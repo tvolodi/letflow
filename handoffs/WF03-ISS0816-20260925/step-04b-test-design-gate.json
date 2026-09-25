@@ -1,0 +1,184 @@
+{
+  "handoff_id": "WF03-ISS0816-20260925-step-04b",
+  "run_id": "WF03-ISS0816-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 4b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0816-20260925/step-04b-test-design-gate.json",
+  "created_at": "2026-09-25T02:47:00Z",
+  "started_at": "2026-09-25T02:35:00Z",
+  "completed_at": "2026-09-25T02:47:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": "Every count in this file was produced by this gate running the command itself, in its own throwaway worktree, at HEAD f4b465bb. No number is copied from step-04-test-designer.json. Where a figure coincides with TEST-DESIGNER's, that is a reproduction, not a transcription.",
+  "context": {
+    "stage": "S8",
+    "issue_id": "ISS-0816",
+    "queue_ref": "Q-816",
+    "github_ref": "GH-1804",
+    "requirement_ids": [],
+    "branch_name": "feature/WF03-ISS0816-20260925",
+    "head_at_step_start": "f4b465bb",
+    "base_commit": "688f29cf",
+    "implementation_commit": "64b87055",
+    "test_step_commit": "3a7214fe",
+    "design_authority": "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md revision 3, sections 7 and 7.1",
+    "gates_already_green": [
+      "SECURITY-REVIEWER PASS at 33f38c1a",
+      "REVIEWER PASS at 9d615627"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0816-20260925/step-04-test-designer.json",
+      "handoffs/WF03-ISS0816-20260925/step-03d-reviewer.json",
+      "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md",
+      "test/specs/ISS-0816.md",
+      "web/src/pages/admin/__tests__/GroupsPage.members.test.tsx",
+      "web/src/api/__tests__/identity.members.test.ts",
+      "web/src/api/__tests__/identity.groupsApi.test.ts",
+      "web/tests/guards/forbidlist.ts",
+      "docs/anti-patterns.md"
+    ],
+    "related_handoff_ids": [
+      "WF03-ISS0816-20260925-step-03d",
+      "WF03-ISS0816-20260925-step-04"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4b for ISS-0816: the hard gate on TEST-DESIGNER's Step 4. The gate's defining obligation here is WF-03 lines 118-121's non-existence clause. Pre-fix, groupsApi.listAllMembers did not exist, so every case in identity.members.test.ts failed pre-fix with a module-resolution error, which proves the module is new and nothing whatever about whether the tests discriminate a correct implementation from a wrong one. Under that clause this gate may not accept TEST-DESIGNER's reported per-mutant counts -- accepting a reported count is copying a claim, not validating one. It must apply at least one mutant to the shipped logic itself, run the suite itself, and quote its own measured figures. Beyond that clause, the substance of Step 4 was REVIEWER's OBS-1: REVIEWER measured that reverting GroupsPage.tsx's queryFn from groupsApi.listAllMembers to groupsApi.members left three of T6's four cases green, and that the one case which did go red was one FRONTEND-DEV added on its own initiative rather than the assertion the design nominated in its section 7 matrix. TEST-DESIGNER reports having closed that hole by dropping the module-mock of @/api/identity in favour of the real module with vi.spyOn on the wire call groupsApi.members, which the real drain reaches through, and rendering the dialog twice so the member set under assertion is the one the page fetched rather than one the test supplied. That mechanism is subtle enough to get wrong in a way that looks right, so the gate had to verify not merely that two of four cases now go red but that the data under assertion genuinely originates in the page's own fetch. Three of TEST-DESIGNER's measurements are proofs by a suite STAYING GREEN -- M6b, T7-C, and the two non-discriminating T6 cases -- and a green proof is exactly the kind a mis-applied probe reproduces by accident, so each needed an independent check that the defect really was live in the green run. All mutation had to be done in a throwaway worktree with a COPIED node_modules, never a junction: ISS-0827 records that a junction plus a recursive delete in an earlier step of this same run destroyed the real 194 MB web/node_modules and halted every web/ step until it was reinstalled.",
+    "acceptance_criteria": [
+      "AC-V1 -- At least one mutant applied and run by this gate itself, with its own measured counts quoted, not TEST-DESIGNER's. Per the dispatch, at least M6b plus one of M4/M5, since M6b is the only measurement in the run that proves something by a suite staying green and M2/M3 have already been measured twice.",
+      "AC-V2 -- M6b's green is shown to be a real green: the /api/v1/admin/ defect is demonstrated LIVE in the same run that reports 16 passed of 16, not merely asserted to have been applied.",
+      "AC-V3 -- The T6 revert (M1) re-run by this gate against the rewritten file, confirming 2 of 4 red and that the design's nominated assertion is one of the red ones, with the failure text quoted.",
+      "AC-V4 -- The member set T6 asserts on is verified to originate in the page's own queryFn rather than in test-supplied data, since that is the entire substance of the OBS-1 fix.",
+      "AC-V5 -- ISS-0824's constraint confirmed intact: useQuery still mocked, no real QueryClientProvider introduced, ISS-0824 not quietly fixed or relaxed.",
+      "AC-V6 -- The two still-green T6 cases confirmed non-discriminating by construction (the pre-fix page has no truncated flag) and confirmed labelled in place rather than passing as apparent coverage.",
+      "AC-V7 -- T7-C spot-checked: with the T7-B shorthand defect live and forbidlist alternative 4 alone removed, the guard specs are confirmed green by this gate, with the defect shown still present in that run.",
+      "AC-V8 -- Coverage and hygiene: every design section 7 row has runnable coverage; no test skipped, only-ed or vacuous; fixtures self-sufficient with no cross-test ordering dependency; no hardcoded secrets or connection strings; meta-control.spec.ts untouched; no ISS-0765 assertion weakened; no forbidlist allowedPaths entry added.",
+      "AC-V9 -- The OBS-1 protection comment confirmed to state what its case uniquely proves and that the other cases do not.",
+      "AC-V10 -- Revert verified, not asserted: no mutant left in any tree, git status --porcelain empty and a green re-run quoted for both the worktree and the working checkout, and web/node_modules confirmed to have survived as a real directory with its full entry count."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "gate_decision": "PASS",
+    "verdict": "PASS -- no blockers. Every measurement this gate reproduced matched TEST-DESIGNER's report exactly, case for case, including the three that are proved by a suite staying green. One non-blocking cosmetic observation is recorded. The tests discriminate a correct implementation from a wrong one at every point the design names, and the OBS-1 coverage hole is genuinely closed rather than merely re-described.",
+    "independent_mutation_evidence": {
+      "preamble": "WF-03's non-existence clause discharged by this gate directly. Seven probes applied by this gate (M6, M6b, the M6b A/B restore, M4, M5, M1, T7-B, T7-C) in a git worktree detached at f4b465bb under the session scratchpad, node_modules a real robocopy copy, never a junction. Baseline in that worktree before any mutation: identity.members.test.ts 6, identity.groupsApi.test.ts 17, GroupsPage.members.test.tsx 4 -- Test Files 3 passed (3); Tests 27 passed (27).",
+      "M6_plus_M6b": {
+        "why_this_one": "The dispatch's primary pick, and the only measurement in the run that demonstrates something by a suite STAYING GREEN. A mis-applied probe produces the same green, so it needed an A/B rather than a single observation.",
+        "M6_applied": "web/src/api/identity.ts listAllMembers changed from awaiting groupsApi.members(id, { cursor, page_size: MEMBER_DRAIN_PAGE_SIZE }) to awaiting client.get<GroupMemberPage>(`/api/v1/admin/groups/${id}/members`, { cursor, page_size: MEMBER_DRAIN_PAGE_SIZE } as Record<string, unknown>).",
+        "M6_measured": "Tests 1 failed | 16 passed (17). The sole failure is 'T-0765-NO-ADMIN-PREFIX: groupsApi.listAllMembers does not dial /api/v1/admin/' at identity.groupsApi.test.ts:285, Received: \"/api/v1/admin/groups/g-1/members?page_size=200\". No other ISS-0765 case fails. Reproduces TEST-DESIGNER exactly.",
+        "M6b_applied": "M6 left live; the single line for the listAllMembers row deleted from surfaceRows. The T-0765-SURFACE key list left intact (verified: 'listAllMembers', still present at :239, and the surfaceRows invocation count for listAllMembers now 0).",
+        "M6b_measured": "Test Files 1 passed (1); Tests 16 passed (16). FULLY GREEN with the admin-prefix defect live.",
+        "proof_the_defect_was_live_in_the_green_run": "Two independent checks, because a green proves nothing if the mutation silently failed to apply. (i) Immediately before the M6b run, grep of the mutated source printed line 115 of web/src/api/identity.ts carrying the /api/v1/admin/groups/ template literal -- the defect present in the file under test. (ii) The A/B: with identity.ts untouched from M6, the surfaceRows row alone was re-inserted and the file re-run -- back to Tests 1 failed | 16 passed (17). The only variable between 16/16 green and 17-with-1-red is the presence of that one hand-added row.",
+        "conclusion": "Confirmed on this gate's own measurement. Without the hand-added surfaceRows row, a groupsApi function dialing /api/v1/admin/ produces no red test anywhere in ISS-0765's guard file. The row is load-bearing, not decorative, and design section 6.3's quiet-degradation prediction is real on this branch."
+      },
+      "M4": {
+        "why_this_one": "The dispatch's second pick and one of the two mutants new to Step 4. Its specific claim -- that T4's URL assertion rather than its concatenation assertion is what catches a lost cursor advance -- is checkable only from the failure text.",
+        "applied": "web/src/api/identity.ts: the line 'cursor = page.next_cursor' deleted from the drain loop.",
+        "measured": "Tests 2 failed | 4 passed (6). Failing: 'T4: concatenates across pages in request order and forwards next_cursor as the next cursor' and 'rejects on the first failed request, leaving useQuery error handling unchanged'. Exactly the set TEST-DESIGNER reported.",
+        "the_claim_is_confirmed_by_the_failure_text": "T4 fails with \"expected '/api/v1/identity/groups/g-1/members?p...' to contain 'cursor=c2'\" -- the URL assertion is the one that fires, exactly as claimed. The concatenation half does still pass, because the stub returns page two by call index. Without expect(urls[1]).toContain('cursor=c2') this mutant would survive T4 entirely."
+      },
+      "M5": {
+        "why_this_one": "Run in addition to M4, at negligible cost, because it targets REVIEWER's OBS-4 wire/type divergence trap and the dispatch asked the failing-case list to be confirmed exactly.",
+        "applied": "web/src/api/identity.ts: 'if (page.next_cursor === null)' changed to 'if (page.next_cursor === undefined)'.",
+        "measured": "Tests 3 failed | 3 passed (6). Failing: T4, T4b, T5b. Exactly the set TEST-DESIGNER reported. T5 and T5c survive, which is correct -- the cap still holds, only the termination condition is broken."
+      },
+      "M1_the_T6_revert": {
+        "applied": "web/src/pages/admin/GroupsPage.tsx:63 queryFn reverted from groupsApi.listAllMembers(activeGroupId) to groupsApi.members(activeGroupId) -- verified identical to the pre-fix page at 688f29cf:web/src/pages/admin/GroupsPage.tsx:56.",
+        "measured": "Test Files 1 failed (1); Tests 2 failed | 2 passed (4).",
+        "red_case_1": "'a second-page member is not offered in the Add member dropdown' -- AssertionError: expected [ '', 'u-51', 'u-99' ] to not include 'u-51'. This is the design's own section 7 row T6 nominated assertion, and the failure text matches TEST-DESIGNER's report verbatim.",
+        "red_case_2": "'the page queries the drain, never the single-page members call' -- AssertionError: expected \"listAllMembers\" to be called with arguments: [ 'g-1' ].",
+        "green_cases": "The truncation-notice pair.",
+        "verdict": "OBS-1 is closed. 2 of 4 red, up from the 1 of 4 REVIEWER measured, and the newly-red one is the assertion the design nominated."
+      },
+      "T7_B_and_T7_C": {
+        "T7_B_applied": "web/src/api/promotions.ts list: the terminating '})' of the client.get call given a .then with a parameter destructure re-emitting items, next_cursor and has_more in ES6 shorthand. Confirmed by grep that the file contains no const/let/var binding of has_more anywhere (count 0) and had no other occurrence of the token before the injection (grep exit 1 on the unmutated file), so alternative 4 is the only alternative that can match.",
+        "T7_B_measured": "source-scan + meta-control: Tests 1 failed | 48 passed (49). The failure is 'Source scan found 1 violation(s): has-more-wire-field @ web/src/api/promotions.ts:261' -- line 261 is the shorthand line itself, not a const line. Alternative 4 fires in isolation.",
+        "T7_C_applied": "T7-B's defect left in place; the alternative-4 substring alone removed from the has-more-wire-field regex in web/tests/guards/forbidlist.ts. Remaining regex verified to be the four-alternative form (property access, key-with-colon, quoted key, const/let/var binding).",
+        "T7_C_measured": "Test Files 2 passed (2); Tests 49 passed (49). Fully green with the defect live.",
+        "proof_the_defect_was_live_in_the_green_run": "In the same command, immediately before the run, grep printed line 261 of web/src/api/promotions.ts carrying the shorthand .then. The defect was present in the scanned tree while the scan reported zero violations.",
+        "conclusion": "Confirmed. Alternative 4 is uniquely load-bearing for the commonest spelling of the field. Removing it lets the exact ISS-0816 defect, respelled as shorthand, pass both guard specs. Design section 7.1's BLOCKER-3 analysis is measured on this branch, not inherited.",
+        "note_on_meta_control": "meta-control stayed green in the T7-C arm with alternative 4 gone, which re-confirms section 7.1's CORRECTED note that the offender fixture does not pin alternatives individually. That is a known and documented limitation, already recorded in the fixture header by FRONTEND-DEV and accepted by REVIEWER at AC-R5; it is not a new finding and not a blocker."
+      }
+    },
+    "check_results": {
+      "AC-V1_gate_applied_mutants_itself": "PASS. Seven probes applied and run by this gate, covering both of the dispatch's required picks (M6b and M4, plus M5, M1 and both T7 arms). Every count in this handoff is this gate's own output.",
+      "AC-V2_M6b_green_is_real": "PASS. Established by an A/B rather than a single observation: same identity.ts mutation, row deleted -> 16/16 green; row re-inserted -> 1 failed | 16 passed (17). See independent_mutation_evidence.M6_plus_M6b.proof_the_defect_was_live_in_the_green_run.",
+      "AC-V3_T6_revert_reproduced": "PASS. 2 failed | 2 passed (4), nominated assertion red with the reported text verbatim.",
+      "AC-V4_data_provenance": "PASS, and checked at the mechanism rather than taken from the report. The headline case never receives member data as an input. renderWithPageFetchedMembers installs useQuery with members undefined for pass one and captures produced = queryFn(); the page's own queryFn therefore runs, reaching the real listAllMembers, which reaches the stubbed wire groupsApi.members. Pass two installs useQuery with data = await produced. The only test-supplied input is the directory user list, which is IDENTICAL under both the fixed and the pre-fix page. The sole variable producing [ '', 'u-51', 'u-99' ] under M1 versus [ '', 'u-99' ] at HEAD is how many members the PAGE fetched -- 50 via one members call, or 51 via the drain. Corroborated in the passing direction too: the baseline case asserts the wire was called twice with calls[1][1].cursor equal to 'cursor-page-2', which is only satisfiable if the REAL drain ran. The assertion is over page-produced data, confirmed.",
+      "AC-V5_ISS0824_constraint_intact": "PASS. GroupsPage.members.test.tsx still carries vi.mock('@tanstack/react-query', ...) doubling useQuery, useMutation and useQueryClient. Grep confirms no QueryClientProvider anywhere in the file. ISS-0824 was not fixed, relaxed or worked around -- the two-pass helper reproduces react-query's resolve-then-render sequence WITHOUT a provider, and the file header records the instruction to promote to a real provider if ISS-0824 ever lands. The constraint was not quietly relaxed.",
+      "AC-V6_two_green_cases": "PASS on substance. Confirmed non-discriminating by construction, and confirmed by source rather than by assertion: grepping the pre-fix page (git show 688f29cf:web/src/pages/admin/GroupsPage.tsx) for 'truncated' or 'capped' returns NOTHING (exit 1) -- the pre-fix page has no truncated flag and no capped notice at all, so neither case can possibly go red against it. Measured consistent: both stayed green under M1. Labelling: the fourth case carries an explicit 'NON-DISCRIMINATING by construction' label naming the reason; cases one and two are each explicitly labelled 'DISCRIMINATING'; the third case's comment refers to 'the two non-discriminating ones' but does not say in so many words that it is one of them. By elimination the file is unambiguous, so no reader can mistake either for regression coverage. See OBS-V1 -- cosmetic, non-blocking.",
+      "AC-V7_T7C_spot_check": "PASS. Reproduced with the defect shown live in the green run. See independent_mutation_evidence.T7_B_and_T7_C.",
+      "AC-V8_coverage_and_hygiene": "PASS. (i) Coverage: every design section 7 row has runnable coverage and every row was RUN by this gate -- T1 npm run type-check exit 0; T2 npm test 127 files / 901 tests; T3 npm run guards 4 files / 52 tests; T4, T4b, T5, T5b, T5c plus the error-propagation case = 6 green in identity.members.test.ts; T6 = 4 green in GroupsPage.members.test.tsx; T7 and T8 inside the 49 guard tests; T9 = 17 green in identity.groupsApi.test.ts including the extended exact-equality key list and the seventh it.each row. (ii) No skipped or narrowed coverage: grep for .only(, .skip(, it.todo, xit( and 'TODO: implement' across the three test files returns nothing (exit 1), and the repo's own forbidlist entry 'test-only-or-skip' (DIRECTIVE T-1) enforces this mechanically over web/src at appliesTo source, and passes. (iii) No vacuous case: every case was shown killable by at least one mutant except the two truncation-notice cases, which are non-discriminating by construction and labelled, and T5/T5c which M2/M3 kill (REVIEWER's measurement, corroborated here by M5 leaving exactly those two alive). (iv) Fixtures self-sufficient: both files use per-test beforeEach/afterEach with vi.restoreAllMocks() and cleanup(); every response body is a fixed literal the test constructs; no module-level mutable state is shared across cases; no test depends on another having run, and the suite is order-independent. (v) No secrets: the only credential-shaped literals are setToken('test-token') and token: 't', both obviously synthetic, with a synthetic tenant id tid-groups-members-fixture-tenant; no connection string, no process.env read, no localhost URL. (vi) meta-control.spec.ts is absent from git diff origin/main...HEAD --name-only -- web/, so it is untouched on the whole branch, not merely in this step. (vii) No ISS-0765 assertion weakened: the ONLY deleted line in identity.groupsApi.test.ts across the whole branch diff is the test TITLE 'the exported surface is exactly the six functions with a real route'; T-0765-SURFACE remains exact equality over Object.keys(groupsApi).sort() and T-0765-NO-ADMIN-PREFIX's body is unchanged. (viii) No allowedPaths added by this step: forbidlist.ts is not in Step 4's commit at all, and its branch diff contains zero deletion lines, so nothing pre-existing was loosened; the two entries present are exactly the ISS-0821 fixtures the design specifies, carrying the delete-when-ISS-0821-lands note.",
+      "AC-V9_OBS1_protection_comment": "PASS, and it says the right thing rather than merely existing. The comment on 'the page queries the drain, never the single-page members call' states that until Step 4 rebuilt the headline case this was the ONLY case in the file that went red against the pre-fix page, quotes the 1-failed/3-passed figure, states explicitly that it is not boilerplate and not redundant with the headline case, distinguishes the two (this one pins WHICH function the page dials, the other pins the CONSEQUENCE of dialing the right one), states the consequence of deleting either, and cites REVIEWER OBS-1 by handoff path. The headline case carries the reciprocal warning against 'simplifying' it back into the non-discriminating form. The file header restates both at length. A later reader cannot delete either as boilerplate without reading why they are not.",
+      "AC-V10_revert_verified": "PASS. See revert_verification."
+    },
+    "verification_commands_on_the_working_checkout": {
+      "cwd": "C:/Users/tvolo/dev/ai-dala/letflow/web",
+      "type_check": "npm run type-check -> tsc -b tsconfig.json, exit 0, no output.",
+      "lint": "npm run lint -> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0, exit 0, no output.",
+      "test": "npm test -> Test Files 127 passed (127); Tests 901 passed (901); Duration 22.49s.",
+      "guards": "npm run guards -> Test Files 4 passed (4); Tests 52 passed (52).",
+      "note": "All four re-run by this gate at HEAD f4b465bb after every mutant was reverted and the worktree removed. They reproduce TEST-DESIGNER's and REVIEWER's figures exactly."
+    },
+    "revert_verification": {
+      "isolation": "Every mutant ran in a git worktree detached at f4b465bb under the session scratchpad. The working checkout was never mutated: git status --porcelain in the repo root printed empty before, during and after the whole gate.",
+      "node_modules_discipline": "The worktree's web/node_modules was a real robocopy copy (/E /MT:32 /NFL /NDL /NJH /NJS /NP), measured 6.528s wall clock. No junction and no symlink was created at any point by this gate.",
+      "between_mutants": "git checkout -- web/ in the worktree after each mutant group, with git status --porcelain printing empty each time.",
+      "final_worktree_state": "git status --porcelain EMPTY, then a green re-run in the worktree BEFORE removal: Test Files 3 passed (3); Tests 27 passed (27), and the guards subset Test Files 2 passed (2); Tests 49 passed (49). The revert was verified by re-running, not asserted.",
+      "worktree_teardown_safety": "Before removal, dir /AL /S over the whole worktree was run and reported no JUNCTION and no SYMLINK entries, so the recursive delete could not traverse into anything outside it. Then git worktree remove --force and git worktree prune. This is the ISS-0827 / anti-patterns.md procedure, followed deliberately.",
+      "node_modules_survived": "Working checkout web/node_modules after teardown: 396 top-level entries, 20036 files. PowerShell Get-Item -Force reports Attributes: Directory (no ReparsePoint), LinkType empty, Target empty -- a real directory, not a link. Intact.",
+      "final_working_checkout_state": "git status --porcelain EMPTY except this handoff file. No file under web/, lib/, test/ or docs/ was modified by this gate."
+    },
+    "observations_non_blocking": [
+      {
+        "id": "OBS-V1",
+        "for": "whoever next edits web/src/pages/admin/__tests__/GroupsPage.members.test.tsx",
+        "severity": "COSMETIC -- explicitly not a blocker; it ships no defect and loses no coverage",
+        "finding": "Step 4's handoff and test/specs/ISS-0816.md both state that 'both non-discriminating cases are labelled as such in place'. Strictly, only the fourth case ('states the list is capped when the bounded drain reports truncated') carries an explicit NON-DISCRIMINATING label. The third ('renders no truncation notice on the normal path') carries a comment referring to 'the two non-discriminating ones' without saying it is one of them. Since cases one and two are each explicitly labelled DISCRIMINATING, the file is unambiguous by elimination and no reader is misled. Worth one line of comment the next time the file is opened; not worth a rework round on its own."
+      },
+      {
+        "id": "OBS-V2",
+        "for": "ORCH",
+        "severity": "INFORMATIONAL",
+        "finding": "TEST-DESIGNER's environment_finding (web/node_modules found empty at Step 4's start) has since been filed as ISS-0827 and written into docs/anti-patterns.md at commit f4b465bb. This gate followed the copy-not-link procedure recorded there and confirms it works: the copy took 6.528s and node_modules survived teardown at full size, 396 entries and 20036 files. No further action needed from this gate's side."
+      }
+    ],
+    "what_remains_unproven": {
+      "preamble": "Carried forward unchanged from REVIEWER and TEST-DESIGNER. This gate proves the tests discriminate; it does not upgrade mocked green into integration evidence.",
+      "items": [
+        "No live backend. The drain has never spoken to lib/letflow/routers/identity.ex:552. The drain cases do exercise the real web/src/api/client.ts with only window.fetch doubled, so URL construction and the cursor round-trip are genuinely run, but that the server accepts page_size=200 and returns the assumed envelope is verified by source reading only.",
+        "No real query provider (ISS-0824, open). T6's two-pass helper reproduces react-query's resolve-then-render sequence faithfully enough for the assertion to discriminate, but queryKey/enabled/refetch wiring, retry semantics and QueryStateBoundary interaction remain unproven.",
+        "No e2e or UAT coverage of the Add-member dropdown against a real tenant with more than fifty group members.",
+        "The truncated-true branch has never been reached against a real server -- it needs a group of more than 4000 members, so it is a bound rather than a path.",
+        "meta-control does not pin forbidlist alternatives individually, measured again here in the T7-C arm. Documented in the fixture header and accepted at REVIEWER AC-R5; a stronger meta-control would be a separate change, not ISS-0816's."
+      ]
+    },
+    "next_action": "PASS. Route to TEST-RUNNER for the Step 4 suite run, then ISSUE-FIXER for Step 5 issue closure and merge. No rework round is warranted: the coverage hole OBS-1 named is measurably closed, every reported fail-first figure reproduces exactly on independent measurement, and the only observation recorded is cosmetic.",
+    "artifacts_out": [],
+    "git_evidence": {
+      "branch": "feature/WF03-ISS0816-20260925",
+      "head_at_step_start": "f4b465bb",
+      "working_tree_before_step": "clean",
+      "working_tree_after_mutation_work": "clean (git status --porcelain empty)",
+      "mutation_worktree": "detached at f4b465bb under the session scratchpad, node_modules a real robocopy copy; verified free of reparse points, then removed with git worktree remove --force and pruned",
+      "files_changed_by_this_step": [
+        "handoffs/WF03-ISS0816-20260925/step-04b-test-design-gate.json (new)"
+      ]
+    }
+  },
+  "gate_history": [
+    {
+      "gate": "TEST-DESIGN-VALIDATOR",
+      "step": "Step 4b",
+      "decision": "PASS",
+      "at": "2026-09-25T02:47:00Z",
+      "commit_reviewed": "f4b465bb",
+      "rework_count": 0
+    }
+  ]
+}

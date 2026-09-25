@@ -30481,7 +30481,7 @@ requirements:
   - id: REQ-411
     title: "P2: Letflow.Packs.Bilimbaga becomes Letflow.Modules.Exam.on_install/2; priv/packs/bilimbaga/ moves to priv/modules/exam/"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 800  # letflow-queue task id, GH#1785. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

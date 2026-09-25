@@ -4610,8 +4610,17 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 24
+    entries: 25
     note: >
+      Incremented to 25 by DOC-UPDATER's own REQ-401 done-event append
+      (feature/WF02-REQ401-20260925, 2026-09-25T03:06:46Z -- catalog-sourced
+      module permissions/role_grants in Letflow.Api.Authorization, plus the
+      new core :ModulesManage permission, S11's second requirement). `grep -c
+      "^  - req:" docs/status/requirement_status.v22.yaml` = 25 on-disk
+      entries, recounted directly rather than assumed. 856 lines / 52437
+      bytes, well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. Prior notes preserved below verbatim.
+
       Incremented to 24 by DOC-UPDATER's own ISS-0772 SCOPE-CHANGE done-event
       append (fix/ISS-0772-logfilter-metadata, 2026-09-25T00:40:32Z --
       LogFilter metadata-only redaction fix + two-stage doc correction,

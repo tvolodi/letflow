@@ -29855,7 +29855,7 @@ requirements:
   - id: REQ-401
     title: "P1: Catalog-sourced module permissions and role_grants in Letflow.Api.Authorization, plus the new core :ModulesManage permission"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 790  # letflow-queue task id, GH#1775. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

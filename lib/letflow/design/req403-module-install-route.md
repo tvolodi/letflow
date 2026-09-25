@@ -364,7 +364,8 @@ consumed as-is.
 | AC7 | §5.4: ISS-0646 test update spec (assert exactly seven permissions for `CANDIDATE`, including `:MyModulesRead`, denial of every other live permission, renamed description). |
 | AC8 | §3.3: `prefix` resolved only from `conn.assigns.scoped_opts`; handler never reads `tenant_id` query param or `x-tenant-id` header (§7 INV-1 restated for this route explicitly, since AC8 is the test that exercises exactly this). |
 | AC9 | §5.1 adds `:MyModulesRead` as a wholly new atom (never touches `:MembershipsRead`'s own union entry or any of its `role_allows?/2` clauses); §7's explicit "`:MembershipsRead`'s existing grant set is untouched" invariant; §4 confirms no `authz_get "/"` root route is added to `me.ex` — the only new route in that file is `authz_get "/modules", ...`. |
-| AC10 (SECURITY-REVIEWER sign-off + `mix letflow.check`) | §7's full invariant list (INV-1 scoping, fail-closed route declaration, response-field minimality) gives SECURITY-REVIEWER a concrete checklist against both new routes; no gate-editing anywhere in this design (§5's `role_allows?`/`endpoint_policy_key`/`required_permission` additions are additive-only, verified by AC6/AC9's grep contracts rather than by trusting a claim). |
+| AC10 (SECURITY-REVIEWER sign-off against INV-1) | §7's full invariant list (INV-1 scoping, fail-closed route declaration, response-field minimality) gives SECURITY-REVIEWER a concrete checklist against both new routes; no gate-editing anywhere in this design (§5's `role_allows?`/`endpoint_policy_key`/`required_permission` additions are additive-only, verified by AC6/AC9's grep contracts rather than by trusting a claim). |
+| AC11 (`mix letflow.check` passes) | Nothing in this design touches lint/check-registry config; all additions are ordinary route/permission code following existing conventions, so no new `mix letflow.check` gate is expected to regress. |
 
 ---
 

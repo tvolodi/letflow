@@ -30598,7 +30598,7 @@ requirements:
   - id: REQ-413
     title: "P2 close-out: update remaining /exam-sessions agent-doc callers, record the exam module inventory, and verify 0039's three measurements plus the full suites"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 802  # letflow-queue task id, GH#1787. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

@@ -1170,3 +1170,20 @@ history:
       check to solution_packs.ex router before any write. All 8 ACs
       pass. SECURITY-REVIEWER PASS. Commits: be729822 (changes bundled
       into REQ-412) + 5732e5aa (format fixes).
+  - req: REQ-413
+    status: done
+    timestamp: 2026-09-26T03:00:00Z
+    run_id: WF02-REQ413-20260926
+    agent: ELIXIR-DEV
+    summary: >
+      P2 close-out. Removed ExamSession*/ExamCertificateIssue dead code from
+      authorization.ex (type unions, @permissions, endpoint_policy_key clauses,
+      required_permission clauses, CANDIDATE core clause replaced with false).
+      Updated authorization_test.exs: @core_permissions now 34, @pre_req401 now
+      32. Updated .claude/agents/ba-analyst.md, product-owner.md, and
+      docs/agents/ba-personas/bilimbaga.yaml URL strings. Updated stage-11 module
+      inventory exam row (3530 lines, 2026-09-26). AC1: 0 grep hits. AC2:
+      check_boundaries 901 edges 0 violations. AC3: s11_measurements_test passes,
+      role_from_string CANDIDATE count=1. AC4: all 4 old paths absent. AC5: mix
+      letflow.check passes, npm run check passes. AC6: Playwright deferred (no
+      running stack). AC7: inventory updated. Commit: 74f106ff.

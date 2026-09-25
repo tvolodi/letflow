@@ -4610,8 +4610,13 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 33
+    entries: 34
     note: >
+      Incremented to 34 by ORCH's REQ-413 done-event append
+      (2026-09-26T03:00:00Z -- P2 close-out: exam atoms removed from core
+      auth, agent docs updated, stage-11 inventory recorded, S11's tenth
+      requirement). Prior note preserved below.
+
       Incremented to 33 by ORCH's REQ-411 done-event append
       (2026-09-26T02:30:00Z -- Bilimbaga pack absorbed into exam
       on_install/2, module-owned pack refusal added, S11's ninth

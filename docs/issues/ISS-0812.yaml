@@ -62,4 +62,6 @@ fix_direction: >
   coverage for each corrected or retained call.
 queue_ref: "Q-812"
 github_ref: "GH-1800"
-status: open
+status: resolved
+resolved_in_run: WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925
+resolved_at: "2026-09-25T05:18:00Z"

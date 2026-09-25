@@ -41,4 +41,6 @@ fix_direction: >
   covering the >200 user scenario.
 queue_ref: "Q-823"
 github_ref: "GH-1814"
-status: open
+status: resolved
+resolved_in_run: WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925
+resolved_at: "2026-09-25T05:18:00Z"

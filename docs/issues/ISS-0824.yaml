@@ -47,6 +47,16 @@ affected_files:
 related:
   - ISS-0816  # the run that surfaced it
   - ISS-0823  # same page, the users-side truncation
+request_volume_note: >
+  Added by SECURITY-REVIEWER (step-03c, WF03-ISS0816-20260925), which noted
+  this record understates one thing: ISS-0824 predates groupsApi.listAllMembers
+  landing on this same page. If the spin turns out to be a live browser render
+  loop rather than a jsdom artifact, the cost per members-query re-trigger is
+  now up to 20 backend requests rather than 1. That is a multiplier on any
+  refetch it provokes, not a new unbounded amplifier -- the query key is stable
+  and staleTime is 30s -- but whoever settles the live-vs-jsdom question should
+  measure REQUEST VOLUME, not just CPU. See also ISS-0826 (no per-actor rate
+  limit on authenticated list routes).
 severity_rationale: >
   MAJOR provisionally, and deliberately so while the browser question is open.
   If it is a real render loop it is a live defect on an admin page that pegs a

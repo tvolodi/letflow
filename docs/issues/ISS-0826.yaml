@@ -1,0 +1,57 @@
+id: ISS-0826
+title: >
+  No per-actor rate limit on authenticated list routes -- PublicReadRateLimit
+  is mounted only on PublicRead, and Admission bounds concurrency, not rate
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-25T01:18:21Z"
+severity: MINOR
+tags:
+  - security
+  - rate-limiting
+  - architecture
+description: >
+  Observed at ISS-0816's Step 3c while assessing whether a new client-side
+  drain could amplify load. Non-blocking for that change; filed as its own
+  concern.
+
+  Letflow.Plugs.PublicReadRateLimit is mounted only on
+  Letflow.Routers.PublicRead. Authenticated traffic passes through
+  Letflow.Plugs.Admission (pool: :global, pool: :tenant), which bounds
+  CONCURRENCY, not rate -- a strictly sequential client occupies one slot and
+  can issue an unlimited number of requests over time without ever tripping
+  it. So there is currently no per-actor rate limit on authenticated list
+  routes.
+
+  The finding that surfaced it is bounded and benign: ISS-0816's
+  groupsApi.listAllMembers issues at most 20 sequential requests per user
+  gesture, at most one in flight, and the realistic path is a single request
+  since page_size 200 is @max_page_size. That is not an amplifier.
+
+  The point is how the gate had to establish that: by reading the client's own
+  loop bound, because nothing server-side would have constrained it. A client
+  bound is not a server guarantee.
+affected_files:
+  - lib/letflow/plugs/public_read_rate_limit.ex
+  - lib/letflow/plugs/admission.ex
+  - lib/letflow/plugs/api_pipeline.ex
+related:
+  - ISS-0816  # the run this surfaced during
+  - ISS-0824  # if that turns out to be a live render loop, each re-trigger costs up to 20 requests
+severity_rationale: >
+  MINOR -- every authenticated actor has already passed authn and authz, and
+  Admission's concurrency pools bound the damage a single actor can do at any
+  instant. Raised above trivial because the absence is currently implicit, an
+  artifact of where one plug happens to be mounted rather than a recorded
+  decision, so nobody re-deriving it can tell whether it was considered.
+fix_direction: >
+  Record a decision on whether authenticated routes should carry a per-actor
+  rate limit, with reasoning. If one is added, make it per-actor, cover list
+  routes, and state how it interacts with Admission's concurrency pools. If
+  none is added, say so explicitly in security-invariants.md or a decision
+  record, so a future gate need not infer the absence from plug mountings.
+  Keep concurrency bounding and rate limiting clearly distinguished --
+  conflating them is what makes the current state read as covered.
+queue_ref: "Q-826"
+github_ref: "GH-1819"
+status: open

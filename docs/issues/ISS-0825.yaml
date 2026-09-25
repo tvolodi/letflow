@@ -1,0 +1,56 @@
+id: ISS-0825
+title: >
+  security-invariants.md still says no multi-tenant API surface exists
+  (S4 not started), which marks INV-2 and INV-5 auto-NOT-APPLICABLE for every
+  security gate
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-25T01:18:21Z"
+severity: MAJOR
+tags:
+  - security
+  - process
+  - stale-doc
+description: >
+  Found at ISS-0816's Step 3c. SECURITY-REVIEWER applied INV-2 as live anyway
+  and flagged this rather than resolving it silently -- the right call, and the
+  reason it is a filed issue rather than an unnoticed gap.
+
+  docs/agents/instructions/security-invariants.md gives INV-2's Reference as
+  "None yet -- no multi-tenant API surface exists (S4 not started)", and groups
+  it with INV-3 and INV-5 as automatically NOT-APPLICABLE.
+
+  S4 plainly landed. lib/letflow/audit.ex:306 literally carries the comment
+  "-- Response allowlist (INV-2) --", and hand-built allowlist maps
+  (user_map/1, group_map/1, page_body/2) are the established convention across
+  the tenant-data routers.
+
+  This is a live risk, not cosmetic staleness. security-invariants.md is the
+  charter SECURITY-REVIEWER gates against, so a reviewer following it
+  literally would skip INV-2 -- the response-allowlist invariant -- on exactly
+  the tenant-data-path changes it exists to cover. The text simply survives
+  from before the surface existed.
+
+  Same staleness shape as the pre-ISS-0026 INV-1 text. INV-5 (lookup-by-ID
+  handlers) very likely needs the same treatment and should be re-derived
+  rather than assumed.
+affected_files:
+  - docs/agents/instructions/security-invariants.md
+related:
+  - ISS-0816  # the run this surfaced during
+severity_rationale: >
+  MAJOR -- no defect ships from it directly, but it can cause a hard security
+  gate to skip an invariant on the precise class of change that invariant
+  exists for. A gate that silently checks less than it believes it does is
+  worse than one that fails, because nothing signals the omission.
+fix_direction: >
+  Give INV-2 a Reference naming the response-allowlist implementations that
+  exist today and stop grouping it as automatically NOT-APPLICABLE.
+  Independently re-derive INV-5 against the current codebase and correct or
+  confirm its applicability on evidence. Check every other invariant's
+  applicability line for the same pre-S4 staleness in the same pass, so this
+  is fixed as a class. Review it as a security-doc change -- it alters what
+  future gates are told to check.
+queue_ref: "Q-825"
+github_ref: "GH-1818"
+status: open

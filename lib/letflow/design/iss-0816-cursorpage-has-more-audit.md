@@ -556,13 +556,27 @@ policed prose is what created BLOCKER-1.
 **T8's two fixtures**, required by GRD-UI-04 (`meta-control.spec.ts` demands an offender and a
 bystander for every `PATTERNS` entry, and asserts the regex matches the first and not the second):
 
-- `fixtures/offender/has-more-wire-field.txt` — must exercise **all five** alternatives, so that
-  each one is mechanically pinned rather than merely present in this document. Required contents:
-  an object-literal key (`has_more: false`), a property access (`page.has_more`), a `const`
-  declaration, an **ES6 shorthand** literal (`{ items, next_cursor, has_more }`), and a renamed
-  destructure (`const { has_more: renamed } = body`). Alternative 4 is the one BLOCKER-3 was about;
-  without a fixture form for it, it would be the only alternative no test protects, and the next
-  edit to this regex could silently drop it again.
+- `fixtures/offender/has-more-wire-field.txt` — must exercise **all five** alternatives. Required
+  contents: an object-literal key (`has_more: false`), a property access (`page.has_more`), a
+  `const` declaration, an **ES6 shorthand** literal (`{ items, next_cursor, has_more }`), and a
+  renamed destructure (`const { has_more: renamed } = body`). Alternative 4 is the one BLOCKER-3
+  was about.
+
+  **CORRECTED — this fixture does NOT pin the alternatives individually.** An earlier revision of
+  this section claimed each alternative would be "mechanically pinned rather than merely present in
+  this document", so that "the next edit to this regex could silently drop it again" would be
+  caught. CODE-DESIGN-VALIDATOR disproved that at the Step 2b rework-2 gate by measurement: it
+  removed alternative 4 from the regex, left this fixture untouched, and `meta-control` still passed
+  48/48. The assertion in `meta-control.spec.ts:34-44` is a single `regex.test(content)` over the
+  whole file per fixture, so **any one** surviving alternative satisfies it. One offender file pins
+  the pattern as a whole, and no alternative individually.
+
+  The fixture contents above are still correct and still worth having — they document every form the
+  guard must catch, in a file a future editor will read. They are simply not a mechanical guarantee.
+  Real per-alternative pinning would require changing `meta-control.spec.ts` (GRD-UI-04's own file)
+  to assert per-alternative, which is outside this issue's scope. So the honest statement is: if a
+  future edit drops one alternative, **no test in this repo will fail**. The durable protection
+  remains ISS-0813.
 - `fixtures/bystander/has-more-wire-field.txt` — must contain everything the guard must never
   catch: the prose form inside backticks, prose with a backtick immediately followed by a comma and
   by a colon (the two forms alternatives 2 and 4 come closest to mis-firing on), a clean

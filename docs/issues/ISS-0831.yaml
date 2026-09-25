@@ -54,5 +54,5 @@ fix_direction: >
 
   This ensures any xref failure is loud rather than silently swallowed.
 status: open
-queue_ref: ~
-github_ref: ~
+queue_ref: null  # discovered in WF02-REQ405-20260925; not yet registered in letflow-queue
+github_ref: null  # not yet filed as a GitHub issue

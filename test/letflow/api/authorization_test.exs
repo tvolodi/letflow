@@ -1859,6 +1859,20 @@ defmodule Letflow.Api.AuthorizationTest do
     end
   end
 
+  describe "REQ-403 — :MyModulesRead grant and me/modules policy" do
+    test "role_allows?(role, :MyModulesRead) is true for every role" do
+      for role <- Authorization.roles() do
+        assert Authorization.role_allows?(role, :MyModulesRead),
+               "expected #{inspect(role)} to hold :MyModulesRead"
+      end
+    end
+
+    test "GET /me/modules resolves to :MyModulesRead" do
+      assert Authorization.endpoint_policy_key("GET", "/me/modules") == :MyModulesRead
+      assert Authorization.required_permission(:MyModulesRead) == :MyModulesRead
+    end
+  end
+
   describe "REQ-401 AC4 — module route fallback" do
     test "resolves the fixture's own route, :Unknown for an unregistered module id" do
       assert Authorization.endpoint_policy_key("GET", "/modules/fixture/items/:id") ==
@@ -2195,6 +2209,7 @@ defmodule Letflow.Api.AuthorizationTest do
         assert actual == expected,
                "role_allows?(:CANDIDATE, #{inspect(permission)}) returned #{inspect(actual)}, " <>
                  "expected #{inspect(expected)} -- CANDIDATE must hold exactly its seven " <>
+<<<<<<< HEAD
                  "ExamSession*/ExamCertificateIssue/MyModulesRead permissions and nothing else " <>
                  "(ISS-0646, decision 0013 addendum; REQ-355 added :ExamCertificateIssue, " <>
                  "REQ-403 added :MyModulesRead to this set)"

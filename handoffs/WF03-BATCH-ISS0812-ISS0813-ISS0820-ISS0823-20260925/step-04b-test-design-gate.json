@@ -1,171 +1,179 @@
 {
-  "run_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
-  "step": "04b-test-design-gate",
-  "agent": "TEST-DESIGN-VALIDATOR",
-  "timestamp": "2026-09-25T04:57:30Z",
-  "verdict": "PASS",
-
-  "criterion_coverage_check": {
-    "ISS-0813": {
-      "AC-ISS0813-1": {
-        "covered_by": ["TC-ISS0813-01 — tests/guards/source-scan.spec.ts"],
-        "status": "COVERED"
-      },
-      "AC-ISS0813-2": {
-        "covered_by": ["TC-ISS0813-02 — tests/guards/meta-control.spec.ts"],
-        "status": "COVERED"
-      }
-    },
-    "ISS-0812": {
-      "AC-ISS0812-1": {
-        "covered_by": ["TC-ISS0812-01 — src/api/__tests__/identity.iss0812.test.ts"],
-        "status": "COVERED"
-      },
-      "AC-ISS0812-2": {
-        "covered_by": [
-          "TC-ISS0812-02 — src/api/__tests__/identity.iss0812.test.ts",
-          "TC-ISS0812-03 — src/api/__tests__/identity.iss0812.test.ts",
-          "TC-ISS0812-04 — src/api/__tests__/identity.iss0812.test.ts"
-        ],
-        "status": "COVERED"
-      }
-    },
-    "ISS-0820": {
-      "AC-ISS0820-1": {
-        "covered_by": ["TC-ISS0820-01 — src/api/__tests__/definitionsSearch.iss0820.test.ts"],
-        "status": "COVERED"
-      },
-      "AC-ISS0820-2": {
-        "covered_by": [
-          "TC-ISS0820-02 — src/api/__tests__/definitionsSearch.iss0820.test.ts",
-          "TC-ISS0820-03 — src/api/__tests__/definitionsSearch.iss0820.test.ts"
-        ],
-        "status": "COVERED"
-      },
-      "AC-ISS0820-3": {
-        "covered_by": ["TC-ISS0820-04 — src/api/__tests__/definitionsSearch.iss0820.test.ts"],
-        "status": "COVERED"
-      },
-      "AC-ISS0820-4": {
-        "covered_by": ["npm run type-check (tsc -b tsconfig.json) — gates the type-signature regression"],
-        "status": "COVERED — tsc only (see gap documentation below)"
-      }
-    },
-    "ISS-0823": {
-      "AC-ISS0823-1": {
-        "covered_by": ["TC-ISS0823-01 — src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx"],
-        "status": "COVERED"
-      },
-      "AC-ISS0823-2": {
-        "covered_by": ["TC-ISS0823-02 — src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx"],
-        "status": "COVERED"
-      },
-      "AC-ISS0823-3": {
-        "covered_by": ["TC-ISS0823-03 — src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx"],
-        "status": "COVERED"
-      }
-    }
-  },
-
-  "skip_tag_check": {
-    "result": "PASS",
-    "detail": "No @tag :skip annotations exist in any of the five test files. Reviewed: source-scan.spec.ts, meta-control.spec.ts, identity.iss0812.test.ts, definitionsSearch.iss0820.test.ts, GroupsPage.iss0823.test.tsx."
-  },
-
-  "todo_implement_check": {
-    "result": "PASS",
-    "detail": "No 'TODO: implement test' strings present in any spec or test file."
-  },
-
-  "fixture_isolation_check": {
-    "result": "PASS",
-    "detail": "All fixtures are locally scoped (beforeEach/afterEach with vi.fn and cleanup). No shared hardcoded state. No test depends on execution order."
-  },
-
-  "secrets_check": {
-    "result": "PASS",
-    "detail": "No hardcoded secrets or connection strings. Tokens use placeholder values ('test-token', 'tok')."
-  },
-
-  "wf03_pre_fix_failure_context": {
-    "note": "The pre-fix failure for ISS-0813 is 'the code under test did not exist as a guard' — the dead-admin-prefix pattern was added by this fix to forbidlist.ts. Per WF-03 protocol, an independent mutant must be applied and verified by TEST-DESIGN-VALIDATOR, not merely copied from TEST-DESIGNER's report.",
-    "independent_mutant_applied": "ISS-0813-A"
-  },
-
-  "independent_mutant_verification": {
-    "mutant_id": "ISS-0813-A",
-    "issue": "ISS-0813",
-    "description": "Applied independently by TEST-DESIGN-VALIDATOR: rolesApi.create URL changed from '/api/v1/identity/roles' to '/api/v1/admin/roles' in web/src/api/identity.ts line 79",
-    "file_mutated": "web/src/api/identity.ts",
-    "change_applied": "client.post<Role>('/api/v1/identity/roles', body) → client.post<Role>('/api/v1/admin/roles', body)",
-    "command_run": "cd web && npx vitest run tests/guards/source-scan.spec.ts",
-    "measured_result": {
-      "test_files_failed": 1,
-      "tests_failed": 1,
-      "tests_passed": 0,
-      "failure_detail": "Source scan found 1 violation(s):\n  dead-admin-prefix @ web/src/api/identity.ts:79",
-      "matches_designer_claim": true
-    },
-    "revert": {
-      "command": "git checkout -- web/src/api/identity.ts",
-      "post_revert_git_status_porcelain": "",
-      "post_revert_status_empty": true,
-      "note": "git status --porcelain web/ test/ returned empty output — working tree clean"
-    },
-    "post_revert_suite_run": {
-      "command": "cd web && npx vitest run tests/guards/source-scan.spec.ts tests/guards/meta-control.spec.ts src/api/__tests__/identity.iss0812.test.ts src/api/__tests__/definitionsSearch.iss0820.test.ts src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
-      "result": "Test Files 5 passed (5) / Tests 60 passed (60)"
-    }
-  },
-
-  "iss0812_assertion_verification": {
-    "file": "web/src/api/__tests__/identity.iss0812.test.ts",
-    "assertion_line_confirmed": "expect(new URL(url, 'http://localhost').pathname).toBe('/api/v1/identity/roles')",
-    "not_just_toContain": true,
-    "also_has_negative_guard": "expect(url).not.toContain('/api/v1/admin/roles')",
-    "note": "The strengthened assertion uses exact pathname comparison (Object.is equality). A suffix-corrupted path like '/api/v1/identity/roles-WRONG' would resolve to pathname '/api/v1/identity/roles-WRONG' which fails .toBe('/api/v1/identity/roles'). The substring-match coverage gap is closed.",
-    "tests_passed_in_baseline": 4
-  },
-
-  "iss0820_tsc_guard_documentation": {
-    "vitest_cannot_catch_type_mutation": true,
-    "rationale": "TypeScript type annotations are fully erased before the JavaScript runtime sees the code. The interface `{ q: string; cursor?: string; page_size?: number }` and its mutated form `{ q: string; limit?: number; offset?: number }` produce identical JavaScript at runtime. When the test calls `definitionsApi.search({ q: 'onboarding' })`, the underlying `client.get` serialises the passed object keys via `params as Record<string, unknown>` — both type signatures result in the same serialised URL because no optional params are supplied. Vitest tests TC-ISS0820-01 through TC-ISS0820-04 call with the new param names (page_size, cursor); with the old type signature, the TypeScript compiler rejects these call sites at TS2353, but at runtime the JS still passes the key through — so the URL actually contains 'page_size=10' whether or not the interface declares it.",
-    "tsc_catches_it": true,
-    "tsc_mechanism": "tsc -b performs structural type checking before erasure. The test file's call sites `definitionsApi.search({ q, page_size: 10 })` and `definitionsApi.search({ q, cursor: '...' })` are checked against the declared interface. When the mutant reverts the interface to `{ q; limit?; offset? }`, tsc reports TS2353 'Object literal may only specify known properties' at every call site that uses page_size or cursor — including definitionsSearch.iss0820.test.ts lines 42, 51, and useDefinitions.ts line 93.",
-    "gap_acknowledged": true,
-    "gap_severity": "NON-BLOCKING — tsc is a mandatory step in npm run check (type-check runs before vitest). The regression is caught before any CI gate passes.",
-    "tc_iss0820_vitest_tests_provide": "Runtime behavioural proof that the correct params (q, page_size, cursor) are forwarded and the dead params (limit, offset) are absent from the URL. The compile-time gate closes the type-signature discrimination gap."
-  },
-
-  "iss0823_guard_verification": {
-    "tc_iss0823_01_uses_getByTestId": true,
-    "getByTestId_throws_if_absent": true,
-    "not_queryByTestId": true,
-    "waitFor_rationale": "React may schedule the conditional render asynchronously after the user click event; waitFor polls until the assertion passes or times out, making the test resilient to micro-task scheduling without weakening the assertion.",
-    "mutant_independence": "TEST-DESIGNER's ISS-0823 mutant (remove entire warning block) is confirmed by reading the test source: getByTestId('user-list-truncated-warning') throws TestingLibraryElementError if the element is absent, which is exactly what happens when the conditional JSX block is removed. The test is structurally self-documenting as a discriminating probe.",
-    "tests_passed_in_baseline": 3
-  },
-
-  "final_baseline": {
-    "command": "cd web && npx vitest run tests/guards/source-scan.spec.ts tests/guards/meta-control.spec.ts src/api/__tests__/identity.iss0812.test.ts src/api/__tests__/definitionsSearch.iss0820.test.ts src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
-    "result": "Test Files 5 passed (5) / Tests 60 passed (60)",
-    "measured_by": "TEST-DESIGN-VALIDATOR (post-revert run)"
-  },
-
-  "gate_summary": {
-    "ISS-0813-A_mutant_independently_verified": true,
-    "ISS-0813-A_revert_clean": true,
-    "ISS-0812_strengthened_assertion_confirmed": true,
-    "ISS-0820_tsc_gap_documented_non_blocking": true,
-    "ISS-0823_guard_confirmed_by_structural_inspection": true,
-    "all_criteria_covered": true,
-    "no_skip_tags": true,
-    "no_todo_tests": true,
-    "fixtures_isolated": true,
-    "no_secrets": true,
-    "baseline_green": true
-  },
-
-  "handoff_to": "TEST-RUNNER",
-  "next_action": "Run the full test suite for this batch. All 5 test files and 60 tests should pass on the current tree."
+    "run_id":  "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
+    "step":  "04b-test-design-gate",
+    "result":  {
+                   "agent":  "TEST-DESIGN-VALIDATOR",
+                   "timestamp":  "2026-09-25T04:57:30Z",
+                   "verdict":  "PASS",
+                   "criterion_coverage_check":  {
+                                                    "ISS-0813":  {
+                                                                     "AC-ISS0813-1":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0813-01 — tests/guards/source-scan.spec.ts"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      },
+                                                                     "AC-ISS0813-2":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0813-02 — tests/guards/meta-control.spec.ts"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      }
+                                                                 },
+                                                    "ISS-0812":  {
+                                                                     "AC-ISS0812-1":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0812-01 — src/api/__tests__/identity.iss0812.test.ts"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      },
+                                                                     "AC-ISS0812-2":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0812-02 — src/api/__tests__/identity.iss0812.test.ts",
+                                                                                                             "TC-ISS0812-03 — src/api/__tests__/identity.iss0812.test.ts",
+                                                                                                             "TC-ISS0812-04 — src/api/__tests__/identity.iss0812.test.ts"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      }
+                                                                 },
+                                                    "ISS-0820":  {
+                                                                     "AC-ISS0820-1":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0820-01 — src/api/__tests__/definitionsSearch.iss0820.test.ts"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      },
+                                                                     "AC-ISS0820-2":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0820-02 — src/api/__tests__/definitionsSearch.iss0820.test.ts",
+                                                                                                             "TC-ISS0820-03 — src/api/__tests__/definitionsSearch.iss0820.test.ts"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      },
+                                                                     "AC-ISS0820-3":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0820-04 — src/api/__tests__/definitionsSearch.iss0820.test.ts"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      },
+                                                                     "AC-ISS0820-4":  {
+                                                                                          "covered_by":  [
+                                                                                                             "npm run type-check (tsc -b tsconfig.json) — gates the type-signature regression"
+                                                                                                         ],
+                                                                                          "status":  "COVERED — tsc only (see gap documentation below)"
+                                                                                      }
+                                                                 },
+                                                    "ISS-0823":  {
+                                                                     "AC-ISS0823-1":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0823-01 — src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      },
+                                                                     "AC-ISS0823-2":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0823-02 — src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      },
+                                                                     "AC-ISS0823-3":  {
+                                                                                          "covered_by":  [
+                                                                                                             "TC-ISS0823-03 — src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx"
+                                                                                                         ],
+                                                                                          "status":  "COVERED"
+                                                                                      }
+                                                                 }
+                                                },
+                   "skip_tag_check":  {
+                                          "result":  "PASS",
+                                          "detail":  "No @tag :skip annotations exist in any of the five test files. Reviewed: source-scan.spec.ts, meta-control.spec.ts, identity.iss0812.test.ts, definitionsSearch.iss0820.test.ts, GroupsPage.iss0823.test.tsx."
+                                      },
+                   "todo_implement_check":  {
+                                                "result":  "PASS",
+                                                "detail":  "No \u0027TODO: implement test\u0027 strings present in any spec or test file."
+                                            },
+                   "fixture_isolation_check":  {
+                                                   "result":  "PASS",
+                                                   "detail":  "All fixtures are locally scoped (beforeEach/afterEach with vi.fn and cleanup). No shared hardcoded state. No test depends on execution order."
+                                               },
+                   "secrets_check":  {
+                                         "result":  "PASS",
+                                         "detail":  "No hardcoded secrets or connection strings. Tokens use placeholder values (\u0027test-token\u0027, \u0027tok\u0027)."
+                                     },
+                   "wf03_pre_fix_failure_context":  {
+                                                        "note":  "The pre-fix failure for ISS-0813 is \u0027the code under test did not exist as a guard\u0027 — the dead-admin-prefix pattern was added by this fix to forbidlist.ts. Per WF-03 protocol, an independent mutant must be applied and verified by TEST-DESIGN-VALIDATOR, not merely copied from TEST-DESIGNER\u0027s report.",
+                                                        "independent_mutant_applied":  "ISS-0813-A"
+                                                    },
+                   "independent_mutant_verification":  {
+                                                           "mutant_id":  "ISS-0813-A",
+                                                           "issue":  "ISS-0813",
+                                                           "description":  "Applied independently by TEST-DESIGN-VALIDATOR: rolesApi.create URL changed from \u0027/api/v1/identity/roles\u0027 to \u0027/api/v1/admin/roles\u0027 in web/src/api/identity.ts line 79",
+                                                           "file_mutated":  "web/src/api/identity.ts",
+                                                           "change_applied":  "client.post\u003cRole\u003e(\u0027/api/v1/identity/roles\u0027, body) → client.post\u003cRole\u003e(\u0027/api/v1/admin/roles\u0027, body)",
+                                                           "command_run":  "cd web \u0026\u0026 npx vitest run tests/guards/source-scan.spec.ts",
+                                                           "measured_result":  {
+                                                                                   "test_files_failed":  1,
+                                                                                   "tests_failed":  1,
+                                                                                   "tests_passed":  0,
+                                                                                   "failure_detail":  "Source scan found 1 violation(s):\n  dead-admin-prefix @ web/src/api/identity.ts:79",
+                                                                                   "matches_designer_claim":  true
+                                                                               },
+                                                           "revert":  {
+                                                                          "command":  "git checkout -- web/src/api/identity.ts",
+                                                                          "post_revert_git_status_porcelain":  "",
+                                                                          "post_revert_status_empty":  true,
+                                                                          "note":  "git status --porcelain web/ test/ returned empty output — working tree clean"
+                                                                      },
+                                                           "post_revert_suite_run":  {
+                                                                                         "command":  "cd web \u0026\u0026 npx vitest run tests/guards/source-scan.spec.ts tests/guards/meta-control.spec.ts src/api/__tests__/identity.iss0812.test.ts src/api/__tests__/definitionsSearch.iss0820.test.ts src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
+                                                                                         "result":  "Test Files 5 passed (5) / Tests 60 passed (60)"
+                                                                                     }
+                                                       },
+                   "iss0812_assertion_verification":  {
+                                                          "file":  "web/src/api/__tests__/identity.iss0812.test.ts",
+                                                          "assertion_line_confirmed":  "expect(new URL(url, \u0027http://localhost\u0027).pathname).toBe(\u0027/api/v1/identity/roles\u0027)",
+                                                          "not_just_toContain":  true,
+                                                          "also_has_negative_guard":  "expect(url).not.toContain(\u0027/api/v1/admin/roles\u0027)",
+                                                          "note":  "The strengthened assertion uses exact pathname comparison (Object.is equality). A suffix-corrupted path like \u0027/api/v1/identity/roles-WRONG\u0027 would resolve to pathname \u0027/api/v1/identity/roles-WRONG\u0027 which fails .toBe(\u0027/api/v1/identity/roles\u0027). The substring-match coverage gap is closed.",
+                                                          "tests_passed_in_baseline":  4
+                                                      },
+                   "iss0820_tsc_guard_documentation":  {
+                                                           "vitest_cannot_catch_type_mutation":  true,
+                                                           "rationale":  "TypeScript type annotations are fully erased before the JavaScript runtime sees the code. The interface `{ q: string; cursor?: string; page_size?: number }` and its mutated form `{ q: string; limit?: number; offset?: number }` produce identical JavaScript at runtime. When the test calls `definitionsApi.search({ q: \u0027onboarding\u0027 })`, the underlying `client.get` serialises the passed object keys via `params as Record\u003cstring, unknown\u003e` — both type signatures result in the same serialised URL because no optional params are supplied. Vitest tests TC-ISS0820-01 through TC-ISS0820-04 call with the new param names (page_size, cursor); with the old type signature, the TypeScript compiler rejects these call sites at TS2353, but at runtime the JS still passes the key through — so the URL actually contains \u0027page_size=10\u0027 whether or not the interface declares it.",
+                                                           "tsc_catches_it":  true,
+                                                           "tsc_mechanism":  "tsc -b performs structural type checking before erasure. The test file\u0027s call sites `definitionsApi.search({ q, page_size: 10 })` and `definitionsApi.search({ q, cursor: \u0027...\u0027 })` are checked against the declared interface. When the mutant reverts the interface to `{ q; limit?; offset? }`, tsc reports TS2353 \u0027Object literal may only specify known properties\u0027 at every call site that uses page_size or cursor — including definitionsSearch.iss0820.test.ts lines 42, 51, and useDefinitions.ts line 93.",
+                                                           "gap_acknowledged":  true,
+                                                           "gap_severity":  "NON-BLOCKING — tsc is a mandatory step in npm run check (type-check runs before vitest). The regression is caught before any CI gate passes.",
+                                                           "tc_iss0820_vitest_tests_provide":  "Runtime behavioural proof that the correct params (q, page_size, cursor) are forwarded and the dead params (limit, offset) are absent from the URL. The compile-time gate closes the type-signature discrimination gap."
+                                                       },
+                   "iss0823_guard_verification":  {
+                                                      "tc_iss0823_01_uses_getByTestId":  true,
+                                                      "getByTestId_throws_if_absent":  true,
+                                                      "not_queryByTestId":  true,
+                                                      "waitFor_rationale":  "React may schedule the conditional render asynchronously after the user click event; waitFor polls until the assertion passes or times out, making the test resilient to micro-task scheduling without weakening the assertion.",
+                                                      "mutant_independence":  "TEST-DESIGNER\u0027s ISS-0823 mutant (remove entire warning block) is confirmed by reading the test source: getByTestId(\u0027user-list-truncated-warning\u0027) throws TestingLibraryElementError if the element is absent, which is exactly what happens when the conditional JSX block is removed. The test is structurally self-documenting as a discriminating probe.",
+                                                      "tests_passed_in_baseline":  3
+                                                  },
+                   "final_baseline":  {
+                                          "command":  "cd web \u0026\u0026 npx vitest run tests/guards/source-scan.spec.ts tests/guards/meta-control.spec.ts src/api/__tests__/identity.iss0812.test.ts src/api/__tests__/definitionsSearch.iss0820.test.ts src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
+                                          "result":  "Test Files 5 passed (5) / Tests 60 passed (60)",
+                                          "measured_by":  "TEST-DESIGN-VALIDATOR (post-revert run)"
+                                      },
+                   "gate_summary":  {
+                                        "ISS-0813-A_mutant_independently_verified":  true,
+                                        "ISS-0813-A_revert_clean":  true,
+                                        "ISS-0812_strengthened_assertion_confirmed":  true,
+                                        "ISS-0820_tsc_gap_documented_non_blocking":  true,
+                                        "ISS-0823_guard_confirmed_by_structural_inspection":  true,
+                                        "all_criteria_covered":  true,
+                                        "no_skip_tags":  true,
+                                        "no_todo_tests":  true,
+                                        "fixtures_isolated":  true,
+                                        "no_secrets":  true,
+                                        "baseline_green":  true
+                                    },
+                   "handoff_to":  "TEST-RUNNER",
+                   "next_action":  "Run the full test suite for this batch. All 5 test files and 60 tests should pass on the current tree."
+               },
+    "status":  "COMPLETED"
 }

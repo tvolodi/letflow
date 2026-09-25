@@ -1,95 +1,88 @@
 {
-  "run_id": "WF03-ISS0806-20260925",
-  "step": "01-issue-fixer",
-  "agent": "ISSUE-FIXER",
-  "timestamp": "2026-09-25T00:28:00Z",
-  "issue": {
-    "canonical_id": "ISS-0790",
-    "queue_alias": "ISS-0806",
-    "queue_ref": "Q-806",
-    "github_ref": "GH-1792",
-    "status_at_start": "open",
-    "severity": "MINOR"
-  },
-
-  "step_0_5_registry_lookup": {
-    "result": "no_prior_resolved_match",
-    "reasoning": "Searched docs/issues/*.yaml for entries with status: resolved whose description mentions similar symptoms — type-safety gap at module manifest boundary, role/permission compile-time checks. No prior resolved entry matches. ISS-0790 (filed 2026-09-24 by REVIEWER in WF02-REQ400-20260924) is the first and only filing of this symptom set. ISS-0806 is confirmed as a queue-id alias for ISS-0790 (the alias file states this explicitly: 'This file is a queue-id alias only.'). This is NOT a recurrence — the issue was pre-announced as a deferred open item in docs/migration/decisions/0039-platform-module-solution-layering.md (lines ~333-337) and filed exactly when that record instructed. Severity remains MINOR."
-  },
-
-  "step_1_diagnosis": {
-    "root_cause": {
-      "summary": "The `Letflow.Modules.Module` behaviour's `@type manifest()` declaration types both `permissions` and `role_grants` values as plain `atom()` / `[atom()]`. Elixir's type system — and Dialyzer by extension — has no mechanism to express a relational / dependent constraint between two sibling fields of the same map type: specifically, that every atom appearing as a value in the `role_grants` map must also appear in the `permissions` list. This is structurally a subset constraint across two independent fields of the same struct/map, which is outside the expressible domain of Elixir's type system. As a result, a module author who writes `role_grants: %{SOME_ROLE: [:Undeclared]}` where `:Undeclared` is absent from `permissions` will receive no compile-time feedback whatsoever.",
-      "where_the_gap_lives": "lib/letflow/modules/module.ex — @type manifest() at the `required(:permissions)` and `required(:role_grants)` field declarations",
-      "what_catches_it_today": "Only `Letflow.Modules.Catalog.validate_granted_permissions_declared/1` (catalog.ex, the private validation helper) catches this, and only when `Catalog.validate/1` is explicitly called — which happens in CatalogTest (test/letflow/modules/catalog_test.exs, the 'rejects a role_grants value not in the module's own permissions' test case), not during compilation of the module itself."
-    },
-
-    "reproduction": {
-      "method": "static_code_trace",
-      "findings": [
-        "lib/letflow/modules/module.ex declares `@type manifest()` with `required(:permissions) => [atom()]` and `required(:role_grants) => %{atom() => [atom()]}`. Both fields accept any atoms — Dialyzer sees no relationship between them.",
-        "@callback manifest/0 returns `manifest()` — this means any module implementing the callback can return a manifest where role_grants contains atoms absent from permissions and the compiler will emit no warning or error.",
-        "lib/letflow/modules/catalog.ex's `validate_granted_permissions_declared/1` (private function, called only through `validate/2`) correctly detects violations at runtime/test time: it flattens all role_grants values, deduplicates, then checks each against `manifest.permissions`, returning `{:error, {:ungranted_permission_declared, bad_permission}}` on the first violation.",
-        "test/letflow/modules/catalog_test.exs exercises this rule correctly via an explicit inline manifest test case. The Fixture module (test/support/modules/fixture/fixture.ex) itself is valid: `permissions: [:FixtureRead]` and `role_grants: %{TASK_WORKER: [:FixtureRead]}` are consistent.",
-        "docs/migration/decisions/0039-platform-module-solution-layering.md (lines ~333-337) explicitly pre-announced this gap as non-blocking: 'module permissions are typed atom() at the Catalog boundary, which is a type-safety gap. When P1's code lands, REVIEWER should file it under docs/issues/ tagged type-safety. Candidate fix: a compile-time check that every role_grants atom is in permissions.'"
-      ],
-      "confirmed_by_direct_read": true,
-      "note": "No mis-typed manifest currently exists in the codebase — the Fixture module is correctly authored. The defect is a missing constraint, not a live correctness failure. Reproduce by writing a module with role_grants referencing an undeclared permission: no compile error; only `Catalog.validate/1` catches it."
-    },
-
-    "feasibility_assessment": {
-      "dialyzer_only_type_refinement": {
-        "verdict": "INFEASIBLE",
-        "reasoning": "Elixir/Erlang's type system (Dialyzer uses HM-style type inference over Erlang terms) cannot express a dependent/relational constraint between two sibling fields of the same map — specifically 'the atoms in the values of role_grants are a subset of the atoms in permissions'. A type alias `@type permission() :: atom()` would give a semantic label but provides no structural enforcement; Dialyzer would not flag a manifest where `role_grants` values contain atoms not in `permissions`. The constraint is set-membership across fields, not a type-level distinction."
-      },
-      "defmanifest_macro": {
-        "verdict": "FEASIBLE — RECOMMENDED",
-        "reasoning": "A `defmanifest/1` macro defined in `Letflow.Modules.Module` (or a companion `Letflow.Modules.Module.DSL` module) can receive the manifest fields as a keyword list or quoted expression at compile time. Since real module manifests use compile-time literal atoms (the Fixture module and all anticipated real modules use static atom lists), the macro can evaluate the permissions list and role_grants map at macro-expansion time, then raise a `CompileError` if any role_grants value atom is absent from permissions. The macro still emits a `def manifest do ... end` function body, preserving the existing `@callback manifest/0` contract. `Catalog.validate/1` remains unchanged and continues to serve as second-line defense (for dynamically-constructed or test-inline manifests). This approach gives genuine compile-time feedback at module definition, not at test-run time.",
-        "trade_off": "Module authors must switch from `def manifest do ... end` to `defmanifest do ... end` (or an equivalent DSL call). For the current codebase this means updating exactly one file: test/support/modules/fixture/fixture.ex. Every future module gets the benefit automatically. If a module's manifest contains non-literal values (computed at runtime from config, for example), the compile-time check would require special handling (e.g., a runtime-only path that skips the compile-time guard but still defers to Catalog.validate/1)."
-      },
-      "before_compile_attribute_accumulator": {
-        "verdict": "FEASIBLE but more complex",
-        "reasoning": "Modules could `use Letflow.Modules.Module`, declare `@permissions [...]` and `@role_grants %{...}` module attributes, and rely on a `@before_compile` hook to (a) validate role_grants ⊆ permissions and (b) generate the `manifest/0` function body. This removes the need for a separate `defmanifest` call but changes the interface from `@behaviour ... + def manifest` to `use ... + @attribute`. More moving parts, higher cognitive overhead for module authors, and a larger change to the existing Module behaviour interface. The @before_compile hook also runs after all module attributes are accumulated, which means errors surface slightly later in the compilation unit (at @before_compile time rather than at the point of the defmanifest call)."
-      },
-      "type_annotation_only_no_code_change": {
-        "verdict": "INSUFFICIENT",
-        "reasoning": "Renaming types without any code validation mechanism (e.g., naming `@type declared_permission() :: atom()` and `@type granted_permission() :: atom()`) gives semantic clarity in @typedoc but provides no actual enforcement. Dialyzer still cannot see the cross-field constraint."
-      }
-    },
-
-    "recommended_approach": {
-      "approach": "defmanifest/1 macro in lib/letflow/modules/module.ex",
-      "rationale": "Simplest mechanism that actually provides compile-time feedback. The macro evaluates at module-definition time, before the module is fully compiled, and raises a CompileError with a clear message (e.g., 'manifest role_grants atom :SomePermission not declared in permissions') if the constraint is violated. No process, no ETS, no runtime overhead. Existing Catalog.validate/1 runtime check and its test coverage are left entirely unchanged, as required by AC2.",
-      "affected_files": [
-        "lib/letflow/modules/module.ex — add defmanifest/1 macro (or compile-time validation helper)",
-        "test/support/modules/fixture/fixture.ex — update manifest/0 definition to use defmanifest if macro approach adopted"
-      ],
-      "acceptance_criteria_mapping": {
-        "AC1_compile_time_check": "defmanifest macro raises CompileError at module compilation if any role_grants value atom is absent from permissions",
-        "AC2_runtime_validate_unchanged": "Catalog.validate/1 and validate_granted_permissions_declared/1 are not modified; all six-rule checks continue to run when validate/1 is called"
-      }
-    },
-
-    "why_existing_tests_did_not_catch_this": "The gap is a missing constraint at the type system / macro level, not a missing test case. The ExUnit test suite (CatalogTest) correctly tests validate_granted_permissions_declared/1 and would catch a bad manifest at test-run time. What is missing is enforcement at module compile time — before any test runs. No ExUnit test can enforce a compile-time contract.",
-
-    "decision_record_alignment": "docs/migration/decisions/0039-platform-module-solution-layering.md lines ~333-337 explicitly designated this as a pre-known non-blocking open item to be filed by REVIEWER when P1 landed. This run is the first resolution attempt. No severity escalation: ISS-0790 is not a recurrence; the runtime validate/1 check has always been correct."
-  },
-
-  "result": {
-    "status": "PASS",
-    "summary": "Root cause confirmed by direct code trace (no speculation): the @type manifest() in lib/letflow/modules/module.ex types both :permissions and :role_grants values as plain atom(), making it impossible for Dialyzer or the compiler to enforce the subset constraint between the two fields. The only current enforcement is Catalog.validate_granted_permissions_declared/1, which fires at test/runtime only. Dialyzer-only type refinement is infeasible for a relational cross-field constraint in Elixir's type system. The recommended fix is a defmanifest/1 macro in module.ex that validates the constraint at module compile time and raises CompileError if violated. The existing runtime validate/1 check and its test coverage are unchanged. No prior resolved match in the issue registry — ISS-0790 is the canonical first filing, pre-announced by decision record 0039.",
-    "next_action": "Route to CODE-DESIGNER for fix design",
-    "next_agent": "CODE-DESIGNER",
-    "handoff_context": {
-      "canonical_issue": "docs/issues/ISS-0790.yaml",
-      "run_id": "WF03-ISS0806-20260925",
-      "module_behaviour_file": "lib/letflow/modules/module.ex",
-      "catalog_file": "lib/letflow/modules/catalog.ex",
-      "fixture_module": "test/support/modules/fixture/fixture.ex",
-      "existing_test_file": "test/letflow/modules/catalog_test.exs",
-      "decision_record": "docs/migration/decisions/0039-platform-module-solution-layering.md (lines ~333-337)",
-      "constraint_to_enforce": "Every atom in the values of manifest.role_grants must also appear in manifest.permissions — currently enforced only by Catalog.validate_granted_permissions_declared/1 at runtime/test time; must also be enforced at compile time via defmanifest/1 macro or equivalent mechanism.",
-      "do_not_change": "Catalog.validate/1, validate_granted_permissions_declared/1, and all six validation rules — runtime behavior must remain unchanged per AC2."
-    }
-  }
+    "run_id":  "WF03-ISS0806-20260925",
+    "step":  "01-issue-fixer",
+    "result":  {
+                   "status":  "PASS",
+                   "summary":  "Root cause confirmed by direct code trace (no speculation): the @type manifest() in lib/letflow/modules/module.ex types both :permissions and :role_grants values as plain atom(), making it impossible for Dialyzer or the compiler to enforce the subset constraint between the two fields. The only current enforcement is Catalog.validate_granted_permissions_declared/1, which fires at test/runtime only. Dialyzer-only type refinement is infeasible for a relational cross-field constraint in Elixir\u0027s type system. The recommended fix is a defmanifest/1 macro in module.ex that validates the constraint at module compile time and raises CompileError if violated. The existing runtime validate/1 check and its test coverage are unchanged. No prior resolved match in the issue registry — ISS-0790 is the canonical first filing, pre-announced by decision record 0039.",
+                   "next_action":  "Route to CODE-DESIGNER for fix design",
+                   "next_agent":  "CODE-DESIGNER",
+                   "handoff_context":  {
+                                           "canonical_issue":  "docs/issues/ISS-0790.yaml",
+                                           "run_id":  "WF03-ISS0806-20260925",
+                                           "module_behaviour_file":  "lib/letflow/modules/module.ex",
+                                           "catalog_file":  "lib/letflow/modules/catalog.ex",
+                                           "fixture_module":  "test/support/modules/fixture/fixture.ex",
+                                           "existing_test_file":  "test/letflow/modules/catalog_test.exs",
+                                           "decision_record":  "docs/migration/decisions/0039-platform-module-solution-layering.md (lines ~333-337)",
+                                           "constraint_to_enforce":  "Every atom in the values of manifest.role_grants must also appear in manifest.permissions — currently enforced only by Catalog.validate_granted_permissions_declared/1 at runtime/test time; must also be enforced at compile time via defmanifest/1 macro or equivalent mechanism.",
+                                           "do_not_change":  "Catalog.validate/1, validate_granted_permissions_declared/1, and all six validation rules — runtime behavior must remain unchanged per AC2."
+                                       },
+                   "agent":  "ISSUE-FIXER",
+                   "timestamp":  "2026-09-25T00:28:00Z",
+                   "issue":  {
+                                 "canonical_id":  "ISS-0790",
+                                 "queue_alias":  "ISS-0806",
+                                 "queue_ref":  "Q-806",
+                                 "github_ref":  "GH-1792",
+                                 "status_at_start":  "open",
+                                 "severity":  "MINOR"
+                             },
+                   "step_0_5_registry_lookup":  {
+                                                    "result":  "no_prior_resolved_match",
+                                                    "reasoning":  "Searched docs/issues/*.yaml for entries with status: resolved whose description mentions similar symptoms — type-safety gap at module manifest boundary, role/permission compile-time checks. No prior resolved entry matches. ISS-0790 (filed 2026-09-24 by REVIEWER in WF02-REQ400-20260924) is the first and only filing of this symptom set. ISS-0806 is confirmed as a queue-id alias for ISS-0790 (the alias file states this explicitly: \u0027This file is a queue-id alias only.\u0027). This is NOT a recurrence — the issue was pre-announced as a deferred open item in docs/migration/decisions/0039-platform-module-solution-layering.md (lines ~333-337) and filed exactly when that record instructed. Severity remains MINOR."
+                                                },
+                   "step_1_diagnosis":  {
+                                            "root_cause":  {
+                                                               "summary":  "The `Letflow.Modules.Module` behaviour\u0027s `@type manifest()` declaration types both `permissions` and `role_grants` values as plain `atom()` / `[atom()]`. Elixir\u0027s type system — and Dialyzer by extension — has no mechanism to express a relational / dependent constraint between two sibling fields of the same map type: specifically, that every atom appearing as a value in the `role_grants` map must also appear in the `permissions` list. This is structurally a subset constraint across two independent fields of the same struct/map, which is outside the expressible domain of Elixir\u0027s type system. As a result, a module author who writes `role_grants: %{SOME_ROLE: [:Undeclared]}` where `:Undeclared` is absent from `permissions` will receive no compile-time feedback whatsoever.",
+                                                               "where_the_gap_lives":  "lib/letflow/modules/module.ex — @type manifest() at the `required(:permissions)` and `required(:role_grants)` field declarations",
+                                                               "what_catches_it_today":  "Only `Letflow.Modules.Catalog.validate_granted_permissions_declared/1` (catalog.ex, the private validation helper) catches this, and only when `Catalog.validate/1` is explicitly called — which happens in CatalogTest (test/letflow/modules/catalog_test.exs, the \u0027rejects a role_grants value not in the module\u0027s own permissions\u0027 test case), not during compilation of the module itself."
+                                                           },
+                                            "reproduction":  {
+                                                                 "method":  "static_code_trace",
+                                                                 "findings":  [
+                                                                                  "lib/letflow/modules/module.ex declares `@type manifest()` with `required(:permissions) =\u003e [atom()]` and `required(:role_grants) =\u003e %{atom() =\u003e [atom()]}`. Both fields accept any atoms — Dialyzer sees no relationship between them.",
+                                                                                  "@callback manifest/0 returns `manifest()` — this means any module implementing the callback can return a manifest where role_grants contains atoms absent from permissions and the compiler will emit no warning or error.",
+                                                                                  "lib/letflow/modules/catalog.ex\u0027s `validate_granted_permissions_declared/1` (private function, called only through `validate/2`) correctly detects violations at runtime/test time: it flattens all role_grants values, deduplicates, then checks each against `manifest.permissions`, returning `{:error, {:ungranted_permission_declared, bad_permission}}` on the first violation.",
+                                                                                  "test/letflow/modules/catalog_test.exs exercises this rule correctly via an explicit inline manifest test case. The Fixture module (test/support/modules/fixture/fixture.ex) itself is valid: `permissions: [:FixtureRead]` and `role_grants: %{TASK_WORKER: [:FixtureRead]}` are consistent.",
+                                                                                  "docs/migration/decisions/0039-platform-module-solution-layering.md (lines ~333-337) explicitly pre-announced this gap as non-blocking: \u0027module permissions are typed atom() at the Catalog boundary, which is a type-safety gap. When P1\u0027s code lands, REVIEWER should file it under docs/issues/ tagged type-safety. Candidate fix: a compile-time check that every role_grants atom is in permissions.\u0027"
+                                                                              ],
+                                                                 "confirmed_by_direct_read":  true,
+                                                                 "note":  "No mis-typed manifest currently exists in the codebase — the Fixture module is correctly authored. The defect is a missing constraint, not a live correctness failure. Reproduce by writing a module with role_grants referencing an undeclared permission: no compile error; only `Catalog.validate/1` catches it."
+                                                             },
+                                            "feasibility_assessment":  {
+                                                                           "dialyzer_only_type_refinement":  {
+                                                                                                                 "verdict":  "INFEASIBLE",
+                                                                                                                 "reasoning":  "Elixir/Erlang\u0027s type system (Dialyzer uses HM-style type inference over Erlang terms) cannot express a dependent/relational constraint between two sibling fields of the same map — specifically \u0027the atoms in the values of role_grants are a subset of the atoms in permissions\u0027. A type alias `@type permission() :: atom()` would give a semantic label but provides no structural enforcement; Dialyzer would not flag a manifest where `role_grants` values contain atoms not in `permissions`. The constraint is set-membership across fields, not a type-level distinction."
+                                                                                                             },
+                                                                           "defmanifest_macro":  {
+                                                                                                     "verdict":  "FEASIBLE — RECOMMENDED",
+                                                                                                     "reasoning":  "A `defmanifest/1` macro defined in `Letflow.Modules.Module` (or a companion `Letflow.Modules.Module.DSL` module) can receive the manifest fields as a keyword list or quoted expression at compile time. Since real module manifests use compile-time literal atoms (the Fixture module and all anticipated real modules use static atom lists), the macro can evaluate the permissions list and role_grants map at macro-expansion time, then raise a `CompileError` if any role_grants value atom is absent from permissions. The macro still emits a `def manifest do ... end` function body, preserving the existing `@callback manifest/0` contract. `Catalog.validate/1` remains unchanged and continues to serve as second-line defense (for dynamically-constructed or test-inline manifests). This approach gives genuine compile-time feedback at module definition, not at test-run time.",
+                                                                                                     "trade_off":  "Module authors must switch from `def manifest do ... end` to `defmanifest do ... end` (or an equivalent DSL call). For the current codebase this means updating exactly one file: test/support/modules/fixture/fixture.ex. Every future module gets the benefit automatically. If a module\u0027s manifest contains non-literal values (computed at runtime from config, for example), the compile-time check would require special handling (e.g., a runtime-only path that skips the compile-time guard but still defers to Catalog.validate/1)."
+                                                                                                 },
+                                                                           "before_compile_attribute_accumulator":  {
+                                                                                                                        "verdict":  "FEASIBLE but more complex",
+                                                                                                                        "reasoning":  "Modules could `use Letflow.Modules.Module`, declare `@permissions [...]` and `@role_grants %{...}` module attributes, and rely on a `@before_compile` hook to (a) validate role_grants ⊆ permissions and (b) generate the `manifest/0` function body. This removes the need for a separate `defmanifest` call but changes the interface from `@behaviour ... + def manifest` to `use ... + @attribute`. More moving parts, higher cognitive overhead for module authors, and a larger change to the existing Module behaviour interface. The @before_compile hook also runs after all module attributes are accumulated, which means errors surface slightly later in the compilation unit (at @before_compile time rather than at the point of the defmanifest call)."
+                                                                                                                    },
+                                                                           "type_annotation_only_no_code_change":  {
+                                                                                                                       "verdict":  "INSUFFICIENT",
+                                                                                                                       "reasoning":  "Renaming types without any code validation mechanism (e.g., naming `@type declared_permission() :: atom()` and `@type granted_permission() :: atom()`) gives semantic clarity in @typedoc but provides no actual enforcement. Dialyzer still cannot see the cross-field constraint."
+                                                                                                                   }
+                                                                       },
+                                            "recommended_approach":  {
+                                                                         "approach":  "defmanifest/1 macro in lib/letflow/modules/module.ex",
+                                                                         "rationale":  "Simplest mechanism that actually provides compile-time feedback. The macro evaluates at module-definition time, before the module is fully compiled, and raises a CompileError with a clear message (e.g., \u0027manifest role_grants atom :SomePermission not declared in permissions\u0027) if the constraint is violated. No process, no ETS, no runtime overhead. Existing Catalog.validate/1 runtime check and its test coverage are left entirely unchanged, as required by AC2.",
+                                                                         "affected_files":  [
+                                                                                                "lib/letflow/modules/module.ex — add defmanifest/1 macro (or compile-time validation helper)",
+                                                                                                "test/support/modules/fixture/fixture.ex — update manifest/0 definition to use defmanifest if macro approach adopted"
+                                                                                            ],
+                                                                         "acceptance_criteria_mapping":  {
+                                                                                                             "AC1_compile_time_check":  "defmanifest macro raises CompileError at module compilation if any role_grants value atom is absent from permissions",
+                                                                                                             "AC2_runtime_validate_unchanged":  "Catalog.validate/1 and validate_granted_permissions_declared/1 are not modified; all six-rule checks continue to run when validate/1 is called"
+                                                                                                         }
+                                                                     },
+                                            "why_existing_tests_did_not_catch_this":  "The gap is a missing constraint at the type system / macro level, not a missing test case. The ExUnit test suite (CatalogTest) correctly tests validate_granted_permissions_declared/1 and would catch a bad manifest at test-run time. What is missing is enforcement at module compile time — before any test runs. No ExUnit test can enforce a compile-time contract.",
+                                            "decision_record_alignment":  "docs/migration/decisions/0039-platform-module-solution-layering.md lines ~333-337 explicitly designated this as a pre-known non-blocking open item to be filed by REVIEWER when P1 landed. This run is the first resolution attempt. No severity escalation: ISS-0790 is not a recurrence; the runtime validate/1 check has always been correct."
+                                        }
+               },
+    "status":  "COMPLETED"
 }

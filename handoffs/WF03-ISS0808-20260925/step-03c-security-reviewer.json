@@ -1,105 +1,109 @@
 {
-  "handoff_id": "WF03-ISS0808-20260925-step-03c",
-  "run_id": "WF03-ISS0808-20260925",
-  "workflow_id": "WF-03",
-  "step": "Step 3c (Security Reviewer Gate)",
-  "to_agent": "ORCH",
-  "from_agent": "SECURITY-REVIEWER",
-  "status": "COMPLETED",
-  "created_at": "2026-09-25T04:30:37Z",
-  "context": {
-    "issue_id": "ISS-0808",
-    "implementation_commit": "97c50b5d",
-    "design_artefact": "lib/letflow/design/iss-0808-tenant-status-roles-normalization.md",
-    "files_changed": [
-      "lib/letflow/plugs/tenant_status.ex",
-      "test/letflow/plugs/tenant_status_test.exs"
-    ],
-    "prior_gate": "step-02b-design-gate.json (CODE-DESIGN-VALIDATOR PASS)"
-  },
-  "verdict": "PASS",
-  "scope_test": {
-    "result": "IN-SCOPE",
-    "rationale": "lib/letflow/plugs/tenant_status.ex is the authorization gate that exempts PLATFORM_ADMIN callers from the inactive-tenant 403 block. It is on the tenant-data access path — every request to tenant-scoped API routes passes through this plug (mounted in Letflow.Plugs.ApiPipeline immediately after AuthPipeline, per moduledoc). A change to the PLATFORM_ADMIN exemption logic directly controls which actors can access tenant data when a tenant is inactive. Scope test criterion satisfied: modifies a tenant-data authorization path."
-  },
-  "invariant_assessment": [
-    {
-      "id": "INV-1",
-      "name": "Tenant data isolation",
-      "verdict": "NOT-APPLICABLE",
-      "rationale": "The diff adds no new Ecto schema module, no migration, and no Ecto query. The only DB access in tenant_status.ex is the pre-existing Repo.get(Tenant, tenant_id) call, which is unchanged. The change is confined to role normalization before the authorization cond — no data-scoping path is touched. INV-1's 'How to verify' procedure (prefix-scoping, migration table placement, tenant_id attribution) has no surface to check here."
-    },
-    {
-      "id": "INV-2",
-      "name": "Server-side field authorisation",
-      "verdict": "NOT-APPLICABLE",
-      "rationale": "S4 (multi-tenant API surface) has not started. No API response type or field-visibility logic is touched by this diff."
-    },
-    {
-      "id": "INV-3",
-      "name": "Untrusted runtime sandboxing",
-      "verdict": "NOT-APPLICABLE",
-      "rationale": "S5 (scripting/plugins) has not started. No sandbox or host-capability logic is touched."
-    },
-    {
-      "id": "INV-4",
-      "name": "Secrets by reference only",
-      "verdict": "APPLIES",
-      "result": "PASS",
-      "how_verified": "INV-4 is live for all changes. Ran Select-String against lib/letflow/plugs/tenant_status.ex and lib/letflow/api/authorization.ex for patterns matching (password|secret|token)\\s*[:=]\\s*\".{8,}\" — zero hits. The diff introduces no string literals, no System.get_env calls, no token values, and no config reads. The new alias Letflow.Api.Authorization is a compile-time alias only and resolves no secret material at runtime."
-    },
-    {
-      "id": "INV-5",
-      "name": "Not-found/forbidden indistinguishability",
-      "verdict": "NOT-APPLICABLE",
-      "rationale": "S4 (lookup-by-ID endpoints) has not started. No new lookup-by-ID handler is introduced."
-    },
-    {
-      "id": "INV-6",
-      "name": "New data-access paths prove their scoping",
-      "verdict": "APPLIES",
-      "result": "PASS",
-      "how_verified": "This handoff file is the proof required by INV-6. The change is reviewed, all applicable invariants are assessed explicitly, and no new data-access path is introduced — the authorization gate narrows (better normalization), it does not widen."
-    },
-    {
-      "id": "INV-7",
-      "name": "No SQL string interpolation",
-      "verdict": "APPLIES",
-      "result": "PASS",
-      "how_verified": "INV-7 is live. Ran Select-String against lib/letflow/plugs/tenant_status.ex and lib/letflow/api/authorization.ex for 'Repo\\.query' — zero hits. The only DB call in tenant_status.ex remains the pre-existing Repo.get(Tenant, tenant_id) (an Ecto struct lookup with bound parameter, not raw SQL). No raw SQL introduced."
-    },
-    {
-      "id": "INV-8",
-      "name": "No unhandled crashes on realistic failure paths",
-      "verdict": "APPLIES",
-      "result": "PASS",
-      "how_verified": "INV-8 is live. Ran Select-String for bare {:ok, ...} = pattern against both changed files — zero hits. The two new lines are: (1) raw_roles = get_in(conn.assigns, [:auth_context, :roles]) || [] — the || [] guard makes this crash-free even if the key is absent. (2) roles = Authorization.roles_from_strings(raw_roles) — per the Authorization moduledoc and @spec, roles_from_strings/1 'never raises, never widens to any role', uses Enum.reduce with fully-pattern-matched cases, and handles empty/all-unrecognized input as []. No new external I/O is introduced. The existing Repo.get/2 crash-propagation behavior (fail-closed, per OQ-14 §6.4 rationale in moduledoc) is unchanged and was reviewed at REQ-075."
-    },
-    {
-      "id": "INV-9",
-      "name": "Tenant-controlled outbound URL validation",
-      "verdict": "NOT-APPLICABLE",
-      "rationale": "The diff introduces no outbound HTTP request, no URL field, and no webhook dispatch path. UrlValidator is not involved."
-    }
-  ],
-  "specific_security_checks": {
-    "platform_admin_exemption_preserved": {
-      "result": "PASS",
-      "analysis": "The PLATFORM_ADMIN exemption is fully preserved. role_from_string(\"PLATFORM_ADMIN\") in authorization.ex returns the atom :PLATFORM_ADMIN. Authorization.roles_from_strings([\"PLATFORM_ADMIN\"]) therefore returns [:PLATFORM_ADMIN]. The cond guard '@platform_admin not in roles' evaluates to ':PLATFORM_ADMIN not in [:PLATFORM_ADMIN]' = false — the inactive-403 branch is skipped, i.e., PLATFORM_ADMIN is exempt. Behavior is identical to the pre-fix string check for all callers who actually carry the PLATFORM_ADMIN role."
-    },
-    "unknown_roles_do_not_gain_privilege": {
-      "result": "PASS",
-      "analysis": "roles_from_strings/1 is a strict allowlist implemented as an Enum.reduce over role_from_string/1 private clauses. The catch-all clause 'role_from_string(_other) -> nil' silently drops any unrecognized string — nil is excluded from the accumulator. String.to_existing_atom/1 is deliberately NOT used (per Authorization moduledoc) to prevent attacker-controlled atom-table growth. A caller sending \"PLATFORM_ADMIN_WANNABE\", \"PLATFORM_ADMIN \", \"platform_admin\", or any other variant receives an empty or non-PLATFORM_ADMIN roles list and is correctly rejected. The ISS-0808 test block's third test ('an unknown role string is not exempt') explicitly covers this."
-    },
-    "no_bypass_for_unauthenticated_or_lower_privilege": {
-      "result": "PASS",
-      "analysis": "The only new code path is raw_roles extraction + roles_from_strings normalization. roles_from_strings/1 is a pure, closed, non-raising function that can only return atoms from the closed role/0 set. It cannot return :PLATFORM_ADMIN for any input that does not contain the exact string \"PLATFORM_ADMIN\". The nil-auth_context passthrough (check_tenant_status/2 with nil tenant_id, and the Tenant nil case) are both pre-existing and unchanged. No new bypass surface has been introduced."
-    },
-    "atom_type_consistency": {
-      "result": "PASS",
-      "analysis": "role_from_string(\"PLATFORM_ADMIN\") -> :PLATFORM_ADMIN (authorization.ex, verified in view at lines ~444-455). @platform_admin :PLATFORM_ADMIN (tenant_status.ex module attribute). Both are the atom :PLATFORM_ADMIN. The comparison ':PLATFORM_ADMIN not in [role()]' where role() is an atom type is type-consistent. The regression guard property is also confirmed: if roles_from_strings/1 were removed and raw_roles (a [String.t()]) were compared directly against the atom :PLATFORM_ADMIN, ':PLATFORM_ADMIN not in [\"PLATFORM_ADMIN\"]' = true always — all callers including PLATFORM_ADMIN would receive 403, and the ISS-0808 first test ('refute conn.halted') would fail immediately."
-    }
-  },
-  "issues": [],
-  "next_step": "Route to TEST-RUNNER (or REVIEWER if not yet done) per WF-03 pipeline."
+    "handoff_id":  "WF03-ISS0808-20260925-step-03c",
+    "run_id":  "WF03-ISS0808-20260925",
+    "workflow_id":  "WF-03",
+    "step":  "Step 3c (Security Reviewer Gate)",
+    "to_agent":  "ORCH",
+    "from_agent":  "SECURITY-REVIEWER",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-25T04:30:37Z",
+    "context":  {
+                    "issue_id":  "ISS-0808",
+                    "implementation_commit":  "97c50b5d",
+                    "design_artefact":  "lib/letflow/design/iss-0808-tenant-status-roles-normalization.md",
+                    "files_changed":  [
+                                          "lib/letflow/plugs/tenant_status.ex",
+                                          "test/letflow/plugs/tenant_status_test.exs"
+                                      ],
+                    "prior_gate":  "step-02b-design-gate.json (CODE-DESIGN-VALIDATOR PASS)"
+                },
+    "result":  {
+                   "verdict":  "PASS",
+                   "scope_test":  {
+                                      "result":  "IN-SCOPE",
+                                      "rationale":  "lib/letflow/plugs/tenant_status.ex is the authorization gate that exempts PLATFORM_ADMIN callers from the inactive-tenant 403 block. It is on the tenant-data access path — every request to tenant-scoped API routes passes through this plug (mounted in Letflow.Plugs.ApiPipeline immediately after AuthPipeline, per moduledoc). A change to the PLATFORM_ADMIN exemption logic directly controls which actors can access tenant data when a tenant is inactive. Scope test criterion satisfied: modifies a tenant-data authorization path."
+                                  },
+                   "invariant_assessment":  [
+                                                {
+                                                    "id":  "INV-1",
+                                                    "name":  "Tenant data isolation",
+                                                    "verdict":  "NOT-APPLICABLE",
+                                                    "rationale":  "The diff adds no new Ecto schema module, no migration, and no Ecto query. The only DB access in tenant_status.ex is the pre-existing Repo.get(Tenant, tenant_id) call, which is unchanged. The change is confined to role normalization before the authorization cond — no data-scoping path is touched. INV-1\u0027s \u0027How to verify\u0027 procedure (prefix-scoping, migration table placement, tenant_id attribution) has no surface to check here."
+                                                },
+                                                {
+                                                    "id":  "INV-2",
+                                                    "name":  "Server-side field authorisation",
+                                                    "verdict":  "NOT-APPLICABLE",
+                                                    "rationale":  "S4 (multi-tenant API surface) has not started. No API response type or field-visibility logic is touched by this diff."
+                                                },
+                                                {
+                                                    "id":  "INV-3",
+                                                    "name":  "Untrusted runtime sandboxing",
+                                                    "verdict":  "NOT-APPLICABLE",
+                                                    "rationale":  "S5 (scripting/plugins) has not started. No sandbox or host-capability logic is touched."
+                                                },
+                                                {
+                                                    "id":  "INV-4",
+                                                    "name":  "Secrets by reference only",
+                                                    "verdict":  "APPLIES",
+                                                    "result":  "PASS",
+                                                    "how_verified":  "INV-4 is live for all changes. Ran Select-String against lib/letflow/plugs/tenant_status.ex and lib/letflow/api/authorization.ex for patterns matching (password|secret|token)\\s*[:=]\\s*\".{8,}\" — zero hits. The diff introduces no string literals, no System.get_env calls, no token values, and no config reads. The new alias Letflow.Api.Authorization is a compile-time alias only and resolves no secret material at runtime."
+                                                },
+                                                {
+                                                    "id":  "INV-5",
+                                                    "name":  "Not-found/forbidden indistinguishability",
+                                                    "verdict":  "NOT-APPLICABLE",
+                                                    "rationale":  "S4 (lookup-by-ID endpoints) has not started. No new lookup-by-ID handler is introduced."
+                                                },
+                                                {
+                                                    "id":  "INV-6",
+                                                    "name":  "New data-access paths prove their scoping",
+                                                    "verdict":  "APPLIES",
+                                                    "result":  "PASS",
+                                                    "how_verified":  "This handoff file is the proof required by INV-6. The change is reviewed, all applicable invariants are assessed explicitly, and no new data-access path is introduced — the authorization gate narrows (better normalization), it does not widen."
+                                                },
+                                                {
+                                                    "id":  "INV-7",
+                                                    "name":  "No SQL string interpolation",
+                                                    "verdict":  "APPLIES",
+                                                    "result":  "PASS",
+                                                    "how_verified":  "INV-7 is live. Ran Select-String against lib/letflow/plugs/tenant_status.ex and lib/letflow/api/authorization.ex for \u0027Repo\\.query\u0027 — zero hits. The only DB call in tenant_status.ex remains the pre-existing Repo.get(Tenant, tenant_id) (an Ecto struct lookup with bound parameter, not raw SQL). No raw SQL introduced."
+                                                },
+                                                {
+                                                    "id":  "INV-8",
+                                                    "name":  "No unhandled crashes on realistic failure paths",
+                                                    "verdict":  "APPLIES",
+                                                    "result":  "PASS",
+                                                    "how_verified":  "INV-8 is live. Ran Select-String for bare {:ok, ...} = pattern against both changed files — zero hits. The two new lines are: (1) raw_roles = get_in(conn.assigns, [:auth_context, :roles]) || [] — the || [] guard makes this crash-free even if the key is absent. (2) roles = Authorization.roles_from_strings(raw_roles) — per the Authorization moduledoc and @spec, roles_from_strings/1 \u0027never raises, never widens to any role\u0027, uses Enum.reduce with fully-pattern-matched cases, and handles empty/all-unrecognized input as []. No new external I/O is introduced. The existing Repo.get/2 crash-propagation behavior (fail-closed, per OQ-14 §6.4 rationale in moduledoc) is unchanged and was reviewed at REQ-075."
+                                                },
+                                                {
+                                                    "id":  "INV-9",
+                                                    "name":  "Tenant-controlled outbound URL validation",
+                                                    "verdict":  "NOT-APPLICABLE",
+                                                    "rationale":  "The diff introduces no outbound HTTP request, no URL field, and no webhook dispatch path. UrlValidator is not involved."
+                                                }
+                                            ],
+                   "specific_security_checks":  {
+                                                    "platform_admin_exemption_preserved":  {
+                                                                                               "result":  "PASS",
+                                                                                               "analysis":  "The PLATFORM_ADMIN exemption is fully preserved. role_from_string(\"PLATFORM_ADMIN\") in authorization.ex returns the atom :PLATFORM_ADMIN. Authorization.roles_from_strings([\"PLATFORM_ADMIN\"]) therefore returns [:PLATFORM_ADMIN]. The cond guard \u0027@platform_admin not in roles\u0027 evaluates to \u0027:PLATFORM_ADMIN not in [:PLATFORM_ADMIN]\u0027 = false — the inactive-403 branch is skipped, i.e., PLATFORM_ADMIN is exempt. Behavior is identical to the pre-fix string check for all callers who actually carry the PLATFORM_ADMIN role."
+                                                                                           },
+                                                    "unknown_roles_do_not_gain_privilege":  {
+                                                                                                "result":  "PASS",
+                                                                                                "analysis":  "roles_from_strings/1 is a strict allowlist implemented as an Enum.reduce over role_from_string/1 private clauses. The catch-all clause \u0027role_from_string(_other) -\u003e nil\u0027 silently drops any unrecognized string — nil is excluded from the accumulator. String.to_existing_atom/1 is deliberately NOT used (per Authorization moduledoc) to prevent attacker-controlled atom-table growth. A caller sending \"PLATFORM_ADMIN_WANNABE\", \"PLATFORM_ADMIN \", \"platform_admin\", or any other variant receives an empty or non-PLATFORM_ADMIN roles list and is correctly rejected. The ISS-0808 test block\u0027s third test (\u0027an unknown role string is not exempt\u0027) explicitly covers this."
+                                                                                            },
+                                                    "no_bypass_for_unauthenticated_or_lower_privilege":  {
+                                                                                                             "result":  "PASS",
+                                                                                                             "analysis":  "The only new code path is raw_roles extraction + roles_from_strings normalization. roles_from_strings/1 is a pure, closed, non-raising function that can only return atoms from the closed role/0 set. It cannot return :PLATFORM_ADMIN for any input that does not contain the exact string \"PLATFORM_ADMIN\". The nil-auth_context passthrough (check_tenant_status/2 with nil tenant_id, and the Tenant nil case) are both pre-existing and unchanged. No new bypass surface has been introduced."
+                                                                                                         },
+                                                    "atom_type_consistency":  {
+                                                                                  "result":  "PASS",
+                                                                                  "analysis":  "role_from_string(\"PLATFORM_ADMIN\") -\u003e :PLATFORM_ADMIN (authorization.ex, verified in view at lines ~444-455). @platform_admin :PLATFORM_ADMIN (tenant_status.ex module attribute). Both are the atom :PLATFORM_ADMIN. The comparison \u0027:PLATFORM_ADMIN not in [role()]\u0027 where role() is an atom type is type-consistent. The regression guard property is also confirmed: if roles_from_strings/1 were removed and raw_roles (a [String.t()]) were compared directly against the atom :PLATFORM_ADMIN, \u0027:PLATFORM_ADMIN not in [\"PLATFORM_ADMIN\"]\u0027 = true always — all callers including PLATFORM_ADMIN would receive 403, and the ISS-0808 first test (\u0027refute conn.halted\u0027) would fail immediately."
+                                                                              }
+                                                },
+                   "issues":  [
+
+                              ],
+                   "next_step":  "Route to TEST-RUNNER (or REVIEWER if not yet done) per WF-03 pipeline."
+               }
 }

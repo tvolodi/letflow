@@ -195,6 +195,11 @@ defmodule Letflow.Plugs.ApiPipeline do
   # implements.
   forward("/help", to: Letflow.Routers.Help)
 
+  # REQ-404 -- tenant-installed module router namespace, mounted under the
+  # module id itself. The nested router resolves the module id and checks the
+  # tenant's install row before dispatching to the module's own router.
+  forward("/modules", to: Letflow.Routers.Modules)
+
   # REQ-374 -- the platform-wide tenant-migration fanout runner. Mounted
   # the same way as `/tenants`/`/onboarding` above: a top-level,
   # non-tenant-scoped sub-router (no single tenant context to scope by),

@@ -1,30 +1,32 @@
 {
-  "run_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
-  "step": 5,
-  "agent": "ISSUE-FIXER",
-  "status": "COMPLETED",
-  "completed_at": "2026-09-25T05:18:00Z",
-  "resolved_issues": [
-    {
-      "id": "ISS-0813",
-      "github_ref": "GH-1801",
-      "resolved_at": "2026-09-25T05:18:00Z"
-    },
-    {
-      "id": "ISS-0812",
-      "github_ref": "GH-1800",
-      "resolved_at": "2026-09-25T05:18:00Z"
-    },
-    {
-      "id": "ISS-0820",
-      "github_ref": "GH-1811",
-      "resolved_at": "2026-09-25T05:18:00Z"
-    },
-    {
-      "id": "ISS-0823",
-      "github_ref": "GH-1814",
-      "resolved_at": "2026-09-25T05:18:00Z"
-    }
-  ],
-  "summary": "All four issues marked resolved in their YAML files. GitHub issues 1801, 1800, 1811, 1814 closed with evidence comments referencing the run and design doc. RELEASE-VALIDATOR gate passed (commit dea086e6). ISS-0813: dead-admin-prefix guard added to forbidlist.ts; rolesApi/tokensApi/modules.ts prefixes corrected. ISS-0812: all usersApi/rolesApi functions audited — dead routes tombstoned, real routes corrected; regression test identity.iss0812.test.ts covers all corrected call sites with exact toBe pathname assertions. ISS-0820: definitionsApi.search params corrected to {q, cursor?, page_size?}; limit/offset removed; test definitionsSearch.iss0820.test.ts asserts they are never sent. ISS-0823: GroupsPage now renders visible warning when next_cursor !== null (>200 users); availableUsers subtraction uses pure id-set; test GroupsPage.iss0823.test.tsx TC-ISS0823-01 is the regression guard."
+    "run_id":  "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
+    "step":  5,
+    "status":  "COMPLETED",
+    "completed_at":  "2026-09-25T05:18:00Z",
+    "result":  {
+                   "agent":  "ISSUE-FIXER",
+                   "resolved_issues":  [
+                                           {
+                                               "id":  "ISS-0813",
+                                               "github_ref":  "GH-1801",
+                                               "resolved_at":  "2026-09-25T05:18:00Z"
+                                           },
+                                           {
+                                               "id":  "ISS-0812",
+                                               "github_ref":  "GH-1800",
+                                               "resolved_at":  "2026-09-25T05:18:00Z"
+                                           },
+                                           {
+                                               "id":  "ISS-0820",
+                                               "github_ref":  "GH-1811",
+                                               "resolved_at":  "2026-09-25T05:18:00Z"
+                                           },
+                                           {
+                                               "id":  "ISS-0823",
+                                               "github_ref":  "GH-1814",
+                                               "resolved_at":  "2026-09-25T05:18:00Z"
+                                           }
+                                       ],
+                   "summary":  "All four issues marked resolved in their YAML files. GitHub issues 1801, 1800, 1811, 1814 closed with evidence comments referencing the run and design doc. RELEASE-VALIDATOR gate passed (commit dea086e6). ISS-0813: dead-admin-prefix guard added to forbidlist.ts; rolesApi/tokensApi/modules.ts prefixes corrected. ISS-0812: all usersApi/rolesApi functions audited — dead routes tombstoned, real routes corrected; regression test identity.iss0812.test.ts covers all corrected call sites with exact toBe pathname assertions. ISS-0820: definitionsApi.search params corrected to {q, cursor?, page_size?}; limit/offset removed; test definitionsSearch.iss0820.test.ts asserts they are never sent. ISS-0823: GroupsPage now renders visible warning when next_cursor !== null (\u003e200 users); availableUsers subtraction uses pure id-set; test GroupsPage.iss0823.test.tsx TC-ISS0823-01 is the regression guard."
+               }
 }

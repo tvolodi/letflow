@@ -1,20 +1,22 @@
 {
-  "run_id": "WF03-ISS0808-20260925",
-  "step": "05",
-  "agent": "ISSUE-FIXER",
-  "status": "COMPLETED",
-  "timestamp": "2026-09-25T06:00:00Z",
-  "summary": "ISS-0808 closed. All gates passed (RELEASE-VALIDATOR committed cc402a30). docs/issues/ISS-0808.yaml marked resolved. GitHub issue GH-1796 closed with resolution comment.",
-  "actions": [
-    "Updated docs/issues/ISS-0808.yaml: status=resolved, resolved_in_run=WF03-ISS0808-20260925, resolved_at=2026-09-25T06:00:00Z",
-    "Closed GitHub issue GH-1796 with resolution comment",
-    "Created handoffs/WF03-ISS0808-20260925/step-05-issue-fixer.json",
-    "Committed and pushed close(ISS-0808)"
-  ],
-  "resolution": {
-    "root_cause": "TenantStatus plug read auth_context.roles as raw strings for PLATFORM_ADMIN check instead of using Authorization.roles_from_strings/1",
-    "fix": "Replaced raw @platform_admin string check with atom :PLATFORM_ADMIN; roles converted via roles_from_strings/1 before cond guard",
-    "tests": "Regression tests in test/letflow/plugs/tenant_status_test.exs (ISS-0808 describe block) — 3/3 PASS",
-    "design_doc": "lib/letflow/design/iss-0808-tenant-status-roles-normalization.md"
-  }
+    "run_id":  "WF03-ISS0808-20260925",
+    "step":  "05",
+    "status":  "COMPLETED",
+    "result":  {
+                   "agent":  "ISSUE-FIXER",
+                   "timestamp":  "2026-09-25T06:00:00Z",
+                   "summary":  "ISS-0808 closed. All gates passed (RELEASE-VALIDATOR committed cc402a30). docs/issues/ISS-0808.yaml marked resolved. GitHub issue GH-1796 closed with resolution comment.",
+                   "actions":  [
+                                   "Updated docs/issues/ISS-0808.yaml: status=resolved, resolved_in_run=WF03-ISS0808-20260925, resolved_at=2026-09-25T06:00:00Z",
+                                   "Closed GitHub issue GH-1796 with resolution comment",
+                                   "Created handoffs/WF03-ISS0808-20260925/step-05-issue-fixer.json",
+                                   "Committed and pushed close(ISS-0808)"
+                               ],
+                   "resolution":  {
+                                      "root_cause":  "TenantStatus plug read auth_context.roles as raw strings for PLATFORM_ADMIN check instead of using Authorization.roles_from_strings/1",
+                                      "fix":  "Replaced raw @platform_admin string check with atom :PLATFORM_ADMIN; roles converted via roles_from_strings/1 before cond guard",
+                                      "tests":  "Regression tests in test/letflow/plugs/tenant_status_test.exs (ISS-0808 describe block) — 3/3 PASS",
+                                      "design_doc":  "lib/letflow/design/iss-0808-tenant-status-roles-normalization.md"
+                                  }
+               }
 }

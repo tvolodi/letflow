@@ -8,6 +8,8 @@ import { TenantSwitcher } from '@/auth/TenantSwitcher'
 import { dlqApi } from '@/api/dlq'
 import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { useBranding } from '@/theming/BrandingContext'
+import { useInstalledModules } from '@/hooks/useInstalledModules'
+import { getInstalledModuleNavItems } from '@/modules/registry'
 
 type Role = 'PLATFORM_ADMIN' | 'PROCESS_DESIGNER' | 'PROCESS_OPERATOR' | 'TASK_WORKER' | 'CANDIDATE'
 
@@ -77,6 +79,7 @@ export function AppShell() {
   const { session, logout } = useAuth()
   const tenantKeys = useTenantScopedQueryKeys()
   const { appName, logoUrl } = useBranding()
+  const { data: installedModules = [] } = useInstalledModules()
 
   const dlqThreshold = Number(import.meta.env.VITE_DLQ_ALERT_THRESHOLD ?? '10')
   const { data: dlqSummary } = useQuery({
@@ -88,7 +91,8 @@ export function AppShell() {
   const pendingDlqCount = dlqSummary?.items?.length ?? 0
   const dlqSeverity = pendingDlqCount <= 0 ? 'none' : (pendingDlqCount > dlqThreshold ? 'critical' : 'warning')
 
-  const visibleNav = NAV_ITEMS.filter((n) =>
+  const moduleNavItems = getInstalledModuleNavItems(installedModules)
+  const visibleNav = [...NAV_ITEMS, ...moduleNavItems].filter((n) =>
     n.roles.some((r) => session?.roles.includes(r)),
   )
 

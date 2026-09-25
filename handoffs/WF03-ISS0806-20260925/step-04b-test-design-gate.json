@@ -1,116 +1,117 @@
 {
-  "run_id": "WF03-ISS0806-20260925",
-  "step": "04b-test-design-gate",
-  "agent": "TEST-DESIGN-VALIDATOR",
-  "timestamp": "2026-09-25T05:52:00+05:00",
-  "verdict": "PASS",
-  "gate_checks": {
-    "ac1_coverage": {
-      "result": "PASS",
-      "detail": "AC1 has 4 tests: 2 negative-path (tests 1+2, assert_raise CompileError), 1 positive-path (test 3, clean compile), 1 production-code integration (test 4, Fixture.manifest/0). All test names match their described locations in spec."
-    },
-    "no_skip_on_must_tests": {
-      "result": "PASS",
-      "detail": "grep '@tag :skip|@moduletag :skip' in test/letflow/modules/defmanifest_test.exs: no matches. No MUST-covering test is tagged :skip."
-    },
-    "no_todo_stubs": {
-      "result": "PASS",
-      "detail": "No 'TODO: implement test' or similar stub found in test/letflow/modules/defmanifest_test.exs."
-    },
-    "fixture_independence": {
-      "result": "PASS",
-      "detail": "Tests 1-3 use Code.compile_string with module-attribute source literals — no shared state, no ordering dependency. Test 4 calls Letflow.Modules.Fixture.manifest/0 which is a pure function. All four are self-sufficient."
-    },
-    "no_hardcoded_secrets": {
-      "result": "PASS",
-      "detail": "Test file contains only module source code strings and manifest field literals. No connection strings, credentials, or secrets."
-    }
-  },
-  "mutant_verification": {
-    "context": "WF-03 'pre-fix failure is code does not exist' rule applies — ISS-0806's fix ADDS the compile-time guard, so every pre-fix test failure is UndefinedFunctionError/missing macro, not discrimination between correct and wrong implementations. Mandatory independent mutant application required per WF-03.",
-    "mutant_applied": {
-      "file": "lib/letflow/modules/module.ex",
-      "description": "Replaced the `unless perm in permissions do raise CompileError … end` block inside the for comprehension in defmanifest/1 with `:ok` (a no-op)",
-      "applied_by": "TEST-DESIGN-VALIDATOR independently — edit tool directly on lib/letflow/modules/module.ex",
-      "before": "for {_role, perms} <- role_grants, perm <- perms do\n  unless perm in permissions do\n    raise CompileError, ...\n  end\nend",
-      "after": "# MUTANT: compile-time check disabled — permission validation removed\nfor {_role, perms} <- role_grants, perm <- perms do\n  :ok\nend"
-    },
-    "compile_result": {
-      "command": "MIX_ENV=test mix compile",
-      "exit_code": 0,
-      "output": "Compiling 2 files (.ex)\n     warning: variable \"perm\" is unused ...\n     warning: variable \"permissions\" is unused ...",
-      "significance": "Exit 0 confirms the mutant compiles — the check is genuinely disabled. Two unused-variable warnings for 'perm' and 'permissions' independently confirm those variables are no longer read anywhere in the macro body (matching TEST-DESIGNER's reported output exactly)."
-    },
-    "mix_test_status": "not_runnable — Postgres unavailable (localhost:5472 connection refused); same constraint as TEST-DESIGNER. Failure analysis performed by direct source inspection.",
-    "independent_failure_analysis": {
-      "test_1": {
-        "name": "raises CompileError when a role_grants atom is absent from permissions",
-        "assertion": "assert_raise CompileError, fn -> Code.compile_string(@bad_module_source_raises) end",
-        "under_mutant": "FAIL — Code.compile_string succeeds (no exception raised). assert_raise CompileError receives no exception and fails: 'Expected exception CompileError but nothing was raised'.",
-        "verdict": "FAIL"
-      },
-      "test_2": {
-        "name": "CompileError message names the caller module",
-        "assertion": "assert_raise CompileError, fn -> Code.compile_string(@bad_module_source_names_caller) end",
-        "under_mutant": "FAIL — same failure mode: Code.compile_string succeeds, assert_raise receives no exception. The subsequent assert error.description =~ ... line is never reached.",
-        "verdict": "FAIL"
-      },
-      "test_3": {
-        "name": "compiles cleanly when all role_grants atoms are in permissions",
-        "assertion": "assert [{Letflow.Test.GoodManifestModule, _binary}] = Code.compile_string(@good_module_source)",
-        "under_mutant": "PASS — good module compiles whether or not the guard is present. The no-op mutant does not affect the happy path.",
-        "verdict": "PASS"
-      },
-      "test_4": {
-        "name": "Letflow.Modules.Fixture (uses defmanifest) satisfies @behaviour and returns correct manifest",
-        "assertion": "manifest = Letflow.Modules.Fixture.manifest(); assert manifest.id == \"fixture\"; ...",
-        "under_mutant": "PASS — calls manifest/0 on the already-compiled Fixture module; no compile-time guard path exercised.",
-        "verdict": "PASS"
-      },
-      "summary": {
-        "tests_failed": 2,
-        "tests_passed": 2,
-        "total_tests": 4,
-        "failing_tests": [
-          "raises CompileError when a role_grants atom is absent from permissions",
-          "CompileError message names the caller module"
-        ],
-        "passing_tests": [
-          "compiles cleanly when all role_grants atoms are in permissions",
-          "Letflow.Modules.Fixture (uses defmanifest) satisfies @behaviour and returns correct manifest"
-        ],
-        "matches_test_designer_claim": true
-      }
-    }
-  },
-  "revert_verification": {
-    "command": "git checkout -- lib/letflow/modules/module.ex",
-    "exit_code": 0,
-    "git_status_porcelain_output": "",
-    "git_status_command": "git status --porcelain lib/ test/",
-    "lib_clean": true,
-    "test_clean": true,
-    "note": "Empty output — both lib/ and test/ are clean. All TEST-DESIGNER changes (including F3 fix to test file) were already committed in b068cb3b before this gate ran. Mutant was the only uncommitted change; git checkout -- lib/ removed it completely.",
-    "post_revert_compile": {
-      "command": "MIX_ENV=test mix compile",
-      "exit_code": 0,
-      "output": "Compiling 2 files (.ex)",
-      "warnings": 0,
-      "significance": "Zero warnings after revert confirms the unused-variable warnings were mutant-specific and the restored code is clean."
-    }
-  },
-  "f3_verification": {
-    "result": "PASS",
-    "detail": "grep 'BadManifestModule' in test/letflow/modules/defmanifest_test.exs: line 16 defines Letflow.Test.BadManifestModule1 (used by @bad_module_source_raises, test 1); line 35 defines Letflow.Test.BadManifestModule2 (used by @bad_module_source_names_caller, test 2). The assertion in test 2 (line 89) matches 'Letflow.Test.BadManifestModule2'. No test uses a shared module name. Race condition eliminated.",
-    "reviewer_finding_addressed": "F3 — async: true race on shared 'Letflow.Test.BadManifestModule' name is fully resolved."
-  },
-  "overall_verdict": "PASS",
-  "result": {
-    "summary": "All gate checks pass. AC1 has complete coverage across 4 tests (2 negative, 1 positive, 1 integration). No @tag :skip on any MUST-covering test. No TODO stubs. Fixtures are self-sufficient. No hardcoded secrets. Mutant independently applied by TEST-DESIGN-VALIDATOR: replaced unless/raise block with :ok; MIX_ENV=test mix compile exits 0 with unused-variable warnings for 'perm' and 'permissions', independently confirming the check is disabled. Source analysis of the 4 tests confirms 2 of 4 would fail (tests 1+2, both assert_raise CompileError receive no exception) and 2 of 4 would pass (tests 3+4, happy-path unaffected). Matches TEST-DESIGNER's reported counts exactly. Mutant reverted: git checkout -- lib/letflow/modules/module.ex. Post-revert: git status --porcelain lib/ test/ is EMPTY (both lib/ and test/ clean); MIX_ENV=test mix compile exits 0 with zero warnings. F3 fix confirmed: BadManifestModule1 and BadManifestModule2 are distinct module names used by tests 1 and 2 respectively."
-  },
-  "routing": {
-    "next_step": "TEST-RUNNER",
-    "gate_status": "PASSED",
-    "note": "Test design is valid. TEST-RUNNER to run the full suite once Postgres is available, or run test/letflow/modules/defmanifest_test.exs directly."
-  }
+    "run_id":  "WF03-ISS0806-20260925",
+    "step":  "04b-test-design-gate",
+    "result":  {
+                   "summary":  "All gate checks pass. AC1 has complete coverage across 4 tests (2 negative, 1 positive, 1 integration). No @tag :skip on any MUST-covering test. No TODO stubs. Fixtures are self-sufficient. No hardcoded secrets. Mutant independently applied by TEST-DESIGN-VALIDATOR: replaced unless/raise block with :ok; MIX_ENV=test mix compile exits 0 with unused-variable warnings for \u0027perm\u0027 and \u0027permissions\u0027, independently confirming the check is disabled. Source analysis of the 4 tests confirms 2 of 4 would fail (tests 1+2, both assert_raise CompileError receive no exception) and 2 of 4 would pass (tests 3+4, happy-path unaffected). Matches TEST-DESIGNER\u0027s reported counts exactly. Mutant reverted: git checkout -- lib/letflow/modules/module.ex. Post-revert: git status --porcelain lib/ test/ is EMPTY (both lib/ and test/ clean); MIX_ENV=test mix compile exits 0 with zero warnings. F3 fix confirmed: BadManifestModule1 and BadManifestModule2 are distinct module names used by tests 1 and 2 respectively.",
+                   "agent":  "TEST-DESIGN-VALIDATOR",
+                   "timestamp":  "2026-09-25T05:52:00+05:00",
+                   "verdict":  "PASS",
+                   "gate_checks":  {
+                                       "ac1_coverage":  {
+                                                            "result":  "PASS",
+                                                            "detail":  "AC1 has 4 tests: 2 negative-path (tests 1+2, assert_raise CompileError), 1 positive-path (test 3, clean compile), 1 production-code integration (test 4, Fixture.manifest/0). All test names match their described locations in spec."
+                                                        },
+                                       "no_skip_on_must_tests":  {
+                                                                     "result":  "PASS",
+                                                                     "detail":  "grep \u0027@tag :skip|@moduletag :skip\u0027 in test/letflow/modules/defmanifest_test.exs: no matches. No MUST-covering test is tagged :skip."
+                                                                 },
+                                       "no_todo_stubs":  {
+                                                             "result":  "PASS",
+                                                             "detail":  "No \u0027TODO: implement test\u0027 or similar stub found in test/letflow/modules/defmanifest_test.exs."
+                                                         },
+                                       "fixture_independence":  {
+                                                                    "result":  "PASS",
+                                                                    "detail":  "Tests 1-3 use Code.compile_string with module-attribute source literals — no shared state, no ordering dependency. Test 4 calls Letflow.Modules.Fixture.manifest/0 which is a pure function. All four are self-sufficient."
+                                                                },
+                                       "no_hardcoded_secrets":  {
+                                                                    "result":  "PASS",
+                                                                    "detail":  "Test file contains only module source code strings and manifest field literals. No connection strings, credentials, or secrets."
+                                                                }
+                                   },
+                   "mutant_verification":  {
+                                               "context":  "WF-03 \u0027pre-fix failure is code does not exist\u0027 rule applies — ISS-0806\u0027s fix ADDS the compile-time guard, so every pre-fix test failure is UndefinedFunctionError/missing macro, not discrimination between correct and wrong implementations. Mandatory independent mutant application required per WF-03.",
+                                               "mutant_applied":  {
+                                                                      "file":  "lib/letflow/modules/module.ex",
+                                                                      "description":  "Replaced the `unless perm in permissions do raise CompileError … end` block inside the for comprehension in defmanifest/1 with `:ok` (a no-op)",
+                                                                      "applied_by":  "TEST-DESIGN-VALIDATOR independently — edit tool directly on lib/letflow/modules/module.ex",
+                                                                      "before":  "for {_role, perms} \u003c- role_grants, perm \u003c- perms do\n  unless perm in permissions do\n    raise CompileError, ...\n  end\nend",
+                                                                      "after":  "# MUTANT: compile-time check disabled — permission validation removed\nfor {_role, perms} \u003c- role_grants, perm \u003c- perms do\n  :ok\nend"
+                                                                  },
+                                               "compile_result":  {
+                                                                      "command":  "MIX_ENV=test mix compile",
+                                                                      "exit_code":  0,
+                                                                      "output":  "Compiling 2 files (.ex)\n     warning: variable \"perm\" is unused ...\n     warning: variable \"permissions\" is unused ...",
+                                                                      "significance":  "Exit 0 confirms the mutant compiles — the check is genuinely disabled. Two unused-variable warnings for \u0027perm\u0027 and \u0027permissions\u0027 independently confirm those variables are no longer read anywhere in the macro body (matching TEST-DESIGNER\u0027s reported output exactly)."
+                                                                  },
+                                               "mix_test_status":  "not_runnable — Postgres unavailable (localhost:5472 connection refused); same constraint as TEST-DESIGNER. Failure analysis performed by direct source inspection.",
+                                               "independent_failure_analysis":  {
+                                                                                    "test_1":  {
+                                                                                                   "name":  "raises CompileError when a role_grants atom is absent from permissions",
+                                                                                                   "assertion":  "assert_raise CompileError, fn -\u003e Code.compile_string(@bad_module_source_raises) end",
+                                                                                                   "under_mutant":  "FAIL — Code.compile_string succeeds (no exception raised). assert_raise CompileError receives no exception and fails: \u0027Expected exception CompileError but nothing was raised\u0027.",
+                                                                                                   "verdict":  "FAIL"
+                                                                                               },
+                                                                                    "test_2":  {
+                                                                                                   "name":  "CompileError message names the caller module",
+                                                                                                   "assertion":  "assert_raise CompileError, fn -\u003e Code.compile_string(@bad_module_source_names_caller) end",
+                                                                                                   "under_mutant":  "FAIL — same failure mode: Code.compile_string succeeds, assert_raise receives no exception. The subsequent assert error.description =~ ... line is never reached.",
+                                                                                                   "verdict":  "FAIL"
+                                                                                               },
+                                                                                    "test_3":  {
+                                                                                                   "name":  "compiles cleanly when all role_grants atoms are in permissions",
+                                                                                                   "assertion":  "assert [{Letflow.Test.GoodManifestModule, _binary}] = Code.compile_string(@good_module_source)",
+                                                                                                   "under_mutant":  "PASS — good module compiles whether or not the guard is present. The no-op mutant does not affect the happy path.",
+                                                                                                   "verdict":  "PASS"
+                                                                                               },
+                                                                                    "test_4":  {
+                                                                                                   "name":  "Letflow.Modules.Fixture (uses defmanifest) satisfies @behaviour and returns correct manifest",
+                                                                                                   "assertion":  "manifest = Letflow.Modules.Fixture.manifest(); assert manifest.id == \"fixture\"; ...",
+                                                                                                   "under_mutant":  "PASS — calls manifest/0 on the already-compiled Fixture module; no compile-time guard path exercised.",
+                                                                                                   "verdict":  "PASS"
+                                                                                               },
+                                                                                    "summary":  {
+                                                                                                    "tests_failed":  2,
+                                                                                                    "tests_passed":  2,
+                                                                                                    "total_tests":  4,
+                                                                                                    "failing_tests":  [
+                                                                                                                          "raises CompileError when a role_grants atom is absent from permissions",
+                                                                                                                          "CompileError message names the caller module"
+                                                                                                                      ],
+                                                                                                    "passing_tests":  [
+                                                                                                                          "compiles cleanly when all role_grants atoms are in permissions",
+                                                                                                                          "Letflow.Modules.Fixture (uses defmanifest) satisfies @behaviour and returns correct manifest"
+                                                                                                                      ],
+                                                                                                    "matches_test_designer_claim":  true
+                                                                                                }
+                                                                                }
+                                           },
+                   "revert_verification":  {
+                                               "command":  "git checkout -- lib/letflow/modules/module.ex",
+                                               "exit_code":  0,
+                                               "git_status_porcelain_output":  "",
+                                               "git_status_command":  "git status --porcelain lib/ test/",
+                                               "lib_clean":  true,
+                                               "test_clean":  true,
+                                               "note":  "Empty output — both lib/ and test/ are clean. All TEST-DESIGNER changes (including F3 fix to test file) were already committed in b068cb3b before this gate ran. Mutant was the only uncommitted change; git checkout -- lib/ removed it completely.",
+                                               "post_revert_compile":  {
+                                                                           "command":  "MIX_ENV=test mix compile",
+                                                                           "exit_code":  0,
+                                                                           "output":  "Compiling 2 files (.ex)",
+                                                                           "warnings":  0,
+                                                                           "significance":  "Zero warnings after revert confirms the unused-variable warnings were mutant-specific and the restored code is clean."
+                                                                       }
+                                           },
+                   "f3_verification":  {
+                                           "result":  "PASS",
+                                           "detail":  "grep \u0027BadManifestModule\u0027 in test/letflow/modules/defmanifest_test.exs: line 16 defines Letflow.Test.BadManifestModule1 (used by @bad_module_source_raises, test 1); line 35 defines Letflow.Test.BadManifestModule2 (used by @bad_module_source_names_caller, test 2). The assertion in test 2 (line 89) matches \u0027Letflow.Test.BadManifestModule2\u0027. No test uses a shared module name. Race condition eliminated.",
+                                           "reviewer_finding_addressed":  "F3 — async: true race on shared \u0027Letflow.Test.BadManifestModule\u0027 name is fully resolved."
+                                       },
+                   "overall_verdict":  "PASS",
+                   "routing":  {
+                                   "next_step":  "TEST-RUNNER",
+                                   "gate_status":  "PASSED",
+                                   "note":  "Test design is valid. TEST-RUNNER to run the full suite once Postgres is available, or run test/letflow/modules/defmanifest_test.exs directly."
+                               }
+               },
+    "status":  "COMPLETED"
 }

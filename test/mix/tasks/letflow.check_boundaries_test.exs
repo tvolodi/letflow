@@ -152,12 +152,28 @@ defmodule Mix.Tasks.Letflow.CheckBoundariesTest do
 
     test "maps manifest id to its depends_on list" do
       manifests = [
-        %{id: "a", depends_on: ["b", "c"], version: "1.0", pack: nil,
-          permissions: [], role_grants: %{}, required_roles: [],
-          settings_schema: nil, route_policies: []},
-        %{id: "b", depends_on: [], version: "1.0", pack: nil,
-          permissions: [], role_grants: %{}, required_roles: [],
-          settings_schema: nil, route_policies: []}
+        %{
+          id: "a",
+          depends_on: ["b", "c"],
+          version: "1.0",
+          pack: nil,
+          permissions: [],
+          role_grants: %{},
+          required_roles: [],
+          settings_schema: nil,
+          route_policies: []
+        },
+        %{
+          id: "b",
+          depends_on: [],
+          version: "1.0",
+          pack: nil,
+          permissions: [],
+          role_grants: %{},
+          required_roles: [],
+          settings_schema: nil,
+          route_policies: []
+        }
       ]
 
       result = CB.build_depends_on_map(manifests)

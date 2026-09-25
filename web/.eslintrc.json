@@ -21,6 +21,16 @@
   ],
   "ignorePatterns": ["dist", "node_modules"],
   "rules": {
-    "react-refresh/only-export-components": "off"
+    "react-refresh/only-export-components": "off",
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          "@/modules/**",
+          "!@/modules/registry",
+          "!@/modules/types"
+        ]
+      }
+    ]
   }
 }

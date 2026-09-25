@@ -1,89 +1,86 @@
 {
-  "run_id": "WF03-ISS0806-20260925",
-  "agent": "RELEASE-VALIDATOR",
-  "timestamp": "2026-09-25T08:25:00+05:00",
-  "verdict": "PASS",
-
-  "ac_results": {
-    "AC1": {
-      "verdict": "PASS",
-      "description": "Compile-time mechanism catches a role_grants atom not present in permissions",
-      "evidence": {
-        "source_check": {
-          "file": "lib/letflow/modules/module.ex",
-          "finding": "defmanifest/1 macro present after @optional_callbacks. Uses Code.eval_quoted/3 to evaluate compile-time literals, iterates role_grants values, raises CompileError at caller.file/caller.line with description 'role_grants atom :<perm> is not declared in permissions for module <CallerModule>' when any perm atom is absent from permissions. Expands to def manifest/0 returning Macro.escape'd manifest map."
-        },
-        "test_file_check": {
-          "file": "test/letflow/modules/defmanifest_test.exs",
-          "tests": [
-            "raises CompileError when a role_grants atom is absent from permissions (bad atom :UndeclaredPerm → CompileError, description check)",
-            "CompileError message names the caller module (Letflow.Test.BadManifestModule2 present in description)",
-            "compiles cleanly when all role_grants atoms are in permissions (no raise, [{GoodManifestModule, _binary}] result)",
-            "Letflow.Modules.Fixture (uses defmanifest) satisfies @behaviour and returns correct manifest (positive path via real fixture)"
-          ],
-          "note": "F3 fix applied: each negative-path Code.compile_string call uses a distinct module name (BadManifestModule1/2) to eliminate async: true race on shared module-name redefinition"
-        },
-        "fixture_check": {
-          "file": "test/support/modules/fixture/fixture.ex",
-          "finding": "Fixture uses defmanifest/1 with permissions: [:FixtureRead] and role_grants: %{TASK_WORKER: [:FixtureRead]} — all role_grants atoms present in permissions, compiles cleanly"
-        },
-        "test_run": {
-          "command": "MIX_ENV=test mix test test/letflow/modules/defmanifest_test.exs --trace",
-          "result": "4 passed, 0 failed",
-          "exit_code": 0
-        }
-      }
-    },
-
-    "AC2": {
-      "verdict": "PASS",
-      "description": "Existing runtime validate/1 behavior unchanged",
-      "evidence": {
-        "source_check": {
-          "file": "lib/letflow/modules/catalog.ex",
-          "finding": "validate_granted_permissions_declared/1 present and structurally unchanged: flattens role_grants values, uniq, finds any perm not in manifest.permissions, returns {:error, {:ungranted_permission_declared, bad_permission}} or :ok. Called as second step in validate/2 pipeline. No changes introduced by ISS-0806 to this function."
-        },
-        "test_run": {
-          "command": "MIX_ENV=test mix test test/letflow/modules/catalog_test.exs --trace",
-          "result": "11 passed, 0 failed",
-          "exit_code": 0,
-          "tests_covered": [
-            "entry_modules/0 returns [Letflow.Modules.Fixture] in the test env",
-            "fetch/1 looks the fixture up by its id string",
-            "fetch/1 returns {:error, :not_found} for an unregistered id",
-            "config/config.exs registers an empty module list",
-            "rejects a role_grants key not in Authorization.roles/0",
-            "rejects a role_grants value not in the module's own permissions",
-            "rejects a permissions atom that collides with a core permission",
-            "rejects a depends_on id that is not registered",
-            "rejects a duplicate module id",
-            "rejects a route_policies entry whose permission is undeclared",
-            "returns :ok for every module the real Catalog lists"
-          ]
-        }
-      }
-    }
-  },
-
-  "broader_suite": {
-    "command": "TEST_PARALLEL_N=2 bash (scripts/test_parallel.sh with LF endings via Git Bash)",
-    "result": "4835 tests, 6 properties, 1168 failures (3673/4841 passed), exit 1",
-    "note": "All 1168 failures are pre-existing, caused by missing entity_record_attachments table in tenant_template schema (DB migration state issue: migration 20260911000001_create_entity_record_attachments.exs from commit 677ad4bf, REQ-316, not applied to local test DB). ISS-0806 only touched lib/letflow/modules/module.ex, test/letflow/modules/defmanifest_test.exs, and test/support/modules/fixture/fixture.ex — none of which relate to entity_record_attachments. Confirmed by git show --stat 2b954e78.",
-    "iss0069_check": {
-      "substring": "default values for the optional arguments",
-      "found_in_partition_logs": false,
-      "result": "PASS — ISS-0069 dead-default-arg warning absent from both partition-1.log and partition-2.log"
-    },
-    "compile_warnings": "none (mix compile MIX_ENV=test exits 0 with no warnings)"
-  },
-
-  "files_touched_by_iss0806": [
-    "lib/letflow/modules/module.ex",
-    "test/letflow/modules/defmanifest_test.exs",
-    "test/support/modules/fixture/fixture.ex"
-  ],
-
-  "pre_existing_failure_root_cause": "relation 'tenant_template.entity_record_attachments' does not exist — all 1168 failures are clone_tenant_schema! errors on this missing table, unrelated to ISS-0806",
-
-  "overall_verdict": "PASS — both ACs verified from source and independently tested. Broader suite failures are pre-existing DB state, not regressions introduced by ISS-0806."
+    "run_id":  "WF03-ISS0806-20260925",
+    "result":  {
+                   "agent":  "RELEASE-VALIDATOR",
+                   "timestamp":  "2026-09-25T08:25:00+05:00",
+                   "verdict":  "PASS",
+                   "ac_results":  {
+                                      "AC1":  {
+                                                  "verdict":  "PASS",
+                                                  "description":  "Compile-time mechanism catches a role_grants atom not present in permissions",
+                                                  "evidence":  {
+                                                                   "source_check":  {
+                                                                                        "file":  "lib/letflow/modules/module.ex",
+                                                                                        "finding":  "defmanifest/1 macro present after @optional_callbacks. Uses Code.eval_quoted/3 to evaluate compile-time literals, iterates role_grants values, raises CompileError at caller.file/caller.line with description \u0027role_grants atom :\u003cperm\u003e is not declared in permissions for module \u003cCallerModule\u003e\u0027 when any perm atom is absent from permissions. Expands to def manifest/0 returning Macro.escape\u0027d manifest map."
+                                                                                    },
+                                                                   "test_file_check":  {
+                                                                                           "file":  "test/letflow/modules/defmanifest_test.exs",
+                                                                                           "tests":  [
+                                                                                                         "raises CompileError when a role_grants atom is absent from permissions (bad atom :UndeclaredPerm → CompileError, description check)",
+                                                                                                         "CompileError message names the caller module (Letflow.Test.BadManifestModule2 present in description)",
+                                                                                                         "compiles cleanly when all role_grants atoms are in permissions (no raise, [{GoodManifestModule, _binary}] result)",
+                                                                                                         "Letflow.Modules.Fixture (uses defmanifest) satisfies @behaviour and returns correct manifest (positive path via real fixture)"
+                                                                                                     ],
+                                                                                           "note":  "F3 fix applied: each negative-path Code.compile_string call uses a distinct module name (BadManifestModule1/2) to eliminate async: true race on shared module-name redefinition"
+                                                                                       },
+                                                                   "fixture_check":  {
+                                                                                         "file":  "test/support/modules/fixture/fixture.ex",
+                                                                                         "finding":  "Fixture uses defmanifest/1 with permissions: [:FixtureRead] and role_grants: %{TASK_WORKER: [:FixtureRead]} — all role_grants atoms present in permissions, compiles cleanly"
+                                                                                     },
+                                                                   "test_run":  {
+                                                                                    "command":  "MIX_ENV=test mix test test/letflow/modules/defmanifest_test.exs --trace",
+                                                                                    "result":  "4 passed, 0 failed",
+                                                                                    "exit_code":  0
+                                                                                }
+                                                               }
+                                              },
+                                      "AC2":  {
+                                                  "verdict":  "PASS",
+                                                  "description":  "Existing runtime validate/1 behavior unchanged",
+                                                  "evidence":  {
+                                                                   "source_check":  {
+                                                                                        "file":  "lib/letflow/modules/catalog.ex",
+                                                                                        "finding":  "validate_granted_permissions_declared/1 present and structurally unchanged: flattens role_grants values, uniq, finds any perm not in manifest.permissions, returns {:error, {:ungranted_permission_declared, bad_permission}} or :ok. Called as second step in validate/2 pipeline. No changes introduced by ISS-0806 to this function."
+                                                                                    },
+                                                                   "test_run":  {
+                                                                                    "command":  "MIX_ENV=test mix test test/letflow/modules/catalog_test.exs --trace",
+                                                                                    "result":  "11 passed, 0 failed",
+                                                                                    "exit_code":  0,
+                                                                                    "tests_covered":  [
+                                                                                                          "entry_modules/0 returns [Letflow.Modules.Fixture] in the test env",
+                                                                                                          "fetch/1 looks the fixture up by its id string",
+                                                                                                          "fetch/1 returns {:error, :not_found} for an unregistered id",
+                                                                                                          "config/config.exs registers an empty module list",
+                                                                                                          "rejects a role_grants key not in Authorization.roles/0",
+                                                                                                          "rejects a role_grants value not in the module\u0027s own permissions",
+                                                                                                          "rejects a permissions atom that collides with a core permission",
+                                                                                                          "rejects a depends_on id that is not registered",
+                                                                                                          "rejects a duplicate module id",
+                                                                                                          "rejects a route_policies entry whose permission is undeclared",
+                                                                                                          "returns :ok for every module the real Catalog lists"
+                                                                                                      ]
+                                                                                }
+                                                               }
+                                              }
+                                  },
+                   "broader_suite":  {
+                                         "command":  "TEST_PARALLEL_N=2 bash (scripts/test_parallel.sh with LF endings via Git Bash)",
+                                         "result":  "4835 tests, 6 properties, 1168 failures (3673/4841 passed), exit 1",
+                                         "note":  "All 1168 failures are pre-existing, caused by missing entity_record_attachments table in tenant_template schema (DB migration state issue: migration 20260911000001_create_entity_record_attachments.exs from commit 677ad4bf, REQ-316, not applied to local test DB). ISS-0806 only touched lib/letflow/modules/module.ex, test/letflow/modules/defmanifest_test.exs, and test/support/modules/fixture/fixture.ex — none of which relate to entity_record_attachments. Confirmed by git show --stat 2b954e78.",
+                                         "iss0069_check":  {
+                                                               "substring":  "default values for the optional arguments",
+                                                               "found_in_partition_logs":  false,
+                                                               "result":  "PASS — ISS-0069 dead-default-arg warning absent from both partition-1.log and partition-2.log"
+                                                           },
+                                         "compile_warnings":  "none (mix compile MIX_ENV=test exits 0 with no warnings)"
+                                     },
+                   "files_touched_by_iss0806":  [
+                                                    "lib/letflow/modules/module.ex",
+                                                    "test/letflow/modules/defmanifest_test.exs",
+                                                    "test/support/modules/fixture/fixture.ex"
+                                                ],
+                   "pre_existing_failure_root_cause":  "relation \u0027tenant_template.entity_record_attachments\u0027 does not exist — all 1168 failures are clone_tenant_schema! errors on this missing table, unrelated to ISS-0806",
+                   "overall_verdict":  "PASS — both ACs verified from source and independently tested. Broader suite failures are pre-existing DB state, not regressions introduced by ISS-0806."
+               },
+    "status":  "COMPLETED"
 }

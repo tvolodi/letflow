@@ -1,71 +1,91 @@
 {
-  "run_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
-  "agent": "TEST-RUNNER",
-  "step": "04c",
-  "timestamp": "2026-09-25T04:59:50+05:00",
-  "vitest_version": "2.1.9",
-
-  "test_runs": [
-    {
-      "label": "ISS-0813 guard + ISS-0812 coverage",
-      "command": "npx vitest run tests/guards/source-scan.spec.ts tests/guards/meta-control.spec.ts src/api/__tests__/identity.iss0812.test.ts",
-      "files_passed": 3,
-      "files_failed": 0,
-      "tests_passed": 53,
-      "tests_failed": 0,
-      "duration_ms": 987,
-      "outcome": "PASS",
-      "files": [
-        { "file": "tests/guards/meta-control.spec.ts",              "passed": 48, "failed": 0 },
-        { "file": "tests/guards/source-scan.spec.ts",               "passed": 1,  "failed": 0 },
-        { "file": "src/api/__tests__/identity.iss0812.test.ts",     "passed": 4,  "failed": 0 }
-      ]
-    },
-    {
-      "label": "ISS-0820 search params",
-      "command": "npx vitest run src/api/__tests__/definitionsSearch.iss0820.test.ts",
-      "files_passed": 1,
-      "files_failed": 0,
-      "tests_passed": 4,
-      "tests_failed": 0,
-      "duration_ms": 1580,
-      "outcome": "PASS",
-      "files": [
-        { "file": "src/api/__tests__/definitionsSearch.iss0820.test.ts", "passed": 4, "failed": 0 }
-      ]
-    },
-    {
-      "label": "ISS-0823 truncation warning",
-      "command": "npx vitest run src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
-      "files_passed": 1,
-      "files_failed": 0,
-      "tests_passed": 3,
-      "tests_failed": 0,
-      "duration_ms": 1620,
-      "outcome": "PASS",
-      "files": [
-        { "file": "src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx", "passed": 3, "failed": 0 }
-      ]
-    }
-  ],
-
-  "type_check": {
-    "label": "ISS-0820 compile-time guard (npm run type-check)",
-    "total_ts_errors": 24,
-    "noise_errors_filtered": 24,
-    "relevant_errors": 0,
-    "noise_pattern": "react-intl|rehype|hast-util|react-markdown|remark",
-    "outcome": "PASS",
-    "notes": "All 24 TS errors are pre-existing missing-package noise (react-intl, rehype-sanitize, hast-util-sanitize, react-markdown, remark-gfm). Zero errors in ISS-0820 scope or any other non-noise path."
-  },
-
-  "summary": {
-    "total_test_files": 5,
-    "total_test_files_passed": 5,
-    "total_test_files_failed": 0,
-    "total_tests_passed": 60,
-    "total_tests_failed": 0,
-    "type_check_relevant_errors": 0,
-    "overall_outcome": "ALL PASS"
-  }
+    "run_id":  "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
+    "step":  "04c",
+    "result":  {
+                   "agent":  "TEST-RUNNER",
+                   "timestamp":  "2026-09-25T04:59:50+05:00",
+                   "vitest_version":  "2.1.9",
+                   "test_runs":  [
+                                     {
+                                         "label":  "ISS-0813 guard + ISS-0812 coverage",
+                                         "command":  "npx vitest run tests/guards/source-scan.spec.ts tests/guards/meta-control.spec.ts src/api/__tests__/identity.iss0812.test.ts",
+                                         "files_passed":  3,
+                                         "files_failed":  0,
+                                         "tests_passed":  53,
+                                         "tests_failed":  0,
+                                         "duration_ms":  987,
+                                         "outcome":  "PASS",
+                                         "files":  [
+                                                       {
+                                                           "file":  "tests/guards/meta-control.spec.ts",
+                                                           "passed":  48,
+                                                           "failed":  0
+                                                       },
+                                                       {
+                                                           "file":  "tests/guards/source-scan.spec.ts",
+                                                           "passed":  1,
+                                                           "failed":  0
+                                                       },
+                                                       {
+                                                           "file":  "src/api/__tests__/identity.iss0812.test.ts",
+                                                           "passed":  4,
+                                                           "failed":  0
+                                                       }
+                                                   ]
+                                     },
+                                     {
+                                         "label":  "ISS-0820 search params",
+                                         "command":  "npx vitest run src/api/__tests__/definitionsSearch.iss0820.test.ts",
+                                         "files_passed":  1,
+                                         "files_failed":  0,
+                                         "tests_passed":  4,
+                                         "tests_failed":  0,
+                                         "duration_ms":  1580,
+                                         "outcome":  "PASS",
+                                         "files":  [
+                                                       {
+                                                           "file":  "src/api/__tests__/definitionsSearch.iss0820.test.ts",
+                                                           "passed":  4,
+                                                           "failed":  0
+                                                       }
+                                                   ]
+                                     },
+                                     {
+                                         "label":  "ISS-0823 truncation warning",
+                                         "command":  "npx vitest run src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
+                                         "files_passed":  1,
+                                         "files_failed":  0,
+                                         "tests_passed":  3,
+                                         "tests_failed":  0,
+                                         "duration_ms":  1620,
+                                         "outcome":  "PASS",
+                                         "files":  [
+                                                       {
+                                                           "file":  "src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
+                                                           "passed":  3,
+                                                           "failed":  0
+                                                       }
+                                                   ]
+                                     }
+                                 ],
+                   "type_check":  {
+                                      "label":  "ISS-0820 compile-time guard (npm run type-check)",
+                                      "total_ts_errors":  24,
+                                      "noise_errors_filtered":  24,
+                                      "relevant_errors":  0,
+                                      "noise_pattern":  "react-intl|rehype|hast-util|react-markdown|remark",
+                                      "outcome":  "PASS",
+                                      "notes":  "All 24 TS errors are pre-existing missing-package noise (react-intl, rehype-sanitize, hast-util-sanitize, react-markdown, remark-gfm). Zero errors in ISS-0820 scope or any other non-noise path."
+                                  },
+                   "summary":  {
+                                   "total_test_files":  5,
+                                   "total_test_files_passed":  5,
+                                   "total_test_files_failed":  0,
+                                   "total_tests_passed":  60,
+                                   "total_tests_failed":  0,
+                                   "type_check_relevant_errors":  0,
+                                   "overall_outcome":  "ALL PASS"
+                               }
+               },
+    "status":  "COMPLETED"
 }

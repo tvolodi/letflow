@@ -1,72 +1,68 @@
 {
-  "run_id": "WF03-ISS0808-20260925",
-  "agent": "RELEASE-VALIDATOR",
-  "timestamp": "2026-09-25T04:47:12Z",
-  "verdict": "PASS",
-
-  "summary": "All three acceptance criteria for ISS-0808 independently verified from source. 20/20 tests pass. No dead-default-argument warnings. No code path divergence found.",
-
-  "ac1": {
-    "criterion": "lib/letflow/plugs/tenant_status.ex derives PLATFORM_ADMIN via Letflow.Api.Authorization.roles_from_strings/1, so exactly one code path maps role strings to the PLATFORM_ADMIN role",
-    "verdict": "PASS",
-    "evidence": {
-      "alias_present": "Line 57: `alias Letflow.Api.Authorization`",
-      "platform_admin_atom": "Line 66: `@platform_admin :PLATFORM_ADMIN` — atom, not string; confirmed by reading file directly",
-      "normalization_call": "Line 99: `roles = Authorization.roles_from_strings(raw_roles)` — called before the cond on line 101",
-      "cond_guard": "Line 101: `tenant.status == :inactive and @platform_admin not in roles` — uses the atom-typed `roles` list returned by roles_from_strings/1",
-      "no_other_paths": "Grep of lib/ confirms the only occurrence of `roles_from_strings` in tenant_status.ex is at line 99; no raw string comparison `\"PLATFORM_ADMIN\" in` exists anywhere in the file; no other code path to the exemption",
-      "grep_evidence": "rg 'PLATFORM_ADMIN' lib/letflow/plugs/tenant_status.ex returns only the @platform_admin module attribute definition and the ISS-0808 comment — no string literal comparison"
-    }
-  },
-
-  "ac2": {
-    "criterion": "The tenant-inactive-403 exemption behavior for PLATFORM_ADMIN is unchanged, proven by a test exercising both an exempt PLATFORM_ADMIN and a non-exempt actor against an inactive tenant",
-    "verdict": "PASS",
-    "evidence": {
-      "describe_block": "test/letflow/plugs/tenant_status_test.exs: describe block `\"ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1\"` present",
-      "exempt_platform_admin_test": "Test `\"a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization\"`: calls `call_plug(:get, tenant.id, [\"PLATFORM_ADMIN\"])` against an `:inactive` tenant, asserts `refute conn.halted` and `conn.status == nil`",
-      "non_exempt_actor_test": "Test `\"a non-PLATFORM_ADMIN caller is not exempt, even with valid roles\"`: calls `call_plug(:get, tenant.id, [\"PROCESS_OPERATOR\"])` against an `:inactive` tenant, asserts `conn.halted` and `conn.status == 403`",
-      "also_present": "Additional non-exempt coverage: test `\"an unknown role string is not exempt (roles_from_strings/1 filters out unknown strings)\"` uses `[\"PLATFORM_ADMIN_WANNABE\"]` → 403",
-      "test_run_output": "mix test test/letflow/plugs/tenant_status_test.exs -- Result: 20 passed (exit code 0, 0.3 seconds, async: true)",
-      "warnings_as_errors_run": "mix test test/letflow/plugs/tenant_status_test.exs --warnings-as-errors -- Result: 20 passed (exit code 0, no warnings)"
-    }
-  },
-
-  "ac3": {
-    "criterion": "A regression test would fail if the plug reverted to the raw string comparison",
-    "verdict": "PASS",
-    "evidence": {
-      "test_name": "\"a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization\"",
-      "regression_mechanism": "@platform_admin is the atom :PLATFORM_ADMIN (confirmed at tenant_status.ex line 66). auth_context.roles carries strings (e.g. [\"PLATFORM_ADMIN\"]). If roles_from_strings/1 were removed and the raw string list were compared against the atom: `:PLATFORM_ADMIN not in [\"PLATFORM_ADMIN\"]` evaluates to `true` (atom ≠ string in Elixir's `in` operator), so the cond guard `tenant.status == :inactive and @platform_admin not in roles` fires → reject_inactive/1 called → conn halted with 403 → `refute conn.halted` assertion fails → test fails",
-      "type_mismatch_proof": "Elixir's `in` operator uses strict equality (===). :PLATFORM_ADMIN (atom) !== \"PLATFORM_ADMIN\" (binary). The atom is never found in a [String.t()] list, making the exemption permanently unreachable if roles_from_strings/1 is removed while @platform_admin stays an atom",
-      "unknown_role_filter_also_guarded": "Test `\"an unknown role string is not exempt\"` further guards that roles_from_strings/1's filter-unknown-strings behavior is exercised: [\"PLATFORM_ADMIN_WANNABE\"] → roles_from_strings returns [] → no atom match → 403 asserted"
-    }
-  },
-
-  "iss_0069_check": {
-    "status": "ENVIRONMENT_BLOCKED_MANUAL_VERIFIED",
-    "detail": "mix letflow.check.test cannot complete on this Windows host: WSL bash finds `mix` at /mnt/c/Program Files/Elixir/bin/elixir but cannot find `erl` (Erlang VM is a native Windows install not on WSL's PATH). Root cause: scripts/test_parallel.sh has CRLF line endings (git core.autocrlf=true; *.sh not covered by .gitattributes eol=lf). This is a pre-existing environment incompatibility unrelated to ISS-0808.",
-    "manual_verification": {
-      "changed_test_file": "test/letflow/plugs/tenant_status_test.exs",
-      "defp_with_default": "unique_slug(prefix \\\\ \"tenant\") — the sole defp with a default argument",
-      "call_sites": "All call sites in the file use unique_slug() (no-arg form), which exercises the default value — the default is NOT dead",
-      "dead_default_pattern": "Elixir's 'default values for the optional arguments' warning fires when the shorter-arity form is NEVER called (always called with explicit value). Here the shorter-arity form unique_slug/0 is the only call pattern, so the default IS used — no warning emitted",
-      "warnings_as_errors_confirmation": "mix test test/letflow/plugs/tenant_status_test.exs --warnings-as-errors exited 0 with zero compiler warnings — independently confirms no ISS-0069 class warning exists in this file",
-      "compile_check": "mix compile --warnings-as-errors exited 0 with no output — zero warnings in production code either"
-    }
-  },
-
-  "test_run_raw": {
-    "command": "mix test test/letflow/plugs/tenant_status_test.exs --color",
-    "exit_code": 0,
-    "summary_line": "Result: 20 passed",
-    "duration": "0.3 seconds (0.3s async, 0.00s sync)",
-    "seed": 850528,
-    "failures": 0
-  },
-
-  "files_verified": [
-    "lib/letflow/plugs/tenant_status.ex",
-    "test/letflow/plugs/tenant_status_test.exs"
-  ]
+    "run_id":  "WF03-ISS0808-20260925",
+    "result":  {
+                   "agent":  "RELEASE-VALIDATOR",
+                   "timestamp":  "2026-09-25T04:47:12Z",
+                   "verdict":  "PASS",
+                   "summary":  "All three acceptance criteria for ISS-0808 independently verified from source. 20/20 tests pass. No dead-default-argument warnings. No code path divergence found.",
+                   "ac1":  {
+                               "criterion":  "lib/letflow/plugs/tenant_status.ex derives PLATFORM_ADMIN via Letflow.Api.Authorization.roles_from_strings/1, so exactly one code path maps role strings to the PLATFORM_ADMIN role",
+                               "verdict":  "PASS",
+                               "evidence":  {
+                                                "alias_present":  "Line 57: `alias Letflow.Api.Authorization`",
+                                                "platform_admin_atom":  "Line 66: `@platform_admin :PLATFORM_ADMIN` — atom, not string; confirmed by reading file directly",
+                                                "normalization_call":  "Line 99: `roles = Authorization.roles_from_strings(raw_roles)` — called before the cond on line 101",
+                                                "cond_guard":  "Line 101: `tenant.status == :inactive and @platform_admin not in roles` — uses the atom-typed `roles` list returned by roles_from_strings/1",
+                                                "no_other_paths":  "Grep of lib/ confirms the only occurrence of `roles_from_strings` in tenant_status.ex is at line 99; no raw string comparison `\"PLATFORM_ADMIN\" in` exists anywhere in the file; no other code path to the exemption",
+                                                "grep_evidence":  "rg \u0027PLATFORM_ADMIN\u0027 lib/letflow/plugs/tenant_status.ex returns only the @platform_admin module attribute definition and the ISS-0808 comment — no string literal comparison"
+                                            }
+                           },
+                   "ac2":  {
+                               "criterion":  "The tenant-inactive-403 exemption behavior for PLATFORM_ADMIN is unchanged, proven by a test exercising both an exempt PLATFORM_ADMIN and a non-exempt actor against an inactive tenant",
+                               "verdict":  "PASS",
+                               "evidence":  {
+                                                "describe_block":  "test/letflow/plugs/tenant_status_test.exs: describe block `\"ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1\"` present",
+                                                "exempt_platform_admin_test":  "Test `\"a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization\"`: calls `call_plug(:get, tenant.id, [\"PLATFORM_ADMIN\"])` against an `:inactive` tenant, asserts `refute conn.halted` and `conn.status == nil`",
+                                                "non_exempt_actor_test":  "Test `\"a non-PLATFORM_ADMIN caller is not exempt, even with valid roles\"`: calls `call_plug(:get, tenant.id, [\"PROCESS_OPERATOR\"])` against an `:inactive` tenant, asserts `conn.halted` and `conn.status == 403`",
+                                                "also_present":  "Additional non-exempt coverage: test `\"an unknown role string is not exempt (roles_from_strings/1 filters out unknown strings)\"` uses `[\"PLATFORM_ADMIN_WANNABE\"]` → 403",
+                                                "test_run_output":  "mix test test/letflow/plugs/tenant_status_test.exs -- Result: 20 passed (exit code 0, 0.3 seconds, async: true)",
+                                                "warnings_as_errors_run":  "mix test test/letflow/plugs/tenant_status_test.exs --warnings-as-errors -- Result: 20 passed (exit code 0, no warnings)"
+                                            }
+                           },
+                   "ac3":  {
+                               "criterion":  "A regression test would fail if the plug reverted to the raw string comparison",
+                               "verdict":  "PASS",
+                               "evidence":  {
+                                                "test_name":  "\"a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization\"",
+                                                "regression_mechanism":  "@platform_admin is the atom :PLATFORM_ADMIN (confirmed at tenant_status.ex line 66). auth_context.roles carries strings (e.g. [\"PLATFORM_ADMIN\"]). If roles_from_strings/1 were removed and the raw string list were compared against the atom: `:PLATFORM_ADMIN not in [\"PLATFORM_ADMIN\"]` evaluates to `true` (atom ≠ string in Elixir\u0027s `in` operator), so the cond guard `tenant.status == :inactive and @platform_admin not in roles` fires → reject_inactive/1 called → conn halted with 403 → `refute conn.halted` assertion fails → test fails",
+                                                "type_mismatch_proof":  "Elixir\u0027s `in` operator uses strict equality (===). :PLATFORM_ADMIN (atom) !== \"PLATFORM_ADMIN\" (binary). The atom is never found in a [String.t()] list, making the exemption permanently unreachable if roles_from_strings/1 is removed while @platform_admin stays an atom",
+                                                "unknown_role_filter_also_guarded":  "Test `\"an unknown role string is not exempt\"` further guards that roles_from_strings/1\u0027s filter-unknown-strings behavior is exercised: [\"PLATFORM_ADMIN_WANNABE\"] → roles_from_strings returns [] → no atom match → 403 asserted"
+                                            }
+                           },
+                   "iss_0069_check":  {
+                                          "status":  "ENVIRONMENT_BLOCKED_MANUAL_VERIFIED",
+                                          "detail":  "mix letflow.check.test cannot complete on this Windows host: WSL bash finds `mix` at /mnt/c/Program Files/Elixir/bin/elixir but cannot find `erl` (Erlang VM is a native Windows install not on WSL\u0027s PATH). Root cause: scripts/test_parallel.sh has CRLF line endings (git core.autocrlf=true; *.sh not covered by .gitattributes eol=lf). This is a pre-existing environment incompatibility unrelated to ISS-0808.",
+                                          "manual_verification":  {
+                                                                      "changed_test_file":  "test/letflow/plugs/tenant_status_test.exs",
+                                                                      "defp_with_default":  "unique_slug(prefix \\\\ \"tenant\") — the sole defp with a default argument",
+                                                                      "call_sites":  "All call sites in the file use unique_slug() (no-arg form), which exercises the default value — the default is NOT dead",
+                                                                      "dead_default_pattern":  "Elixir\u0027s \u0027default values for the optional arguments\u0027 warning fires when the shorter-arity form is NEVER called (always called with explicit value). Here the shorter-arity form unique_slug/0 is the only call pattern, so the default IS used — no warning emitted",
+                                                                      "warnings_as_errors_confirmation":  "mix test test/letflow/plugs/tenant_status_test.exs --warnings-as-errors exited 0 with zero compiler warnings — independently confirms no ISS-0069 class warning exists in this file",
+                                                                      "compile_check":  "mix compile --warnings-as-errors exited 0 with no output — zero warnings in production code either"
+                                                                  }
+                                      },
+                   "test_run_raw":  {
+                                        "command":  "mix test test/letflow/plugs/tenant_status_test.exs --color",
+                                        "exit_code":  0,
+                                        "summary_line":  "Result: 20 passed",
+                                        "duration":  "0.3 seconds (0.3s async, 0.00s sync)",
+                                        "seed":  850528,
+                                        "failures":  0
+                                    },
+                   "files_verified":  [
+                                          "lib/letflow/plugs/tenant_status.ex",
+                                          "test/letflow/plugs/tenant_status_test.exs"
+                                      ]
+               },
+    "status":  "COMPLETED"
 }

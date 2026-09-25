@@ -1,108 +1,107 @@
 {
-  "run_id": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
-  "agent": "RELEASE-VALIDATOR",
-  "timestamp": "2026-09-25T05:22:00+05:00",
-  "verdict": "PASS",
-
-  "iss0821_iss0816": {
-    "verdict": "PASS",
-    "acceptance_criteria": {
-      "AC1_no_has_more_dlq_pagination": {
-        "result": "PASS",
-        "evidence": "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx PAGES constant verified: each entry has only {items, next_cursor, count}. No has_more key present.",
-        "file": "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx",
-        "relevant_code": "const PAGES: Record<string, CursorPage<DlqEntry>> = { __page1__: { items: [...], next_cursor: 'cursor-2', count: 1 }, 'cursor-2': { items: [...], next_cursor: 'cursor-3', count: 1 }, 'cursor-3': { items: [...], next_cursor: null, count: 1 } }"
-      },
-      "AC1_no_has_more_promotion_review": {
-        "result": "PASS",
-        "evidence": "web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx installUseQueryMock returns { items, next_cursor: null, count: items.length }. No has_more.",
-        "file": "web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx"
-      },
-      "AC1_no_has_more_task_inbox": {
-        "result": "PASS",
-        "evidence": "web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx inbox mock returns { items: [...], next_cursor: null, count: 1 }. No has_more.",
-        "file": "web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx"
-      },
-      "AC1_no_has_more_obs04_e2e": {
-        "result": "PASS",
-        "evidence": "web/tests/e2e/obs04.timeline.e2e.spec.ts mockTimeline = { items: [...], next_cursor: null, count: 1 }. Instances mock also { items, next_cursor: null, count: 1 }. No has_more anywhere.",
-        "file": "web/tests/e2e/obs04.timeline.e2e.spec.ts"
-      },
-      "AC1_global_grep_has_more": {
-        "result": "PASS",
-        "evidence": "grep -r 'has_more' web/src web/tests returns NO occurrences that fabricate has_more in mock data. Matches found only in: (a) cursor-page-wire-shape.test.ts (the prevention test itself — comments + assertions about absence), (b) api/__tests__/identity.groupsApi.test.ts (comment: 'No has_more — Pagination.Page never emits one.'), (c) types/api.ts (documentation comment). No mock fixture assigns has_more."
-      },
-      "AC2_cursor_based_pagination_assertions_dlq": {
-        "result": "PASS",
-        "evidence": "DlqPage.pagination.test.tsx contains cursor-based pagination assertions: requestedCursors tracks each useQuery call's cursor; tests assert 'cursor-2' and 'cursor-3' are sent on forward navigation and correct values on back-navigation.",
-        "file": "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx"
-      },
-      "AC3_prevention_TC_ISS0821_03": {
-        "result": "PASS",
-        "evidence": "cursor-page-wire-shape.test.ts contains TC-ISS0821-03: expect(Object.prototype.hasOwnProperty.call(cursorPageNoCount, 'has_more')).toBe(false) and same for cursorPageWithCount. Vitest run: 4/4 PASS.",
-        "file": "web/src/types/__tests__/cursor-page-wire-shape.test.ts",
-        "vitest_run": "npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts → 4 tests passed"
-      }
-    }
-  },
-
-  "iss0822": {
-    "verdict": "PASS",
-    "acceptance_criteria": {
-      "AC1_spa_route_removed": {
-        "result": "PASS",
-        "evidence": "web/src/router.tsx has NO { path: 'admin/modules', element: <ProcessModulesPage /> } entry. ProcessModulesPage is not imported. Only a comment remains: '// ISS-0822: ProcessModulesPage import removed — Letflow.Routers.ProcessModules is deferred to S5...' and '// admin/modules route removed in ISS-0822: Letflow.Routers.ProcessModules is deferred to S5 — no backend exists, every API call 404s.'",
-        "file": "web/src/router.tsx"
-      },
-      "AC2_decision_recorded_router_ex": {
-        "result": "PASS",
-        "evidence": "lib/letflow/router.ex @moduledoc deferred-routes table lists Letflow.Routers.ProcessModules as S5 (process-module packaging). Explicit decision note: 'Decision (ISS-0822): Letflow.Routers.ProcessModules is not mounted here and its SPA route (/admin/modules → ProcessModulesPage) has been removed from web/src/router.tsx until S5 is implemented.'",
-        "file": "lib/letflow/router.ex"
-      },
-      "AC3_no_live_routes_for_other_deferred_routers": {
-        "result": "PASS",
-        "evidence": "grep for 'SimulationTest|AgentRequest|AgentResponse|AgentEvent|ProcessModulesPage' in web/src/router.tsx returns only the ISS-0822 comment (no live import or route entry). SimulationTest, AgentRequests, AgentResponses, AgentEvents have no SPA routes in router.tsx.",
-        "file": "web/src/router.tsx"
-      },
-      "AC4_source_scan_guard": {
-        "result": "PASS",
-        "evidence": "npx vitest run tests/guards/source-scan.spec.ts → 1 test passed.",
-        "vitest_run": "npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts tests/guards/source-scan.spec.ts → 5 tests (4+1) passed"
-      }
-    }
-  },
-
-  "test_runs": {
-    "vitest_wire_shape_only": {
-      "command": "cd web && npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts",
-      "result": "PASS",
-      "output": "✓ src/types/__tests__/cursor-page-wire-shape.test.ts (4 tests) 2ms | Test Files 1 passed (1) | Tests 4 passed (4)"
-    },
-    "vitest_wire_shape_and_source_scan": {
-      "command": "cd web && npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts tests/guards/source-scan.spec.ts",
-      "result": "PASS",
-      "output": "✓ src/types/__tests__/cursor-page-wire-shape.test.ts (4 tests) 4ms | ✓ tests/guards/source-scan.spec.ts (1 test) 47ms | Test Files 2 passed (2) | Tests 5 passed (5)"
-    },
-    "mix_compile_warnings_as_errors": {
-      "command": "mix compile --warnings-as-errors",
-      "result": "PASS",
-      "exit_code": 0,
-      "output": "(no output — already compiled, no warnings)"
-    },
-    "mix_letflow_check_test": {
-      "command": "mix letflow.check.test",
-      "result": "BLOCKED_PRE_EXISTING_ENV_ISSUE",
-      "exit_code": 0,
-      "output": "mix letflow.check.test: FAILED -- scripts/test_parallel.sh exited 2 before ever printing its partition-log-directory line",
-      "root_cause": "scripts/test_parallel.sh checked out with CRLF line endings on Windows (git core.autocrlf=true). bash cannot execute CRLF scripts — exits 2 with '$\\r': command not found. git status confirms scripts/test_parallel.sh is UNMODIFIED relative to HEAD — this is a pre-existing environment issue, not introduced by this batch. mix compile --warnings-as-errors exits 0 cleanly.",
-      "impact": "None on this batch. All changes are frontend (ISS-0821/ISS-0816 fixture cleanup) or moduledoc-only backend (ISS-0822 router.ex decision note). No functional Elixir code changed; no risk of dead default-argument warnings. Database (port 5472) is also unavailable in this environment, so mix test is not runnable regardless."
-    }
-  },
-
-  "summary": {
-    "ISS-0821": "PASS — has_more fully expunged from all four fixtures; cursor-based pagination assertions remain; TC-ISS0821-03 prevention test passes (4/4 vitest).",
-    "ISS-0816": "PASS — subsumed by ISS-0821 fix; no has_more in any mock data confirmed by global grep.",
-    "ISS-0822": "PASS — admin/modules SPA route removed; ProcessModulesPage import removed; ISS-0822 decision note in router.ex moduledoc; no other deferred-router pages have live SPA routes; source-scan guard passes.",
-    "environment_caveats": "mix letflow.check.test blocked by pre-existing CRLF environment issue (git autocrlf on Windows). mix compile --warnings-as-errors clean. No DB available for mix test. These are pre-existing constraints, not introduced by this batch."
-  }
+    "run_id":  "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
+    "result":  {
+                   "agent":  "RELEASE-VALIDATOR",
+                   "timestamp":  "2026-09-25T05:22:00+05:00",
+                   "verdict":  "PASS",
+                   "iss0821_iss0816":  {
+                                           "verdict":  "PASS",
+                                           "acceptance_criteria":  {
+                                                                       "AC1_no_has_more_dlq_pagination":  {
+                                                                                                              "result":  "PASS",
+                                                                                                              "evidence":  "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx PAGES constant verified: each entry has only {items, next_cursor, count}. No has_more key present.",
+                                                                                                              "file":  "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx",
+                                                                                                              "relevant_code":  "const PAGES: Record\u003cstring, CursorPage\u003cDlqEntry\u003e\u003e = { __page1__: { items: [...], next_cursor: \u0027cursor-2\u0027, count: 1 }, \u0027cursor-2\u0027: { items: [...], next_cursor: \u0027cursor-3\u0027, count: 1 }, \u0027cursor-3\u0027: { items: [...], next_cursor: null, count: 1 } }"
+                                                                                                          },
+                                                                       "AC1_no_has_more_promotion_review":  {
+                                                                                                                "result":  "PASS",
+                                                                                                                "evidence":  "web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx installUseQueryMock returns { items, next_cursor: null, count: items.length }. No has_more.",
+                                                                                                                "file":  "web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx"
+                                                                                                            },
+                                                                       "AC1_no_has_more_task_inbox":  {
+                                                                                                          "result":  "PASS",
+                                                                                                          "evidence":  "web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx inbox mock returns { items: [...], next_cursor: null, count: 1 }. No has_more.",
+                                                                                                          "file":  "web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx"
+                                                                                                      },
+                                                                       "AC1_no_has_more_obs04_e2e":  {
+                                                                                                         "result":  "PASS",
+                                                                                                         "evidence":  "web/tests/e2e/obs04.timeline.e2e.spec.ts mockTimeline = { items: [...], next_cursor: null, count: 1 }. Instances mock also { items, next_cursor: null, count: 1 }. No has_more anywhere.",
+                                                                                                         "file":  "web/tests/e2e/obs04.timeline.e2e.spec.ts"
+                                                                                                     },
+                                                                       "AC1_global_grep_has_more":  {
+                                                                                                        "result":  "PASS",
+                                                                                                        "evidence":  "grep -r \u0027has_more\u0027 web/src web/tests returns NO occurrences that fabricate has_more in mock data. Matches found only in: (a) cursor-page-wire-shape.test.ts (the prevention test itself — comments + assertions about absence), (b) api/__tests__/identity.groupsApi.test.ts (comment: \u0027No has_more — Pagination.Page never emits one.\u0027), (c) types/api.ts (documentation comment). No mock fixture assigns has_more."
+                                                                                                    },
+                                                                       "AC2_cursor_based_pagination_assertions_dlq":  {
+                                                                                                                          "result":  "PASS",
+                                                                                                                          "evidence":  "DlqPage.pagination.test.tsx contains cursor-based pagination assertions: requestedCursors tracks each useQuery call\u0027s cursor; tests assert \u0027cursor-2\u0027 and \u0027cursor-3\u0027 are sent on forward navigation and correct values on back-navigation.",
+                                                                                                                          "file":  "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx"
+                                                                                                                      },
+                                                                       "AC3_prevention_TC_ISS0821_03":  {
+                                                                                                            "result":  "PASS",
+                                                                                                            "evidence":  "cursor-page-wire-shape.test.ts contains TC-ISS0821-03: expect(Object.prototype.hasOwnProperty.call(cursorPageNoCount, \u0027has_more\u0027)).toBe(false) and same for cursorPageWithCount. Vitest run: 4/4 PASS.",
+                                                                                                            "file":  "web/src/types/__tests__/cursor-page-wire-shape.test.ts",
+                                                                                                            "vitest_run":  "npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts → 4 tests passed"
+                                                                                                        }
+                                                                   }
+                                       },
+                   "iss0822":  {
+                                   "verdict":  "PASS",
+                                   "acceptance_criteria":  {
+                                                               "AC1_spa_route_removed":  {
+                                                                                             "result":  "PASS",
+                                                                                             "evidence":  "web/src/router.tsx has NO { path: \u0027admin/modules\u0027, element: \u003cProcessModulesPage /\u003e } entry. ProcessModulesPage is not imported. Only a comment remains: \u0027// ISS-0822: ProcessModulesPage import removed — Letflow.Routers.ProcessModules is deferred to S5...\u0027 and \u0027// admin/modules route removed in ISS-0822: Letflow.Routers.ProcessModules is deferred to S5 — no backend exists, every API call 404s.\u0027",
+                                                                                             "file":  "web/src/router.tsx"
+                                                                                         },
+                                                               "AC2_decision_recorded_router_ex":  {
+                                                                                                       "result":  "PASS",
+                                                                                                       "evidence":  "lib/letflow/router.ex @moduledoc deferred-routes table lists Letflow.Routers.ProcessModules as S5 (process-module packaging). Explicit decision note: \u0027Decision (ISS-0822): Letflow.Routers.ProcessModules is not mounted here and its SPA route (/admin/modules → ProcessModulesPage) has been removed from web/src/router.tsx until S5 is implemented.\u0027",
+                                                                                                       "file":  "lib/letflow/router.ex"
+                                                                                                   },
+                                                               "AC3_no_live_routes_for_other_deferred_routers":  {
+                                                                                                                     "result":  "PASS",
+                                                                                                                     "evidence":  "grep for \u0027SimulationTest|AgentRequest|AgentResponse|AgentEvent|ProcessModulesPage\u0027 in web/src/router.tsx returns only the ISS-0822 comment (no live import or route entry). SimulationTest, AgentRequests, AgentResponses, AgentEvents have no SPA routes in router.tsx.",
+                                                                                                                     "file":  "web/src/router.tsx"
+                                                                                                                 },
+                                                               "AC4_source_scan_guard":  {
+                                                                                             "result":  "PASS",
+                                                                                             "evidence":  "npx vitest run tests/guards/source-scan.spec.ts → 1 test passed.",
+                                                                                             "vitest_run":  "npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts tests/guards/source-scan.spec.ts → 5 tests (4+1) passed"
+                                                                                         }
+                                                           }
+                               },
+                   "test_runs":  {
+                                     "vitest_wire_shape_only":  {
+                                                                    "command":  "cd web \u0026\u0026 npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts",
+                                                                    "result":  "PASS",
+                                                                    "output":  "✓ src/types/__tests__/cursor-page-wire-shape.test.ts (4 tests) 2ms | Test Files 1 passed (1) | Tests 4 passed (4)"
+                                                                },
+                                     "vitest_wire_shape_and_source_scan":  {
+                                                                               "command":  "cd web \u0026\u0026 npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts tests/guards/source-scan.spec.ts",
+                                                                               "result":  "PASS",
+                                                                               "output":  "✓ src/types/__tests__/cursor-page-wire-shape.test.ts (4 tests) 4ms | ✓ tests/guards/source-scan.spec.ts (1 test) 47ms | Test Files 2 passed (2) | Tests 5 passed (5)"
+                                                                           },
+                                     "mix_compile_warnings_as_errors":  {
+                                                                            "command":  "mix compile --warnings-as-errors",
+                                                                            "result":  "PASS",
+                                                                            "exit_code":  0,
+                                                                            "output":  "(no output — already compiled, no warnings)"
+                                                                        },
+                                     "mix_letflow_check_test":  {
+                                                                    "command":  "mix letflow.check.test",
+                                                                    "result":  "BLOCKED_PRE_EXISTING_ENV_ISSUE",
+                                                                    "exit_code":  0,
+                                                                    "output":  "mix letflow.check.test: FAILED -- scripts/test_parallel.sh exited 2 before ever printing its partition-log-directory line",
+                                                                    "root_cause":  "scripts/test_parallel.sh checked out with CRLF line endings on Windows (git core.autocrlf=true). bash cannot execute CRLF scripts — exits 2 with \u0027$\\r\u0027: command not found. git status confirms scripts/test_parallel.sh is UNMODIFIED relative to HEAD — this is a pre-existing environment issue, not introduced by this batch. mix compile --warnings-as-errors exits 0 cleanly.",
+                                                                    "impact":  "None on this batch. All changes are frontend (ISS-0821/ISS-0816 fixture cleanup) or moduledoc-only backend (ISS-0822 router.ex decision note). No functional Elixir code changed; no risk of dead default-argument warnings. Database (port 5472) is also unavailable in this environment, so mix test is not runnable regardless."
+                                                                }
+                                 },
+                   "summary":  {
+                                   "ISS-0821":  "PASS — has_more fully expunged from all four fixtures; cursor-based pagination assertions remain; TC-ISS0821-03 prevention test passes (4/4 vitest).",
+                                   "ISS-0816":  "PASS — subsumed by ISS-0821 fix; no has_more in any mock data confirmed by global grep.",
+                                   "ISS-0822":  "PASS — admin/modules SPA route removed; ProcessModulesPage import removed; ISS-0822 decision note in router.ex moduledoc; no other deferred-router pages have live SPA routes; source-scan guard passes.",
+                                   "environment_caveats":  "mix letflow.check.test blocked by pre-existing CRLF environment issue (git autocrlf on Windows). mix compile --warnings-as-errors clean. No DB available for mix test. These are pre-existing constraints, not introduced by this batch."
+                               }
+               },
+    "status":  "COMPLETED"
 }

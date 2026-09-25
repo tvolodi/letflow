@@ -118,6 +118,19 @@ describe('useTenantScopedQueryKeys — REQ-384 §7.2 core mechanism', () => {
     expect(result.current.me.memberships()[0]).not.toBe('tenant')
   })
 
+  it('TC-REQ406-01: me.modules is tenant-scoped while me.memberships remains global', () => {
+    mockUseAuth.mockReturnValue(sessionWithTenant('tenant-a'))
+    const { result: a } = renderHook(() => useTenantScopedQueryKeys())
+
+    mockUseAuth.mockReturnValue(sessionWithTenant('tenant-b'))
+    const { result: b } = renderHook(() => useTenantScopedQueryKeys())
+
+    expect(a.current.me.memberships()[0]).not.toBe('tenant')
+    expect(a.current.me.modules().slice(0, 2)).toEqual(['tenant', 'tenant-a'])
+    expect(b.current.me.modules().slice(0, 2)).toEqual(['tenant', 'tenant-b'])
+    expect(a.current.me.modules()).not.toEqual(b.current.me.modules())
+  })
+
   it('TC-REQ384-05: throws when called outside an authenticated session (no session at all)', () => {
     mockUseAuth.mockReturnValue(sessionWithTenant(undefined as unknown as string))
     const { result } = renderHook(() => {

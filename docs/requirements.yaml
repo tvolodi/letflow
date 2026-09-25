@@ -30107,7 +30107,7 @@ requirements:
   - id: REQ-405
     title: "P1: mix letflow.check_boundaries (xref-based module boundary check) wired into mix letflow.check"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 794  # letflow-queue task id, GH#1779. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >
@@ -30158,7 +30158,7 @@ requirements:
   - id: REQ-406
     title: "P1: web/src/modules/types.ts and registry.ts, installed-modules API client, and the ESLint module-boundary rule"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 795  # letflow-queue task id, GH#1780. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >
@@ -30221,7 +30221,7 @@ requirements:
   - id: REQ-407
     title: "P1: router.tsx and AppShell.tsx build module routes and nav from the installed-module list"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 796  # letflow-queue task id, GH#1781. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >
@@ -30259,7 +30259,7 @@ requirements:
   - id: REQ-408
     title: "P2: exam entry module Letflow.Modules.Exam with the six exam permissions and CANDIDATE role_grants; remove them from Letflow.Api.Authorization"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 797  # letflow-queue task id, GH#1782. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

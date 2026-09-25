@@ -254,5 +254,8 @@ export const queryKeys = {
   me: {
     all: ['me'] as const,
     memberships: () => [...queryKeys.me.all, 'memberships'] as const,
+    /** REQ-406 — installed-module list is tenant-scoped because it exposes
+     *  per-tenant business data, even though the route lives under /me. */
+    modules: (tenantId: string) => ['tenant', tenantId, 'me', 'modules'] as const,
   },
 }

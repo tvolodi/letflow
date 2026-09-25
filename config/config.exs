@@ -54,9 +54,9 @@ config :letflow, :lua_platform_time_source, Letflow.Engine.Lua.Platform.SystemCl
 # REQ-400 (docs/migration/decisions/0039-platform-module-solution-layering.md
 # D4; design lib/letflow/design/req400-module-behaviour-catalog.md §5):
 # the compiled list of registered platform modules, read once via
-# Application.compile_env/3 by Letflow.Modules.Catalog. No real module ships
-# in P1 -- REQ-408 (P2) is what first appends one (Letflow.Modules.Exam).
-# config/test.exs overrides this with the test-only fixture module.
-config :letflow, :modules, []
+# Application.compile_env/3 by Letflow.Modules.Catalog. The first real
+# module shipped in P2 is Letflow.Modules.Exam; config/test.exs appends the
+# test-only fixture module on top of that list.
+config :letflow, :modules, [Letflow.Modules.Exam]
 
 import_config "#{config_env()}.exs"

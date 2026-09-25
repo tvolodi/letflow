@@ -61,6 +61,35 @@ vi.mock('@/api/tasks', () => ({
   },
 }))
 
+vi.mock('@/hooks/usePolling', () => ({
+  usePolling: vi.fn(() => ({
+    lastRefreshedAt: null,
+    refreshNow: vi.fn(),
+    refreshCount: 0,
+  })),
+}))
+
+vi.mock('@/hooks/useHistoryScrubber', () => ({
+  useHistoryScrubber: vi.fn(() => ({
+    currentSeqNum: 0,
+    totalEvents: 0,
+    reconstructedState: null,
+    isLoading: false,
+    isLiveMode: true,
+    error: null,
+    goToEvent: vi.fn(),
+    resumeLive: vi.fn(),
+  })),
+}))
+
+vi.mock('@/components/instances/CancelInstanceDialog', () => ({
+  CancelInstanceDialog: ({ instanceName }: { instanceName: string }) => (
+    <div data-testid="cancel-dialog-prop" data-instance-name={instanceName}>
+      {instanceName}
+    </div>
+  ),
+}))
+
 vi.mock('@/auth/AuthContext', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/auth/AuthContext')>()
   return {
@@ -106,6 +135,27 @@ describe('InstanceDetailPage — Definition detail row', () => {
     })
 
     // Never the pre-fix literal-"undefined" rendering.
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument()
+  })
+
+  it('passes the definition-based instance name into the cancel dialog, not undefined', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[`/instances/${INSTANCE_ID}`]}>
+          <Routes>
+            <Route path="/instances/:id" element={<InstanceDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => {
+      const trigger = screen.getByTestId('cancel-dialog-prop')
+      expect(trigger).toHaveAttribute('data-instance-name', 'pl-rollback-fixture v2.0.0')
+    })
+
     expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument()
   })
 })

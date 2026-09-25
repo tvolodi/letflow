@@ -135,6 +135,9 @@ export function useTenantScopedQueryKeys() {
     },
     // NOT tenant-scoped — passed through unchanged.
     onboarding: queryKeys.onboarding,
-    me: queryKeys.me,
+    me: {
+      memberships: queryKeys.me.memberships,
+      modules: () => queryKeys.me.modules(tenantId),
+    },
   }
 }

@@ -1,56 +1,59 @@
 {
-  "run_id": "WF03-ISS0806-20260925",
-  "gate": "CODE-DESIGN-VALIDATOR",
-  "step": "1b",
-  "timestamp": "2026-09-25T05:33:49+05:00",
-  "design_artefact": "lib/letflow/design/iss-0806-defmanifest-compile-check.md",
-  "verdict": "PASS",
-  "acceptance_criteria": [
-    {
-      "id": "AC1",
-      "text": "A compile-time or Dialyzer-checkable mechanism catches a role_grants atom not present in permissions",
-      "status": "COVERS",
-      "evidence": "§1.1 selects defmanifest/1 macro as the compile-time mechanism. §1.4 specifies the expansion-time validation loop unambiguously (3-step: extract permissions, extract role_grants, for each perm in each role_grants value assert perm in permissions, else raise CompileError). §1.5 specifies the exact CompileError message format with a concrete example. §4 specifies three tests covering negative path (Code.compile_string/1 must raise CompileError), positive path, and callback contract."
-    },
-    {
-      "id": "AC2",
-      "text": "Existing runtime validate/1 behavior unchanged",
-      "status": "COVERS",
-      "evidence": "§5 explicitly states validate/1 and validate/2 are not modified, lists all six private validation helpers as unchanged in a table. §3 confirms catalog.ex has No change. §1.3 and §1.6 reinforce that defmanifest is additive opt-in sugar that coexists with runtime validation."
-    }
-  ],
-  "checks": {
-    "no_implementation_code": {
-      "result": "PASS",
-      "notes": "All code blocks are fenced as text pseudocode or test-fixture strings for Code.compile_string/1. The macro signature defmacro defmanifest(fields) :: Macro.t() (§3) is a signature only — no body. The expansion description def manifest() :: Letflow.Modules.Module.manifest() is a description, not a body. No def/defp/defmacro function bodies are present."
-    },
-    "compile_time_loop_unambiguous": {
-      "result": "PASS",
-      "notes": "§1.4 provides a 3-step algorithm with no TBD language. Iterates role_grants pairs, inner-iterates perms, checks membership in permissions. __CALLER__.module identified as source of CallerModule in error message. Implementable without guessing."
-    },
-    "compile_error_message_specified": {
-      "result": "PASS",
-      "notes": "§1.5 gives exact template 'role_grants atom :<ATOM> is not declared in permissions for module Elixir.<CallerModule>' plus a concrete instantiated example. No ambiguity in message shape."
-    },
-    "ac2_validate_explicitly_covered": {
-      "result": "PASS",
-      "notes": "§5 is entirely devoted to AC2. Six-row table lists every validation helper as unchanged. Coexistence of compile-time and runtime enforcement points is described clearly."
-    },
-    "open_questions_blocking_implementation": {
-      "result": "NONE",
-      "notes": "§6 declares all decisions resolved with rationale. The @impl true interaction with defmanifest is correctly scoped as an implementation detail (not mandated) and does not block ELIXIR-DEV. Non-literal manifest pass-through policy (§1.3/§2) is resolved. Error message wording is fixed. Fixture as demonstration site is fixed."
-    },
-    "tbd_or_deferral_language": {
-      "result": "PASS",
-      "notes": "No TBD, TODO, deferred, or open-ended deferral language found in the design artefact."
-    },
-    "cross_module_dependencies_listed": {
-      "result": "PASS",
-      "notes": "§3 lists all affected files with precise change descriptions: module.ex (defmacro addition), test/support/modules/fixture/fixture.ex (defmanifest substitution), catalog.ex (no change), catalog_test.exs (no change to existing tests). Dependencies on __CALLER__, CompileError (Elixir built-in), and Letflow.Modules.Module.manifest() type are identified."
-    }
-  },
-  "routing": {
-    "next_step": "STEP 2a — ELIXIR-DEV",
-    "notes": "Design is complete and unambiguous. Implement defmacro defmanifest/1 in lib/letflow/modules/module.ex, update test/support/modules/fixture/fixture.ex, and add tests per §4."
-  }
+    "run_id":  "WF03-ISS0806-20260925",
+    "step":  "1b",
+    "result":  {
+                   "gate":  "CODE-DESIGN-VALIDATOR",
+                   "timestamp":  "2026-09-25T05:33:49+05:00",
+                   "design_artefact":  "lib/letflow/design/iss-0806-defmanifest-compile-check.md",
+                   "verdict":  "PASS",
+                   "acceptance_criteria":  [
+                                               {
+                                                   "id":  "AC1",
+                                                   "text":  "A compile-time or Dialyzer-checkable mechanism catches a role_grants atom not present in permissions",
+                                                   "status":  "COVERS",
+                                                   "evidence":  "§1.1 selects defmanifest/1 macro as the compile-time mechanism. §1.4 specifies the expansion-time validation loop unambiguously (3-step: extract permissions, extract role_grants, for each perm in each role_grants value assert perm in permissions, else raise CompileError). §1.5 specifies the exact CompileError message format with a concrete example. §4 specifies three tests covering negative path (Code.compile_string/1 must raise CompileError), positive path, and callback contract."
+                                               },
+                                               {
+                                                   "id":  "AC2",
+                                                   "text":  "Existing runtime validate/1 behavior unchanged",
+                                                   "status":  "COVERS",
+                                                   "evidence":  "§5 explicitly states validate/1 and validate/2 are not modified, lists all six private validation helpers as unchanged in a table. §3 confirms catalog.ex has No change. §1.3 and §1.6 reinforce that defmanifest is additive opt-in sugar that coexists with runtime validation."
+                                               }
+                                           ],
+                   "checks":  {
+                                  "no_implementation_code":  {
+                                                                 "result":  "PASS",
+                                                                 "notes":  "All code blocks are fenced as text pseudocode or test-fixture strings for Code.compile_string/1. The macro signature defmacro defmanifest(fields) :: Macro.t() (§3) is a signature only — no body. The expansion description def manifest() :: Letflow.Modules.Module.manifest() is a description, not a body. No def/defp/defmacro function bodies are present."
+                                                             },
+                                  "compile_time_loop_unambiguous":  {
+                                                                        "result":  "PASS",
+                                                                        "notes":  "§1.4 provides a 3-step algorithm with no TBD language. Iterates role_grants pairs, inner-iterates perms, checks membership in permissions. __CALLER__.module identified as source of CallerModule in error message. Implementable without guessing."
+                                                                    },
+                                  "compile_error_message_specified":  {
+                                                                          "result":  "PASS",
+                                                                          "notes":  "§1.5 gives exact template \u0027role_grants atom :\u003cATOM\u003e is not declared in permissions for module Elixir.\u003cCallerModule\u003e\u0027 plus a concrete instantiated example. No ambiguity in message shape."
+                                                                      },
+                                  "ac2_validate_explicitly_covered":  {
+                                                                          "result":  "PASS",
+                                                                          "notes":  "§5 is entirely devoted to AC2. Six-row table lists every validation helper as unchanged. Coexistence of compile-time and runtime enforcement points is described clearly."
+                                                                      },
+                                  "open_questions_blocking_implementation":  {
+                                                                                 "result":  "NONE",
+                                                                                 "notes":  "§6 declares all decisions resolved with rationale. The @impl true interaction with defmanifest is correctly scoped as an implementation detail (not mandated) and does not block ELIXIR-DEV. Non-literal manifest pass-through policy (§1.3/§2) is resolved. Error message wording is fixed. Fixture as demonstration site is fixed."
+                                                                             },
+                                  "tbd_or_deferral_language":  {
+                                                                   "result":  "PASS",
+                                                                   "notes":  "No TBD, TODO, deferred, or open-ended deferral language found in the design artefact."
+                                                               },
+                                  "cross_module_dependencies_listed":  {
+                                                                           "result":  "PASS",
+                                                                           "notes":  "§3 lists all affected files with precise change descriptions: module.ex (defmacro addition), test/support/modules/fixture/fixture.ex (defmanifest substitution), catalog.ex (no change), catalog_test.exs (no change to existing tests). Dependencies on __CALLER__, CompileError (Elixir built-in), and Letflow.Modules.Module.manifest() type are identified."
+                                                                       }
+                              },
+                   "routing":  {
+                                   "next_step":  "STEP 2a — ELIXIR-DEV",
+                                   "notes":  "Design is complete and unambiguous. Implement defmacro defmanifest/1 in lib/letflow/modules/module.ex, update test/support/modules/fixture/fixture.ex, and add tests per §4."
+                               }
+               },
+    "status":  "COMPLETED"
 }

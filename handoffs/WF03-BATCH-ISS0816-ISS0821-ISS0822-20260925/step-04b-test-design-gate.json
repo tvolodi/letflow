@@ -1,124 +1,127 @@
 {
-  "run_id": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
-  "step": "04b-TEST-DESIGN-VALIDATOR",
-  "agent": "TEST-DESIGN-VALIDATOR",
-  "status": "PASS",
-  "issues": ["ISS-0816", "ISS-0821", "ISS-0822"],
-
-  "spec_location": {
-    "note": "No standalone test/specs/ISS-0816-0821-0822.md file was created; the spec is distributed across: (1) web/src/types/__tests__/cursor-page-wire-shape.test.ts (inline documentation per test case), (2) handoffs/WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925/step-04-test-designer.json (mutation analysis), and (3) lib/letflow/design/iss-0816-0821-0822-cursor-page-and-dead-route.md Section 4 (AC coverage table). Acceptance criteria are traceable from these sources.",
-    "design_doc_ac_section": "lib/letflow/design/iss-0816-0821-0822-cursor-page-and-dead-route.md § 4 Acceptance Criteria Coverage"
-  },
-
-  "criterion_coverage": {
-    "ISS-0821_ISS-0816": {
-      "AC_fixtures_no_has_more": {
-        "criterion": "Four fixtures no longer fabricate has_more; each mock matches a real route's response shape",
-        "covered_by": ["TC-ISS0821-03 (hasOwnProperty check on both fixture variants)", "typed fixture declarations at lines 24 and 30 (compile-time TS2741 on mutant 1)"],
-        "verdict": "COVERED"
-      },
-      "AC_next_cursor_pagination": {
-        "criterion": "Tests still meaningfully cover pagination via next_cursor",
-        "covered_by": ["TC-ISS0821-04 (next_cursor === null for no-more-pages, next_cursor !== null for more-pages-available)"],
-        "verdict": "COVERED"
-      },
-      "AC_reintroduction_guard": {
-        "criterion": "A mechanism makes has_more harder to reintroduce",
-        "covered_by": ["Typed fixture declarations (const cursorPageNoCount: CursorPage<SampleItem>, const cursorPageWithCount: CursorPage<SampleItem>) act as compile-time specification; tsc --noEmit catches any required has_more reintroduction via TS2741"],
-        "verdict": "COVERED — independently verified (see mutant_1_independent_verification)"
-      },
-      "AC_count_optional": {
-        "criterion": "count is optional in CursorPage<T> — hand-built routes omit it",
-        "covered_by": ["TC-ISS0821-01 (cursorPageNoCount.count is undefined)", "TC-ISS0821-02 (cursorPageWithCount.count is 5)"],
-        "verdict": "COVERED"
-      }
-    },
-    "ISS-0822": {
-      "AC_route_removed": {
-        "criterion": "SPA route admin/modules removed or explicitly gated",
-        "covered_by": "Static check: admin/modules appears exactly once in router.tsx (tombstone comment only — no active path declaration)",
-        "verdict": "COVERED — independently verified (see iss_0822_static_checks)"
-      },
-      "AC_import_removed": {
-        "criterion": "ProcessModulesPage not imported as live symbol",
-        "covered_by": "Static check: ProcessModulesPage appears exactly once in router.tsx (tombstone comment only — no import statement or JSX usage)",
-        "verdict": "COVERED — independently verified"
-      }
-    }
-  },
-
-  "checklist": {
-    "every_MUST_criterion_has_test": true,
-    "no_tag_skip_on_MUST_test": true,
-    "no_TODO_implement_test_in_spec": true,
-    "fixtures_not_shared_hardcoded_state": true,
-    "tests_self_sufficient": true,
-    "no_hardcoded_secrets_or_connection_strings": true
-  },
-
-  "mutant_1_independent_verification": {
-    "issue": "ISS-0821/ISS-0816",
-    "mutant": "Added `has_more: boolean` as required field to CursorPage<T> in web/src/types/api.ts (after next_cursor line)",
-    "edit_confirmed": "Field inserted between next_cursor and count lines",
-
-    "vitest_run": {
-      "command": "cd web && npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts",
-      "exit_code": 0,
-      "outcome": "4/4 PASS",
-      "explanation": "esbuild transpilation strips TypeScript types at test run time; the runtime fixture objects are plain literals that never contained has_more, and TC-ISS0821-03 asserts hasOwnProperty(cursorPageNoCount, 'has_more') === false which holds because no runtime key is present. All 4 assertions pass at runtime."
-    },
-
-    "tsc_run": {
-      "command": "cd web && npx tsc --noEmit --project tsconfig.app.json 2>&1 | Select-String 'cursor-page'",
-      "exit_code": 2,
-      "relevant_errors": [
-        "src/types/__tests__/cursor-page-wire-shape.test.ts(24,7): error TS2741: Property 'has_more' is missing in type '{ items: { id: string; }[]; next_cursor: null; }' but required in type 'CursorPage<SampleItem>'.",
-        "src/types/__tests__/cursor-page-wire-shape.test.ts(30,7): error TS2741: Property 'has_more' is missing in type '{ items: { id: string; }[]; next_cursor: string; count: number; }' but required in type 'CursorPage<SampleItem>'."
-      ],
-      "outcome": "COMPILE-TIME FAIL — TS2741 at cursor-page-wire-shape.test.ts:24 and :30, exactly as TEST-DESIGNER claimed. The typed fixture declarations `const cursorPageNoCount: CursorPage<SampleItem>` and `const cursorPageWithCount: CursorPage<SampleItem>` are the operative compile-time guards."
-    },
-
-    "verdict": "Mutant 1 independently confirmed. vitest runtime: PASS (expected, esbuild strips types). tsc compile: EXIT 2 with TS2741 at lines 24 and 30. TEST-DESIGNER's claims verified independently.",
-
-    "revert": {
-      "command": "git checkout -- web/src/types/api.ts",
-      "git_status_porcelain_web_src_types_api_after_revert": "",
-      "post_revert_vitest": "4/4 PASS (cd web && npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts)",
-      "quote": "git status --porcelain web/src/types/api.ts output: (empty string — no tracked changes)"
-    }
-  },
-
-  "mutant_2_verification_by_reasoning": {
-    "issue": "ISS-0821",
-    "mutant": "Change count?: number to count: number (make required)",
-    "reasoning": "cursorPageNoCount at line 24 is declared as `const cursorPageNoCount: CursorPage<SampleItem> = { items: [...], next_cursor: null }` — no count key. Making count required triggers the identical TS2741 mechanism as mutant 1: TypeScript's structural assignment check at line 24 rejects the literal that lacks the now-required field. TEST-DESIGNER's reported TS2741 at line 24 (exit 2, 28 total errors) is consistent with this mechanism. Mutant 1 independently verified; mutant 2 confirmed by structural reasoning from the same tsc mechanism.",
-    "verdict": "Confirmed by reasoning — same TS2741 assignment-check mechanism as mutant 1, same typed fixture at line 24."
-  },
-
-  "iss_0822_static_checks": {
-    "admin_modules_count": {
-      "command": "(Get-Content web\\src\\router.tsx | Select-String 'admin/modules').Count",
-      "result": 1,
-      "match": "      // admin/modules route removed in ISS-0822: Letflow.Routers.ProcessModules is",
-      "verdict": "PASS — single tombstone comment, no active path declaration"
-    },
-    "ProcessModulesPage_count": {
-      "command": "(Get-Content web\\src\\router.tsx | Select-String 'ProcessModulesPage').Count",
-      "result": 1,
-      "match": "// ISS-0822: ProcessModulesPage import removed — Letflow.Routers.ProcessModules is",
-      "verdict": "PASS — single tombstone comment, no import statement or JSX usage"
-    }
-  },
-
-  "tree_cleanliness": {
-    "git_status_porcelain_lib_test_after_all_mutants": "",
-    "git_status_porcelain_web_src_types_api_final": "",
-    "quote_lib_test": "git status --porcelain lib/ test/ output: (empty string)",
-    "quote_api_ts": "git status --porcelain web/src/types/api.ts output: (empty string)"
-  },
-
-  "gate_decision": "PASS",
-  "gate_rationale": "All acceptance criteria for ISS-0821/ISS-0816 and ISS-0822 have runnable test coverage. Mutant 1 (has_more: boolean required) independently applied and verified: vitest 4/4 PASS (esbuild strips types), tsc exits 2 with TS2741 at cursor-page-wire-shape.test.ts lines 24 and 30. Mutant 2 (count required) confirmed by structural reasoning from the same tsc mechanism. Mutant reverted: git status --porcelain web/src/types/api.ts is empty. Post-revert vitest: 4/4 PASS. ISS-0822 static checks: both patterns appear exactly once as tombstone comments, no active declarations. No @tag:skip on MUST-covering tests, no TODO placeholders, no shared state, no hardcoded secrets. Tree is clean.",
-
-  "next_action": "Route to TEST-RUNNER to run the full suite."
+    "run_id":  "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
+    "step":  "04b-TEST-DESIGN-VALIDATOR",
+    "status":  "COMPLETED",
+    "result":  {
+                   "agent":  "TEST-DESIGN-VALIDATOR",
+                   "issues":  [
+                                  "ISS-0816",
+                                  "ISS-0821",
+                                  "ISS-0822"
+                              ],
+                   "spec_location":  {
+                                         "note":  "No standalone test/specs/ISS-0816-0821-0822.md file was created; the spec is distributed across: (1) web/src/types/__tests__/cursor-page-wire-shape.test.ts (inline documentation per test case), (2) handoffs/WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925/step-04-test-designer.json (mutation analysis), and (3) lib/letflow/design/iss-0816-0821-0822-cursor-page-and-dead-route.md Section 4 (AC coverage table). Acceptance criteria are traceable from these sources.",
+                                         "design_doc_ac_section":  "lib/letflow/design/iss-0816-0821-0822-cursor-page-and-dead-route.md § 4 Acceptance Criteria Coverage"
+                                     },
+                   "criterion_coverage":  {
+                                              "ISS-0821_ISS-0816":  {
+                                                                        "AC_fixtures_no_has_more":  {
+                                                                                                        "criterion":  "Four fixtures no longer fabricate has_more; each mock matches a real route\u0027s response shape",
+                                                                                                        "covered_by":  [
+                                                                                                                           "TC-ISS0821-03 (hasOwnProperty check on both fixture variants)",
+                                                                                                                           "typed fixture declarations at lines 24 and 30 (compile-time TS2741 on mutant 1)"
+                                                                                                                       ],
+                                                                                                        "verdict":  "COVERED"
+                                                                                                    },
+                                                                        "AC_next_cursor_pagination":  {
+                                                                                                          "criterion":  "Tests still meaningfully cover pagination via next_cursor",
+                                                                                                          "covered_by":  [
+                                                                                                                             "TC-ISS0821-04 (next_cursor === null for no-more-pages, next_cursor !== null for more-pages-available)"
+                                                                                                                         ],
+                                                                                                          "verdict":  "COVERED"
+                                                                                                      },
+                                                                        "AC_reintroduction_guard":  {
+                                                                                                        "criterion":  "A mechanism makes has_more harder to reintroduce",
+                                                                                                        "covered_by":  [
+                                                                                                                           "Typed fixture declarations (const cursorPageNoCount: CursorPage\u003cSampleItem\u003e, const cursorPageWithCount: CursorPage\u003cSampleItem\u003e) act as compile-time specification; tsc --noEmit catches any required has_more reintroduction via TS2741"
+                                                                                                                       ],
+                                                                                                        "verdict":  "COVERED — independently verified (see mutant_1_independent_verification)"
+                                                                                                    },
+                                                                        "AC_count_optional":  {
+                                                                                                  "criterion":  "count is optional in CursorPage\u003cT\u003e — hand-built routes omit it",
+                                                                                                  "covered_by":  [
+                                                                                                                     "TC-ISS0821-01 (cursorPageNoCount.count is undefined)",
+                                                                                                                     "TC-ISS0821-02 (cursorPageWithCount.count is 5)"
+                                                                                                                 ],
+                                                                                                  "verdict":  "COVERED"
+                                                                                              }
+                                                                    },
+                                              "ISS-0822":  {
+                                                               "AC_route_removed":  {
+                                                                                        "criterion":  "SPA route admin/modules removed or explicitly gated",
+                                                                                        "covered_by":  "Static check: admin/modules appears exactly once in router.tsx (tombstone comment only — no active path declaration)",
+                                                                                        "verdict":  "COVERED — independently verified (see iss_0822_static_checks)"
+                                                                                    },
+                                                               "AC_import_removed":  {
+                                                                                         "criterion":  "ProcessModulesPage not imported as live symbol",
+                                                                                         "covered_by":  "Static check: ProcessModulesPage appears exactly once in router.tsx (tombstone comment only — no import statement or JSX usage)",
+                                                                                         "verdict":  "COVERED — independently verified"
+                                                                                     }
+                                                           }
+                                          },
+                   "checklist":  {
+                                     "every_MUST_criterion_has_test":  true,
+                                     "no_tag_skip_on_MUST_test":  true,
+                                     "no_TODO_implement_test_in_spec":  true,
+                                     "fixtures_not_shared_hardcoded_state":  true,
+                                     "tests_self_sufficient":  true,
+                                     "no_hardcoded_secrets_or_connection_strings":  true
+                                 },
+                   "mutant_1_independent_verification":  {
+                                                             "issue":  "ISS-0821/ISS-0816",
+                                                             "mutant":  "Added `has_more: boolean` as required field to CursorPage\u003cT\u003e in web/src/types/api.ts (after next_cursor line)",
+                                                             "edit_confirmed":  "Field inserted between next_cursor and count lines",
+                                                             "vitest_run":  {
+                                                                                "command":  "cd web \u0026\u0026 npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts",
+                                                                                "exit_code":  0,
+                                                                                "outcome":  "4/4 PASS",
+                                                                                "explanation":  "esbuild transpilation strips TypeScript types at test run time; the runtime fixture objects are plain literals that never contained has_more, and TC-ISS0821-03 asserts hasOwnProperty(cursorPageNoCount, \u0027has_more\u0027) === false which holds because no runtime key is present. All 4 assertions pass at runtime."
+                                                                            },
+                                                             "tsc_run":  {
+                                                                             "command":  "cd web \u0026\u0026 npx tsc --noEmit --project tsconfig.app.json 2\u003e\u00261 | Select-String \u0027cursor-page\u0027",
+                                                                             "exit_code":  2,
+                                                                             "relevant_errors":  [
+                                                                                                     "src/types/__tests__/cursor-page-wire-shape.test.ts(24,7): error TS2741: Property \u0027has_more\u0027 is missing in type \u0027{ items: { id: string; }[]; next_cursor: null; }\u0027 but required in type \u0027CursorPage\u003cSampleItem\u003e\u0027.",
+                                                                                                     "src/types/__tests__/cursor-page-wire-shape.test.ts(30,7): error TS2741: Property \u0027has_more\u0027 is missing in type \u0027{ items: { id: string; }[]; next_cursor: string; count: number; }\u0027 but required in type \u0027CursorPage\u003cSampleItem\u003e\u0027."
+                                                                                                 ],
+                                                                             "outcome":  "COMPILE-TIME FAIL — TS2741 at cursor-page-wire-shape.test.ts:24 and :30, exactly as TEST-DESIGNER claimed. The typed fixture declarations `const cursorPageNoCount: CursorPage\u003cSampleItem\u003e` and `const cursorPageWithCount: CursorPage\u003cSampleItem\u003e` are the operative compile-time guards."
+                                                                         },
+                                                             "verdict":  "Mutant 1 independently confirmed. vitest runtime: PASS (expected, esbuild strips types). tsc compile: EXIT 2 with TS2741 at lines 24 and 30. TEST-DESIGNER\u0027s claims verified independently.",
+                                                             "revert":  {
+                                                                            "command":  "git checkout -- web/src/types/api.ts",
+                                                                            "git_status_porcelain_web_src_types_api_after_revert":  "",
+                                                                            "post_revert_vitest":  "4/4 PASS (cd web \u0026\u0026 npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts)",
+                                                                            "quote":  "git status --porcelain web/src/types/api.ts output: (empty string — no tracked changes)"
+                                                                        }
+                                                         },
+                   "mutant_2_verification_by_reasoning":  {
+                                                              "issue":  "ISS-0821",
+                                                              "mutant":  "Change count?: number to count: number (make required)",
+                                                              "reasoning":  "cursorPageNoCount at line 24 is declared as `const cursorPageNoCount: CursorPage\u003cSampleItem\u003e = { items: [...], next_cursor: null }` — no count key. Making count required triggers the identical TS2741 mechanism as mutant 1: TypeScript\u0027s structural assignment check at line 24 rejects the literal that lacks the now-required field. TEST-DESIGNER\u0027s reported TS2741 at line 24 (exit 2, 28 total errors) is consistent with this mechanism. Mutant 1 independently verified; mutant 2 confirmed by structural reasoning from the same tsc mechanism.",
+                                                              "verdict":  "Confirmed by reasoning — same TS2741 assignment-check mechanism as mutant 1, same typed fixture at line 24."
+                                                          },
+                   "iss_0822_static_checks":  {
+                                                  "admin_modules_count":  {
+                                                                              "command":  "(Get-Content web\\src\\router.tsx | Select-String \u0027admin/modules\u0027).Count",
+                                                                              "result":  1,
+                                                                              "match":  "      // admin/modules route removed in ISS-0822: Letflow.Routers.ProcessModules is",
+                                                                              "verdict":  "PASS — single tombstone comment, no active path declaration"
+                                                                          },
+                                                  "ProcessModulesPage_count":  {
+                                                                                   "command":  "(Get-Content web\\src\\router.tsx | Select-String \u0027ProcessModulesPage\u0027).Count",
+                                                                                   "result":  1,
+                                                                                   "match":  "// ISS-0822: ProcessModulesPage import removed — Letflow.Routers.ProcessModules is",
+                                                                                   "verdict":  "PASS — single tombstone comment, no import statement or JSX usage"
+                                                                               }
+                                              },
+                   "tree_cleanliness":  {
+                                            "git_status_porcelain_lib_test_after_all_mutants":  "",
+                                            "git_status_porcelain_web_src_types_api_final":  "",
+                                            "quote_lib_test":  "git status --porcelain lib/ test/ output: (empty string)",
+                                            "quote_api_ts":  "git status --porcelain web/src/types/api.ts output: (empty string)"
+                                        },
+                   "gate_decision":  "PASS",
+                   "gate_rationale":  "All acceptance criteria for ISS-0821/ISS-0816 and ISS-0822 have runnable test coverage. Mutant 1 (has_more: boolean required) independently applied and verified: vitest 4/4 PASS (esbuild strips types), tsc exits 2 with TS2741 at cursor-page-wire-shape.test.ts lines 24 and 30. Mutant 2 (count required) confirmed by structural reasoning from the same tsc mechanism. Mutant reverted: git status --porcelain web/src/types/api.ts is empty. Post-revert vitest: 4/4 PASS. ISS-0822 static checks: both patterns appear exactly once as tombstone comments, no active declarations. No @tag:skip on MUST-covering tests, no TODO placeholders, no shared state, no hardcoded secrets. Tree is clean.",
+                   "next_action":  "Route to TEST-RUNNER to run the full suite."
+               }
 }

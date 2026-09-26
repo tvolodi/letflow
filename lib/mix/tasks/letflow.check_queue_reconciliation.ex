@@ -80,6 +80,7 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliation do
             reason: String.t()
           }
           | %{kind: :dangling_queue_ref, source: source_ref()}
+          | %{kind: :unrecognized_yaml_status, source: source_ref(), reason: String.t()}
 
   @type report :: %{
           sources_checked: non_neg_integer(),
@@ -229,6 +230,12 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliation do
   @doc """
   Compares already-parsed `sources` against an already-fetched `queue_tasks`
   list. Pure -- no file reads, no HTTP -- so it is directly fixture-testable.
+
+  **AMENDMENT (§3.3b):** the compatibility mapping consulted is now dispatched
+  on `source.kind` -- a `:requirement` source consults §3.3's table, an
+  `:issue` source consults §3.3b's table. A `yaml_status` value neither table
+  recognizes (for the source's kind) is its own `:unrecognized_yaml_status`
+  finding, never folded into `:status_mismatch`.
   """
   @spec reconcile([source_ref()], [queue_task()]) :: report()
   def reconcile(sources, queue_tasks) do
@@ -241,14 +248,15 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliation do
             [%{kind: :dangling_queue_ref, source: source}]
 
           {:ok, task} ->
-            case compatible_queue_statuses(source.yaml_status) do
+            case compatible_queue_statuses(source.kind, source.yaml_status) do
               nil ->
                 [
                   %{
-                    kind: :status_mismatch,
+                    kind: :unrecognized_yaml_status,
                     source: source,
-                    queue_status: "n/a",
-                    reason: "unrecognized yaml status #{inspect(source.yaml_status)}"
+                    reason:
+                      "no #{source.kind} mapping recognizes yaml status " <>
+                        "#{inspect(source.yaml_status)}"
                   }
                 ]
 
@@ -280,25 +288,43 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliation do
   end
 
   @doc """
-  The yaml-status <-> queue-status compatibility mapping. Every mapping
-  direction not explicitly listed here is a mismatch -- no
-  everything-else-is-fine branch.
+  The yaml-status <-> queue-status compatibility mapping, dispatched by
+  `source_kind()`. Every mapping direction not explicitly listed here is a
+  mismatch -- no everything-else-is-fine branch. `kind` must be given because
+  the two vocabularies are separate tables (§3.3 for `:requirement`, §3.3b for
+  `:issue`) -- the same spelling can mean different things (or nothing at all)
+  depending on which source kind it came from.
   """
-  @spec status_compatible?(yaml_status(), queue_status()) :: boolean()
-  def status_compatible?(yaml_status, queue_status) do
-    case compatible_queue_statuses(yaml_status) do
+  @spec status_compatible?(source_kind(), yaml_status(), queue_status()) :: boolean()
+  def status_compatible?(kind, yaml_status, queue_status) do
+    case compatible_queue_statuses(kind, yaml_status) do
       nil -> false
       compatible -> queue_status in compatible
     end
   end
 
-  @spec compatible_queue_statuses(yaml_status()) :: [queue_status()] | nil
-  defp compatible_queue_statuses("done"), do: ["done", "blocked"]
-  defp compatible_queue_statuses("in_progress"), do: ["open", "blocked"]
-  defp compatible_queue_statuses("pending"), do: ["open"]
-  defp compatible_queue_statuses("blocked"), do: ["blocked", "open"]
-  defp compatible_queue_statuses("cancelled"), do: ["open", "blocked", "done"]
-  defp compatible_queue_statuses(_unrecognized), do: nil
+  # -- §3.3: requirement-vocabulary mapping (unchanged from the original design)
+  @spec compatible_queue_statuses(source_kind(), yaml_status()) :: [queue_status()] | nil
+  defp compatible_queue_statuses(:requirement, "done"), do: ["done", "blocked"]
+  defp compatible_queue_statuses(:requirement, "in_progress"), do: ["open", "blocked"]
+  defp compatible_queue_statuses(:requirement, "pending"), do: ["open"]
+  defp compatible_queue_statuses(:requirement, "blocked"), do: ["blocked", "open"]
+  defp compatible_queue_statuses(:requirement, "cancelled"), do: ["open", "blocked", "done"]
+  defp compatible_queue_statuses(:requirement, _unrecognized), do: nil
+
+  # -- §3.3b (AMENDMENT): issue-vocabulary mapping, separate table
+  defp compatible_queue_statuses(:issue, "open"), do: ["open"]
+  defp compatible_queue_statuses(:issue, "in_progress"), do: ["open", "blocked"]
+  defp compatible_queue_statuses(:issue, "resolved"), do: ["done", "blocked"]
+  # instrumented/no_defect: NEVER "done" -- ISSUE_QUEUE.md's explicit rule
+  # ("Release the queue task with release_lock(status: "blocked"), not "done"").
+  defp compatible_queue_statuses(:issue, "instrumented"), do: ["blocked"]
+  defp compatible_queue_statuses(:issue, "no_defect"), do: ["blocked"]
+  # 8 undocumented legacy values (reopened, fixed, declined,
+  # closed_not_applicable, resolved_via_duplicate, resolved_not_applicable,
+  # duplicate, done-as-issue-value) deliberately NOT mapped -- see §3.3b's
+  # open question. They fall through to :unrecognized_yaml_status.
+  defp compatible_queue_statuses(:issue, _unrecognized), do: nil
 
   # -- I/O: token resolution -------------------------------------------------
 
@@ -437,6 +463,11 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliation do
   defp format_finding(%{kind: :dangling_queue_ref, source: source}) do
     "[dangling_queue_ref] #{source_label(source)} -> queue task " <>
       "#{source.queue_task_id} does not exist"
+  end
+
+  defp format_finding(%{kind: :unrecognized_yaml_status, source: source, reason: reason}) do
+    "[unrecognized_yaml_status] #{source_label(source)} -> queue task " <>
+      "#{source.queue_task_id}: #{reason}"
   end
 
   @spec source_label(source_ref()) :: String.t()

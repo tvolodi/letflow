@@ -50,14 +50,52 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliationTest do
       assert reason =~ "done"
     end
 
-    test "an unrecognized yaml status is always a mismatch, queue_status reported as n/a" do
+    test "issue instrumented vs queue done is flagged, not silently accepted" do
+      sources = [source(:issue, "ISS-0700", "instrumented", 700)]
+      queue_tasks = [task(700, "done")]
+
+      report = CheckQueueReconciliation.reconcile(sources, queue_tasks)
+
+      assert [%{kind: :status_mismatch, source: %{id: "ISS-0700"}, queue_status: "done"}] =
+               report.findings
+    end
+
+    test "issue no_defect vs queue done is flagged, not silently accepted" do
+      sources = [source(:issue, "ISS-0701", "no_defect", 701)]
+      queue_tasks = [task(701, "done")]
+
+      report = CheckQueueReconciliation.reconcile(sources, queue_tasks)
+
+      assert [%{kind: :status_mismatch, source: %{id: "ISS-0701"}, queue_status: "done"}] =
+               report.findings
+    end
+  end
+
+  describe "reconcile/2 -- unrecognized_yaml_status" do
+    test "an unrecognized yaml status on a requirement source is its own finding kind" do
       sources = [source(:requirement, "REQ-1", "unknown_status", 1)]
       queue_tasks = [task(1, "open")]
 
       report = CheckQueueReconciliation.reconcile(sources, queue_tasks)
 
-      assert [%{kind: :status_mismatch, queue_status: "n/a", reason: reason}] = report.findings
-      assert reason =~ "unrecognized yaml status"
+      assert [%{kind: :unrecognized_yaml_status, source: %{id: "REQ-1"}, reason: reason}] =
+               report.findings
+
+      assert reason =~ "unknown_status"
+      refute Enum.any?(report.findings, &(&1.kind == :status_mismatch))
+    end
+
+    test "a legacy/undocumented issue yaml status is its own finding kind, not a status_mismatch" do
+      sources = [source(:issue, "ISS-0123", "reopened", 123)]
+      queue_tasks = [task(123, "done")]
+
+      report = CheckQueueReconciliation.reconcile(sources, queue_tasks)
+
+      assert [%{kind: :unrecognized_yaml_status, source: %{id: "ISS-0123"}, reason: reason}] =
+               report.findings
+
+      assert reason =~ "reopened"
+      refute Enum.any?(report.findings, &(&1.kind == :status_mismatch))
     end
   end
 
@@ -90,7 +128,10 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliationTest do
         source(:requirement, "REQ-2", "in_progress", 2),
         source(:requirement, "REQ-3", "pending", 3),
         source(:requirement, "REQ-4", "blocked", 4),
-        source(:issue, "ISS-0001", "cancelled", 5)
+        source(:issue, "ISS-0001", "resolved", 5),
+        source(:issue, "ISS-0002", "open", 6),
+        source(:issue, "ISS-0003", "instrumented", 7),
+        source(:issue, "ISS-0004", "no_defect", 8)
       ]
 
       queue_tasks = [
@@ -98,50 +139,102 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliationTest do
         task(2, "blocked"),
         task(3, "open"),
         task(4, "open"),
-        task(5, "done")
+        task(5, "done"),
+        task(6, "open"),
+        task(7, "blocked"),
+        task(8, "blocked")
       ]
 
       report = CheckQueueReconciliation.reconcile(sources, queue_tasks)
 
       assert report.findings == []
-      assert report.sources_checked == 5
-      assert report.queue_tasks_seen == 5
+      assert report.sources_checked == 8
+      assert report.queue_tasks_seen == 8
     end
   end
 
-  describe "status_compatible?/2 -- the mapping table" do
+  describe "status_compatible?/3 -- the requirement mapping table (§3.3, unchanged)" do
     test "done accepts done and blocked, rejects open" do
-      assert CheckQueueReconciliation.status_compatible?("done", "done")
-      assert CheckQueueReconciliation.status_compatible?("done", "blocked")
-      refute CheckQueueReconciliation.status_compatible?("done", "open")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "done", "done")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "done", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:requirement, "done", "open")
     end
 
     test "in_progress accepts open and blocked, rejects done" do
-      assert CheckQueueReconciliation.status_compatible?("in_progress", "open")
-      assert CheckQueueReconciliation.status_compatible?("in_progress", "blocked")
-      refute CheckQueueReconciliation.status_compatible?("in_progress", "done")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "in_progress", "open")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "in_progress", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:requirement, "in_progress", "done")
     end
 
     test "pending accepts only open" do
-      assert CheckQueueReconciliation.status_compatible?("pending", "open")
-      refute CheckQueueReconciliation.status_compatible?("pending", "blocked")
-      refute CheckQueueReconciliation.status_compatible?("pending", "done")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "pending", "open")
+      refute CheckQueueReconciliation.status_compatible?(:requirement, "pending", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:requirement, "pending", "done")
     end
 
     test "blocked accepts blocked and open, rejects done" do
-      assert CheckQueueReconciliation.status_compatible?("blocked", "blocked")
-      assert CheckQueueReconciliation.status_compatible?("blocked", "open")
-      refute CheckQueueReconciliation.status_compatible?("blocked", "done")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "blocked", "blocked")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "blocked", "open")
+      refute CheckQueueReconciliation.status_compatible?(:requirement, "blocked", "done")
     end
 
     test "cancelled accepts anything" do
-      assert CheckQueueReconciliation.status_compatible?("cancelled", "open")
-      assert CheckQueueReconciliation.status_compatible?("cancelled", "blocked")
-      assert CheckQueueReconciliation.status_compatible?("cancelled", "done")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "cancelled", "open")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "cancelled", "blocked")
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "cancelled", "done")
     end
 
     test "an unrecognized yaml status is never compatible" do
-      refute CheckQueueReconciliation.status_compatible?("weird", "open")
+      refute CheckQueueReconciliation.status_compatible?(:requirement, "weird", "open")
+    end
+  end
+
+  describe "status_compatible?/3 -- the issue mapping table (§3.3b, AMENDMENT)" do
+    test "open accepts only open (queue done under yaml open must NOT be compatible)" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "open", "open")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "open", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "open", "done")
+    end
+
+    test "in_progress accepts open and blocked, rejects done" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "in_progress", "open")
+      assert CheckQueueReconciliation.status_compatible?(:issue, "in_progress", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "in_progress", "done")
+    end
+
+    test "resolved accepts done and blocked (ISS-0836-style precedent), rejects open" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "resolved", "done")
+      assert CheckQueueReconciliation.status_compatible?(:issue, "resolved", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "resolved", "open")
+    end
+
+    test "instrumented accepts only blocked -- NEVER done, per ISSUE_QUEUE.md's explicit rule" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "instrumented", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "instrumented", "done")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "instrumented", "open")
+    end
+
+    test "no_defect accepts only blocked -- NEVER done, per ISSUE_QUEUE.md's explicit rule" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "no_defect", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "no_defect", "done")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "no_defect", "open")
+    end
+
+    test "the 8 undocumented legacy issue-status values are never compatible (unmapped by design)" do
+      for legacy <- ~w(reopened fixed declined closed_not_applicable resolved_via_duplicate
+                       resolved_not_applicable duplicate done) do
+        refute CheckQueueReconciliation.status_compatible?(:issue, legacy, "open")
+        refute CheckQueueReconciliation.status_compatible?(:issue, legacy, "blocked")
+        refute CheckQueueReconciliation.status_compatible?(:issue, legacy, "done")
+      end
+    end
+
+    test "requirement and issue tables are independent -- issue-side unmapped 'cancelled'" do
+      # "cancelled" IS mapped for :requirement (accepts anything) but is NOT part
+      # of the issue vocabulary (§3.3b) -- confirms the two tables are dispatched
+      # separately, not merged/shared.
+      assert CheckQueueReconciliation.status_compatible?(:requirement, "cancelled", "open")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "cancelled", "open")
     end
   end
 

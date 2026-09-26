@@ -1,0 +1,47 @@
+id: ISS-0846
+title: |
+  No 'how to add an application module' guide -- the S11 contract is only reconstructable from decision 0039 plus seventeen requirement texts
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: MINOR
+tags:
+  - docs
+  - modules
+  - guide
+  - decision-0039
+description: |
+  0039 D8 says new modules (HR, WMS, ERP, ...) are extracted when a client needs them; they will be
+  built by pipeline agents from requirements. No doc in docs/guides/ explains the module contract end to
+  end. An implementer must reverse-engineer: layout (lib/letflow/modules/<id>/, priv/modules/<id>/,
+  web/src/modules/<id>/); Letflow.Modules.Module callbacks and defmanifest; permissions / role_grants /
+  route_policies rules and the Catalog fallback in Letflow.Api.Authorization; router mounting under
+  /api/v1/modules/<id>/ and the 404 gate; pack location and on_install/2; registration in
+  config/config.exs AND config/test.exs (and updating test/letflow/modules/catalog_test.exs -- the
+  root cause of ISS-0838); tenant_modules backfill migrations for existing tenants;
+  settings_schema and the settings write route; solution manifests priv/solutions/<id>.json; frontend
+  ModuleDefinition/registry; boundary checks (mix letflow.check_boundaries, the ESLint rule); and what
+  is explicitly out of scope (uninstall, client scripts, CANDIDATE role).
+affected_files:
+  - "docs/guides/adding-an-application-module.md"
+  - ".claude/agents/code-designer.md"
+  - ".claude/agents/elixir-dev.md"
+  - ".claude/agents/frontend-dev.md"
+  - "docs/migration/stage-11-modular-platform.md"
+depends_on:  # resolve these first; queue depends_on carries the same edges
+  - ISS-0845
+  - ISS-0844
+fix_direction: |
+  Write docs/guides/adding-an-application-module.md with the exam module as the worked example, real
+  paths only, one heading per topic above, and a checklist at the end. Link it with one line from
+  .claude/agents/code-designer.md, .claude/agents/elixir-dev.md, .claude/agents/frontend-dev.md and
+  docs/migration/stage-11-modular-platform.md. Write it after ISS-0844 (frontend contract) and ISS-0845
+  (lint rule) are resolved so it documents the final shape.
+acceptance_criteria:
+  - "the guide exists with one heading per topic listed in the description and a closing checklist"
+  - "every file path, module and function cited exists on main -- the verification commands and their output are quoted in the handoff"
+  - "the three agent files and the stage-11 file each link to the guide"
+  - "`mix letflow.check` passes (or remaining failures are each linked to an open issue by id)"
+status: open
+queue_ref: "Q-846"
+github_ref: "GH-1844"

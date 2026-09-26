@@ -67,3 +67,5 @@ fix_direction: >
   quoting real output before closing this issue.
 status: open
 queue_ref: "Q-835"
+  # registered late by ORCH in ADHOC-20260926-S11-AUDIT; any earlier queue_ref here was derived, not allocated
+github_ref: "GH-1833"

@@ -1,0 +1,33 @@
+id: ISS-0843
+title: |
+  docs/mobile/ spec predates decision 0039 -- it has no notion of installed application modules, so a MOBILE-DEV run would hard-code module screens into the Flutter shell
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: MINOR
+tags:
+  - mobile
+  - docs
+  - modules
+  - decision-0039
+description: |
+  `git grep -n -i -e installed_modules -e 0039 -e "S11" -- docs/mobile` returns nothing. Decision 0039
+  D5 says a module's screens are reachable only for tenants that installed it, and the SPA builds routes
+  and navigation from the installed list (GET /api/v1/me/modules); module APIs live under
+  /api/v1/modules/<id>/ and answer 404 for tenants without the module. MOBILE-DEV is dormant, but
+  REQ-294 and all future S9 work read docs/mobile/ as the spec.
+affected_files:
+  - "docs/mobile/"
+fix_direction: |
+  Doc-only. In the docs/mobile/ file that defines the app shell / navigation (find it; do not create a
+  parallel doc), add a section "Application modules (decision 0039)": navigation and routes built from
+  GET /api/v1/me/modules; per-module feature folders mirroring web/src/modules/<id>/; module API base
+  /api/v1/modules/<id>/ with 404-for-uninstalled; the same core/module import boundary as 0039 D3.
+  Cite only endpoints that exist in lib/ (verify with git grep).
+acceptance_criteria:
+  - "docs/mobile/ contains the section, citing 0039 D3 and D5"
+  - "every endpoint named is shown to exist by a quoted `git grep` against lib/"
+  - "`git diff --name-only main` shows only files under docs/mobile/ (plus this issue's yaml/status files)"
+status: open
+queue_ref: "Q-843"
+github_ref: "GH-1841"

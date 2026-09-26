@@ -1,0 +1,61 @@
+id: ISS-0844
+title: |
+  Frontend module contract is not reusable for a second module: exam's route table and ModuleGuard sit in core's web/src/modules/ root, ModuleDefinition.routes is a dead parallel mechanism, and registry.ts hand-maintains two lists
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: MAJOR
+tags:
+  - frontend
+  - modules
+  - architecture
+  - S11
+  - decision-0039
+description: |
+  State on main 12f0a78f:
+  - web/src/modules/examRoutes.tsx lives at the modules ROOT (core per 0039 D3) and imports five exam
+    page components directly (./exam/ExamListPage, ./exam/ExamSessionPage, ...). That is exam-specific
+    code outside web/src/modules/exam/, and a second core file importing module internals besides
+    registry.ts, which D3 names as the only sanctioned importer.
+  - web/src/modules/ModuleGuard.tsx is generic core infrastructure but also sits at the modules root;
+    its doc comment says it is only used from examRoutes.tsx.
+  - web/src/modules/types.ts ModuleDefinition.routes: ModuleRoute[] with `element?: string` (string
+    names). router.tsx does NOT render these; it spreads REGISTERED_MODULE_ROUTE_OBJECTS
+    (registry.ts:20-22). getInstalledModuleRoutes() appears to have no non-test caller (verify with
+    git grep). Two parallel route mechanisms: a new module author cannot tell which one is real.
+  - registry.ts maintains REGISTERED_MODULES and REGISTERED_MODULE_ROUTE_OBJECTS as two separate
+    hand-edited lists; adding a module means editing both and adding a <id>Routes.tsx to core.
+  - The fake 'sample' module in registry.ts is tracked by ISS-0836 -- resolve it there, not here.
+
+  0039 D8 expects further modules (HR, WMS, ...) to be built later by agents from requirements; the
+  current shape makes each one copy the exam workaround.
+affected_files:
+  - "web/src/modules/registry.ts"
+  - "web/src/modules/types.ts"
+  - "web/src/modules/examRoutes.tsx"
+  - "web/src/modules/ModuleGuard.tsx"
+  - "web/src/modules/exam/index.ts"
+  - "web/src/router.tsx"
+depends_on:  # resolve these first; queue depends_on carries the same edges
+  - ISS-0836
+fix_direction: |
+  CODE-DESIGNER confirms the target, taking ISS-0836's resolution as input:
+  - each module's web/src/modules/<id>/index.ts exports ONE ModuleDefinition: id, depends_on, navItems,
+    routeObjects (RouteObject[]);
+  - registry.ts holds ONE list and derives both nav items and route objects from it, wrapping each
+    module's routes in ModuleGuard itself (modules never import ModuleGuard);
+  - ModuleGuard moves to a core location outside web/src/modules/ (e.g.
+    web/src/components/routing/ModuleGuard.tsx);
+  - examRoutes.tsx content moves into web/src/modules/exam/; the string-element ModuleRoute mechanism
+    and any dead helpers are removed;
+  - SPA paths unchanged (exam, exam/:examId/session, exam/sessions/:sessionId/result, admin/bilimbaga,
+    admin/bilimbaga/:entityType).
+acceptance_criteria:
+  - "`git ls-files web/src/modules` shows at the root only registry.ts, types.ts, __tests__/ and <id>/ directories (output quoted)"
+  - "registry.ts contains exactly one module list; a unit test proves nav items and route objects are both derived from it"
+  - "`git grep -n -i exam -- web/src/router.tsx web/src/components/layout/AppShell.tsx` returns nothing (output quoted)"
+  - "for a tenant with exam installed all five exam SPA paths render; for a tenant without it each renders NotFound -- existing tests plus any missing case, output quoted"
+  - "`npm run check` in web/ passes, output quoted"
+status: open
+queue_ref: "Q-844"
+github_ref: "GH-1842"

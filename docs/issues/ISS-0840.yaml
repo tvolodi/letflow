@@ -1,0 +1,49 @@
+id: ISS-0840
+title: |
+  CI on main goes green without running backend tests: push runs use cancel-in-progress and a per-push path filter, so a following docs-only push cancels the backend run and reports success
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: BLOCKER
+tags:
+  - ci
+  - process
+  - false-green
+  - S11
+description: |
+  .github/workflows/ci.yml:108-115:
+    on: push: branches: [main] / pull_request
+    concurrency: group ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }},
+                 cancel-in-progress: true
+  and the `changes` job decides backend/frontend relevance from the pushed commit range only.
+
+  Observed on main, 2026-09-25 (gh run list --commit <sha> --workflow CI):
+  - cancelled by the next push: 875f8cfd (REQ-404), 24eab9a5 (REQ-410), 5732e5aa, 74f106ff (REQ-413),
+    73e7102e (REQ-414), 29513e28 (REQ-416)
+  - failed: 7c481984 (REQ-401), e052d2ef (REQ-402), 2a83bec1 (REQ-403), 64e76394 (REQ-409),
+    be729822 (REQ-412), be133e54 (REQ-415)
+  - no CI run at all: b6a45852
+  - final head 12f0a78f (docs-only): backend=false, backend gate skipped its steps, run "success".
+
+  So main carries all of S11 with no completed backend run, and the green check is not evidence of
+  anything. A local full run on 12f0a78f shows real failures (see ISS-0847).
+affected_files:
+  - ".github/workflows/ci.yml"
+  - "docs/anti-patterns.md"
+fix_direction: |
+  1. Never cancel push-to-main runs: e.g.
+     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  2. On push to main, the backend/frontend gates must run whenever any backend/frontend change landed
+     since the last main commit whose CI completed successfully -- simplest correct option: always run
+     both gates on push to main and keep the path filter for pull_request only. Designer chooses; no
+     new third-party action unless one already used in .github/workflows/.
+  3. Add an entry to docs/anti-patterns.md: "treating a green main check as proof when the backend
+     gate was skipped or earlier runs were cancelled".
+acceptance_criteria:
+  - "ci.yml diff quoted: push-to-main runs are not cancelled by a later push; PR runs still cancel superseded runs"
+  - "after merge, a real CI run URL on main is quoted whose Backend gate log contains ExUnit's 'Finished in' line"
+  - "a docs-only push to main after this change is shown (run URL) to execute the backend gate, or the design proves by construction that push-to-main always runs it"
+  - "docs/anti-patterns.md has the new entry"
+status: open
+queue_ref: "Q-840"
+github_ref: "GH-1838"

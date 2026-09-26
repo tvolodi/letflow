@@ -1,0 +1,48 @@
+id: ISS-0838
+title: |
+  REQ-400 CatalogTest AC2 assertions are stale since REQ-408 registered Letflow.Modules.Exam -- 2 tests fail on main
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: BLOCKER
+tags:
+  - modules
+  - tests
+  - stale-assertion
+  - S11
+description: |
+  Two tests in test/letflow/modules/catalog_test.exs fail on main (12f0a78f):
+
+  1. catalog_test.exs:35 "entry_modules/0 returns the registered test-only fixtures, in config order"
+     asserts Catalog.entry_modules() == [Letflow.Modules.Fixture, Letflow.Modules.FixtureDependent,
+     Letflow.Modules.FixtureFailingInstall]. config/test.exs:267 now registers
+     [Letflow.Modules.Exam, Letflow.Modules.Fixture, Letflow.Modules.FixtureDependent,
+     Letflow.Modules.FixtureFailingInstall] (Exam was prepended by REQ-408), so left != right.
+
+  2. catalog_test.exs:56 "config/config.exs registers an empty module list" asserts
+     config/config.exs matches ~r/config :letflow, :modules, \[\]/. config/config.exs:60 now reads
+     `config :letflow, :modules, [Letflow.Modules.Exam]` (REQ-408, intended).
+
+  REQ-400's own AC2 text anticipated this: "REQ-402 and REQ-408 later append to this list and update
+  this test's expectation". REQ-402 updated it; REQ-408 did not. Nothing is wrong in lib/ or config/ --
+  only the test expectations are stale.
+
+  Reproduce: `mix test test/letflow/modules/catalog_test.exs` -> 2 failures.
+affected_files:
+  - "test/letflow/modules/catalog_test.exs"
+fix_direction: |
+  Test-only change in test/letflow/modules/catalog_test.exs:
+  - test 1: expect exactly the four-element list in config/test.exs order
+    ([Letflow.Modules.Exam, Letflow.Modules.Fixture, Letflow.Modules.FixtureDependent,
+    Letflow.Modules.FixtureFailingInstall]); update the comment to cite REQ-408.
+  - test 2: rename to "config/config.exs registers exactly [Letflow.Modules.Exam]" and assert
+    ~r/config :letflow, :modules, \[Letflow\.Modules\.Exam\]/.
+  Do NOT edit config/*.exs or lib/.
+acceptance_criteria:
+  - "`mix test test/letflow/modules/catalog_test.exs` passes with 0 failures, real output quoted"
+  - "the entry_modules/0 test asserts the exact four-element list from config/test.exs, in that order"
+  - "the config.exs test asserts the production module list is exactly [Letflow.Modules.Exam]"
+  - "`git diff --name-only main` lists only test/letflow/modules/catalog_test.exs (plus this issue's yaml/status files)"
+status: open
+queue_ref: "Q-838"
+github_ref: "GH-1836"

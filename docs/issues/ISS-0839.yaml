@@ -1,0 +1,52 @@
+id: ISS-0839
+title: |
+  ExamFixturesTest cleanup cannot delete its tenant since REQ-410 -- the seed task's exam module install leaves a solution_pack_installs row (FK violation), 5 tests fail
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: BLOCKER
+tags:
+  - modules
+  - tests
+  - fixtures
+  - regression
+  - S11
+description: |
+  lib/mix/tasks/letflow.seed.exam_fixtures.ex:181 now calls
+  `Installs.install("exam", candidate.id, prefix: prefix)` (changed by REQ-410/REQ-411). Installing
+  the exam module installs its pack through Letflow.Definitions.SolutionPack.install/3, which writes a
+  row in the GLOBAL table solution_pack_installs (FK solution_pack_installs_tenant_id_fkey -> tenants).
+
+  test/mix/tasks/letflow.seed.exam_fixtures_test.exs cleanup_bpm_default/0 (lines 119-142) drops the
+  tenant schema, deletes ColumnPromotion and Registration rows, then deletes the tenants row. It never
+  deletes solution_pack_installs rows, so the tenant delete raises
+    Postgrex.Error 23503 foreign_key_violation ... "solution_pack_installs_tenant_id_fkey"
+  in setup (line 101) and in on_exit.
+
+  Failing on main 12f0a78f (5 tests): "idempotency -- running the task twice ...", "no exam_assignment
+  entity definition is active ...", "content correctness the scoreable exam ...", "content correctness
+  the mixed exam ...", "session outcome the seeded session's submit outcome ...".
+
+  The file uses Sandbox :auto mode, so leftover rows persist in the test DB and can poison later
+  tests that reuse the bpm-default realm.
+affected_files:
+  - "test/mix/tasks/letflow.seed.exam_fixtures_test.exs"
+  - "lib/mix/tasks/letflow.seed.exam_fixtures.ex"
+fix_direction: |
+  1. In cleanup_bpm_default/0 delete solution_pack_installs rows for the tenant_id before deleting the
+     tenants row (use the existing schema module for that table; find it with
+     `git grep -n "schema \"solution_pack_installs\"" lib/`).
+  2. Check whether module/solution install writes any OTHER global table with an FK to tenants
+     (`git grep -n "references(:tenants" priv/repo/migrations/`); delete those rows too if populated.
+  3. Audit every other test-side tenant-deletion helper for the same gap
+     (`git grep -n "Tenant, where: t.id" test/`), especially fixtures used by exam/module/solution
+     tests (e.g. test/support exam fixtures, REQ-415/416 solution tests). Fix any that can hit it.
+  No change under lib/.
+acceptance_criteria:
+  - "`mix test test/mix/tasks/letflow.seed.exam_fixtures_test.exs` passes with 0 failures twice in a row against the same test DB, both outputs quoted"
+  - "after the second run, no solution_pack_installs row references a tenant with idp_realm_id 'bpm-default' (query + output quoted)"
+  - "the handoff lists every test-side tenant-deletion helper found by the grep and states for each whether it needed the fix"
+  - "`git diff --name-only main -- lib/` is empty"
+status: open
+queue_ref: "Q-839"
+github_ref: "GH-1837"

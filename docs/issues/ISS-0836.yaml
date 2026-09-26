@@ -133,5 +133,34 @@ fix_direction: >
   handoffs/, docs/issues/, and exam.ex changes under a REQ-404-labeled
   commit, and whether that indicates a squash/rebase mechanism defect
   worth its own follow-up (possibly a process anti-pattern entry).
+addendum_2026_09_26: >
+  Added by ORCH during ADHOC-20260926-S11-AUDIT. Three facts change the
+  decision space above.
+
+  (1) Both REQ-406 AND REQ-407 were flipped to status done inside b6a45852
+  itself (verified by reading docs/requirements.yaml at 875f8cfd, where both
+  are pending, and at b6a45852, where both are done). docs/status/ holds no
+  status-history event for either requirement, and no RELEASE-VALIDATOR run
+  exists for either. Their done status is unvalidated.
+
+  (2) The branch feature/WF02-REQ406-20260925 no longer exists: `git
+  ls-remote origin 'refs/heads/*406*'` is empty and no local branch or
+  worktree carries it. Option (b) above now needs the branch recovered from
+  the reflog of whichever host ran it; if it cannot be recovered, option (a)
+  is the only path.
+
+  (3) main's frontend contract is now load-bearing for REQ-412 (exam screens)
+  and web/src/components/layout/AppShell.tsx. A follow-up issue (frontend
+  module contract not reusable for a second module) depends on this issue's
+  decision and will reshape registry.ts/types.ts; decide the contract here,
+  implement the reshaping there.
+acceptance_criteria:
+  - one of options (a)/(b) chosen and recorded in this file with REVIEWER sign-off
+  - the fake 'sample' module is removed from web/src/modules/registry.ts (and its test fixtures moved to test-only data), or re-justified in writing with REVIEWER sign-off
+  - RELEASE-VALIDATOR re-verifies every acceptance criterion of REQ-406 and REQ-407 against main, each quoted with real output; any unmet criterion is either fixed or the requirement is flipped back from done
+  - the current status-history volume carries a verified (or revised) event for REQ-406 and REQ-407 with real UTC timestamps
+  - the letflow-queue task for REQ-407 is closed only after that verification
 status: open
 queue_ref: "Q-836"
+  # registered late by ORCH in ADHOC-20260926-S11-AUDIT; any earlier queue_ref here was derived, not allocated
+github_ref: "GH-1834"

@@ -37,3 +37,8 @@ fix_direction: >
   contention pattern (shared connection/schema) that only manifests
   under parallel load.
 status: open
+queue_ref: "Q-829"
+  # queue allocated issue_ref ISS-0829 (the GitHub title carries that prefix); this file keeps
+  # its original id ISS-0825, which was locally numbered and collides with an unrelated queue task.
+  # Never derive ids -- read these two fields. Registered late by ORCH in ADHOC-20260926-S11-AUDIT.
+github_ref: "GH-1827"

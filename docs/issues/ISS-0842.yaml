@@ -1,0 +1,44 @@
+id: ISS-0842
+title: |
+  Test tenant_template is reused when stale: template_built_in_db?/0 only checks the schema exists, so after a new tenant migration a reused test DB fails ~90 tests with 'relation tenant_template.<table> does not exist'
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: MAJOR
+tags:
+  - tests
+  - test-infrastructure
+  - tenant-template
+  - dev-experience
+description: |
+  test/support/tenant_template.ex:254-262 treats the template as built iff a schema named
+  "tenant_template" exists. It never compares the template's applied tenant-migration set with the
+  current tenant migrations.
+
+  After pulling REQ-402 (new tenant table tenant_modules), a test DB built earlier keeps the old
+  template; clone_tenant_schema!/1 then fails with
+    relation "tenant_template.tenant_modules" does not exist (42P01)
+  Observed 2026-09-26 on main 12f0a78f: 99 failures in one partial `mix test` run (AttachmentLinksTest
+  and many others). All disappeared after `MIX_ENV=test mix ecto.drop`.
+
+  CI is unaffected (fresh DB per run). Every local checkout and agent worktree that reuses its test DB
+  is affected, and the failure looks like a real regression, so agents waste runs or file false
+  issues.
+affected_files:
+  - "test/support/tenant_template.ex"
+fix_direction: |
+  Record a fingerprint of the tenant migration versions the template was built from (e.g. COMMENT ON
+  SCHEMA "tenant_template" IS '<hash>' set as part of the atomic build-then-rename, or a marker that is
+  excluded from cloning) and rebuild when it differs from the current tenant migration set. Rebuild
+  must keep the existing guarantees from lib/letflow/design/iss0427-tenant-test-schema-template-clone.md
+  and iss0515-tenant-template-build-race-fix.md: advisory-lock serialization, randomized staging schema,
+  rename-into-place as the last step (INV-8: "tenant_template" never exists half-built). Dropping a stale
+  template must happen under the same lock.
+acceptance_criteria:
+  - "a new test simulates a stale template (fingerprint mismatch / one table missing), calls ensure_template!/0 with the persistent_term marker cleared, and asserts the template is rebuilt and clone_tenant_schema!/1 succeeds; output quoted"
+  - "with a deliberately stale template in the test DB, `mix test test/letflow/repository/attachment_links_test.exs` passes without ecto.drop; output quoted"
+  - "existing tenant-template tests (test/support/tenant_template_retry_test.exs and any other test of this module) pass; output quoted"
+  - "REVIEWER confirms in the handoff that INV-8 and the advisory-lock design are preserved"
+status: open
+queue_ref: "Q-842"
+github_ref: "GH-1840"

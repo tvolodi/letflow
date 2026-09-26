@@ -37,8 +37,10 @@ defmodule Letflow.Modules.CatalogTest do
       # rejection coverage) and FixtureFailingInstall (on_install/2
       # rollback coverage, design §9 open question 1 option (a)) to
       # config/test.exs's :modules list, alongside REQ-400's original
-      # Fixture entry.
+      # Fixture entry. REQ-408 prepends Letflow.Modules.Exam (the real
+      # exam module), so the full list in config order is:
       assert Catalog.entry_modules() == [
+               Letflow.Modules.Exam,
                Letflow.Modules.Fixture,
                Letflow.Modules.FixtureDependent,
                Letflow.Modules.FixtureFailingInstall
@@ -53,10 +55,12 @@ defmodule Letflow.Modules.CatalogTest do
       assert Catalog.fetch("does-not-exist") == {:error, :not_found}
     end
 
-    test "config/config.exs registers an empty module list" do
+    test "config/config.exs registers exactly [Letflow.Modules.Exam]" do
+      # REQ-408 added Letflow.Modules.Exam to config/config.exs; the test
+      # env (config/test.exs) adds the fixture modules for test coverage.
       config_source = File.read!(Path.join([File.cwd!(), "config", "config.exs"]))
 
-      assert config_source =~ ~r/config :letflow, :modules, \[\]/
+      assert config_source =~ ~r/config :letflow, :modules, \[Letflow\.Modules\.Exam\]/
     end
   end
 

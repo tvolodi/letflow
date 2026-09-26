@@ -42,6 +42,38 @@ acceptance_criteria:
   - "`npm run lint` in web/ passes on the resulting tree, output quoted"
   - "`git diff main -- web/package.json web/package-lock.json` shows no dependency added"
   - "if the mechanism deviates from 0039 D3's wording, 0039 carries an amendment with REVIEWER sign-off"
-status: open
+status: resolved
+resolution: |
+  Fixed via CODE-DESIGNER -> FRONTEND-DEV -> REVIEWER -> TEST-DESIGNER -> TEST-RUNNER ->
+  RELEASE-VALIDATOR pipeline, branch fix/ISS0845-eslint-boundary-20260926. web/.eslintrc.json
+  now enforces both 0039 D3 rules: (a) a `**/<other-module-id>/**` deny-pattern family closes
+  the relative-import bypass (both alias and relative/sibling forms), (b) per-module overrides
+  enforce depends_on-scoped module-to-module imports. No new npm dependency added.
+
+  Two real defects were caught and fixed by the gate process during this pipeline, not routine
+  churn:
+    1. CODE-DESIGN-VALIDATOR FAILed the first design pass on a real bug: rule (b)'s design only
+       matched alias-form imports (`@/modules/beta/Thing`) and never flagged the equivalent
+       relative-sibling form (`../beta/Thing` from inside another module's directory). Fixed by
+       adding the `**/<other-module-id>/**` deny-pattern family; re-verified PASS by an
+       independent second design-validation pass with fresh empirical ESLint testing.
+    2. TEST-DESIGN-VALIDATOR FAILed the first test-design pass on a real coverage gap:
+       registry.ts's ESLint exemption (the one file allowed to import any module) had zero
+       regression coverage -- nothing would have caught a future accidental tightening or
+       loosening of that exemption. Fixed by adding a new discriminating test case; re-verified
+       PASS by an independent second pass.
+
+  RELEASE-VALIDATOR independently re-derived all four ACs and empirically reproduced ISS-0845's
+  own original bug report (`import X from '../modules/exam/ExamListPage'` from
+  src/pages/Probe.tsx) -- confirmed it is now correctly flagged, where on main 12f0a78f it was
+  not. Full suite re-run (948 tests, 0 failures), lint, type-check, guards, and production build
+  all clean.
+
+  AC1: 8-case vitest test (boundary-lint.test.ts) via the ESLint Node API, all passing.
+  AC2: `npm run lint` clean in web/.
+  AC3: `git diff` on web/package.json / web/package-lock.json shows no dependency added.
+  AC4: no 0039 amendment needed -- REVIEWER (and SECURITY-REVIEWER's explicit non-applicability
+  determination: dev-time lint check, no runtime tenant-data path) both signed off on this
+  determination, re-confirmed by RELEASE-VALIDATOR's independent pass.
 queue_ref: "Q-845"
 github_ref: "GH-1843"

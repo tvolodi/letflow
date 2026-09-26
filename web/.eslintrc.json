@@ -28,7 +28,10 @@
         "patterns": [
           "@/modules/**",
           "!@/modules/registry",
-          "!@/modules/types"
+          "!@/modules/types",
+          "**/modules/**",
+          "!**/modules/registry",
+          "!**/modules/types"
         ]
       }
     ]
@@ -38,6 +41,26 @@
       "files": ["src/modules/registry.ts"],
       "rules": {
         "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/modules/exam/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              "@/modules/*/**",
+              "!@/modules/exam/**",
+              "!@/modules/registry",
+              "!@/modules/types",
+              "**/modules/*/**",
+              "!**/modules/exam/**",
+              "!**/modules/registry",
+              "!**/modules/types"
+            ]
+          }
+        ]
       }
     }
   ]

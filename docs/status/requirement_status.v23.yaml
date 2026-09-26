@@ -78,3 +78,34 @@
       origin/main (9632ae1d) immediately before this append;
       `mix test test/mix/tasks/letflow_check_queue_reconciliation_test.exs`
       re-run post-rebase: 31 passed, 0 failed.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-26T15:46:17Z
+    note: >
+      ISS-0845 (MAJOR, frontend module-boundary ESLint rule, 0039 D3) resolved
+      and closed in docs/issues/ISS-0845.yaml. web/.eslintrc.json now enforces
+      both 0039 D3 rules: (a) a `**/<other-module-id>/**` deny-pattern family
+      closes the relative-import bypass (alias and relative/sibling forms
+      both flagged), (b) per-module overrides enforce depends_on-scoped
+      module-to-module imports. No new npm dependency added (AC3 confirmed).
+      Two real defects were caught and fixed by the gate process during this
+      pipeline: CODE-DESIGN-VALIDATOR FAILed the first design pass on rule
+      (b)'s relative-sibling-form bypass (fixed, re-verified PASS on a second
+      independent pass with fresh empirical ESLint testing); TEST-DESIGN-
+      VALIDATOR FAILed the first test-design pass on registry.ts's ESLint
+      exemption having zero regression coverage (fixed with a new
+      discriminating test case, re-verified PASS on a second independent
+      pass). TEST-RUNNER: full suite 948 tests passed, 0 failures, guards
+      clean, real production build, AC3 confirmed. RELEASE-VALIDATOR
+      independently re-derived all 4 ACs and empirically reproduced ISS-0845's
+      own original bug report (`import X from '../modules/exam/ExamListPage'`
+      from src/pages/Probe.tsx) -- confirmed now correctly flagged, where on
+      main 12f0a78f it was not; full suite/lint/type-check/guards/build
+      re-run clean. AC4: no 0039 amendment needed, determination made and
+      re-confirmed by REVIEWER, SECURITY-REVIEWER (explicit non-applicability:
+      dev-time lint check, no runtime tenant-data path), and
+      RELEASE-VALIDATOR. Branch fix/ISS0845-eslint-boundary-20260926
+      confirmed already rebased onto/up to date with origin/main (merge-base
+      = origin/main tip a8037c5c) before this append.

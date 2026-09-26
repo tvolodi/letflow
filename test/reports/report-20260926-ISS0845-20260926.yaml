@@ -1,0 +1,89 @@
+run_id: ISS0845-20260926
+workflow_id: WF-04
+step: "01"
+agent: TEST-RUNNER
+issue_ids:
+  - ISS-0845
+branch: fix/ISS0845-eslint-boundary-20260926
+commit: b8becfb2
+generated_at: "2026-09-26T15:41:00Z"
+change_scope:
+  note: >
+    git diff main --stat -- web/ shows 13 files changed (509 insertions,
+    102 deletions): web/.eslintrc.json; web/src/modules/routing/ModuleGuard.tsx
+    (moved from a different path, +8/-8 lines); four new test-support files
+    under web/src/modules/__tests__/ (boundary-config.test.ts, boundary-lint.test.ts,
+    eslint-shim.d.ts, registry.test.ts changes); web/src/modules/exam/__tests__/
+    examModule.nav.test.tsx (2 lines); web/src/modules/exam/examRoutes.tsx (new,
+    33 lines, replacing the old web/src/modules/examRoutes.tsx which is deleted,
+    47 lines removed); web/src/modules/exam/index.ts; web/src/modules/registry.ts;
+    web/src/modules/types.ts; web/router.tsx. This is broader than the dispatch's
+    summary of "web/.eslintrc.json + 4 new test-support files" -- it also includes
+    a real source restructuring (examRoutes.tsx moved into modules/exam/, plus
+    ModuleGuard.tsx relocated to modules/routing/), which is consistent with
+    closing an ESLint module-boundary bypass that required moving files to match
+    the module layout the new rule enforces. Flagging this discrepancy for
+    RELEASE-VALIDATOR's awareness; not itself a red flag since all checks below
+    are green and prior gates (CODE-DESIGN-VALIDATOR, REVIEWER, TEST-DESIGN-VALIDATOR)
+    already passed on this same diff.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-iss0845
+  scope: "Frontend-only (web/). No lib/letflow/ or priv/repo/migrations/ changes in this diff; docker compose / Postgres not needed for this run."
+  node: "v18.19.1"
+  npm: "9.2.0"
+  deps: "web/node_modules already present in this worktree; no npm install performed or needed."
+ac3_check:
+  command: "git diff main -- web/package.json web/package-lock.json"
+  result: "PASS -- empty diff, zero output. No dependency changes."
+check_chain:
+  type_check:
+    command: "npm run type-check (tsc -b tsconfig.json)"
+    result: "PASS -- no output, exit 0."
+  lint:
+    command: "npm run lint (eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0)"
+    result: "PASS -- no output, exit 0."
+  unit_tests:
+    command: "npm run test (vitest run --passWithNoTests --exclude \"tests/e2e/**\" --exclude \"tests/guards/**\")"
+    result: "Test Files  139 passed (139) / Tests  948 passed (948)"
+    duration: "35.87s"
+    failures: 0
+  guards:
+    command: "npm run guards (vitest run tests/guards/meta-control.spec.ts tests/guards/source-scan.spec.ts tests/guards/bundle-scan.spec.ts tests/guards/role-set.spec.ts --reporter=verbose)"
+    result: "Test Files  4 passed (4) / Tests  52 passed (52)"
+    includes: "A real vite build ran as part of bundle-scan.spec.ts (tsc -b && vite build): PASS, 2470 modules transformed, no errors (only the pre-existing >500kB chunk-size advisory, not an error)."
+    duration: "24.65s"
+    failures: 0
+overall_check_chain_verdict: PASS (type-check, lint, unit tests, guards all green; 0 failures across 143 test files / 1000 tests total)
+new_test_files_isolated_rerun:
+  command: >
+    npx vitest run src/modules/__tests__/boundary-lint.test.ts
+    src/modules/__tests__/boundary-config.test.ts --reporter=verbose
+  result: "Test Files  2 passed (2) / Tests  14 passed (14)"
+  detail:
+    - file: "src/modules/__tests__/boundary-lint.test.ts"
+      tests_passed: 11
+      cases: >
+        case 1 (core->module relative rejected), case 2 (alias form rejected,
+        regression guard), case 4/4b (registry.ts->module index allowed, both
+        forms), case 5 (module->core allowed), case 3/3b (module a->module b
+        not in depends_on, alias+relative, rejected), case 6/6b (module a->module
+        b declared in depends_on, alias+relative, allowed), same-module self-import
+        unaffected, sibling-deny is depth-independent.
+    - file: "src/modules/__tests__/boundary-config.test.ts"
+      tests_passed: 3
+      cases: >
+        exam module's .eslintrc.json override allow-set is exactly {id} ∪
+        depends_on; denies exactly the sibling ids not covered by an allow;
+        no override names a module id absent from REGISTERED_MODULES.
+  duration: "1.87s"
+  failures: 0
+failure_diagnosis: "N/A -- no failures observed anywhere in this run (full suite, guards, or the two new files in isolation)."
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"
+notes:
+  - "AC3 confirmed: git diff main -- web/package.json web/package-lock.json is empty."
+  - "Full frontend check chain (type-check, lint, test, guards) all green, 0 failures, run fresh in this worktree (not the shared main checkout)."
+  - "Both new ISS-0845 test files (boundary-lint.test.ts, boundary-config.test.ts) re-run in isolation outside the full-suite run: 14/14 passed."
+  - "The actual diff touches more files than the dispatch's one-line summary (includes examRoutes.tsx/ModuleGuard.tsx relocation, registry.ts, types.ts, router.tsx changes beyond the eslintrc + 4 test files) -- noted above for RELEASE-VALIDATOR; does not change the PASS verdict since every check ran clean against the actual committed diff."
+  - "No code was fixed or modified as part of this step; this is a pure independent-execution report."
+  - "Did not commit, push, or merge."

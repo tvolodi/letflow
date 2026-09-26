@@ -56,3 +56,5 @@ fix_direction: >
   if a future caller is anticipated. Re-run `mix compile --warnings-as-errors`
   clean afterward.
 status: open
+queue_ref: "Q-853"
+github_ref: "GH-1867"

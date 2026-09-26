@@ -1,0 +1,37 @@
+id: ISS-0850
+title: >
+  Letflow.Modules.CatalogTest REQ-400-family tests stale after config.exs now
+  registers Letflow.Modules.Exam
+discovered_by: TEST-RUNNER (ISS-0848 full-suite run, 2026-09-26)
+discovered_in_run: fix/ISS0848-queue-reconciliation-20260926
+discovered_at: "2026-09-26T13:05:00Z"
+severity: BLOCKER
+tags:
+  - test
+  - modules
+  - catalog
+description: |
+  Two tests in test/letflow/modules/catalog_test.exs fail on main (12f0a78f):
+  1. entry_modules/0 test asserts 3-element list but config/test.exs now registers
+     4 modules (Exam prepended by REQ-408).
+  2. config/config.exs test asserts empty module list but config.exs now has Exam.
+  REQ-400's own AC2 text anticipated this: "REQ-402 and REQ-408 later append to
+  this list and update this test's expectation". REQ-408 did not update the test.
+affected_files:
+  - test/letflow/modules/catalog_test.exs
+related:
+  - REQ-400
+  - REQ-408
+  - ISS-0838
+fix_direction: |
+  Update the two stale assertions in catalog_test.exs to match the current
+  registration. No lib/ or config/ changes.
+status: done
+resolved_at: "2026-09-26T18:40:00Z"
+resolved_by: ORCH (session-A) via ISS-0838
+resolution: |
+  Fixed in PR #1853 (ISS-0838 fix): entry_modules/0 test updated to include
+  Letflow.Modules.Exam as first element; config.exs test renamed to assert
+  exactly [Letflow.Modules.Exam]. All 12 catalog tests pass.
+queue_ref: "Q-850"
+github_ref: null # not separately tracked on GitHub; sub-finding of ISS-0848

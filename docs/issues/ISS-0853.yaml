@@ -1,0 +1,60 @@
+id: ISS-0853
+title: >
+  test/support/tenant_template.ex's template_built_in_db?/0 is dead code left
+  behind by ISS-0842's fix, and fails `mix compile --warnings-as-errors`
+discovered_by: "ELIXIR-DEV (ISS-0846, docs/guides/adding-an-application-module.md)"
+discovered_in_run: WF03-ISS0846-20260926
+discovered_at: "2026-09-26T16:30:00Z"
+severity: MINOR
+tags:
+  - backend
+  - test-infrastructure
+  - compile-warning
+  - tenant-template
+description: >
+  Found while running `mix letflow.check` (its first hard gate,
+  `compile --warnings-as-errors`) as part of ISS-0846's own AC4. Commit
+  50ffad77 (fix(ISS-0842): detect and rebuild stale tenant_template via
+  migration fingerprint) replaced `template_built_in_db?/0`'s call site inside
+  `ensure_template!/0` with the new `template_db_state/0`, but deliberately
+  left the old `defp template_built_in_db?/0` function defined (see its own
+  "NOTE (ISS-0842)" comment: "this function is retained for the inline doc
+  comment history, but is no longer called ... Kept private and not deleted
+  to preserve the §0.7/INV-8 rationale comment above in context").
+
+  That choice is incompatible with `--warnings-as-errors`: an unused private
+  function is a compile warning, and the alias run by `mix letflow.check`
+  treats it as fatal, so the very first gate fails:
+
+    warning: function template_built_in_db?/0 is unused
+    │
+  349 │   defp template_built_in_db? do
+    │        ~
+    │
+    └─ test/support/tenant_template.ex:349:8: Letflow.Test.TenantTemplate (module)
+
+  Compilation failed due to warnings while using the --warnings-as-errors option
+
+  Not caused by, or related to, ISS-0846's own change (a docs-only diff);
+  reproduces identically on an unmodified main checkout at commit e1f90a35.
+affected_files:
+  - test/support/tenant_template.ex
+related:
+  - ISS-0842
+severity_rationale: >
+  MINOR -- blocks `mix letflow.check` (and therefore every WF-02/WF-03 run's
+  own AC4-style gate) but has no production behavior impact; the fix is a
+  small, mechanical dead-code removal (or an `@compile {:no_warn_unused_function,
+  ...}` annotation, if the rationale comment must stay attached to a live
+  function).
+fix_direction: >
+  Either delete `defp template_built_in_db?/0` from
+  test/support/tenant_template.ex and move its "§0.7/INV-8" rationale comment
+  onto `template_db_state/0` (the function that now does the equivalent
+  inside-lock check), or keep the function and silence the specific warning
+  (e.g. `@compile {:no_warn_unused_function, {:template_built_in_db?, 0}}`)
+  if a future caller is anticipated. Re-run `mix compile --warnings-as-errors`
+  clean afterward.
+status: open
+queue_ref: "Q-853"
+github_ref: "GH-1867"

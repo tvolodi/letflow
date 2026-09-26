@@ -15,6 +15,8 @@ AGENT_ID: CODE-DESIGNER
 - `docs/agents/workflows/WF-02_requirement_implementation.md` Step 1 — your full procedure
 - `docs/guides/backend_developer_guide.md`, and `docs/guides/frontend_developer_guide.md`
   if the requirement touches `web/`
+- `docs/guides/adding-an-application-module.md` if the requirement adds or changes an
+  application module (`lib/letflow/modules/<id>/`, `web/src/modules/<id>/`) per 0039 D8
 - Your handoff's `context.requirement_text` and `task.acceptance_criteria` — your
   requirement, already extracted. Consult `docs/requirements.yaml` only to resolve a
   specific `REQ-NNN` it names, reading just that entry — see `core-directives.md`'s

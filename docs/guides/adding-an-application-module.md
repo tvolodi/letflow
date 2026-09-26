@@ -1,0 +1,442 @@
+# Adding an application module
+
+This is the end-to-end guide ISS-0846 asks for: how to add a new **application
+module** (HR, WMS, ERP, project management, …) to Letflow, per
+[`docs/migration/decisions/0039-platform-module-solution-layering.md`](../migration/decisions/0039-platform-module-solution-layering.md)
+(0039) D1–D8. 0039 D8 is explicit that no such module is built speculatively —
+this guide exists so that when a real client solution needs one, the
+implementing agent does not have to reverse-engineer the contract from the one
+module that exists today, `exam`. Every path, module and function cited below
+is taken directly from the current `exam` module (`lib/letflow/modules/exam/`,
+`priv/modules/exam/`, `web/src/modules/exam/`) — treat it as the worked
+example throughout, not as a template to imitate structurally without reading
+its own moduledocs.
+
+Read [`docs/migration/stage-11-modular-platform.md`](../migration/stage-11-modular-platform.md)
+for the phase history (P1 mechanism, P2 exam extraction, P3 solutions) and
+0039 in full before starting; this guide assumes both.
+
+## 1. Layout
+
+A module has up to three directories, mirroring the three places platform
+code already lives:
+
+| Layer | Path | Contains |
+|---|---|---|
+| Backend | `lib/letflow/modules/<id>/` | Entry module `Letflow.Modules.<Id>` at `lib/letflow/modules/<id>/<id>.ex` (never at `lib/letflow/modules/<id>.ex` — that path is reserved for core mechanism files), plus the module's own runtime code, e.g. `lib/letflow/modules/exam/session.ex`, `lib/letflow/modules/exam/router.ex`, `lib/letflow/modules/exam/certificate.ex`. |
+| Pack/data | `priv/modules/<id>/` | The module's solution-pack document (`pack.json`) and any entity-definition JSON it installs, e.g. `priv/modules/exam/pack.json`, `priv/modules/exam/entity_definitions/*.json`. |
+| Frontend | `web/src/modules/<id>/` | The module's `ModuleDefinition` export (`index.ts`), its route components, API client, and its own `__tests__/`, e.g. `web/src/modules/exam/index.ts`, `web/src/modules/exam/examRoutes.tsx`, `web/src/modules/exam/exam.api.ts`. |
+
+Core mechanism files that a module must **never** duplicate or fork live
+one level up, with no subdirectory, and are shared by every module:
+
+- `lib/letflow/modules/module.ex` — the `Letflow.Modules.Module` behaviour.
+- `lib/letflow/modules/catalog.ex` — `Letflow.Modules.Catalog`, the only core
+  file permitted to reference a file inside a module's own subdirectory (D3).
+- `lib/letflow/modules/installs.ex` — `Letflow.Modules.Installs`, the tenant
+  install/list/settings context.
+- `lib/letflow/modules/tenant_module.ex` — `Letflow.Modules.TenantModule`,
+  the Ecto schema for the `tenant_modules` table.
+- `web/src/modules/registry.ts` and `web/src/modules/types.ts` — the frontend
+  mirror of the same split; `registry.ts` is the one sanctioned importer of
+  module code on the frontend.
+
+## 2. The `Letflow.Modules.Module` behaviour and `defmanifest`
+
+Every module's entry file (`lib/letflow/modules/<id>/<id>.ex`) implements
+`@behaviour Letflow.Modules.Module` (`lib/letflow/modules/module.ex`), which
+declares three callbacks:
+
+- `manifest/0` — **required**, returns the `t:Letflow.Modules.Module.manifest/0`
+  map (see §3 below for its fields).
+- `router/0` — **optional** (`@optional_callbacks router: 0, on_install: 2`),
+  returns the `Plug.Router`-implementing module itself, not a started process.
+- `on_install/2` — **optional**, `(prefix :: String.t(), settings :: map()) ::
+  :ok | {:error, term()}`, run inside the install transaction after the
+  module's pack installs.
+
+Rather than hand-writing `def manifest/0`, import and call the
+`defmanifest/1` macro (`Letflow.Modules.Module.defmanifest/1`), which both
+generates `manifest/0` and raises a `CompileError` at compile time if any
+`role_grants` atom is missing from `permissions`. `Letflow.Modules.Exam`
+(`lib/letflow/modules/exam/exam.ex:20-76`) is the worked example:
+
+```elixir
+defmodule Letflow.Modules.Exam do
+  @behaviour Letflow.Modules.Module
+  import Letflow.Modules.Module, only: [defmanifest: 1]
+
+  @impl true
+  defmanifest(
+    id: "exam",
+    version: "0.1.0",
+    depends_on: [],
+    pack: "modules/exam/pack.json",
+    permissions: [:ExamSessionStart, :ExamSessionRead, :ExamSessionSave,
+                  :ExamSessionSubmit, :ExamSessionReportEvent, :ExamCertificateIssue],
+    role_grants: %{CANDIDATE: [:ExamSessionStart, :ExamSessionRead, :ExamSessionSave,
+                                :ExamSessionSubmit, :ExamSessionReportEvent, :ExamCertificateIssue]},
+    required_roles: [],
+    settings_schema: nil,
+    route_policies: [
+      {"POST", "/exam-sessions", :ExamSessionStart},
+      {"GET", "/exam-sessions/:id", :ExamSessionRead},
+      # ...
+    ]
+  )
+
+  @impl true
+  def router, do: Letflow.Modules.Exam.Router
+
+  @impl true
+  def on_install(prefix, _settings) when is_binary(prefix) do
+    # seeds entity_field_restrictions rows; see the real function for the shape
+    :ok
+  end
+end
+```
+
+`defmanifest`'s keyword-list argument must be a **compile-time literal** at
+the call site (see `lib/letflow/modules/module.ex`'s own `@doc` for the full
+argument contract table); a module unable to supply literals for every field
+implements `def manifest/0` by hand instead — `defmanifest` is additive, not
+a replacement for the `@callback` contract.
+
+## 3. Manifest fields, permissions, role_grants, route_policies, and the Catalog fallback
+
+The manifest map shape (`t:Letflow.Modules.Module.manifest/0`,
+`lib/letflow/modules/module.ex:63-73`):
+
+| Field | Shape | Meaning |
+|---|---|---|
+| `:id` | `String.t()` | the module's id, e.g. `"exam"` |
+| `:version` | `String.t()` | opaque version string |
+| `:depends_on` | `[String.t()]` | other module ids required installed first |
+| `:pack` | `String.t() \| nil` | path (relative to `priv/`) to the module's solution-pack document |
+| `:permissions` | `[atom()]` | permission atoms this module declares and owns |
+| `:role_grants` | `%{atom() => [atom()]}` | which existing platform roles get which of this module's own permissions |
+| `:required_roles` | `[String.t()]` | advisory only (0029 §2), not enforced |
+| `:settings_schema` | `map() \| nil` | JSON-Schema-shaped description of the module's configurable settings |
+| `:route_policies` | `[{method, path_pattern, permission}]` | maps each of the module's own routes, relative to its own mount, to the permission that gates it |
+
+A module **declares its own permission atoms and grants them only to
+existing platform roles** — it cannot create a role and cannot grant a core
+permission (checked by `Letflow.Modules.Catalog.validate/1`,
+`lib/letflow/modules/catalog.ex:130-169`, whose six rules are
+`{:unknown_role, _}`, `{:ungranted_permission_declared, _}`,
+`{:core_permission_collision, _}`, `{:unknown_dependency, _}`,
+`{:duplicate_module_id, _}`, `{:undeclared_route_permission, _}`).
+
+Two fallback points in `lib/letflow/api/authorization.ex` are how core code
+picks up a module's permissions and grants without ever naming the module:
+
+- `Letflow.Api.Authorization.permissions/0` (`authorization.ex:448`) —
+  `core_permissions() ++ Letflow.Modules.Catalog.permissions()`.
+- `Letflow.Api.Authorization.role_allows?/2` (`authorization.ex:1106-1108`) —
+  `core_role_allows?(role, permission) or permission in Letflow.Modules.Catalog.role_grants(role)`.
+  This is the **last** `role_allows?/2` clause; `:PLATFORM_ADMIN`'s existing
+  catch-all (`authorization.ex:1113`) and every other core per-role clause
+  are checked first, and the Catalog fallback only fires once none of them
+  matched.
+
+A module's own HTTP routes resolve their required permission through a third
+fallback, `endpoint_policy_key/2`'s Catalog clause (`authorization.ex:883-895`,
+`module_route_permission/3`), which matches the request's method and
+sub-path against the module's own `route_policies` list.
+
+## 4. Router mounting and the 404 gate
+
+`Letflow.Plugs.ApiPipeline` mounts `Letflow.Routers.Modules` at `/modules`
+(full path `/api/v1/modules/<module_id>/<rest...>`, `lib/letflow/plugs/api_pipeline.ex:166`),
+a **plain `Plug`**, not `Letflow.Api.AuthorizedRouter` — see
+`lib/letflow/routers/modules.ex`'s own moduledoc for why the authorization
+check must come from the module's own `router/0`, not this dispatcher.
+
+`Letflow.Routers.Modules.call/2` (`lib/letflow/routers/modules.ex:81-90`)
+looks up `module_id` in the path, and `resolve/2` (`modules.ex:127-145`)
+decides in this order:
+
+1. `Letflow.Modules.Installs.installed?/2` — a real DB round trip, computed
+   **unconditionally** (see the moduledoc's "INV-5 timing parity" section —
+   this must never be skipped by a short-circuiting `with`-chain, or the
+   response latency itself leaks whether the module exists).
+2. `Letflow.Modules.Catalog.fetch/1` — is the id registered at all.
+3. `function_exported?(entry_module, :router, 0)` — does it export a router.
+
+All three failure modes collapse into the same `Letflow.Api.Response.not_found/1`
+call — a caller cannot distinguish "module doesn't exist" from "module
+exists but isn't installed for you" from "module exists, installed, but has
+no router" (D5: "a module's absence is not information to leak").
+
+`Letflow.Modules.Exam.Router` (`lib/letflow/modules/exam/router.ex`) is the
+module's own `AuthorizedRouter`-based router, reached only after all three
+checks above pass; its routes live at
+`/api/v1/modules/exam/exam-sessions/…`.
+
+## 5. Pack location and `on_install/2`
+
+A module's solution-pack document lives under `priv/modules/<id>/`, e.g.
+`priv/modules/exam/pack.json` (`pack_id` `"bilimbaga-question-bank"`), with
+any entity-definition JSON alongside it in `priv/modules/exam/entity_definitions/`.
+The manifest's `:pack` field is a path **relative to `priv/`**
+(`"modules/exam/pack.json"`), resolved via
+`Path.join(Application.app_dir(:letflow, "priv"), pack_path)`
+(`lib/letflow/modules/installs.ex`'s `read_pack_document/1`).
+
+`Letflow.Modules.Installs.install/3` (`lib/letflow/modules/installs.ex:70-84`)
+does all of this inside **one** `Repo.transaction/1`:
+
+1. reject an unknown module id, an already-installed module, or a module
+   whose `depends_on` isn't fully satisfied;
+2. if `manifest.pack` is set, install it through the **existing**
+   `Letflow.Definitions.SolutionPack.install/3` (no second pack installer);
+3. insert the `tenant_modules` row;
+4. call the module's `on_install/2` if exported
+   (`function_exported?(entry_module, :on_install, 2)`).
+
+Any step failing rolls back every write, pack install included.
+`Letflow.Modules.Exam.on_install/2` (`lib/letflow/modules/exam/exam.ex:97-120`)
+is the worked example: it seeds four `entity_field_restrictions` rows,
+idempotently (`on_conflict: :nothing`), so calling it twice against the same
+tenant schema is a safe no-op.
+
+## 6. Registration: `config/config.exs`, `config/test.exs`, and `catalog_test.exs`
+
+`Letflow.Modules.Catalog` reads its module list once, at compile time, via
+`Application.compile_env(:letflow, :modules, [])` (`lib/letflow/modules/catalog.ex:55`).
+Registering a new module means editing **both** config files, plus the test
+that pins their contents:
+
+- `config/config.exs:60` — `config :letflow, :modules, [Letflow.Modules.Exam]`
+  — the real, production module list. Add your entry module here.
+- `config/test.exs:267` — `config :letflow, :modules, [...]` — the test-env
+  list, currently `[Letflow.Modules.Exam, Letflow.Modules.Fixture,
+  Letflow.Modules.FixtureDependent, Letflow.Modules.FixtureFailingInstall]`
+  (prod entries first, then the test-only fixtures under
+  `test/support/modules/`). Add your entry module here too if it needs to be
+  exercised in the test env (a genuinely new production module should be
+  registered exactly like `Letflow.Modules.Exam` was).
+- `test/letflow/modules/catalog_test.exs` — **this is ISS-0846's flagged
+  root cause of the stale-`CatalogTest` issue.** Two assertions there
+  hardcode the module list and go stale unless updated in the same change:
+  - `"entry_modules/0 returns the registered test-only fixtures, in config
+    order"` asserts `Catalog.entry_modules() ==
+    [Letflow.Modules.Exam, Letflow.Modules.Fixture, ...]` literally — add
+    your module to this literal list, in the same order as `config/test.exs`.
+  - `"config/config.exs registers exactly [Letflow.Modules.Exam]"` greps the
+    real file (`~r/config :letflow, :modules, \[Letflow\.Modules\.Exam\]/`)
+    — update this regex to match your new `config/config.exs` line.
+
+Forgetting either edit does not fail compilation — it fails exactly these
+two assertions the next time `mix test` runs, which is why ISS-0846 calls
+this out by name.
+
+## 7. `tenant_modules` backfill migrations
+
+`tenant_modules` (created by `priv/repo/migrations/20260925000001_create_tenant_modules.exs`)
+is a **tenant-scoped** table — the `if prefix() do` guard is mandatory, and
+so is registering the migration file in `Letflow.TenantProvisioning`'s
+`@tenant_scoped_migration_manifest` (both halves, per that migration's own
+comment).
+
+If your new module replaces functionality that existing tenants already have
+installed some other way (the way `exam` replaced BilimBaga's direct pack
+install), write a **second**, separate migration that backfills a
+`tenant_modules` row for every tenant that qualifies — otherwise D5's 404
+gate cuts those tenants off the day the module ships. The worked example is
+`priv/repo/migrations/20260926010001_backfill_exam_tenant_modules.exs`: for
+every tenant schema, it derives the tenant's UUID from the schema name
+(`Letflow.TenantProvisioning.tenant_id_for_schema_name/1`), then inserts an
+`INSERT ... SELECT ... WHERE EXISTS (SELECT 1 FROM public.solution_pack_installs
+WHERE tenant_id = $1 AND pack_id = 'bilimbaga-question-bank') ON CONFLICT
+(module_id) DO NOTHING`. If your module has no such predecessor state to
+backfill (a genuinely new module, per 0039 D8), skip this step — a
+brand-new module starts with zero tenants having it, which is correct.
+
+## 8. `settings_schema` and the settings write route
+
+A module's configurable settings are declared in its own manifest's
+`:settings_schema` (a JSON-Schema-shaped map, or `nil` if the module has no
+settings — `exam`'s is `nil`, so it has no live worked example in this
+codebase yet; follow `Letflow.Modules.Installs.put_settings/3`'s validation
+rules below regardless).
+
+`PUT /api/v1/tenant/modules/:module_id/settings` (`authz_put "/:module_id/settings"`,
+`lib/letflow/routers/tenant_modules.ex:44-46`, gated by `:ModulesManage`)
+delegates to `Letflow.Modules.Installs.put_settings/3`
+(`lib/letflow/modules/installs.ex`), which:
+
+1. looks the module up via `Catalog.fetch/1` — unknown id →
+   `{:error, {:module_not_installed, module_id}}`;
+2. validates `settings` against `manifest().settings_schema`: `nil` schema
+   accepts only `%{}` (any non-empty map is
+   `{:error, {:settings_validation_failed, :no_schema}}`); a real schema is
+   checked with the existing `Letflow.EventStore.Registry.JsonSchema.validate/2`;
+3. requires a `tenant_modules` row to already exist for that tenant (not
+   installed → `{:error, {:module_not_installed, module_id}}`);
+4. updates the row's `settings` field via `TenantModule.settings_changeset/2`.
+
+The `prefix` used throughout is `conn.assigns.scoped_opts`'s prefix only
+(INV-1) — never a body field.
+
+## 9. Solution manifests
+
+A solution (`priv/solutions/<id>.json`) is a manifest, not code — "a list of
+modules, versions and default settings," per 0039 D6. Two exist today:
+
+```json
+// priv/solutions/bilimbaga.json
+{
+  "id": "bilimbaga",
+  "modules": [{"module_id": "exam", "version": "0.1.0", "settings": {}}]
+}
+```
+
+```json
+// priv/solutions/fixture-bundle.json (test-only, exercises dependency order)
+{
+  "id": "fixture-bundle",
+  "modules": [
+    {"module_id": "fixture_dependent", "version": "0.1.0", "settings": {}},
+    {"module_id": "fixture", "version": "0.1.0", "settings": {}}
+  ]
+}
+```
+
+Installing a solution installs each listed module in dependency order, then
+writes each module's declared default `settings`. A solution has no runtime
+identity of its own after install — the tenant simply ends up with the
+modules. If your new module ships as part of a client solution, add or
+extend a `priv/solutions/<id>.json` file; if it's meant to be installed
+standalone (`POST /api/v1/tenant/modules` with just `module_id`), no solution
+manifest is required at all.
+
+## 10. Frontend `ModuleDefinition` and the registry
+
+`web/src/modules/types.ts` defines `ModuleDefinition`:
+
+```ts
+export interface ModuleDefinition {
+  id: string
+  depends_on?: string[]
+  routeObjects: RouteObject[]   // plain routes -- no guard wrapper, registry adds it
+  navItems: ModuleNavItem[]
+}
+```
+
+A module exports exactly one of these from `web/src/modules/<id>/index.ts`.
+The worked example, `web/src/modules/exam/index.ts`:
+
+```ts
+export const examModuleDefinition: ModuleDefinition = {
+  id: 'exam',
+  depends_on: [],
+  routeObjects: examRouteObjects,
+  navItems: [
+    { to: '/exam', label: 'Exams', roles: ['CANDIDATE'] },
+    { to: '/admin/bilimbaga', label: 'Question Bank', roles: ['PLATFORM_ADMIN', 'PROCESS_OPERATOR'] },
+  ],
+}
+```
+
+`web/src/modules/registry.ts` is the **one sanctioned importer** of module
+code (0039 D3): it holds `REGISTERED_MODULES: ModuleDefinition[]` (today just
+`[examModuleDefinition]`), wraps each module's `routeObjects` in
+`ModuleGuard` (`web/src/components/routing/ModuleGuard`) to derive
+`REGISTERED_MODULE_ROUTE_OBJECTS`, and exposes
+`getInstalledModuleDefinitions/2` and `getInstalledModuleNavItems/2`, both
+filtered by the tenant's actual `installed_modules` list (read from `GET
+/me`, per `Letflow.Routers.Me`'s `installed_modules` field, backed by
+`Letflow.Modules.Installs.list_installed/1`). Adding a module means: write
+its `index.ts`, then add exactly one line —
+`import { yourModuleDefinition } from './your_id/index'` plus one array
+entry in `REGISTERED_MODULES` — in `registry.ts`. No other frontend file
+should import module code directly.
+
+## 11. Boundary checks
+
+Two checks enforce D3 — that core code never names a module, and a module
+only reaches the modules its own `depends_on` lists — and both run in CI:
+
+- **Backend** — `mix letflow.check_boundaries`
+  (`lib/mix/tasks/letflow.check_boundaries.ex`), built on `mix xref graph
+  --format plain` with no new dependency. It fails the build if any file
+  outside `lib/letflow/modules/<id>/` references a file inside one (except
+  `lib/letflow/modules/catalog.ex`, the one sanctioned exception), or a file
+  in module `a` references a file in module `b` when `b` is not in `a`'s
+  `depends_on`. Wired into the `mix letflow.check` alias, after `compile
+  --warnings-as-errors` and before the test alias.
+- **Frontend** — the ESLint `no-restricted-imports` rule in
+  `web/.eslintrc.json`: the default override (lines 25–34) blocks any file
+  from importing `@/modules/**` or `**/modules/**` except `registry` and
+  `types`; a per-module override (lines 47–60, scoped to
+  `src/modules/exam/**`) permits that module's own files to import
+  `@/modules/exam/**` (and the two core files) but not another module's
+  subdirectory; and a separate override (line 41) turns the rule off
+  entirely inside `src/modules/registry.ts` itself, since it is the
+  sanctioned importer. A new module needs its own `files:
+  ["src/modules/<id>/**"]` override block added to `web/.eslintrc.json`,
+  mirroring the `exam` block with `<id>` substituted throughout.
+
+## 12. Explicitly out of scope (do not build this as part of adding a module)
+
+- **Uninstall.** 0039 D5: "No uninstall in S11" — removing a module safely
+  means deciding what happens to its definitions and tenant data, which is
+  not decided anywhere yet. `docs/migration/stage-11-modular-platform.md`'s
+  "Open items" section records it as open, not assigned.
+- **Client scripts.** 0039 D7: tenant-attached Lua extension points need a
+  runtime invocation path and an audit path that do not exist yet (0029 §1).
+  A module's `on_install/2` is reviewed **code**, not pack content, and does
+  not reopen this.
+- **The `CANDIDATE` role.** It is exam-specific but stays a **platform** role
+  atom in `Letflow.Api.Authorization.roles/0` (`@roles`,
+  `role_from_string("CANDIDATE")`) — moving it into the exam module is an
+  open item (0039 "Relationship to earlier decisions", 0013) needing its own
+  design, not something a new module's implementer should attempt as a side
+  effect.
+- **New pack sections.** The solution-pack section set stays closed
+  (0026/0027/0029); a module wraps a pack, it does not add pack sections. A
+  requirement that seems to need a new section needs its own decision record
+  first.
+- **A supervised process per module.** REQ-045 stands: a module is a code
+  boundary, not a process. `Letflow.Modules.Catalog` and
+  `Letflow.Modules.Installs` are both plain modules, not `GenServer`s — no
+  module gets its own supervision entry unless its own design justifies one
+  through the normal gates.
+
+## Checklist for adding module `<id>`
+
+1. [ ] Confirm 0039 D8's gate: a real client solution needs this module now —
+   don't build it speculatively.
+2. [ ] `lib/letflow/modules/<id>/<id>.ex` — entry module, `@behaviour
+   Letflow.Modules.Module`, `defmanifest(...)` with `id`, `version`,
+   `depends_on`, `pack`, `permissions`, `role_grants` (existing roles only,
+   `Authorization.roles/0`), `required_roles`, `settings_schema`,
+   `route_policies`.
+3. [ ] Module runtime code and (if any) `router/0`, `on_install/2` under
+   `lib/letflow/modules/<id>/`.
+4. [ ] If the module has a pack: `priv/modules/<id>/pack.json` (+ entity
+   definitions), manifest `:pack` set to the path relative to `priv/`.
+5. [ ] Register the entry module in `config/config.exs`, and in
+   `config/test.exs` if it needs test-env coverage.
+6. [ ] Update `test/letflow/modules/catalog_test.exs`'s two hardcoded
+   assertions (`entry_modules/0` literal list; the `config/config.exs` regex).
+7. [ ] If existing tenants need to be backfilled onto this module (replacing
+   prior ad hoc functionality), write a tenant-scoped backfill migration,
+   `if prefix() do` guarded, registered in
+   `Letflow.TenantProvisioning.@tenant_scoped_migration_manifest`.
+8. [ ] If the module has settings, confirm `Letflow.Modules.Installs.put_settings/3`'s
+   JSON-Schema validation covers your `settings_schema` shape.
+9. [ ] If the module belongs to a client solution, add/extend
+   `priv/solutions/<id>.json`.
+10. [ ] `web/src/modules/<id>/index.ts` exporting one `ModuleDefinition`; add
+    it to `REGISTERED_MODULES` in `web/src/modules/registry.ts` — the only
+    file that imports it.
+11. [ ] Add a `files: ["src/modules/<id>/**"]` override block to
+    `web/.eslintrc.json`, mirroring the `exam` block.
+12. [ ] Run `mix letflow.check_boundaries` and the frontend ESLint boundary
+    rule; both must pass with zero new violations.
+13. [ ] Run `mix letflow.check` end to end before handoff.
+14. [ ] Do not build uninstall, client scripts, a new pack section, the
+    `CANDIDATE` role move, or a supervised process for this module — flag
+    each as a separate decision/requirement if the work seems to need one.

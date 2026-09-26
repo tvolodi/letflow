@@ -42,6 +42,28 @@ acceptance_criteria:
   - "every file path, module and function cited exists on main -- the verification commands and their output are quoted in the handoff"
   - "the three agent files and the stage-11 file each link to the guide"
   - "`mix letflow.check` passes (or remaining failures are each linked to an open issue by id)"
-status: open
+status: resolved
 queue_ref: "Q-846"
 github_ref: "GH-1844"
+resolution: |
+  docs/guides/adding-an-application-module.md written (12 sections + 14-item closing
+  checklist), using the exam module as the worked example throughout, real paths only.
+  Linked from .claude/agents/code-designer.md, elixir-dev.md, frontend-dev.md, and
+  docs/migration/stage-11-modular-platform.md (AC1, AC3). Every citation verified
+  against main across three independent passes -- ELIXIR-DEV's own extensive
+  verification log (10+ citations, commands+output quoted), REVIEWER's independent
+  spot-check of a different 12+-citation sample across 8 sections, and
+  RELEASE-VALIDATOR's fresh re-derivation with yet another non-overlapping sample --
+  none found a stale reference (AC2). `mix letflow.check`'s remaining failures are all
+  linked to already-open issues (ISS-0852, ISS-0827 x2, ISS-0834, ISS-0832), matching
+  AC4's own accommodation for that case; RELEASE-VALIDATOR specifically re-ran the
+  suite from an isolated physical build (discarding an initial run that had reused
+  symlinked _build/deps and would have hidden a real failure) and reproduced this
+  exactly. In the course of writing the guide, ELIXIR-DEV found a genuine, unrelated
+  compile-warning-as-error bug (dead code in test/support/tenant_template.ex left by
+  ISS-0842's own fix) and filed it properly as ISS-0853 (queue_ref/github_ref
+  registered). This is a docs-only deliverable: no application code, migrations, or
+  tests were touched by this diff itself. Branch docs/ISS0846-module-guide-20260926
+  (commits e166f189, a53ba621) confirmed by RELEASE-VALIDATOR to sit cleanly on
+  origin/main with zero drift (merge-base = origin/main HEAD e1f90a35 at the time of
+  that check; re-confirmed by DOC-UPDATER before merge).

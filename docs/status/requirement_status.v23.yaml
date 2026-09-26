@@ -109,3 +109,21 @@
       RELEASE-VALIDATOR. Branch fix/ISS0845-eslint-boundary-20260926
       confirmed already rebased onto/up to date with origin/main (merge-base
       = origin/main tip a8037c5c) before this append.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-26T18:22:00Z
+    note: >
+      ISS-0846 (S11, MINOR, queue task 846) resolved: docs/guides/adding-an-application-
+      module.md added (12 sections + 14-item checklist, exam module worked example),
+      linked from .claude/agents/code-designer.md, elixir-dev.md, frontend-dev.md and
+      docs/migration/stage-11-modular-platform.md. Docs-only diff, three independent
+      verification passes (ELIXIR-DEV author, REVIEWER, RELEASE-VALIDATOR), each with a
+      non-overlapping citation sample -- all PASS. Surfaced one genuine unrelated
+      compile-warning-as-error bug (test/support/tenant_template.ex dead code from
+      ISS-0842), filed and registered as ISS-0853 (queue_ref/github_ref set). `mix
+      letflow.check` failures all trace to already-open issues (ISS-0852, ISS-0827 x2,
+      ISS-0834, ISS-0832), satisfying AC4 as worded. Branch
+      docs/ISS0846-module-guide-20260926 (e166f189, a53ba621) confirmed clean on
+      origin/main (merge-base e1f90a35, zero drift) before PR/merge.

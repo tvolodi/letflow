@@ -4610,8 +4610,14 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 4
+    entries: 5
     note: >
+      Incremented to 5 by DOC-UPDATER's ISS-0853 closing SCOPE-CHANGE append
+      (2026-09-26T18:22:30Z) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 5 on-disk entries. 145
+      lines / 8273 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+
       Opened by ORCH's own roll of volume 22 (closed at 38 entries / 1259
       frozen-prefix lines, over its 1200-line ceiling) as part of the
       ISS-0848 queue/yaml reconciliation append. First entry is the roll

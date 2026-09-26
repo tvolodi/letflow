@@ -1,0 +1,217 @@
+run_id: WF03-ISS0853-20260926
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+issue_ids:
+  - ISS-0853
+branch: fix/ISS0853-tenant-template-warning-20260926
+head_sha_verified: >
+  6344c891 -- confirmed via `git log -1` and `git status` (clean) in the
+  assigned worktree. Commit message: "fix(ISS-0853): delete unused
+  template_built_in_db?/0, preserve rationale" -- deletes an unused private
+  function left over from ISS-0842's own fix (which replaced its call site
+  with template_db_state/0 but kept the old definition "in context" for its
+  attached §0.7/INV-8 rationale comment), which is a fatal
+  `mix compile --warnings-as-errors` warning (unused function). Moved the
+  rationale comment onto template_db_state/0. PASSed REVIEWER cleanly per
+  dispatch.
+generated_at: "2026-09-26T17:52:00Z"
+change_scope:
+  note: >
+    Single-file change: test/support/tenant_template.ex (deletes
+    template_built_in_db?/0, relocates its §0.7/INV-8 rationale comment onto
+    template_db_state/0). No lib/, migration, or other test/support/ file
+    touched.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-iss0853
+  host_health_check: >
+    `free -h`: 15Gi total, 6.9Gi used, 2.3Gi free, 6.9Gi buff/cache, 8.4Gi
+    available -- healthy, no docker-worktree-leak signature. `docker ps`
+    required `sudo -n docker` (invoking user has no docker group membership;
+    passwordless sudo confirmed working). `sudo -n docker ps -a` showed only
+    long-lived, legitimately-named stacks (letflow-postgres-1 [port 5462,
+    healthy -- this worktree's shared container], letflow-1-postgres-1 [port
+    5463, healthy], letflow-queue-test, letflow-dev, letflow-1-keycloak-1,
+    plus unrelated other-project containers) -- zero orphaned `wt-*`-prefixed
+    containers.
+  shared_container_confirmation: >
+    This worktree has no untracked `.env`, so LETFLOW_DB_PORT defaults to
+    5462 (docker-compose.yml's own default), the SAME port the primary
+    checkout's already-running `letflow-postgres-1` container is bound to.
+    Ran `docker compose up -d` here as instructed and it failed exactly as
+    expected: "Bind for 127.0.0.1:5462 failed: port is already allocated" --
+    confirming this worktree shares the primary checkout's Postgres rather
+    than needing its own. Cleaned up the transiently-created
+    wt-iss0853-postgres-1/wt-iss0853-keycloak-1 containers via
+    `docker compose down` (never touched the pre-existing shared
+    letflow-postgres-1). Proceeded against the shared container, which was
+    already healthy.
+  build_isolation: >
+    `_build` in this worktree is a real (non-symlinked) directory, confirmed
+    via `file _build/test` + `readlink -f`. Deleted `_build/test/lib/letflow`
+    before every compile-focused run in this report (both the full
+    `mix letflow.check` run and a second, standalone
+    `mix compile --warnings-as-errors` re-run) per this session's own
+    established anti-pattern about symlinked/stale-build false passes.
+  toolchain: "Elixir 1.20.3 / OTP 29 / Rust rustc 1.97.1, matches .tool-versions (confirmed by letflow.check_toolchain: OK)"
+  test_parallel_n: "8 (source: nproc, default -- no override needed)"
+command: "mix letflow.check (run as a blocking foreground call; auto-backgrounded by the harness past its 120s default timeout, then waited on with a blocking `while kill -0 <pid>; do sleep 5; done` loop -- never Monitor, never assumed-notification)"
+full_output_capture: >
+  /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/tasks/bhizsyrxh.output
+  (460535 lines, full mix letflow.check run). Real exit code recovered from
+  the script's own `echo "EXIT_CODE=$?"` line inside that file (=1) -- NOT
+  from the harness's background-task notification, which reported the
+  wrapper shell's own exit (0, since `echo` always succeeds) and would have
+  been misleading taken alone.
+compile_gate_result:
+  status: CLEAN -- this is the actual point of ISS-0853's fix
+  evidence_in_full_run: >
+    Output line 1: "Compiling 308 files (.ex)" / "Generated letflow app" --
+    the implicit compile Mix performs on project load, zero warnings. The
+    alias's own explicit "compile --warnings-as-errors" step (position 189
+    of 194 in the `letflow.check` alias, mix.exs) then printed NOTHING
+    (no recompilation needed -- nothing changed since the implicit compile
+    above), and `letflow.check_boundaries: OK` (the very next alias step)
+    ran successfully immediately after it, confirming the alias proceeded
+    past that step without failing.
+  independent_isolated_reverification: >
+    Not satisfied with the "no recompile = no output" inference alone: ran
+    `rm -rf _build/test/lib/letflow && MIX_ENV=test mix compile
+    --warnings-as-errors` standalone, forcing a genuine full recompile of
+    all 308 .ex files under the exact flag this issue exists to satisfy.
+    Output: "Compiling 308 files (.ex)" / "Generated letflow app", exit 0,
+    zero warnings printed. This is the direct, first-time-this-session
+    confirmation that the compile-warnings-as-errors gate itself -- the
+    thing blocking mix letflow.check's very first hard gate on every prior
+    PR this session before ISS-0853 was found/fixed -- is now clean.
+letflow_check_preceding_gates_all_ok:
+  - "letflow.check_toolchain: OK -- Elixir 1.20.3 / OTP 29 / Rust rustc 1.97.1 matches .tool-versions."
+  - "letflow.check_requirements_registration: 383 entries = 381 registered + 2 deferred + 0 neither + 0 unclassified (deferred list reported, never gates)."
+  - "letflow.check_req_id_collision: OK -- no REQ-NNN id collision with origin/main."
+  - "letflow.check_deferral_staleness: stage activity reported (S0-S11 all ACTIVE), never gates."
+  - "letflow.lint_handoffs: OK -- 0 new violations across 3020 handoff files (25 pre-existing grandfathered, traced to ISS-0190)."
+  - "letflow.check_async_sandbox_reachability: OK -- 94 async:true test file(s) scanned, 0 violations."
+  - "letflow.check_issue_refs: OK -- 476 file(s) under docs/issues/, every cross-reference well-formed."
+  - "letflow.check_uat_scenario_schema: OK -- 32 file(s) checked, 0 violations."
+  - "compile --warnings-as-errors: CLEAN (see compile_gate_result above)."
+  - "letflow.check_boundaries: OK -- 846 edges checked, 0 violations."
+gate_that_failed: "letflow.check.test -- scripts/test_parallel.sh exited 1 (real test failure/error)"
+full_suite_result:
+  command: "scripts/test_parallel.sh (invoked internally by the letflow.check alias; N=8, source nproc)"
+  combined_totals:
+    tests: 4982
+    properties: 6
+    failures: 5
+    passed: 4983
+    passed_over_total: "4983/4988"
+  per_partition:
+    - {partition: 1, tests: 724, properties: 0, failures: 1, exit: 2}
+    - {partition: 2, tests: 734, properties: 0, failures: 0, exit: 0}
+    - {partition: 3, tests: 569, properties: 1, failures: 0, exit: 0}
+    - {partition: 4, tests: 498, properties: 0, failures: 0, exit: 0}
+    - {partition: 5, tests: 661, properties: 0, failures: 1, exit: 2}
+    - {partition: 6, tests: 596, properties: 3, failures: 3, exit: 2}
+    - {partition: 7, tests: 654, properties: 2, failures: 0, exit: 0}
+    - {partition: 8, tests: 546, properties: 0, failures: 0, exit: 0}
+failure_classification:
+  - test: "A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume"
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    partition: 1
+    classification: KNOWN_ISS_0852
+    detail: >
+      Exactly 9 unparseable ISO-8601 timestamps in
+      docs/status/requirement_status.v22.yaml (entry_lines 858, 1111, 1127,
+      1144, 1158, 1173, 1190, 1205, 1219) -- matches ISS-0852's title and
+      affected_files verbatim. `git diff origin/main -- docs/status/` for
+      this branch is empty (ISS-0853 only touches test/support/tenant_template.ex).
+  - test: "system invocation (AC2) exits 0 on the current branch tree (AC2)"
+    module: Mix.Tasks.Letflow.CheckBoundariesTaskTest
+    partition: 5
+    classification: KNOWN_ISS_0832
+    detail: >
+      Subprocess inherits MIX_TEST_PARTITION=5 from test_parallel.sh's
+      environment with MIX_ENV defaulting to "dev"; the runtime config guard
+      rejects that combination ("MIX_TEST_PARTITION is set, but MIX_ENV is
+      dev"), so the child exits 1 instead of 0. Exact same failure text
+      documented in ISS-0832 (CheckBoundariesTaskTest AC2 shells out without
+      pinning MIX_ENV). ISS-0853 does not touch this test file or
+      letflow.check_boundaries.
+  - test: "ISS-0819 -- run/1 single-file mode, isolated tmp fixture T-FILE-VIOLATIONS-LINTED-DIRECTLY -- a single-file target with real hard violations is linted, not silently filtered to an empty scope"
+    module: Mix.Tasks.Letflow.LintHandoffsTest
+    partition: 6
+    classification: KNOWN_ISS_0834
+    detail: >
+      handoffs/registry.json fails Jason.decode! with a leading UTF-8 BOM
+      (﻿), matching ISS-0834's title and root cause exactly. ISS-0853
+      does not touch lint_handoffs.ex or handoffs/.
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- the deferred table holds exactly 9 rows, no more"
+    module: Letflow.RouterTest
+    partition: 6
+    classification: KNOWN_ISS_0827
+    detail: >
+      Found 5 rows, not 9, missing Letflow.Routers.Services among others --
+      matches ISS-0827's exact root cause (commit 65312cd9 removed 4 rows
+      from router.ex's deferred-routes table without updating this test's
+      hardcoded count). ISS-0853 does not touch router.ex.
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- all 9 deferred sub-router module names are listed"
+    module: Letflow.RouterTest
+    partition: 6
+    classification: KNOWN_ISS_0827
+    detail: "Same root cause as the row-count failure above (missing Letflow.Routers.Services)."
+classification_summary:
+  known_iss_0827: 2
+  known_iss_0832: 1
+  known_iss_0834: 1
+  known_iss_0852: 1
+  new_unclassified: 0
+  attributable_to_iss_0853: 0
+tenant_template_own_coverage:
+  command: "MIX_ENV=test mix test test/support/tenant_template_test.exs test/support/tenant_template_retry_test.exs"
+  result: "12 passed, 0 failures -- clean."
+overall_verdict: >
+  PASS for ISS-0853 specifically. The compile-warnings-as-errors gate --
+  the actual deliverable of this fix, and the first hard gate in
+  mix letflow.check that had blocked every PR this session before this fix
+  landed -- is now clean, confirmed twice: once observed passing silently
+  inside the full mix letflow.check run, and once independently re-verified
+  by deleting _build/test/lib/letflow and forcing a genuine from-scratch
+  `mix compile --warnings-as-errors` recompile of all 308 files, which
+  produced zero warnings. Every gate preceding letflow.check.test in the
+  alias (toolchain, requirements-registration, req-id-collision,
+  deferral-staleness, lint_handoffs, async-sandbox-reachability,
+  check_issue_refs, check_uat_scenario_schema, compile
+  --warnings-as-errors, check_boundaries) reported OK. The alias's final
+  gate, letflow.check.test, failed (raw exit 1) because
+  scripts/test_parallel.sh found 5 real ExUnit failures out of 4988
+  combined properties+tests (4983 passed) -- but all 5 map exactly, by
+  file/line/error-text, to 4 already-filed, already-classified issues
+  (ISS-0827 x2, ISS-0832, ISS-0834, ISS-0852), none of which touch
+  test/support/tenant_template.ex or any file in ISS-0853's diff. Zero new
+  or unclassified failures. tenant_template.ex's own direct test coverage
+  (test/support/tenant_template_test.exs + tenant_template_retry_test.exs)
+  passed clean, 12/12.
+notes:
+  - >
+    mix letflow.check auto-backgrounded past the Bash tool's 120s default
+    timeout; per core-directives' "No Background Wait For A Cross-Turn
+    Notification," did not rely on the eventual task-notification as a
+    resume signal -- instead issued a second, purely local blocking Bash
+    call (`while kill -0 <pid>; do sleep 5; done`) that polls the SAME
+    already-running process without launching a duplicate, and only read
+    results from the captured output file once that blocking wait itself
+    returned.
+  - >
+    The background-task notification's own reported "exit code 0" was
+    misleading (it reflects the wrapper shell's trailing `echo` call, which
+    always succeeds) -- the real `mix letflow.check` exit code (1) was
+    recovered from the script's own `echo "EXIT_CODE=$?"` output line
+    inside the captured file, not trusted from the notification summary.
+    Recording this here since it is a reusable gotcha for any future
+    dispatch on this host.
+next_action: >
+  ISS-0853's fix is confirmed clean at the exact gate it targets (compile
+  --warnings-as-errors) and introduces no new test failures. Route to
+  RELEASE-VALIDATOR for independent re-verification. The 5 remaining
+  mix letflow.check.test failures are all pre-existing and already tracked
+  (ISS-0827, ISS-0832, ISS-0834, ISS-0852) -- no new issue filing needed
+  from this run.

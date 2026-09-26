@@ -3503,3 +3503,75 @@ scratch state, not anything to preserve). `free -h`'s `available` column is the
 cheapest single signal that this has happened again: if it's near zero on a host
 that should have headroom, check for orphaned worktree stacks before assuming the
 suite itself is flaky.
+
+## An issue's `queue_ref:` derived from its filename instead of taken from `register_task`'s response (2026-09-26, ORCH, ISS-0848)
+
+`docs/issues/ISS-0832.yaml` through `ISS-0836.yaml` (and, discovered later in the
+same audit, `ISS-0824`/`ISS-0825`/`ISS-0827`/`ISS-0831`) all carried a `queue_ref:`
+computed by taking the issue's own filename number and prefixing it with `Q-` (e.g.
+`ISS-0832.yaml` → `queue_ref: "Q-832"`), on the assumption that the local filename
+number and the queue's own task id are the same integer. `docs/agents/protocols/
+TASK_QUEUE.md`'s own "Numbering schema" section forbids exactly this: **the queue's
+`id` is the only legal source for `queue_ref`, returned by `register_task`'s
+response** — a filename-derived guess is indistinguishable from a real allocation
+until someone actually checks, and in every one of these cases it was wrong: no
+queue task with that id existed at all (`ISS-0824`/`0825`/`0827`/`0831` were never
+registered), or the local filename number collided with a completely different,
+already-in-use queue task id (the well-documented queue-id/filename divergence
+pattern this project hits repeatedly — see the entry on the ISSUE_QUEUE.md
+recurring-collision class elsewhere in this file).
+
+**Fix going forward:**
+
+*Preventive:* an issue's `queue_ref:` is written ONCE, at the moment `register_task`
+returns, copied verbatim from that response's `id` field (`Q-<id>`) — never computed,
+guessed, or assumed equal to the filename's own number. If an issue is filed before
+`register_task` is called (a same-session incidental finding written to disk first,
+registered later), leave `queue_ref: null` until the real registration happens, the
+same discipline `docs/requirements.yaml`'s `impl_order: UNREGISTERED` marker already
+enforces for requirements — never fill the field with a placeholder that reads as a
+real allocation.
+
+*Detective:* a reconciliation check (see this file's entry on `get_next_task` handing
+out already-finished work, immediately below) that walks every `docs/issues/*.yaml`
+with a non-null `queue_ref:` and confirms a task with that exact id actually exists on
+the live queue catches this class directly — a `queue_ref` pointing at a nonexistent
+task is exactly as loud a signal as a queue task whose status disagrees with its
+yaml mirror, and the same check should assert both.
+
+## `docs/requirements.yaml` flipped a requirement to `done` without releasing its matching `letflow-queue` task, so the queue silently drifted out of sync with the yaml it's supposed to mirror (2026-09-26, ORCH, ISS-0848)
+
+A live audit of the queue (`GET /tasks`) against `docs/requirements.yaml` on
+2026-09-26 found 14 requirements/issues whose queue task was still `open` (or, in two
+cases, still `blocked`/locked by a dead session) while their yaml `status:` already
+read `done` — REQ-122, REQ-123, REQ-373, REQ-405, REQ-407 through REQ-416, and
+ISS-0816. In every case the underlying work had genuinely finished and the yaml flip
+was correct; only the queue-side `release_lock(status: "done")` call that should have
+happened in the same run never did, most likely because a run's Step Final flipped
+the yaml and pushed the merge but stopped before (or without) calling back into the
+queue API — a step that has no compiler or test to catch its omission, since nothing
+in the merged diff depends on it.
+
+Left alone, this is not cosmetic: an `open` task whose real work is already done sits
+claimable forever, and per `get_next_task`'s documented two-tier priority (issue-type
+tasks jump the requirement backlog LIFO), a stale-open `task_type: "issue"` row can
+keep winning every future claim ahead of genuinely pending work, exactly the
+re-selection-loop failure mode `TASK_QUEUE.md` already documents for a mis-released
+`status: "blocked"` outcome — this is the same failure shape from the opposite
+direction (never released at all, rather than released with the wrong status).
+
+**Fix going forward:**
+
+*Preventive:* DOC-UPDATER's Step 6 (flip `docs/requirements.yaml`'s `status:` to
+`done`) and the queue's own `release_lock(status: "done")` call are two halves of one
+atomic-in-spirit action, not two independent steps that can silently drift apart —
+treat a Step Final that flips the yaml but errors/stops before the queue release as
+incomplete, not as "the merge succeeded, ship it," and retry the release rather than
+moving on.
+
+*Detective:* the same reconciliation check this file's adjacent entry calls for
+(walk `docs/requirements.yaml` and `docs/issues/*.yaml`, compare each `status:` against
+the live queue's status for its `impl_order`/`queue_ref` task, fail on any mismatch)
+catches this directly and should run automatically — either as a `mix letflow.check`
+step (when `$QUEUE_AUTH_TOKEN` is available) or as a step ORCH runs at session start,
+per ISS-0848's own resolution.

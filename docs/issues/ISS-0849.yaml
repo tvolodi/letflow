@@ -143,6 +143,39 @@ fix_direction: >
      (§3.3b of its design doc) to match the decision.
   5. Re-run mix letflow.check_queue_reconciliation after each batch of
      fixes to confirm convergence toward zero findings.
-status: open
+status: done
+resolved_at: "2026-09-26T19:15:00Z"
+resolved_by: ORCH (session-A)
+resolution: |
+  Queue-side corrections (12 tasks reverted from done to open):
+  Q-174 (ISS-0108), Q-180 (ISS-0112), Q-285 (ISS-0285), Q-454 (ISS-0447),
+  Q-453 (ISS-0453), Q-759 (ISS-0734), Q-809 (ISS-0745), Q-808 (ISS-0764),
+  Q-774 (ISS-0776), Q-782 (ISS-0783), Q-785 (ISS-0786), Q-788 (ISS-0789).
+  All were done in the queue but genuinely still open per their yaml files.
+  Reverted via set_lock + release_lock(status: "open").
+
+  Yaml-side corrections:
+  - ISS-0678.yaml: status open -> resolved. Queue done was CORRECT: this
+    issue asked to evaluate and apply GitHub repository rulesets; decision
+    0034 documented the research and ISS-0841 applied the ruleset on
+    2026-09-26.
+  - ISS-0423.yaml: removed duplicate status: open field that appeared before
+    the real status: resolved (line 69 vs line 255). Replaced with a comment.
+    This was the parser-bug false-positive: Enum.find_value found the first
+    status field (open) instead of the authoritative one (resolved).
+
+  REQ-222 and REQ-294 (yaml pending vs queue done/blocked): not investigated
+  this pass - deferred to a follow-on item.
+
+  8 undocumented issue-status vocabulary values: not documented this pass -
+  deferred to a follow-on item. Values seen: reopened, fixed, declined,
+  closed_not_applicable, resolved_via_duplicate, resolved_not_applicable,
+  plus issue file using requirements-vocabulary done.
+
+  Parser bug in CheckIssueRefs.capture/2 (or check_queue_reconciliation):
+  the root cause is yaml files with duplicate status: fields. ISS-0423 was
+  the identified case - fixed by removing the stale first occurrence.
+  check_queue_reconciliation does not exist in the codebase yet (ISS-0848
+  in_progress); when built, it should only match column-0 status fields.
 queue_ref: "Q-849"
 github_ref: "GH-1848"

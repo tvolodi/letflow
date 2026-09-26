@@ -29,4 +29,14 @@ affected_files:
   - docs/migration/decisions/0018-branch-protection-posture.md
 queue_ref: Q-678
 github_ref: GH-1418
-status: open
+status: resolved
+resolved_at: "2026-09-26T17:45:00Z"
+resolved_by: ORCH (ISS-0841)
+resolution: >
+  Decision 0034 was researched and documented in this run. The ruleset
+  configuration was subsequently applied to tvolodi/letflow by ISS-0841
+  (2026-09-26): GitHub repository ruleset id 24040748 "main-protection",
+  with bypass_mode "pull_request" on actor tvolodi. Bare pushes to main are
+  now rejected with GH013. GIT_MERGE.md updated with mechanical enforcement
+  notice. See docs/migration/decisions/0034-ruleset-bypass-mode-direct-push-closure.md
+  Applied addendum for full verification outputs.

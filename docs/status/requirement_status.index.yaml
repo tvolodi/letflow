@@ -4610,7 +4610,7 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 3
+    entries: 4
     note: >
       Opened by ORCH's own roll of volume 22 (closed at 38 entries / 1259
       frozen-prefix lines, over its 1200-line ceiling) as part of the

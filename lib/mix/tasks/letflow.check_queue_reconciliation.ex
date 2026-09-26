@@ -217,12 +217,20 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliation do
     end
   end
 
+  # NOTE (ISS-0848 fix, REVIEWER finding): must NOT trim leading whitespace
+  # before matching `re` -- every `*_line_re` is anchored with `^` precisely
+  # so an indented line (e.g. inside a folded `description: >`/`resolution: >`
+  # block) can never match a top-level field. Trimming leading whitespace
+  # first defeats that anchor and lets prose-that-happens-to-start-with-a-
+  # field-name-after-trimming shadow the real field later in the file. Only
+  # trailing whitespace (and a trailing inline `# comment`) is stripped here;
+  # mirrors `Mix.Tasks.Letflow.CheckIssueRefs.capture/2`'s same fix.
   @spec capture(String.t(), Regex.t()) :: String.t() | nil
   defp capture(line, re) do
-    line = line |> String.split("#", parts: 2) |> hd() |> String.trim()
+    line = line |> String.split("#", parts: 2) |> hd() |> String.trim_trailing()
 
     case Regex.run(re, line) do
-      [_, val] -> String.trim(val, "\"")
+      [_, val] -> val |> String.trim() |> String.trim("\"")
       nil -> nil
     end
   end
@@ -414,9 +422,7 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliation do
 
     case decoded do
       %{"tasks" => tasks} when is_list(tasks) ->
-        Enum.map(tasks, fn t ->
-          %{id: Map.fetch!(t, "id"), status: Map.fetch!(t, "status"), title: Map.get(t, "title")}
-        end)
+        Enum.map(tasks, &decode_task/1)
 
       _ ->
         Mix.raise(
@@ -424,6 +430,30 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliation do
             "`\"tasks\"` list key: #{String.slice(body, 0, 500)}"
         )
     end
+  end
+
+  # A task object missing `"id"` or `"status"` is the same class of problem as
+  # the list missing `"tasks"` entirely -- an unexpected response shape -- so
+  # it gets the same `Mix.raise` treatment instead of a raw `KeyError`.
+  @spec decode_task(map()) :: queue_task()
+  defp decode_task(t) when is_map(t) do
+    case {Map.fetch(t, "id"), Map.fetch(t, "status")} do
+      {{:ok, id}, {:ok, status}} ->
+        %{id: id, status: status, title: Map.get(t, "title")}
+
+      _ ->
+        Mix.raise(
+          "mix letflow.check_queue_reconciliation: GET /tasks response contains a " <>
+            "task object missing `\"id\"` or `\"status\"`: #{inspect(t)}"
+        )
+    end
+  end
+
+  defp decode_task(t) do
+    Mix.raise(
+      "mix letflow.check_queue_reconciliation: GET /tasks response contains a " <>
+        "non-object task entry: #{inspect(t)}"
+    )
   end
 
   # -- rendering -------------------------------------------------------------

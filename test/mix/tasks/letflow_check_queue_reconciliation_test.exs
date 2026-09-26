@@ -310,6 +310,32 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliationTest do
       assert CheckQueueReconciliation.parse_issue_file(content, "docs/issues/ISS-0105.yaml") ==
                :unregistered
     end
+
+    # ISS-0848 REVIEWER finding: the fixture above never actually exercises the
+    # bug class it names, because "queue_ref: Q-999" sits mid-sentence, not at
+    # the START of the trimmed line. The real corpus bug (ISS-0033, ISS-0064,
+    # ISS-0631) is a field-looking token at the START of an indented folded-
+    # block line -- e.g. a `status:`-shaped line -- which, if leading
+    # whitespace were stripped before the anchored regex ran, would be
+    # misread as the real top-level `status:` field. This fixture reproduces
+    # that shape: the indented look-alike appears BEFORE the real field, and
+    # the real field (declared later in the file) must still win.
+    test "a field-looking token at the start of an indented folded-block line is prose, not a field" do
+      content = """
+      id: ISS-0106
+      description: >
+        Earlier investigation notes said status: resolved prematurely, before
+        the regression was confirmed and the fix reverted.
+      resolution: >
+        status: this looks like a real field because it starts the trimmed
+        line, but it is still indented prose inside a folded block.
+      status: in_progress
+      queue_ref: Q-1
+      """
+
+      assert %{yaml_status: "in_progress"} =
+               CheckQueueReconciliation.parse_issue_file(content, "docs/issues/ISS-0106.yaml")
+    end
   end
 
   describe "resolve_queue_auth_token/0" do

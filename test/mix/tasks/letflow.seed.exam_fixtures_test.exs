@@ -74,6 +74,8 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixturesTest do
 
   import Ecto.Query
 
+  alias Letflow.Definitions.SolutionPackArtefactBase
+  alias Letflow.Definitions.SolutionPackInstall
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EventTypes
   alias Letflow.Entities.Record.Latest
@@ -126,6 +128,15 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixturesTest do
           {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
           {:error, :invalid_tenant_id} -> :ok
         end
+
+        # ISS-0839: REQ-410/REQ-411 changed the exam seed to call
+        # Installs.install("exam", ...) which writes GLOBAL tables:
+        # solution_pack_installs (FK -> tenants) and solution_pack_artefact_bases
+        # (FK -> tenants, written by SolutionPack.install/3 step 6b). Delete these
+        # before deleting the tenants row or the FK raises. Same pattern as
+        # solution_pack_test.exs's cleanup_solution_pack_installs!/1.
+        Repo.delete_all(from(s in SolutionPackInstall, where: s.tenant_id == ^tenant_id))
+        Repo.delete_all(from(b in SolutionPackArtefactBase, where: b.tenant_id == ^tenant_id))
 
         # `category`/`question`/`exam_question_rule`/`session_question` (etc)
         # each declare a `constraints` entry, so activating them

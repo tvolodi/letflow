@@ -28,6 +28,8 @@ implement the requirement you were handed, gated the same way backend work is.
 - `docs/agents/instructions/core-directives.md`
 - `docs/agents/workflows/WF-02_requirement_implementation.md` Step 2b
 - `docs/guides/frontend_developer_guide.md` — your working guide; read it in full
+- `docs/guides/adding-an-application-module.md` if your unit is (or touches) an
+  application module under `web/src/modules/<id>/` — the module contract end to end
 - `web/README.md` — layout, scripts, verified state, and the known drift from R-Co
 - `docs/migration/stage-8-frontend-cutover.md`
 - `lib/letflow/design/<module>.md` if a design artefact exists for this unit

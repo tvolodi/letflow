@@ -34,6 +34,8 @@ Before changing code, read:
 - `lib/letflow/design/<module>.md` if a design artefact exists for this unit — build
   from it, don't invent a different shape.
 - `docs/guides/backend_developer_guide.md` — Elixir/Ecto/OTP conventions for this project.
+- `docs/guides/adding-an-application-module.md` if your unit is (or touches) an
+  application module under `lib/letflow/modules/<id>/` — the module contract end to end.
 - `docs/agents/instructions/security-invariants.md` — INV-4, INV-7, INV-8 apply to your
   code today; the others become relevant once their stage lands.
 - `docs/anti-patterns.md` — known mistakes, if any are logged yet.

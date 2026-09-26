@@ -18,6 +18,15 @@ tenant, make a **solution** a manifest of modules, and move BilimBaga's exam
 domain out of the platform into the first module, `exam`. No new business
 module (HR, WMS, ERP, project management, …) is built in this stage (0039 D8).
 
+For the end-to-end module contract this stage produced — layout, the
+`Letflow.Modules.Module` behaviour, permissions/role_grants/route_policies,
+router mounting and the 404 gate, pack location and `on_install/2`,
+registration, `tenant_modules` backfills, settings, solution manifests, the
+frontend registry, and the boundary checks — see
+[`../guides/adding-an-application-module.md`](../guides/adding-an-application-module.md),
+the guide a future module's implementer should build from rather than
+reverse-engineering `exam`.
+
 ## Phases
 
 | Phase | Goal | Done when |

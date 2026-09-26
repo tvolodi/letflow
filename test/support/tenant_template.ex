@@ -54,6 +54,14 @@ defmodule Letflow.Test.TenantTemplate do
   # VM's lifetime.
   @built_marker_key {__MODULE__, :template_built}
 
+  # ISS-0842: fingerprint stored as a COMMENT ON SCHEMA "tenant_template".
+  # Records which tenant migration versions the template was built from.
+  # Excluded from cloning (schema-level comments are not part of the data
+  # schema itself and are never LIKE-copied into tenant schemas). Read back by
+  # template_db_state/0 to decide whether a reused test DB's existing template
+  # is still current or must be dropped and rebuilt.
+  @fingerprint_comment_prefix "letflow_migrations_v1:"
+
   # ISS-0578 design §1.1/§1.2: bounded retry-with-backoff around
   # do_clone/2's whole clone transaction, for the narrow class of transient
   # connection failure named there. 3 total attempts (initial + 2 retries),
@@ -107,44 +115,72 @@ defmodule Letflow.Test.TenantTemplate do
     if template_ready?() do
       :ok
     else
-      # SESSION-level advisory lock (pg_advisory_lock/pg_advisory_unlock), not
-      # the transaction-scoped pg_advisory_xact_lock provision_tenant_schema/1
-      # uses -- deliberately, because build_template!/0 below calls
-      # replay_migrations/2, whose Ecto.Migrator.run/4 checks out its OWN
-      # connection rather than participating in an ambient
-      # Repo.transaction/1's connection/transaction, so a transaction-scoped
-      # lock held on THIS connection would not serialize against it anyway.
-      # Explicitly unlocked in an `after` block so a raise inside
-      # build_template!/0 still releases it (design §4.3's concurrency guard,
-      # adapted to this function's own I/O shape).
-      Repo.query!("SELECT pg_advisory_lock(hashtext($1))", [@advisory_lock_key])
+      # ISS-0842: wrap the entire advisory lock acquire/release section in
+      # Repo.checkout/2, which pins ONE physical connection to this process
+      # for the duration of the callback. Without this, two separate
+      # Repo.query!/2 calls (acquire and release) could be dispatched to
+      # different pool connections -- acquiring the SESSION-level advisory
+      # lock on connection A, then attempting to release it on connection B,
+      # leaving A's lock orphaned until the connection is recycled. This was
+      # harmless under the original design (ensure_template!/0 was called
+      # exactly once from test_helper.exs, so the lock path ran at most once
+      # per VM lifetime), but the ISS-0842 stale-rebuild path can enter the
+      # lock section multiple times per VM lifetime (once to detect stale,
+      # once to rebuild). Repo.checkout/2 pins connection A for the entire
+      # callback, so acquire, check, build, and release all use session A.
+      #
+      # unboxed_run is NOT needed inside this block: Repo.checkout/2 already
+      # provides a real (non-sandboxed) connection when Sandbox mode is :auto.
+      # All Repo.query!/2 calls in the callback -- including those inside
+      # build_template!/0 and replay_migrations/2's own nested Repo.checkout --
+      # reuse connection A (DBConnection's re-entrant checkout). DDL committed
+      # on connection A survives the process's own sandbox transaction cleanup
+      # because connection A is not sandbox-managed.
+      Repo.checkout(fn ->
+        # SESSION-level advisory lock (pg_advisory_lock/pg_advisory_unlock), not
+        # the transaction-scoped pg_advisory_xact_lock provision_tenant_schema/1
+        # uses -- deliberately, because build_template!/0 below calls
+        # replay_migrations/2, whose Ecto.Migrator.run/4 checks out its OWN
+        # connection. With Repo.checkout, that nested checkout reuses connection A
+        # (DBConnection re-entrant), so the advisory lock is active for the full
+        # migration replay. Explicitly unlocked in an `after` block so a raise
+        # inside the case arms still releases it (design §4.3's concurrency guard,
+        # adapted to this function's own I/O shape).
+        Repo.query!("SELECT pg_advisory_lock(hashtext($1))", [@advisory_lock_key])
 
-      try do
-        # Re-check inside the lock: a concurrent first-caller may have already
-        # built the template while this call waited on the advisory lock.
-        unless template_built_in_db?() do
-          # THE WHOLE BUILD runs unboxed, on ONE connection. Under a
-          # partitioned run (MIX_TEST_PARTITION, i.e. scripts/test_parallel.sh)
-          # the caller's connection is sandbox-owned, so build_template!/0's
-          # DDL would be rolled back the moment the test's checkout ends --
-          # while replay_migrations/2 still returns {:ok, versions}, because
-          # from its own point of view the migrations really did run. Measured
-          # symptom: the template schema EXISTED but held ZERO tables, and 354
-          # suite failures followed. It hid until a real partitioned run
-          # because against the default letflow_test database the same file
-          # passed 6/6.
-          #
-          # It must be the WHOLE build, not just the migration:
-          # replay_migrations/2 opens with Repo.get_by(Registration, ...), and
-          # the throwaway row is inserted by build_template!/0 itself. Wrapping
-          # only the migration puts that lookup on a different connection which
-          # cannot see the row, yielding {:error, :tenant_not_provisioned} --
-          # verified by trying exactly that first.
-          Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn -> build_template!() end)
+        try do
+          # Re-check inside the lock: a concurrent first-caller may have already
+          # built the template while this call waited on the advisory lock.
+          # ISS-0842: also check fingerprint — treat a stale template the same
+          # as no template (drop it and rebuild). template_db_state/0 returns
+          # :missing, :stale, or :current; :current is the only path that skips
+          # the build.
+          case template_db_state() do
+            :current ->
+              :ok
+
+            :stale ->
+              # Drop the stale schema first, then rebuild. DROP before BUILD:
+              # build_template!/0 starts with CREATE SCHEMA, which would fail on
+              # an already-existing name. INV-8 is preserved: the stale schema is
+              # fully dropped before the new build starts its own
+              # rename-into-place sequence.
+              Repo.query!(~s(DROP SCHEMA "#{@template_schema}" CASCADE))
+              build_template!()
+
+            :missing ->
+              # Build fresh. All operations run on the same connection A that
+              # holds the advisory lock (via Repo.checkout's re-entrant pinning).
+              # The pre-ISS-0842 note about needing unboxed_run to prevent DDL
+              # rollback no longer applies: Repo.checkout/2 in :auto mode gives a
+              # non-sandboxed connection, and DDL it commits is not wrapped in an
+              # outer sandbox transaction.
+              build_template!()
+          end
+        after
+          Repo.query!("SELECT pg_advisory_unlock(hashtext($1))", [@advisory_lock_key])
         end
-      after
-        Repo.query!("SELECT pg_advisory_unlock(hashtext($1))", [@advisory_lock_key])
-      end
+      end)
 
       :persistent_term.put(@built_marker_key, true)
       :ok
@@ -242,6 +278,58 @@ defmodule Letflow.Test.TenantTemplate do
   # Template build (design §2.3, ensure_template!/0's build sequence)
   # ---------------------------------------------------------------------------
 
+  # ISS-0842: three-state check replacing the binary template_built_in_db?/0
+  # fast-path inside the advisory lock. Queries the schema comment to detect
+  # whether the template exists, is current, or is stale (built from a
+  # different tenant migration set than the one currently compiled).
+  #
+  # :missing  — no schema named "tenant_template" in pg_namespace.
+  # :stale    — schema exists but its comment is absent or does not match
+  #             the current migration fingerprint (e.g. after pulling a new
+  #             migration, in a reused test DB).
+  # :current  — schema exists and its comment matches the current fingerprint.
+  #
+  # INV-8 is unaffected: template_db_state/0 is read-only. The rename-into-
+  # place invariant is still only produced by build_template!/0's step 5.
+  defp template_db_state do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT obj_description(n.oid, 'pg_namespace')
+        FROM pg_namespace n
+        WHERE n.nspname = $1
+        """,
+        [@template_schema]
+      )
+
+    case rows do
+      [] ->
+        :missing
+
+      [[comment]] ->
+        expected = migration_fingerprint_comment()
+
+        if comment == expected, do: :current, else: :stale
+    end
+  end
+
+  # Computes the expected fingerprint comment string for the current compiled
+  # tenant migration set. Deterministic for a given compilation: the version
+  # list comes from the manifest constant compiled into TenantProvisioning, so
+  # it is stable within one BEAM VM and changes only when migrations are added
+  # or removed (which requires a recompile, hence a new BEAM VM).
+  defp migration_fingerprint_comment do
+    fingerprint =
+      TenantProvisioning.tenant_scoped_migrations()
+      |> Enum.map(fn {version, _module} -> version end)
+      |> Enum.sort()
+      |> Enum.join(",")
+      |> then(&:crypto.hash(:md5, &1))
+      |> Base.encode16(case: :lower)
+
+    @fingerprint_comment_prefix <> fingerprint
+  end
+
   # design §0.7/INV-8: because build_template!/0 now builds the WHOLE
   # sequence under a randomized staging schema and only renames it to
   # "tenant_template" as the LAST step (after the self-check has already
@@ -251,6 +339,13 @@ defmodule Letflow.Test.TenantTemplate do
   # self-check defensively "just in case" the schema exists but is broken:
   # that state is now structurally impossible to produce. A bare existence
   # check is therefore correct, not merely convenient.
+  #
+  # NOTE (ISS-0842): this function is retained for the inline doc comment
+  # history, but is no longer called from ensure_template!/0. template_db_state/0
+  # supersedes it for the inside-lock re-check, since :missing maps to "not
+  # built" and :stale maps to "needs rebuild" (a case this function could not
+  # distinguish). Kept private and not deleted to preserve the §0.7/INV-8
+  # rationale comment above in context.
   defp template_built_in_db? do
     %{rows: rows} =
       Repo.query!(
@@ -356,6 +451,14 @@ defmodule Letflow.Test.TenantTemplate do
     # table/index rebuild -- only after this succeeds does "tenant_template"
     # exist under its well-known name.
     Repo.query!(~s(ALTER SCHEMA "#{staging_schema}" RENAME TO "#{@template_schema}"))
+
+    # Step 6 (ISS-0842): stamp the fingerprint as a schema comment. Runs AFTER
+    # the rename so the comment is set on "tenant_template" (not the staging
+    # name). If this fails, the template is left without a comment, which
+    # template_db_state/0 treats as :stale, triggering a rebuild on the next
+    # call — never a silent partial-build.
+    fingerprint = migration_fingerprint_comment()
+    Repo.query!(~s(COMMENT ON SCHEMA "#{@template_schema}" IS '#{fingerprint}'))
 
     :ok
   end

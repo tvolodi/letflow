@@ -35,9 +35,7 @@ acceptance_criteria:
   - "every endpoint named is shown to exist by a quoted `git grep` against lib/"
   - "`git diff --name-only main` shows only files under docs/mobile/ (plus this issue's yaml/status files)"
 queue_ref: "Q-843"
-queue_task_id: 843
 github_ref: "GH-1841"
-github_issue_number: 1841
 status: done
 resolved_at: "2026-09-26T12:15:00Z"
 resolved_by: ORCH (session-A)

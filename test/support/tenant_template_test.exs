@@ -119,6 +119,60 @@ defmodule Letflow.Test.TenantTemplateTest do
     end
   end
 
+  describe "ISS-0842 — stale template detection and rebuild" do
+    # Regression tests for the fingerprint-based staleness check. The key
+    # failure mode this covers: a reused test DB (from a prior `mix test`
+    # run) holds a "tenant_template" schema built from an older migration set.
+    # After pulling a new migration (e.g. REQ-402's tenant_modules table),
+    # template_db_state/0 must detect the mismatch and rebuild — which
+    # build_template!/0's rename-into-place already does atomically, with the
+    # old schema dropped first in ensure_template!/0's :stale branch.
+
+    test "stale fingerprint comment triggers rebuild and clone succeeds" do
+      # Phase 1: ensure a current template exists, then corrupt its fingerprint
+      # to simulate a stale-DB scenario (wrong fingerprint = built from a
+      # different migration set than the currently-compiled one).
+      :ok = TenantTemplate.ensure_template!()
+
+      Repo.query!(
+        "COMMENT ON SCHEMA tenant_template IS 'letflow_migrations_v1:000000000000000000000000stale'"
+      )
+
+      # Phase 2: clear the per-VM persistent_term marker so ensure_template!/0
+      # re-enters the advisory-lock path on the next call. The key is the
+      # private module attribute value — {Letflow.Test.TenantTemplate, :template_built}.
+      :persistent_term.erase({Letflow.Test.TenantTemplate, :template_built})
+
+      # Phase 3: ensure_template!/0 must detect :stale, drop the old schema,
+      # and rebuild a fresh one with the correct fingerprint.
+      assert :ok = TenantTemplate.ensure_template!()
+
+      # Phase 4: the rebuilt template must be clonable and produce a valid schema.
+      tenant = insert_throwaway_tenant!()
+      on_exit(fn -> cleanup_tenant!(tenant) end)
+
+      assert {:ok, clone_schema} = TenantTemplate.clone_tenant_schema!(tenant.id)
+      assert :ok = TenantTemplate.assert_clone_parity!("tenant_template", clone_schema)
+    end
+
+    test "missing fingerprint comment (no COMMENT set) is treated as stale and triggers rebuild" do
+      # Simulates a template built by an older version of this code that did
+      # not set a comment. template_db_state/0 must treat nil/no-comment as
+      # :stale (the fingerprint never matches the current one), not :current.
+      :ok = TenantTemplate.ensure_template!()
+
+      Repo.query!("COMMENT ON SCHEMA tenant_template IS NULL")
+      :persistent_term.erase({Letflow.Test.TenantTemplate, :template_built})
+
+      assert :ok = TenantTemplate.ensure_template!()
+
+      tenant = insert_throwaway_tenant!()
+      on_exit(fn -> cleanup_tenant!(tenant) end)
+
+      assert {:ok, _clone_schema} = TenantTemplate.clone_tenant_schema!(tenant.id)
+    end
+  end
+
   describe "non-vacuity — a genuinely divergent clone must fail this same check" do
     # These three tests are this file's own proof that the assertion above
     # is not a tautology. Each independently reproduces one of the three

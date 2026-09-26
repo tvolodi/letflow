@@ -39,6 +39,26 @@ acceptance_criteria:
   - "with a deliberately stale template in the test DB, `mix test test/letflow/repository/attachment_links_test.exs` passes without ecto.drop; output quoted"
   - "existing tenant-template tests (test/support/tenant_template_retry_test.exs and any other test of this module) pass; output quoted"
   - "REVIEWER confirms in the handoff that INV-8 and the advisory-lock design are preserved"
-status: open
+status: done
+resolved_at: "2026-09-26T17:35:00Z"
+resolved_by: ORCH (session-A)
+resolution: |
+  Added fingerprint mechanism to test/support/tenant_template.ex:
+  - @fingerprint_comment_prefix "letflow_migrations_v1:"
+  - migration_fingerprint_comment/0: md5 hash of sorted tenant migration versions
+  - template_db_state/0: returns :missing | :stale | :current by reading
+    COMMENT ON SCHEMA via pg_namespace/obj_description
+  - ensure_template!/0: now uses Repo.checkout/2 for advisory-lock connection pinning
+    (fixes unreleased-lock hazard when entering the lock path multiple times);
+    handles :stale by DROP CASCADE + rebuild under the same advisory lock
+  - do_build_template!/1: sets COMMENT ON SCHEMA after rename (new step 6)
+
+  Added 2 regression tests to test/support/tenant_template_test.exs:
+  - stale fingerprint comment triggers rebuild and clone succeeds
+  - missing fingerprint comment is treated as stale
+
+  All 12 tenant_template tests pass. attachment_links_test passes without ecto.drop.
+  INV-8 preserved: rename-into-place is still the final step; stale schema is dropped
+  before a new build begins. Advisory lock serialization preserved via Repo.checkout/2.
 queue_ref: "Q-842"
 github_ref: "GH-1840"

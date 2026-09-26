@@ -53,6 +53,9 @@ fix_direction: >
   opens the Cancel dialog, and asserts the instanceName shown matches the definition
   (not a literal 'undefined'). This can be a new test file
   web/src/pages/instances/__tests__/InstanceDetailPage.cancelDialog.test.tsx.
-queue_ref: null  # not yet registered in letflow-queue
-github_ref: null  # not yet mirrored to GitHub
 status: open
+queue_ref: "Q-837"
+  # queue allocated issue_ref ISS-0837 (the GitHub title carries that prefix); this file keeps
+  # its original id ISS-0824, which was locally numbered and collides with an unrelated queue task.
+  # Never derive ids -- read these two fields. Registered late by ORCH in ADHOC-20260926-S11-AUDIT.
+github_ref: "GH-1835"

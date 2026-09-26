@@ -37,3 +37,8 @@ fix_direction: >
   the current, smaller deferred-routes table in lib/letflow/router.ex
   after ISS-0822's removal of 4 dead routes.
 status: open
+queue_ref: "Q-830"
+  # queue allocated issue_ref ISS-0830 (the GitHub title carries that prefix); this file keeps
+  # its original id ISS-0827, which was locally numbered and collides with an unrelated queue task.
+  # Never derive ids -- read these two fields. Registered late by ORCH in ADHOC-20260926-S11-AUDIT.
+github_ref: "GH-1828"

@@ -1,0 +1,47 @@
+id: ISS-0845
+title: |
+  Frontend module boundary rule (0039 D3) only matches '@/modules/**' import strings -- relative imports from core into a module pass lint, and module-to-module depends_on is not enforced
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: MAJOR
+tags:
+  - frontend
+  - eslint
+  - modules
+  - boundary
+  - decision-0039
+description: |
+  web/.eslintrc.json:24-33 applies one global rule:
+    "no-restricted-imports": ["error", {"patterns": ["@/modules/**", "!@/modules/registry",
+    "!@/modules/types"]}]
+  Probe on main 12f0a78f (`npx eslint --stdin --stdin-filename src/pages/Probe.tsx`):
+    import X from '../modules/exam/ExamListPage'  -> exit 0, NOT reported
+    import X from '@/modules/exam/ExamListPage'   -> reported
+  0039 D3 requires the frontend check to enforce the same two rules as the backend:
+   (a) nothing outside web/src/modules/<id>/ imports a module file, except web/src/modules/registry.ts;
+   (b) web/src/modules/a/ imports web/src/modules/b/ only if b is in a's depends_on.
+  (a) is bypassable with relative paths; (b) is not implemented at all.
+  Stage-11 hard constraint 3: no new npm dependency. eslint-plugin-import is NOT installed
+  (web/package.json), so import/no-restricted-paths is not available.
+affected_files:
+  - "web/.eslintrc.json"
+  - "web/src/modules/"
+depends_on:  # resolve these first; queue depends_on carries the same edges
+  - ISS-0844
+fix_direction: |
+  CODE-DESIGNER picks the mechanism within constraints: ESLint core rules with `overrides` per file
+  glob (no-restricted-imports patterns covering relative forms such as "**/modules/*/**",
+  "../modules/**", "./<id>/**" from the modules root), or a small local rule shipped inside web/ (no npm
+  package). Rule (b) needs a per-module override listing the modules it may import, generated or
+  hand-maintained next to its depends_on -- the design must say which, and how drift is caught.
+  Test with the ESLint Node API (ESLint#lintText with filePath) in a vitest test, e.g.
+  web/src/modules/__tests__/boundary-lint.test.ts.
+acceptance_criteria:
+  - "a vitest test lints six probe cases via the ESLint Node API and passes: core->module relative import flagged; core->module alias import flagged; module a->module b not in depends_on flagged; registry.ts->module index allowed; module->core allowed; module a->b with b declared allowed. Output quoted"
+  - "`npm run lint` in web/ passes on the resulting tree, output quoted"
+  - "`git diff main -- web/package.json web/package-lock.json` shows no dependency added"
+  - "if the mechanism deviates from 0039 D3's wording, 0039 carries an amendment with REVIEWER sign-off"
+status: open
+queue_ref: "Q-845"
+github_ref: "GH-1843"

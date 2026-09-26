@@ -1,0 +1,51 @@
+id: ISS-0848
+title: |
+  letflow-queue is out of sync with docs/requirements.yaml and docs/issues/: done requirements REQ-405 and REQ-407..REQ-416 are still open (REQ-407 claimable), ISS-0832..0836 carried fabricated queue_refs, local issue numbers collided with queue ids
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: BLOCKER
+tags:
+  - letflow-queue
+  - process
+  - registry-integrity
+description: |
+  GET /tasks on 2026-09-26 (highest task id was 828 before this filing batch):
+  - Done in docs/requirements.yaml but open in the queue: task 252 (REQ-122), 256 (REQ-123),
+    794 (REQ-405, locked by orch-main), 796 (REQ-407, eligible=true -- get_next_task can hand it
+    out), 797..805 (REQ-408..REQ-416). Task 734 (REQ-373) is blocked although yaml says done.
+  - Task 816 (ISS-0816) is open and locked by orch-main-20260925 although docs/issues/ISS-0816.yaml
+    is resolved.
+  - docs/issues/ISS-0832..ISS-0836 carried queue_ref Q-832..Q-836 although no such tasks existed:
+    the refs were derived from filenames, which ISSUE_QUEUE.md "Numbering schema" forbids. They
+    were registered for real in this filing batch (mapping recorded in each yaml).
+  - docs/issues/ISS-0824, ISS-0825, ISS-0827 and ISS-0831 were never registered, and the numbers
+    0824/0825/0827 had already been allocated by the queue to DIFFERENT issues (queue 824 = GroupsPage
+    jsdom hang, queue 825 = local ISS-0830, queue 827 = local ISS-0829), i.e. local scan-and-increment
+    numbering. Registered in this batch; mapping recorded in each yaml.
+  Root causes: runs flip yaml status and stop without releasing the queue task; some agents allocate
+  ISS numbers locally instead of taking issue_ref from register_task.
+affected_files:
+  - "docs/agents/protocols/TASK_QUEUE.md"
+  - "docs/anti-patterns.md"
+  - "lib/mix/tasks/"
+fix_direction: |
+  1. For each task listed, confirm the yaml status, then close it in the queue via the documented
+     release call (docs/agents/protocols/TASK_QUEUE.md). EXCEPTION: task 796 (REQ-407) must NOT be
+     closed as done -- its done flip was never validated (ISS-0836); set it blocked with a reason
+     pointing to ISS-0836. Release task 816's stale lock and close it.
+  2. Add a reconciliation check comparing queue task status (GET /tasks) with docs/requirements.yaml
+     and docs/issues/*.yaml status and failing on mismatch. CODE-DESIGNER decides where it runs (a
+     mix task ORCH runs at session start, or inside mix letflow.check when QUEUE_AUTH_TOKEN is
+     present); REVIEWER signs off. It must also flag a queue_ref whose task does not exist.
+  3. docs/anti-patterns.md entries: "queue_ref derived from the filename" and "requirement flipped
+     done in yaml without releasing its queue task".
+  Do this FIRST: until step 1 is done, get_next_task can hand out already-finished work.
+acceptance_criteria:
+  - "GET /tasks output quoted showing every listed task's status now matches its yaml, with task 796 blocked and the reason citing ISS-0836"
+  - "the reconciliation check exists, and a test proves it flags (i) a status mismatch and (ii) a queue_ref to a non-existent task, using fixtures, not the live service"
+  - "running the check against the live queue after step 1 reports no mismatches (output quoted)"
+  - "docs/anti-patterns.md has both entries"
+status: open
+queue_ref: "Q-848"
+github_ref: "GH-1846"

@@ -53,4 +53,5 @@ fix_direction: >
      lands on, not just N=1.
 status: open
 queue_ref: "Q-832"
-github_ref: null  # Not yet filed as a GitHub issue; tracked in the internal queue only (Q-832).
+  # registered late by ORCH in ADHOC-20260926-S11-AUDIT; any earlier queue_ref here was derived, not allocated
+github_ref: "GH-1830"

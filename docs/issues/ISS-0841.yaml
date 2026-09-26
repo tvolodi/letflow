@@ -1,0 +1,49 @@
+id: ISS-0841
+title: |
+  main accepts direct pushes that skip required CI: decision 0034's ruleset was never applied (no rulesets, enforce_admins false), and REQ-409..REQ-416 were pushed to main with no PR while their CI failed or was cancelled
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: BLOCKER
+tags:
+  - ci
+  - branch-protection
+  - process
+  - decision-0034
+description: |
+  Live state 2026-09-26:
+  - `gh api repos/tvolodi/letflow/rulesets` -> []
+  - main branch protection: required checks ["Backend gate (mix letflow.check)", "Frontend gate (npm
+    run check)"], enforce_admins=false, no pull-request requirement. The pipeline pushes as the
+    admin identity, so required checks are bypassed on direct push.
+  - Commits on main with no PR (`gh api repos/tvolodi/letflow/commits/<sha>/pulls` -> []):
+    b6a45852, 64e76394, 24eab9a5, be729822, 5732e5aa, 74f106ff, 73e7102e, be133e54, 29513e28 --
+    i.e. REQ-404 (second commit), REQ-409..REQ-416. Their CI failed or was cancelled (see the CI
+    false-green issue).
+
+  Decision 0034 (2026-09-15) researched and decided the ruleset configuration that closes exactly this
+  gap, but its "What this record does not do" section left applying it to "whoever applies the
+  configuration to the real repo next". Nobody did. The humanless pipeline's only hard merge gate
+  (0004, 0018) is therefore advisory.
+affected_files:
+  - "docs/migration/decisions/0034-ruleset-bypass-mode-direct-push-closure.md"
+  - "docs/agents/protocols/GIT_MERGE.md"
+fix_direction: |
+  1. Read docs/migration/decisions/0034-ruleset-bypass-mode-direct-push-closure.md in full and apply
+     exactly the configuration it decides, via `gh api -X POST repos/tvolodi/letflow/rulesets`.
+  2. Verify live with 0034's own method: a bare `git push origin main` of a throwaway commit is
+     rejected; a PR whose required checks are green merges. Do not leave the throwaway commit anywhere.
+  3. Append an "Applied <date>" addendum to 0034 with the verification outputs.
+  4. Remove any direct-push-to-main fallback from docs/agents/protocols/GIT_MERGE.md and agent docs.
+  Changing repository settings needs a token with admin rights. If the executing session's gh token
+  lacks them (403), mark this task blocked with the exact error and report to the user -- do not
+  work around it.
+acceptance_criteria:
+  - "`gh api repos/tvolodi/letflow/rulesets` output quoted, showing the 0034 configuration active"
+  - "a bare direct push to main is rejected by GitHub (output quoted) and nothing lands on main"
+  - "a PR with green required checks merges successfully (PR URL quoted)"
+  - "0034 has an 'Applied' addendum with date and verification outputs"
+  - "`git grep -n -i \"push origin main\" docs/agents .claude` shows no instruction to push directly to main"
+status: open
+queue_ref: "Q-841"
+github_ref: "GH-1839"

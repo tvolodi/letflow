@@ -1,0 +1,55 @@
+id: ISS-0847
+title: |
+  S11 was declared complete (REQ-416, 2026-09-25) while main's full backend suite was red -- re-verify S11 end-to-end once the blocking test failures are fixed
+discovered_by: "ORCH (architecture audit of S11 / decision 0039 on main 12f0a78f)"
+discovered_in_run: ADHOC-20260926-S11-AUDIT
+discovered_at: "2026-09-26T09:56:42Z"
+severity: MAJOR
+tags:
+  - S11
+  - release-validation
+  - process
+description: |
+  The done flips for REQ-409..REQ-416 were committed while CI on each backend commit failed or was
+  cancelled (see ISS-0840 and ISS-0841). A full local `mix test` on 12f0a78f
+  with a fresh test DB shows failures:
+  - CatalogTest x2 (ISS-0838)
+  - Mix.Tasks.Letflow.Seed.ExamFixturesTest x5 (ISS-0839)
+  - Letflow.RouterTest REQ-070 AC5 x2 (ISS-0827)
+  - Letflow.Docs.RequirementStatusInvariantsTest A3/A4a/A4b/A5 (ISS-0833)
+  - Mix.Tasks.Letflow.LintHandoffsTest ISS-0819 single-file mode (ISS-0834)
+  The run was cut off by a 50-minute timeout before ExUnit's summary, so the total is unknown.
+
+  What IS verified (2026-09-26): 0039's three measurements hold -- `mix letflow.check_boundaries`: OK,
+  911 edges, 0 violations; no exam permission atom in authorization.ex code (doc text only);
+  lib/letflow/exam/, lib/letflow/packs/bilimbaga.ex, lib/letflow/routers/exam_sessions.ex,
+  web/src/pages/exam/ are gone. web/: tsc clean, eslint clean, vitest src/modules + src/router 58/58.
+  What is NOT verified: stage-11 P2's "full backend suite and the S10 Playwright specs green", and P3's
+  end-to-end claim, on a completed run.
+affected_files:
+  - "docs/migration/stage-11-modular-platform.md"
+  - "docs/status/"
+depends_on:  # resolve these first; queue depends_on carries the same edges
+  - ISS-0838
+  - ISS-0839
+  - ISS-0827
+  - ISS-0833
+  - ISS-0834
+fix_direction: |
+  RELEASE-VALIDATOR, after the dependencies are resolved, from a fresh test DB:
+  1. `mix letflow.check` run to completion (no external timeout cutting it) -- quote the summary line;
+  2. `npm run check` in web/;
+  3. the S10 Playwright specs referenced by stage-11 P2;
+  4. REQ-416's end-to-end (bilimbaga solution into a fresh tenant yields a working exam tenant).
+  Any new failure -> file an issue per ISSUE_QUEUE.md; S11 stays unverified until green. Update
+  docs/migration/stage-11-modular-platform.md status with the result and date, and append a
+  `verified` (or `revised`) event for REQ-416 to the current status-history volume.
+acceptance_criteria:
+  - "full `mix letflow.check` summary line quoted showing 0 failures, or each remaining failure linked to an open issue id"
+  - "`npm run check` in web/ passes, tail quoted"
+  - "the S10 Playwright specs named by stage-11 P2 pass, output quoted"
+  - "REQ-416's end-to-end test passes, output quoted"
+  - "stage-11 status line updated with date; status history has a verified/revised event for REQ-416 with a real UTC timestamp"
+status: open
+queue_ref: "Q-847"
+github_ref: "GH-1845"

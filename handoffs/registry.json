@@ -1,4 +1,4 @@
-﻿{
+{
     "_comment":  "Per-run lock/status registry backing docs/agents/ORCHESTRATOR.md §7\u0027s owned_modules collision check and AGENT_SYSTEM.md §7\u0027s pre-start check. Append-only per HANDOFF_PROTOCOL.md §5 -- never shrink, never regenerate wholesale. Created 2026-08-16 to close ISS-0010 (this file had never existed; REQ-015 through REQ-021 all ran and merged without it). Entries below for REQ-018/019/020/021 are a best-effort backfill reconstructed from each run\u0027s own handoffs/\u003crun_id\u003e/step-*.json files and docs/status/requirement_status.yaml, not live-recorded at the time -- see each entry\u0027s backfilled: true flag. Every run listed is already merged to main (Step Final PASS), so all are status COMPLETED with released_lock: true; none represent an active lock.",
     "runs":  [
                  {

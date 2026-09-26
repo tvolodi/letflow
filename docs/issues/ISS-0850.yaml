@@ -1,0 +1,42 @@
+id: ISS-0850
+title: >
+  Letflow.Modules.CatalogTest REQ-400-family tests stale after config.exs
+  now registers Letflow.Modules.Exam
+discovered_by: TEST-RUNNER (WF03-ISS0848-20260926)
+discovered_in_run: WF03-ISS0848-20260926
+discovered_at: "2026-09-26T13:30:00Z"
+severity: MINOR
+tags:
+  - test
+  - modules
+description: >
+  Found by TEST-RUNNER during ISS-0848's full-suite run. 2
+  Letflow.Modules.CatalogTest failures, REQ-400-family, expecting a fixed
+  registered-modules list that no longer matches config.exs now that
+  Letflow.Modules.Exam is registered there. Confirmed unrelated to ISS-0848's
+  own diff (neither lib/mix/tasks/letflow.check_queue_reconciliation.ex nor
+  its test touch config.exs or Letflow.Modules.*). Letflow.Modules.Exam
+  landed via a separate, direct human commit this session (b6a45852 and
+  follow-ons, per docs/issues/ISS-0836's own account of that commit's bundled
+  scope), which grew the registered-modules list beyond what these tests'
+  own hardcoded expectations anticipated.
+affected_files:
+  - test/letflow/modules/catalog_test.exs
+  - config/config.exs
+related:
+  - ISS-0836
+severity_rationale: >
+  MINOR -- a stale hardcoded test expectation, not a real defect in the
+  catalog registration mechanism itself; the actual registered-modules list
+  is correct, only the test's expectation of it is stale.
+fix_direction: >
+  Update the stale test expectation to include Exam in the expected
+  registered-modules list, or make the assertion structural (count/shape
+  invariant) rather than a hardcoded exact list if that's this codebase's
+  established convention for this class of test elsewhere -- check other
+  REQ-400-family tests for precedent before choosing. Confirm the fix
+  doesn't silently loosen the test in a way that would miss a genuine future
+  registration regression (e.g. don't just delete the assertion).
+status: open
+queue_ref: "Q-850"
+github_ref: "GH-1854"

@@ -1,0 +1,42 @@
+id: ISS-0851
+title: >
+  Mix.Tasks.Letflow.Seed.ExamFixturesTest: solution_pack_installs FK
+  violation on deleted-tenant teardown race (5 failures)
+discovered_by: TEST-RUNNER (WF03-ISS0848-20260926)
+discovered_in_run: WF03-ISS0848-20260926
+discovered_at: "2026-09-26T13:30:00Z"
+severity: MINOR
+tags:
+  - test
+  - flaky
+  - test-isolation
+description: >
+  Found by TEST-RUNNER during ISS-0848's full-suite run. 5
+  Mix.Tasks.Letflow.Seed.ExamFixturesTest failures, all one root cause: a
+  foreign-key violation on solution_pack_installs during test teardown, when
+  a tenant row is deleted while a solution_pack_installs row still
+  references it -- a teardown-ordering bug (the fixture/teardown deletes the
+  tenant before, or without, deleting/cascading its solution_pack_installs
+  rows). Confirmed unrelated to ISS-0848's own diff (a pure
+  queue-reconciliation mix task, touches no seed/exam-fixture code).
+affected_files:
+  - test/mix/tasks/letflow.seed.exam_fixtures_test.exs
+  - priv/repo/migrations/ (whichever creates solution_pack_installs' FK to tenants)
+related: []
+severity_rationale: >
+  MINOR -- a test-teardown ordering bug producing noisy full-suite failures,
+  not a defect in seeded exam-fixture data correctness or a production code
+  path.
+fix_direction: >
+  1. Identify which delete happens first in teardown (tenant row vs.
+     solution_pack_installs row) with real evidence (a targeted, isolated
+     re-run showing the exact failing sequence).
+  2. Fix via teardown reordering (delete solution_pack_installs rows before
+     the tenant row) or a DB-level ON DELETE CASCADE on the FK itself,
+     whichever the investigation shows is correct/idiomatic here.
+  3. Confirm no other test's teardown assumes the old (buggy) ordering in a
+     way this fix would break.
+  4. Re-run all 5 previously-failing tests, quote real passing output.
+status: open
+queue_ref: "Q-851"
+github_ref: "GH-1855"

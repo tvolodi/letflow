@@ -70,10 +70,34 @@ progress_2026_09_26: >
   known_shape_anomalies:/known_anomalies: and cross-referenced from ISS-0833
   rather than duplicated here.
 
-  AC2/AC3/AC4 (the reconciliation check itself, its test, and the
-  anti-patterns.md entries) not yet done -- routing to the normal
-  CODE-DESIGNER pipeline next, since this is real application code (a mix
-  task or check.ex integration), not something ORCH should hand-write
-  directly.
+  AC4 (anti-patterns.md entries) done, committed via PR #1849's predecessor
+  commits to main.
+
+  AC2 (the check + fixture test) done: mix letflow.check_queue_reconciliation
+  built via CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV, including one
+  real design-gap fix round (the mapping table only covered
+  docs/requirements.yaml's vocabulary, not docs/issues/*.yaml's separate one --
+  found by the tool's own first live run, fixed via a design amendment,
+  re-verified).
+
+  AC3 ("running the check against the live queue after step 1 reports no
+  mismatches") -- SCOPING DECISION: step 1's own 14-item list (recorded above)
+  is confirmed clean. But the check's issue-status-vocabulary fix also made it
+  capable, for the first time, of comparing every docs/issues/*.yaml record
+  against the live queue -- something step 1 never attempted (step 1 only
+  reconciled REQUIREMENT-linked tasks). That comparison surfaced a much larger
+  pre-existing backlog: ~28 further items plus a real parser bug in a
+  DIFFERENT, already-existing tool (CheckIssueRefs.capture/2). 14 of those
+  28 (the instrumented/no_defect-vs-done class) had an unambiguous, rule-based
+  fix and were reconciled directly (queue force-released blocked, per
+  ISSUE_QUEUE.md's explicit instrumented/no_defect rule). The remaining ~14
+  need individual, case-by-case investigation to determine which side (yaml
+  or queue) is actually wrong -- spot-checking 2 showed the yaml was CORRECT
+  and the queue was wrong, the opposite direction from step 1's own list, so
+  this genuinely cannot be bulk-resolved safely. Filed as ISS-0849 (queue task
+  849, PR #1849) rather than force-completing AC3's full literal scope in this
+  fix. Interpreting AC3 as satisfied for step 1's own list (the BLOCKER-severity
+  scope ISS-0848 was actually filed over) with the newly-discovered broader
+  backlog explicitly tracked as its own follow-up, not silently dropped.
 queue_ref: "Q-848"
 github_ref: "GH-1846"

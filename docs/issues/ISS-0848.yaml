@@ -46,6 +46,34 @@ acceptance_criteria:
   - "the reconciliation check exists, and a test proves it flags (i) a status mismatch and (ii) a queue_ref to a non-existent task, using fixtures, not the live service"
   - "running the check against the live queue after step 1 reports no mismatches (output quoted)"
   - "docs/anti-patterns.md has both entries"
-status: open
+status: in_progress
+progress_2026_09_26: >
+  Step 1 (AC1) done by ORCH. Reconciled every listed task via lock+release
+  against the live queue: 252, 256, 734, 794, 797, 798, 799, 800, 801, 802,
+  803, 804, 805, 816 all released status: done (734 and 816 needed
+  force:true to clear a stale blocked-state / stale lock respectively; 794
+  needed force:true to clear a stale orch-main lock). EXCEPTION per the
+  fix_direction and ISS-0836: task 796 (REQ-407) released status: blocked,
+  not done. Also corrected task 795 (REQ-406) from done back to blocked --
+  ORCH itself had mistakenly released it done in a prior turn, before the
+  ISS-0836 collision was fully understood; corrected here for consistency
+  with 796's own treatment, since REQ-406's done status is equally
+  unvalidated per ISS-0836. Fresh GET /tasks pull after all releases
+  confirms every id now matches its yaml except 795/796 (both blocked, both
+  citing ISS-0836).
+
+  Recorded as a SCOPE-CHANGE entry in docs/status/requirement_status.v22.yaml
+  (which the append itself rolled to volume 23, being already at 37 entries /
+  near the 1200-line ceiling before this append). Volume 22 closed and pinned
+  in the index; its pre-existing schema-drift shape/vocabulary anomalies
+  (found while closing it, not introduced by this append) declared in
+  known_shape_anomalies:/known_anomalies: and cross-referenced from ISS-0833
+  rather than duplicated here.
+
+  AC2/AC3/AC4 (the reconciliation check itself, its test, and the
+  anti-patterns.md entries) not yet done -- routing to the normal
+  CODE-DESIGNER pipeline next, since this is real application code (a mix
+  task or check.ex integration), not something ORCH should hand-write
+  directly.
 queue_ref: "Q-848"
 github_ref: "GH-1846"

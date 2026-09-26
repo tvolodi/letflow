@@ -4606,12 +4606,33 @@ volumes:
       = 5 on-disk entries. 272 lines / 15587 bytes, well under the
       1200-line/120000-byte roll ceiling, so no roll triggered.
 
+  - volume: 23
+    path: docs/status/requirement_status.v23.yaml
+    status: current
+    opened: 2026-09-26
+    entries: 1
+    note: >
+      Opened by ORCH's own roll of volume 22 (closed at 38 entries / 1259
+      frozen-prefix lines, over its 1200-line ceiling) as part of the
+      ISS-0848 queue/yaml reconciliation append. First entry is the roll
+      notice itself.
+
   - volume: 22
     path: docs/status/requirement_status.v22.yaml
-    status: current
+    status: closed
     opened: 2026-09-22
-    entries: 37
+    closed: 2026-09-26
+    entries: 38
+    lines: 1280
+    bytes_working_tree: 77889
+    frozen_prefix_lines: 1259
+    frozen_prefix_sha256: "4dc809c8b4e6e38d892d5a4320d1f7fc1c4955709608e2b2178bc995c5a8ca34"
     note: >
+      Incremented to 38 by ORCH's SCOPE-CHANGE append
+      (2026-09-26T12:03:14Z -- ISS-0848 queue/yaml reconciliation:
+      12 tasks released done, 2 (REQ-406/407) released blocked per
+      ISS-0836's own unvalidated-done finding). Prior note preserved below.
+
       Incremented to 37 by ORCH's REQ-416 done-event append
       (2026-09-26T06:00:00Z -- P3 close-out bilimbaga e2e, S11's
       thirteenth and final requirement; REQ-400..416 all done). Prior note
@@ -5068,6 +5089,16 @@ known_anomalies:
     value: SCOPE-CHANGE
     should_have_been: "req: SCOPE-CHANGE with event: done"
     cause: docs/agents/protocols/TASK_QUEUE.md:133 stated the convention in the wrong field
+  - path: docs/status/requirement_status.v22.yaml
+    line: 859
+    req: REQ-405
+    field: event
+    value: doc-correction
+    should_have_been: "event: revised (this entry records a correction to a design doc, not a new started/done/blocked/cancelled/verified transition)"
+    cause: >
+      Written by DOC-UPDATER (WF02-REQ405-20260925) inventing a new event value
+      instead of using one of the six documented ones. Volume 22 is now closed
+      and pinned, so left as written rather than corrected; see ISS-0833.
 
 known_shape_anomalies:
   # Entries whose FIELD SET or FIELD NAMES do not conform to the five-field entry
@@ -5144,3 +5175,470 @@ known_shape_anomalies:
     cause: >
       Same as line 4803: appended with four fields instead of five, in the same
       period and by the same appending pattern.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 858
+    req: REQ-405
+    event: doc-correction
+    kind: misnamed_field
+    field: at
+    found_as: "workflow"
+    found_line: 862
+    should_have_been: "at: 2026-09-25T03:39:10Z (the real timestamp already recorded, just under the extra timestamp: field two lines above)"
+    cause: >
+      This entry's field order is req/event/timestamp/agent/workflow/note. Position 4
+      (where at: belongs) is occupied by workflow: WF02-REQ405-20260925, a run-id-style
+      value, not a timestamp -- the real ISO-8601 timestamp is present, but under the
+      extra timestamp: field at line 860 instead of at:. Same root incident ISS-0833
+      was originally filed about.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 858
+    req: REQ-405
+    event: doc-correction
+    kind: extra_field
+    field: timestamp
+    found_as: null
+    found_line: 860
+    should_have_been: "(this IS the real at: value, 2026-09-25T03:39:10Z -- it should have been named at: in position 4, not timestamp: in position 3)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present but under the wrong field name and in the wrong position.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1111
+    req: REQ-409
+    event: null
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five (req/status/timestamp/run_id/agent, no note), part of the same schema drift as ISS-0833 (originally found on REQ-405).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1111
+    req: REQ-409
+    event: null
+    kind: misnamed_field
+    field: event
+    found_as: "status"
+    found_line: 1112
+    should_have_been: "event: done"
+    cause: >
+      Written as `status:` instead of `event:`. The VALUE (done) is a legal event value; only the field NAME is wrong.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1111
+    req: REQ-409
+    event: null
+    kind: misnamed_field
+    field: at
+    found_as: "summary"
+    found_line: 1116
+    should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
+    cause: >
+      Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1111
+    req: REQ-409
+    event: null
+    kind: extra_field
+    field: timestamp
+    found_as: null
+    found_line: 1113
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `timestamp:` field carries what should have been the `at:` value; the entry never declares `at:` under its own name.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1111
+    req: REQ-409
+    event: null
+    kind: extra_field
+    field: run_id
+    found_as: null
+    found_line: 1114
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `run_id:` field (a WF-02 run identifier) not part of the five-field schema.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1127
+    req: REQ-410
+    event: null
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five (req/status/timestamp/run_id/agent, no note), part of the same schema drift as ISS-0833 (originally found on REQ-405).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1127
+    req: REQ-410
+    event: null
+    kind: misnamed_field
+    field: event
+    found_as: "status"
+    found_line: 1128
+    should_have_been: "event: done"
+    cause: >
+      Written as `status:` instead of `event:`. The VALUE (done) is a legal event value; only the field NAME is wrong.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1127
+    req: REQ-410
+    event: null
+    kind: misnamed_field
+    field: at
+    found_as: "summary"
+    found_line: 1132
+    should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
+    cause: >
+      Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1127
+    req: REQ-410
+    event: null
+    kind: extra_field
+    field: timestamp
+    found_as: null
+    found_line: 1129
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `timestamp:` field carries what should have been the `at:` value; the entry never declares `at:` under its own name.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1127
+    req: REQ-410
+    event: null
+    kind: extra_field
+    field: run_id
+    found_as: null
+    found_line: 1130
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `run_id:` field (a WF-02 run identifier) not part of the five-field schema.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1144
+    req: REQ-412
+    event: null
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five (req/status/timestamp/run_id/agent, no note), part of the same schema drift as ISS-0833 (originally found on REQ-405).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1144
+    req: REQ-412
+    event: null
+    kind: misnamed_field
+    field: event
+    found_as: "status"
+    found_line: 1145
+    should_have_been: "event: done"
+    cause: >
+      Written as `status:` instead of `event:`. The VALUE (done) is a legal event value; only the field NAME is wrong.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1144
+    req: REQ-412
+    event: null
+    kind: misnamed_field
+    field: at
+    found_as: "summary"
+    found_line: 1149
+    should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
+    cause: >
+      Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1144
+    req: REQ-412
+    event: null
+    kind: extra_field
+    field: timestamp
+    found_as: null
+    found_line: 1146
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `timestamp:` field carries what should have been the `at:` value; the entry never declares `at:` under its own name.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1144
+    req: REQ-412
+    event: null
+    kind: extra_field
+    field: run_id
+    found_as: null
+    found_line: 1147
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `run_id:` field (a WF-02 run identifier) not part of the five-field schema.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1158
+    req: REQ-411
+    event: null
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five (req/status/timestamp/run_id/agent, no note), part of the same schema drift as ISS-0833 (originally found on REQ-405).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1158
+    req: REQ-411
+    event: null
+    kind: misnamed_field
+    field: event
+    found_as: "status"
+    found_line: 1159
+    should_have_been: "event: done"
+    cause: >
+      Written as `status:` instead of `event:`. The VALUE (done) is a legal event value; only the field NAME is wrong.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1158
+    req: REQ-411
+    event: null
+    kind: misnamed_field
+    field: at
+    found_as: "summary"
+    found_line: 1163
+    should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
+    cause: >
+      Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1158
+    req: REQ-411
+    event: null
+    kind: extra_field
+    field: timestamp
+    found_as: null
+    found_line: 1160
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `timestamp:` field carries what should have been the `at:` value; the entry never declares `at:` under its own name.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1158
+    req: REQ-411
+    event: null
+    kind: extra_field
+    field: run_id
+    found_as: null
+    found_line: 1161
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `run_id:` field (a WF-02 run identifier) not part of the five-field schema.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1173
+    req: REQ-413
+    event: null
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five (req/status/timestamp/run_id/agent, no note), part of the same schema drift as ISS-0833 (originally found on REQ-405).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1173
+    req: REQ-413
+    event: null
+    kind: misnamed_field
+    field: event
+    found_as: "status"
+    found_line: 1174
+    should_have_been: "event: done"
+    cause: >
+      Written as `status:` instead of `event:`. The VALUE (done) is a legal event value; only the field NAME is wrong.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1173
+    req: REQ-413
+    event: null
+    kind: misnamed_field
+    field: at
+    found_as: "summary"
+    found_line: 1178
+    should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
+    cause: >
+      Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1173
+    req: REQ-413
+    event: null
+    kind: extra_field
+    field: timestamp
+    found_as: null
+    found_line: 1175
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `timestamp:` field carries what should have been the `at:` value; the entry never declares `at:` under its own name.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1173
+    req: REQ-413
+    event: null
+    kind: extra_field
+    field: run_id
+    found_as: null
+    found_line: 1176
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `run_id:` field (a WF-02 run identifier) not part of the five-field schema.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1190
+    req: REQ-414
+    event: null
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five (req/status/timestamp/run_id/agent, no note), part of the same schema drift as ISS-0833 (originally found on REQ-405).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1190
+    req: REQ-414
+    event: null
+    kind: misnamed_field
+    field: event
+    found_as: "status"
+    found_line: 1191
+    should_have_been: "event: done"
+    cause: >
+      Written as `status:` instead of `event:`. The VALUE (done) is a legal event value; only the field NAME is wrong.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1190
+    req: REQ-414
+    event: null
+    kind: misnamed_field
+    field: at
+    found_as: "summary"
+    found_line: 1195
+    should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
+    cause: >
+      Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1190
+    req: REQ-414
+    event: null
+    kind: extra_field
+    field: timestamp
+    found_as: null
+    found_line: 1192
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `timestamp:` field carries what should have been the `at:` value; the entry never declares `at:` under its own name.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1190
+    req: REQ-414
+    event: null
+    kind: extra_field
+    field: run_id
+    found_as: null
+    found_line: 1193
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `run_id:` field (a WF-02 run identifier) not part of the five-field schema.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1205
+    req: REQ-415
+    event: null
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five (req/status/timestamp/run_id/agent, no note), part of the same schema drift as ISS-0833 (originally found on REQ-405).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1205
+    req: REQ-415
+    event: null
+    kind: misnamed_field
+    field: event
+    found_as: "status"
+    found_line: 1206
+    should_have_been: "event: done"
+    cause: >
+      Written as `status:` instead of `event:`. The VALUE (done) is a legal event value; only the field NAME is wrong.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1205
+    req: REQ-415
+    event: null
+    kind: misnamed_field
+    field: at
+    found_as: "summary"
+    found_line: 1210
+    should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
+    cause: >
+      Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1205
+    req: REQ-415
+    event: null
+    kind: extra_field
+    field: timestamp
+    found_as: null
+    found_line: 1207
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `timestamp:` field carries what should have been the `at:` value; the entry never declares `at:` under its own name.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1205
+    req: REQ-415
+    event: null
+    kind: extra_field
+    field: run_id
+    found_as: null
+    found_line: 1208
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `run_id:` field (a WF-02 run identifier) not part of the five-field schema.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1219
+    req: REQ-416
+    event: null
+    kind: missing_field
+    field: note
+    found_as: null
+    found_line: null
+    should_have_been: "note: <short free-text>, as the fifth and last field"
+    cause: >
+      Appended with four fields instead of five (req/status/timestamp/run_id/agent, no note), part of the same schema drift as ISS-0833 (originally found on REQ-405).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1219
+    req: REQ-416
+    event: null
+    kind: misnamed_field
+    field: event
+    found_as: "status"
+    found_line: 1220
+    should_have_been: "event: done"
+    cause: >
+      Written as `status:` instead of `event:`. The VALUE (done) is a legal event value; only the field NAME is wrong.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1219
+    req: REQ-416
+    event: null
+    kind: misnamed_field
+    field: at
+    found_as: "summary"
+    found_line: 1224
+    should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
+    cause: >
+      Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1219
+    req: REQ-416
+    event: null
+    kind: extra_field
+    field: timestamp
+    found_as: null
+    found_line: 1221
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `timestamp:` field carries what should have been the `at:` value; the entry never declares `at:` under its own name.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1219
+    req: REQ-416
+    event: null
+    kind: extra_field
+    field: run_id
+    found_as: null
+    found_line: 1222
+    should_have_been: "(not part of the five-field schema; remove or fold into note:)"
+    cause: >
+      An extra `run_id:` field (a WF-02 run identifier) not part of the five-field schema.

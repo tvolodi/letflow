@@ -1233,3 +1233,48 @@ history:
       all 6 roles. All 6 ACs pass. mix letflow.check passes. Updated
       stage-11-modular-platform.md status to P1-P3 done. Commit: 29513e28.
       S11 (REQ-400..416) is fully complete.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-26T12:03:14Z
+    note: >
+      Queue/yaml reconciliation per ISS-0848 step 1. Released as done
+      (queue status was open/blocked-mismatched, yaml already done):
+      task 252 (REQ-122), 256 (REQ-123), 734 (REQ-373, was queue-blocked),
+      794 (REQ-405, force-released from a stale orch-main lock), 797-805
+      (REQ-408..REQ-416), 816 (ISS-0816, force-released from a stale
+      orch-main-20260925 lock). EXCEPTION per ISS-0836: tasks 795 (REQ-406)
+      and 796 (REQ-407) released as blocked, not done -- their yaml
+      status: done was never RELEASE-VALIDATOR-verified per ISS-0836's own
+      findings (task 795 had been mistakenly released done by ORCH in a
+      prior turn before the ISS-0836 collision was fully understood;
+      corrected here to blocked for consistency with 796). GET /tasks
+      re-pull after all releases confirms every listed id now matches
+      this exception pattern. Also flagging: this volume's REQ-409..REQ-416
+      entries use req/status/timestamp/run_id/agent/summary fields, not
+      the documented req/event/agent/at/note schema
+      test/support/status_history.ex actually parses -- likely the same
+      root cause as ISS-0833 (malformed REQ-405 entry) but far more
+      widespread; noted in ISS-0833 as a follow-up rather than fixed here
+      (out of scope for ISS-0848).
+# VOLUME 22 — CLOSED 2026-09-26. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-22 through
+# 2026-09-26 (38 entries, 1259 frozen-prefix lines before this closure footer).
+# It is frozen: every line above this comment is preserved byte-for-byte. Closed
+# by ORCH's own SCOPE-CHANGE (ISS-0848 queue/yaml reconciliation) append, which
+# brought this file to 1259 lines -- over the declared roll_rule ceiling
+# (1200 lines / 120000 bytes). No entry above this footer was moved, edited or
+# deleted.
+#
+# Successor:
+#   docs/status/requirement_status.v23.yaml
+#
+# which, as of this closure, names:
+#   docs/status/requirement_status.v23.yaml
+#
+# KNOWN ANOMALIES IN THIS VOLUME: the "doc-correction" event value at line 859
+# (undeclared vocabulary, pre-existing, see ISS-0833) and the
+# req/status/timestamp/run_id/agent/summary shape used by the REQ-409..REQ-416
+# entries instead of the documented req/event/agent/at/note schema (also
+# pre-existing, see ISS-0833's 2026-09-26 addendum) -- neither introduced by
+# this closure, both flagged for a future fix rather than corrected here.

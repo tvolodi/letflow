@@ -50,6 +50,56 @@ fix_direction: >
      rather than editing a concurrent session's own in-progress append (same
      caution this project already applies to handoffs/ files) -- check
      docs/requirements.yaml REQ-405's own status first.
+addendum_2026_09_26: >
+  Added by ORCH while working ISS-0848 (queue/yaml reconciliation). The
+  drift is broader than one entry: test/support/status_history.ex parses
+  entries strictly by the req/event/agent/at/note field schema (5 fields,
+  that order), but every REQ-409..REQ-416 entry appended to
+  docs/status/requirement_status.v22.yaml this run instead uses
+  req/status/timestamp/run_id/agent/summary -- none of the documented
+  fields except req and agent are actually present under their expected
+  names. This is the same root-cause shape as the original REQ-405 finding
+  above, just recurring across roughly 8 more entries in the same volume.
+  Not fixed here (out of scope for the issue that surfaced it, ISS-0848);
+  whoever picks this up should decide whether to reformat the affected
+  entries in place (append-only discipline permitting -- these are already
+  committed history, so check test/support/status_history.ex's own
+  append-only invariant test before editing rather than assuming a rewrite
+  is safe) or extend the schema/parser to accept the newer shape if it is
+  actually the intended go-forward convention.
+addendum_2026_09_26_b: >
+  Follow-up while closing volume 22 (ISS-0848's own reconciliation append
+  pushed it over its 1200-line ceiling). Closing a volume makes its shape
+  defects declarable in the index's known_shape_anomalies:/known_anomalies:
+  -- I declared all 42 shape violations and the 1 vocabulary violation
+  this addendum's own drift produces, verified programmatically against
+  SH.shape_anomalies/1 and SH.anomalies/3 rather than transcribed by hand.
+  test/docs/requirement_status_invariants_test.exs went from 5 failing
+  (A3/A4a/A4b/A5/A9) to 1 (A4b only) as a result.
+
+  The one residual A4b failure is NOT closable by declaration at all, and
+  this is a real, distinct finding beyond "the schema drift is broader than
+  one entry": A4b's `unparseable_at/2` check is unconditional and has no
+  declaration escape hatch (see test/docs/requirement_status_invariants_test.exs
+  around line 710's comment, "design section 13.5: declaring the field NAME
+  wrong does not license an unparseable timestamp"). For 9 of these entries
+  (REQ-405's own original entry plus REQ-409/410/411/412/413/414/415/416),
+  SH.shape_anomalies/1 deterministically classifies the misnamed `at:` field
+  as found under `summary:` (REQ-409 and the 7 others) or `workflow:`
+  (REQ-405) -- but the literal text sitting at that found_line is not a
+  timestamp at all (a YAML fold-block marker ">" for the `summary:` cases,
+  a run-id string for the `workflow:` case). A `misnamed_field`/field=`at`
+  declaration MUST cite exactly that found_as/found_line pair to satisfy the
+  undeclared/unfound key-equality check, but citing it unconditionally trips
+  `unparseable_at`, with no way to satisfy both at once. This is architecturally
+  unfixable for these 9 entries without either (a) rewriting frozen,
+  digest-pinned volume-22 history (exactly what the append-only rule and A6's
+  digest check forbid), or (b) changing `unparseable_at`'s own logic/adding a
+  declaration key for it (a real design decision, not something to make
+  unilaterally while working an unrelated queue-reconciliation issue).
+  Left red and documented rather than forced. Whoever picks this up next has
+  the full working-out above plus a live example already declared in the
+  index to test against.
 status: open
 queue_ref: "Q-833"
   # registered late by ORCH in ADHOC-20260926-S11-AUDIT; any earlier queue_ref here was derived, not allocated

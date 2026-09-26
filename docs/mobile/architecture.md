@@ -121,3 +121,65 @@ renderers. There is no compiler that will catch a miss. The mitigation is that
 the format is server-delivered and versioned, so a stale client fails loudly on
 an unknown field rather than silently mis-rendering — `MOB-4`'s six mandatory
 renderer states exist for exactly this reason.
+
+## 6. Application modules (decision 0039)
+
+[`../migration/decisions/0039-platform-module-solution-layering.md`](../migration/decisions/0039-platform-module-solution-layering.md)
+D5 introduces a per-tenant **installed-module list** that controls both
+navigation and API access. The mobile app must follow the same contract as the
+SPA.
+
+### Navigation and routes
+
+The app builds its top-level navigation and route set from the installed-module
+list returned by:
+
+```
+GET /api/v1/me/modules
+→ {"installed_modules": [{"module_id": "<id>", "version": "<vsn>"}, …]}
+```
+
+Confirmed in `lib/letflow/routers/me.ex:78` (`git grep -n "authz_get.*modules" -- lib/letflow/routers/me.ex`).
+
+A module's screens are **not reachable at all** for a tenant whose installed list
+does not include that module — the entry point is simply not added to the route
+table. This matches D5's principle that a module's absence is not information to
+leak.
+
+### Per-module feature folders
+
+Each module's Flutter code lives in `apps/mobile/lib/features/<id>/`, mirroring
+`web/src/modules/<id>/` on the SPA side. No module code lives outside its own
+`features/<id>/` subtree. The `features/` root acts as the core/module boundary
+(see below).
+
+### Module API base path
+
+Every authenticated call scoped to a specific module uses the path:
+
+```
+/api/v1/modules/<id>/…
+```
+
+Confirmed in `lib/letflow/plugs/api_pipeline.ex:166` (`git grep -n "forward.*modules" -- lib/letflow/plugs/api_pipeline.ex`).
+
+A request to this path for a module the tenant has **not** installed returns
+`404`, not `403` (D5: "a module's absence is not information to leak"). The API
+client MUST treat a `404` on any `/api/v1/modules/<id>/` path as a
+"module not available" state, not as a generic not-found, and route the user
+accordingly rather than crashing or showing a generic error screen.
+
+### Core / module import boundary (D3)
+
+The same two-rule boundary that governs `web/src/modules/` applies here:
+
+1. No file outside `apps/mobile/lib/features/<id>/` may import code from inside
+   it, except the one sanctioned place that reads the full module list (the
+   navigation bootstrap, which reads `installed_modules` and wires routes).
+2. A file in `apps/mobile/lib/features/a/` may not import from
+   `apps/mobile/lib/features/b/` unless `b` is in `a`'s declared `depends_on`.
+
+Enforcement mechanism: a linting step (exact tool TBD at implementation time,
+matching the Dart/Flutter ecosystem) enforcing the same structural rule as the
+SPA's ESLint `no-restricted-imports` check (0039 D3). It must fail the build,
+not produce a warning.

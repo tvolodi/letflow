@@ -17,7 +17,13 @@ description: |
   /api/v1/modules/<id>/ and answer 404 for tenants without the module. MOBILE-DEV is dormant, but
   REQ-294 and all future S9 work read docs/mobile/ as the spec.
 affected_files:
-  - "docs/mobile/"
+  - "docs/mobile/architecture.md"
+related:
+  - docs/migration/decisions/0039-platform-module-solution-layering.md
+  - REQ-294
+  - REQ-400
+  - REQ-403
+  - REQ-404
 fix_direction: |
   Doc-only. In the docs/mobile/ file that defines the app shell / navigation (find it; do not create a
   parallel doc), add a section "Application modules (decision 0039)": navigation and routes built from
@@ -28,6 +34,19 @@ acceptance_criteria:
   - "docs/mobile/ contains the section, citing 0039 D3 and D5"
   - "every endpoint named is shown to exist by a quoted `git grep` against lib/"
   - "`git diff --name-only main` shows only files under docs/mobile/ (plus this issue's yaml/status files)"
-status: open
 queue_ref: "Q-843"
+queue_task_id: 843
 github_ref: "GH-1841"
+github_issue_number: 1841
+status: done
+resolved_at: "2026-09-26T12:15:00Z"
+resolved_by: ORCH (session-A)
+resolution: >
+  Added section 6 "Application modules (decision 0039)" to
+  docs/mobile/architecture.md. Section covers: navigation built from
+  GET /api/v1/me/modules (confirmed lib/letflow/routers/me.ex:78); per-module
+  feature folders at apps/mobile/lib/features/<id>/; module API base
+  /api/v1/modules/<id>/ with 404-for-uninstalled (confirmed
+  lib/letflow/plugs/api_pipeline.ex:166 + lib/letflow/routers/modules.ex);
+  core/module import boundary matching 0039 D3. All cited endpoints verified
+  via git grep against lib/.

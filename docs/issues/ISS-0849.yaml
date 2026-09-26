@@ -1,0 +1,148 @@
+id: ISS-0849
+title: >
+  mix letflow.check_queue_reconciliation's first live run surfaced a large
+  pre-existing backlog (~28 items) and a real parser bug -- both out of
+  ISS-0848's own scope, tracked here for individual case-by-case review
+discovered_by: ELIXIR-DEV / ORCH (fix/ISS0848-queue-reconciliation-20260926)
+discovered_in_run: fix/ISS0848-queue-reconciliation-20260926
+discovered_at: "2026-09-26T13:05:00Z"
+severity: MAJOR
+tags:
+  - process
+  - letflow-queue
+  - tooling
+description: >
+  ISS-0848 built mix letflow.check_queue_reconciliation, a new check
+  comparing docs/requirements.yaml + docs/issues/*.yaml status against the
+  live letflow-queue's own status. Its first live run (after fixing a
+  genuine issue-status-vocabulary design gap that produced ~40 false
+  positives, since corrected in the same fix) found 42 real findings, split
+  into several distinct classes -- some already reconciled directly, most
+  requiring individual review this fix could not respons ibly perform in bulk.
+
+  **Already reconciled (queue-side, high confidence, same session):**
+  14 issues (ISS-0109/0114/0115/0116/0214/0456 "instrumented";
+  ISS-0200/0266/0409/0410/0416/0419/0432/0433 "no_defect") had their queue
+  task force-released from "done" back to "blocked". This direction was high
+  confidence because docs/agents/protocols/ISSUE_QUEUE.md is explicit and
+  unambiguous: an instrumented/no_defect outcome MUST be released
+  `status: "blocked"`, never `"done"` -- a `"done"` release best-effort
+  closes the linked GitHub issue, falsely asserting the underlying defect
+  was fixed when these records explicitly say it was not (the exact failure
+  mode TASK_QUEUE.md's own account of ISS-0277/#360/#366/#367 already
+  documents). No case-by-case judgment was needed; the rule has no
+  exceptions.
+
+  **NOT reconciled -- genuinely needs individual review, direction unclear:**
+
+  1. 14 issues whose yaml `status: open` disagrees with a queue status of
+     `done` or `blocked`: ISS-0108, ISS-0112, ISS-0285, ISS-0423, ISS-0447,
+     ISS-0453, ISS-0678, ISS-0734, ISS-0745, ISS-0764, ISS-0776, ISS-0783,
+     ISS-0786, ISS-0789. Spot-checked two (ISS-0108, ISS-0285) in full: BOTH
+     are genuinely still-open, unresolved issues whose own yaml text
+     explicitly says so ("Left open, not instrumented -- no diagnostic
+     capability was shipped" for ISS-0108; "No code change made (root cause
+     not conclusively localized)" for ISS-0285) -- meaning for at least
+     these two, the QUEUE is wrong (something incorrectly released these as
+     done), not the yaml. This is the OPPOSITE direction from what the
+     original ISS-0848 reconciliation (12 requirement tasks) needed, so it
+     cannot be assumed to generalize to all 14 without checking each one
+     individually -- some may instead be the mirror case (yaml genuinely
+     stale, issue actually resolved, same shape as ISS-0588/ISS-0593 fixed
+     during ISS-0848's own work).
+  2. 2 requirements whose yaml `status: pending` disagrees with a queue
+     status of `done`/`blocked`: REQ-222, REQ-294. Not investigated at all
+     this pass.
+  3. 8 real, on-disk issue-status values with no documented meaning in
+     ISSUE_QUEUE.md's vocabulary, currently reported as
+     `:unrecognized_yaml_status` rather than silently mapped:
+     `reopened` (2 files), `fixed`, `declined` (2 files),
+     `closed_not_applicable`, `resolved_via_duplicate`,
+     `resolved_not_applicable`, plus one issue file using the
+     requirements-vocabulary value `done` where an issue-vocabulary value
+     was expected. Whoever picks this up should decide, with REVIEWER
+     sign-off, whether each is a legitimate vocabulary extension
+     ISSUE_QUEUE.md should document (and what queue-status it maps to) or a
+     one-off typo/legacy spelling that should be corrected to a real value
+     instead.
+
+  **A real, pre-existing parser bug, unmasked (not caused) by this fix:**
+  `Mix.Tasks.Letflow.CheckIssueRefs.capture/2` (around line 219-227)
+  `String.trim`s each line BEFORE regex-matching for a `key: value` field,
+  so an indented line inside a YAML folded block scalar (`description: >`,
+  `resolution: >`) that happens to start with something matching
+  `^\s*status:` gets misread as a real top-level `status:` field.
+  `Enum.find_value` then returns whichever "field" is found FIRST in file
+  order, which is sometimes the prose fragment, not the real field. Found
+  via 4 misparsed files: ISS-0033 (captured
+  "BLOCKED and no released_lock/lock_released_at fields, but" as its
+  status), ISS-0064 (captured a parenthetical clause from its own prose),
+  ISS-0278 (captured the literal string "open:" -- a colon inside a prose
+  sentence), ISS-0631 (captured an Elixir code snippet quoted inside its own
+  description text: `String.to_existing_atom(fv(session, "status"))`). This
+  bug predates ISS-0848 entirely and was invisible before because every
+  misparse happened to land in the old, undifferentiated
+  `mix letflow.check_issue_refs` output as a different kind of finding (or
+  wasn't checked against at all) -- it is now visible specifically because
+  check_queue_reconciliation's new `:unrecognized_yaml_status` finding kind
+  reports the exact (wrong) captured value, making the parser defect
+  self-evident. Real files' actual `status:` fields (verified by direct
+  `grep -n '^status:'` on all four) are: ISS-0033 `open`, ISS-0064
+  `resolved`, ISS-0278 `open`, ISS-0631 (not yet verified -- flagged for
+  whoever fixes this to confirm).
+affected_files:
+  - lib/mix/tasks/letflow.check_issue_refs.ex
+  - docs/issues/ISS-0108.yaml
+  - docs/issues/ISS-0112.yaml
+  - docs/issues/ISS-0285.yaml
+  - docs/issues/ISS-0423.yaml
+  - docs/issues/ISS-0447.yaml
+  - docs/issues/ISS-0453.yaml
+  - docs/issues/ISS-0678.yaml
+  - docs/issues/ISS-0734.yaml
+  - docs/issues/ISS-0745.yaml
+  - docs/issues/ISS-0764.yaml
+  - docs/issues/ISS-0776.yaml
+  - docs/issues/ISS-0783.yaml
+  - docs/issues/ISS-0786.yaml
+  - docs/issues/ISS-0789.yaml
+  - docs/issues/ISS-0033.yaml
+  - docs/issues/ISS-0064.yaml
+  - docs/issues/ISS-0278.yaml
+  - docs/issues/ISS-0631.yaml
+  - docs/agents/protocols/ISSUE_QUEUE.md
+  - docs/requirements.yaml
+related:
+  - ISS-0848
+severity_rationale: >
+  MAJOR -- not because any single item is severe, but because the parser
+  bug means mix letflow.check_issue_refs (an existing, already-relied-on
+  check) has been silently misreporting status for at least 4 files, and
+  the 14+2 genuine status-disagreement backlog represents real,
+  currently-undetected drift between the queue (which gates future
+  get_next_task claims) and the yaml (which humans/agents read as ground
+  truth) -- exactly the class of problem ISS-0848 itself was filed to catch,
+  just at a scale too large to safely bulk-resolve in one pass without
+  individually verifying each item's true state.
+fix_direction: >
+  1. Fix `CheckIssueRefs.capture/2`'s line-matching to only consider
+     column-0 (non-indented) lines as real top-level fields, or use a real
+     YAML parser instead of line-by-line regex matching, so a folded block
+     scalar's contents can never be misread as a sibling field.
+  2. For each of the 14 open-vs-done/blocked issues: read the file in full,
+     determine the TRUE current state (genuinely resolved but yaml never
+     updated -- back-fill yaml per the ISS-0588/ISS-0593 precedent; or
+     genuinely still open/unresolved -- force-release the queue task back
+     to open or blocked per TASK_QUEUE.md's own release-status rules), one
+     at a time, citing real evidence for each decision.
+  3. Investigate REQ-222 and REQ-294 individually the same way.
+  4. Decide the 8 undocumented issue-status values' fate (document as real
+     vocabulary extensions with queue-status mappings, or correct as
+     typos/legacy spellings) with REVIEWER sign-off, then update
+     mix letflow.check_queue_reconciliation's issue-status mapping table
+     (§3.3b of its design doc) to match the decision.
+  5. Re-run mix letflow.check_queue_reconciliation after each batch of
+     fixes to confirm convergence toward zero findings.
+status: open
+queue_ref: "Q-849"
+github_ref: "GH-1848"

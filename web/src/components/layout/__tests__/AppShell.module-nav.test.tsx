@@ -1,11 +1,32 @@
 // @vitest-environment jsdom
+/**
+ * ISS-0836: the 'sample' module was removed from production REGISTERED_MODULES;
+ * its test fixture data is kept here as a local const (moved to test-only data
+ * per ISS-0836's acceptance criteria). The registry module is mocked so tests
+ * do not depend on the production module list.
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import type { UserSession } from '@/types/api'
+import type { InstalledModule } from '@/api/me'
 
 expect.extend(jestDomMatchers)
+
+// Test-only fixture module definition (was previously in production REGISTERED_MODULES;
+// removed from registry.ts by ISS-0836, kept here as test-only data).
+const SAMPLE_FIXTURE_NAV_ITEM = { to: '/sample', label: 'Sample', roles: ['CANDIDATE'] }
+
+vi.mock('@/modules/registry', () => ({
+  getInstalledModuleNavItems: vi.fn(
+    (installed: InstalledModule[]) =>
+      installed.some((m) => m.module_id === 'sample')
+        ? [SAMPLE_FIXTURE_NAV_ITEM]
+        : [],
+  ),
+  REGISTERED_MODULE_ROUTE_OBJECTS: [],
+}))
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: vi.fn(() => ({ data: undefined })),

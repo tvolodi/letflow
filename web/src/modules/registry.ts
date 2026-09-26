@@ -3,13 +3,11 @@ import { examModuleDefinition } from './exam/index'
 import { EXAM_ROUTE_OBJECTS } from './examRoutes'
 import type { RouteObject } from 'react-router-dom'
 
+// P1 registry: exam module only (REQ-412). Empty until a real module is registered.
+// The 'sample' placeholder that shipped with b6a45852/REQ-404 is removed here
+// per REQ-406's own spec ("empty in P1; exam is added in REQ-412") and ISS-0836's
+// resolution.
 export const REGISTERED_MODULES: ModuleDefinition[] = [
-  {
-    id: 'sample',
-    depends_on: [],
-    routes: [{ path: '/sample', element: 'SamplePage' }],
-    navItems: [{ to: '/sample', label: 'Sample', roles: ['CANDIDATE'] }],
-  },
   examModuleDefinition,
 ]
 

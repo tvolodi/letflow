@@ -3602,3 +3602,46 @@ for push events; filtering applies only to pull_request events.
 2. gh run view <run-id> --log --job <backend-job-id> | grep "Finished in" — verify
    ExUnit ran and produced output. A job log with only setup steps and no ExUnit line is
    a path-filter skip, not a passing run.
+
+## Two concurrent sessions independently found, filed, and fixed the exact same test defects under different issue ids, and a follow-up filing collided on filename with the real, already-merged record (2026-09-26, ORCH)
+
+While closing out ISS-0848 (a TEST-RUNNER full-suite run), 2 new-looking failure
+clusters were found (a stale `Letflow.Modules.CatalogTest` assertion, an
+`ExamFixturesTest` FK-violation teardown race) and filed as `ISS-0850`/`ISS-0851`
+via `register_task` (queue ids 850/851). Only on rebasing the follow-up docs PR
+did it surface that a DIFFERENT concurrent session had independently found the
+SAME two underlying defects roughly the same day, filed them as `ISS-0838`/
+`ISS-0839` (queue ids 838/839), *and already shipped fixes* for both (PRs #1852/
+#1853, merged before this discovery). The follow-up filing here used the queue's
+own freshly-`register_task`-allocated ids (850/851) for its filenames — correct
+per this project's own numbering discipline — but those ids happened to be the
+exact ones the OTHER session's own `docs/issues/ISS-0850.yaml`/`ISS-0851.yaml`
+already occupied for unrelated content, so `git rebase` on the follow-up branch
+produced a real add/add conflict between two live, correctly-numbered, but
+entirely different issue records.
+
+Root cause: nothing wrong with the numbering (both sides followed
+`register_task`'s own atomic allocation correctly) — the actual failure was
+running a full-suite TEST-RUNNER pass and treating its "new/unclassified"
+failures as necessarily new *findings*, without first checking whether the
+underlying test files had already been touched/fixed very recently by someone
+else. A `git log -1 --format=%cd -- <failing test file>` (or simply reading the
+file's current content before assuming it represents live drift) would have
+shown both files were fixed hours earlier by other, already-merged commits.
+
+**Fix going forward:**
+
+*Preventive:* before filing a "new" issue for a test failure discovered during a
+full-suite run, check `git log --oneline -5 -- <affected file(s)>` for very
+recent activity — a same-day fix already in flight (or already merged and
+somehow still failing in a stale worktree) is common on a multi-session project
+and changes what's worth filing.
+
+*Detective:* an add/add rebase conflict on a `docs/issues/ISS-NNNN.yaml` file
+during a follow-up PR is the cheap, unavoidable signal this happened — read
+BOTH sides in full before resolving; if the other side is a real, already-merged
+fix for the same defect your side describes, your own filing is a duplicate.
+Close/discard your PR (don't force your version through), and release your own
+queue task(s) as `done` cross-referencing the real, already-resolved record(s)
+— the underlying defect genuinely is fixed, even though your own filing never
+shipped anything itself.

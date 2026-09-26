@@ -129,7 +129,7 @@ describe('REQ-412 AC4 — /exam route guard when exam module not installed', () 
       isLoading: false,
     } as never)
 
-    const { ModuleGuard } = await import('@/modules/ModuleGuard')
+    const { ModuleGuard } = await import('@/components/routing/ModuleGuard')
     const { NotFoundPage } = await import('@/pages/NotFoundPage')
 
     render(

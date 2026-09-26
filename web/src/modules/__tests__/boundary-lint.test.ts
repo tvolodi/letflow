@@ -67,6 +67,19 @@ describe('module-boundary ESLint rule (ISS-0845, real shipped config)', () => {
     expect(messages).toHaveLength(0)
   })
 
+  it('case 4b: registry.ts -> module index, alias form is allowed (proves the registry.ts override does something)', async () => {
+    // Unlike case 4's relative specifier, `@/modules/exam/index` contains the
+    // literal "modules" segment the top-level rule matches on. Without the
+    // `src/modules/registry.ts` override turning `no-restricted-imports` off,
+    // this import would be rejected exactly like case 2's alias-form probe.
+    const messages = await lint(
+      realConfigESLint,
+      'src/modules/registry.ts',
+      "import { examModuleDefinition } from '@/modules/exam/index'\nexport {}\n",
+    )
+    expect(messages).toHaveLength(0)
+  })
+
   it('case 5: module -> core is allowed', async () => {
     const messages = await lint(
       realConfigESLint,

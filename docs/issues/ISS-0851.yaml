@@ -1,0 +1,41 @@
+id: ISS-0851
+title: >
+  Mix.Tasks.Letflow.Seed.ExamFixturesTest: solution_pack_installs FK violation
+  on deleted-tenant teardown race (5 failures)
+discovered_by: TEST-RUNNER (ISS-0848 full-suite run, 2026-09-26)
+discovered_in_run: fix/ISS0848-queue-reconciliation-20260926
+discovered_at: "2026-09-26T13:05:00Z"
+severity: BLOCKER
+tags:
+  - test
+  - exam
+  - solution-pack
+  - teardown
+description: |
+  5 Mix.Tasks.Letflow.Seed.ExamFixturesTest failures, all one root cause:
+  a foreign-key violation on solution_pack_installs during test teardown.
+  cleanup_bpm_default/0 deletes the tenants row before deleting the
+  solution_pack_installs rows that reference it (FK: solution_pack_installs
+  -> tenants, no cascade). REQ-410/411 changed the exam seed to install the
+  exam module via Installs.install/3, which writes solution_pack_installs
+  rows. The teardown never cleaned them up.
+affected_files:
+  - test/mix/tasks/letflow.seed.exam_fixtures_test.exs
+related:
+  - ISS-0839
+  - REQ-410
+  - REQ-411
+fix_direction: |
+  Delete solution_pack_installs rows for tenant_id before deleting the tenant
+  row in cleanup_bpm_default/0. Also delete solution_pack_artefact_bases
+  (written by SolutionPack.install/3 step 6b, same FK constraint).
+status: done
+resolved_at: "2026-09-26T18:20:00Z"
+resolved_by: ORCH (session-A) via ISS-0839
+resolution: |
+  Fixed in PR #1852 (ISS-0839 fix): added SolutionPackInstall and
+  SolutionPackArtefactBase aliases and two Repo.delete_all calls before
+  the tenant deletion in cleanup_bpm_default/0. All 5 tests pass. No lib/
+  changes. Verified by running the test twice against the same test DB.
+queue_ref: "Q-851"
+github_ref: null # not separately tracked on GitHub; sub-finding of ISS-0848

@@ -46,7 +46,7 @@ acceptance_criteria:
   - "the reconciliation check exists, and a test proves it flags (i) a status mismatch and (ii) a queue_ref to a non-existent task, using fixtures, not the live service"
   - "running the check against the live queue after step 1 reports no mismatches (output quoted)"
   - "docs/anti-patterns.md has both entries"
-status: in_progress
+status: resolved
 progress_2026_09_26: >
   Step 1 (AC1) done by ORCH. Reconciled every listed task via lock+release
   against the live queue: 252, 256, 734, 794, 797, 798, 799, 800, 801, 802,
@@ -101,3 +101,45 @@ progress_2026_09_26: >
   backlog explicitly tracked as its own follow-up, not silently dropped.
 queue_ref: "Q-848"
 github_ref: "GH-1846"
+resolution_2026_09_26: >
+  Closing this issue: AC2, AC3 and AC4 (AC1 already closed by ORCH's own
+  step-1 work above) all independently verified.
+
+  AC2 (the check + fixture tests): ELIXIR-DEV built
+  lib/mix/tasks/letflow.check_queue_reconciliation.ex (new, standalone mix
+  task, deliberately not wired into mix letflow.check's alias) plus
+  test/mix/tasks/letflow_check_queue_reconciliation_test.exs (31 tests).
+  CODE-DESIGNER -> CODE-DESIGN-VALIDATOR passed across 2 rounds (the second
+  an issue-status-vocabulary amendment after ELIXIR-DEV's own live run
+  exposed a design gap producing ~40 false positives). REVIEWER FAILed once
+  on a real anchor-defeat bug in the new module's own capture/2 (reproduced
+  against 3 real files), then re-verified PASS after the fix. TEST-DESIGN-
+  VALIDATOR passed (4/5 mutations caught with concrete evidence; 1 non-
+  blocking, design-acknowledged scope gap). TEST-RUNNER: full suite
+  4972/4986 passed, all 14 failures classified pre-existing/unrelated.
+  RELEASE-VALIDATOR independently re-derived AC2 and re-ran the fixture
+  suite twice (once from a completely fresh `mix deps.get` after a
+  concurrent session's rebase wiped deps/.env mid-verification), confirming
+  the parser fix holds against the real files that exposed it. DOC-UPDATER
+  re-ran `mix test test/mix/tasks/letflow_check_queue_reconciliation_test.exs`
+  after rebasing this branch onto latest origin/main (9632ae1d) and
+  confirms all 31 tests still pass post-rebase.
+
+  AC3: RELEASE-VALIDATOR independently confirmed the scoping decision
+  recorded above (step 1's own 14-item list stays clean; the much larger
+  backlog the vocabulary fix incidentally surfaced is tracked separately as
+  ISS-0849, already resolved by a concurrent session's own reconciliation
+  pass, PR #1857) is defensible engineering judgment, not scope-dodging.
+
+  AC4: docs/anti-patterns.md's "queue_ref derived from the filename" and
+  "requirement flipped done in yaml without releasing its queue task"
+  entries already merged to main earlier this session.
+
+  One MINOR unrouted finding from RELEASE-VALIDATOR (RequirementStatus
+  InvariantsTest A4b) was out of scope for this issue and has been filed
+  separately as ISS-0852 (queue task 852, PR #1863) rather than folded in
+  here.
+
+  Resolved by DOC-UPDATER via PR opened from branch
+  fix/ISS0848-queue-reconciliation-20260926 (rebased onto origin/main
+  9632ae1d immediately before merge).

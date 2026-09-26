@@ -1,0 +1,330 @@
+run_id: WF03-ISS0848-20260926
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+issue_ids:
+  - ISS-0848
+branch: fix/ISS0848-queue-reconciliation-20260926
+head_sha_verified: >
+  00859a88 -- confirmed via `git log --oneline -3` in the assigned worktree,
+  matching the dispatch exactly. Top of branch: "fix(ISS-0848): stop
+  trimming leading whitespace before capture/2's anchored match", on top of
+  "fix(ISS-0848): dispatch status-compatibility mapping by source.kind
+  (§3.3b)" and "design(ISS-0848): amend queue reconciliation check for
+  issue-status vocabulary gap". All prior gates (CODE-DESIGN-VALIDATOR x2
+  rounds, REVIEWER after one real fix round, TEST-DESIGN-VALIDATOR with 4/5
+  mutations caught) already PASSed per dispatch.
+generated_at: "2026-09-26T13:50:00Z"
+change_scope:
+  note: >
+    `git diff --stat origin/main...HEAD`: lib/letflow/design/iss0848-queue-reconciliation-check.md
+    (new, design doc, +516), lib/mix/tasks/letflow.check_queue_reconciliation.ex
+    (new, +507), test/mix/tasks/letflow_check_queue_reconciliation_test.exs
+    (new, +349). 3 files, 1372 insertions, 0 deletions -- this branch adds
+    no new migration and touches no shared test/support/ file. Confirmed:
+    `mix letflow.check`'s alias does NOT include this new mix task
+    (deliberate per dispatch) -- it is not part of the standard gate's
+    invocation list.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-iss0848
+  host_health_check: >
+    `free -h` at session start: 15Gi total, 6.9Gi used, 1.3Gi free, 7.9Gi
+    buff/cache, 8.3Gi available -- low raw "free" but the large reclaimable
+    buff/cache meant this was not the near-zero-available
+    docker-worktree-leak signature from anti-patterns; proceeded. Docker
+    required `sudo -n docker` (invoking user has no docker group membership;
+    passwordless sudo works, confirmed working throughout). `sudo -n docker
+    ps -a` showed only long-lived, legitimately-named stacks
+    (letflow-1-postgres-1 [port 5463, healthy -- this worktree's shared
+    container], letflow-postgres-1 [port 5462, healthy], letflow-2-postgres-1
+    [exited], letflow-dev, letflow-queue-test, letflow-1-keycloak-1, plus
+    unrelated other-project containers) -- zero orphaned `wt-*`-prefixed
+    containers.
+  shared_container_confirmation: >
+    This worktree's untracked `.env` sets LETFLOW_DB_PORT=5463, byte-identical
+    to the primary checkout's own `.env` (/home/tvolodi/workspace/letflow-1/.env).
+    `docker inspect letflow-1-postgres-1` confirmed this container's compose
+    project is "letflow-1" with `working_dir=/home/tvolodi/workspace/letflow-1`
+    -- i.e. this worktree is deliberately configured to SHARE the primary
+    checkout's Postgres container, matching docs/anti-patterns.md's "Running
+    docker compose up from a secondary worktree checkout" entry exactly. Per
+    that entry's "Correct alternative", `docker compose up` was never run
+    here -- only `docker ps`/`docker inspect` to confirm the existing shared
+    container was healthy and reachable (it was) before proceeding.
+  connection_exhaustion_incident: >
+    Runs 1-2 (default N=8, then TEST_PARALLEL_N=4) both produced huge,
+    near-uniform failure spreads (1120/4387 and 1094/4442) with one partition
+    each fully aborting on `FATAL 53300 (too_many_connections)`. Root-caused
+    via `pg_stat_activity`: a persistent, unrelated `mix run --no-halt`
+    process (host PID 3011743, running since Thu Sep 24 20:22, cwd
+    /home/tvolodi/workspace/letflow-1, listening on 0.0.0.0:4000 -- a live
+    dev server, not a test zombie) permanently holds ~30 connections to the
+    `letflow_dev` database on the SAME shared Postgres server, eating into
+    the server-wide max_connections=100 budget that test_parallel.sh's own
+    headroom arithmetic did not know about. This process was NOT killed
+    (it is a legitimately-running server another session may depend on,
+    per anti-patterns.md's own "sibling-session contention is not
+    hypothetical" lesson) -- worked around instead via
+    `TEST_CONNECTION_HEADROOM=45` to shrink the computed per-partition pool
+    size and leave room for it.
+  tenant_template_staleness_check: >
+    Run 3 (N=4, headroom=45, clean connection budget) still produced 1233
+    combined failures, this time with ZERO too_many_connections errors.
+    First failing test's full log matched docs/anti-patterns.md's "Stale
+    tenant_template schema surviving a migration-adding commit" entry
+    exactly: `versions_missing=[20260926010001]` in
+    Letflow.TenantFixtureDispatchTest. Listed `letflow_test*` databases on
+    the shared container: 11 found (letflow_test, letflow_test1-8,
+    letflow_test97, letflow_test388) -- stale leftovers from earlier
+    sessions' runs against this same persisted volume, predating migration
+    20260926010001. Terminated their connections and `DROP DATABASE`'d all
+    11, then re-ran.
+  concurrent_sessions_check: >
+    Multiple other worktrees exist under the same scratchpad root (wt-req397
+    family, wt-rv-iss0770, wt-testrunner-iss0770, wt-tdv-iss0773,
+    wt-testrunner-iss0773, wt-testrunner-req397-v2) sharing this host: `git
+    worktree list` confirms them. No `mix test`/`test_parallel` process from
+    any of them was observed contending during the final (5th) run.
+  toolchain: "local mix/Elixir 1.20.3 (Erlang/OTP 29) toolchain, Linux host"
+  test_parallel_n: "4 (explicit override) with TEST_CONNECTION_HEADROOM=45 (explicit override, accounting for the persistent external mix run --no-halt process's ~30 held connections on the shared Postgres server)"
+command: "TEST_PARALLEL_N=4 TEST_CONNECTION_HEADROOM=45 scripts/test_parallel.sh"
+full_output_capture: >
+  /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/test_full_run5.log
+  (final, clean run's summary) plus full per-partition logs preserved at
+  /tmp/letflow_test_parallel.Lt27tJ/partition-{1..4}.log (script
+  auto-preserved these because exit_code=1). Earlier attempts' logs also
+  preserved: /tmp/letflow_test_parallel.AnLeat (run1, connection-exhaustion
+  contaminated), /tmp/letflow_test_parallel.W1WyPV (run2, same),
+  /tmp/letflow_test_parallel.Jyy3CM and /tmp/letflow_test_parallel.FwPL3V
+  (runs 3-4, stale-tenant_template contaminated). All runs launched as true
+  background OS processes (`nohup ... &`, PID captured) and polled with
+  repeated blocking foreground Bash calls (a `grep`/`kill -0` until-loop),
+  per core-directives' "No Background Wait For A Cross-Turn Notification" --
+  never via Monitor, never ending the turn awaiting a cross-turn resume.
+runs_performed: 5
+run_5_final:
+  combined_totals:
+    tests: 4980
+    properties: 6
+    failures: 14
+    passed: 4972
+    passed_over_total: "4972/4986"
+  per_partition:
+    - {partition: 1, tests: 1385, properties: 0, failures: 2, exit: 2}
+    - {partition: 2, tests: 1330, properties: 3, failures: 5, exit: 2}
+    - {partition: 3, tests: 1223, properties: 3, failures: 7, exit: 2}
+    - {partition: 4, tests: 1042, properties: 0, failures: 0, exit: 0}
+failure_classification:
+  - test: "A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume"
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    partition: 1
+    classification: NEW_UNCLASSIFIED
+    detail: >
+      docs/status/ requirement-status corpus self-check drift. `git diff
+      origin/main -- docs/status/` for this branch is empty (ISS-0848 never
+      touches docs/status/), so this is pre-existing repo-state drift from
+      other concurrent sessions, not attributable to ISS-0848. Not on the
+      dispatch's named known-class list (ISS-0826/0827/0766-class/0831-0834).
+  - test: "system invocation (AC2) exits 0 on the current branch tree (AC2)"
+    module: Mix.Tasks.Letflow.CheckBoundariesTaskTest
+    partition: 1
+    classification: KNOWN_ISS_0832_CLASS
+    detail: >
+      Subprocess inherits MIX_TEST_PARTITION=1 from test_parallel.sh's
+      environment with MIX_ENV defaulting to "dev"; config's own guard
+      rejects that combination ("MIX_TEST_PARTITION is set, but MIX_ENV is
+      dev"), so the child exits 1 instead of 0. Same root cause documented
+      for REQ-404's ISS-0832 classification (test/mix/tasks/letflow.check_boundaries_test.exs
+      shells out without pinning MIX_ENV). ISS-0848 does not touch this
+      test file or letflow.check_boundaries.
+  - test: "ISS-0819 -- run/1 single-file mode, isolated tmp fixture T-FILE-VIOLATIONS-LINTED-DIRECTLY -- a single-file target with real hard violations is linted, not silently filtered to an empty scope"
+    module: Mix.Tasks.Letflow.LintHandoffsTest
+    partition: 2
+    classification: KNOWN_ISS_0826_CLASS
+    detail: "Named explicitly in the dispatch as the handoff-lint backlog class. ISS-0848 does not touch lint_handoffs.ex or handoffs/."
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- the deferred table holds exactly 9 rows, no more"
+    module: Letflow.RouterTest
+    partition: 2
+    classification: KNOWN_ISS_0827
+    detail: "Named explicitly in the dispatch (router deferred-count). ISS-0848 does not touch router.ex."
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- all 9 deferred sub-router module names are listed"
+    module: Letflow.RouterTest
+    partition: 2
+    classification: KNOWN_ISS_0827
+    detail: "Same root cause as the row-count failure above."
+  - test: "REQ-400 AC2 — Catalog module list and lookup config/config.exs registers an empty module list"
+    module: Letflow.Modules.CatalogTest
+    partition: 2
+    classification: NEW_UNCLASSIFIED
+    detail: >
+      Assertion diff shows `Letflow.Modules.Exam` present in
+      `Catalog.entry_modules()` where the test expects only the 3 test-only
+      fixtures -- config/config.exs has a real, currently-registered module
+      (`Letflow.Modules.Exam`) that this REQ-400-family test's assumption
+      predates. `git diff origin/main -- config/, lib/letflow/modules/`
+      for this branch is empty -- ISS-0848 never touches module
+      registration. Reads as in-flight S11 REQ-400..416 module-catalog work
+      (git log shows "docs(S11): decision 0039 modular-platform layering +
+      REQ-400..416" landed on main recently) outpacing this one test's own
+      expectations. Not on the dispatch's named known-class list --
+      flagging as new/unclassified rather than folding into an existing
+      class.
+  - test: "REQ-400 AC2 — Catalog module list and lookup entry_modules/0 returns the registered test-only fixtures, in config order"
+    module: Letflow.Modules.CatalogTest
+    partition: 2
+    classification: NEW_UNCLASSIFIED
+    detail: "Same root cause as the empty-module-list failure above."
+  - test: "T-LIVE-* -- the real docs/issues/ corpus T-LIVE-CLEAN -- the tree itself satisfies every rule"
+    module: Mix.Tasks.Letflow.CheckIssueRefsTest
+    partition: 3
+    classification: KNOWN_ISS_0831_CLASS
+    detail: >
+      docs/issues/ISS-0843.yaml uses superseded field names
+      (`queue_task_id:`/`github_issue_number:` instead of
+      `queue_ref:`/`github_ref:`). Same class as ISS-0831 named in the
+      dispatch (check_issue_refs vocabulary drift), different file. This
+      SAME violation independently reproduced under plain `mix
+      letflow.check_issue_refs` (see ac6 section below) -- confirms it is a
+      real, currently-present repo-state defect, not a test-harness
+      artifact. ISS-0848 does not touch docs/issues/.
+  - test: "T-LIVE-* -- the real docs/issues/ corpus T-LIVE-NO-SUPERSEDED-NAMES -- the normalisation is not silently reverted"
+    module: Mix.Tasks.Letflow.CheckIssueRefsTest
+    partition: 3
+    classification: KNOWN_ISS_0831_CLASS
+    detail: "Same root cause as T-LIVE-CLEAN above (docs/issues/ISS-0843.yaml)."
+  - test: "content correctness the scoreable exam has exactly 3 questions, none shorttext, and passing_score_pct 60.0"
+    module: Mix.Tasks.Letflow.Seed.ExamFixturesTest
+    partition: 3
+    classification: NEW_UNCLASSIFIED
+    detail: >
+      Setup-phase failure, not an assertion failure: `** (Postgrex.Error)
+      ERROR 23503 (foreign_key_violation) update or delete on table
+      "tenants" violates foreign key constraint
+      "solution_pack_installs_tenant_id_fkey"` during test cleanup/teardown
+      of a prior test's tenant. Reads as a test-ordering/cleanup bug in this
+      seed task's own test suite (deletes a tenant before its
+      solution_pack_installs child rows), not an ISS-0848 concern -- `git
+      diff origin/main` for this branch touches neither
+      letflow.seed.exam_fixtures nor solution_pack_installs. Not on the
+      dispatch's named known-class list.
+  - test: "content correctness the mixed exam has exactly 5 questions, one per type"
+    module: Mix.Tasks.Letflow.Seed.ExamFixturesTest
+    partition: 3
+    classification: NEW_UNCLASSIFIED
+    detail: "Same FK-violation root cause as the scoreable-exam failure above -- cascades from the same setup-ordering defect."
+  - test: "idempotency -- running the task twice leaves exactly one exam per title, one category per exam, one rule per exam, one session"
+    module: Mix.Tasks.Letflow.Seed.ExamFixturesTest
+    partition: 3
+    classification: NEW_UNCLASSIFIED
+    detail: "Same FK-violation root cause as above."
+  - test: "no exam_assignment no exam_assignment entity definition is active in the seeded tenant"
+    module: Mix.Tasks.Letflow.Seed.ExamFixturesTest
+    partition: 3
+    classification: NEW_UNCLASSIFIED
+    detail: "Same FK-violation root cause as above."
+  - test: "session outcome the seeded session's submit outcome is status grading_pending, passed nil"
+    module: Mix.Tasks.Letflow.Seed.ExamFixturesTest
+    partition: 3
+    classification: NEW_UNCLASSIFIED
+    detail: "Same FK-violation root cause as above."
+classification_summary:
+  known_iss_0826_class: 1
+  known_iss_0827: 2
+  known_iss_0831_class: 2
+  known_iss_0832_class: 1
+  new_unclassified: 8
+  attributable_to_iss_0848: 0
+overall_verdict: >
+  PASS for ISS-0848 specifically -- zero of the 14 failures trace to
+  ISS-0848's diff (lib/mix/tasks/letflow.check_queue_reconciliation.ex, its
+  design doc, its own test file). None of the 14 failing tests are in or
+  near ISS-0848's own files -- confirmed by content inspection of every
+  failure, not just by module-name pattern-matching. 6 of 14 match named
+  classes from the dispatch (ISS-0826-class x1, ISS-0827 x2, ISS-0831-class
+  x2, ISS-0832-class x1). The remaining 8 (1 Letflow.Docs.RequirementStatusInvariantsTest
+  docs/status drift, 2 Letflow.Modules.CatalogTest REQ-400-family
+  config-vs-test drift, 5 Mix.Tasks.Letflow.Seed.ExamFixturesTest failures
+  all sharing one FK-violation teardown-ordering root cause) are NOT on the
+  dispatch's known-class list -- flagged explicitly as new/unclassified per
+  the no-speculation rule. All are confirmed via `git diff origin/main` on
+  their implicated files/areas to be pre-existing and untouched by
+  ISS-0848's own diff; they read as real, currently-unfiled repo-state drift
+  that should be filed as their own issues by ORCH/ISSUE-FIXER, not as
+  ISS-0848 defects.
+  Combined: 4972/4986 passed, 14 failed.
+iss_0848_own_test_file:
+  command: "MIX_ENV=test mix test test/mix/tasks/letflow_check_queue_reconciliation_test.exs --no-color"
+  result: "31 passed, 0 failures (exactly the 31 tests expected per the dispatch)"
+ac_letflow_check:
+  command: "mix letflow.check"
+  exit_status: "FAIL (non-zero exit, confirmed directly)"
+  gate_that_failed: "letflow.check_issue_refs -- 2 violation(s) in docs/issues/ISS-0843.yaml"
+  raw_violations: |
+    [R2] docs/issues/ISS-0843.yaml:38: `queue_task_id:` is a superseded field name -- use `queue_ref:` with a prefixed value
+    [R2] docs/issues/ISS-0843.yaml:40: `github_issue_number:` is a superseded field name -- use `github_ref:` with a prefixed value
+  preceding_gates: >
+    letflow.lint_handoffs: OK -- 0 new violations across 3020 handoff files
+    (25 pre-existing grandfathered, traced to ISS-0190).
+    letflow.check_async_sandbox_reachability: OK -- 94 async:true test
+    files scanned, 0 violations. Both passed clean before check_issue_refs.
+  new_mix_task_confirmation: >
+    Confirmed by reading the check output: `letflow.check_queue_reconciliation`
+    (ISS-0848's new task) never appears anywhere in `mix letflow.check`'s
+    output -- exactly as expected per the dispatch's statement that this
+    task is deliberately NOT part of the alias yet.
+  scope_independently_verified: >
+    Grepped the full `mix letflow.check` output for "0848"/"ISS-0848"/
+    "queue_reconciliation" -- zero matches anywhere. The only hard
+    violation is docs/issues/ISS-0843.yaml, a file ISS-0848's diff never
+    touches (`git diff origin/main --name-only` for this branch lists only
+    the 3 files in change_scope above).
+  classification: KNOWN_ISS_0831_CLASS
+  detail: >
+    Same superseded-field-name defect class as the ISS-0831-class test
+    failures above, just a different implicated file (ISS-0843.yaml instead
+    of ISS-0831.yaml/ISS-0832.yaml). Pre-existing, repo-wide, unrelated to
+    ISS-0848.
+  status_for_iss_0848: >
+    ISS-0848's own change introduces no new check_issue_refs (or any other
+    gate) violation. The command's real overall exit is FAIL today for
+    every branch on this host until the docs/issues/ISS-0843.yaml
+    superseded-field-name drift is fixed -- not an ISS-0848-specific gap.
+notes:
+  - >
+    Host-health work performed before any test run: (1) confirmed the
+    shared letflow-1-postgres-1 container was healthy via docker
+    ps/inspect, never ran docker compose up in this secondary worktree
+    (anti-patterns.md's "Running docker compose up from a secondary
+    worktree checkout"); (2) diagnosed and worked around a persistent
+    external mix run --no-halt process (unrelated to this session,
+    listening on :4000, holding ~30 permanent connections to letflow_dev)
+    eating into the shared Postgres server's max_connections=100 budget --
+    did not kill it (a live dev server another session may depend on),
+    instead widened TEST_CONNECTION_HEADROOM; (3) found and dropped 11
+    stale letflow_test* databases carrying a tenant_template schema missing
+    migration 20260926010001, matching anti-patterns.md's "Stale
+    tenant_template schema surviving a migration-adding commit" entry
+    exactly (root-caused via the first failing test's versions_missing
+    field, not by guessing).
+  - >
+    Full per-partition logs preserved under /tmp/letflow_test_parallel.Lt27tJ/
+    (script's own preservation policy on non-zero exit) for
+    RELEASE-VALIDATOR's independent inspection, in addition to this
+    worktree's own scratchpad copies of all 5 run logs listed above.
+next_action: >
+  ISS-0848's implementation and its own test file are clean (31/31). Route
+  to RELEASE-VALIDATOR for independent re-verification. Recommend
+  ORCH/ISSUE-FIXER: (1) file/route the persistent host-level connection
+  contention (an unrelated mix run --no-halt dev server permanently
+  consuming ~30 connections against the shared test Postgres server) as a
+  standing host-hygiene item so future TEST-RUNNER/RELEASE-VALIDATOR
+  dispatches on this host know to check pg_stat_activity for it before
+  assuming a regression; (2) periodically reset/drop stale letflow_test*
+  databases on this host's persisted Postgres volume per the existing
+  tenant_template-staleness anti-pattern entry (recurred a 3rd time here);
+  (3) file two new issues from the 8 new/unclassified failures above: (a)
+  Letflow.Modules.CatalogTest's REQ-400-family fixture-count assumption now
+  stale against config.exs's real registered Letflow.Modules.Exam module,
+  and (b) Mix.Tasks.Letflow.Seed.ExamFixturesTest's FK-violation
+  teardown-ordering bug (deletes a tenant before its solution_pack_installs
+  child rows) cascading into 5 failures. Neither blocks ISS-0848.

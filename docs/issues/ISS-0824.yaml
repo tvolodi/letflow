@@ -53,7 +53,17 @@ fix_direction: >
   opens the Cancel dialog, and asserts the instanceName shown matches the definition
   (not a literal 'undefined'). This can be a new test file
   web/src/pages/instances/__tests__/InstanceDetailPage.cancelDialog.test.tsx.
-status: open
+status: done
+resolved_at: "2026-09-26T19:35:00Z"
+resolved_by: ORCH (session-A)
+resolution: |
+  Added web/src/pages/instances/__tests__/InstanceDetailPage.cancelDialog.test.tsx.
+  Test mounts InstanceDetailPage with useInstance returning an instance without
+  definition_name/version, useDefinition returning {name: 'iss0824-fixture',
+  version: '3.0.0'}, and useAuth with PLATFORM_ADMIN role. Clicks the Cancel
+  button, waits for the real CancelInstanceDialog to open (role="dialog"),
+  and asserts the dialog text contains 'iss0824-fixture v3.0.0' and does not
+  contain the literal 'undefined'. Test passes.
 queue_ref: "Q-837"
   # queue allocated issue_ref ISS-0837 (the GitHub title carries that prefix); this file keeps
   # its original id ISS-0824, which was locally numbered and collides with an unrelated queue task.

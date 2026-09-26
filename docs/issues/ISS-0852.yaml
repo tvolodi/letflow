@@ -1,0 +1,47 @@
+id: ISS-0852
+title: >
+  RequirementStatusInvariantsTest A4b: 9 unparseable ISO-8601 timestamps in
+  the status-history corpus
+discovered_by: RELEASE-VALIDATOR (WF03-ISS0848-20260926)
+discovered_in_run: WF03-ISS0848-20260926
+discovered_at: "2026-09-26T14:00:00Z"
+severity: MINOR
+tags:
+  - test
+  - status-tracking
+description: >
+  Found by RELEASE-VALIDATOR while independently verifying ISS-0848 (ran
+  mix letflow.check.test twice, including once from a completely fresh
+  dependency install). test/docs/requirement_status_invariants_test.exs's
+  A4b assertion fails with 9 unparseable ISO-8601 timestamps somewhere in
+  the docs/status/requirement_status.v*.yaml corpus. Confirmed unrelated to
+  ISS-0848's own diff (no docs/status/ file is part of that fix's 3-file
+  change set). Likely the same broad schema-drift class ISS-0833 already
+  documents (req/status/timestamp/run_id/agent/summary shape instead of the
+  documented req/event/agent/at/note schema), but not yet individually
+  root-caused to specific entries/volumes.
+affected_files:
+  - docs/status/requirement_status.v22.yaml
+  - docs/status/requirement_status.v23.yaml
+  - docs/status/requirement_status.index.yaml
+related:
+  - ISS-0833
+severity_rationale: >
+  MINOR -- a test-corpus schema issue in append-only history tracking, not a
+  production defect or a currently-blocking gate (mix letflow.check.test is
+  not part of the standard mix letflow.check CI gate).
+fix_direction: >
+  1. Run test/docs/requirement_status_invariants_test.exs A4b in isolation
+     and read its failure output for the exact file/line of each of the 9
+     unparseable timestamps.
+  2. For each, determine whether it's pre-existing history in an already
+     closed-and-pinned volume (in which case declare it in the index's
+     known_shape_anomalies:/known_anomalies: per the established mechanism,
+     same as ISS-0833's own entries -- never rewrite frozen history) or a
+     new entry in the current open volume (in which case FIX it directly,
+     since the append-only rule only protects already-committed/closed
+     history, not the volume still being written to).
+  3. Confirm A4b passes afterward, real output quoted.
+status: open
+queue_ref: "Q-852"
+github_ref: "GH-1862"

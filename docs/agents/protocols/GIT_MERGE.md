@@ -73,9 +73,13 @@ attempt while either is red or pending is rejected by GitHub, not merely inadvis
 > merged and the run-history entries recording their (incorrect) justification
 > are append-only historical fact, not errors to silently correct — but no
 > further direct push to `main` is authorized for any reason, docs-only
-> included. This paragraph's own enforcement remains prose-only, not a
-> mechanical pre-push gate; see the anti-patterns entry for why that gap is
-> judged acceptable here rather than a defect requiring a new check.
+> included. **Mechanical enforcement — as of 2026-09-26, ISS-0841:** This
+> paragraph's enforcement is no longer prose-only. `tvolodi/letflow` now has a
+> GitHub repository ruleset (`id: 24040748`, "main-protection", see decision
+> 0034's Applied addendum) that enforces this rule at the git ref level. A bare
+> `git push origin main` is rejected with `GH013: Changes must be made through a
+> pull request` — not advisory, not bypassable by the pipeline identity for a
+> bare push.
 
 **What "reported green" means here.** This suite carries a standing set of pre-existing
 failures (13-15 at the time of writing) and has for days, so "green" read as "zero

@@ -44,6 +44,20 @@ acceptance_criteria:
   - "a PR with green required checks merges successfully (PR URL quoted)"
   - "0034 has an 'Applied' addendum with date and verification outputs"
   - "`git grep -n -i \"push origin main\" docs/agents .claude` shows no instruction to push directly to main"
-status: open
+status: done
+resolved_at: "2026-09-26T17:50:00Z"
+resolved_by: ORCH (session-A)
+resolution: |
+  1. Ruleset applied: gh api -X POST repos/tvolodi/letflow/rulesets -> id 24040748
+     "main-protection", enforcement active, bypass_mode "pull_request".
+  2. Bare push rejected: GH013 "Changes must be made through a pull request."
+     Throwaway commit reset, nothing landed.
+  3. PR verification: ISS-0841 doc changes committed on feature branch, pushed,
+     and merged via PR (see PR URL in 0034 addendum).
+  4. 0034 addendum: "Applied 2026-09-26" section added with ruleset response,
+     push rejection output, and override-path note.
+  5. GIT_MERGE.md: "prose-only" note replaced with mechanical-enforcement notice.
+  6. git grep -n -i "push origin main" docs/agents .claude: no instruction to
+     push directly; all 4 matches in GIT_MERGE.md are prohibitions.
 queue_ref: "Q-841"
 github_ref: "GH-1839"

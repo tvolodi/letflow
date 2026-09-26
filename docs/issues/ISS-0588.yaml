@@ -34,4 +34,14 @@ description: >
   correction should read as an amendment rather than a silent edit.
 affected_files:
   - docs/migration/decisions/0022-bilimbaga-vertical.md
+status: resolved
+resolution: >
+  Back-filled by ORCH 2026-09-26 while working ISS-0848 (queue reconciliation):
+  this file never carried a `status:` field, discovered by the new
+  mix letflow.check_queue_reconciliation task's first live run. The
+  letflow-queue task (Q-588) itself has been status: done since
+  2026-09-11T03:22:37Z, closing GH#1210 -- no resolution detail beyond the
+  queue's own done transition is recoverable from this file or its linked
+  GitHub issue at this remove; recorded as resolved to match the queue's own
+  authoritative state rather than left inconsistent.
 queue_ref: Q-588

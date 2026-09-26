@@ -260,15 +260,24 @@ classifier.
 4. `fetch_queue_tasks/1` (the only network call in this module): `GET
    https://queue-test.ai-dala.com/tasks` via `:httpc` (mirrors
    `Letflow.Webhooks.do_dispatch_http/3`'s own use of `:httpc` — no new HTTP
-   client dependency), `Authorization: Bearer <token>` header, decode the
-   `{"error": ..., "data": [...]}` envelope with `Jason.decode!/1` (already a
-   project dependency) reading task lists from `data`, **never from the
-   response's top level** — the exact parsing mistake
-   `docs/anti-patterns.md`'s "Retrying a `register_task` POST after
-   misreading its success response" entry documents for this same envelope
-   shape on a different endpoint. A non-2xx response or a JSON-decode failure
-   is a hard `Mix.raise` (network/service failure is not a clean "no
-   mismatches" pass).
+   client dependency), `Authorization: Bearer <token>` header, decode with
+   `Jason.decode!/1` (already a project dependency), reading the task list
+   from the **`"tasks"`** key — per REQ-222's own acceptance criterion
+   (`docs/requirements.yaml`: "GET /tasks with a valid bearer token returns
+   200 and a JSON body with a `\"tasks\"` key whose value is a list covering
+   every task in the database"), and independently confirmed empirically:
+   ORCH's own live `GET /tasks` call earlier in this same session parsed the
+   response as `%{"tasks" => [...]}`, not `%{"data" => [...]}`. **This is a
+   DIFFERENT envelope shape from `register_task`'s POST response**
+   (`{"error": ..., "data": {...}}`, a single created-task object) — do not
+   assume the two endpoints share a shape; `docs/anti-patterns.md`'s
+   "Retrying a `register_task` POST after misreading its success response"
+   entry is about that other, `data`-keyed endpoint and does not apply here
+   directly, though the general lesson (read the actual documented/observed
+   key, don't assume) is the same one this correction re-applies. A non-2xx
+   response, a JSON-decode failure, or a response missing the `"tasks"` key
+   entirely is a hard `Mix.raise` (network/service failure or an unexpected
+   response shape is not a clean "no mismatches" pass).
 5. `reconcile/2` on the combined `sources` and the fetched `queue_tasks`.
 6. Print the report (counts + full finding list, same "always printed"
    discipline as the sibling checks) and exit `0` iff `findings == []`,

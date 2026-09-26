@@ -291,6 +291,26 @@ defmodule Letflow.Test.TenantTemplate do
   #
   # INV-8 is unaffected: template_db_state/0 is read-only. The rename-into-
   # place invariant is still only produced by build_template!/0's step 5.
+  #
+  # design §0.7/INV-8: because build_template!/0 now builds the WHOLE
+  # sequence under a randomized staging schema and only renames it to
+  # "tenant_template" as the LAST step (after the self-check has already
+  # passed against the staging name), the literal name "tenant_template"
+  # can never be observed half-built -- its existence under that exact name
+  # IS the completeness proof. So this check does not need to re-run the
+  # self-check defensively "just in case" the schema exists but is broken:
+  # that state is structurally impossible to produce. A bare existence/comment
+  # check (:missing vs. :stale vs. :current, above) is therefore correct, not
+  # merely convenient.
+  #
+  # (ISS-0853: this comment previously lived on a now-deleted sibling function,
+  # template_built_in_db?/0 -- a binary existence check ISS-0842 replaced with
+  # this three-state one but initially left defined, unused, purely to keep
+  # this rationale in context. That left an unused-function compile warning
+  # fatal under `mix compile --warnings-as-errors`; the function added nothing
+  # this call site didn't already retire, so it was deleted and the rationale
+  # moved here, onto the function that actually performs the check it
+  # describes.)
   defp template_db_state do
     %{rows: rows} =
       Repo.query!(
@@ -328,32 +348,6 @@ defmodule Letflow.Test.TenantTemplate do
       |> Base.encode16(case: :lower)
 
     @fingerprint_comment_prefix <> fingerprint
-  end
-
-  # design §0.7/INV-8: because build_template!/0 now builds the WHOLE
-  # sequence under a randomized staging schema and only renames it to
-  # "tenant_template" as the LAST step (after the self-check has already
-  # passed against the staging name), the literal name "tenant_template"
-  # can never be observed half-built -- its existence under that exact name
-  # IS the completeness proof. So this check no longer needs to re-run the
-  # self-check defensively "just in case" the schema exists but is broken:
-  # that state is now structurally impossible to produce. A bare existence
-  # check is therefore correct, not merely convenient.
-  #
-  # NOTE (ISS-0842): this function is retained for the inline doc comment
-  # history, but is no longer called from ensure_template!/0. template_db_state/0
-  # supersedes it for the inside-lock re-check, since :missing maps to "not
-  # built" and :stale maps to "needs rebuild" (a case this function could not
-  # distinguish). Kept private and not deleted to preserve the §0.7/INV-8
-  # rationale comment above in context.
-  defp template_built_in_db? do
-    %{rows: rows} =
-      Repo.query!(
-        "SELECT 1 FROM information_schema.schemata WHERE schema_name = $1",
-        [@template_schema]
-      )
-
-    rows != []
   end
 
   # design §0.7/§2.3 steps 0-6 (rework 4): ATOMIC BUILD-THEN-RENAME-INTO-PLACE.

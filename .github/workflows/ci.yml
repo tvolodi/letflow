@@ -112,7 +112,14 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # ISS-0840: only cancel superseded runs on pull_request events (where a newer
+  # push to the same PR genuinely replaces the old one). Push events to main must
+  # NOT be cancelled: a docs-only follow-up push would cancel the preceding
+  # backend run, producing a false-green where the backend gate steps were
+  # skipped and the run reported success with no ExUnit output at all. The
+  # original unconditional cancel-in-progress was responsible for
+  # REQ-401..REQ-416's backend runs all being cancelled or skipped.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Not a required status check. Computes whether backend-relevant /
@@ -139,12 +146,27 @@ jobs:
         run: |
           set -uo pipefail
 
+          # ISS-0840: on push to main, always run both gates regardless of which
+          # files changed. The path filter exists to skip expensive CI on a PR that
+          # only touched docs -- but on main itself, no run should ever be skipped:
+          # a "docs-only" push to main could follow a backend change pushed seconds
+          # earlier, and the path filter for that follow-up push would incorrectly
+          # report backend=false for the commit range it sees (the docs delta only),
+          # silently skipping the backend gate whose job is to prove the whole branch
+          # is green. This was the root cause of REQ-401..REQ-416's CI false-green
+          # (see ISS-0840 and the anti-patterns entry this fix adds). The path
+          # filter is kept for pull_request events only, where each PR's own commit
+          # range genuinely represents everything that changed relative to main.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "Push to main -- always running both gates (ISS-0840: path filter on push-to-main caused false-green)."
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            BASE_SHA="${{ github.event.before }}"
-            HEAD_SHA="${{ github.event.after }}"
           else
             BASE_SHA=""
             HEAD_SHA=""

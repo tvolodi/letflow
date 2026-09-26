@@ -3575,3 +3575,30 @@ the live queue's status for its `impl_order`/`queue_ref` task, fail on any misma
 catches this directly and should run automatically — either as a `mix letflow.check`
 step (when `$QUEUE_AUTH_TOKEN` is available) or as a step ORCH runs at session start,
 per ISS-0848's own resolution.
+
+## Treating a green main CI check as proof when the backend gate was skipped or a prior run was cancelled (ISS-0840)
+
+**What happened.** CI on main used cancel-in-progress: true (workflow-wide) and a
+per-push path filter. A docs-only push to main triggered a new CI run; that run's
+changes job saw only doc files changed and set ackend=false. The backend gate
+skipped its mix letflow.check step and reported success with no ExUnit output. Every
+one of S11's requirements (REQ-401..REQ-416) landed this way: their backend runs were
+either cancelled by a following push or the backend gate skipped due to a path-filter
+miss. The final main HEAD had a green CI check that was not evidence of anything.
+
+**The rule.** A green check on main is proof only if the backend and frontend gate logs
+contain real output — ExUnit's Finished in line for the backend, check script output
+for the frontend. A run whose backend gate log is empty (path-filter skip) or whose
+status is cancelled is NOT a green check.
+
+**The fix (ISS-0840).** cancel-in-progress now applies only to pull_request events
+(where a newer push to the same PR genuinely supersedes the old run). Push-to-main runs
+are never cancelled. The path filter now always outputs ackend=true/rontend=true
+for push events; filtering applies only to pull_request events.
+
+**Practical consequence.** Before treating any main CI run as green:
+1. gh run view <run-id> --json jobs --jq '.jobs[] | {name, conclusion}' — confirm both
+   gate jobs show "conclusion":"success", not "skipped" or "cancelled".
+2. gh run view <run-id> --log --job <backend-job-id> | grep "Finished in" — verify
+   ExUnit ran and produced output. A job log with only setup steps and no ExUnit line is
+   a path-filter skip, not a passing run.

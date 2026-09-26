@@ -101,9 +101,8 @@ export const router = createBrowserRouter([
       { path: 'webhooks', element: <WebhooksPage /> },
       // REQ-393: tenant-agnostic entity-list browse screen (filter/sort/page-size)
       { path: 'entities/:entityType', element: <EntityListBrowserPage /> },
-      // REQ-412: module-provided routes (exam etc.). Each entry is wrapped in
-      // ModuleGuard so paths only render when the module is installed;
-      // uninstalled routes fall through to the catch-all below.
+      // REQ-412 / ISS-0844: module-provided routes, wrapped in ModuleGuard by registry.ts.
+      // Paths only render when the module is installed; uninstalled routes fall through.
       ...REGISTERED_MODULE_ROUTE_OBJECTS,
       // Catch-all: any path not matched above renders the not-found page.
       { path: '*', element: <NotFoundPage /> },

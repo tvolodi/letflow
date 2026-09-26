@@ -1,23 +1,29 @@
-import type { InstalledModule, ModuleDefinition, ModuleNavItem, ModuleRoute } from './types'
+/** web/src/modules/registry.ts — ISS-0844 / REQ-406
+ *
+ *  The ONE sanctioned importer of module code (0039 D3). Holds ONE list of
+ *  registered module definitions and derives both route objects and nav items
+ *  from it. Registry wraps each module's routeObjects in a ModuleGuard so
+ *  module code itself never imports the guard (0039 D3).
+ */
+import { createElement } from 'react'
+import type { InstalledModule, ModuleDefinition, ModuleNavItem } from './types'
 import { examModuleDefinition } from './exam/index'
-import { EXAM_ROUTE_OBJECTS } from './examRoutes'
+import { ModuleGuard } from '@/components/routing/ModuleGuard'
 import type { RouteObject } from 'react-router-dom'
 
-// P1 registry: exam module only (REQ-412). Empty until a real module is registered.
-// The 'sample' placeholder that shipped with b6a45852/REQ-404 is removed here
-// per REQ-406's own spec ("empty in P1; exam is added in REQ-412") and ISS-0836's
-// resolution.
 export const REGISTERED_MODULES: ModuleDefinition[] = [
   examModuleDefinition,
 ]
 
-/** All registered module RouteObjects for inclusion in the static router.
- *  Each top-level entry wraps its children in ModuleGuard so routes only
- *  render when the module is installed. Router.tsx spreads this array into
- *  the authenticated route's children. */
-export const REGISTERED_MODULE_ROUTE_OBJECTS: RouteObject[] = [
-  ...EXAM_ROUTE_OBJECTS,
-]
+/** All registered module RouteObjects wrapped in ModuleGuard, for inclusion
+ *  in the static router. Router.tsx spreads this array into the authenticated
+ *  route's children. Each entry's guard checks installed_modules at render
+ *  time; a module path for an uninstalled tenant renders NotFoundPage. */
+export const REGISTERED_MODULE_ROUTE_OBJECTS: RouteObject[] =
+  REGISTERED_MODULES.map((mod) => ({
+    element: createElement(ModuleGuard, { moduleId: mod.id }),
+    children: mod.routeObjects,
+  }))
 
 export function getInstalledModuleDefinitions(
   installedModules: InstalledModule[],
@@ -25,13 +31,6 @@ export function getInstalledModuleDefinitions(
 ): ModuleDefinition[] {
   const installedIds = new Set(installedModules.map((module) => module.module_id))
   return definitions.filter((definition) => installedIds.has(definition.id))
-}
-
-export function getInstalledModuleRoutes(
-  installedModules: InstalledModule[],
-  definitions: ModuleDefinition[] = REGISTERED_MODULES,
-): ModuleRoute[] {
-  return getInstalledModuleDefinitions(installedModules, definitions).flatMap((definition) => definition.routes)
 }
 
 export function getInstalledModuleNavItems(

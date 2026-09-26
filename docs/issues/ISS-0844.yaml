@@ -56,6 +56,37 @@ acceptance_criteria:
   - "`git grep -n -i exam -- web/src/router.tsx web/src/components/layout/AppShell.tsx` returns nothing (output quoted)"
   - "for a tenant with exam installed all five exam SPA paths render; for a tenant without it each renders NotFound -- existing tests plus any missing case, output quoted"
   - "`npm run check` in web/ passes, output quoted"
-status: open
+status: done
+resolved_at: "2026-09-26T20:15:00Z"
+resolved_by: ORCH (session-A)
+resolution: |
+  Changes (all in web/):
+  1. src/components/routing/ModuleGuard.tsx - new location for ModuleGuard
+     (moved from web/src/modules/ModuleGuard.tsx per ISS-0844 fix direction)
+  2. src/modules/ModuleGuard.tsx - DELETED
+  3. src/modules/examRoutes.tsx - DELETED (content moved inside exam module)
+  4. src/modules/exam/examRoutes.tsx - NEW: exam's RouteObjects (JSX), no guard
+  5. src/modules/exam/index.ts - updated: routeObjects replaces routes (strings)
+  6. src/modules/types.ts - updated: ModuleDefinition.routeObjects: RouteObject[]
+     instead of routes: ModuleRoute[]; added AGENT_RUNNER to ModuleRole;
+     removed ModuleRoute interface
+  7. src/modules/registry.ts - ONE list (REGISTERED_MODULES); derives both
+     REGISTERED_MODULE_ROUTE_OBJECTS and nav items from it; registry wraps
+     each module's routeObjects in ModuleGuard via createElement
+  8. src/modules/__tests__/registry.test.ts - updated to use routeObjects;
+     added third test proving single-list derivation
+  9. src/modules/exam/__tests__/examModule.nav.test.tsx - updated import path
+     for ModuleGuard
+  10. src/router.tsx - removed 'exam' from comment (AC3)
+
+  AC verification:
+  - AC1: git ls-files web/src/modules at root: registry.ts, types.ts, __tests__/,
+    exam/ (output: see git ls-files src/modules grep above)
+  - AC2: registry.ts has ONE list; registry.test.ts third test verifies it
+  - AC3: git grep -n -i exam -- web/src/router.tsx web/src/components/layout/AppShell.tsx
+    returns nothing (verified)
+  - AC4: existing exam nav tests in AppShell.module-nav.test.tsx cover install/no-install;
+    examModule.nav.test.tsx covers the 5 exam paths for installed/uninstalled
+  - AC5: npm run check passes (137 test files, 934 tests)
 queue_ref: "Q-844"
 github_ref: "GH-1842"

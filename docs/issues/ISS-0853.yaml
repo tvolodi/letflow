@@ -55,6 +55,39 @@ fix_direction: >
   (e.g. `@compile {:no_warn_unused_function, {:template_built_in_db?, 0}}`)
   if a future caller is anticipated. Re-run `mix compile --warnings-as-errors`
   clean afterward.
-status: open
+status: resolved
+resolution: >
+  Fixed by ELIXIR-DEV: deleted the dead `defp template_built_in_db?/0` from
+  test/support/tenant_template.ex and moved its "§0.7/INV-8" rationale
+  comment onto `template_db_state/0` (the function that replaced its call
+  site since ISS-0842's fix), confirmed via a repo-wide grep that there was
+  no remaining caller and no existing
+  `@compile {:no_warn_unused_function, ...}` precedent to follow instead.
+
+  REVIEWER passed: confirmed the dead-function claim, confirmed the comment
+  migration is coherent (tense correctly adjusted for its new home), zero
+  functional diff, and a fresh isolated compile came back clean.
+
+  TEST-RUNNER passed: confirmed via genuinely fresh/isolated compiles that
+  `mix compile --warnings-as-errors` -- `mix letflow.check`'s very first
+  gate -- is clean for the first time this session. Full suite: 4983/4988,
+  the 5 failures all matched already-tracked issues (ISS-0827 x2, ISS-0832,
+  ISS-0834, ISS-0852), none new. tenant_template's own tests: 12/12.
+
+  RELEASE-VALIDATOR passed: independently re-derived both acceptance
+  criteria with its own fresh isolated compiles (run twice), spot-checked 4
+  of the 5 known failures by reading the actual issue files and comparing
+  symptoms (all matched exactly), noted a 6th failure on one run (an
+  ISS-0453-class flake, unrelated, non-reproducing on retry), and judged the
+  CI-vs-local discrepancy TEST-RUNNER flagged as not worth a new issue
+  (plausible CI build-cache explanation, matches an already-documented
+  anti-pattern class).
+
+  Both real acceptance criteria satisfied: AC1 (`mix compile
+  --warnings-as-errors` clean, real output quoted across 3 independent
+  fresh runs by 3 different agents) and AC2 (rationale comment preserved
+  and coherent, confirmed by 2 independent readers).
+resolved_by: "DOC-UPDATER"
+resolved_at: "2026-09-26T18:22:30Z"
 queue_ref: "Q-853"
 github_ref: "GH-1867"

@@ -127,3 +127,19 @@
       ISS-0834, ISS-0832), satisfying AC4 as worded. Branch
       docs/ISS0846-module-guide-20260926 (e166f189, a53ba621) confirmed clean on
       origin/main (merge-base e1f90a35, zero drift) before PR/merge.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-26T18:22:30Z
+    note: >
+      ISS-0853 resolved: deleted dead `template_built_in_db?/0` from
+      test/support/tenant_template.ex, moved its "§0.7/INV-8" rationale
+      comment onto `template_db_state/0` (its replacement since ISS-0842).
+      Notable because this unblocked `mix letflow.check`'s very first gate
+      (`mix compile --warnings-as-errors`) -- confirmed genuinely clean for
+      the first time this session by 3 independent agents' fresh isolated
+      compiles (ELIXIR-DEV, REVIEWER, TEST-RUNNER; RELEASE-VALIDATOR
+      confirmed a 4th time, twice over). Full suite 4983/4988, remaining 5
+      failures all pre-existing and already tracked (ISS-0827 x2, ISS-0832,
+      ISS-0834, ISS-0852). Both ACs satisfied with real evidence.

@@ -43,6 +43,15 @@ acceptance_criteria:
   - "the entry_modules/0 test asserts the exact four-element list from config/test.exs, in that order"
   - "the config.exs test asserts the production module list is exactly [Letflow.Modules.Exam]"
   - "`git diff --name-only main` lists only test/letflow/modules/catalog_test.exs (plus this issue's yaml/status files)"
-status: open
+status: done
+resolved_at: "2026-09-26T18:40:00Z"
+resolved_by: ORCH (session-A)
+resolution: |
+  test/letflow/modules/catalog_test.exs - two stale test expectations updated:
+  1. entry_modules/0 test: list updated to include Letflow.Modules.Exam as
+     first element (prepended by REQ-408). Comment updated to cite REQ-408.
+  2. config.exs test: renamed "registers exactly [Letflow.Modules.Exam]",
+     pattern updated to ~r/config :letflow, :modules, \[Letflow\.Modules\.Exam\]/.
+  All 12 catalog tests pass. git diff --name-only main -- lib/ is empty.
 queue_ref: "Q-838"
 github_ref: "GH-1836"

@@ -397,3 +397,31 @@
       (handoffs/WF02-REQ418-20260927/step-05-release-validator.json). Branch
       feature/WF02-REQ418-20260927. Flipping docs/requirements.yaml's
       REQ-418 status: pending -> done in this same append.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-27T10:35:00Z
+    note: >
+      ISS-0832 (MINOR, CheckBoundariesTaskTest AC2 fails under partitioned
+      test runs) resolved and closed in docs/issues/ISS-0832.yaml. Root
+      cause confirmed by direct reproduction (not merely inferred): the
+      AC2 test's System.cmd/3 call to the spawned `mix letflow.check_boundaries`
+      subprocess carried no env: override, so the child defaulted its own
+      MIX_ENV to "dev" while inheriting the parent's MIX_TEST_PARTITION,
+      tripping config/dev.exs's ISS-0015 guard. `env -u MIX_ENV
+      MIX_TEST_PARTITION=3 mix test test/mix/tasks/letflow.check_boundaries_test.exs`
+      reproduced exactly this failure (28/29 passed) pre-fix -- the same
+      condition observed live in PR #1900's CI backend-gate run -- and
+      29/29 passed post-fix, same command. Fix on branch
+      fix/ISS0832-mix-env-partition-leak-20260927 (commit 29e88425):
+      explicitly forwards MIX_ENV/MIX_TEST_PARTITION/MIX_BUILD_PATH to the
+      subprocess, defaulting MIX_ENV to "test" when unset, matching
+      test/support/tenant_slug_test.exs's established pattern. Exactly 1
+      file changed: test/mix/tasks/letflow.check_boundaries_test.exs.
+      Handled as an ORCH direct action per ORCHESTRATOR.md §10 (single
+      file, no new public function/module/@spec, no migration, no
+      supervision-tree file, no tenant-data path, no change to any
+      test's asserted expected value) -- still through the full
+      branch/PR/merge procedure per GIT_MERGE.md, never a direct push to
+      main. Queue task 832 released done.

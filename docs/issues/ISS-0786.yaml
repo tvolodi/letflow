@@ -57,4 +57,17 @@ queue_ref: "Q-785"
 # issue. Established, recurring queue-id/filename divergence pattern for
 # this project; queue_ref/github_ref below are authoritative for this file.
 github_ref: "GH-1744"
-status: open
+status: resolved
+resolved_in_run: "fix/ISS0786-dev-pool-size"
+resolved_at: "2026-09-23T08:00:00Z"
+resolution: >
+  Fixed in commit d067a0c2 (PR #1747): config/dev.exs's pool_size raised
+  from 10 to 30, giving Letflow.Plugs.Admission's derived global_cap
+  (pool_size - reserved_headroom) real headroom (cap 28 vs. prior 8).
+  Confirmed live on main -- this record was never flipped to resolved
+  when the fix merged. No change needed to config/runtime.exs's
+  POOL_SIZE env-override handling (piece 2 of the suggested_fix was not
+  pursued; the static bump alone closed the observed 503s). Not flagged
+  as conflicting with the CI postgres-sizing concerns raised in
+  ISS-0219/ISS-0222 -- this only affects config/dev.exs, not
+  config/test.exs's own pool sizing used by CI.

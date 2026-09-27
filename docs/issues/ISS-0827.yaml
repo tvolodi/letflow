@@ -36,9 +36,33 @@ fix_direction: >
   hardcoded @deferred list and/or "exactly 9 rows" expectation) to match
   the current, smaller deferred-routes table in lib/letflow/router.ex
   after ISS-0822's removal of 4 dead routes.
-status: open
+status: resolved
 queue_ref: "Q-830"
   # queue allocated issue_ref ISS-0830 (the GitHub title carries that prefix); this file keeps
   # its original id ISS-0827, which was locally numbered and collides with an unrelated queue task.
   # Never derive ids -- read these two fields. Registered late by ORCH in ADHOC-20260926-S11-AUDIT.
 github_ref: "GH-1828"
+resolution_2026_09_27: >
+  Fixed on branch fix/ISS0830-router-deferred-count-20260927 (commit
+  02a001ff): test/letflow/router_test.exs's stale REQ-070 AC5 assertion
+  updated to match lib/letflow/router.ex's current, smaller deferred-routes
+  table -- the hardcoded @deferred list/count corrected from 9 entries down
+  to 5, matching what commit 65312cd9 (ISS-0822's dead-route removal) had
+  already shrunk router.ex to. Test-only change, exactly 1 file touched.
+  RELEASE-VALIDATOR independently re-verified: fresh isolated compile clean;
+  live router.ex deferred-routes table byte-matched against the test's new
+  @deferred list; fresh `mix test test/letflow/router_test.exs` -> 20
+  passed; scope confirmed test-only, exactly 1 file; independent full-suite
+  run 4996/4997 passed with the 1 remaining failure confirmed as the
+  pre-existing unrelated ISS-0832 class; RouterTest/router_test.exs
+  confirmed with ZERO hits anywhere in the failure logs -- the persistent
+  ISS-0827-class failure that had shown up in nearly every PR this session
+  is genuinely gone. PASSed.
+
+  Note on the id/queue mismatch: letflow-queue task 830 tracks this same
+  fix under a colliding `issue_ref: "ISS-0830"` label, but that label does
+  not correspond to a docs/issues/*.yaml file of the same name -- the real,
+  unrelated ISS-0830.yaml on disk is a separate, already-resolved
+  security-invariants staleness issue and was not touched by this fix. See
+  this file's own queue_ref/github_ref comment above and
+  docs/anti-patterns.md's entry on this filename/queue-id mismatch class.

@@ -7,11 +7,11 @@ defmodule Letflow.Routers.MobileTenantConfig do
 
   | Handler | Method/path                    | Delegate                                | Auth     | Response |
   |---------|---------------------------------|------------------------------------------|----------|----------|
-  | config  | `GET /api/mobile/tenant-config` | `Letflow.Identity.get_tenant_by_slug/1`  | **none** | always 200, `{realm_url, locales, default_locale, branding, environment_kind}` |
+  | config  | `GET /api/mobile/tenant-config` | `Letflow.Identity.get_tenant_by_slug/1`  | **none** | always 200, `{realm_url, locales, default_locale, branding, environment_kind, client_id}` |
 
   This is a **second, independent** module from `Letflow.Routers.TenantConfig`
   (REQ-078), not a discriminator on its route — see design §1 for why: the
-  existing module's 2-key allowlist and this module's 5-key allowlist are each
+  existing module's 2-key allowlist and this module's 6-key allowlist are each
   easier to audit in isolation than one handler branching between two response
   contracts. `Letflow.Routers.TenantConfig`'s existing route, behavior and
   response shape are **untouched** by this module.
@@ -42,7 +42,7 @@ defmodule Letflow.Routers.MobileTenantConfig do
   ## The never-error rule is LOAD-BEARING here too
 
   Every path — resolvable slug, unknown slug, missing `?slug=` param, DB
-  error/exception — returns **200** with the full 5-field body. There is no
+  error/exception — returns **200** with the full 6-field body. There is no
   `404`, no partial body, no absent field:
 
     1. **Availability.** The mobile app cannot get past its bootstrap screen
@@ -80,18 +80,41 @@ defmodule Letflow.Routers.MobileTenantConfig do
   can ever produce a non-default `realm_url`. `environment_kind` is the one
   field that is still, and remains, byte-identical across every branch by
   construction (env-derived, not tenant-derived, not touched by this
-  requirement).
+  requirement), and `client_id` joins it as a second such field (REQ-418) —
+  resolved with no tenant input whatsoever, a stronger invariance than the
+  three per-tenant fields' same-if-no-settings-stored convergence.
 
   ## What this endpoint discloses, and what it must never disclose
 
-  It returns exactly five keys: `realm_url`, `locales`, `default_locale`,
-  `branding`, `environment_kind`. All are values the mobile app must learn
-  before it can even start authenticating, and none identifies the tenant
-  beyond the realm URL a user of that tenant already sees at login. The
-  response map is hand-built with exactly these five keys and is **never**
+  It returns exactly six keys: `realm_url`, `locales`, `default_locale`,
+  `branding`, `environment_kind`, `client_id`. All are values the mobile app
+  must learn before it can even start authenticating, and none identifies the
+  tenant beyond the realm URL a user of that tenant already sees at login.
+  The response map is hand-built with exactly these six keys and is **never**
   derived from `%Letflow.Identity.Tenant{}` (INV-2) — it must never return a
   tenant id, slug, display name, status, user count, or any other tenant
-  attribute. **Adding a sixth key to this response is a security change, not
+  attribute.
+
+  `client_id` (REQ-418) is added as a sixth disclosed value. It is safe to
+  disclose unauthenticated for three reasons: (i) an OAuth public-client
+  identifier is not a secret (RFC 6749 §2.2 — a public client has no
+  credential to protect), and `Letflow.Routers.TenantConfig` already
+  publishes its own equivalent `client_id` unauthenticated for the web SPA;
+  (ii) the value is platform-global, not tenant-derived — byte-identical on
+  every never-error branch (resolvable slug, unknown slug, missing `?slug=`,
+  lookup failure), adding zero enumeration signal, the same status
+  `environment_kind` already has; (iii) the alternative — compiling the
+  client id into the mobile app — would work today but freezes it into every
+  shipped build, so a deployment whose realm registers the client under a
+  different name, or a later rename, would require an app store release;
+  serving it from this endpoint keeps the platform's existing "one
+  tenant-agnostic build" constraint (the same constraint that makes this
+  whole endpoint exist) without that release coupling. This does **not**
+  support a per-tenant client name — the value is platform-global by design
+  (point ii) — a per-tenant client id would be a new requirement with its own
+  disclosure analysis.
+
+  **Adding a seventh key to this response is a security change, not
   a feature.**
 
   ## locales / default_locale / branding are per-tenant; environment_kind remains global
@@ -157,6 +180,7 @@ defmodule Letflow.Routers.MobileTenantConfig do
     "primary_color" => "#228be6"
   }
   @default_environment_kind "development"
+  @default_client_id "letflow-mobile"
 
   plug(:match)
   plug(:dispatch)
@@ -172,7 +196,7 @@ defmodule Letflow.Routers.MobileTenantConfig do
   # ── GET /api/mobile/tenant-config (design §3) ─────────────────────────────
   #
   # There is no error map by design: EVERY path returns 200 with the full
-  # 5-field body. See the moduledoc's never-error rule.
+  # 6-field body. See the moduledoc's never-error rule.
 
   @spec handle_mobile_tenant_config(conn :: Plug.Conn.t()) :: Plug.Conn.t()
   defp handle_mobile_tenant_config(conn) do
@@ -220,16 +244,17 @@ defmodule Letflow.Routers.MobileTenantConfig do
 
   # ── Response allowlist (INV-2) ────────────────────────────────────────────
 
-  # EXACTLY five keys, hand-built, never derived from %Tenant{}. Adding a
-  # sixth key here is a security change -- see the moduledoc.
+  # EXACTLY six keys, hand-built, never derived from %Tenant{}. Adding a
+  # seventh key here is a security change -- see the moduledoc.
   @doc """
-  Builds the hand-built 5-key mobile tenant-config response map for the
+  Builds the hand-built 6-key mobile tenant-config response map for the
   given (already-resolved) `realm_id` and the resolved tenant's `settings`
   (or `nil`). Never derived from `%Letflow.Identity.Tenant{}` or
   `Map.from_struct/1` -- see the moduledoc's INV-2 allowlist statement.
   `locales`, `default_locale` and `branding` each resolve per sub-key from
   `settings` where set and from a platform default otherwise (REQ-282);
-  `environment_kind` is env-derived and remains the one true global constant.
+  `environment_kind` and `client_id` (REQ-418) are env-derived and remain the
+  two byte-identical-by-construction, platform-global constants.
   """
   @spec mobile_config_map(realm_id :: String.t(), settings :: map() | nil) :: %{
           required(String.t()) => String.t() | [String.t()] | map()
@@ -240,7 +265,8 @@ defmodule Letflow.Routers.MobileTenantConfig do
       "locales" => locales_from_settings(settings),
       "default_locale" => default_locale_from_settings(settings),
       "branding" => branding_from_settings(settings),
-      "environment_kind" => environment_kind()
+      "environment_kind" => environment_kind(),
+      "client_id" => client_id()
     }
   end
 
@@ -306,4 +332,19 @@ defmodule Letflow.Routers.MobileTenantConfig do
   @spec environment_kind() :: String.t()
   defp environment_kind,
     do: System.get_env("LETFLOW_ENVIRONMENT_KIND") || @default_environment_kind
+
+  # Same env-then-constant resolution shape as Letflow.Routers.TenantConfig's
+  # own client_id/0 (lib/letflow/routers/tenant_config.ex:361,
+  # OIDC_CLIENT_ID || "letflow-web") but this module's own, independent env
+  # var and default -- deliberately NOT shared/reused (mirrors this module's
+  # own @default_branding independence from that module's branding defaults),
+  # so a deployment can override the web client id without accidentally
+  # overriding the mobile one. Read at point of use (INV-4 style, same as
+  # idp_base_url/0 and environment_kind/0 above), never threaded through a
+  # struct field, never logged. Not a secret (RFC 6749 §2.2 -- a public
+  # client has no credential to protect) but the resolution style is
+  # followed regardless (design req418-mobile-oidc-client.md §2.1).
+  @spec client_id() :: String.t()
+  defp client_id,
+    do: System.get_env("MOBILE_OIDC_CLIENT_ID") || @default_client_id
 end

@@ -62,7 +62,7 @@ fix_direction: >
   identical page under the same navigation helper -- possibly first-load
   cost of the wide column set. No suspicion of a product regression: this
   is a test-timing tightness issue, not an application defect.
-status: open
+status: resolved
 queue_ref: "Q-869"
 github_ref: "GH-1897"
 registration_note_2026_09_27: >
@@ -73,3 +73,22 @@ registration_note_2026_09_27: >
   https://github.com/tvolodi/letflow/issues/1897 (newly created). queue_ref was
   already correct by coincidence; github_ref corrected from the prior fabricated
   GH-1887 to the real GH-1897.
+resolution_2026_09_27: >
+  Fixed on branch fix/ISS0869-playwright-timeout-flake-20260927 (commit e844b072).
+  Root cause confirmed exactly as filed: `page.getByTestId('data-table').isVisible({
+  timeout: 10_000 }).catch(() => false)` does not poll/retry -- `Locator.isVisible({
+  timeout })` is a single, immediate DOM check, so the generous-looking 10s timeout
+  never actually waited for the EntityCrudPage table to finish rendering. Replaced
+  with the genuinely auto-retrying `expect(page.getByTestId('data-table')).toBeVisible({
+  timeout: 10_000 })`, matching the idiom already used by the adjacent
+  `examRow(...).toBeVisible({ timeout: 10_000 })` assertion in the same file. Exactly
+  one file changed: web/tests/e2e/exam-lifecycle.e2e.spec.ts (+10/-2).
+  RELEASE-VALIDATOR independently re-verified: 5/5 standalone reruns of the target
+  test with `--retries=0` all passed (previously flaky under these exact conditions);
+  full-file regression run of all 6 tests in exam-lifecycle.e2e.spec.ts, 6/6 passed;
+  diff independently confirmed as the single file/+10/-2 described above; root-cause
+  fix confirmed technically correct (non-retrying `isVisible({ timeout })` swapped for
+  retrying `expect(...).toBeVisible({ timeout })`, the same idiom already in use
+  elsewhere in this file). PASSed. A non-blocking anti-patterns.md entry was added in
+  the same PR per REVIEWER's suggestion during this fix's review, documenting that
+  `Locator.isVisible({ timeout })` does not poll despite the `timeout`-looking option.

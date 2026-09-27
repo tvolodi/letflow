@@ -425,3 +425,39 @@
       test's asserted expected value) -- still through the full
       branch/PR/merge procedure per GIT_MERGE.md, never a direct push to
       main. Queue task 832 released done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-27T10:15:00Z
+    note: >
+      ISS-0869 (MINOR, Playwright flake -- exam-lifecycle.e2e.spec.ts "all
+      exam rows have an Edit action" losing the render race on a non-retrying
+      `isVisible({ timeout })` poll) resolved and closed in
+      docs/issues/ISS-0869.yaml. Fix on branch
+      fix/ISS0869-playwright-timeout-flake-20260927 (commit e844b072):
+      replaced `page.getByTestId('data-table').isVisible({ timeout: 10_000
+      }).catch(() => false)` with the genuinely auto-retrying
+      `expect(page.getByTestId('data-table')).toBeVisible({ timeout: 10_000
+      })`, matching the idiom already used by the adjacent `examRow(...)
+      .toBeVisible({ timeout: 10_000 })` assertion in the same file. Exactly
+      one file changed, web/tests/e2e/exam-lifecycle.e2e.spec.ts (+10/-2).
+      RELEASE-VALIDATOR independently re-verified: 5/5 standalone reruns of
+      the target test with `--retries=0` all passed (previously flaky under
+      these exact conditions); full-file regression run of all 6 tests in
+      the file, 6/6 passed; diff independently confirmed as the single
+      file/+10/-2 described above; root-cause fix confirmed technically
+      correct. PASSed. A non-blocking docs/anti-patterns.md entry was added
+      in the same PR per REVIEWER's suggestion, documenting that
+      `Locator.isVisible({ timeout })` does not poll/retry despite the
+      `timeout` option looking like it does, and that
+      `expect(locator).toBeVisible({ timeout })` is the genuinely
+      auto-retrying idiom to use instead. Landing on top of the just-merged
+      ISS-0832 fix (previous entry, this same volume) during this PR's own
+      rebase: with ISS-0827 and ISS-0832 both now resolved, ISS-0869 is the
+      only remaining chronic-flake class from this session's own tracking,
+      and it is proven non-functional (real feature renders correctly, only
+      the test's own now-fixed poll lost the race) -- not independently
+      re-confirmed against a fresh full-suite run by this append itself,
+      that remains RELEASE-VALIDATOR's/TEST-RUNNER's claim above, not a new
+      one made here.

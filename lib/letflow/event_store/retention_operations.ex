@@ -108,21 +108,38 @@ defmodule Letflow.EventStore.RetentionOperations do
              computed_at: NaiveDateTime.t()
            }}
   def retention_summary do
-    schemas = provisioned_tenant_schemas()
+    # ISS-0873: wrapped in a single REPEATABLE READ, READ ONLY transaction so
+    # provisioned_tenant_schemas/0, keep_forever_event_types/0 (called
+    # transitively via platform_wide_protected_record_count/1), and the
+    # per-schema count_protected_rows_in_schema/3 fan-out all observe the
+    # exact same committed-as-of-snapshot-start view -- see
+    # lib/letflow/design/iss0873-retention-summary-toctou.md §1. This
+    # function performs no writes and never calls Repo.rollback/1, so
+    # Repo.transaction/1 here can only return {:ok, _} (an infra-level pool
+    # or connection failure raises past this boundary, same as every other
+    # caller of Repo.transaction/1 in this codebase -- design doc OQ-1) or
+    # re-raise whatever exception occurred inside the fun.
+    {:ok, result} =
+      Repo.transaction(fn ->
+        Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
 
-    oldest =
-      case oldest_eligible_month_platform_wide(schemas) do
-        {year, month} -> %{year: year, month: month}
-        nil -> nil
-      end
+        schemas = provisioned_tenant_schemas()
 
-    {:ok,
-     %{
-       oldest_eligible_month: oldest,
-       protected_record_count: platform_wide_protected_record_count(schemas),
-       tenant_schema_count: length(schemas),
-       computed_at: naive_now()
-     }}
+        oldest =
+          case oldest_eligible_month_platform_wide(schemas) do
+            {year, month} -> %{year: year, month: month}
+            nil -> nil
+          end
+
+        %{
+          oldest_eligible_month: oldest,
+          protected_record_count: platform_wide_protected_record_count(schemas),
+          tenant_schema_count: length(schemas),
+          computed_at: naive_now()
+        }
+      end)
+
+    {:ok, result}
   end
 
   @doc """
@@ -339,6 +356,19 @@ defmodule Letflow.EventStore.RetentionOperations do
     end
   end
 
+  # ISS-0873: a schema whose Registration row was present at this
+  # transaction's snapshot-start instant (provisioned_tenant_schemas/0) can
+  # still have its physical schema concurrently DROPPED (a different
+  # partition's tenant-offboarding flow) before this query against it
+  # executes -- catalog/relation-name resolution is not covered by the
+  # surrounding REPEATABLE READ snapshot's row-data consistency guarantee.
+  # Mirrors Letflow.EventStore.Registry.rescue_missing_schema/1's exact
+  # narrow-rescue shape (registry.ex:213-237, ISS-0343): rescue only
+  # %Postgrex.Error{postgres: %{code: :undefined_table}}, re-raise every
+  # other exception unchanged. A vanished schema contributes 0 -- a schema
+  # actively being torn down is not meaningfully "still provisioned" for
+  # this summary's purposes, consistent with provisioned_tenant_schemas/0's
+  # own intent. See design doc §2.
   defp count_protected_rows_in_schema(schema_name, table, keep_forever_types) do
     %Postgrex.Result{rows: [[count]]} =
       Repo.query!(
@@ -347,6 +377,15 @@ defmodule Letflow.EventStore.RetentionOperations do
       )
 
     count
+  rescue
+    e in Postgrex.Error ->
+      case e do
+        %Postgrex.Error{postgres: %{code: :undefined_table}} ->
+          0
+
+        _other ->
+          reraise e, __STACKTRACE__
+      end
   end
 
   defp keep_forever_event_types do

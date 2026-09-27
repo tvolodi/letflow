@@ -7,9 +7,9 @@
   "to_agent": "ISSUE-FIXER",
   "file": "handoffs/WF03-ISS0829-20260927/step-06-issue-fixer-close.json",
   "created_at": "2026-09-27T14:12:02Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-27T14:15:47Z",
+  "completed_at": "2026-09-27T14:15:47Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S11",
@@ -35,9 +35,13 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Closed docs/issues/ISS-0825.yaml: status open -> resolved, resolved_in_run: feature/WF03-ISS0829-20260927, resolved_at: 2026-09-27T14:15:47Z, with a full resolution field citing root cause (EO-004/EO-005 asserted global rollout/tenant-outcome invariants against Letflow.Platform.MigrationRollout's apply_to_existing_rollout/2, which legitimately recomputes active_company_tenant_ids/0 over ALL active company tenants in the shared per-partition DB on every call -- a deliberate, documented design choice per design doc section 9 OQ-1, not a defect -- letting a concurrently-provisioned tenant from another async DataCase test land inside EO-004/EO-005's narrow global-assertion window under -N4 parallel-suite load), the fix (test-file-only scoped-assertion rewrite in test/letflow/platform/migration_rollout_test.exs following the file's existing ISS-0716 precedent; no production code changed), and both independent verification runs: TEST-RUNNER (commit 745a931a: targeted file 12 passed/0 failures; TEST_PARALLEL_N=4 combined 5011/5014 passed, 3 pre-existing/unrelated failures via git-diff attribution, zero referencing MigrationRolloutTest) and RELEASE-VALIDATOR (commit c4d3f257: targeted file 12 passed/0 failures; independent TEST_PARALLEL_N=4 run combined 5008 tests/6 properties/2 failures (5012/5014 passed), both pre-existing Letflow.IdentityTest REQ-019 AC1 confirmed via git-diff; also independently ran mix letflow.check.test N=16 with the same 2-failure class and zero ISS-0069 anti-pattern occurrences; read EO-004/EO-005's actual test bodies, confirmed real DB-reloaded assertions, not weakened to always-pass). Appended a SCOPE-CHANGE 'done' event to docs/status/requirement_status.v23.yaml (the current volume; reconciled first -- index declared entries: 14 matched the actual on-disk grep count of 14, no drift) with a real UTC timestamp (2026-09-27T14:15:47Z), and incremented docs/status/requirement_status.index.yaml's volume 23 entries: field 14 -> 15, matching the file's new actual count of 15 (grep-verified). Volume 23 now at 466 lines / 27691 bytes, well under the 1200-line/120000-byte roll ceiling.",
+    "artifacts_out": [
+      "docs/issues/ISS-0825.yaml",
+      "docs/status/requirement_status.v23.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0829-20260927",
@@ -47,7 +51,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to ORCH. ISS-0825/ISS-0829 fully closed. ORCH should also file the two incidentally-reconfirmed pre-existing failure classes (Letflow.EventStore.RetentionOperationsTest retire_oldest_eligible_month/1, Letflow.IdentityTest REQ-019 AC1) as new issues for future ISSUE-FIXER triage, per RELEASE-VALIDATOR's next_action -- not done in this step, out of scope."
   },
   "rework_count": 0,
   "max_rework": 3

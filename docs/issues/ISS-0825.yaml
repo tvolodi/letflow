@@ -36,7 +36,68 @@ fix_direction: >
   assertion) similar to ISS-0766's own root-cause class, or a resource
   contention pattern (shared connection/schema) that only manifests
   under parallel load.
-status: open
+status: resolved
+resolved_in_run: feature/WF03-ISS0829-20260927
+resolved_at: "2026-09-27T14:15:47Z"
+resolution: >
+  ROOT CAUSE (confirmed by direct code trace, not the CPU-contention
+  guess this issue originally suspected -- see ISSUE-FIXER's step-01
+  diagnosis for the full trace): EO-004/EO-005 in
+  test/letflow/platform/migration_rollout_test.exs asserted GLOBAL
+  rollout/outcome-row invariants (exact row counts, `Enum.all?` over the
+  full outcome set). Letflow.Platform.MigrationRollout's repeat-call
+  path (`apply_to_existing_rollout/2`) legitimately recomputes
+  `active_company_tenant_ids/0` -- scoped to ALL active company tenants
+  in the shared per-partition database, not to any one caller's tenant
+  set -- on every call, sweeping any newly-active tenant into the
+  rollout's scope. This is a deliberate, explicitly-documented
+  production design choice (lib/letflow/design/req374-tenant-migration-
+  fanout-runner.md section 9, OQ-1), not a defect. Under
+  `scripts/test_parallel.sh -N 4`, ~110+ other DataCase test files
+  provision/activate tenants concurrently (async: true) in the same
+  per-partition database as EO-004/EO-005's async: false calls; if one
+  of those commits landed inside the narrow window between EO-005's two
+  back-to-back start_rollout/3 calls (or before EO-004's final
+  "completed" assertion), the global-scope assertions broke. Not a
+  recurrence of ISS-0766 (different mechanism, different module) --
+  same general class of "shared per-partition DB lets an unrelated
+  test's activity leak into a test assuming a closed data set."
+  FIX: test-file-only change to EO-004/EO-005's assertions in
+  test/letflow/platform/migration_rollout_test.exs, following the same
+  file's existing ISS-0716 precedent (the adjacent "queryable outcome
+  record" describe block): scoped tenant/rollout-id-filtered assertions
+  (direct Repo.get! reloads, equality checks scoped to each test's own
+  tenant_ids/rollout_id) in place of global counts/`Enum.all?`. No
+  production code changed -- apply_to_existing_rollout/2's scope-refresh
+  behavior is the correct, intended design.
+  VERIFICATION (two independent full-suite re-runs, neither reproducing
+  the original EO-004/EO-005 failure):
+  TEST-RUNNER (commit 745a931a): targeted
+  test/letflow/platform/migration_rollout_test.exs -> 12 passed, 0
+  failures. TEST_PARALLEL_N=4 scripts/test_parallel.sh clean run
+  combined: 5011/5014 passed, 3 failures, 6 properties -- all 3
+  (Letflow.EventStore.RetentionOperationsTest x1, Letflow.IdentityTest
+  x2) structurally confirmed via `git diff origin/main...HEAD` to be in
+  files this branch's diff never touches; zero failures referenced
+  MigrationRolloutTest/EO-004/EO-005 anywhere in the logs.
+  RELEASE-VALIDATOR (commit c4d3f257, independent re-run, different
+  failure set as expected under contention): targeted file -> 12
+  passed, 0 failures. Its own independent TEST_PARALLEL_N=4 run:
+  combined 5008 tests, 6 properties, 2 failures (5012/5014 passed) --
+  both Letflow.IdentityTest REQ-019 AC1, structurally confirmed
+  pre-existing/unrelated via the same git-diff method. Also
+  independently ran `mix letflow.check.test` (N=16 partitions): same
+  2-failure IdentityTest class, zero occurrences of the ISS-0069
+  anti-pattern substring. RELEASE-VALIDATOR additionally read EO-004/
+  EO-005's actual current test bodies (lines 334-477) and confirmed
+  both assert real DB-reloaded state and real status transitions --
+  not weakened into an always-pass shape.
+  Two pre-existing, unrelated failure classes were incidentally
+  reconfirmed during this run's independent verifications
+  (Letflow.EventStore.RetentionOperationsTest,
+  Letflow.IdentityTest REQ-019 AC1) and are left for ORCH to file as
+  separate issues per RELEASE-VALIDATOR's next_action -- not
+  investigated or fixed here, per scope.
 queue_ref: "Q-829"
   # queue allocated issue_ref ISS-0829 (the GitHub title carries that prefix); this file keeps
   # its original id ISS-0825, which was locally numbered and collides with an unrelated queue task.

@@ -9,7 +9,7 @@
   "created_at": "2026-09-27T05:22:04Z",
   "started_at": null,
   "completed_at": null,
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -50,19 +50,27 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Implemented both parts of REQ-418 per the PASSed design (lib/letflow/design/req418-mobile-oidc-client.md). PART 1: added the letflow-mobile client to priv/keycloak/realms/bpm-default.json exactly per design §1.1 (publicClient true, standardFlowEnabled true, directAccessGrantsEnabled false, implicitFlowEnabled false, serviceAccountsEnabled false, attributes.pkce.code.challenge.method S256, attributes.post.logout.redirect.uris, redirectUris exactly [\"com.bizdala.letflow:/oauth2redirect\"], webOrigins [], realm-roles mapper copied from letflow-web, and a mandatory oidc-audience-mapper naming included.client.audience \"letflow-web\"). Confirmed via `git diff` that this is a pure addition -- no hunk touches letflow-web's existing client object. Added test/letflow/api/keycloak_realm_mobile_client_test.exs (12 tests: every letflow-mobile field, no-wildcard guard, both mappers, and letflow-web's full object via inline literal equality) -- all pass. PART 2: added @default_client_id \"letflow-mobile\" and a private client_id/0 (System.get_env(\"MOBILE_OIDC_CLIENT_ID\") || @default_client_id) to lib/letflow/routers/mobile_tenant_config.ex; mobile_config_map/2 now returns 6 keys (client_id placed last). Rewrote the moduledoc per design §2.3 items 1-4: header table and disclosure section now state six keys plus the verbatim three-point client_id security reasoning (not a secret / platform-global / avoids app-release coupling); 'exactly five keys' no longer appears anywhere in the file, replaced by 'exactly six keys' and 'Adding a seventh key...'. Re-verified the actual moduledoc line numbers before editing (the byte-identical-by-construction sentence is at lines 80-83, inside 'The never-error rule is LOAD-BEARING here too', distinct from the lines 111-113 sentence in the per-tenant section) and extended it by appending 'and client_id joins it as a second such field...' strictly AFTER the existing matched phrase, so test/letflow/routers/mobile_tenant_config_test.exs's pre-existing REQ-282 AC4 assertion (lines 535-536 pre-edit, now ~628) passes UNMODIFIED -- confirmed by running that specific test. Updated @expected_keys to the six-key sorted list and added four new describe blocks (client_id default, client_id env override via MOBILE_OIDC_CLIENT_ID, byte-identical-across-all-four-paths, and moduledoc-no-longer-says-five-keys) -- all pass. Recorded a dated 2026-09-27 addendum in lib/letflow/design/req124-mobile-tenant-config.md per the addendum-not-rewrite convention, noting its own §6/§9 are superseded on key-count only. `mix compile` clean. Targeted test runs: test/letflow/api/keycloak_realm_mobile_client_test.exs + keycloak_realm_audience_mapper_test.exs = 17 passed, 0 failed; test/letflow/routers/mobile_tenant_config_test.exs = 23 passed, 0 failed. Full `mix letflow.check` run twice (after clearing an unrelated stale-connection issue from an earlier crashed run on this host, confirmed via `docker exec ... psql pg_stat_activity` and killing the orphaned erl.exe PID): both runs reproduced identically at 242/243 passed (2/2 properties, 240/241 tests), Failed: 1 test. Root-caused the one failure to test/docs/requirement_status_invariants_test.exs's A4b assertion against docs/status/requirement_status.v22.yaml ('unparseable ISO-8601 timestamps' on unrelated pre-existing entries) -- confirmed via `git status`/`git log` that this task touched neither docs/status/ nor docs/requirements.yaml, and that the repo's own recent commit history (09c96eb4, 'docs(ISS-0848): ... declare pre-existing schema drift') already flags this exact drift as a known, separately-tracked issue predating this run. Not a regression introduced by REQ-418; out of this handoff's owned_modules.",
+    "artifacts_out": [
+      "priv/keycloak/realms/bpm-default.json",
+      "test/letflow/api/keycloak_realm_mobile_client_test.exs",
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "lib/letflow/design/req124-mobile-tenant-config.md"
+    ],
+    "issues": [
+      "Pre-existing, unrelated: mix letflow.check's one test failure (Letflow.Docs.RequirementStatusInvariantsTest A4b, docs/status/requirement_status.v22.yaml) is already tracked under ISS-0848 ('declare pre-existing schema drift', commit 09c96eb4) and is not caused by this change -- flagging for SECURITY-REVIEWER/REVIEWER awareness so it is not mistaken for a regression from this diff."
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ418-20260927",
-      "commit_sha_list": [],
+      "commit_sha_list": ["9e9c860fa02c5c2a42eeb6a63ec64b11dd715fd8"],
       "remote_branch": "origin/feature/WF02-REQ418-20260927",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (step 02c) -- this is a SECURITY CHANGE (identity configuration: new public OIDC client; public unauthenticated response-shape change: sixth client_id key). Do NOT route directly to REVIEWER."
   },
   "rework_count": 0,
   "max_rework": 3

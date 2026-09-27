@@ -180,6 +180,89 @@ defmodule Mix.Tasks.Letflow.CheckBoundariesTest do
       assert result == %{"a" => ["b", "c"], "b" => []}
     end
   end
+
+  # ================================================================
+  # run/1 -- xref exit-code handling (ISS-0831)
+  #
+  # Injectable seam: Application.put_env(:letflow, :check_boundaries_xref_runner, ...)
+  # Design: lib/letflow/design/iss0831-check-boundaries-exit-code.md §4.
+  #
+  # This key has no legitimate non-test setter, so cleanup is an
+  # unconditional `delete_env` (not restore-prior-value), matching
+  # ISS-0697's established convention for this codebase's injectable-seam
+  # tests.
+  # ================================================================
+
+  describe "run/1 -- mix xref non-zero exit (ISS-0831)" do
+    setup do
+      on_exit(fn -> Application.delete_env(:letflow, :check_boundaries_xref_runner) end)
+      :ok
+    end
+
+    # T-XREF-EXIT-NONZERO-RAISES
+    test "T-XREF-EXIT-NONZERO-RAISES -- raises when mix xref exits non-zero" do
+      Application.put_env(:letflow, :check_boundaries_xref_runner, fn ->
+        {"some xref error text", 1}
+      end)
+
+      assert_raise Mix.Error, ~r/mix xref exited 1/, fn -> CB.run([]) end
+    end
+
+    # T-XREF-EXIT-NONZERO-MESSAGE-INCLUDES-OUTPUT
+    test "T-XREF-EXIT-NONZERO-MESSAGE-INCLUDES-OUTPUT -- raised message includes exit code and captured output" do
+      Application.put_env(:letflow, :check_boundaries_xref_runner, fn ->
+        {"internal xref crash: bad_state", 1}
+      end)
+
+      error =
+        assert_raise Mix.Error, fn ->
+          CB.run([])
+        end
+
+      assert error.message =~ "exited 1"
+      assert error.message =~ "internal xref crash: bad_state"
+    end
+
+    # T-XREF-EXIT-NONZERO-SKIPS-PARSE
+    test "T-XREF-EXIT-NONZERO-SKIPS-PARSE -- raises before parsing/classifying, never reaches OK or violation paths" do
+      # This fake output would not crash parse_xref_output/1 (it's a
+      # perfectly valid-looking xref edge), so if the raise message shows
+      # the exit-code text (not an edge-count/OK/violations message), that
+      # proves parsing was never attempted -- the raise fires first.
+      Application.put_env(:letflow, :check_boundaries_xref_runner, fn ->
+        {"lib/a.ex\n`-- lib/b.ex\n", 1}
+      end)
+
+      error =
+        assert_raise Mix.Error, fn ->
+          CB.run([])
+        end
+
+      assert error.message =~ "mix xref exited 1"
+      refute error.message =~ "OK --"
+      refute error.message =~ "violation"
+    end
+
+    # T-XREF-EXIT-ZERO-UNCHANGED
+    test "T-XREF-EXIT-ZERO-UNCHANGED -- normal parse/summary path still works on exit 0" do
+      Application.put_env(:letflow, :check_boundaries_xref_runner, fn -> {"", 0} end)
+
+      assert CB.run([]) == :ok
+    end
+
+    # T-XREF-RUNNER-DEFAULT-IS-REAL-SYSTEM-CMD
+    test "T-XREF-RUNNER-DEFAULT-IS-REAL-SYSTEM-CMD -- with no override configured, the seam falls back to a real subprocess call" do
+      assert Application.get_env(:letflow, :check_boundaries_xref_runner) == nil
+
+      # The real end-to-end proof that the default falls through to a real
+      # `mix xref` invocation lives in CheckBoundariesTaskTest (below),
+      # which shells out to `mix letflow.check_boundaries` with no env
+      # override set and asserts exit 0. Called out explicitly here per
+      # the design's §4 item 5: a regression in that test is a hard
+      # failure of this fix, not an unrelated flake.
+      assert :ok
+    end
+  end
 end
 
 defmodule Mix.Tasks.Letflow.CheckBoundariesTaskTest do

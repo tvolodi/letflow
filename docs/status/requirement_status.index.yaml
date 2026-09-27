@@ -4610,8 +4610,24 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 17
+    entries: 18
     note: >
+      Incremented to 18 by ORCH, reconciled while rebasing
+      feature/WF02-REQ419-20260927 onto origin/main for Step Final: this
+      branch's own tip had independently incremented 16 -> 17 for its own
+      REQ-419 "started" event append (WF02-REQ419-20260927,
+      2026-09-27T15:07:21Z), while origin/main had separately incremented
+      16 -> 17 for DOC-UPDATER's ISS-0873 closing SCOPE-CHANGE append
+      (2026-09-27T20:42:41Z, cross-partition TOCTOU race in
+      retention_summary/0 fixed via REPEATABLE READ transaction + SAVEPOINT
+      degrade paths). Both entries are present on disk after the rebase's
+      own (non-conflicting) merge of requirement_status.v23.yaml itself --
+      `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 18
+      on-disk entries, so the correct combined count is 18, not either
+      side's own 17 alone. 553 lines / 32765 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered. Both prior
+      notes preserved below.
+
       Incremented to 17 by DOC-UPDATER's ISS-0873 closing SCOPE-CHANGE append
       (2026-09-27T20:42:41Z, cross-partition TOCTOU race in
       retention_summary/0 fixed via REPEATABLE READ transaction + SAVEPOINT
@@ -4619,6 +4635,16 @@ volumes:
       docs/status/requirement_status.v23.yaml` = 17 on-disk entries. 535
       lines / 31302 bytes, well under the 1200-line/120000-byte roll
       ceiling, so no roll triggered. Prior note preserved below.
+
+      Incremented to 17 by ORCH's own REQ-419 "started" event append
+      (WF02-REQ419-20260927, 2026-09-27T15:07:21Z) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 17 on-disk entries. This
+      entries: field was not bumped in the same commit that appended the
+      event, which briefly broke RequirementStatusInvariantsTest's A9
+      check on this branch (caught by TEST-RUNNER's Step 4 run); fixed
+      here as a direct ORCH bookkeeping correction, same pattern as the
+      REQ-417 A9 fix recorded earlier in this same index. Prior note
+      preserved below.
 
       Incremented to 16 by ORCH, reconciled while rebasing
       feature/WF03-ISS0829-20260927 onto origin/main: this branch's own

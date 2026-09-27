@@ -53,7 +53,27 @@ fix_direction: >
     end
 
   This ensures any xref failure is loud rather than silently swallowed.
-status: open
+status: resolved
 queue_ref: "Q-831"
   # registered late by ORCH in ADHOC-20260926-S11-AUDIT; any earlier queue_ref here was derived, not allocated
 github_ref: "GH-1829"
+resolution_2026_09_27: >
+  Fixed on branch fix/ISS0831-xref-exit-code-20260927 (commit d4bf3ef6).
+  Mix.Tasks.Letflow.CheckBoundaries.run/1 now captures both output and
+  exit_code from System.cmd/3 (an injectable run_xref/0 seam matching the
+  ISS-0697 precedent, so the failure path is unit-testable without shelling
+  out) and calls Mix.raise/1 loudly whenever exit_code != 0, before any
+  attempt to parse the xref output -- replacing the prior silent-OK false
+  negative described above. Diff is exactly 3 files:
+  lib/mix/tasks/letflow.check_boundaries.ex,
+  test/mix/tasks/letflow.check_boundaries_test.exs, and
+  test/specs/ISS-0831.md. RELEASE-VALIDATOR independently re-verified: fresh
+  isolated compile clean; fresh `mix test
+  test/mix/tasks/letflow.check_boundaries_test.exs` -> 29 passed; an
+  independent mutation check against the pre-fix commit (f3610e7a)
+  reproduced exactly the 3 expected raise-assertion failures then restored
+  cleanly; diff reviewed and confirmed to be exactly the 3 files above;
+  TEST-RUNNER's full-suite report (4994/4997 passed) was confirmed, with all
+  3 remaining failures independently verified as genuinely pre-existing
+  ISS-0832/ISS-0827 classes, unrelated to this change. RELEASE-VALIDATOR
+  PASSed.

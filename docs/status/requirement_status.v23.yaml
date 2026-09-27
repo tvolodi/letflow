@@ -248,3 +248,33 @@
       `mix compile --warnings-as-errors` clean. Branch
       fix/ISS0833-a4b-unparseable-at-20260927 (c0ba2039) rebased onto
       latest origin/main (post ISS-0868 merge) before this append.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-27T05:10:00Z
+    note: >
+      ISS-0831 (MINOR, mix letflow.check_boundaries silently reporting OK
+      when mix xref itself exits non-zero) resolved and closed in
+      docs/issues/ISS-0831.yaml. Fix on branch
+      fix/ISS0831-xref-exit-code-20260927 (commit d4bf3ef6): captured
+      exit_code from System.cmd/3 via an injectable run_xref/0 seam
+      (matching the ISS-0697 precedent) and Mix.raise/1 now fires loudly on
+      a non-zero mix xref exit before parsing, instead of silently reporting
+      a false OK. Exactly 3 files changed:
+      lib/mix/tasks/letflow.check_boundaries.ex,
+      test/mix/tasks/letflow.check_boundaries_test.exs,
+      test/specs/ISS-0831.md. RELEASE-VALIDATOR independently re-verified:
+      fresh isolated compile clean; fresh `mix test
+      test/mix/tasks/letflow.check_boundaries_test.exs` -> 29 passed;
+      independent mutation check against the pre-fix commit (f3610e7a)
+      reproduced exactly the 3 expected raise-assertion failures then
+      restored cleanly; diff reviewed as exactly the 3 files above;
+      TEST-RUNNER's full-suite report (4994/4997 passed) confirmed, all 3
+      remaining failures verified as genuinely pre-existing ISS-0832/ISS-0827
+      classes. PASSed. Separately, this same append corrects a stale claim
+      in docs/anti-patterns.md's ISS-0868 entry ("PID 3011743 ... no longer
+      running on this host") -- TEST-RUNNER re-checked and found it still
+      running (`ss -tnp | grep 5463 | grep -c 3011743` = 30 held
+      connections; ~2d10h uptime), so the entry was corrected in the same
+      PR rather than left stale.

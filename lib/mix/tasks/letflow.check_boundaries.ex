@@ -69,7 +69,7 @@ defmodule Mix.Tasks.Letflow.CheckBoundaries do
   @type depends_on_map :: %{String.t() => [String.t()]}
 
   @typedoc "Override shape for the injectable xref-runner seam (test-only)."
-  @type xref_runner :: (() -> {String.t(), non_neg_integer()})
+  @type xref_runner :: (-> {String.t(), non_neg_integer()})
 
   @impl Mix.Task
   @spec run([String.t()]) :: :ok

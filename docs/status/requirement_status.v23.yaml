@@ -533,3 +533,21 @@
       Letflow.IdentityTest REQ-019 AC1) reconfirmed incidentally during
       these independent runs, left for ORCH to file as separate issues,
       not investigated here. Branch feature/WF03-ISS0829-20260927.
+
+  - req: REQ-419
+    event: started
+    agent: ORCH
+    at: 2026-09-27T15:07:21Z
+    note: >
+      MOB-1: scaffold apps/mobile/ (Flutter, Android API 26+/iOS 15+) as a
+      generic definition-interpreter shell, with the three static guards.
+      First requirement of the S9 mobile chain to actually create
+      apps/mobile/ (REQ-417/418 were docs-only/backend-only). Selected by
+      direct user instruction naming REQ-419 explicitly, overriding
+      get_next_task's LIFO issue-priority ordering (which was currently
+      surfacing ISS-0873 ahead of the mobile backlog) -- queue selection
+      not consulted for this pick, per ORCHESTRATOR.md Section 1's
+      human-named-REQ-XXX exemption. Queue task 856 (impl_order) set_lock'd
+      directly by ORCH before this run started. Branch
+      feature/WF02-REQ419-20260927, pushed from origin/main with no
+      divergence (git pull --ff-only exited 0).

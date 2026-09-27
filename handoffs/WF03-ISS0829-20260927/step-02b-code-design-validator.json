@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF03-ISS0829-20260927/step-02b-code-design-validator.json",
   "created_at": "2026-09-27T11:21:47Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-27T11:25:10Z",
+  "completed_at": "2026-09-27T11:26:24Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S11",
@@ -34,10 +34,17 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Substance of the design (root-cause recap, cited line numbers/assertion text for EO-004, EO-005, and the ISS-0716 precedent, tenant-scoping strategy, and the 'no production code change needed' claim) all independently verified accurate against the current test/letflow/platform/migration_rollout_test.exs, lib/letflow/platform/migration_rollout.ex, migration_rollout/rollout.ex (@statuses ~w(running completed), line 39), and req374-tenant-migration-fanout-runner.md §9 OQ-1. However, the design FAILS check (e) of WF-02 Step 1b / code-designer.md's own 'Forbidden' clause: it contains extensive literal .exs code blocks -- not signatures/type shapes -- that are meant to be pasted near-verbatim into the test file. Per the hard-gate rule ('FAIL immediately and completely on any single failed check -- no partial credit'), this alone fails the design regardless of the otherwise-correct analysis.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "check (e) violated -- real .exs code blocks present, not signatures/type shapes only: design.md §2.2 steps 1-3 (Repo.all(from o in Outcome, where: ...), all_outcomes_succeeded? = Enum.all?(...), and the full if/else assert branches for the EO-004 replacement)",
+      "check (e) violated: design.md §3.1 (literal `assert outcome_for(first_result, good_a.tenant_id).status == \"succeeded\"` / good_b lines)",
+      "check (e) violated: design.md §3.2 (literal Repo.get!/Repo.aggregate code blocks including the full scoped_outcomes_query Ecto expression)",
+      "check (e) violated: design.md §3.3 (literal `assert outcome_for(second_result, ...).already_current` lines)",
+      "check (e) violated: design.md §4's summary table also embeds literal replacement code in its 'Replacement' column rather than describing the assertion shape in prose",
+      "Rework instruction for CODE-DESIGNER: keep every other finding in the doc (root-cause recap, line-number citations, the tenant-scoping strategy per assertion, the 'invariant not literal' approach for EO-004, the no-production-code-change conclusion) -- all independently re-verified accurate and sound -- but rewrite §2.2, §3.1-3.3, and §4's table to describe each replacement assertion's required shape and exact semantics in prose/pseudocode (e.g. 'query every Outcome row for rollout_id; assert the invariant: rollout.status == \"completed\" iff every queried outcome.status == \"succeeded\"') without literal Elixir/Ecto syntax or copy-pasteable assert statements. The specificity of WHICH values/invariant to assert must stay -- only the literal code syntax must go; that specificity is exactly what TEST-DESIGNER needs and is not itself the violation."
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0829-20260927",
       "commit_sha_list": [],
@@ -46,8 +53,8 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Rework CODE-DESIGNER: revise lib/letflow/design/iss0829-migration-rollout-test-isolation.md to remove literal .exs code blocks per the issues above, keeping all other content. Re-submit to CODE-DESIGN-VALIDATOR."
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

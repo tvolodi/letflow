@@ -1,0 +1,58 @@
+id: ISS-0868
+title: >
+  Stale long-lived beam.smp process (mix run --no-halt, PID 3011743) permanently
+  holds ~30 connections to shared Postgres, causing recurring too_many_connections
+  flakes
+discovered_by: TEST-RUNNER (WF03-ISS0833-20260927), previously root-caused independently by RELEASE-VALIDATOR (WF03-ISS0848-20260926)
+discovered_in_run: WF03-ISS0833-20260927
+discovered_at: "2026-09-27T04:00:00Z"
+severity: MINOR
+tags:
+  - process
+  - infrastructure
+  - flaky
+description: >
+  A long-lived `mix run --no-halt` process in the main checkout (PID
+  3011743), running since 2026-09-24, permanently holds ~30 connections to
+  the shared `letflow-1-postgres-1` container on port 5463 (confirmed via
+  `ss -tnp | grep 5463 | grep -c 3011743` -> 30). This has been
+  independently observed and root-caused by at least 2 separate agents this
+  session (RELEASE-VALIDATOR during ISS-0848's verification, TEST-RUNNER
+  during ISS-0833's verification) as the primary cause of recurring,
+  non-deterministic `scripts/test_parallel.sh` failures --
+  `too_many_connections` (Postgres error 53300), `DBConnection.ConnectionError`,
+  and occasional whole-partition crashes. Different specific tests fail on
+  each run, confirming genuine host-resource contention rather than an
+  application-logic defect. Each investigating agent has had to re-derive
+  this root cause from scratch since it is not tracked or documented
+  anywhere, costing real time on every affected full-suite run.
+affected_files:
+  - scripts/test_parallel.sh
+  - docs/anti-patterns.md
+related: []
+severity_rationale: >
+  MINOR -- does not affect production behavior or correctness, but degrades
+  full-suite test reliability repeatedly across many agent runs and wastes
+  investigation time re-deriving the same root cause.
+fix_direction: >
+  1. Identify what the `mix run --no-halt` process (PID 3011743, or whatever
+     PID it has by the time this is picked up) actually is -- likely a
+     leftover dev server started by an earlier session for manual
+     testing/debugging.
+  2. Determine if it's still needed. If abandoned, stop it and free the
+     connections.
+  3. If it needs to keep running for some other concurrent session's work,
+     document it explicitly in docs/anti-patterns.md (symptom:
+     too_many_connections/DBConnection.ConnectionError during
+     scripts/test_parallel.sh, non-deterministic which partition/test fails)
+     so future TEST-RUNNER/RELEASE-VALIDATOR passes can recognize and
+     classify it by name immediately rather than re-investigating from
+     scratch each time.
+  4. Consider whether scripts/test_parallel.sh's own connection-pool sizing
+     should reserve headroom by default (the TEST_CONNECTION_HEADROOM env
+     var already exists per earlier session precedent, ISS-0848's own
+     verification run used it) rather than requiring each investigating
+     agent to discover and apply it fresh.
+status: open
+queue_ref: "Q-868"
+github_ref: "GH-1886"

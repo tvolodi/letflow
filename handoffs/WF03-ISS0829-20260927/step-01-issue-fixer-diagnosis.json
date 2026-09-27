@@ -1,0 +1,55 @@
+{
+  "handoff_id": "WF03-ISS0829-20260927-step-01",
+  "run_id": "WF03-ISS0829-20260927",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0829-20260927/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-27T10:53:38Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S11",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0825.yaml",
+      "test/letflow/platform/migration_rollout_test.exs",
+      "docs/anti-patterns.md",
+      "docs/issues/ISS-0766.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Diagnose ISS-0829 (docs/issues/ISS-0825.yaml is the authoritative local record; the queue mirrors it under issue_ref ISS-0829). Reported: a fresh scripts/test_parallel.sh -N 4 run showed 2 new failures (Letflow.Platform.MigrationRolloutTest's EO-004 and EO-005 cases) alongside 2 already-tracked ISS-0766 flakes, but the same test file run in isolation immediately after passed 12/12 clean -- suggesting a CPU-contention-induced flake under full parallel-suite load, not a code defect, but this is NOT YET CONFIRMED (fix_direction in the issue record explicitly says 'Not yet investigated'). Step 0.5: check docs/issues/*.yaml for a resolved entry with similar symptoms (ISS-0766 is the named candidate -- read its root cause and resolution, if any, to see whether this is the same class or genuinely different). Step 1: reproduce directly -- read test/letflow/platform/migration_rollout_test.exs's EO-004/EO-005 setup for a timing dependency (unawaited async operation, wallclock-sensitive assertion) or a resource-contention pattern (shared connection/schema) that only manifests under parallel load, matching or distinct from ISS-0766's own root-cause class. Attempt an actual repro: run scripts/test_parallel.sh with a parallelism level likely to reproduce contention, or targeted concurrent invocations of the test file alongside other load, and report what you find -- including if you CANNOT reproduce it after a real attempt (that is itself a valid, reportable outcome: 'instrumented' or 'no_defect' per WF-03's issue status vocabulary, not a failure to complete this step). Do NOT implement a fix yourself -- diagnose only, then state next_action: either 'Route to CODE-DESIGNER for fix design' (if a real code fix is warranted) or 'Route to ORCH for direct-action documentation close' (if this is best resolved by documenting the flake class in docs/anti-patterns.md, matching how ISS-0766/ISS-0868/ISS-0832's own contention-class flakes were handled) or 'Recommend no_defect close' (if you cannot substantiate any actionable defect after a real attempt).",
+    "acceptance_criteria": [
+      "Step 0.5 registry lookup against docs/issues/ISS-0766.yaml completed and cited, stating whether this is the same root-cause class or distinct",
+      "Step 1 diagnosis is based on an actual read of test/letflow/platform/migration_rollout_test.exs's EO-004/EO-005 test bodies, not speculation from the issue report's prose alone",
+      "A real reproduction attempt is made and its actual outcome (reproduced / not reproduced) is reported, not assumed",
+      "diagnosis.summary states root cause (if found) or the specific reason no root cause could be substantiated, and what changes (if any) a fix would need to make",
+      "next_action names exactly one of the three routing options above with justification",
+      "This is a first dispatch: claim by setting status to IN_PROGRESS only, then complete normally with a real result block."
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0829-20260927",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0829-20260927",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

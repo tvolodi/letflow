@@ -455,11 +455,9 @@ defmodule Letflow.EventStore.RetentionOperations do
           Repo.query!(~s{ROLLBACK TO SAVEPOINT #{@isolation_savepoint_name}})
           Repo.query!(~s{RELEASE SAVEPOINT #{@isolation_savepoint_name}})
 
-          Logger.warning(
-            "retention_summary/0 invoked from inside an already-open transaction; " <>
-              "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY was rejected " <>
-              "(active_sql_transaction) -- proceeding at the ambient isolation level " <>
-              "instead of the intended REPEATABLE READ, READ ONLY snapshot"
+          Logger.warning("retention_summary/0 isolation level upgrade rejected, degrading",
+            error: :active_sql_transaction,
+            degraded: true
           )
 
           :ok

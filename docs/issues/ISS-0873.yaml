@@ -34,16 +34,101 @@ severity_rationale: >
   been observed to reproduce twice in a row, and there is no evidence yet
   that it masks a real correctness defect in retention logic itself.
 fix_direction: >
-  Not yet investigated. Read RetentionOperationsTest's setup for a timing
-  dependency (an unawaited async operation, a wallclock-sensitive
-  assertion) or a resource-contention pattern (shared connection, schema,
-  or advisory lock) similar to ISS-0766's root cause (an on_exit
-  restoration race on a fixed row) or ISS-0829's root cause (assertions on
-  global state that legitimately changes under concurrent tenant
-  provisioning) -- it may be either class or a third, distinct mechanism.
-  Attempt a real reproduction (repeated `scripts/test_parallel.sh -N 4`
-  runs, or a targeted concurrent-load harness alongside other
-  event-store/retention-heavy test files) before concluding root cause.
+  INVESTIGATED (ISSUE-FIXER, 2026-09-27). Root-cause mechanism identified
+  via code inspection with high confidence -- NOT confirmed via live
+  reproduction: 2/2 full `TEST_PARALLEL_N=4 scripts/test_parallel.sh` runs
+  in this session came back clean on RetentionOperationsTest specifically
+  (5017/5023 and 5021/5023 passed; the only failures in either run were
+  the already-tracked Letflow.IdentityTest REQ-019 AC1 flake, ISS-0766's
+  own class -- so this remains a genuinely intermittent, low-frequency
+  flake, consistent with its MINOR severity and the two prior sightings'
+  own low observed rate).
+
+  Mechanism (a cross-partition TOCTOU race on unscoped global reads, a
+  third mechanism distinct from ISS-0766's on_exit-restoration race and
+  ISS-0829's original tenant_schema_count finding, though the same general
+  "assertion on platform-wide state" class as ISS-0829):
+
+  `retention_summary/0` (lib/letflow/event_store/retention_operations.ex:110-126)
+  performs two genuinely platform-wide, unscoped-to-this-test's-own-tenant
+  reads every time it is called: `provisioned_tenant_schemas/0` (lines
+  310-316, ALL `Registration` rows with `migrations_applied_at` set,
+  across every tenant ever provisioned, not just this test's own) and
+  `keep_forever_event_types/0` (lines 352-357, ALL `RetentionPolicy` rows
+  with `policy: :keep_forever`, again platform-wide). It then fans out
+  `count_protected_rows_in_schema/3` (lines 342-350) once per schema per
+  table (`events`, `events_archive`) using whatever `keep_forever_types`
+  the first read produced.
+
+  The failing test ("protected_record_count sums keep_forever rows...",
+  test/letflow/event_store/retention_operations_test.exs:249-270) calls
+  `RetentionOperations.retention_summary()` TWICE (lines 263 and 268) and
+  asserts the second call's `protected_record_count` is bit-identical to
+  the first's (line 269) -- an implicit assumption that nothing
+  platform-wide changes between the two calls. The test module sets
+  `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` (test file line
+  84) -- i.e. deliberately NO sandbox transaction isolation, per the
+  module's own moduledoc rationale (a second real DB connection is
+  needed for `replay_migrations/2` and the async retirement fanout).
+  Within a single `mix test` OS process this is safe, because ExUnit
+  fully drains every `async: true` module and then runs `async: false`
+  modules one at a time (documented in
+  test/letflow/event_store/partition_maintenance_test.exs:26-29, the
+  sibling module this one's moduledoc says it deliberately duplicates
+  fixtures from) -- so nothing else is concurrently mutating
+  `RetentionPolicy`/`Registration` from WITHIN that same process while
+  this test's two calls run.
+
+  But `scripts/test_parallel.sh` shards the suite across N independent
+  `mix test --partitions N` OS processes (confirmed via `ps` during this
+  session's reproduction attempts: 4 separate BEAM VMs, each its own
+  connection pool, all against the same Postgres instance). Nothing
+  serializes THOSE against each other. Any test running concurrently in
+  ANY of the other partitions that (a) inserts or deletes a
+  `policy: :keep_forever` `RetentionPolicy` row, or (b) provisions or
+  drops (via `on_exit`) a tenant schema, in the window between this
+  test's two `retention_summary()` calls, changes what
+  `keep_forever_event_types()` and/or `provisioned_tenant_schemas()`
+  resolve to on the second call -- breaking the "must equal the first
+  call" assertion. A schema being dropped mid-query could instead
+  surface as a raised `Postgrex.Error` ("schema does not exist") out of
+  `count_protected_rows_in_schema/3`'s un-guarded `Repo.query!/2` (line
+  343), rather than a plain assertion failure -- either failure mode is
+  consistent with "intermittent, only under full parallel-suite
+  contention, not reproducing twice in a row."
+
+  Conceptual fix direction (no code written per ISSUE-FIXER's own scope):
+  `retention_summary/0`'s two inputs (`provisioned_tenant_schemas/0`,
+  `keep_forever_event_types/0`) need to be read ONCE per summary call and
+  the whole computation wrapped so both derived values (`protected_record_count`
+  and `tenant_schema_count`/`oldest_eligible_month`) are computed from
+  the SAME consistent snapshot -- e.g. a single `Repo.transaction/1` at
+  `SERIALIZABLE` or `REPEATABLE READ` isolation around the whole of
+  `retention_summary/0`'s body, so a concurrent commit elsewhere is
+  simply invisible to this call rather than racing it. The TEST's own
+  assertion (line 269, "second call must equal first") may also need
+  reframing -- if `retention_summary/0` is documented as a live,
+  eventually-changing platform-wide read (which it is, deliberately, per
+  its own moduledoc), asserting bit-identical results across two
+  separate calls under full-suite concurrency is arguably testing an
+  invariant the function never actually promises under concurrent
+  writes elsewhere; TEST-DESIGNER should assess whether the fix belongs
+  in the production isolation level, the test's assertion, or both. This
+  is a small, well-scoped change (isolation level in one query context,
+  or a test assertion tightened to same-tenant-only fixtures) -- a
+  CODE-DESIGNER pass is warranted only for the production-code isolation
+  question (whether SERIALIZABLE is safe/appropriate here alongside
+  `retire_oldest_eligible_month/1`'s own concurrent writers); the test
+  assertion question can go directly to TEST-DESIGNER without a separate
+  design doc.
+additional_sighting_2026_09_27: >
+  ORCH independently observed this same test class fail
+  ("retention_summary/0 protected_record_count sums keep_forever rows
+  across events for every schema, unaffected by min_partition_age_days")
+  in a separate full-suite run during ISS-0340's own verification (2026-09-27,
+  ~14:07 UTC), alongside other reaper/orphan-sweep contention flakes
+  (ISS-0229/ISS-0217/ISS-0224/ISS-0458 classes) -- a second independent
+  confirmation this is a real, reproducible-under-load flake, not a one-off.
 status: open
 queue_ref: "Q-873"
 github_ref: "GH-1913"

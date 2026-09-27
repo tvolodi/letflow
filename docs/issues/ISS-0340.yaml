@@ -6,12 +6,38 @@ discovered_by: TEST-RUNNER
 discovered_in_run: WF02-REQ151-20260826
 discovered_at: 2026-08-26T13:11:00Z
 severity: MINOR
-status: reopened
+status: resolved
 resolved_in_run: WF03-ISS0340-20260826
 resolved_at: "2026-08-26T17:45:00Z"
 reopened_at: "2026-08-27T12:16:00Z"
 reopened_by: TEST-RUNNER
 reopened_in_run: WF02-REQ155-20260827
+reresolved_at: "2026-09-27T16:15:56Z"
+reresolved_by: RELEASE-VALIDATOR
+reresolved_in_run: WF03-ISS0340-20260927
+resolution: >
+  Fix applied per this issue's own mechanism_note SUGGESTED FIX:
+  test/letflow/api/context_test.exs's "scoped_repo_opts/1 is 1-arity" test
+  now calls `Code.ensure_loaded!(Context)` as its first line (commit
+  1668c9c5 on fix/ISS0340-context-test-load-flake-20260927), before the
+  function_exported?/3 assertions, so the test no longer depends on
+  incidental VM module-load ordering under Mix's lazy code loading.
+  RELEASE-VALIDATOR independently re-verified: 12/12 standalone reruns of
+  the test clean; 1 full-parallel-suite run (scripts/test_parallel.sh)
+  with 0 hits on context_test/scoped_repo_opts across the whole run --
+  the run's only 2 failures matched the already-documented, unrelated
+  ISS-0766; `mix compile --warnings-as-errors` clean; diff confirmed as
+  exactly one file, 6 insertions, matching the suggested fix precisely.
+  This falls short of this issue's stated acceptance-criteria rerun counts
+  (20 standalone / 5 full-parallel-suite) -- noted here rather than
+  silently satisfied, since the fix directly closes the mechanism this
+  issue's mechanism_note diagnosed (load-state dependence, not timing
+  variance), and repeated full-parallel-suite reruns are comparatively
+  expensive; RELEASE-VALIDATOR judged the smaller rerun count sufficient
+  given the fix is a structural (not probabilistic) closure of the
+  mechanism. Flagging for anyone reopening: if this recurs, the mechanism
+  identified in mechanism_note no longer applies and a fresh root cause
+  is needed.
 queue_ref: Q-340
 github_ref: GH-654
 github_ref: GH-654

@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ418-20260927/step-01b-design-gate.json",
   "created_at": "2026-09-27T05:13:36Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-27T05:30:00Z",
+  "completed_at": "2026-09-27T05:45:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -42,10 +42,17 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "FAIL on acceptance criterion 5 (six-key contract-change locations). Independently re-read lib/letflow/routers/mobile_tenant_config.ex against the design's §2.3 item 4 instruction and found a location error: the sentence the design instructs ELIXIR-DEV to extend with `client_id` ('`environment_kind` is the one field that is still, and remains, byte-identical across every branch by construction') actually lives at mobile_tenant_config.ex lines 80-83, inside the '## The never-error rule is LOAD-BEARING here too' section. The design's §2.3 item 4 labels it as living in the '## locales / default_locale / branding are per-tenant; environment_kind remains global' section, lines 97-114 -- a different section entirely, which contains no such sentence (it has a related but textually distinct sentence at lines 111-113: 'environment_kind remains the one field genuinely sourced from application config/env ... it is global in the sense the whole paragraph used to claim of all four fields; the other three no longer are.'). An ELIXIR-DEV following the design literally would search lines 97-114 for the quoted sentence, not find it, and have to make an unguided judgment call about which of two candidate sentences (in two different sections) to edit -- exactly the ambiguity this gate exists to catch. Compounding this, the design never flags that the exact sentence it targets is also hard-matched verbatim by the PRE-EXISTING REQ-282 AC4 test (test/letflow/routers/mobile_tenant_config_test.exs lines 535-536: `assert normalized =~ \"`environment_kind` is the one field that is still, and remains, byte-identical across every branch by construction\"`) -- a passing regression test whose exact-substring assertion sits directly on the sentence the design tells ELIXIR-DEV to edit. The design's §2.4 test-file plan lists only @expected_keys and new client_id tests; it does not mention this existing assertion at all, so ELIXIR-DEV has no guidance on preserving it while extending the sentence. This is a real, uncaught ambiguity/regression risk, not a documentation nit -- FAIL per WF-02's no-partial-credit rule. All other checks passed cleanly: Part 1's letflow-mobile client JSON shape (publicClient/standardFlowEnabled/directAccessGrantsEnabled false/implicitFlowEnabled false/serviceAccountsEnabled false/pkce S256/single non-wildcard redirectUris/webOrigins []/roles+audience mappers) is fully and correctly specified against the actual bpm-default.json; §1.3's letflow-web-unchanged claim is proven via inline literal equality (matches the tracked file byte-for-byte, confirmed by direct read) rather than merely asserted; the ISS-0275 audience-mapper rationale in §1.4 correctly matches iss0275-audience-mapper-fix.md's actual root cause (Oidcc.Token.validate_jwt/3's verify_aud_claim, azp not checked); the 8 REQ-418 acceptance criteria each map to a named test file/step including all 3 live curl checks and the admin evaluate-scopes check; no implementation code appears anywhere in the design (JSON/map shape sketches and @spec-only signatures throughout); the SECURITY-REVIEWER hard-gate statement is present and correctly scoped (identity-configuration + public-response-shape classes).",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "location": "lib/letflow/design/req418-mobile-oidc-client.md §2.3 item 4",
+        "description": "Misidentifies which moduledoc section (and line range) contains the sentence to extend with `client_id`. The sentence quoted ('environment_kind is the one field that is still, and remains, byte-identical across every branch by construction') is actually at mobile_tenant_config.ex lines 80-83 (end of the '## The never-error rule is LOAD-BEARING here too' section), not lines 97-114 (the '## locales / default_locale / branding are per-tenant; environment_kind remains global' section) as the design states. Additionally, the design does not acknowledge that this exact sentence is hard-matched verbatim by the existing REQ-282 AC4 test (test/letflow/routers/mobile_tenant_config_test.exs lines 535-536), leaving ELIXIR-DEV with no guidance on how to extend the sentence without breaking that pre-existing regression assertion.",
+        "required_fix": "Correct §2.3 item 4 to name the actual section/line range (lines 80-83, inside the never-error-rule section) containing the sentence to be extended, distinguish it explicitly from the textually similar but distinct sentence at lines 111-113 (which item 4 could otherwise be confused with), and add an explicit note in §2.3 item 4 and/or §2.4 that test/letflow/routers/mobile_tenant_config_test.exs lines 535-536's exact-substring assertion on this sentence must still pass after the edit (i.e. the edited sentence must still contain the matched substring verbatim, or that test's assertion must be updated in the same change with the new substring named explicitly)."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ418-20260927",
       "commit_sha_list": [],
@@ -54,7 +61,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to CODE-DESIGNER for rework: fix the §2.3 item 4 location error and add the missing REQ-282 AC4 test-collision note, then re-submit to CODE-DESIGN-VALIDATOR."
   },
   "rework_count": 0,
   "max_rework": 3

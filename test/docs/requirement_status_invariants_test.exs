@@ -654,13 +654,27 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
       not_closed_and_pinned:
         Enum.reject(declared, &closed_pinned_and_warranted?(volumes, index.roll_rule, &1)),
       misattributed: Enum.filter(declared, &misattributed?(entry_index, &1)),
-      unparseable_at: unparseable_at(index.volumes, declared)
+      unparseable_at: unparseable_at(index.volumes, declared, index.known_unparseable_at),
+      invalid_unparseable_at_exemptions:
+        invalid_unparseable_at_exemptions(
+          index.volumes,
+          index.roll_rule,
+          declared,
+          index.known_unparseable_at
+        )
     }
   end
 
   defp a4b_clean?(findings) do
     Enum.all?(
-      [:undeclared, :unfound, :not_closed_and_pinned, :misattributed, :unparseable_at],
+      [
+        :undeclared,
+        :unfound,
+        :not_closed_and_pinned,
+        :misattributed,
+        :unparseable_at,
+        :invalid_unparseable_at_exemptions
+      ],
       &(Map.fetch!(findings, &1) == [])
     )
   end
@@ -741,7 +755,7 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
     end
   end
 
-  defp unparseable_at(volumes, declared) do
+  defp unparseable_at(volumes, declared, exemptions) do
     from_disk =
       for volume <- volumes,
           entry <- SH.entries(volume.path),
@@ -750,7 +764,14 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
           do: %{path: volume.path, entry_line: entry.line, field: "at", value: entry.at}
 
     # Declaring the field NAME wrong does not license an unparseable timestamp
-    # (design §13.5).
+    # (design §13.5) -- UNLESS a `known_unparseable_at:` record exempts this
+    # exact finding, and that exemption re-verifies against disk (design
+    # `iss0833-a4b-unparseable-at-declaration.md` §2.3). This reject-pass is
+    # applied ONLY to `from_declared` candidates, never to `from_disk` ones: a
+    # correctly-named `at:` field that is itself unparseable has no
+    # `misnamed_field` companion record to hang a `verified_via` citation off
+    # of, and must stay structurally impossible to exempt via this mechanism
+    # (design §3.4).
     from_declared =
       for record <- declared,
           Map.get(record, :kind) == "misnamed_field",
@@ -759,14 +780,70 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
           File.exists?(record.path),
           value = value_at(record.path, record.found_line),
           not parseable_iso8601?(value),
-          do: %{
+          candidate = %{
             path: record.path,
             entry_line: record.entry_line,
             field: record.found_as,
             value: value
-          }
+          },
+          not exempt_unparseable_at?(exemptions, declared, candidate),
+          do: candidate
 
     from_disk ++ from_declared
+  end
+
+  # §2.3 steps 1-4 of the design: look up a `known_unparseable_at:` record
+  # citing this exact candidate, confirm its cited `known_shape_anomalies:`
+  # sibling genuinely exists in the declared set, confirm that sibling's
+  # `found_line` is a REAL, currently-true shape anomaly (not just a stale
+  # declaration), then re-read that line's actual on-disk text and re-parse
+  # it. Never trusts the exemption's own prose -- every fact is re-derived.
+  defp exempt_unparseable_at?(exemptions, known_shape_anomalies, candidate) do
+    Enum.any?(exemptions, fn x ->
+      x.path == candidate.path and x.entry_line == candidate.entry_line and
+        x.found_as == candidate.field and
+        Enum.any?(known_shape_anomalies, fn s ->
+          s.path == x.path and s.entry_line == x.entry_line and s.kind == "extra_field" and
+            s.field == x.verified_via_field and s.found_line == x.verified_via_found_line
+        end) and
+        Enum.any?(SH.shape_anomalies(x.path), fn s ->
+          s.path == x.path and s.entry_line == x.entry_line and s.kind == "extra_field" and
+            s.field == x.verified_via_field and s.found_line == x.verified_via_found_line
+        end) and
+        File.exists?(x.path) and
+        parseable_iso8601?(value_at(x.path, x.verified_via_found_line))
+    end)
+  end
+
+  # The new 6th A4b sub-check (design §2.4/§2.5's "6th sub-check"). Any
+  # declared `known_unparseable_at:` record that fails verification is a LOUD,
+  # reported failure, not a silent no-op -- this is what makes a bogus
+  # declaration (orphaned citation, non-parseable sibling, or a citation of a
+  # volume that is not closed-and-pinned) visibly wrong rather than inert.
+  defp invalid_unparseable_at_exemptions(volumes, roll_rule, known_shape_anomalies, exemptions) do
+    volumes_by_path = Map.new(volumes, &{&1.path, &1})
+
+    Enum.reject(exemptions, fn x ->
+      sibling_declared? =
+        Enum.any?(known_shape_anomalies, fn s ->
+          s.path == x.path and s.entry_line == x.entry_line and s.kind == "extra_field" and
+            s.field == x.verified_via_field and s.found_line == x.verified_via_found_line
+        end)
+
+      sibling_on_disk? =
+        File.exists?(x.path) and
+          Enum.any?(SH.shape_anomalies(x.path), fn s ->
+            s.path == x.path and s.entry_line == x.entry_line and s.kind == "extra_field" and
+              s.field == x.verified_via_field and s.found_line == x.verified_via_found_line
+          end)
+
+      sibling_parseable? =
+        File.exists?(x.path) and parseable_iso8601?(value_at(x.path, x.verified_via_found_line))
+
+      pinned? = closed_pinned_and_warranted?(volumes_by_path, roll_rule, x)
+
+      sibling_declared? and sibling_on_disk? and sibling_parseable? and pinned?
+    end)
   end
 
   defp value_at(path, line_number) do
@@ -830,6 +907,14 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
 
       unparseable ISO-8601 timestamps (#{length(findings.unparseable_at)}):
     #{a4b_lines(findings.unparseable_at)}
+
+      invalid known_unparseable_at: exemptions (#{length(findings.invalid_unparseable_at_exemptions)}) —
+      a declared exemption whose citation does not re-verify against disk (an
+      orphaned/fabricated `verified_via` sibling, a sibling that is not itself
+      a real, currently-true shape anomaly, a sibling value that does not
+      parse as ISO-8601, or a citation of a volume that is not
+      closed-and-pinned) is reported here rather than silently accepted:
+    #{a4b_lines(findings.invalid_unparseable_at_exemptions)}
     """
   end
 

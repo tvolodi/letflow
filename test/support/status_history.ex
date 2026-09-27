@@ -71,18 +71,31 @@ defmodule Letflow.Test.StatusHistory do
 
   @doc """
   Parse the run-history index into
-  `%{roll_rule:, volumes:, known_anomalies:, known_shape_anomalies:}`.
+  `%{roll_rule:, volumes:, known_anomalies:, known_shape_anomalies:,
+  known_unparseable_at:}`.
 
   `known_shape_anomalies:` is design §13.4's key, added by the §13 post-gate
   amendment. Its records are keyed `{path, entry_line, kind, field, found_as}`
   and its literal YAML `null` values are normalised to `nil`, so a declared
   record compares equal to what `shape_anomalies/1` finds on disk.
+
+  `known_unparseable_at:` is ISS-0833's addendum key (design
+  `iss0833-a4b-unparseable-at-declaration.md` §2.2/§2.4). Its records exempt
+  one `unparseable_at`/`from_declared` finding by citing a second, independently
+  declared `known_shape_anomalies:` record on the same entry. The line-oriented
+  parser has no nested-mapping support, so the conceptual `verified_via:`
+  sub-map is written as three flat sibling fields on disk —
+  `verified_via_kind`, `verified_via_field`, `verified_via_found_line` — parsed
+  by the same generic `parse_list/1` used for every other section, no new
+  primitive needed. Its literal YAML `null` values are normalised to `nil`
+  exactly like `known_shape_anomalies:`.
   """
   @spec parse_index(Path.t()) :: %{
           roll_rule: map(),
           volumes: [map()],
           known_anomalies: [map()],
-          known_shape_anomalies: [map()]
+          known_shape_anomalies: [map()],
+          known_unparseable_at: [map()]
         }
   def parse_index(index_path) do
     sections =
@@ -98,6 +111,11 @@ defmodule Letflow.Test.StatusHistory do
       known_shape_anomalies:
         sections
         |> Map.get("known_shape_anomalies", [])
+        |> parse_list()
+        |> Enum.map(&denull/1),
+      known_unparseable_at:
+        sections
+        |> Map.get("known_unparseable_at", [])
         |> parse_list()
         |> Enum.map(&denull/1)
     }

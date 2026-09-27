@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ418-20260927/step-01-code-designer.json",
   "created_at": "2026-09-27T05:09:06Z",
   "started_at": "2026-09-27T05:20:00Z",
-  "completed_at": null,
-  "status": "COMPLETED",
+  "completed_at": "2026-09-27T05:22:00Z",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -47,7 +47,8 @@
       "Design states the moduledoc rewrite explicitly removes the phrase 'exactly five keys' and states the three-point client_id security reasoning (public-client id is not a secret; platform-global not tenant-derived; server-sent avoids app-release coupling)",
       "No implementation code in the design doc (JSON/shape sketches and prose only, no working Elixir functions beyond signatures)",
       "Design explicitly flags this as SECURITY-REVIEWER-gated (identity configuration + public unauthenticated response shape) per security-invariants.md",
-      "Set this handoff's status to COMPLETED (or FAILED) and result.status to PASS/FAIL/PARTIAL when done -- this is a first dispatch, so claim it by setting status to IN_PROGRESS only, per HANDOFF_PROTOCOL.md."
+      "Set this handoff's status to COMPLETED (or FAILED) and result.status to PASS/FAIL/PARTIAL when done -- this is a first dispatch, so claim it by setting status to IN_PROGRESS only, per HANDOFF_PROTOCOL.md.",
+      "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR FAILed the design on a BLOCKER: §2.3 item 4 of lib/letflow/design/req418-mobile-oidc-client.md tells ELIXIR-DEV to extend the sentence '`environment_kind` is the one field that is still, and remains, byte-identical across every branch by construction' inside the '## locales / default_locale / branding are per-tenant; environment_kind remains global' section (lines 97-114) -- but that exact sentence actually lives at lines 80-83, inside the DIFFERENT '## The never-error rule is LOAD-BEARING here too' section. Lines 97-114 contain a similar but textually distinct sentence instead. Fix: re-read lib/letflow/routers/mobile_tenant_config.ex directly and correct §2.3 item 4 to name the right section/line range for the sentence actually being extended. Also: that exact sentence is hard-matched verbatim by the PRE-EXISTING REQ-282 AC4 test (test/letflow/routers/mobile_tenant_config_test.exs lines 535-536, `assert normalized =~ \"...\"`) -- add explicit guidance in §2.4 (test-file plan) on how to edit that sentence without breaking this existing regression assertion (e.g. update both together, or word the extension so the existing substring match still holds). This is not a first dispatch: the receiving agent flips status to COMPLETED/FAILED as normal on finishing, per HANDOFF_PROTOCOL.md's normal completion step -- do not re-claim via IN_PROGRESS-only."
     ]
   },
   "result": {
@@ -65,6 +66,6 @@
     },
     "next_action": "Route to CODE-DESIGN-VALIDATOR for the hard gate on this design before ELIXIR-DEV implements."
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

@@ -1,0 +1,60 @@
+{
+  "handoff_id": "WF02-REQ418-20260927-step-03b",
+  "run_id": "WF02-REQ418-20260927",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ418-20260927/step-03b-test-design-gate.json",
+  "created_at": "2026-09-27T07:49:31Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-418"],
+    "requirement_text": {
+      "REQ-418": "See handoffs/WF02-REQ418-20260927/step-01-code-designer.json's context.requirement_text for the full verbatim requirement, copied there by ORCH from docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["WF02-REQ418-20260927-step-03"],
+    "artifacts_in": [
+      "test/letflow/integration/keycloak_mobile_client_auth_test.exs",
+      "test/specs/REQ-418.md",
+      "test/letflow/integration/keycloak_auth_pipeline_test.exs",
+      "test/support/keycloak_test_client.ex",
+      "test/letflow/api/keycloak_realm_mobile_client_test.exs",
+      "test/letflow/routers/mobile_tenant_config_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's output for REQ-418 (checkout feature/WF02-REQ418-20260927, pull to get commits c132c20d/4ece9556). Verify every one of REQ-418's 8 acceptance criteria has a runnable, correctly-targeted test: 5 pre-existing unit tests from ELIXIR-DEV (AC1, AC2, AC5, AC6, AC7) plus the 2 new live-Keycloak tests in test/letflow/integration/keycloak_mobile_client_auth_test.exs (AC3, AC4) -- cross-check test/specs/REQ-418.md's mapping against the actual test files rather than trusting the doc. Confirm the new file correctly follows the @moduletag :keycloak / async: false / setup_all-reachability convention from test/letflow/integration/keycloak_auth_pipeline_test.exs (no invented {:skip, ...} return, no new HTTP dependency). Confirm no coverage is skipped or stubbed out (e.g. no test that merely asserts the request 'doesn't crash' instead of the actual specified HTTP status/body/Location assertions). Confirm test isolation: does this new file depend on any state left behind by another test, or leave state that could affect a later test (check its own on_exit/cleanup, and whether the master-realm admin token acquisition could collide with keycloak_auth_pipeline_test.exs if both ran in the same --include keycloak invocation).",
+    "acceptance_criteria": [
+      "Every one of REQ-418's 8 acceptance criteria maps to an actual, existing test (not a TODO/pending placeholder) -- verified by reading the test files, not just test/specs/REQ-418.md's claims",
+      "The new keycloak_mobile_client_auth_test.exs correctly uses @moduletag :keycloak, async: false, and the established RuntimeError-based reachability check (not {:skip, ...})",
+      "No new HTTP client dependency was added -- confirm via mix.exs diff",
+      "AC3's three sub-checks (valid request 200, evil redirect_uri rejected, missing code_challenge rejected) are each a distinct, specific assertion (status code AND body/Location content), not a vague 'succeeds'/'fails' check",
+      "AC4's admin evaluate-scopes check asserts both aud contains letflow-web AND azp == letflow-mobile as two distinct assertions",
+      "Test isolation confirmed: no shared mutable state risk with keycloak_auth_pipeline_test.exs or other :keycloak-tagged tests",
+      "PASS or FAIL with issues if FAIL; handoff completed per protocol (claim via IN_PROGRESS, then COMPLETED with a real result block)"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ418-20260927",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ418-20260927",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

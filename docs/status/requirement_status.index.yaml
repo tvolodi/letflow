@@ -4612,13 +4612,36 @@ volumes:
     opened: 2026-09-26
     entries: 9
     note: >
-      Incremented to 9 by DOC-UPDATER's rebase of the ISS-0833 closing
-      SCOPE-CHANGE append (2026-09-27T03:55:00Z, A4b unparseable_at
-      declaration escape hatch) onto latest origin/main, which brought in
-      2 REQ-417 entries (WF02-REQ417-20260927, S9 mobile-tier reactivation)
-      appended upstream without a matching index note -- `grep -c
-      "^  - req:" docs/status/requirement_status.v23.yaml` = 9 on-disk
-      entries after merge. 250 lines / 14237 bytes, well under the
+      Incremented to 9, confirmed post-merge, by DOC-UPDATER resolving a
+      genuine `entries:`/note conflict on this exact field while closing
+      out PR #1890 (ISS-0833, 2026-09-27): origin/main (a61d7f2d, PR #1889)
+      had independently corrected this field 6 -> 8 for the REQ-417 run's
+      own 2 entries (WF02-REQ417-20260927 Step Final follow-up, fixing an
+      A9 invariant break its own PR #1888 had left), while this branch's
+      tip (10085fd0) separately incremented it 6 -> 7 for the ISS-0833
+      closing SCOPE-CHANGE append -- both starting from the same
+      pre-divergence base of 6, so neither side's note was wrong, they were
+      just counting different, non-overlapping additions. `git merge
+      origin/main` auto-merged `requirement_status.v23.yaml` itself cleanly
+      (both sides' entries concatenate: 6 pre-existing + 2 REQ-417 + 1
+      ISS-0833 SCOPE-CHANGE), so only this index note needed manual
+      reconciliation. `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 9 on-disk entries
+      post-merge. 250 lines / 14237 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
+      Incremented to 8 by ORCH directly (WF02-REQ417-20260927 Step Final
+      follow-up) -- the REQ-417 run's own `started`/`done` append
+      (2026-09-27T04:11:00Z / 04:24:45Z) landed on main (PR #1888) without
+      this field being bumped from 6, which broke
+      Letflow.Docs.RequirementStatusInvariantsTest's A9 check on that PR's
+      own CI run (correctly attributed there as a docs-only diff cannot
+      cause an Elixir test failure structurally -- but this specific
+      failure IS caused by this run's own docs-only diff, so `--admin` was
+      right to merge past a different, genuinely pre-existing failure set
+      but this one still needed a same-day follow-up fix rather than being
+      left red). `grep -c "^  - req:" docs/status/requirement_status.v23.yaml`
+      = 8 on-disk entries. 216 lines / 12421 bytes, well under the
       1200-line/120000-byte roll ceiling, so no roll triggered.
 
       Incremented to 7 by DOC-UPDATER's ISS-0833 closing SCOPE-CHANGE append

@@ -61,7 +61,7 @@ Routing logic, gates, rework/escalation rules, stage-gate enforcement:
 | `CODE-DESIGN-VALIDATOR` | Hard gate on CODE-DESIGNER's design | [`.claude/agents/code-design-validator.md`](.claude/agents/code-design-validator.md) |
 | `ELIXIR-DEV` | Implements/changes `lib/letflow/` and `priv/repo/migrations/` | [`.claude/agents/elixir-dev.md`](.claude/agents/elixir-dev.md) |
 | `FRONTEND-DEV` | Builds and changes `web/` — Letflow's own React/TS SPA — and wires it to Letflow's API | [`.claude/agents/frontend-dev.md`](.claude/agents/frontend-dev.md) |
-| `MOBILE-DEV` | **Dormant.** Builds `apps/mobile/` (Flutter) per `docs/mobile/`; activated once S9's backend gaps close | [`.claude/agents/mobile-dev.md`](.claude/agents/mobile-dev.md) |
+| `MOBILE-DEV` | Builds `apps/mobile/` (Flutter) per `docs/mobile/` | [`.claude/agents/mobile-dev.md`](.claude/agents/mobile-dev.md) |
 | `SECURITY-REVIEWER` | Hard gate on tenant-data-path changes — `docs/agents/instructions/security-invariants.md` | [`.claude/agents/security-reviewer.md`](.claude/agents/security-reviewer.md) |
 | `REVIEWER` | Hard gate — idiomatic OTP usage, supervision integrity, scope creep, decision-record consistency | [`.claude/agents/reviewer.md`](.claude/agents/reviewer.md) |
 | `TEST-DESIGNER` | Writes test specs and test code | [`.claude/agents/test-designer.md`](.claude/agents/test-designer.md) |

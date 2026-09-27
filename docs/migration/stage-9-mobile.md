@@ -1,6 +1,7 @@
 # Stage 9 — Mobile tier
 
-Status: not started. Depends on: S4. Requirements: `REQ-123` … `REQ-126`.
+Status: in progress. Depends on: S4. Requirements: `REQ-124`..`REQ-127`, `REQ-282`,
+`REQ-289`..`REQ-294`, `REQ-385`, `REQ-417`..`REQ-430`.
 
 Created 2026-08-21. See
 [`decisions/0012-mobile-tier-stack.md`](decisions/0012-mobile-tier-stack.md) for
@@ -39,9 +40,9 @@ touch-points are absent:
 
 | Needed by | Touch-point | State |
 |---|---|---|
-| `MOB-2` | **Unauthenticated** `tenant-config` returning `{ realm_url, locales, default_locale, branding, environment_kind }` | `Letflow.Routers.TenantConfig` is a stub — routes land in `REQ-078` (`pending`) — **and** `Letflow.Plugs.ApiPipeline` mounts it behind `Letflow.Plugs.AuthPipeline`, so implementing the route is not sufficient. The bootstrap sequence has no token at that point. |
-| `MOB-3` | `GET /definitions/delta?since=…` | Implemented (`REQ-125`, 2026-08-23) — `Letflow.Routers.Definitions` delta route, monotonic per-tenant cursor, tenant-isolated. |
-| `MOB-3` | `{ form_id, form_version }` on task payloads | Absent — neither identifier appears anywhere in `lib/`. `Letflow.Engine.PinResolver` pins *definition* versions; a pinned **form** version on a task payload is a separate contract. |
+| `MOB-2` | **Unauthenticated** `tenant-config` returning `{ realm_url, locales, default_locale, branding, environment_kind }` | Closed by `REQ-124`, done 2026-08-22 (`docs/status/requirement_status.v3.yaml` line 463). `Letflow.Routers.TenantConfig` was a stub, mounted behind `Letflow.Plugs.AuthPipeline`; REQ-124 shipped the unauthenticated route and its pipeline placement. |
+| `MOB-3` | `GET /definitions/delta?since=…` | Closed by `REQ-125`, done 2026-08-23 (`docs/status/requirement_status.v4.yaml` line 275) — `Letflow.Routers.Definitions` delta route, monotonic per-tenant cursor, tenant-isolated. |
+| `MOB-3` | `{ form_id, form_version }` on task payloads | Closed by `REQ-126`, done 2026-08-22 (`docs/status/requirement_status.v3.yaml` line 419). `Letflow.Engine.PinResolver` pins *definition* versions; REQ-126 added the pinned **form** version on task payloads as its own contract. |
 
 The first is the gate for the entire tier — without it the app cannot reach a
 login screen. This is why the stage depends on S4, and why
@@ -53,9 +54,9 @@ it is backend work and it is the majority of the risk.
 
 Dart/Flutter sits outside every current agent's competence. `MOBILE-DEV` and its
 validating counterpart are registered in
-[`../agents/AGENT_SYSTEM.md`](../agents/AGENT_SYSTEM.md) as **dormant** — defined
-now so the role is not invented under pressure when the stage starts, and marked
-dormant so nothing routes to them before then.
+[`../agents/AGENT_SYSTEM.md`](../agents/AGENT_SYSTEM.md) — defined on 2026-08-21 so
+the role would not be invented under pressure when the stage starts, and reactivated
+by `REQ-417` on 2026-09-27 now that all three backend gaps above are closed.
 
 ## Why S9 does not depend on S8
 

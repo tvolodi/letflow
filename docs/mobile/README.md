@@ -45,6 +45,11 @@ does not serve yet — see that stage file for the verified gap list. Nothing
 here is expanded into `REQ-NNN` implementation requirements beyond the spec-port
 itself; that expansion happens when S4 lands.
 
+**Backend gaps closed 2026-09-27** by `REQ-124` (done 2026-08-22), `REQ-125`
+(done 2026-08-23), and `REQ-126` (done 2026-08-22) — see
+`../migration/stage-9-mobile.md`'s gap table. `apps/mobile/` itself still does
+not exist; that is `REQ-419`'s job, part of the `REQ-417..430` build queue.
+
 ## The one thing to understand before reading further
 
 The mobile app is **a generic interpreter of server-delivered definitions**, on

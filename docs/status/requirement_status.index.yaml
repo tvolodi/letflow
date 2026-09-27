@@ -4610,8 +4610,23 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 6
+    entries: 9
     note: >
+      Incremented to 9 by DOC-UPDATER's rebase of the ISS-0833 closing
+      SCOPE-CHANGE append (2026-09-27T03:55:00Z, A4b unparseable_at
+      declaration escape hatch) onto latest origin/main, which brought in
+      2 REQ-417 entries (WF02-REQ417-20260927, S9 mobile-tier reactivation)
+      appended upstream without a matching index note -- `grep -c
+      "^  - req:" docs/status/requirement_status.v23.yaml` = 9 on-disk
+      entries after merge. 250 lines / 14237 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
+      Incremented to 7 by DOC-UPDATER's ISS-0833 closing SCOPE-CHANGE append
+      (2026-09-27T03:55:00Z, A4b unparseable_at declaration escape hatch) --
+      `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 7
+      on-disk entries. 210 lines / 12100 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Incremented to 5 by DOC-UPDATER's ISS-0853 closing SCOPE-CHANGE append
       (2026-09-26T18:22:30Z) -- `grep -c "^  - req:"
       docs/status/requirement_status.v23.yaml` = 5 on-disk entries. 145

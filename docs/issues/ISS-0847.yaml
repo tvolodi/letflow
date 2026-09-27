@@ -50,6 +50,33 @@ acceptance_criteria:
   - "the S10 Playwright specs named by stage-11 P2 pass, output quoted"
   - "REQ-416's end-to-end test passes, output quoted"
   - "stage-11 status line updated with date; status history has a verified/revised event for REQ-416 with a real UTC timestamp"
-status: open
+status: resolved
 queue_ref: "Q-847"
 github_ref: "GH-1845"
+resolution_2026_09_27: |
+  RELEASE-VALIDATOR independently re-verified S11 end-to-end on `main` @ 94517238,
+  from a fresh test DB / fresh dev DB, after all five of this issue's blocking
+  dependencies (ISS-0838, ISS-0839, ISS-0827, ISS-0833, ISS-0834) resolved. All four
+  acceptance criteria satisfied:
+  1. `mix letflow.check` ran to completion, no external timeout cutting it off --
+     `4996/4997 passed`, 1 failure. That failure (`Letflow.Api.ContextTest`
+     "scoped_repo_opts/1 is 1-arity") is the already-open, already-root-caused
+     intermittent flake ISS-0340 (a code-loading-order race in a pure introspection
+     assertion), not a new failure or an S11 regression.
+  2. `npm run check` in web/ passed clean: tsc clean, eslint clean, vitest 205 tests
+     passed, guards 52 tests passed, vite build succeeded.
+  3. The S10 Playwright specs named by stage-11 P2 (categories, tags, question-bank,
+     exam-lifecycle, employee-portal, exam-taking, exam-result, exam-result-by-id --
+     8 spec files, 37 tests) ran green against a live instance on current main:
+     `37 passed`, 0 failures. One genuine test-timing flake was found during this
+     work and filed separately as non-blocking: ISS-0869 (proven non-functional --
+     the real feature renders correctly, only the test's own visibility poll lost
+     the race once; passed on retry).
+  4. REQ-416's own end-to-end test (test/letflow/modules/bilimbaga_solution_e2e_test.exs)
+     passed standalone against a fresh test DB: `Result: 1 passed`.
+
+  docs/migration/stage-11-modular-platform.md's status line was updated with this
+  result and date, and a `verified` event for REQ-416 was appended to
+  docs/status/requirement_status.v23.yaml (with docs/status/requirement_status.index.yaml's
+  entry count incremented accordingly) -- all in the same commit as this closure.
+  Verdict: S11 fully verified. Closed by DOC-UPDATER per RELEASE-VALIDATOR's findings.

@@ -1,0 +1,67 @@
+id: ISS-0869
+title: >
+  Flaky Playwright test: exam-lifecycle.e2e.spec.ts "all exam rows have an Edit
+  action" -- data-table locator intermittently not visible within its own 10s
+  timeout despite the table (with real Edit/Delete actions) actually rendering
+discovered_by: RELEASE-VALIDATOR (ISS-0847 S11 re-verification)
+discovered_in_run: WF03-ISS0847-20260927
+discovered_at: "2026-09-27T09:50:00Z"
+severity: MINOR
+tags:
+  - flaky
+  - e2e
+  - playwright
+  - S10
+  - S11
+description: >
+  While re-running the S10 Playwright specs stage-11 P2 names ("full backend
+  suite and the S10 Playwright specs green") against a live dev instance
+  (fresh dev DB, current main @ 94517238, exam module post-P2-extraction
+  routes), `web/tests/e2e/exam-lifecycle.e2e.spec.ts`'s "all exam rows have an
+  Edit action" test (line 223) failed twice in a row with `--workers=1`
+  (i.e. not a cross-test-worker contention artifact):
+
+    Error: expect(received).toBeTruthy()
+    Received: false
+      226 |     expect(hasTable).toBeTruthy()
+
+  `hasTable` comes from `page.getByTestId('data-table').isVisible({ timeout:
+  10_000 }).catch(() => false)`. The auto-captured `error-context.md` page
+  snapshot taken at the moment of failure shows the exams table FULLY
+  rendered, with real data (two seeded exam rows, "REQ-345 E2E Scoreable
+  Exam" / "REQ-345 E2E Mixed Exam") and real "Edit"/"Delete" action buttons
+  present on both rows -- i.e. the feature under test genuinely works; the
+  table simply had not finished rendering by the 10s the `isVisible` poll
+  was given, on this local single-backend-instance dev setup. Re-running
+  the identical test alone with `--retries=2` passed on retry #1 (1 flaky,
+  matches the `1) exam-lifecycle.e2e.spec.ts:199/223` "2 flaky" precedent
+  already recorded in `docs/migration/stage-10-bilimbaga-vertical.md`'s "P5
+  close-out" RELEASE-VALIDATOR re-run section, 2026-09-14 -- same file,
+  adjacent tests, same "renders slightly late" shape). NOT the same root
+  cause as `ISS-0663` (that one is a pagination/soft-delete-backlog page-1
+  visibility issue) -- this is a plain render-timing race with no visible
+  data artifact, filed separately per that precedent's own convention of
+  naming each flake class rather than lumping them.
+affected_files:
+  - web/tests/e2e/exam-lifecycle.e2e.spec.ts
+  - docs/migration/stage-10-bilimbaga-vertical.md
+related:
+  - ISS-0663
+severity_rationale: >
+  MINOR -- proven non-functional (the real feature renders correctly; only
+  the test's own visibility poll loses the race), and Playwright's own CI
+  config already retries once (`retries: process.env.CI ? 1 : 0`), which
+  would absorb this in an actual CI run. Locally (non-CI, retries: 0) it can
+  surface as a false failure.
+fix_direction: >
+  Either raise `exam-lifecycle.e2e.spec.ts`'s own `data-table` visibility
+  timeout for this specific assertion (matching the more generous timeouts
+  already used elsewhere in the same file, e.g. the 10_000 already used by
+  `examRow(...).toBeVisible`), or root-cause why this specific EntityCrudPage
+  render (12+ columns, 2 rows) is slower than the adjacent passing tests'
+  identical page under the same navigation helper -- possibly first-load
+  cost of the wide column set. No suspicion of a product regression: this
+  is a test-timing tightness issue, not an application defect.
+status: open
+queue_ref: "Q-869"
+github_ref: "GH-1887"

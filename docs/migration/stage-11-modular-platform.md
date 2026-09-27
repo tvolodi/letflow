@@ -1,11 +1,35 @@
 # Stage 11 — Modular platform (platform / module / solution / tenant configuration)
 
-Status: P1–P3 requirements done. Requirements REQ-400 through REQ-416 filed and all
-`done`. P3 close-out end-to-end proof: `test/letflow/modules/bilimbaga_solution_e2e_test.exs`
+Status: P1–P3 requirements done and independently re-verified.  Requirements
+REQ-400 through REQ-416 filed and all `done`. P3 close-out end-to-end proof:
+`test/letflow/modules/bilimbaga_solution_e2e_test.exs`
 (REQ-416) installs the bilimbaga solution into a fresh tenant via the real HTTP route and
 verifies the full exam-tenant path end-to-end (solution install → module listing → entity
 definition/restriction verification → exam seeding → candidate session flow → TASK_WORKER
 answer-key redaction → 404-for-uninstalled-tenant). Depends on: S10. Created 2026-09-24.
+
+**RELEASE-VALIDATOR re-verification (ISS-0847, 2026-09-27), on `main` @ `94517238`,
+from a fresh test DB / fresh dev DB, after all five of ISS-0847's own blocking
+dependencies (ISS-0838, ISS-0839, ISS-0827, ISS-0833, ISS-0834) resolved:**
+`mix letflow.check` ran to completion (no timeout cutoff) — `Result: 4996/4997
+passed, 1 excluded` / `Failed: 1 test`, the one failure being
+`Letflow.Api.ContextTest`'s "scoped_repo_opts/1 is 1-arity" test, the already-open,
+already-root-caused intermittent flake `ISS-0340` (a code-loading-order race in a
+pure introspection assertion, unrelated to S11) — not a new failure. `npm run
+check` in `web/` passed clean (type-check/lint/vitest 205 tests/guards). The S10
+Playwright specs stage-11 P2 names (`categories`, `tags`, `question-bank`,
+`exam-lifecycle`, `employee-portal`, `exam-taking`, `exam-result`,
+`exam-result-by-id` — 37 tests) ran green against a live instance on current
+`main` (`37 passed`, 0 failures) after fixing three purely-local dev-DB setup
+gaps unrelated to S11 correctness (entity definitions never activated on the
+freshly reset dev DB; the fixed e2e candidate's fixture exams needed
+`max_attempts` bumped after repeated local re-runs exhausted them, same
+mechanism as the stage-10 close-out's own precedent) — one genuine test-timing
+flake found and filed separately (`ISS-0869`, passed on retry, confirmed via the
+Playwright trace that the real table+actions render correctly). REQ-416's own
+end-to-end test (`test/letflow/modules/bilimbaga_solution_e2e_test.exs`) passed
+standalone against a fresh test DB (`Result: 1 passed`), and its "no direct SQL"
+grep contract holds. Full evidence in the WF03-ISS0847-20260927 run history.
 
 See [`decisions/0039-platform-module-solution-layering.md`](decisions/0039-platform-module-solution-layering.md)
 for why this stage exists and for decisions D1–D8, which every requirement in this

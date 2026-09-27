@@ -7272,6 +7272,25 @@
                      "completed_at":  "2026-09-25T07:36:00Z",
                      "last_known_step":  "Step 5 COMPLETED PASS -- ISS-0806/ISS-0790 resolved. GH-1792 closed. 17/17 Elixir tests. Commit 2b954e78.",
                      "note":  "defmanifest/1 macro: compile-time check that role_grants atoms are in permissions. REVIEWER F1 (doc clarification) and F3 (unique module names) addressed."
+                 },
+                 {
+                     "run_id":  "WF02-REQ418-20260927",
+                     "workflow_id":  "WF-02",
+                     "status":  "IN_PROGRESS",
+                     "requirement_ids":  [
+                                    "REQ-418"
+                                ],
+                     "owned_modules":  [
+                                    "priv/keycloak/realms/bpm-default.json",
+                                    "lib/letflow/routers/mobile_tenant_config.ex",
+                                    "lib/letflow/design/req124-mobile-tenant-config.md",
+                                    "test/letflow/routers/mobile_tenant_config_test.exs",
+                                    "test/letflow/api/keycloak_realm_mobile_client_test.exs"
+                                ],
+                     "started_at":  "2026-09-27T05:09:06Z",
+                     "completed_at":  null,
+                     "last_known_step":  "Step 00 COMPLETED PASS -- branch feature/WF02-REQ418-20260927 created and pushed by ORCH. Step 01 dispatched to CODE-DESIGNER.",
+                     "note":  "MOB-2 OIDC: new public PKCE-S256 letflow-mobile Keycloak client + sixth client_id key on GET /api/mobile/tenant-config. SECURITY-REVIEWER gated. First requirement of the S9 mobile-tier chain after REQ-417 unblocked it."
                  }
              ]
 }

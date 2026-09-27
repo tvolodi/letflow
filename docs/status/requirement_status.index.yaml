@@ -4610,8 +4610,30 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 18
+    entries: 19
     note: >
+      Incremented to 19 by ORCH, reconciled while rebasing
+      feature/WF02-REQ419-20260927 onto origin/main for Step Final: after
+      the prior 16 -> 18 reconciliation below (composing origin/main's
+      ISS-0873 append with this branch's own REQ-419 "started" append),
+      this branch's own tip went on to independently append REQ-419's
+      "done" event on top of its own (pre-reconciliation) 17-entry base,
+      claiming 18 for that reason alone. The actual on-disk file after the
+      rebase's own (non-conflicting) merge of requirement_status.v23.yaml
+      itself carries all three appends (ISS-0873, REQ-419 started, REQ-419
+      done) -- `grep -c "^  - req:" docs/status/requirement_status.v23.yaml`
+      = 19 on-disk entries, so the correct combined count is 19, not
+      either side's own claimed value alone. Well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered. All prior
+      notes preserved below.
+
+      Incremented to 18 by DOC-UPDATER's REQ-419 "done" event append
+      (WF02-REQ419-20260927, Step 6, 2026-09-27T19:08:16Z) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v23.yaml` = 18 on-disk
+      entries, bumped in the same commit as the append per the REQ-417
+      A9-fix precedent below. Prior note (17-entry increment) preserved
+      below.
+
       Incremented to 18 by ORCH, reconciled while rebasing
       feature/WF02-REQ419-20260927 onto origin/main for Step Final: this
       branch's own tip had independently incremented 16 -> 17 for its own

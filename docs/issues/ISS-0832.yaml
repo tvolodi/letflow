@@ -51,7 +51,35 @@ fix_direction: >
   3. Confirm fixed by running scripts/test_parallel.sh with N>=2 partitions
      and checking CheckBoundariesTaskTest AC2 passes on every partition it
      lands on, not just N=1.
-status: open
+status: resolved
+resolved_in_run: fix/ISS0832-mix-env-partition-leak-20260927
+resolved_at: "2026-09-27T10:35:00Z"
+resolution: >
+  Root cause confirmed exactly as diagnosed: the AC2 test's
+  `System.cmd("mix", ["letflow.check_boundaries"], ...)` call carried no
+  `env:` override, so the spawned subprocess's own `mix` invocation
+  defaults its MIX_ENV to "dev" while still inheriting whatever
+  MIX_TEST_PARTITION the parent test process's OS environment carries
+  (exported per-partition by scripts/test_parallel.sh, but not
+  accompanied by an explicit MIX_ENV export -- `mix test` resolves its
+  own env internally without necessarily setting the OS var for child
+  processes to inherit). config/dev.exs's ISS-0015 guard then fires:
+  "MIX_TEST_PARTITION=N is set, but MIX_ENV is dev". Reproduced
+  deterministically and directly (not merely inferred from a report):
+  `env -u MIX_ENV MIX_TEST_PARTITION=3 mix test
+  test/mix/tasks/letflow.check_boundaries_test.exs` -- 28/29 passed
+  pre-fix (exactly this failure, matching the exact condition observed
+  live in PR #1900's CI backend-gate run, MIX_TEST_PARTITION=3); 29/29
+  passed post-fix, same command. Fix: explicitly pass
+  `env: [{"MIX_ENV", ...}, {"MIX_TEST_PARTITION", ...},
+  {"MIX_BUILD_PATH", ...}]` to the spawned subprocess, defaulting
+  MIX_ENV to "test" when unset in the parent -- matching
+  test/support/tenant_slug_test.exs's own established System.cmd/3
+  pattern. Exactly 1 file changed:
+  test/mix/tasks/letflow.check_boundaries_test.exs. Handled as an ORCH
+  direct action per docs/agents/ORCHESTRATOR.md §10 (one file, no new
+  public function/module/@spec, no migration, no supervision-tree file,
+  no tenant-data path, no change to any test's asserted expected value).
 queue_ref: "Q-832"
   # registered late by ORCH in ADHOC-20260926-S11-AUDIT; any earlier queue_ref here was derived, not allocated
 github_ref: "GH-1830"

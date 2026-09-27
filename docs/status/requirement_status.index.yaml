@@ -4610,8 +4610,14 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 13
+    entries: 14
     note: >
+      Incremented to 14 by ORCH's own ISS-0832 closing SCOPE-CHANGE append
+      (2026-09-27T10:35:00Z, check_boundaries AC2 subprocess MIX_ENV/
+      MIX_TEST_PARTITION leak). `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 14 on-disk entries.
+      Prior note preserved below.
+
       Incremented to 13 by DOC-UPDATER's own REQ-418 done-event append
       (WF02-REQ418-20260927, 2026-09-27T10:06:25Z), reconciled by ORCH while
       rebasing feature/WF02-REQ418-20260927 onto origin/main -- this branch's

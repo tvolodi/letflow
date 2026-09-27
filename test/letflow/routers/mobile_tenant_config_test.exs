@@ -39,7 +39,14 @@ defmodule Letflow.Routers.MobileTenantConfigTest do
 
   @router_opts Letflow.Router.init([])
 
-  @expected_keys ["branding", "default_locale", "environment_kind", "locales", "realm_url"]
+  @expected_keys [
+    "branding",
+    "client_id",
+    "default_locale",
+    "environment_kind",
+    "locales",
+    "realm_url"
+  ]
 
   defp call(conn), do: Letflow.Router.call(conn, @router_opts)
 
@@ -311,7 +318,8 @@ defmodule Letflow.Routers.MobileTenantConfigTest do
       assert source =~ "\"locales\" => locales_from_settings(settings),"
       assert source =~ "\"default_locale\" => default_locale_from_settings(settings),"
       assert source =~ "\"branding\" => branding_from_settings(settings),"
-      assert source =~ "\"environment_kind\" => environment_kind()"
+      assert source =~ "\"environment_kind\" => environment_kind(),"
+      assert source =~ "\"client_id\" => client_id()"
     end
 
     test "GET /api/mobile/tenant-config still returns exactly the 5 documented keys" do
@@ -319,6 +327,90 @@ defmodule Letflow.Routers.MobileTenantConfigTest do
 
       assert conn.status == 200
       assert Map.keys(body) |> Enum.sort() == @expected_keys
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REQ-418 -- sixth `client_id` key, env-then-constant resolution
+  # (MOBILE_OIDC_CLIENT_ID || "letflow-mobile"), byte-identical across all
+  # four never-error paths, moduledoc no longer says "exactly five keys"
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  describe "REQ-418: client_id value -- default (MOBILE_OIDC_CLIENT_ID unset)" do
+    setup do
+      previous = System.get_env("MOBILE_OIDC_CLIENT_ID")
+      System.delete_env("MOBILE_OIDC_CLIENT_ID")
+
+      on_exit(fn ->
+        if previous, do: System.put_env("MOBILE_OIDC_CLIENT_ID", previous)
+      end)
+
+      :ok
+    end
+
+    test "body[\"client_id\"] is \"letflow-mobile\" when the env var is unset" do
+      {conn, body} = get_mobile_config()
+
+      assert conn.status == 200
+      assert body["client_id"] == "letflow-mobile"
+    end
+  end
+
+  describe "REQ-418: client_id value -- MOBILE_OIDC_CLIENT_ID env override" do
+    setup do
+      previous = System.get_env("MOBILE_OIDC_CLIENT_ID")
+      System.put_env("MOBILE_OIDC_CLIENT_ID", "req418-override-client")
+
+      on_exit(fn ->
+        if previous do
+          System.put_env("MOBILE_OIDC_CLIENT_ID", previous)
+        else
+          System.delete_env("MOBILE_OIDC_CLIENT_ID")
+        end
+      end)
+
+      :ok
+    end
+
+    test "body[\"client_id\"] equals the env value when MOBILE_OIDC_CLIENT_ID is set" do
+      {conn, body} = get_mobile_config()
+
+      assert conn.status == 200
+      assert body["client_id"] == "req418-override-client"
+    end
+  end
+
+  describe "REQ-418: client_id is byte-identical across all four never-error paths" do
+    test "resolvable slug, unknown slug, missing ?slug=, and lookup-failure client_id values all agree" do
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug("req418-client-id-identical"),
+          display_name: "REQ-418 Client Id Identical Tenant",
+          idp_realm_id: unique_realm("req418-client-id-identical")
+        })
+
+      {_conn_resolvable, body_resolvable} = get_mobile_config(tenant.slug)
+      {_conn_unknown, body_unknown} = get_mobile_config(unique_slug("req418-client-id-unknown"))
+      {_conn_missing, body_missing} = get_mobile_config()
+      {_conn_db_failure, body_db_failure} = get_mobile_config(<<0>>)
+
+      assert body_resolvable["client_id"] == body_unknown["client_id"]
+      assert body_unknown["client_id"] == body_missing["client_id"]
+      assert body_missing["client_id"] == body_db_failure["client_id"]
+      assert body_missing["client_id"] == "letflow-mobile"
+    end
+  end
+
+  describe "REQ-418: moduledoc no longer says \"exactly five keys\"; states six keys and the reasoning" do
+    test "moduledoc states six keys, includes client_id, and the three-point security reasoning" do
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} =
+        Code.fetch_docs(Letflow.Routers.MobileTenantConfig)
+
+      refute moduledoc =~ "exactly five keys"
+      assert moduledoc =~ "exactly six keys"
+      assert moduledoc =~ "client_id"
+      assert moduledoc =~ "is not a secret"
+      assert moduledoc =~ "platform-global"
     end
   end
 

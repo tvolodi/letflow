@@ -311,3 +311,24 @@ so a later reader does not mistake the static defaults for a bug.
   `branding` but specify no sub-schema. If a later mobile-tier requirement defines a
   concrete branding contract, this map's internal keys are revised then, not
   guessed further now.
+
+## Addendum (REQ-418, 2026-09-27)
+
+`GET /api/mobile/tenant-config`'s response gains a **sixth** key, `client_id`,
+resolved `System.get_env("MOBILE_OIDC_CLIENT_ID") || "letflow-mobile"` — the same
+env-then-constant shape `Letflow.Routers.TenantConfig.client_id/0` already uses for
+the web SPA's own `client_id` (`OIDC_CLIENT_ID || "letflow-web"`), with this module's
+own independent env var and default. Full rationale, field shape, and the
+three-point disclosure-safety reasoning (public-client id is not a secret;
+platform-global not tenant-derived; server-sent avoids app-release coupling) live in
+`lib/letflow/design/req418-mobile-oidc-client.md` §2 — not restated here.
+
+This supersedes this document's own §6 (response-shape table) and §9
+(acceptance-criteria table) on **key-count only** (five keys → six): both tables
+above still correctly describe `realm_url`/`locales`/`default_locale`/`branding`/
+`environment_kind`'s own per-branch behavior and are **not rewritten in place** —
+per this design corpus's established addendum-not-rewrite convention (e.g.
+`req128-keycloak-dev-stack.md`'s "Correction after..." sections). `client_id` is
+platform-global and byte-identical across every never-error branch, exactly as
+`environment_kind` already is — see `req418-mobile-oidc-client.md` §2.2 for why it
+belongs in that same invariance category rather than the three per-tenant fields'.

@@ -1,0 +1,71 @@
+{
+  "handoff_id": "WF02-REQ418-20260927-step-01",
+  "run_id": "WF02-REQ418-20260927",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ418-20260927/step-01-code-designer.json",
+  "created_at": "2026-09-27T05:09:06Z",
+  "started_at": "2026-09-27T05:20:00Z",
+  "completed_at": "2026-09-27T06:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-418"],
+    "requirement_text": {
+      "REQ-418": "MOB-2 authenticates via OIDC Authorization-Code + PKCE through the system browser (flutter_appauth). That needs an OIDC client the app can name. None exists: priv/keycloak/realms/bpm-default.json's only client is letflow-web (publicClient true, directAccessGrantsEnabled true, redirectUris [\"*\"], webOrigins [\"*\"]). Reusing letflow-web is rejected: its wildcard redirect list would let any app that registers any scheme receive a mobile authorization code, and its password grant has no place on a device. THIS IS A SECURITY CHANGE. SECURITY-REVIEWER is a required gate (identity configuration plus a public, unauthenticated response shape; docs/agents/instructions/security-invariants.md).\n\nPART 1 -- the client, in priv/keycloak/realms/bpm-default.json: clientId \"letflow-mobile\"; publicClient true; standardFlowEnabled true; directAccessGrantsEnabled false; implicitFlowEnabled false; serviceAccountsEnabled false; attributes \"pkce.code.challenge.method\": \"S256\" (Keycloak then rejects an authorization request without an S256 challenge) and \"post.logout.redirect.uris\": \"com.bizdala.letflow:/oauth2redirect\"; redirectUris exactly [\"com.bizdala.letflow:/oauth2redirect\"] -- no \"*\", no http(s) URI, no trailing wildcard; webOrigins [] (a native app makes no CORS requests). Protocol mappers: the same realm-roles mapper letflow-web carries (claim.name \"roles\" -- Letflow reads that claim), plus an oidc-audience-mapper with included.client.audience \"letflow-web\" and access.token.claim \"true\". The audience mapper is NOT optional: Letflow.Oidc.TokenVerifier.Oidcc validates with Oidcc.Token.validate_jwt/3, whose verify_aud_claim (deps/oidcc/src/oidcc_token.erl:1283) rejects any access token whose aud lacks the configured :oidc client_id (\"letflow-web\", config/dev.exs:97, config/test.exs:128). This is exactly ISS-0275's defect (lib/letflow/design/iss0275-audience-mapper-fix.md) and must not be reintroduced for the second client. validate_jwt does not check azp, so azp \"letflow-mobile\" is accepted. Do NOT modify the letflow-web client. The redirect scheme must equal the Android applicationId REQ-419 creates (com.bizdala.letflow; see the S9 header's open question).\n\nPART 2 -- how the app learns the client_id. DECIDED HERE (with the reasoning below; REQ-VALIDATOR/REVIEWER may overturn): add a sixth key \"client_id\" to GET /api/mobile/tenant-config, valued System.get_env(\"MOBILE_OIDC_CLIENT_ID\") || \"letflow-mobile\" -- the same env-then-constant shape Letflow.Routers.TenantConfig already uses for the web SPA's client_id (lib/letflow/routers/tenant_config.ex:168 and :361, OIDC_CLIENT_ID || \"letflow-web\"). Security reasoning, to be restated in the moduledoc: (i) an OAuth public-client identifier is not a secret (RFC 6749 §2.2; a public client has no credential), and the web endpoint already publishes its equivalent unauthenticated; (ii) the value is platform-global, not tenant-derived -- byte-identical on every never-error branch (resolvable slug, unknown slug, missing ?slug=, lookup failure) -- so it adds zero enumeration signal, the same status environment_kind has; (iii) the alternative, compiling the id into the app, would work today but freezes it into every shipped build, so a deployment whose realms register the client under another name, or a later rename, would need an app release; server-sent keeps the one-tenant-agnostic-build constraint without that coupling. (It does NOT support a per-tenant client name -- the value is platform-global by design, point ii; per-tenant naming would be a new requirement and a new disclosure analysis.) CONTRACT CHANGE TO CALL OUT: the module's moduledoc says \"It returns exactly five keys\" and \"Adding a sixth key to this response is a security change, not a feature\"; REQ-124's and REQ-282's exact-shape tests in test/letflow/routers/mobile_tenant_config_test.exs assert five keys. Update the table, the \"What this endpoint discloses\" section and the per-field-variance paragraph to six keys, and update the exact-shape assertions to the new six-key set -- never loosen them to a subset check. Also record the change in lib/letflow/design/req124-mobile-tenant-config.md as a dated addendum.\n\nOUT OF SCOPE: provisioning letflow-mobile into per-tenant realms other than bpm-default (Letflow does not provision Keycloak realms or clients programmatically -- lib/letflow/routers/onboarding.ex's moduledoc lists realm/client provisioning as not done); any apps/mobile/ code; the web endpoint."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "priv/keycloak/realms/bpm-default.json",
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "lib/letflow/design/req124-mobile-tenant-config.md",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "lib/letflow/design/iss0275-audience-mapper-fix.md",
+      "lib/letflow/routers/tenant_config.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "config/dev.exs",
+      "config/test.exs"
+    ],
+    "owned_modules": [
+      "priv/keycloak/realms/bpm-default.json",
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "lib/letflow/design/req124-mobile-tenant-config.md",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "test/letflow/api/keycloak_realm_mobile_client_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Design the two parts of REQ-418 (branch feature/WF02-REQ418-20260927 already created and pushed by ORCH; verify it out with `git branch --show-current` before writing). PART 1: the new public PKCE-S256 letflow-mobile Keycloak client in priv/keycloak/realms/bpm-default.json, exact attribute/redirectUris/webOrigins/mapper shape per the requirement text, with an explicit note that letflow-web must remain byte-identical. PART 2: the sixth `client_id` key on GET /api/mobile/tenant-config (lib/letflow/routers/mobile_tenant_config.ex), env-then-constant resolution, and the moduledoc/table/disclosure-section/exact-shape-test updates the contract change requires. Write the design to lib/letflow/design/req418-mobile-oidc-client.md. Design only -- no implementation code, no realm JSON edits, no route/test edits.",
+    "acceptance_criteria": [
+      "Design specifies the exact letflow-mobile client JSON shape (all fields named in the requirement text) and states explicitly that letflow-web's JSON object is unchanged",
+      "Design specifies the audience-mapper fields exactly (included.client.audience 'letflow-web', access.token.claim 'true') and cites why (ISS-0275 recurrence risk) it is mandatory",
+      "Design specifies the six-key GET /api/mobile/tenant-config response shape, the client_id resolution order (MOBILE_OIDC_CLIENT_ID env, else 'letflow-mobile'), and identifies every place in mobile_tenant_config.ex's moduledoc/table/disclosure-section that must change from five to six keys",
+      "Design lists every acceptance-criterion test from REQ-418's own acceptance_criteria (a static realm-JSON test, the three live Keycloak curl checks, the admin evaluate-scopes check, the six-key exact-shape test across all four never-error paths, the client_id-value test) and states which file each belongs in",
+      "Design states the moduledoc rewrite explicitly removes the phrase 'exactly five keys' and states the three-point client_id security reasoning (public-client id is not a secret; platform-global not tenant-derived; server-sent avoids app-release coupling)",
+      "No implementation code in the design doc (JSON/shape sketches and prose only, no working Elixir functions beyond signatures)",
+      "Design explicitly flags this as SECURITY-REVIEWER-gated (identity configuration + public unauthenticated response shape) per security-invariants.md",
+      "Set this handoff's status to COMPLETED (or FAILED) and result.status to PASS/FAIL/PARTIAL when done -- this is a first dispatch, so claim it by setting status to IN_PROGRESS only, per HANDOFF_PROTOCOL.md.",
+      "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR FAILed the design on a BLOCKER: §2.3 item 4 of lib/letflow/design/req418-mobile-oidc-client.md tells ELIXIR-DEV to extend the sentence '`environment_kind` is the one field that is still, and remains, byte-identical across every branch by construction' inside the '## locales / default_locale / branding are per-tenant; environment_kind remains global' section (lines 97-114) -- but that exact sentence actually lives at lines 80-83, inside the DIFFERENT '## The never-error rule is LOAD-BEARING here too' section. Lines 97-114 contain a similar but textually distinct sentence instead. Fix: re-read lib/letflow/routers/mobile_tenant_config.ex directly and correct §2.3 item 4 to name the right section/line range for the sentence actually being extended. Also: that exact sentence is hard-matched verbatim by the PRE-EXISTING REQ-282 AC4 test (test/letflow/routers/mobile_tenant_config_test.exs lines 535-536, `assert normalized =~ \"...\"`) -- add explicit guidance in §2.4 (test-file plan) on how to edit that sentence without breaking this existing regression assertion (e.g. update both together, or word the extension so the existing substring match still holds). This is not a first dispatch: the receiving agent flips status to COMPLETED/FAILED as normal on finishing, per HANDOFF_PROTOCOL.md's normal completion step -- do not re-claim via IN_PROGRESS-only."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 fix. CODE-DESIGN-VALIDATOR FAILed on a BLOCKER: §2.3 item 4 misidentified the moduledoc location of the sentence to extend with `client_id` -- claimed it lived in the 'locales / default_locale / branding are per-tenant; environment_kind remains global' section (lines 97-114), when it actually lives at lines 80-83, at the end of the 'The never-error rule is LOAD-BEARING here too' section. Re-read lib/letflow/routers/mobile_tenant_config.ex directly (offset 1, limit 130) and confirmed: the sentence '`environment_kind` is the one field that is still, and remains, byte-identical across every branch by construction (env-derived, not tenant-derived, not touched by this requirement).' is at lines 80-83, inside the section whose header ('## The never-error rule is LOAD-BEARING here too') is at line 42. Lines 97-114 instead contain a different sentence at lines 111-113 ('`environment_kind` remains the one field genuinely sourced from application config/env ... the other three no longer are.'). Rewrote §2.3 item 4 to name the correct section/line range (80-83), explicitly distinguish it from the lines-111-113 sentence so ELIXIR-DEV cannot confuse the two, and require any extension to be appended AFTER the matched phrase rather than inserted into it. Also confirmed (Read, offset 520, limit 30) that test/letflow/routers/mobile_tenant_config_test.exs lines 535-536 hard-match this exact sentence verbatim via `assert normalized =~ \"...\"` (substring match against whitespace-collapsed moduledoc, REQ-282 AC4 describe block at lines 525-544) -- added a new row to §2.4's test-file plan naming this pre-existing assertion explicitly, explaining why the append-only wording constraint in §2.3 item 4 lets it pass with zero change to the test file, and instructing ELIXIR-DEV to run that specific test after the moduledoc edit and treat a failure as a sign the edit (not the test) needs fixing. No other design content changed.",
+    "artifacts_out": ["lib/letflow/design/req418-mobile-oidc-client.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ418-20260927",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ418-20260927",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-gate on the corrected design."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

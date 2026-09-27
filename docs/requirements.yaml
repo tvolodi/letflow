@@ -31025,7 +31025,7 @@ requirements:
   - id: REQ-418
     title: "Add public PKCE-S256 Keycloak client letflow-mobile (custom-scheme redirect, no wildcards) and expose its client_id on GET /api/mobile/tenant-config, under SECURITY-REVIEWER gate"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S9
     impl_order: 855  # letflow-queue task id, GH#1872. Registered 2026-09-27T02:59:55Z by ORCH (WF-01 Step 3).
     description: >

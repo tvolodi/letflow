@@ -365,3 +365,35 @@
       (ISS-0869, proven non-functional). docs/migration/stage-11-modular-
       platform.md's Status line updated with this result and today's date
       in the same commit as this append.
+
+  - req: REQ-418
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-27T10:06:25Z
+    note: >
+      WF-02 run WF02-REQ418-20260927 closed. Added public PKCE-S256 Keycloak
+      client letflow-mobile to priv/keycloak/realms/bpm-default.json
+      (standardFlowEnabled true, directAccessGrantsEnabled/implicitFlowEnabled/
+      serviceAccountsEnabled false, pkce.code.challenge.method S256,
+      redirectUris exactly ["com.bizdala.letflow:/oauth2redirect"], webOrigins
+      [], roles mapper + oidc-audience-mapper targeting letflow-web -- guards
+      against ISS-0275's audience-mapper defect recurring for a second
+      client). letflow-web left untouched (diff addition-only). Exposed the
+      new client_id as a sixth key on GET /api/mobile/tenant-config
+      (lib/letflow/routers/mobile_tenant_config.ex, client_id/0 resolving
+      MOBILE_OIDC_CLIENT_ID env var with a "letflow-mobile" default);
+      tenant_config_test.exs's cross-path AC7 guard updated from "exactly
+      five keys" to "exactly six keys" as a legitimate REQ-418-caused change.
+      SECURITY-REVIEWER PASS (identity-configuration + public-response-shape
+      gate, security-invariants.md) and REVIEWER PASS both on record
+      (step-02c/step-02d). TEST-RUNNER: full suite plus the live-Keycloak
+      integration test (test/letflow/integration/keycloak_mobile_client_auth_test.exs,
+      --include keycloak) passing. RELEASE-VALIDATOR independently re-ran
+      scripts/test_parallel.sh (4999 tests, 6 failures, all 6 structurally
+      pre-existing/unrelated via git-diff attribution), re-ran the three
+      REQ-418 test files directly (47 passed), re-ran the live-Keycloak test
+      against the real container (4 passed), and explicitly re-checked all 8
+      acceptance criteria against actual code -- PASS
+      (handoffs/WF02-REQ418-20260927/step-05-release-validator.json). Branch
+      feature/WF02-REQ418-20260927. Flipping docs/requirements.yaml's
+      REQ-418 status: pending -> done in this same append.

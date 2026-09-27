@@ -1,0 +1,59 @@
+{
+  "handoff_id": "WF02-REQ418-20260927-step-05",
+  "run_id": "WF02-REQ418-20260927",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ418-20260927/step-05-release-validator.json",
+  "created_at": "2026-09-27T08:05:00Z",
+  "started_at": "2026-09-27T13:35:00Z",
+  "completed_at": "2026-09-27T15:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-418"],
+    "requirement_text": {
+      "REQ-418": "See handoffs/WF02-REQ418-20260927/step-01-code-designer.json's context.requirement_text for the full verbatim requirement, copied there by ORCH from docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["WF02-REQ418-20260927-step-04"],
+    "artifacts_in": [
+      "test/reports/report-20260927-WF02-REQ418-20260927.yaml",
+      "priv/keycloak/realms/bpm-default.json",
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "test/letflow/api/keycloak_realm_mobile_client_test.exs",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "test/letflow/integration/keycloak_mobile_client_auth_test.exs",
+      "test/letflow/routers/tenant_config_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-418 before it's marked done (checkout feature/WF02-REQ418-20260927, pull to get TEST-RUNNER's commit f6b99fbf). Per docs/agents/workflows/WF-02_requirement_implementation.md Step 5: (1) independently re-run scripts/test_parallel.sh (do not trust TEST-RUNNER's report alone) -- TEST_PARALLEL_N=4 is this host's known-good setting (ISS-0219). Do not expect to reproduce Step 4's exact failure set; re-derive pre-existence attribution structurally (check each failing file's git diff against main) rather than by count-matching. (2) Confirm each of REQ-418's 8 acceptance criteria explicitly against the actual code/tests -- not against TEST-RUNNER's summary. Docker's letflow-keycloak-1 must be healthy and already carry the letflow-mobile client (TEST-RUNNER force-recreated it in the prior step to pick up the realm import; confirm it's still up and don't force-recreate it again without checking first, since the live test depends on that exact state). (3) Check docs/requirements.yaml and docs/status/ for staleness relative to what actually shipped -- REQ-418's status is still 'pending' there; DOC-UPDATER flips it next, so 'stale' here means something else was missed, not that status. (4) Complete the handoff: PASS -> route to DOC-UPDATER; FAIL -> name the blocking issue and which agent it routes back to.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh re-run independently, real aggregated output quoted",
+      "Every failure in this independent run is attributed structurally (git diff of the failing file against main) not by comparing counts against TEST-RUNNER's report",
+      "Each of REQ-418's 8 acceptance criteria explicitly re-checked against actual code/tests and confirmed satisfied",
+      "The live-Keycloak test (test/letflow/integration/keycloak_mobile_client_auth_test.exs) re-run with --include keycloak and confirmed passing against the real container",
+      "PASS or FAIL verdict with next_action naming DOC-UPDATER (PASS) or the blocking agent (FAIL); handoff completed per protocol (claim via IN_PROGRESS, then COMPLETED with a real result block)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified REQ-418. (1) TEST_PARALLEL_N=4 scripts/test_parallel.sh, run alone: 'combined: 4999 tests, 6 properties, 6 failures (4999/5005 passed)'. Attributed each failure structurally via `git diff main --stat` on the failing file and its source: Letflow.Docs.RequirementStatusInvariantsTest (docs-drift class, test/docs/requirement_status_invariants_test.exs -- zero diff vs main), Mix.Tasks.Letflow.CheckBoundariesTaskTest AC2 (ISS-0832-class MIX_TEST_PARTITION/MIX_ENV=dev subprocess flake -- zero diff vs main on that test file or lib/mix/tasks/letflow.check_boundaries*.ex), Letflow.RouterTest x2 (ISS-0827-class stale deferred-route-count guard -- zero diff vs main on test/letflow/router_test.exs or lib/letflow/router.ex), Letflow.IdentityTest x2 (ISS-0766-class bpm-default tenant displacement flake via test/support/bpm_default_realm_displacement.ex -- zero diff vs main on test/letflow/identity_test.exs or lib/letflow/identity.ex). None of REQ-418's changed files (mobile_tenant_config.ex, bpm-default.json, the new/edited test files) appear anywhere in this failure set -- all 6 are pre-existing and unrelated. (2) Also independently ran `mix letflow.check.test` (the stricter ISS-0069 gate) three times to get a clean read: first at default N=16 (nproc) was killed early as noise; a second TEST_PARALLEL_N=4 run overlapped briefly with the killed run and surfaced 4 extra Letflow.ServiceCatalogReaperTest failures that are ISS-0414's own concurrent-invocation guard correctly detecting my own overlapping mix test process (self-inflicted contamination, discarded); a third, single, clean TEST_PARALLEL_N=4 run reproduced exactly the same 6 pre-existing failures/files as (1) above (`Result: 1227/1229 passed ... Failed: 2 tests` for the last-dumped partition; full dump: RequirementStatusInvariantsTest x1, IdentityTest x2, CheckBoundariesTaskTest x1, RouterTest x2 = 6 total), exited 1 only for that reason -- zero occurrences of the ISS-0069 target substring 'default values for the optional arguments' anywhere in that run's captured output (grep -c = 0). (3) Ran the three REQ-418 test files directly (keycloak_realm_mobile_client_test.exs, mobile_tenant_config_test.exs, tenant_config_test.exs): 47 passed. (4) Re-ran `mix test --include keycloak test/letflow/integration/keycloak_mobile_client_auth_test.exs` against the live letflow-keycloak-1 container (confirmed healthy via `docker ps`, still carrying TEST-RUNNER's force-recreated realm import -- did not force-recreate again since the test passed against the existing container state): 4 passed (AC3a/b/c, AC4). (5) Re-checked all 8 acceptance criteria directly against code: AC1/AC2 -- read priv/keycloak/realms/bpm-default.json's diff vs main: letflow-mobile appended as a new clients[] element with the exact publicClient/standardFlowEnabled/directAccessGrantsEnabled:false/implicitFlowEnabled:false/pkce.code.challenge.method:S256/redirectUris (exact one-element list, no '*'/http)/webOrigins:[]/roles-mapper/oidc-audience-mapper(included.client.audience:letflow-web, access.token.claim:true) shape; letflow-web's object is untouched (diff shows only an addition, no modification hunk). AC3/AC4 -- live keycloak_mobile_client_auth_test.exs run, 4/4 passing against the real container. AC5/AC6 -- read lib/letflow/routers/mobile_tenant_config.ex directly: mobile_config_map/2 returns the six keys realm_url/locales/default_locale/branding/environment_kind/client_id; client_id/0 resolves System.get_env(\"MOBILE_OIDC_CLIENT_ID\") || \"letflow-mobile\"; test file's @expected_keys and dedicated client_id-value/env-override/cross-path-identity tests are present and passing (47/47 above). AC7 -- read the moduledoc directly: 'exactly five keys' does not appear anywhere in the file (grep-equivalent visual scan of the full moduledoc); it now states 'It returns exactly six keys: realm_url, locales, default_locale, branding, environment_kind, client_id' and the full three-point client_id reasoning (public-client id is not a secret / RFC 6749 §2.2; platform-global, byte-identical across every never-error branch; server-sent avoids app-release coupling), plus 'Adding a seventh key to this response is a security change, not a feature' (correctly renumbered forward). Also confirmed the cross-module test/letflow/routers/tenant_config_test.exs AC7 guard was correctly updated from asserting 'exactly five keys' to 'exactly six keys' (a legitimate, REQ-418-caused update to a different requirement's regression test, not scope creep). AC8 -- SECURITY-REVIEWER's step-02c-security-reviewer.json result.status is PASS (confirmed by direct read); mix letflow.check.test's real output is quoted above (fails only on the 6 pre-existing, structurally-unrelated failures, not on anything REQ-418 touched, and not on the ISS-0069 substring). (6) docs/requirements.yaml's REQ-418 entry is still status: pending as expected (DOC-UPDATER's job next); docs/status/requirement_status.index.yaml has no REQ-418 entry yet, also expected pending DOC-UPDATER. No other staleness found. VERDICT: PASS.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ418-20260927",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ418-20260927",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER: flip REQ-418's status to done in docs/requirements.yaml and append a status-history event to the current run-history volume (via docs/status/requirement_status.index.yaml)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,196 @@
+run_id: WF02-REQ418-20260927
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids:
+  - REQ-418
+branch: feature/WF02-REQ418-20260927
+head_sha_verified: >
+  86963b8e -- confirmed via `git log --oneline -5` after checkout+pull, matching
+  the dispatch's stated commit: "chore(ORCH): dispatch WF02-REQ418-20260927 Step 04
+  to TEST-RUNNER" on top of "chore(TEST-DESIGN-VALIDATOR): PASS on WF02-REQ418-20260927
+  Step 03b". Implementation commit in this branch's history is 9e9c860f
+  "feat(REQ-418): letflow-mobile OIDC client + sixth client_id key".
+generated_at: "2026-09-27T08:30:00Z"
+environment:
+  docker:
+    letflow-postgres-1: "port 5462, healthy (confirmed via `docker ps` before running)"
+    letflow-keycloak-1: "port 8093, healthy; force-recreated mid-run (see run_2 below) to
+      pick up ELIXIR-DEV's priv/keycloak/realms/bpm-default.json changes (letflow-mobile
+      client + oidc-audience-mapper), since realm import only happens on container
+      creation when the realm doesn't already exist and this container had been running
+      since before this branch's changes landed."
+  toolchain: "local mix/Elixir toolchain, Windows host (Git Bash)"
+  test_parallel_n: "16 (nproc-derived default for mix letflow.check's internal
+    scripts/test_parallel.sh call, no override set)"
+
+runs_performed: 3
+
+run_1_targeted_ac1_ac2:
+  command: >
+    mix test test/letflow/api/keycloak_realm_mobile_client_test.exs
+    test/letflow/routers/mobile_tenant_config_test.exs
+  result: "Result: 36 passed. Finished in 0.3 seconds."
+  failures: 0
+
+run_2_live_keycloak_ac3_ac4:
+  command: "mix test --include keycloak test/letflow/integration/keycloak_mobile_client_auth_test.exs"
+  attempt_1:
+    result: "CompileError: internal error in pass core_to_ssa -- list_to_atom system
+      limit reached, compiling the AC3c test's combined describe+test name."
+    root_cause: >
+      The AC3c test's `test` string, concatenated with its `describe` block's name
+      (ExUnit derives the exported test function's atom from that combination), was
+      long enough to exceed BEAM's atom-length limit, so the compiler's core_to_ssa
+      pass crashed while generating a function-clause error message for it. This was
+      a real defect in the test file (owned by TEST-RUNNER per role scope), not an
+      application bug or a Keycloak/environment issue.
+    fix_applied: >
+      Shortened the AC3c test description in
+      test/letflow/integration/keycloak_mobile_client_auth_test.exs from
+      "no code_challenge/code_challenge_method -> not the login page; error names
+      code_challenge(_method), either in body or as error=invalid_request in a
+      Location redirect to the registered redirect_uri" to "no
+      code_challenge/code_challenge_method is rejected, not the login page" (same
+      assertions unchanged, only the description shortened). Ran `mix format` on the
+      file afterward to keep it check-formatted (mix letflow.check's own gate caught
+      one unrelated pre-existing formatting drift in the same file from an earlier
+      commit, which mix format also fixed).
+  attempt_2:
+    result: >
+      Compiled clean. Realm-mismatch failure: all 4 tests failed. Keycloak container
+      had been running since before priv/keycloak/realms/bpm-default.json's
+      letflow-mobile client was added, and Keycloak's realm import only runs on
+      container creation when the named realm doesn't already exist -- the running
+      bpm-default realm predated the client. AC3a/b/c got a generic
+      "unauthorized_client"-shaped rejection page instead of the expected login/PKCE
+      behavior; AC4's admin client search for letflow-mobile returned an empty list
+      (`{:ok, []}`), confirming the client did not exist in the live realm.
+    diagnosis_confirmed: >
+      `docker inspect --format='{{json .State.Health}}' letflow-keycloak-1` showed
+      healthy throughout -- this was a stale-realm-import issue, not a container
+      health issue.
+    resolution: "`docker compose up -d --force-recreate keycloak`, waited for
+      health=healthy (8 polls, ~24s), confirmed letflow-mobile is now importable."
+  attempt_3_final:
+    result: "Result: 4 passed. Finished in 1.3 seconds."
+    per_test:
+      - {ac: "AC3a", test: "client_id=letflow-mobile, registered redirect_uri, response_type=code, S256 code_challenge -> HTTP 200", status: PASS}
+      - {ac: "AC3b", test: "redirect_uri=https://evil.example/cb -> non-200 error naming redirect_uri, no redirect to evil.example", status: PASS}
+      - {ac: "AC3c", test: "no code_challenge/code_challenge_method is rejected, not the login page", status: PASS}
+      - {ac: "AC4", test: "aud contains letflow-web, azp is letflow-mobile", status: PASS}
+  failures: 0
+
+run_3_full_backend_gate:
+  command: "mix letflow.check"
+  attempt_1:
+    result: >
+      All non-test checks OK (toolchain pin, requirements registration,
+      req id collision, deferral staleness, lint_handoffs, async sandbox
+      reachability, issue refs, uat scenario schema, check_boundaries: 846 edges
+      checked 0 violations). scripts/test_parallel.sh (16 partitions):
+      combined 4999 tests, 6 properties, 7 failures (4998/5005 passed). Overall
+      task exit: FAILED (mix letflow.check.test propagates test_parallel.sh's exit 1).
+    new_failure_diagnosed:
+      test: "AC7: mobile_tenant_config.ex is not this requirement's concern --
+        Letflow.Routers.MobileTenantConfig still discloses 5 keys, unaffected by
+        the branding key added here (Letflow.Routers.TenantConfigTest,
+        test/letflow/routers/tenant_config_test.exs:324)"
+      root_cause: >
+        This is a cross-file regression guard written under an earlier,
+        unrelated requirement (branding) to assert Letflow.Routers.MobileTenantConfig
+        stays untouched by that requirement's own change. REQ-418's already-approved
+        design (CODE-DESIGN-VALIDATOR/SECURITY-REVIEWER/REVIEWER/TEST-DESIGN-VALIDATOR
+        all PASSed per this branch's commit history) legitimately grew
+        MobileTenantConfig's own moduledoc-documented allowlist from five keys to six
+        (added client_id) -- confirmed by reading
+        lib/letflow/routers/mobile_tenant_config.ex's current moduledoc, which
+        correctly says "It returns exactly six keys" (line 89) and describes a
+        "6-key allowlist" (line 14). This is not a bug in application code; the
+        old test's assertion was simply never updated for a change to a module it
+        was never meant to gate against REQ-418 in particular, only against
+        requirements narrower than "any change to this module."
+      classification: NEW_BUT_EXPECTED_TEST_DRIFT_FROM_APPROVED_DESIGN
+      fix_applied: >
+        Updated test/letflow/routers/tenant_config_test.exs's AC7 test to assert
+        "exactly six keys" (refuting the stale "exactly five keys" text) instead of
+        the pre-REQ-418 five-key assertion, and renamed the test description to drop
+        the now-incorrect "still discloses 5 keys" claim. Ran `mix format` and
+        re-ran test/letflow/routers/tenant_config_test.exs alone: Result: 11 passed.
+    known_preexisting_failures_confirmed_unrelated:
+      - test: "A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume (Letflow.Docs.RequirementStatusInvariantsTest)"
+        classification: KNOWN_DOCS_DRIFT_CLASS (ISS-0848-adjacent; same 9 unparseable
+          ISO-8601 timestamps at the same entry_lines in
+          docs/status/requirement_status.v22.yaml as in the WF03-ISS0834
+          test-runner report from 2 days prior)
+        confirmed_unrelated: "`git diff main...HEAD --stat -- docs/status/requirement_status.v22.yaml` is empty for this branch."
+      - test: "system invocation (AC2) exits 0 on the current branch tree (AC2) (Mix.Tasks.Letflow.CheckBoundariesTaskTest)"
+        classification: KNOWN_ISS_0832_CLASS (subprocess inherits MIX_TEST_PARTITION
+          without MIX_ENV=test set, hits the task's own MIX_ENV=dev guard)
+        confirmed_unrelated: "`git diff main...HEAD --stat -- lib/mix/tasks/letflow/check_boundaries.ex` is empty for this branch."
+      - test: "REQ-070 AC5: router.ex names all 9 deferred routes -- both the row-count and module-name-list assertions (Letflow.RouterTest)"
+        classification: KNOWN_ISS_0827_CLASS (stale hardcoded @deferred list vs.
+          router.ex's current real deferred routes -- 9 expected, 5 found, matches
+          the exact signature from the REQ-404 test-runner report)
+        confirmed_unrelated: "`git diff main...HEAD --stat -- lib/letflow/router.ex` is empty for this branch."
+      - test: "resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 AC1) -- both the realm-by-tenant and tenant-by-realm assertions (Letflow.IdentityTest)"
+        classification: KNOWN_ISS_0766_CLASS (tracked flake: bpm-default tenant row
+          displaced by test/support/bpm_default_realm_displacement.ex's on_exit
+          restoration racing against insert_default_tenant!(), under shared/
+          non-isolated DB state -- reproduces even in isolation, per docs/issues/ISS-0766.yaml
+          and the ISS-0817 test-runner report from 3 days prior)
+        confirmed_unrelated: "identity.ex, seeds, and this branch's diff do not touch
+          this code path; reproduced by running `mix test test/letflow/identity_test.exs`
+          alone (no parallelism): same 2 failures, deterministic, matching the
+          documented flake exactly."
+  attempt_2_after_fix:
+    result: >
+      combined: 4999 tests, 6 properties, 6 failures (4999/5005 passed). The AC7
+      mobile_tenant_config drift failure is gone; the 4 remaining failures (1 docs
+      drift, 1 MIX_ENV subprocess flake, 2 router deferred-list) match the
+      known-unrelated classes above exactly, now down to 6 total (was 7). Overall
+      task exit: still FAILED (mix letflow.check.test propagates test_parallel.sh's
+      non-zero exit), for the pre-existing, unrelated reasons only. All non-test
+      gate checks (formatting, boundaries, requirements registration, handoff lint,
+      issue refs, uat schema, async sandbox reachability) remained OK on this
+      second run.
+
+classification_summary:
+  attributable_to_req_418: 1 (fixed in this run -- AC7 stale test assertion, test
+    code only, no application-code change needed)
+  known_docs_drift_class: 1
+  known_iss_0832_class: 1
+  known_iss_0827_class: 2
+  known_iss_0766_class: 2
+  new_unclassified: 0
+
+files_changed_by_test_runner:
+  - test/letflow/integration/keycloak_mobile_client_auth_test.exs (AC3c test name
+    shortened to fix atom-length compile crash; reformatted)
+  - test/letflow/routers/tenant_config_test.exs (AC7 guard updated from
+    "exactly five keys" to "exactly six keys" to match REQ-418's approved
+    moduledoc change; reformatted)
+
+overall_verdict: >
+  PASS for REQ-418. All three requested runs quote real, current output:
+  (1) 36/36 passed for the targeted AC1/AC2 unit+router tests; (2) 4/4 passed for
+  the live-Keycloak AC3a/AC3b/AC3c/AC4 checks against the real bpm-default realm,
+  after force-recreating the Keycloak container to pick up the new letflow-mobile
+  client (a genuine environment staleness issue, diagnosed and resolved, not
+  silently skipped); (3) mix letflow.check's full backend gate has zero failures
+  attributable to this branch after fixing one real stale-test issue this branch's
+  own approved design change surfaced (test/letflow/routers/tenant_config_test.exs's
+  AC7 guard) -- the remaining 6 test_parallel.sh failures are all independently
+  confirmed, via `git diff main...HEAD --stat` on each failure's touched file,
+  to be pre-existing and untouched by REQ-418's diff, matching known issue classes
+  already documented in prior test-runner reports (ISS-0848-adjacent docs drift,
+  ISS-0832 MIX_ENV subprocess flake, ISS-0827 stale router deferred-list,
+  ISS-0766 bpm-default tenant displacement flake).
+
+next_action: >
+  Route to RELEASE-VALIDATOR for independent re-verification. No escalation to
+  ELIXIR-DEV needed -- the one REQ-418-adjacent test failure found was a stale
+  test assertion in a file outside this requirement's artifacts_in, already fixed
+  here as ordinary test-code maintenance, not an application bug. Recommend
+  ORCH continue tracking the 4 pre-existing, already-documented issue classes
+  (ISS-0848-adjacent docs drift, ISS-0832, ISS-0827, ISS-0766) -- none block REQ-418.

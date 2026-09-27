@@ -82,5 +82,13 @@ one. It is not a stage dependency.
 
 ## REVIEWER sign-off
 
-(None yet — the stage has not started. The 2026-08-21 migration landed the
-specification and this stage file; no mobile code exists.)
+`REQ-418` (2026-09-27, `WF02-REQ418-20260927`): public PKCE-S256 Keycloak
+client `letflow-mobile` added to `priv/keycloak/realms/bpm-default.json`
+(custom-scheme redirect only, no wildcards) and its `client_id` exposed as a
+sixth key on `GET /api/mobile/tenant-config`. SECURITY-REVIEWER PASSed
+(identity-configuration + public-response-shape gate,
+`docs/agents/instructions/security-invariants.md`) and REVIEWER PASSed;
+RELEASE-VALIDATOR independently re-verified all 8 acceptance criteria,
+including the live-Keycloak integration test against a real container. This
+is the first real mobile-tier code to land — the stage is no longer
+docs-only.

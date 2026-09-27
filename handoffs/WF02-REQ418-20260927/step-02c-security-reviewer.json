@@ -1,0 +1,62 @@
+{
+  "handoff_id": "WF02-REQ418-20260927-step-02c",
+  "run_id": "WF02-REQ418-20260927",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ418-20260927/step-02c-security-reviewer.json",
+  "created_at": "2026-09-27T07:14:05Z",
+  "started_at": "2026-09-27T07:14:05Z",
+  "completed_at": "2026-09-27T07:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-418"],
+    "requirement_text": {
+      "REQ-418": "See handoffs/WF02-REQ418-20260927/step-01-code-designer.json's context.requirement_text for the full verbatim requirement, copied there by ORCH from docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["WF02-REQ418-20260927-step-01", "WF02-REQ418-20260927-step-01b", "WF02-REQ418-20260927-step-02"],
+    "artifacts_in": [
+      "priv/keycloak/realms/bpm-default.json",
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "test/letflow/api/keycloak_realm_mobile_client_test.exs",
+      "lib/letflow/design/req418-mobile-oidc-client.md",
+      "lib/letflow/design/iss0275-audience-mapper-fix.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard security gate on REQ-418's implementation (commits 9e9c860f, c457c3b8, ebbc3d09 on branch feature/WF02-REQ418-20260927 -- checkout and pull first). This is a new public OIDC client (letflow-mobile) plus a sixth field added to an unauthenticated API response (GET /api/mobile/tenant-config's client_id). Verify against docs/agents/instructions/security-invariants.md's INV set: (1) letflow-mobile's redirectUris contain no wildcard and no http(s) scheme -- only the exact custom-scheme URI; confirm via git diff and by reading the actual JSON, not the design doc's claim; (2) the oidc-audience-mapper naming 'letflow-web' is present and correctly configured, since its absence would reproduce ISS-0275's exact defect (a token whose aud excludes the configured Oidcc client_id, silently breaking auth) -- read lib/letflow/design/iss0275-audience-mapper-fix.md to confirm you understand what that defect actually was; (3) letflow-web's own client configuration is byte-for-byte unchanged (confirm via git diff showing pure addition, not modification); (4) the new client_id field on the unauthenticated tenant-config endpoint discloses nothing tenant-specific or secret -- confirm it is a public OAuth client identifier per RFC 6749 §2.2 and is platform-global (byte-identical across every never-error branch), not derived from tenant state; (5) directAccessGrantsEnabled/implicitFlowEnabled/serviceAccountsEnabled are all false on the new client (no password grant, no implicit flow, no service account) so a stolen mobile binary cannot authenticate any other way than Authorization-Code+PKCE.",
+    "acceptance_criteria": [
+      "letflow-mobile's redirectUris is exactly [\"com.bizdala.letflow:/oauth2redirect\"] with no wildcard, no http(s) scheme -- confirmed by direct read of the JSON",
+      "The oidc-audience-mapper is present with included.client.audience 'letflow-web' and access.token.claim 'true', and the reviewer states explicitly why this prevents ISS-0275's recurrence",
+      "git diff main -- priv/keycloak/realms/bpm-default.json shows zero removed/modified lines inside the letflow-web client object (pure addition)",
+      "The new client_id response field is confirmed to carry no tenant-specific or secret information, and is byte-identical across all four never-error paths",
+      "directAccessGrantsEnabled, implicitFlowEnabled, serviceAccountsEnabled are all false on letflow-mobile",
+      "PASS or FAIL with issues (severity BLOCKER/MAJOR/MINOR) if FAIL; handoff completed per protocol (claim via IN_PROGRESS, then COMPLETED with a real result block)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-418 (letflow-mobile OIDC client + sixth client_id field on GET /api/mobile/tenant-config) verified directly against the current diff (git diff main...HEAD), not against the design doc's or ELIXIR-DEV's claims. Scope test: applies -- diff adds a secret-resolving OIDC client config and modifies response-shaping code for an unauthenticated tenant-config endpoint (INV-4, INV-2 territory). Per-invariant verdicts: INV-1 NOT-APPLICABLE (module reads only the global tenants table outside any per-tenant schema, no :prefix to derive, per moduledoc's own 'No tenant scoping call' section -- confirmed true by reading Letflow.Identity.get_tenant_by_slug/1's call site). INV-2 APPLIES/PASS -- mobile_config_map/2 is a hand-built 6-key allowlist map, never derived from %Tenant{} or Map.from_struct/1; client_id is env-then-constant resolved with zero tenant input. INV-3/INV-5 NOT-APPLICABLE (no Lua/WASM host function; no lookup-by-ID exposing cross-tenant existence -- this endpoint is deliberately anti-enumeration by convergent defaults, not an ID lookup). INV-4 APPLIES/PASS -- new client_id/0 resolves System.get_env('MOBILE_OIDC_CLIENT_ID') || @default_client_id at point of use, never threaded through a struct field or logged; confirmed not a secret per RFC 6749 section 2.2 (public client has no credential). INV-6 APPLIES/PASS -- this handoff itself is the proof. INV-7/INV-8 NOT-APPLICABLE (no SQL touched; no new unguarded pattern match introduced by this diff). AC-by-AC: (1) letflow-mobile redirectUris is exactly [\"com.bizdala.letflow:/oauth2redirect\"] -- confirmed by direct read of priv/keycloak/realms/bpm-default.json; no wildcard, no http(s) scheme; keycloak_realm_mobile_client_test.exs also asserts this plus a generic no-wildcard/no-http scan over redirectUris++webOrigins. (2) oidc-audience-mapper present on letflow-mobile with included.client.audience='letflow-web', access.token.claim='true' -- confirmed by direct JSON read. Read lib/letflow/design/iss0275-audience-mapper-fix.md in full: ISS-0275's defect was that Oidcc.Token.validate_jwt/3 unconditionally requires the ACCESS token's aud claim to contain the backend's configured client_id -- 'letflow-web' per config/dev.exs:97 and config/test.exs:128 (confirmed by direct grep of both files) -- regardless of which Keycloak client actually issued the token. Without this mapper on letflow-mobile, every token Keycloak issues to the mobile app would omit 'letflow-web' from aud and every authenticated mobile API call would 401, reproducing ISS-0275's exact defect on a second client. The mapper as configured (audience-mapper naming 'letflow-web', access.token.claim=true, id.token.claim=false, matching letflow-web's own mapper's shape byte-for-byte) is exactly correct and prevents recurrence. (3) git diff main...HEAD -- priv/keycloak/realms/bpm-default.json shows zero removed/modified lines inside letflow-web's client object -- confirmed: the diff is a pure insertion (all '+' lines) immediately after letflow-web's closing '}'; no '-' line appears anywhere near letflow-web's fields. keycloak_realm_mobile_client_test.exs also asserts full structural equality of letflow-web's client object against an inline literal (belt-and-suspenders). (4) client_id field: confirmed via direct code read that mobile_config_map/2 calls client_id() unconditionally on every branch (resolvable slug, unknown slug, missing ?slug=, lookup-error/nil-realm) -- the resolve_tenant_config/1 branches only vary realm_id/settings, never client_id, so the field is byte-identical across all four never-error paths by construction, not merely by test coverage; confirmed further by mobile_tenant_config_test.exs's dedicated REQ-418 describe block asserting exactly this across all four paths. Value is a public OAuth client identifier (RFC 6749 section 2.2 -- a public client has no credential to protect) and is platform-global (env-var-or-constant), never derived from %Tenant{} or any tenant-scoped column -- discloses nothing tenant-specific or secret. (5) directAccessGrantsEnabled=false, implicitFlowEnabled=false, serviceAccountsEnabled=false all confirmed by direct JSON read on letflow-mobile's client object, and each is asserted individually in keycloak_realm_mobile_client_test.exs. Ran both test files directly (mix test test/letflow/api/keycloak_realm_mobile_client_test.exs test/letflow/routers/mobile_tenant_config_test.exs): 36 passed, 0 failures. No BLOCKER/MAJOR/MINOR issues found.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ418-20260927/step-02c-security-reviewer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ418-20260927",
+      "commit_sha_list": ["3caeb6eff21bd9ac0414073c5eb713d2f8a49578"],
+      "remote_branch": "origin/feature/WF02-REQ418-20260927",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER for the next WF-02 gate (OTP idiom / decision-record consistency)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

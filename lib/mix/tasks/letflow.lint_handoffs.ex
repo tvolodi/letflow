@@ -780,6 +780,31 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   @spec registry_file(dir :: String.t()) :: String.t()
   defp registry_file(dir), do: Path.join(dir, "registry.json")
 
+  # ISS-0834 -- handoffs/registry.json was found committed with a leading
+  # UTF-8 byte-order-mark (EF BB BF), which `Jason.decode!/1`/`Jason.decode/1`
+  # reject outright. The committed file itself is fixed (BOM stripped), but
+  # per ISS-0834's own fix direction this read path is hardened too, so a
+  # future write that reintroduces a BOM (e.g. some Windows-originated
+  # tooling in this multi-session environment) degrades to the same
+  # non-crashing PARSE-advisory shape ISS-0347 already established for
+  # arbitrary handoff files, rather than resurfacing as a silent decode
+  # failure specifically for the shared registry.
+  #
+  # Deliberately scoped to registry.json's two read call sites
+  # (`do_check_registry_coverage/2` below, and `lint_file/2`'s :json branch
+  # when the scanned path IS registry.json in single-file mode) rather than
+  # applied unconditionally to every handoff-shaped JSON file: the
+  # F-BOM-PARSE-ADVISORY-SHAPE regression test (ISS-0347) asserts that an
+  # arbitrary handoff file with a leading BOM still lands in the PARSE
+  # branch without crashing -- stripping BOMs universally would silently
+  # make that fixture decode clean and invalidate that regression guard.
+  # registry.json is the one file this issue is actually about, so the fix
+  # is scoped to it, not generalized into a decode-everything-permissively
+  # policy the requirement never asked for.
+  @spec strip_bom(binary()) :: binary()
+  def strip_bom(<<0xEF, 0xBB, 0xBF, rest::binary>>), do: rest
+  def strip_bom(raw), do: raw
+
   # -- §4.1(b) schema, read live from HANDOFF_PROTOCOL.md ------------------
 
   # Returns %{required: [String.t()], optional: [String.t()], spent_exception_file: String.t() | nil}
@@ -856,7 +881,13 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
         }
 
       :json ->
-        with {:ok, raw} <- File.read(path),
+        # ISS-0834 -- when this file itself IS registry.json (single-file
+        # mode, e.g. `--dir handoffs/registry.json`), strip a leading BOM
+        # before decoding, same as the H5 registry-coverage reader below.
+        # Every other .json handoff file is read byte-for-byte unchanged --
+        # see strip_bom/1's own comment for why this is not generalized.
+        with {:ok, raw0} <- File.read(path),
+             raw = if(path == @registry_file, do: strip_bom(raw0), else: raw0),
              {:ok, data} <- Jason.decode(raw) do
           hard = []
 
@@ -1197,7 +1228,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     registry_run_ids =
       case File.read(@registry_file) do
         {:ok, raw} ->
-          case Jason.decode(raw) do
+          case raw |> strip_bom() |> Jason.decode() do
             {:ok, %{"runs" => runs}} ->
               runs |> Enum.map(& &1["run_id"]) |> Enum.reject(&is_nil/1) |> MapSet.new()
 

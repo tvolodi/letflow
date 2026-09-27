@@ -4610,12 +4610,18 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 5
+    entries: 6
     note: >
       Incremented to 5 by DOC-UPDATER's ISS-0853 closing SCOPE-CHANGE append
       (2026-09-26T18:22:30Z) -- `grep -c "^  - req:"
       docs/status/requirement_status.v23.yaml` = 5 on-disk entries. 145
       lines / 8273 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+
+      Incremented to 6 by DOC-UPDATER's ISS-0834 closing SCOPE-CHANGE append
+      (2026-09-27T02:38:21Z, registry.json BOM strip) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 6 on-disk entries. 176
+      lines / 10068 bytes, well under the 1200-line/120000-byte roll
       ceiling, so no roll triggered.
 
       Opened by ORCH's own roll of volume 22 (closed at 38 entries / 1259

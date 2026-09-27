@@ -369,18 +369,46 @@ defmodule Letflow.EventStore.RetentionOperations do
   # actively being torn down is not meaningfully "still provisioned" for
   # this summary's purposes, consistent with provisioned_tenant_schemas/0's
   # own intent. See design doc §2.
+  #
+  # ISS-0873 §7 amendment: this whole function now runs inside
+  # retention_summary/0's own outer Repo.transaction/1 (§1). Postgres marks
+  # the *entire surrounding transaction* aborted the instant the query below
+  # raises :undefined_table -- an Elixir-level rescue is invisible to
+  # Postgres and does nothing to un-poison the connection, so the very next
+  # statement on it (the events_archive follow-up query, or the next
+  # schema's query in the Enum.map fan-out) would hit 25P02
+  # (in_failed_sql_transaction) instead of the graceful 0-contribution
+  # outcome. Fixed with an explicit SAVEPOINT wrapped around the query:
+  # SAVEPOINT before, RELEASE SAVEPOINT on success, ROLLBACK TO SAVEPOINT
+  # then RELEASE SAVEPOINT on the matched :undefined_table case (this is
+  # what actually un-poisons the connection). Raw SQL, not a nested
+  # Repo.transaction/1 -- Ecto only turns a nested Repo.transaction/1 into a
+  # real SAVEPOINT under Sandbox :manual mode; this module's own test suite
+  # runs Sandbox :auto (retention/retirement work runs on a different
+  # connection than the test's own), and production isn't in :manual mode
+  # either, so a nested Repo.transaction/1 here would issue no SAVEPOINT at
+  # all. A single fixed savepoint name is safe to reuse across this
+  # function's repeated, sequential (never concurrent) calls within the
+  # fan-out -- see design doc §7.1-§7.3.
+  @savepoint_name "retention_count_protected_rows"
+
   defp count_protected_rows_in_schema(schema_name, table, keep_forever_types) do
+    Repo.query!(~s{SAVEPOINT #{@savepoint_name}})
+
     %Postgrex.Result{rows: [[count]]} =
       Repo.query!(
         ~s{SELECT count(*) FROM "#{schema_name}"."#{table}" WHERE event_type = ANY($1)},
         [keep_forever_types]
       )
 
+    Repo.query!(~s{RELEASE SAVEPOINT #{@savepoint_name}})
     count
   rescue
     e in Postgrex.Error ->
       case e do
         %Postgrex.Error{postgres: %{code: :undefined_table}} ->
+          Repo.query!(~s{ROLLBACK TO SAVEPOINT #{@savepoint_name}})
+          Repo.query!(~s{RELEASE SAVEPOINT #{@savepoint_name}})
           0
 
         _other ->

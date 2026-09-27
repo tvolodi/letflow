@@ -3167,6 +3167,39 @@ created in the first place. Also: this host's Postgres/CPU budget cannot sustain
 `nproc`-derived parallelism (ISS-0219 already documents this) — always set
 `TEST_PARALLEL_N=4` here.
 
+### A distinct, non-test-run cause of the same symptom: a long-lived `mix run --no-halt` dev process (ISS-0868, 2026-09-27)
+
+The zombie-BEAM entry directly above covers orphans left by an *interrupted test
+run*. A **separate** root cause produces the identical symptom
+(`FATAL 53300 too_many_connections`, `DBConnection.ConnectionError`, a
+non-deterministic spread of unrelated test failures that differs run to run) via a
+different mechanism: a long-lived `mix run --no-halt` process — e.g. a dev server
+or a one-off script someone left running in a background shell — that holds a
+standing pool of Postgrex connections (~30, observed) against a *shared* Postgres
+container for as long as it's up, with no interrupted-run event to point at. Two
+separate agents (RELEASE-VALIDATOR verifying ISS-0848, TEST-RUNNER verifying
+ISS-0833) independently re-derived this same root cause from scratch in the same
+session before it was named anywhere, because "check for orphaned `erl.exe` from a
+killed run" doesn't surface a process that was never killed and never orphaned —
+it's simply still doing its job.
+
+**Correct alternative:** when `test_parallel.sh` shows the too-many-connections
+symptom but there's no interrupted/killed prior run to blame, don't stop at "no
+zombie `erl.exe` found" — also check `pg_stat_activity` for a steady-state elevated
+connection count attributable to a *legitimate, still-running* `beam.smp`/`erl.exe`
+(`Get-Process erl`/`ps` cross-referenced against `pg_stat_activity`'s
+`application_name`/`client_addr`), which is a different finding from an orphan and
+should not be killed without first confirming it's abandoned (it may be another
+session's real work). If it's genuinely still needed, the correct mitigation is
+`TEST_CONNECTION_HEADROOM` (decision `0009-test-parallel-pool-sizing.md`) sized to
+cover its held connections rather than killing it — e.g.
+`TEST_CONNECTION_HEADROOM=45` was the working value against a ~30-connection
+holder (`test/reports/report-20260926-WF03-ISS0848-20260926.yaml`), not the
+default of 10. As of 2026-09-27 this specific PID (3011743) is no longer running on
+this host — the condition self-resolved (process exited/host state changed) — but
+the symptom-to-cause mapping is recorded here so the next occurrence is recognized
+by name instead of re-derived.
+
 **Separately, on this run:** this repository checkout is shared, concurrently, by
 multiple Claude Code agent sessions (not separate worktrees) — confirmed via `git
 reflog` showing commits this session never authored interleaved with its own, and

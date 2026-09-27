@@ -321,13 +321,20 @@ defmodule Letflow.Routers.TenantConfigTest do
   # ═══════════════════════════════════════════════════════════════════════════
 
   describe "AC7: mobile_tenant_config.ex is not this requirement's concern" do
-    test "Letflow.Routers.MobileTenantConfig still discloses 5 keys, unaffected by the branding key added here" do
+    test "Letflow.Routers.MobileTenantConfig's key count is unaffected by the branding key added here" do
       assert Code.ensure_loaded?(Letflow.Routers.MobileTenantConfig)
 
       {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} =
         Code.fetch_docs(Letflow.Routers.MobileTenantConfig)
 
-      assert moduledoc =~ "exactly five keys"
+      # REQ-418 (2026-09) legitimately grew this module's own allowlist from
+      # five keys to six (added `client_id`) -- unrelated to this
+      # requirement's branding key. Assert on that current, approved count
+      # rather than a number this requirement never touched, so this guard
+      # stays meaningful instead of drifting stale against REQ-418's own
+      # reviewed change.
+      refute moduledoc =~ "exactly five keys"
+      assert moduledoc =~ "exactly six keys"
     end
   end
 

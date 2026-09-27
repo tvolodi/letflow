@@ -207,10 +207,12 @@ defmodule Letflow.Integration.KeycloakMobileClientAuthTest do
       # Assert both possible shapes never point at evil.example: no Location header
       # naming it, and the response is not itself a redirect to it.
       location = response.headers["location"]
+
       refute is_binary(location) and String.contains?(location, "evil.example"),
              "response redirected to evil.example via Location header: #{inspect(location)}"
 
-      refute String.contains?(response.body, "evil.example") and response.status in [301, 302, 303, 307, 308],
+      refute String.contains?(response.body, "evil.example") and
+               response.status in [301, 302, 303, 307, 308],
              "response body/status suggests a redirect toward evil.example"
 
       assert String.downcase(response.body) =~ "redirect_uri",
@@ -226,7 +228,7 @@ defmodule Letflow.Integration.KeycloakMobileClientAuthTest do
   # ---------------------------------------------------------------------------------
 
   describe "AC3c — missing code_challenge is rejected (server-side PKCE enforcement)" do
-    test "no code_challenge/code_challenge_method -> not the login page; error names code_challenge(_method), either in body or as error=invalid_request in a Location redirect to the registered redirect_uri",
+    test "no code_challenge/code_challenge_method is rejected, not the login page",
          %{base_url: base_url} do
       url =
         authorization_url(base_url, %{
@@ -238,8 +240,9 @@ defmodule Letflow.Integration.KeycloakMobileClientAuthTest do
 
       assert {:ok, response} = raw_get(url)
 
-      login_page? = response.status == 200 and response.headers["content-type"] =~ "text/html" and
-                       String.downcase(response.body) =~ "kc-form-login"
+      login_page? =
+        response.status == 200 and response.headers["content-type"] =~ "text/html" and
+          String.downcase(response.body) =~ "kc-form-login"
 
       refute login_page?,
              "expected PKCE enforcement to reject this request, but got what looks like the " <>

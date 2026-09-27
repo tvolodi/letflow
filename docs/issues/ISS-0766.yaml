@@ -6,7 +6,7 @@ title: >
 discovered_by: ELIXIR-DEV
 discovered_in_run: WF03-ISS0736-20260921
 discovered_at: "2026-09-20T22:51:57Z"
-severity: MINOR
+severity: MAJOR
 tags:
   - backend
   - test-flake
@@ -35,20 +35,145 @@ related_requirements:
   - REQ-019
 related:
   - ISS-0736  # discovered as an out-of-scope finding during ISS-0736's Step Final
+  - ISS-0874  # duplicate mechanism: same displace!/0 singleton-loss, different caller (iss0778 T4)
 severity_rationale: >
-  MINOR -- does not reproduce under the project's own validated isolated
-  test methodology; only manifests under a non-partitioned shared-DB run,
-  and the module's own moduledoc already documents adjacent test-isolation
-  hazards of this same class (a link failure and a mutual-exclusion race),
-  suggesting this may be foldable into the same existing fix class rather
-  than a wholly new investigation.
+  UPDATE 2026-09-27 (ISSUE-FIXER): raising from MINOR to MAJOR. This is not
+  a test-only flake bounded to one file -- it is a permanent, cumulative
+  corruption of a shared, long-lived database (any abnormal interruption
+  of a `displace!/0` caller orphans the migration-seeded "bpm-default" row
+  forever, with no self-repair), confirmed to affect at least two
+  independent test files (identity_test.exs, and
+  iss0778_platform_role_seeding_e2e_test.exs's T4 per ISS-0874) and to
+  compound in likelihood every time a `mix test`/`scripts/test_parallel.sh`
+  invocation is interrupted (CI cancellation, timeout, OOM-kill, or an
+  orphaned stray process as ISS-0829's own report caught live) rather than
+  being a bounded, self-resolving race. Original MINOR rationale (below,
+  preserved for history) assumed a transient live race bounded to one
+  file, which the 2026-09-27 root-cause investigation refutes.
+
+  Original (2026-09-20) rationale, superseded above: MINOR -- does not
+  reproduce under the project's own validated isolated test methodology;
+  only manifests under a non-partitioned shared-DB run, and the module's
+  own moduledoc already documents adjacent test-isolation hazards of this
+  same class (a link failure and a mutual-exclusion race), suggesting this
+  may be foldable into the same existing fix class rather than a wholly
+  new investigation.
 fix_direction: >
-  Investigate whether bpm_default_realm_displacement.ex's on_exit
-  restoration can race against another test's setup under shared
-  (non-partitioned) DB state, and whether it should be folded into the
-  same fix class as the module's already-documented link-failure/
-  mutual-exclusion-race hazards. Lower priority since the project's
-  standard isolated-partition test runner does not exhibit the flake.
+  UPDATE 2026-09-27 (ISSUE-FIXER, root-caused via direct reproduction, not
+  speculation): This is NOT a live timing race between displace!/0's on_exit
+  restoration and identity_test.exs's read, and the existing
+  pg_advisory_lock/with_lock mutex (bpm_default_realm_displacement.ex's
+  documented "Mutual exclusion" fix) is NOT the broken part -- it correctly
+  serializes both same-VM and cross-OS-process access to the "bpm-default"
+  binding, confirmed by direct reasoning through ExUnit's own scheduler
+  (`ex_unit/lib/ex_unit/runner.ex`'s `async_loop/4`: ALL async modules fully
+  drain before ANY sync/`async: false` module starts, and sync modules run
+  strictly one-at-a-time waiting for each to fully finish -- including
+  on_exit -- before the next starts; every caller of `displace!/0` and
+  `with_lock/1` in this codebase is `async: false`, so no genuine intra-VM
+  race is possible, and the advisory lock is real Postgres session state,
+  correctly serializing across separate `mix test` OS processes too).
+
+  ACTUAL ROOT CAUSE (confirmed via live reproduction, not guessed): the
+  migration-seeded "bpm-default" tenant row is a irrecoverable SINGLETON
+  once lost. `displace!/0`'s `nil ->` branch (line 81-83) treats "no tenant
+  currently holds this binding" as an already-correct, nothing-to-do state
+  and registers an on_exit that ONLY releases the lock -- it never re-seeds
+  the row. Separately, `Repo.delete!(existing)` (line 102) commits
+  immediately (`Sandbox.mode(Repo, :auto)`), but the row is only restored
+  later, inside the *displacing test's own on_exit callback* (lines 92-100).
+  If that on_exit never runs -- because the OS process running that test
+  is killed abnormally (SIGKILL, OOM-kill, CI job cancellation/timeout,
+  or an orphaned/stray leftover `mix test` process, exactly the scenario
+  ISS-0829's own TEST-RUNNER report caught live: "the actual Erlang/beam
+  process tree... was still alive... running an identical mix test
+  --partitions 4 invocation" from an earlier, abandoned run) -- the row is
+  gone from that physical database PERMANENTLY. `mix ecto.migrate` will not
+  re-insert it on a later run (the seed migration is already recorded as
+  applied in `schema_migrations`, so it's skipped, not re-executed), and
+  every later `displace!/0` call against that same database now also finds
+  `nil` and perpetuates the loss (confirmed live: reproducing the failure
+  induced exactly this -- 5 consecutive `displace!/0` calls in a fresh
+  `mix test` run all logged "found NIL existing row", and a direct SQL
+  query, `select * from tenants where idp_realm_id = 'bpm-default'` against
+  that same partition's database, returned zero rows). This project's own
+  Postgres test/dev instance is long-lived and reused across many sessions
+  (`docker compose` is routinely "already up, healthy" rather than freshly
+  started per run -- see this session's and multiple TEST-RUNNER reports'
+  own docker-health-check notes), and `scripts/test_parallel.sh`/plain
+  `mix test --partitions N` derive each partition's database name purely
+  as `letflow_test#{N}` (config/test.exs:65) with NO run-unique component
+  (TEST_PARALLEL_GROUP is folded only into `application_name` tagging for
+  the reaper, never into the database name) -- so once ANY interrupted run
+  orphans this row in `letflow_test<N>`, EVERY later run that reuses
+  partition index N against that same long-lived Postgres instance
+  inherits the corruption, deterministically, with no parallelism or live
+  contention required (this also explains why an isolated single-file
+  `mix test test/letflow/identity_test.exs` run can reproduce it "alone",
+  per the REQ-418 TEST-RUNNER report cross-referenced above -- the DB
+  itself is already broken before that run even starts).
+
+  Reproduced live in this session: killed a `scripts/test_parallel.sh`
+  run mid-flight (an ordinary SIGKILL, the same class of interruption CI
+  job cancellation/timeout or an OOM-kill would cause) while a displacing
+  test was plausibly between `Repo.delete!` and its on_exit restore in
+  partition 1's database; a direct SQL check against `letflow_test1`
+  afterward showed zero "bpm-default"-bound tenant rows, and both a
+  standalone `mix test test/letflow/identity_test.exs` run and a
+  standalone `mix test test/letflow/plugs/auth_pipeline_test.exs` run
+  against that same database failed/no-op'd exactly as documented, with no
+  concurrency involved at all. Manually repaired that one partition's row
+  for this session (`INSERT ... ON CONFLICT (slug) DO NOTHING`, the same
+  statement the seed migration uses) so this checkout's `letflow_test1` is
+  not left broken.
+
+  ISS-0874 (a second symptom filed for
+  test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs's T4) is
+  the SAME mechanism, not a separate bug: T4's own moduledoc confirms it
+  also calls `BpmDefaultRealmDisplacement.displace!/0` directly (its own
+  "Fixture mechanics" section, lines 35-52) to bind a freshly-onboarded
+  tenant to the same shared "bpm-default" realm -- any interrupted run
+  that orphans the row while T4 (or any other `displace!/0` caller) is
+  mid-displacement produces the identical permanent-loss failure in T4 or
+  in identity_test.exs, depending only on which test happens to touch the
+  binding next against that same corrupted database. No separate
+  docs/issues/ISS-0874.yaml is warranted; folded in here as a confirmed
+  duplicate mechanism.
+
+  FIX DIRECTION (self-healing repair, not a new synchronization
+  primitive -- the existing advisory lock is correctly designed and
+  should be reused, not replaced):
+  1. Make the "bpm-default" binding's presence a repaired invariant rather
+     than an assumed one. The natural owner is
+     `bpm_default_realm_displacement.ex` itself: `displace!/0`'s `nil ->`
+     branch should not treat "row absent" as steady-state -- either (a)
+     insert a fresh seed row there before proceeding (still under the
+     already-held advisory lock, via the same
+     `INSERT ... ON CONFLICT (slug) DO NOTHING` shape the migration uses,
+     so a genuinely-fresh/never-seeded database and a corrupted/
+     previously-orphaned one are repaired identically), or (b) add a
+     shared `ensure_seeded!/0` helper (called from `with_lock/1`'s
+     `insert_default_tenant!`-style read path too) that performs the same
+     idempotent repair before reading. Either way the repair write must
+     happen under the SAME `@lock_key` advisory lock already in place, to
+     avoid a new lost-update race between two callers repairing
+     concurrently.
+  2. Consider (belt-and-suspenders, lower priority): a
+     `scripts/test_parallel.sh`/`test_helper.exs` step that verifies+
+     repairs this invariant once per partition database at suite-start,
+     independent of any individual test file, so a corrupted long-lived
+     database self-heals even before any `displace!/0` caller runs.
+  This is simple/scoped enough (one well-understood idempotent insert,
+  reusing an existing lock and an existing SQL shape already proven
+  correct in the migration) that it does not need a CODE-DESIGNER design
+  pass -- ELIXIR-DEV can implement option 1(a) directly, with
+  TEST-DESIGNER adding a regression test that simulates the orphaned-row
+  precondition (delete the bpm-default row directly, bypassing
+  displace!/0, then assert `insert_default_tenant!()`/a fresh `displace!/0`
+  call self-heals it) rather than relying on live process-kill
+  reproduction (not itself practical as an automated test). Route only to
+  REVIEWER/SECURITY-REVIEWER as usual for a tenant-identity-table write
+  path; no new design artifact is warranted.
 status: open
 process_note: >
   UPDATE 2026-09-21 (RELEASE-VALIDATOR, during REQ-397/PR #1672's

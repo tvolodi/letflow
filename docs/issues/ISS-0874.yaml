@@ -1,0 +1,72 @@
+id: ISS-0874
+title: >
+  test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs's T4 fails
+  with the same Ecto.NoResultsError signature as ISS-0766, sharing its
+  root cause (permanently-orphaned bpm-default singleton row) -- not
+  investigated separately
+discovered_by: ISSUE-FIXER
+discovered_in_run: fix/ISS0766-realm-displacement-diagnosis-20260927
+discovered_at: "2026-09-27T21:00:00Z"
+severity: MAJOR
+tags:
+  - backend
+  - test-flake
+  - shared-db-isolation
+  - duplicate-mechanism
+description: >
+  Flagged for investigation alongside ISS-0766 (same `Ecto.NoResultsError`
+  shape reported against the shared "bpm-default" realm binding, this time
+  surfacing in
+  test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs's T4
+  describe block rather than test/letflow/identity_test.exs). Confirmed,
+  not merely suspected, to share ISS-0766's exact mechanism: T4's own
+  moduledoc ("Fixture mechanics for a freshly-onboarded tenant's OIDC
+  realm", lines 25-52) states it calls
+  `Letflow.Support.BpmDefaultRealmDisplacement.displace!/0` directly, the
+  same function whose interrupted-restoration failure mode ISS-0766's
+  2026-09-27 root-cause pass identified: `displace!/0`'s `nil ->` branch
+  treats "no tenant currently holds the bpm-default binding" as an
+  already-correct state and never re-seeds it, so once any caller's
+  on_exit-based restoration fails to run (an abnormally-killed test
+  process -- SIGKILL, OOM-kill, CI cancellation/timeout, or an orphaned
+  stray process, the exact class ISS-0829's TEST-RUNNER report caught
+  live), the migration-seeded singleton row is permanently gone from that
+  physical database and EVERY later caller of `displace!/0` (T4 included)
+  or `with_lock/1` (identity_test.exs's `insert_default_tenant!()`)
+  against that same database fails identically and deterministically, with
+  no live race or parallelism required. See docs/issues/ISS-0766.yaml's
+  `fix_direction` for the full root-cause writeup and reproduction
+  evidence (live repro: killing a `scripts/test_parallel.sh` run mid-flight
+  orphaned partition 1's bpm-default row; a direct SQL check confirmed
+  zero matching rows; both identity_test.exs and auth_pipeline_test.exs
+  then failed/no-op'd against that same corrupted database with no
+  concurrency at all).
+affected_files:
+  - test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs
+  - test/support/bpm_default_realm_displacement.ex
+related_requirements:
+  - REQ-019
+related:
+  - ISS-0766  # primary tracking issue -- same root cause, fix lives there
+severity_rationale: >
+  MAJOR, matching ISS-0766's revised severity -- not a bounded, one-file
+  flake but a symptom of the same cumulative, self-perpetuating database
+  corruption (an interrupted `displace!/0` caller anywhere in the suite
+  can orphan the shared singleton row, after which every later caller of
+  `displace!/0`/`with_lock/1` against that same physical database fails).
+fix_direction: >
+  Do NOT investigate or fix this separately from ISS-0766 -- same
+  mechanism, same fix. See docs/issues/ISS-0766.yaml's `fix_direction` for
+  the concrete repair direction (make `displace!/0`'s `nil ->` branch --
+  or a shared `ensure_seeded!/0` helper reused by both `displace!/0` and
+  the read path -- idempotently re-insert the migration-seeded row under
+  the same advisory lock, rather than treating "row absent" as steady
+  state). Once ISS-0766 is fixed, this issue closes as a duplicate with no
+  separate code change.
+status: open
+process_note: >
+  Filed 2026-09-27 by ISSUE-FIXER while root-causing ISS-0766, per that
+  issue's own dispatch instructions ("a second test file... was just found
+  sharing this exact same root-cause mechanism"). This file exists only to
+  give the T4 symptom its own tracking id and cross-reference -- all
+  further investigation and the actual fix belong to ISS-0766.

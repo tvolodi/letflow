@@ -1,0 +1,59 @@
+{
+  "handoff_id": "WF02-REQ418-20260927-step-05",
+  "run_id": "WF02-REQ418-20260927",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ418-20260927/step-05-release-validator.json",
+  "created_at": "2026-09-27T08:05:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-418"],
+    "requirement_text": {
+      "REQ-418": "See handoffs/WF02-REQ418-20260927/step-01-code-designer.json's context.requirement_text for the full verbatim requirement, copied there by ORCH from docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["WF02-REQ418-20260927-step-04"],
+    "artifacts_in": [
+      "test/reports/report-20260927-WF02-REQ418-20260927.yaml",
+      "priv/keycloak/realms/bpm-default.json",
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "test/letflow/api/keycloak_realm_mobile_client_test.exs",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "test/letflow/integration/keycloak_mobile_client_auth_test.exs",
+      "test/letflow/routers/tenant_config_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-418 before it's marked done (checkout feature/WF02-REQ418-20260927, pull to get TEST-RUNNER's commit f6b99fbf). Per docs/agents/workflows/WF-02_requirement_implementation.md Step 5: (1) independently re-run scripts/test_parallel.sh (do not trust TEST-RUNNER's report alone) -- TEST_PARALLEL_N=4 is this host's known-good setting (ISS-0219). Do not expect to reproduce Step 4's exact failure set; re-derive pre-existence attribution structurally (check each failing file's git diff against main) rather than by count-matching. (2) Confirm each of REQ-418's 8 acceptance criteria explicitly against the actual code/tests -- not against TEST-RUNNER's summary. Docker's letflow-keycloak-1 must be healthy and already carry the letflow-mobile client (TEST-RUNNER force-recreated it in the prior step to pick up the realm import; confirm it's still up and don't force-recreate it again without checking first, since the live test depends on that exact state). (3) Check docs/requirements.yaml and docs/status/ for staleness relative to what actually shipped -- REQ-418's status is still 'pending' there; DOC-UPDATER flips it next, so 'stale' here means something else was missed, not that status. (4) Complete the handoff: PASS -> route to DOC-UPDATER; FAIL -> name the blocking issue and which agent it routes back to.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh re-run independently, real aggregated output quoted",
+      "Every failure in this independent run is attributed structurally (git diff of the failing file against main) not by comparing counts against TEST-RUNNER's report",
+      "Each of REQ-418's 8 acceptance criteria explicitly re-checked against actual code/tests and confirmed satisfied",
+      "The live-Keycloak test (test/letflow/integration/keycloak_mobile_client_auth_test.exs) re-run with --include keycloak and confirmed passing against the real container",
+      "PASS or FAIL verdict with next_action naming DOC-UPDATER (PASS) or the blocking agent (FAIL); handoff completed per protocol (claim via IN_PROGRESS, then COMPLETED with a real result block)"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ418-20260927",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ418-20260927",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

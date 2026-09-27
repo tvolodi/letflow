@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF02-REQ419-20260927-step-04",
+  "run_id": "WF02-REQ419-20260927",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ419-20260927/step-04-test-runner.json",
+  "created_at": "2026-09-27T16:05:38Z",
+  "started_at": "2026-09-27T16:05:38Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-419"],
+    "requirement_text": {
+      "REQ-419": "Build-order M1: scaffold apps/mobile/ as a generic definition-interpreter shell with three static guards. This diff is apps/mobile/-only plus docs/mobile/README.md and ORCH bookkeeping (docs/requirements.yaml, docs/status/, handoffs/, lib/letflow/design/req419-mobile-scaffold.md, test/specs/REQ-419.md) -- no lib/letflow/ application code touched."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/REQ-419.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the standard Step 4 procedure on branch feature/WF02-REQ419-20260927 (`git checkout feature/WF02-REQ419-20260927` if needed). 1) scripts/test_parallel.sh for the full backend ExUnit suite (not just anything new -- this diff doesn't touch lib/letflow/ but Unblock-Everything still applies: a pre-existing failure must be attributed structurally, per core-directives.md, not assumed). 2) Additionally, since this diff touches apps/mobile/: from apps/mobile/, run `flutter analyze` and `flutter test`, and record their real output in the report alongside the ExUnit results (these have already been run and PASSed by MOBILE-DEV in Step 2b-mobile and independently re-run by TEST-DESIGN-VALIDATOR in Step 3b -- re-run them yourself here too, as the producer/validator principle requires an independent confirmation at this step rather than trusting the prior reports). Write test/reports/report-<date>-WF02-REQ419-20260927.yaml with the actual output, including derived partition count N and its source. Any backend ExUnit failure must be attributed per core-directives.md's structural rule (not by count-matching) -- this branch touches zero lib/letflow/ files, so any backend failure should be trivially attributable as pre-existing via git diff --name-only, but do the check properly rather than assuming.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run in full, combined pass/fail totals reported with partition count and source",
+      "flutter analyze run from apps/mobile/, real output quoted, 'No issues found!' or explicit failure",
+      "flutter test run from apps/mobile/, real output quoted, listing the guard test files and their self-tests",
+      "Any backend ExUnit failure structurally attributed (pre-existing via git-diff-name-only, or unattributed and blocking) -- never by count-matching",
+      "test/reports/report-<date>-WF02-REQ419-20260927.yaml written with real output"
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

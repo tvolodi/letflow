@@ -129,6 +129,51 @@ additional_sighting_2026_09_27: >
   ~14:07 UTC), alongside other reaper/orphan-sweep contention flakes
   (ISS-0229/ISS-0217/ISS-0224/ISS-0458 classes) -- a second independent
   confirmation this is a real, reproducible-under-load flake, not a one-off.
-status: open
+status: resolved
 queue_ref: "Q-873"
 github_ref: "GH-1913"
+resolution_2026_09_27: >
+  Fixed on branch fix/ISS0873-retention-summary-toctou-20260927 (5 commits:
+  631561fe, c2d9fc2d, ca3880fa, 57530178, c56de63d), closing the cross-partition
+  TOCTOU race ISSUE-FIXER's fix_direction above identified.
+  `retention_summary/0` (lib/letflow/event_store/retention_operations.ex) now
+  wraps its whole body in a `Repo.transaction/1` at `REPEATABLE READ, READ
+  ONLY` isolation, so `provisioned_tenant_schemas/0` and
+  `keep_forever_event_types/0` (and the derived per-schema counts) are read
+  from one consistent snapshot instead of racing a concurrent commit in
+  another test partition.
+
+  A first fix attempt (isolation level set directly on the shared connection)
+  broke test/letflow/event_store/retention_operations_test.exs with a Postgres
+  `25001` error ("SET TRANSACTION ISOLATION LEVEL must be called before any
+  query") whenever `retention_summary/0` is invoked from inside an
+  already-open transaction/subtransaction. The follow-up commits
+  (57530178, c56de63d) wrap the isolation-level `SET` itself in its own
+  SAVEPOINT (`retention_summary_isolation`) that gracefully degrades --
+  logs a warning and continues at ambient isolation -- when that SET fails,
+  rather than crashing the caller.
+
+  `count_protected_rows_in_schema/3` separately gained its own SAVEPOINT
+  (`retention_count_protected_rows`, commit ca3880fa) to recover from a
+  tenant schema being concurrently dropped mid-query (`:undefined_table`),
+  returning a protected-row count of 0 for that schema instead of raising --
+  closing the second failure mode ISSUE-FIXER's diagnosis called out.
+
+  The test file was reframed in the same branch (commit c2d9fc2d) to assert
+  the new documented guarantee (a single call's own snapshot is internally
+  consistent) plus a positive regression test for the schema-drop rescue
+  path, rather than the original bit-identical-across-two-calls assertion
+  that never was a real invariant under concurrent writes.
+
+  RELEASE-VALIDATOR independently re-verified before this closure: fresh
+  isolated compile clean; both target files
+  (lib/letflow/event_store/retention_operations.ex,
+  test/letflow/event_store/retention_operations_test.exs) 9/9 passing fresh;
+  live-observed the degrade-path warning log firing during a real test run
+  (confirming the SAVEPOINT-recovery branch is genuinely exercised, not
+  just present in source); an independent mutation check that reverted the
+  §8 SAVEPOINT wrap around the isolation-level SET reproduced the exact
+  `25001` regression, then confirmed clean again on restore; a full-suite
+  run (twice) came back clean apart from the pre-existing ISS-0766 flake;
+  scope confirmed clean across all 5 commits -- only the two files named
+  above touched.

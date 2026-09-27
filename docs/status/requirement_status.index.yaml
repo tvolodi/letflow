@@ -4610,8 +4610,16 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 16
+    entries: 17
     note: >
+      Incremented to 17 by DOC-UPDATER's ISS-0873 closing SCOPE-CHANGE append
+      (2026-09-27T20:42:41Z, cross-partition TOCTOU race in
+      retention_summary/0 fixed via REPEATABLE READ transaction + SAVEPOINT
+      degrade paths) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 17 on-disk entries. 535
+      lines / 31302 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior note preserved below.
+
       Incremented to 16 by ORCH, reconciled while rebasing
       feature/WF03-ISS0829-20260927 onto origin/main: this branch's own
       tip had independently incremented 14 -> 15 for ISSUE-FIXER's

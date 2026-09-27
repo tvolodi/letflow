@@ -429,6 +429,39 @@
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER
+    at: 2026-09-27T20:42:41Z
+    note: >
+      ISS-0873 (MINOR, RetentionOperationsTest cross-partition TOCTOU race
+      under full parallel-suite contention) resolved and closed in
+      docs/issues/ISS-0873.yaml. Fix on branch
+      fix/ISS0873-retention-summary-toctou-20260927 (5 commits: 631561fe,
+      c2d9fc2d, ca3880fa, 57530178, c56de63d): retention_summary/0
+      (lib/letflow/event_store/retention_operations.ex) now wraps its body
+      in a Repo.transaction/1 at REPEATABLE READ, READ ONLY isolation,
+      closing the original unscoped-global-read race ISSUE-FIXER's
+      diagnosis identified. The isolation-level SET itself is wrapped in
+      its own SAVEPOINT (retention_summary_isolation) that logs a warning
+      and degrades to ambient isolation when invoked from an
+      already-open transaction, after a first fix attempt broke the test
+      suite with a Postgres 25001 error. count_protected_rows_in_schema/3
+      gained its own separate SAVEPOINT (retention_count_protected_rows) to
+      recover from a concurrently-dropped tenant schema
+      (:undefined_table), returning 0 instead of crashing. Exactly 2 files
+      touched across all 5 commits:
+      lib/letflow/event_store/retention_operations.ex and
+      test/letflow/event_store/retention_operations_test.exs.
+      RELEASE-VALIDATOR independently re-verified: fresh isolated compile
+      clean; both target files 9/9 passing fresh; live-observed the
+      degrade-path warning log firing during a real test run; an
+      independent mutation check reverting the SAVEPOINT wrap around the
+      isolation-level SET reproduced the exact 25001 regression, then
+      confirmed clean again on restore; full suite run twice, only the
+      pre-existing ISS-0766 flake remains; scope confirmed clean across
+      all 5 commits. PASS.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
     at: 2026-09-27T10:15:00Z
     note: >
       ISS-0869 (MINOR, Playwright flake -- exam-lifecycle.e2e.spec.ts "all

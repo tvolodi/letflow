@@ -108,21 +108,38 @@ defmodule Letflow.EventStore.RetentionOperations do
              computed_at: NaiveDateTime.t()
            }}
   def retention_summary do
-    schemas = provisioned_tenant_schemas()
+    # ISS-0873: wrapped in a single REPEATABLE READ, READ ONLY transaction so
+    # provisioned_tenant_schemas/0, keep_forever_event_types/0 (called
+    # transitively via platform_wide_protected_record_count/1), and the
+    # per-schema count_protected_rows_in_schema/3 fan-out all observe the
+    # exact same committed-as-of-snapshot-start view -- see
+    # lib/letflow/design/iss0873-retention-summary-toctou.md §1. This
+    # function performs no writes and never calls Repo.rollback/1, so
+    # Repo.transaction/1 here can only return {:ok, _} (an infra-level pool
+    # or connection failure raises past this boundary, same as every other
+    # caller of Repo.transaction/1 in this codebase -- design doc OQ-1) or
+    # re-raise whatever exception occurred inside the fun.
+    {:ok, result} =
+      Repo.transaction(fn ->
+        set_isolation_level_or_degrade()
 
-    oldest =
-      case oldest_eligible_month_platform_wide(schemas) do
-        {year, month} -> %{year: year, month: month}
-        nil -> nil
-      end
+        schemas = provisioned_tenant_schemas()
 
-    {:ok,
-     %{
-       oldest_eligible_month: oldest,
-       protected_record_count: platform_wide_protected_record_count(schemas),
-       tenant_schema_count: length(schemas),
-       computed_at: naive_now()
-     }}
+        oldest =
+          case oldest_eligible_month_platform_wide(schemas) do
+            {year, month} -> %{year: year, month: month}
+            nil -> nil
+          end
+
+        %{
+          oldest_eligible_month: oldest,
+          protected_record_count: platform_wide_protected_record_count(schemas),
+          tenant_schema_count: length(schemas),
+          computed_at: naive_now()
+        }
+      end)
+
+    {:ok, result}
   end
 
   @doc """
@@ -339,14 +356,115 @@ defmodule Letflow.EventStore.RetentionOperations do
     end
   end
 
+  # ISS-0873: a schema whose Registration row was present at this
+  # transaction's snapshot-start instant (provisioned_tenant_schemas/0) can
+  # still have its physical schema concurrently DROPPED (a different
+  # partition's tenant-offboarding flow) before this query against it
+  # executes -- catalog/relation-name resolution is not covered by the
+  # surrounding REPEATABLE READ snapshot's row-data consistency guarantee.
+  # Mirrors Letflow.EventStore.Registry.rescue_missing_schema/1's exact
+  # narrow-rescue shape (registry.ex:213-237, ISS-0343): rescue only
+  # %Postgrex.Error{postgres: %{code: :undefined_table}}, re-raise every
+  # other exception unchanged. A vanished schema contributes 0 -- a schema
+  # actively being torn down is not meaningfully "still provisioned" for
+  # this summary's purposes, consistent with provisioned_tenant_schemas/0's
+  # own intent. See design doc §2.
+  #
+  # ISS-0873 §7 amendment: this whole function now runs inside
+  # retention_summary/0's own outer Repo.transaction/1 (§1). Postgres marks
+  # the *entire surrounding transaction* aborted the instant the query below
+  # raises :undefined_table -- an Elixir-level rescue is invisible to
+  # Postgres and does nothing to un-poison the connection, so the very next
+  # statement on it (the events_archive follow-up query, or the next
+  # schema's query in the Enum.map fan-out) would hit 25P02
+  # (in_failed_sql_transaction) instead of the graceful 0-contribution
+  # outcome. Fixed with an explicit SAVEPOINT wrapped around the query:
+  # SAVEPOINT before, RELEASE SAVEPOINT on success, ROLLBACK TO SAVEPOINT
+  # then RELEASE SAVEPOINT on the matched :undefined_table case (this is
+  # what actually un-poisons the connection). Raw SQL, not a nested
+  # Repo.transaction/1 -- Ecto only turns a nested Repo.transaction/1 into a
+  # real SAVEPOINT under Sandbox :manual mode; this module's own test suite
+  # runs Sandbox :auto (retention/retirement work runs on a different
+  # connection than the test's own), and production isn't in :manual mode
+  # either, so a nested Repo.transaction/1 here would issue no SAVEPOINT at
+  # all. A single fixed savepoint name is safe to reuse across this
+  # function's repeated, sequential (never concurrent) calls within the
+  # fan-out -- see design doc §7.1-§7.3.
+  @savepoint_name "retention_count_protected_rows"
+
   defp count_protected_rows_in_schema(schema_name, table, keep_forever_types) do
+    Repo.query!(~s{SAVEPOINT #{@savepoint_name}})
+
     %Postgrex.Result{rows: [[count]]} =
       Repo.query!(
         ~s{SELECT count(*) FROM "#{schema_name}"."#{table}" WHERE event_type = ANY($1)},
         [keep_forever_types]
       )
 
+    Repo.query!(~s{RELEASE SAVEPOINT #{@savepoint_name}})
     count
+  rescue
+    e in Postgrex.Error ->
+      case e do
+        %Postgrex.Error{postgres: %{code: :undefined_table}} ->
+          Repo.query!(~s{ROLLBACK TO SAVEPOINT #{@savepoint_name}})
+          Repo.query!(~s{RELEASE SAVEPOINT #{@savepoint_name}})
+          0
+
+        _other ->
+          reraise e, __STACKTRACE__
+      end
+  end
+
+  # ISS-0873 §8 amendment: retention_summary/0's REPEATABLE READ, READ ONLY
+  # guarantee (§1) depends on `SET TRANSACTION ISOLATION LEVEL` being the
+  # transaction's first statement. When retention_summary/0 is itself called
+  # from inside an already-open transaction (e.g. Letflow.DataCase's Sandbox
+  # wrapping transaction, or any real caller composing this function inside
+  # its own Repo.transaction/1), that SET statement is rejected by Postgres
+  # with 25001 (active_sql_transaction) -- neither Repo.in_transaction?/0
+  # (measures only whether *this process* explicitly opened a transaction,
+  # not whether the underlying connection is already inside one for any
+  # other reason) nor a Repo.transaction/2 isolation-level option (Postgres
+  # adapter has none; only Ecto.Adapters.Tds does) can detect or avoid this
+  # in advance. Instead: attempt the SET wrapped in its own SAVEPOINT (same
+  # shape as count_protected_rows_in_schema/3's own SAVEPOINT, a distinct
+  # name so the two are individually identifiable in pg_stat_activity /
+  # pg_locks). On success, RELEASE and the genuine REPEATABLE READ, READ
+  # ONLY guarantee holds for the rest of this transaction, unchanged from
+  # §1's original design. On the matched 25001, ROLLBACK TO SAVEPOINT then
+  # RELEASE SAVEPOINT to un-poison the connection, log a warning, and let
+  # the rest of retention_summary/0 proceed at whatever isolation level the
+  # ambient transaction already has -- a documented, narrow residual risk
+  # (the original pre-§1 TOCTOU window reopens for this invocation only),
+  # accepted rather than crashing a read-only admin summary. See design doc
+  # §8.3 for the full reasoning; any other exception reraises unchanged, no
+  # savepoint cleanup needed -- the outer transaction's own rollback on that
+  # reraise discards it for free.
+  @isolation_savepoint_name "retention_summary_isolation"
+
+  defp set_isolation_level_or_degrade do
+    Repo.query!(~s{SAVEPOINT #{@isolation_savepoint_name}})
+    Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+    Repo.query!(~s{RELEASE SAVEPOINT #{@isolation_savepoint_name}})
+    :ok
+  rescue
+    e in Postgrex.Error ->
+      case e do
+        %Postgrex.Error{postgres: %{code: :active_sql_transaction}} ->
+          Repo.query!(~s{ROLLBACK TO SAVEPOINT #{@isolation_savepoint_name}})
+          Repo.query!(~s{RELEASE SAVEPOINT #{@isolation_savepoint_name}})
+
+          Logger.warning("retention_summary/0 isolation level upgrade rejected, degrading",
+            error: :active_sql_transaction,
+            degraded: true
+          )
+
+          :ok
+
+        _other ->
+          reraise e, __STACKTRACE__
+      end
   end
 
   defp keep_forever_event_types do

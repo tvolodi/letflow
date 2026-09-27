@@ -52,9 +52,13 @@ that's REQ-138).
 The same migration brought over the **mobile tier specification**
 (`docs/mobile/`) as stage S9 — a Flutter app that is a generic
 interpreter of server-delivered definitions, on the same principle as
-the SPA. Nothing is built: the tier was specified in R-Co and never
-implemented, and all three of the backend endpoints it needs are
-verified gaps in Letflow today.
+the SPA. The Flutter app itself is not built yet (that starts at
+`REQ-419`, MOB-1's scaffold); S9's three backend gaps closed earlier
+(`REQ-124`/`125`/`126`) and `REQ-418` has since added the mobile
+tier's own PKCE-S256 Keycloak client (`letflow-mobile`) plus its
+`client_id` on `GET /api/mobile/tenant-config` — see
+[`docs/migration/stage-9-mobile.md`](docs/migration/stage-9-mobile.md)
+for the current gap/progress table.
 
 ## What's here today
 

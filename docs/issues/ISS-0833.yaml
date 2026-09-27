@@ -100,7 +100,58 @@ addendum_2026_09_26_b: >
   Left red and documented rather than forced. Whoever picks this up next has
   the full working-out above plus a live example already declared in the
   index to test against.
-status: open
+status: resolved
+resolution_2026_09_27: >
+  Fixed via the design in
+  lib/letflow/design/iss0833-a4b-unparseable-at-declaration.md (PASSed by
+  CODE-DESIGN-VALIDATOR), implemented across three commits on
+  fix/ISS0833-a4b-unparseable-at-20260927: 5e499fd1 (design),
+  241ad2f9 (implementation), c0ba2039 (missing test coverage added after
+  TEST-DESIGN-VALIDATOR FAILed the first handoff for only 1 of the design's
+  5 required coverage deliverables being present).
+
+  Mechanism: a new `known_unparseable_at:` key in
+  docs/status/requirement_status.index.yaml declares, per-entry, that a
+  misnamed `at:` field's `unparseable_at` finding is exempt IF AND ONLY IF a
+  sibling `known_shape_anomalies:` `extra_field` record on the SAME entry
+  re-verifies, live from disk, as ISO-8601 parseable
+  (`verified_via_kind`/`verified_via_field`/`verified_via_found_line`, flat
+  keys, no nested mapping -- the line-oriented parser doesn't support one).
+  `unparseable_at/3` now takes an `exemptions` arg and rejects exempted
+  candidates from `from_declared` only -- `from_disk` findings (a genuinely
+  unparseable literal sitting on disk, not just a misnamed field) remain
+  structurally unexemptable by design, so this cannot be used to paper over
+  a real bad timestamp. A new 6th A4b sub-check,
+  `invalid_unparseable_at_exemptions/4`, catches a bogus or malformed
+  exemption record itself (orphaned citation, citation of a sibling whose
+  disk value doesn't actually parse, citation of an open/unpinned volume),
+  wired into `a4b_findings/1`, `a4b_clean?/1`, and `a4b_message/2`.
+
+  9 real `known_unparseable_at:` declarations were added, one each for the
+  REQ-405 entry (addendum_2026_09_26_b above) and REQ-409..REQ-416 (the
+  ISS-0848-era shape-drift batch), all re-derived and verified against the
+  live `docs/status/requirement_status.v22.yaml` content rather than
+  transcribed by hand.
+
+  Test coverage (test/docs/requirement_status_invariants_test.exs): a
+  positive fixture (correct citation suppresses the finding and is itself
+  valid) plus three negative controls -- orphaned citation, citation of a
+  sibling whose on-disk value doesn't parse, citation of an open/unpinned
+  volume -- each confirmed via discriminating mutation (make the fixture's
+  defect stop being wrong, confirm the test then fails, revert, confirm
+  byte-identical). Full file: 24/24 passed.
+
+  RELEASE-VALIDATOR independently re-verified (2026-09-27) rather than
+  trusting the above self-report: fresh isolated
+  `mix test test/docs/requirement_status_invariants_test.exs` -> 24 passed;
+  independently re-derived the adversarial-gaming trace with its own
+  throwaway fixtures, all 3 cases confirmed; spot-checked 3 of the 9
+  `known_unparseable_at:` records directly against live
+  docs/status/requirement_status.v22.yaml content, all exact matches;
+  full-suite failures all traced to already-known/tracked classes
+  (ISS-0827 router drift, ISS-0832 CheckBoundariesTaskTest env-leak,
+  ISS-0868 connection-contention) -- none touching the files this fix
+  changed; `mix compile --warnings-as-errors` clean. PASS.
 queue_ref: "Q-833"
   # registered late by ORCH in ADHOC-20260926-S11-AUDIT; any earlier queue_ref here was derived, not allocated
 github_ref: "GH-1831"

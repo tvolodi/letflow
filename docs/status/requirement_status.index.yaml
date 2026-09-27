@@ -4610,8 +4610,26 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 8
+    entries: 9
     note: >
+      Incremented to 9, confirmed post-merge, by DOC-UPDATER resolving a
+      genuine `entries:`/note conflict on this exact field while closing
+      out PR #1890 (ISS-0833, 2026-09-27): origin/main (a61d7f2d, PR #1889)
+      had independently corrected this field 6 -> 8 for the REQ-417 run's
+      own 2 entries (WF02-REQ417-20260927 Step Final follow-up, fixing an
+      A9 invariant break its own PR #1888 had left), while this branch's
+      tip (10085fd0) separately incremented it 6 -> 7 for the ISS-0833
+      closing SCOPE-CHANGE append -- both starting from the same
+      pre-divergence base of 6, so neither side's note was wrong, they were
+      just counting different, non-overlapping additions. `git merge
+      origin/main` auto-merged `requirement_status.v23.yaml` itself cleanly
+      (both sides' entries concatenate: 6 pre-existing + 2 REQ-417 + 1
+      ISS-0833 SCOPE-CHANGE), so only this index note needed manual
+      reconciliation. `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 9 on-disk entries
+      post-merge. 250 lines / 14237 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Incremented to 8 by ORCH directly (WF02-REQ417-20260927 Step Final
       follow-up) -- the REQ-417 run's own `started`/`done` append
       (2026-09-27T04:11:00Z / 04:24:45Z) landed on main (PR #1888) without
@@ -4624,6 +4642,12 @@ volumes:
       but this one still needed a same-day follow-up fix rather than being
       left red). `grep -c "^  - req:" docs/status/requirement_status.v23.yaml`
       = 8 on-disk entries. 216 lines / 12421 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
+      Incremented to 7 by DOC-UPDATER's ISS-0833 closing SCOPE-CHANGE append
+      (2026-09-27T03:55:00Z, A4b unparseable_at declaration escape hatch) --
+      `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 7
+      on-disk entries. 210 lines / 12100 bytes, well under the
       1200-line/120000-byte roll ceiling, so no roll triggered.
 
       Incremented to 5 by DOC-UPDATER's ISS-0853 closing SCOPE-CHANGE append
@@ -5679,3 +5703,180 @@ known_shape_anomalies:
     should_have_been: "(not part of the five-field schema; remove or fold into note:)"
     cause: >
       An extra `run_id:` field (a WF-02 run identifier) not part of the five-field schema.
+
+known_unparseable_at:
+  # ISS-0833 addendum_2026_09_26_b's escape hatch — design
+  # lib/letflow/design/iss0833-a4b-unparseable-at-declaration.md. Each record
+  # exempts exactly one `unparseable_at`/`from_declared` finding (a declared
+  # `known_shape_anomalies:` `misnamed_field`/`field: "at"` record whose live
+  # on-disk value at `found_line` does not parse as ISO-8601) by citing a
+  # SECOND, independently-already-declared `known_shape_anomalies:` record on
+  # the SAME entry (`kind: extra_field`) whose own on-disk line genuinely
+  # parses as ISO-8601 — re-verified live at check time, never taken on the
+  # declaration's own word (design §2.3).
+  #
+  # `verified_via_kind`/`verified_via_field`/`verified_via_found_line` are FLAT
+  # fields, not a nested mapping — the index's line-oriented parser has no
+  # nested-mapping support (design §2.4/§2.5); they name the sibling
+  # `known_shape_anomalies:` record by `kind`, `field`, and `found_line`.
+  #
+  # These 9 records exempt the 9 `misnamed_field`/`at` findings on
+  # REQ-405/409/410/411/412/413/414/415/416 in the closed, digest-pinned
+  # `requirement_status.v22.yaml` — each entry's real timestamp is present,
+  # just under the sibling `extra_field`/`timestamp` record two-to-six lines
+  # away (design §1). REQ-405 needs exactly one record despite having two
+  # `known_shape_anomalies:` records on its entry: only the `misnamed_field`/
+  # `at` one feeds `unparseable_at`'s `from_declared` clause; the `extra_field`
+  # one is the sibling being cited, not itself a finding needing exemption.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 858
+    req: REQ-405
+    field: at
+    found_as: workflow
+    found_line: 862
+    verified_via_kind: extra_field
+    verified_via_field: timestamp
+    verified_via_found_line: 860
+    should_have_been: "at: 2026-09-25T03:39:10Z (the real timestamp already recorded, just under the extra timestamp: field two lines above)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present under the extra timestamp: field at line 860, not
+      under at:. Exempting the unparseable_at finding on the misnamed field
+      because the real timestamp genuinely exists, on disk, at the cited
+      sibling line, and mechanically re-parses as ISO-8601.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1111
+    req: REQ-409
+    field: at
+    found_as: summary
+    found_line: 1116
+    verified_via_kind: extra_field
+    verified_via_field: timestamp
+    verified_via_found_line: 1113
+    should_have_been: "at: 2026-09-26T00:10:00Z (the real timestamp already recorded, under the extra timestamp: field)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present under the extra timestamp: field at line 1113, not
+      under at: (the summary: field occupies the at: slot instead). Exempting
+      the unparseable_at finding because the real timestamp genuinely exists,
+      on disk, at the cited sibling line, and mechanically re-parses as
+      ISO-8601.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1127
+    req: REQ-410
+    field: at
+    found_as: summary
+    found_line: 1132
+    verified_via_kind: extra_field
+    verified_via_field: timestamp
+    verified_via_found_line: 1129
+    should_have_been: "at: 2026-09-26T01:20:00Z (the real timestamp already recorded, under the extra timestamp: field)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present under the extra timestamp: field at line 1129, not
+      under at: (the summary: field occupies the at: slot instead). Exempting
+      the unparseable_at finding because the real timestamp genuinely exists,
+      on disk, at the cited sibling line, and mechanically re-parses as
+      ISO-8601.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1144
+    req: REQ-412
+    field: at
+    found_as: summary
+    found_line: 1149
+    verified_via_kind: extra_field
+    verified_via_field: timestamp
+    verified_via_found_line: 1146
+    should_have_been: "at: 2026-09-26T02:00:00Z (the real timestamp already recorded, under the extra timestamp: field)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present under the extra timestamp: field at line 1146, not
+      under at: (the summary: field occupies the at: slot instead). Exempting
+      the unparseable_at finding because the real timestamp genuinely exists,
+      on disk, at the cited sibling line, and mechanically re-parses as
+      ISO-8601.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1158
+    req: REQ-411
+    field: at
+    found_as: summary
+    found_line: 1163
+    verified_via_kind: extra_field
+    verified_via_field: timestamp
+    verified_via_found_line: 1160
+    should_have_been: "at: 2026-09-26T02:30:00Z (the real timestamp already recorded, under the extra timestamp: field)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present under the extra timestamp: field at line 1160, not
+      under at: (the summary: field occupies the at: slot instead). Exempting
+      the unparseable_at finding because the real timestamp genuinely exists,
+      on disk, at the cited sibling line, and mechanically re-parses as
+      ISO-8601.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1173
+    req: REQ-413
+    field: at
+    found_as: summary
+    found_line: 1178
+    verified_via_kind: extra_field
+    verified_via_field: timestamp
+    verified_via_found_line: 1175
+    should_have_been: "at: 2026-09-26T03:00:00Z (the real timestamp already recorded, under the extra timestamp: field)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present under the extra timestamp: field at line 1175, not
+      under at: (the summary: field occupies the at: slot instead). Exempting
+      the unparseable_at finding because the real timestamp genuinely exists,
+      on disk, at the cited sibling line, and mechanically re-parses as
+      ISO-8601.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1190
+    req: REQ-414
+    field: at
+    found_as: summary
+    found_line: 1195
+    verified_via_kind: extra_field
+    verified_via_field: timestamp
+    verified_via_found_line: 1192
+    should_have_been: "at: 2026-09-26T04:00:00Z (the real timestamp already recorded, under the extra timestamp: field)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present under the extra timestamp: field at line 1192, not
+      under at: (the summary: field occupies the at: slot instead). Exempting
+      the unparseable_at finding because the real timestamp genuinely exists,
+      on disk, at the cited sibling line, and mechanically re-parses as
+      ISO-8601.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1205
+    req: REQ-415
+    field: at
+    found_as: summary
+    found_line: 1210
+    verified_via_kind: extra_field
+    verified_via_field: timestamp
+    verified_via_found_line: 1207
+    should_have_been: "at: 2026-09-26T05:10:00Z (the real timestamp already recorded, under the extra timestamp: field)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present under the extra timestamp: field at line 1207, not
+      under at: (the summary: field occupies the at: slot instead). Exempting
+      the unparseable_at finding because the real timestamp genuinely exists,
+      on disk, at the cited sibling line, and mechanically re-parses as
+      ISO-8601.
+  - path: docs/status/requirement_status.v22.yaml
+    entry_line: 1219
+    req: REQ-416
+    field: at
+    found_as: summary
+    found_line: 1224
+    verified_via_kind: extra_field
+    verified_via_field: timestamp
+    verified_via_found_line: 1221
+    should_have_been: "at: 2026-09-26T06:00:00Z (the real timestamp already recorded, under the extra timestamp: field)"
+    cause: >
+      Same incident as the misnamed_field record above on this entry: the real
+      timestamp is present under the extra timestamp: field at line 1221, not
+      under at: (the summary: field occupies the at: slot instead). Exempting
+      the unparseable_at finding because the real timestamp genuinely exists,
+      on disk, at the cited sibling line, and mechanically re-parses as
+      ISO-8601.

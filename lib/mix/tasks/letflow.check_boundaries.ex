@@ -68,11 +68,20 @@ defmodule Mix.Tasks.Letflow.CheckBoundaries do
   @typedoc "Module-id → list of dependency module-ids the module declares."
   @type depends_on_map :: %{String.t() => [String.t()]}
 
+  @typedoc "Override shape for the injectable xref-runner seam (test-only)."
+  @type xref_runner :: (() -> {String.t(), non_neg_integer()})
+
   @impl Mix.Task
   @spec run([String.t()]) :: :ok
   def run(_argv) do
-    {output, _exit_code} =
-      System.cmd("mix", ["xref", "graph", "--format", "plain"], stderr_to_stdout: false)
+    {output, exit_code} = run_xref()
+
+    if exit_code != 0 do
+      Mix.raise(
+        "mix letflow.check_boundaries: mix xref exited #{exit_code} -- " <>
+          "cannot check boundaries without a valid xref graph.\n#{output}"
+      )
+    end
 
     edges = parse_xref_output(output)
     depends_on_map = build_depends_on_map(Letflow.Modules.Catalog.all_manifests())
@@ -282,5 +291,22 @@ defmodule Mix.Tasks.Letflow.CheckBoundaries do
       [clean, _rest] -> clean
       [clean] -> clean
     end
+  end
+
+  # ISS-0831: the single seam through which this module runs `mix xref`. Consults
+  # the {:letflow, :check_boundaries_xref_runner} Application env key -- unset in
+  # every real (non-test) invocation, so the default here (the real System.cmd/3
+  # call) is what actually runs -- falling back to whatever 0-arity runner a test
+  # has installed there. This is the ONLY place in this module that may call
+  # System.cmd/3 directly; run/1 goes through this function instead (design doc
+  # lib/letflow/design/iss0831-check-boundaries-exit-code.md §1-2).
+  @spec run_xref() :: {String.t(), non_neg_integer()}
+  defp run_xref() do
+    runner =
+      Application.get_env(:letflow, :check_boundaries_xref_runner, fn ->
+        System.cmd("mix", ["xref", "graph", "--format", "plain"], stderr_to_stdout: false)
+      end)
+
+    runner.()
   end
 end

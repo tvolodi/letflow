@@ -3195,10 +3195,13 @@ session's real work). If it's genuinely still needed, the correct mitigation is
 cover its held connections rather than killing it — e.g.
 `TEST_CONNECTION_HEADROOM=45` was the working value against a ~30-connection
 holder (`test/reports/report-20260926-WF03-ISS0848-20260926.yaml`), not the
-default of 10. As of 2026-09-27 this specific PID (3011743) is no longer running on
-this host — the condition self-resolved (process exited/host state changed) — but
-the symptom-to-cause mapping is recorded here so the next occurrence is recognized
-by name instead of re-derived.
+default of 10. **Correction (2026-09-27, ISS-0831 close-out):** this specific PID
+(3011743) is NOT gone — TEST-RUNNER re-checked while closing out an unrelated
+issue and found it still running (`ss -tnp | grep 5463 | grep -c 3011743` = 30
+held connections; `ps -p 3011743` shows ~2d10h uptime, still the same `mix run
+--no-halt` process). The earlier "no longer running / self-resolved" claim in
+this entry was wrong — don't trust it without re-checking; the
+symptom-to-cause mapping above is still the right one to reach for.
 
 **Separately, on this run:** this repository checkout is shared, concurrently, by
 multiple Claude Code agent sessions (not separate worktrees) — confirmed via `git

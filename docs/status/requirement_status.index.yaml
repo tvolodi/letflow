@@ -4610,8 +4610,17 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 9
+    entries: 10
     note: >
+      Incremented to 10 by DOC-UPDATER's ISS-0831 closing SCOPE-CHANGE append
+      (2026-09-27T05:10:00Z, mix xref exit-code guard on
+      mix letflow.check_boundaries; also corrects a stale ISS-0868
+      "PID 3011743 no longer running" claim in docs/anti-patterns.md in the
+      same append). `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 10 on-disk entries. 280
+      lines / 15921 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior note preserved below.
+
       Incremented to 9, confirmed post-merge, by DOC-UPDATER resolving a
       genuine `entries:`/note conflict on this exact field while closing
       out PR #1890 (ISS-0833, 2026-09-27): origin/main (a61d7f2d, PR #1889)

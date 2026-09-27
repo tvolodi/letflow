@@ -1,0 +1,72 @@
+id: ISS-0870
+title: >
+  letflow-queue/docs drift recurred: mix letflow.check_queue_reconciliation
+  reports 26 fresh findings post-ISS-0849
+discovered_by: ORCH (routine get_next_task loop; ISS-0808 and ISS-0809 both
+  turned out to be already-resolved-on-main stale queue entries, prompting a
+  reconciliation-tool run)
+discovered_in_run: ADHOC-20260927-QUEUE-RECONCILIATION
+discovered_at: "2026-09-27T11:25:00Z"
+severity: MINOR
+tags:
+  - letflow-queue
+  - process
+  - registry-integrity
+description: >
+  After fixing docs/issues/ISS-0836.yaml's malformed YAML (fields were
+  swallowed as plain text inside a folded block scalar, which was crashing
+  mix letflow.check_queue_reconciliation -- see PR #1905), a fresh run of the
+  reconciliation tool reports 26 findings:
+
+  - 2 requirement status_mismatch: REQ-222 (yaml "pending") -> queue task 449
+    reports "done"; REQ-294 (yaml "pending") -> queue task 585 reports
+    "blocked".
+  - Several issue status_mismatch: ISS-0446/task453, ISS-0454/task454,
+    ISS-0745/task809, ISS-0764/task808 (yaml "resolved"/"open" vs. queue
+    disagreeing in various directions).
+  - ISS-0868/task868 is the most concerning: docs/issues/ISS-0868.yaml
+    correctly says "open" (a real, still-unresolved infra issue -- the
+    stale PID 3011743 connection-hog was confirmed STILL RUNNING as of
+    WF03-ISS0833-20260927, only hours before this finding), but queue task
+    868 reports "done" -- meaning something force-released it incorrectly
+    without the underlying problem being fixed.
+  - Many unrecognized_yaml_status findings: the tool's issue-status
+    vocabulary does not recognize "reopened", "resolved_via_duplicate",
+    "closed_not_applicable", "resolved_not_applicable", "declined", or (for
+    many recently-closed ISS-08xx issues this session) "done" as a valid
+    issue status.
+
+  ISS-0848's own fix already identified this vocabulary gap and scoped a
+  14-item bulk fix plus a remainder to ISS-0849, which was itself later
+  marked resolved (by a concurrent session, PR #1857). This fresh run shows
+  either the drift recurred after that fix, or ISS-0849's own resolution
+  didn't cover everything it claimed to.
+affected_files:
+  - docs/issues/
+  - lib/mix/tasks/letflow.check_queue_reconciliation.ex
+  - docs/agents/protocols/TASK_QUEUE.md
+related:
+  - ISS-0848
+  - ISS-0849
+  - ISS-0868
+severity_rationale: >
+  MINOR -- process/registry-integrity drift, not a production defect. The
+  one item worth elevated attention is ISS-0868/task868's incorrect "done"
+  status, since it could cause a future get_next_task caller to believe a
+  real, still-active infra problem has been resolved when it has not.
+fix_direction: >
+  1. Investigate each of the 26 findings individually per the case-by-case
+     rule ISS-0849 already established (spot-checking has shown the yaml is
+     sometimes right and the queue is sometimes right -- do not bulk-force
+     in one direction without checking).
+  2. Specifically correct queue task 868 back to open (or re-verify PID
+     3011743 / whatever the current stale connection-holder is, and only
+     mark it done if genuinely resolved).
+  3. Either extend check_queue_reconciliation's issue-status vocabulary to
+     recognize the missing values, or confirm they are genuinely invalid and
+     fix the yaml files using them instead.
+  4. Re-run mix letflow.check_queue_reconciliation and quote a clean (or
+     fully explained remainder) result.
+status: open
+queue_ref: "Q-870"
+github_ref: "GH-1906"

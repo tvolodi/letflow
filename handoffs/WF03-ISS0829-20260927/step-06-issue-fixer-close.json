@@ -1,0 +1,54 @@
+{
+  "handoff_id": "WF03-ISS0829-20260927-step-06",
+  "run_id": "WF03-ISS0829-20260927",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0829-20260927/step-06-issue-fixer-close.json",
+  "created_at": "2026-09-27T14:12:02Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S11",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["WF03-ISS0829-20260927-step-05"],
+    "artifacts_in": [
+      "docs/issues/ISS-0825.yaml",
+      "handoffs/WF03-ISS0829-20260927/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0829-20260927/step-05-release-validator.json"
+    ],
+    "owned_modules": [
+      "docs/issues/ISS-0825.yaml"
+    ]
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR PASSed ISS-0829's fix (handoffs/WF03-ISS0829-20260927/step-05-release-validator.json). Close out docs/issues/ISS-0825.yaml (the authoritative local record for queue issue_ref ISS-0829) per docs/agents/protocols/WF-03_issue_resolving.md Step 5: status: resolved, resolved_in_run: feature/WF03-ISS0829-20260927, resolved_at: real UTC timestamp. Write a resolution summary citing: root cause (EO-004/EO-005 asserted on global rollout/tenant state that Letflow.Platform.MigrationRollout's apply_to_existing_rollout/2 legitimately recomputes over ALL active company tenants on every call -- a documented design choice, not a defect -- so concurrent tenant provisioning under full parallel-suite load could inflate/change those global counts), the fix (tenant/rollout-scoped assertions in test/letflow/platform/migration_rollout_test.exs, following the file's existing ISS-0716 precedent), and both independent verifications (TEST-RUNNER's and RELEASE-VALIDATOR's own full-suite re-runs, neither of which reproduced the original EO-004/EO-005 failure). Also append the run-history 'done'/'resolved' event to the current volume via docs/status/requirement_status.index.yaml (check current volume/entry count first, increment correctly).",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0825.yaml: status: resolved, resolved_in_run and resolved_at set correctly",
+      "Resolution summary cites root cause, fix, and both independent verification runs",
+      "Run-history event appended to the current volume with a real UTC timestamp and the index's entry count correctly incremented",
+      "This is a first dispatch: claim by setting status to IN_PROGRESS only, then complete normally with a real result block."
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0829-20260927",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0829-20260927",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

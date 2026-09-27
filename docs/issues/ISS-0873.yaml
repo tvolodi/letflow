@@ -1,0 +1,49 @@
+id: ISS-0873
+title: >
+  Letflow.EventStore.RetentionOperationsTest fails intermittently under
+  full parallel-suite contention
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0829-20260927
+discovered_at: "2026-09-27T13:11:34Z"
+tags:
+  - backend
+  - test-flake
+  - event-store
+severity: MINOR
+description: >
+  Found incidentally by TEST-RUNNER during WF03-ISS0829-20260927 Step 04's
+  independent-verification full-suite run (`TEST_PARALLEL_N=4
+  scripts/test_parallel.sh`) -- `Letflow.EventStore.RetentionOperationsTest`
+  failed alongside two other pre-existing failures unrelated to that run.
+  `git diff origin/main...HEAD` confirmed this branch never touched
+  `test/letflow/event_store/retention_operations_test.exs` or
+  `lib/letflow/event_store/retention_operations.ex`, so the failure is
+  pre-existing, not a regression from that branch's diff. RELEASE-VALIDATOR's
+  own separate independent re-run of the same full suite (same run, Step 05)
+  did NOT reproduce this specific failure -- it hit a different pair of
+  pre-existing failures (`Letflow.IdentityTest` REQ-019 AC1, already tracked
+  as ISS-0766) instead. This is consistent with a genuine intermittent,
+  contention-class flake (different non-deterministic failures surfacing
+  across different runs of the same full suite) rather than a deterministic
+  defect -- the same general symptom shape as ISS-0766/ISS-0829's own
+  root-cause classes, but not yet confirmed to share either of their specific
+  mechanisms.
+severity_rationale: >
+  MINOR -- only reproduces under full parallel-suite contention (not the
+  common single-shard `mix test` path most agents use locally), has not
+  been observed to reproduce twice in a row, and there is no evidence yet
+  that it masks a real correctness defect in retention logic itself.
+fix_direction: >
+  Not yet investigated. Read RetentionOperationsTest's setup for a timing
+  dependency (an unawaited async operation, a wallclock-sensitive
+  assertion) or a resource-contention pattern (shared connection, schema,
+  or advisory lock) similar to ISS-0766's root cause (an on_exit
+  restoration race on a fixed row) or ISS-0829's root cause (assertions on
+  global state that legitimately changes under concurrent tenant
+  provisioning) -- it may be either class or a third, distinct mechanism.
+  Attempt a real reproduction (repeated `scripts/test_parallel.sh -N 4`
+  runs, or a targeted concurrent-load harness alongside other
+  event-store/retention-heavy test files) before concluding root cause.
+status: open
+queue_ref: "Q-873"
+github_ref: "GH-1913"

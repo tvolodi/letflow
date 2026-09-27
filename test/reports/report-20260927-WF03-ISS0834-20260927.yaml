@@ -1,0 +1,188 @@
+run_id: WF03-ISS0834-20260927
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+issue_ids:
+  - ISS-0834
+branch: fix/ISS0834-registry-bom-20260926
+head_sha_verified: >
+  2a751abe -- confirmed via `git log --oneline -3` in the assigned worktree,
+  matching the dispatch's stated commit exactly: "fix(ISS-0834): strip UTF-8
+  BOM from handoffs/registry.json + harden its read path", on top of
+  "fix(ISS-0853): delete unused tenant_template.ex function, close out
+  compile-warning gap (#1869)".
+generated_at: "2026-09-27T02:35:00Z"
+change_scope:
+  note: >
+    `git show --stat HEAD`: handoffs/registry.json (+1/-1, BOM stripped),
+    lib/mix/tasks/letflow.lint_handoffs.ex (+34/-3, new strip_bom/1 applied
+    at both the H5 registry-coverage reader and lint_file/2's :json branch
+    for registry.json in single-file mode). 2 files, 34 insertions / 3
+    deletions. Deliberately scoped to registry.json only -- the existing
+    F-BOM-PARSE-ADVISORY-SHAPE regression test (ISS-0347) still requires an
+    arbitrary BOM-prefixed handoff file to land in the non-crashing PARSE
+    advisory branch, so BOM-stripping was not applied universally. REVIEWER
+    already PASSed cleanly per dispatch.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-iss0834
+  host_health_check: >
+    Prior TEST-RUNNER attempt on this exact task had hit a genuine
+    session-wide /tmp filesystem-full crisis blocking all Bash/Write calls.
+    Independently re-verified recovery before trusting anything: `free -h`
+    showed 15Gi total, 999Mi free, 7.5Gi buff/cache, 7.5Gi available (no
+    zero-free signature); `df -h /tmp` showed 150G filesystem, 48G available
+    (68% used) -- confirms genuine recovery, not just ORCH's claim.
+    `docker ps -a` as the plain user returned "permission denied" (not a
+    docker-group member in this shell's cached group list, despite
+    `getent group docker` showing tvolodi as a member -- likely a
+    not-yet-refreshed login session); `sudo -n docker ps -a` worked
+    passwordlessly and confirmed wt-iss0834-postgres-1 (port 5474) and
+    wt-iss0834-keycloak-1 (port 8093) both freshly created (~23s old) and
+    healthy/healthy after a short wait, consistent with ORCH's claim of a
+    freshly recreated, empty-volume stack for this worktree. .env already
+    set LETFLOW_DB_PORT=5474 / LETFLOW_KEYCLOAK_PORT=8093. No `docker
+    compose up` was re-run -- containers were already up per the dispatch.
+  toolchain: "local mix/Elixir 1.20.3 (Erlang/OTP 29) toolchain, Linux host"
+  test_parallel_n: "8 (nproc-derived default, no override set)"
+command: "scripts/test_parallel.sh"
+full_output_capture: >
+  Ran as a normal blocking foreground call (no Monitor/background wait used,
+  per core-directives' "No Background Wait For A Cross-Turn Notification").
+  Per-partition logs preserved by the script's own non-zero-exit
+  preservation policy at /tmp/letflow_test_parallel.JlmFqY/partition-{1..8}.log.
+runs_performed: 1
+run_1:
+  combined_totals:
+    tests: 4982
+    properties: 6
+    failures: 4
+    passed: 4984
+    passed_over_total: "4984/4988"
+  per_partition:
+    - {partition: 1, tests: 724, properties: 0, failures: 1, exit: 2}
+    - {partition: 2, tests: 734, properties: 0, failures: 0, exit: 0}
+    - {partition: 3, tests: 569, properties: 1, failures: 0, exit: 0}
+    - {partition: 4, tests: 498, properties: 0, failures: 0, exit: 0}
+    - {partition: 5, tests: 661, properties: 0, failures: 1, exit: 2}
+    - {partition: 6, tests: 596, properties: 3, failures: 2, exit: 2}
+    - {partition: 7, tests: 654, properties: 2, failures: 0, exit: 0}
+    - {partition: 8, tests: 546, properties: 0, failures: 0, exit: 0}
+iss_0834_regression_class_check: >
+  CONFIRMED GONE from the full suite. Grepped all 8 partition logs for
+  "bom"/"registry.json"/"lint_handoffs"/"LintHandoffs"/"decode.error"/"crash"
+  (case-insensitive) -- every hit is either a passing test whose NAME
+  happens to contain "crash" (e.g. REQ-161's pcall-vs-crash
+  distinguishability test, ISS-0343/ISS-0444 "not a crash of the whole run"
+  regression tests, REQ-219 AC4's deliberate forced-crash isolation test) or
+  routine debug-log INSERT statements referencing unrelated tables/fields
+  that happen to contain the substring "crash" (e.g.
+  PromotionAssertionRerunTest's "simulated evaluator crash" fixture string).
+  Zero failures anywhere reference registry.json, BOM, or a Jason decode
+  error. This is the first full-suite run this session in which the
+  ISS-0834/ISS-0819-class single-file-mode BOM crash does not appear.
+targeted_verification:
+  command: "MIX_ENV=test mix test test/mix/tasks/letflow.lint_handoffs_test.exs --trace"
+  result: "Result: 63 passed"
+  bom_test_confirmed: >
+    "test existing .json handoff behavior (H1-H5) is unaffected
+    F-BOM-PARSE-ADVISORY-SHAPE (ISS-0347 regression) -- a leading UTF-8 BOM
+    also hits the parse-error branch without crashing" -- PASSED (0.4ms).
+    Confirms the fix's deliberate scoping: an arbitrary BOM-prefixed handoff
+    file still lands in the non-crashing PARSE-advisory branch (ISS-0347's
+    invariant preserved), while registry.json itself now decodes cleanly.
+real_task_verification:
+  command: "mix letflow.lint_handoffs"
+  result: >
+    Ran to completion with no crash and no Jason decode error on
+    registry.json. Final line: "letflow.lint_handoffs: OK -- 0 new
+    violations across 3020 handoff files under \"handoffs\" (25
+    pre-existing grandfathered, traced to ISS-0190)." The H5
+    registry-coverage check (do_check_registry_coverage/2, the other call
+    site this fix hardens) completed and printed its on-disk-vs-registry
+    diff report normally instead of crashing.
+failure_classification:
+  - test: "A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume"
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    partition: 1
+    classification: KNOWN_DOCS_DRIFT_CLASS
+    detail: >
+      9 unparseable ISO-8601 timestamps in
+      docs/status/requirement_status.v22.yaml (entry_lines 858, 1111, 1127,
+      1144, 1158, 1173, 1190, 1205, 1219 -- malformed `at:`/`summary:` field
+      values, e.g. a literal ">" or a workflow-id string in the wrong
+      field). `git diff main -- docs/status/requirement_status.v22.yaml` is
+      empty for this branch -- ISS-0834 does not touch this file. Matches
+      the same requirement_status.v22.yaml drift class flagged as
+      NEW_UNCLASSIFIED in the REQ-404 test-runner report
+      (test/reports/report-20260925-WF02-REQ404-20260925.yaml) two days
+      prior; pre-existing, unrelated to ISS-0834, already surfaced for
+      ORCH/ISSUE-FIXER to file.
+  - test: "system invocation (AC2) exits 0 on the current branch tree (AC2)"
+    module: Mix.Tasks.Letflow.CheckBoundariesTaskTest
+    partition: 5
+    classification: KNOWN_ISS_0832_CLASS
+    detail: >
+      test shells out to a subprocess without setting MIX_ENV; under
+      test_parallel.sh the child inherits MIX_TEST_PARTITION=5 with
+      MIX_ENV defaulting to "dev", which config's own guard rejects
+      ("MIX_TEST_PARTITION is set, but MIX_ENV is dev"). Exact match to the
+      ISS-0453/ISS-0832-class flake named in the dispatch. Not touched by
+      ISS-0834's diff.
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- the deferred table holds exactly 9 rows, no more"
+    module: Letflow.RouterTest
+    partition: 6
+    classification: KNOWN_ISS_0827_CLASS
+    detail: >
+      router.ex missing deferred routes Letflow.Routers.Services (and 4
+      others) from the test's stale hardcoded @deferred list -- same
+      signature as ISS-0827, previously seen in the REQ-404 test-runner
+      report (partition 3, identical "9 expected, 5 found" mismatch). Not
+      touched by ISS-0834's diff (confirmed via `git show --stat HEAD`
+      above: only handoffs/registry.json and letflow.lint_handoffs.ex
+      changed).
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- all 9 deferred sub-router module names are listed"
+    module: Letflow.RouterTest
+    partition: 6
+    classification: KNOWN_ISS_0827_CLASS
+    detail: "Same root cause as the row-count failure above (stale @deferred list vs. router.ex's current real routes)."
+classification_summary:
+  known_docs_drift_class: 1
+  known_iss_0832_class: 1
+  known_iss_0827_class: 2
+  new_unclassified: 0
+  attributable_to_iss_0834: 0
+overall_verdict: >
+  PASS for ISS-0834 specifically. Zero of the 4 failures trace to ISS-0834's
+  diff (handoffs/registry.json BOM strip + lint_handoffs.ex strip_bom/1
+  hardening). The dedicated regression test file
+  (test/mix/tasks/letflow.lint_handoffs_test.exs, 63 tests) passed clean,
+  including the ISS-0819 single-file-mode regression this fix targets and
+  the F-BOM-PARSE-ADVISORY-SHAPE (ISS-0347) guard confirming the fix's
+  deliberate registry.json-only scoping was not over-broadened. The real
+  `mix letflow.lint_handoffs` task ran to completion without crashing.
+  Most importantly: the ISS-0834/ISS-0819-class BOM crash, which had
+  appeared in nearly every full-suite run this session, is CONFIRMED ABSENT
+  from this run -- the first clean run of this class. All 4 remaining
+  failures match previously-documented classes (requirement_status.v22.yaml
+  docs drift, ISS-0827 stale deferred-route list, ISS-0832/ISS-0453-class
+  MIX_ENV subprocess flake) and are independently confirmed, via `git show
+  --stat HEAD`, to be untouched by ISS-0834's 2-file diff.
+  Combined: 4984/4988 passed, 4 failed.
+notes:
+  - >
+    Full per-partition logs preserved under
+    /tmp/letflow_test_parallel.JlmFqY/ (script's own preservation policy on
+    non-zero exit) for RELEASE-VALIDATOR's independent inspection.
+  - >
+    docker permission note for future runs on this host: the invoking user
+    (tvolodi) is listed in `getent group docker` but plain `docker` commands
+    still returned "permission denied" in this shell -- likely a stale
+    cached group list from before group membership was granted. `sudo -n
+    docker ...` worked passwordlessly throughout and is a reliable
+    workaround; a fresh login shell would likely resolve it directly.
+next_action: >
+  Route to RELEASE-VALIDATOR for independent re-verification. Recommend
+  ORCH/ISSUE-FIXER continue tracking the 3 pre-existing, already-surfaced
+  issue classes (requirement_status.v22.yaml docs drift, ISS-0827 stale
+  router deferred-list, ISS-0832/ISS-0453 MIX_ENV subprocess flake) --
+  none block ISS-0834.

@@ -56,7 +56,29 @@ fix_direction: >
   4. Confirm fixed by re-running
      test/mix/tasks/letflow.lint_handoffs_test.exs (the ISS-0819
      single-file-mode test specifically).
-status: open
+status: resolved
+resolution: >
+  Fixed per fix_direction above and re-verified by RELEASE-VALIDATOR
+  (WF03-ISS0834-20260927). ELIXIR-DEV stripped the UTF-8 BOM from
+  handoffs/registry.json and added a scoped strip_bom/1 helper at exactly
+  the 2 read call sites that touch registry.json -- deliberately NOT
+  applied to other handoff files, since ISS-0347's own regression test
+  requires those OTHER BOM'd files to still fail-to-decode. REVIEWER
+  passed: confirmed the ISS-0819 claim discrepancy (the issue's own text
+  cited the wrong precedent), confirmed ISS-0347's constraint is real and
+  non-conflicting, confirmed strip_bom/1 is content-based (not
+  offset-based, so no corruption risk), confirmed exactly 2 call sites
+  touched. TEST-RUNNER ran the full suite: 4984/4988 passed, the 4
+  failures all pre-existing/tracked (ISS-0827 x2, ISS-0832-class,
+  docs-drift A4b class) -- and confirmed the ISS-0834/ISS-0819 BOM crash
+  class is genuinely gone from a full-suite run for the first time this
+  session. RELEASE-VALIDATOR independently re-derived all of the above
+  from scratch (fresh BOM check, fresh implementation read, fresh
+  targeted test run, fresh real-task run, re-derived the full-suite
+  failure classification from raw partition logs with its own grep,
+  spot-checked 2 of the 4 failures against their real issue files) and
+  passed. This closes out one of the most persistently recurring
+  known-failure classes carried across this entire session.
 queue_ref: "Q-834"
   # registered late by ORCH in ADHOC-20260926-S11-AUDIT; any earlier queue_ref here was derived, not allocated
 github_ref: "GH-1832"

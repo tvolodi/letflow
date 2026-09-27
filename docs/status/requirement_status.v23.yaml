@@ -143,3 +143,34 @@
       confirmed a 4th time, twice over). Full suite 4983/4988, remaining 5
       failures all pre-existing and already tracked (ISS-0827 x2, ISS-0832,
       ISS-0834, ISS-0852). Both ACs satisfied with real evidence.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-27T02:38:21Z
+    note: >
+      ISS-0834 (MINOR, handoffs/registry.json UTF-8 BOM prefix breaking
+      LintHandoffsTest's ISS-0819 single-file-mode regression test)
+      resolved and closed in docs/issues/ISS-0834.yaml. ELIXIR-DEV
+      stripped the BOM and added a scoped strip_bom/1 helper at exactly 2
+      read call sites for registry.json only, deliberately not touching
+      other handoff files per ISS-0347's own regression test which
+      requires those OTHER BOM'd files to keep failing to decode.
+      REVIEWER passed: confirmed the ISS-0819 claim discrepancy in the
+      issue's own text, confirmed ISS-0347's constraint is real and
+      non-conflicting, confirmed strip_bom/1 is content-based (not
+      offset-based, no corruption risk), confirmed exactly 2 call sites.
+      TEST-RUNNER: full suite 4984/4988 passed, the 4 remaining failures
+      all pre-existing/tracked (ISS-0827 x2, ISS-0832-class, docs-drift
+      A4b class) -- and confirmed the ISS-0834/ISS-0819 BOM crash class
+      is genuinely gone from a full-suite run for the first time this
+      session. RELEASE-VALIDATOR independently re-derived everything
+      (fresh BOM check, fresh implementation read, fresh targeted test
+      run, fresh real-task run, re-derived the full-suite failure
+      classification from raw partition logs with its own grep,
+      spot-checked 2 of the 4 failures against their real issue files)
+      and passed. This closes out one of the most persistently recurring
+      known-failure classes carried across this entire session. Branch
+      fix/ISS0834-registry-bom-20260926 (2a751abe) confirmed up to date
+      with origin/main (merge-base 5bdcbbcf, zero drift) before this
+      append.

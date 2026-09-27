@@ -222,8 +222,16 @@ test.describe('Exam Lifecycle admin (REQ-347 port onto /admin/bilimbaga/exam)', 
 
   test('all exam rows have an Edit action', async ({ page }) => {
     await gotoExams(page)
-    const hasTable = await page.getByTestId('data-table').isVisible({ timeout: 10_000 }).catch(() => false)
-    expect(hasTable).toBeTruthy()
+    // ISS-0869: `locator.isVisible({ timeout })` does NOT poll/retry the way
+    // `expect(locator).toBeVisible({ timeout })` does -- it is a single,
+    // immediate DOM check, so the previous `.isVisible({ timeout: 10_000
+    // }).catch(() => false)` form lost the race against this EntityCrudPage's
+    // render on a loaded local dev backend even though the timeout read as
+    // generous. Switched to the same auto-retrying assertion already used by
+    // the adjacent tests in this file for the identical `data-table`/
+    // `examRow` wait (see `examRow(...).toBeVisible({ timeout: 10_000 })`
+    // above), which genuinely polls for up to 10s.
+    await expect(page.getByTestId('data-table')).toBeVisible({ timeout: 10_000 })
     const editActions = page.locator('[data-testid^="entity-edit-"]')
     const count = await editActions.count()
     expect(count).toBeGreaterThan(0)

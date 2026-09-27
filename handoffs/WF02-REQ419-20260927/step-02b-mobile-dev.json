@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ419-20260927/step-02b-mobile-dev.json",
   "created_at": "2026-09-27T15:25:31Z",
   "started_at": "2026-09-27T15:25:31Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-27T16:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -44,8 +44,22 @@
     ]
   },
   "result": {
-    "status": "PENDING"
+    "status": "PASS",
+    "summary": "Built apps/mobile/ exactly per lib/letflow/design/req419-mobile-scaffold.md. flutter create --org com.bizdala --project-name letflow --platforms android,ios apps/mobile, then hand-authored: lib/ tree (bootstrap/, auth/, api/, definitions/, renderers/{form,list,process,task}/, features/, design_system/, i18n/, shared/, main.dart, app.dart), renderer_registry.dart with UnsupportedDefinitionTypeWidget fallback, analysis_options.yaml (flutter_lints, unmodified), the three static guards under test/guards/ each with a real-tree test + a self-test on a violating fixture, a widget test on the renderer fallback, README.md updates in both apps/mobile/ and docs/mobile/, and ios/Podfile with platform :ios, '15.0' (uncommented from the stock Flutter cocoapods template) plus IPHONEOS_DEPLOYMENT_TARGET bumped to 15.0 in all 3 project.pbxproj build-config blocks. Android build.gradle.kts: minSdk pinned to literal 26, applicationId com.bizdala.letflow (flutter create's own org+name convention). pubspec.yaml: environment sdk >=3.11.0 <3.12.0 / flutter 3.41.7, dependencies added via `flutter pub add go_router flutter_riverpod dio flutter_appauth flutter_secure_storage intl` (resolved versions: go_router 17.5.0, flutter_riverpod 2.6.1, dio 5.11.1, flutter_appauth 12.1.0, flutter_secure_storage 11.2.0, intl 0.20.3) -- no other runtime dependency; stock cupertino_icons was auto-removed by pub. Deleted the stock counter-app test/widget_test.dart (didn't compile against the new app.dart shape) in favor of the guard tests + the renderer-fallback widget test, per the design's open question 3.\n\nOne build fix beyond the design doc's text: `flutter build apk --debug` failed on first attempt with 'Attribute data@scheme at AndroidManifest.xml requires a placeholder substitution but no value for <appAuthRedirectScheme> is provided' -- flutter_appauth's own AndroidManifest.xml declares a redirect intent-filter placeholder that must resolve to the app's custom scheme. Added `manifestPlaceholders[\"appAuthRedirectScheme\"] = \"com.bizdala.letflow\"` to android/app/build.gradle.kts's defaultConfig. This is app-identity wiring only (the same identifier already fixed by REQ-418's Keycloak client registration and this requirement's own applicationId) -- no auth logic, no fetch, nothing beyond what's needed for the dependency's manifest merge to succeed.\n\n`flutter analyze` (from apps/mobile/): 'Analyzing mobile... No issues found! (ran in 9.1s)'.\n\n`flutter test` (from apps/mobile/): all 7 tests passed --\n00:00 +0: .../forbidden_dependencies_guard_test.dart: real pubspec.yaml and pubspec.lock contain no forbidden dependency\n00:00 +1: .../forbidden_dependencies_guard_test.dart: self-test: checker fires on a pubspec containing webview_flutter\n00:00 +2: .../module_boundary_guard_test.dart: real lib/ tree has zero module boundary violations\n00:00 +3: .../module_boundary_guard_test.dart: self-test: checker fires on a violating fixture (Rule 2)\n00:00 +4: .../tenant_identifier_guard_test.dart: real lib/ tree and assets/ contain no compiled-in tenant identifier\n00:00 +5: .../tenant_identifier_guard_test.dart: self-test: checker fires on a literal \"bpm-default\"\n00:00 +6: .../renderer_registry_fallback_test.dart: RendererRegistry.build shows the unsupported-definition-type fallback for an unknown definition type, never an empty container\n00:01 +7: All tests passed!\n\n`flutter build apk --debug` (from apps/mobile/, after the manifestPlaceholders fix): 'Running Gradle task 'assembleDebug'... Built build\\app\\outputs\\flutter-apk\\app-debug.apk' (exit 0).\n\n`grep -rn 'minSdk' android/app/build.gradle*` -> `android/app/build.gradle.kts:29:        minSdk = 26`\n`grep -rn 'applicationId' android/app/build.gradle*` -> `android/app/build.gradle.kts:24:        applicationId = \"com.bizdala.letflow\"`\n\n`grep -n \"platform :ios\" ios/Podfile` -> `3:platform :ios, '15.0'`. iOS build itself (pod install / flutter build ios / any Xcode invocation) was NOT run -- the build host is Windows, which cannot run Xcode. The Podfile and all 3 IPHONEOS_DEPLOYMENT_TARGET occurrences in Runner.xcodeproj/project.pbxproj were generated/edited and verified by grep, not compiled.\n\n`git ls-files apps/mobile/lib | cut -d/ -f4 | sort -u` (after `git add apps/mobile`) ->\napi\napp.dart\nauth\nbootstrap\ndefinitions\ndesign_system\nfeatures\ni18n\nmain.dart\nrenderers\nshared\nThis is exactly architecture.md §2's nine directories plus main.dart plus the one sanctioned app/router file (app.dart) -- matches AC5.\n\nDid not touch web/ or lib/letflow/. No backend gap found -- REQ-419 needed no backend call. `git diff --name-only origin/main...HEAD` scope will be verified post-commit; pre-commit `git status` showed only apps/mobile/** (new) and docs/mobile/README.md (modified) plus this handoff -- no other paths touched.",
+    "acceptance_criteria_evidence": {
+      "flutter_analyze": "PASS - No issues found! (ran in 9.1s)",
+      "flutter_test": "PASS - 7/7, guard files + self-tests + renderer-fallback widget test all listed",
+      "flutter_build_apk_debug": "PASS after adding manifestPlaceholders[appAuthRedirectScheme] fix - app-debug.apk built",
+      "minSdk_grep": "android/app/build.gradle.kts:29:        minSdk = 26",
+      "applicationId_grep": "android/app/build.gradle.kts:24:        applicationId = \"com.bizdala.letflow\"",
+      "guard_self_tests": "all three PASS: boundary guard fires on cross-feature import not in depends_on (Rule 2), dependency guard fires on webview_flutter, tenant-identifier guard fires on literal 'bpm-default'",
+      "git_ls_files_directories": "api, app.dart, auth, bootstrap, definitions, design_system, features, i18n, main.dart, renderers, shared -- exact match",
+      "renderer_fallback_widget_test": "PASS - finds Key('unsupported-definition-type') and text containing 'Unsupported definition type'",
+      "ios_podfile": "platform :ios, '15.0' present; iOS build deferred (Windows host, no Xcode)",
+      "diff_scope": "apps/mobile/** and docs/mobile/README.md only, plus this handoff"
+    }
   },
+  "next_action": "Route to REVIEWER (Step 2d) -- SECURITY-REVIEWER not required, this requirement does not touch auth/token storage/transport",
   "rework_count": 0,
   "max_rework": 3
 }

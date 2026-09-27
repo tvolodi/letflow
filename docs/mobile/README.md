@@ -1,10 +1,11 @@
 # `docs/mobile/` — mobile tier specification
 
-**Nothing is built.** This directory is a specification for a subsystem that
-does not exist yet, in this repository or in R-Co. It was migrated on
-2026-08-21 so that the mobile tier has a home, a stage, and a dependency chain
-in Letflow's own plan rather than living as an appendix in a Zig repo that is
-being retired.
+**The scaffold exists as of REQ-419** (`apps/mobile/` — shell, static guards,
+no auth or fetch yet). This directory was originally a specification for a
+subsystem that did not exist yet, in this repository or in R-Co; it was
+migrated on 2026-08-21 so that the mobile tier has a home, a stage, and a
+dependency chain in Letflow's own plan rather than living as an appendix in a
+Zig repo that is being retired.
 
 | File | What it is |
 |---|---|
@@ -47,8 +48,8 @@ itself; that expansion happens when S4 lands.
 
 **Backend gaps closed 2026-09-27** by `REQ-124` (done 2026-08-22), `REQ-125`
 (done 2026-08-23), and `REQ-126` (done 2026-08-22) — see
-`../migration/stage-9-mobile.md`'s gap table. `apps/mobile/` itself still does
-not exist; that is `REQ-419`'s job, part of the `REQ-417..430` build queue.
+`../migration/stage-9-mobile.md`'s gap table. `apps/mobile/` scaffold landed
+via `REQ-419`, part of the `REQ-417..430` build queue.
 
 ## The one thing to understand before reading further
 

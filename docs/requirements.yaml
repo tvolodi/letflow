@@ -17485,6 +17485,12 @@ requirements:
     title: Dart evaluator for the Expr grammar in apps/mobile/, passing the same conformance corpus (0020 D1a step 12, S9, dormant)
     owner: MOBILE-DEV
     impl_order: 585  # letflow-queue task id, GH#1205. Registered 2026-09-11 by ORCH
+      # 2026-09-27 (WF-01 S9 mobile batch): task 585 stays `blocked` in the queue --
+      # letflow-queue has no endpoint to add depends_on edges to an existing task, so the
+      # new REQ-419/REQ-420 edges (tasks 856/857) cannot be recorded there. When REQ-420
+      # (task 857) is released done, ORCH must reopen task 585 with
+      # `POST /tasks/585/release {"force":true,"status":"open"}`; REQ-427 (task 864)
+      # depends on 585 and stays ineligible until then.
       # (WF02-REQ293-20260910 Step Final) once every depends_on link
       # ([REQ-290, REQ-292, REQ-293]) landed done and S9 was independently
       # ACTIVE regardless, making the entry's own prior `blocked-by:`
@@ -17502,6 +17508,20 @@ requirements:
       # start this entry: owner: MOBILE-DEV remains dormant per CLAUDE.md's
       # own roster table until S9's backend gaps close and apps/mobile/
       # exists, independent of this registration's mechanical purpose.
+      # REVISED 2026-09-27T02:37:55Z by REQ-ANALYST (WF-01, S9 app batch):
+      # depends_on gained REQ-419 (MOB-1 scaffold, which creates apps/mobile/)
+      # -- this entry's first acceptance criterion requires apps/mobile/ to
+      # exist and MOBILE-DEV to be active (REQ-417, transitively via REQ-419),
+      # and neither was a depends_on edge until now. The queue task above is
+      # still status "blocked"; ORCH must re-open it (and translate the new
+      # edge to REQ-419's queue task id) when registering REQ-417..430,
+      # otherwise REQ-427 (form renderer, depends on this entry) can never
+      # become eligible. Text and acceptance criteria unchanged.
+      # REVISED 2026-09-27 by REQ-VALIDATOR (WF-01 Step 2): depends_on also
+      # gained REQ-420 (CI mobile job). REQ-420's own description promises CI
+      # exists before the second MOB requirement merges; with only REQ-419 as
+      # an edge this entry could be claimed in parallel with REQ-420 and merge
+      # its Dart suite with no CI job running it.
     status: pending
     stage: S9
     description: >
@@ -17594,7 +17614,7 @@ requirements:
       - "no offline submission queue is introduced, confirmed by grep over the diff, and the completion report states that MOB-8's exclusion of offline writes is unchanged"
       - "git diff shows nothing under lib/ or web/ modified by this requirement"
       - "git diff shows lib/letflow/engine/expr.ex unmodified by this requirement. A client evaluator that finds the grammar lacking must report that as a finding, never close the gap by extending expr.ex or by adding the missing capability on the client side only -- the second is worse, because it passes the corpus while silently making this client incompatible with the other two"
-    depends_on: [REQ-290, REQ-292, REQ-293]
+    depends_on: [REQ-290, REQ-292, REQ-293, REQ-419, REQ-420]
 
   # REQ-295..REQ-302 -- decision 0023's own open question, and the
   # implementation work it gates. 0023 (docs/migration/decisions/0023-entity-
@@ -30797,3 +30817,945 @@ requirements:
       - "`git grep -nE \"Repo\\.(insert_all|query)|Ecto\\.Adapters\\.SQL\\.query\" test/letflow/modules/bilimbaga_solution_e2e_test.exs` returns no hits (no direct SQL seeding)"
       - "`mix letflow.check` passes and `npm run check` passes in `web/`, real output quoted"
     depends_on: [REQ-415]
+
+  # ---------------------------------------------------------------
+  # S9 (continued) -- mobile-tier app build (MOB-1..MOB-8)
+  #
+  # Drafted 2026-09-27 (WF-01, user-directed; REQ-ANALYST). Appended at the
+  # end of the file rather than beside REQ-124..127 (line ~6201) because the
+  # file is append-only (WF-01 Step 1.5) and every other late-expanded batch
+  # (S10 batches, S11) was appended here with its own header.
+  #
+  # The S9 block above said the app's own requirements would be expanded
+  # "once these land". They have: REQ-124, REQ-125, REQ-126 and REQ-127 are
+  # all done, as are REQ-282 (per-tenant branding on the mobile endpoint),
+  # REQ-289..293 (Expr conformance corpus, server re-evaluation, SPA
+  # evaluator) and REQ-385. REQ-294 (Dart Expr evaluator) is the one S9
+  # entry still pending, and gains a depends_on edge to REQ-419 below.
+  #
+  # Verified against the tree on 2026-09-27, the facts this batch builds on:
+  #   - apps/mobile/ does not exist.
+  #   - priv/keycloak/realms/bpm-default.json has one client, letflow-web
+  #     (public, redirectUris ["*"]). There is no mobile OIDC client.
+  #   - GET /api/mobile/tenant-config (lib/letflow/routers/mobile_tenant_config.ex)
+  #     returns exactly {realm_url, locales, default_locale, branding,
+  #     environment_kind} -- no client_id.
+  #   - Letflow.Oidc.TokenVerifier.Oidcc calls Oidcc.Token.validate_jwt/3,
+  #     whose verify_aud_claim (deps/oidcc/src/oidcc_token.erl:1283-1302)
+  #     requires the access token's aud to contain the configured :oidc
+  #     client_id ("letflow-web" in config/dev.exs and config/test.exs).
+  #     validate_jwt does NOT check azp. A token minted for a second client
+  #     is therefore rejected unless its aud carries "letflow-web".
+  #   - .github/workflows/ci.yml has jobs changes/backend/frontend and no
+  #     Flutter job; backend/frontend job names are 0018's required
+  #     status-check contexts.
+  #   - Flutter 3.41.7 / Dart 3.11.5, the Android SDK and emulators are
+  #     installed on the build host (Windows). iOS cannot be built there:
+  #     every iOS-only acceptance check below is explicitly DEFERRED with
+  #     that reason, never silently dropped; iOS configuration files are
+  #     still written and statically checked where a static check exists.
+  #   - The web locale policy MOB-7 must match now exists (REQ-285:
+  #     web/src/i18n/sessionLocale.ts, PLATFORM_SUPPORTED_LOCALES,
+  #     FALLBACK_LOCALE 'en'); docs/mobile/requirements.md's MOB-7 note
+  #     still says there is none, which is stale.
+  #
+  # Order (docs/mobile/build-order.md M1..M8, plus three enabling items):
+  #   REQ-417 docs reactivation (un-dormant MOBILE-DEV)  -- enables all MOB work
+  #   REQ-418 letflow-mobile OIDC client + client_id    -- gates MOB-2
+  #   REQ-419 MOB-1 scaffold + shell + static guards    (M1)
+  #   REQ-420 CI mobile job                              -- after REQ-419, before MOB-2
+  #   REQ-421 MOB-2 bootstrap                            (M2)
+  #   REQ-422 MOB-5 on-device security                   (M3)
+  #   REQ-423 MOB-3 cache + delta sync + airplane launch (M4, part 1)
+  #   REQ-424 MOB-3 pinned form version resolution       (M4, part 2)
+  #   REQ-425 MOB-6 API client hardening                 (M6)
+  #   REQ-426 MOB-4 six-state framework + list renderer  (M5, part 1)
+  #   REQ-427 MOB-4 form renderer + on-device Expr       (M5, part 2)
+  #   REQ-428 MOB-4 task + process-instance renderers    (M5, part 3)
+  #   REQ-429 MOB-7 i18n                                 (M7)
+  #   REQ-430 MOB-8 v1 scope gate + phase close-out      (M8)
+  # Splits forced by the one-agent-turn sizing rule: MOB-3 into two (cache/
+  # delta vs. pinning), MOB-4 into three (it names four renderers, eleven
+  # field types and six states). One deliberate ordering deviation from the
+  # build-order table, which introduces no contradiction because that table
+  # gives M5 no edge to M6: MOB-6 (REQ-425) is built BEFORE MOB-4, because
+  # MOB-4's fetch-failure / permission-denied / 429-backpressure states are
+  # classifications of MOB-6's typed ApiError, and building the renderers
+  # first would force them to invent a second error taxonomy that MOB-6
+  # then has to retrofit.
+  # (REQ-VALIDATOR note, 2026-09-27: this is less a deviation than it looks --
+  # build-order.md's own "Phasing" table already puts M6 in phase M-2 with M4,
+  # ahead of M5 in phase M-3. Only the table's Order column lists M5 first.)
+  #
+  # App identity used consistently by REQ-418, REQ-419 and REQ-421 (OPEN
+  # QUESTION, flagged, not a decision record): Android applicationId / iOS
+  # bundle id com.bizdala.letflow (reverse of bizdala.com, the domain the
+  # project's QA deployment actually uses -- qa.bizdala.com), OAuth redirect
+  # URI com.bizdala.letflow:/oauth2redirect. Cheap to change until the app is
+  # published to a store; effectively permanent after. REQ-VALIDATOR/REVIEWER
+  # may substitute another reverse-DNS id; if so, change it in all three
+  # entries together.
+  #
+  # impl_order markers: each entry carries `# impl_order: UNREGISTERED -- ...`
+  # for ORCH to replace with the register_task response at WF-01 Step 3.
+  # Entries with a still-pending dependency use the `blocked-by: REQ-NNN`
+  # scope so mix letflow.check_deferral_staleness stays green in the interim;
+  # the two roots (REQ-417, REQ-418) have no pending blocker and are
+  # reported STALE by that check until registered -- S9 is an active stage.
+  # ---------------------------------------------------------------
+
+  - id: REQ-417
+    title: "Reactivate MOBILE-DEV: un-dormant its role file, roster rows and S9 stage file, add a mobile implementation step to WF-02, and mark S9's three backend gaps closed in docs/mobile/"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S9
+    impl_order: 854  # letflow-queue task id, GH#1871. Registered 2026-09-27T02:59:54Z by ORCH (WF-01 Step 3).
+    description: >
+      Every MOB requirement below is owned by MOBILE-DEV, and MOBILE-DEV's
+      own role file currently instructs it to refuse the work. Under
+      core-directives.md's Instruction Precedence a role file is rank 2
+      (above workflows and CLAUDE.md), so this documentation change is a
+      hard precondition, not tidying.
+
+      Verified 2026-09-27, the stale text:
+      (1) .claude/agents/mobile-dev.md frontmatter description says
+      "DORMANT ... Nothing routes here until S9's three backend gaps
+      close and apps/mobile/ exists"; its "Status: dormant" section lists
+      REQ-124/125/126 as gaps and says "If you have been dispatched,
+      something is probably wrong ... stop and report blocked to ORCH";
+      its Forbidden list says "Creating apps/mobile/ before REQ-124,
+      REQ-125, and REQ-126 are done". All three are done.
+      (2) docs/migration/stage-9-mobile.md line 3 reads "Status: not
+      started. Depends on: S4. Requirements: REQ-123 ... REQ-126" (REQ-123
+      is an S8 requirement; the S9 set is REQ-124..127, REQ-282,
+      REQ-289..294, REQ-385 and REQ-417..430). Its gap table (line ~42)
+      describes Letflow.Routers.TenantConfig as a stub behind AuthPipeline
+      and form_id/form_version as absent; REQ-124 (public
+      Letflow.Routers.MobileTenantConfig mounted on Letflow.Router) and
+      REQ-126 closed both. Its Roles section still says "dormant".
+      (3) docs/agents/AGENT_SYSTEM.md: the MOBILE-DEV roster row (line
+      ~39) says Dormant; the capability-matrix row (line ~71) is marked
+      "(dormant)" and limits writes to apps/mobile/; the artifact table
+      (line ~138) says apps/mobile/ "does not exist yet".
+      (4) CLAUDE.md's roster table row for MOBILE-DEV says "Dormant";
+      docs/agents/instructions/core-directives.md's producer/validator
+      table (line ~100) says "MOBILE-DEV (apps/mobile/) -- dormant until
+      S9".
+      (5) docs/agents/workflows/WF-02_requirement_implementation.md has
+      Step 2a (backend) and Step 2b (frontend) and no mobile step, while
+      mobile-dev.md tells MOBILE-DEV to read "WF-02 ... Step 2b".
+      (6) docs/mobile/architecture.md §3, docs/mobile/requirements.md's
+      MOB-2 and MOB-3 "Letflow gap" paragraphs and docs/mobile/README.md's
+      Status section still describe the three backend gaps as open.
+
+      DELIVERABLES.
+      a. mobile-dev.md: replace the dormant status section with an ACTIVE
+      one naming the three closed gaps (REQ-124, REQ-125, REQ-126, all
+      done) and REQ-417..430 as its work queue; delete the "if you have
+      been dispatched, something is probably wrong" instruction and the
+      "Creating apps/mobile/ before ..." Forbidden bullet; update the
+      frontmatter description. KEEP UNCHANGED the three tier constraints
+      (including constraint 2's D1a carve-out, which REQ-294's second
+      acceptance criterion quotes) and every other Forbidden bullet.
+      b. mobile-dev.md and AGENT_SYSTEM.md: widen MOBILE-DEV's write scope
+      to apps/mobile/, docs/mobile/, handoffs/, the mobile job ONLY in
+      .github/workflows/ci.yml (REQ-420 needs it; precedent: FRONTEND-DEV
+      owned the frontend job, REQ-138), and docs/migration/stage-9-mobile.md
+      outside its REVIEWER sign-off sections (REQ-430's close-out needs it;
+      precedent: REQ-416's implementer updated stage-11's Status line). State that MOBILE-DEV owns its own
+      Dart tests under apps/mobile/test/, as FRONTEND-DEV owns web/'s,
+      and that TEST-DESIGN-VALIDATOR and TEST-RUNNER still gate them.
+      c. AGENT_SYSTEM.md: roster row, matrix row and artifact-table row
+      drop "dormant"/"does not exist yet" (the artifact row may say
+      "created by REQ-419"). The TEST-RUNNER capability-matrix row
+      ("mix test only") gains `flutter analyze`/`flutter test` for
+      apps/mobile/, matching deliverable e's Step 4 change.
+      d. CLAUDE.md roster row: drop "Dormant" and the "activated once S9's
+      backend gaps close" clause.
+      e. WF-02: add a mobile implementation step (e.g. "Step 2b-mobile",
+      agent MOBILE-DEV) mirroring Step 2b's structure: verify branch; read
+      the design artefact and docs/mobile/; make the change in apps/mobile/
+      only; run, from apps/mobile/, `flutter analyze` and `flutter test`
+      and quote real output; route to SECURITY-REVIEWER (2c) when the
+      change touches auth, token storage or transport (MOB-2, MOB-5,
+      MOB-6). Mention it in the Overview diagram's routing line.
+      Also in WF-02 (without this, a mobile change reaches steps whose text
+      only knows ExUnit and never runs its Dart suite): Step 2c -- state
+      that an apps/mobile/ diff touching auth, token storage or transport
+      is in scope (security-reviewer.md's "anything resolving a ... token"
+      clause) and that its checklist is MOB-5's acceptance criteria in
+      docs/mobile/requirements.md, applied alongside INV-4/INV-5; Step 3 --
+      its scope test names the mobile step's artifacts_out beside 2a/2b,
+      and states Dart tests under apps/mobile/test/ are written by
+      MOBILE-DEV in the mobile step (TEST-DESIGN-VALIDATOR still reviews
+      them against the acceptance criteria); Step 4 -- when the diff
+      touches apps/mobile/, TEST-RUNNER additionally runs `flutter analyze`
+      and `flutter test` from apps/mobile/ and records their real output
+      in the test report.
+      d2. core-directives.md's producer/validator row: drop "dormant until
+      S9".
+      f. stage-9-mobile.md: Status line -> "in progress", correct the
+      requirement list, annotate each gap-table row as closed by its
+      requirement id with the done date recorded in
+      docs/status/requirement_status*.yaml (not a guessed date), and
+      update Roles. Keep the 2026-08-21 verification text as dated
+      history.
+      g. docs/mobile/architecture.md §3, requirements.md MOB-2/MOB-3 gap
+      paragraphs, README.md Status: append a dated "closed by REQ-NNN"
+      note to each; do not delete the original dated verification text.
+      "Nothing is built" in README.md stays true until REQ-419 lands and
+      is NOT changed here.
+
+      OUT OF SCOPE: docs/mobile/requirements.md's MOB-7 locale note
+      (REQ-429 rewrites it against the real policy); any code; any change
+      to REQ-294's text (REQ-417 only makes its first acceptance
+      criterion satisfiable).
+    acceptance_criteria:
+      - "`git grep -n -i dormant -- .claude/agents/mobile-dev.md docs/agents/AGENT_SYSTEM.md CLAUDE.md docs/agents/instructions/core-directives.md docs/migration/stage-9-mobile.md` returns no line that describes MOBILE-DEV or S9 as currently dormant (historical dated sentences such as 'registered on 2026-08-21 as dormant' are allowed only if they say 'was'); the command and its output are quoted"
+      - "`git grep -n 'something is probably wrong' -- .claude/agents/mobile-dev.md` and `git grep -n 'Creating .apps/mobile/. before' -- .claude/agents/mobile-dev.md` both return no hits, quoted"
+      - "mobile-dev.md's three-constraint section is byte-identical to its pre-change text, proven by quoting `git diff origin/main -- .claude/agents/mobile-dev.md` and showing no hunk inside that section"
+      - "AGENT_SYSTEM.md's MOBILE-DEV matrix row and mobile-dev.md both name `.github/workflows/ci.yml` (mobile job only) as a MOBILE-DEV write location, and both state MOBILE-DEV owns tests under apps/mobile/test/"
+      - "WF-02_requirement_implementation.md contains a MOBILE-DEV implementation step that names both commands `flutter analyze` and `flutter test` run from apps/mobile/ and the SECURITY-REVIEWER routing condition, and mobile-dev.md's mandatory-reading bullet points at that step's actual heading"
+      - "WF-02's Step 2c names MOB-5 (docs/mobile/requirements.md) as the checklist for an in-scope apps/mobile/ diff, Step 3's scope test names the mobile step beside 2a/2b, and Step 4 requires TEST-RUNNER to run `flutter analyze` and `flutter test` from apps/mobile/ when the diff touches apps/mobile/ -- each quoted from the diff"
+      - "docs/migration/stage-9-mobile.md line 3 no longer says 'not started' and no longer lists REQ-123; its gap table marks each of the three rows closed with the requirement id and a date taken from docs/status/ (the source file and line for each date quoted in the completion report)"
+      - "docs/mobile/architecture.md §3 and requirements.md's MOB-2 and MOB-3 gap paragraphs each carry a dated 'closed by REQ-124/REQ-125/REQ-126' note, and the original 2026-08-21 text is still present (git diff shows additions only in those paragraphs)"
+      - "`git diff --name-only origin/main...HEAD` lists only files under docs/, .claude/agents/mobile-dev.md and CLAUDE.md -- nothing under lib/, web/, apps/ or .github/"
+    depends_on: [REQ-124, REQ-125, REQ-126]
+
+  - id: REQ-418
+    title: "Add public PKCE-S256 Keycloak client letflow-mobile (custom-scheme redirect, no wildcards) and expose its client_id on GET /api/mobile/tenant-config, under SECURITY-REVIEWER gate"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S9
+    impl_order: 855  # letflow-queue task id, GH#1872. Registered 2026-09-27T02:59:55Z by ORCH (WF-01 Step 3).
+    description: >
+      MOB-2 authenticates via OIDC Authorization-Code + PKCE through the
+      system browser (flutter_appauth). That needs an OIDC client the app
+      can name. None exists: priv/keycloak/realms/bpm-default.json's only
+      client is letflow-web (publicClient true, directAccessGrantsEnabled
+      true, redirectUris ["*"], webOrigins ["*"]). Reusing letflow-web is
+      rejected: its wildcard redirect list would let any app that
+      registers any scheme receive a mobile authorization code, and its
+      password grant has no place on a device.
+      THIS IS A SECURITY CHANGE. SECURITY-REVIEWER is a required gate
+      (identity configuration plus a public, unauthenticated response
+      shape; docs/agents/instructions/security-invariants.md).
+
+      PART 1 -- the client, in priv/keycloak/realms/bpm-default.json:
+      clientId "letflow-mobile"; publicClient true; standardFlowEnabled
+      true; directAccessGrantsEnabled false; implicitFlowEnabled false;
+      serviceAccountsEnabled false; attributes
+      "pkce.code.challenge.method": "S256" (Keycloak then rejects an
+      authorization request without an S256 challenge) and
+      "post.logout.redirect.uris": "com.bizdala.letflow:/oauth2redirect";
+      redirectUris exactly ["com.bizdala.letflow:/oauth2redirect"] -- no
+      "*", no http(s) URI, no trailing wildcard; webOrigins [] (a native
+      app makes no CORS requests). Protocol mappers: the same realm-roles
+      mapper letflow-web carries (claim.name "roles" -- Letflow reads that
+      claim), plus an oidc-audience-mapper with included.client.audience
+      "letflow-web" and access.token.claim "true". The audience mapper is
+      NOT optional: Letflow.Oidc.TokenVerifier.Oidcc validates with
+      Oidcc.Token.validate_jwt/3, whose verify_aud_claim
+      (deps/oidcc/src/oidcc_token.erl:1283) rejects any access token whose
+      aud lacks the configured :oidc client_id ("letflow-web",
+      config/dev.exs:97, config/test.exs:128). This is exactly ISS-0275's
+      defect (lib/letflow/design/iss0275-audience-mapper-fix.md) and must
+      not be reintroduced for the second client. validate_jwt does not
+      check azp, so azp "letflow-mobile" is accepted. Do NOT modify the
+      letflow-web client. The redirect scheme must equal the Android
+      applicationId REQ-419 creates (com.bizdala.letflow; see the S9
+      header's open question).
+
+      PART 2 -- how the app learns the client_id. DECIDED HERE (with the
+      reasoning below; REQ-VALIDATOR/REVIEWER may overturn): add a sixth
+      key "client_id" to GET /api/mobile/tenant-config, valued
+      System.get_env("MOBILE_OIDC_CLIENT_ID") || "letflow-mobile" -- the
+      same env-then-constant shape Letflow.Routers.TenantConfig already
+      uses for the web SPA's client_id (lib/letflow/routers/tenant_config.ex:168
+      and :361, OIDC_CLIENT_ID || "letflow-web").
+      Security reasoning, to be restated in the moduledoc: (i) an OAuth
+      public-client identifier is not a secret (RFC 6749 §2.2; a public
+      client has no credential), and the web endpoint already publishes
+      its equivalent unauthenticated; (ii) the value is platform-global,
+      not tenant-derived -- byte-identical on every never-error branch
+      (resolvable slug, unknown slug, missing ?slug=, lookup failure) --
+      so it adds zero enumeration signal, the same status
+      environment_kind has; (iii) the alternative, compiling the id into
+      the app, would work today but freezes it into every shipped build,
+      so a deployment whose realms register the client under another name,
+      or a later rename, would need an app release; server-sent keeps the
+      one-tenant-agnostic-build constraint without that coupling. (It does
+      NOT support a per-tenant client name -- the value is platform-global
+      by design, point ii; per-tenant naming would be a new requirement
+      and a new disclosure analysis.)
+      CONTRACT CHANGE TO CALL OUT: the module's moduledoc says "It returns
+      exactly five keys" and "Adding a sixth key to this response is a
+      security change, not a feature"; REQ-124's and REQ-282's exact-shape
+      tests in test/letflow/routers/mobile_tenant_config_test.exs assert
+      five keys. Update the table, the "What this endpoint discloses"
+      section and the per-field-variance paragraph to six keys, and update
+      the exact-shape assertions to the new six-key set -- never loosen
+      them to a subset check. Also record the change in
+      lib/letflow/design/req124-mobile-tenant-config.md as a dated addendum.
+
+      OUT OF SCOPE: provisioning letflow-mobile into per-tenant realms
+      other than bpm-default (Letflow does not provision Keycloak realms
+      or clients programmatically -- lib/letflow/routers/onboarding.ex's
+      moduledoc lists realm/client provisioning as not done); any
+      apps/mobile/ code; the web endpoint.
+    acceptance_criteria:
+      - "a new ExUnit test (e.g. test/letflow/api/keycloak_realm_mobile_client_test.exs, static JSON check in the style of test/letflow/api/keycloak_realm_audience_mapper_test.exs) asserts the letflow-mobile client has publicClient true, standardFlowEnabled true, directAccessGrantsEnabled false, implicitFlowEnabled false, attributes['pkce.code.challenge.method'] == 'S256', redirectUris == ['com.bizdala.letflow:/oauth2redirect'] exactly, webOrigins == [], a roles mapper, and an oidc-audience-mapper with included.client.audience 'letflow-web' and access.token.claim 'true'"
+      - "the same test asserts no element of letflow-mobile's redirectUris or webOrigins contains '*' or starts with 'http', and asserts the letflow-web client's JSON object equals an inline expected map copied from the pre-change file (not `git show origin/main:...`, which CI's shallow checkout may lack and which becomes tautological once this change is on main)"
+      - "live check against a freshly recreated dev Keycloak (`docker compose up -d --force-recreate keycloak`, since realm import only runs when the realm does not exist): an authorization request to /realms/bpm-default/protocol/openid-connect/auth with client_id=letflow-mobile, redirect_uri=com.bizdala.letflow:/oauth2redirect, response_type=code and an S256 code_challenge returns the login page (HTTP 200); the same request with redirect_uri=https://evil.example/cb returns a non-200 error response whose body names redirect_uri and does NOT redirect to evil.example; the same request with no code_challenge does not return the login page and instead yields an error naming code_challenge or code_challenge_method (in the body, or as error=invalid_request in the Location header of a redirect to the registered custom-scheme URI) -- the three curl commands, status lines and the relevant body/Location excerpts quoted"
+      - "live check: Keycloak's admin endpoint GET /admin/realms/bpm-default/clients/<letflow-mobile id>/evaluate-scopes/generate-example-access-token?userId=<admin-user id> returns claims whose aud contains 'letflow-web' and whose azp is 'letflow-mobile', quoted"
+      - "GET /api/mobile/tenant-config returns exactly six keys -- realm_url, locales, default_locale, branding, environment_kind, client_id -- asserted by an exact key-set equality test (not a subset check) on each of the four never-error paths: resolvable slug, unknown slug, missing ?slug=, simulated lookup failure"
+      - "a test asserts client_id is 'letflow-mobile' with MOBILE_OIDC_CLIENT_ID unset and equals the env value when set, and is identical across all four never-error paths for a given environment"
+      - "the moduledoc of lib/letflow/routers/mobile_tenant_config.ex no longer contains the phrase 'exactly five keys'; it states the six keys, the three-point client_id reasoning above, and that client_id is platform-global -- before and after quoted in the completion report"
+      - "SECURITY-REVIEWER signs off before merge, and `mix letflow.check` passes, real output quoted"
+    depends_on: [REQ-124, REQ-282]
+
+  - id: REQ-419
+    title: "MOB-1: scaffold apps/mobile/ (Flutter, Android API 26+ / iOS 15+) as a generic definition-interpreter shell with the settled stack and three static guards"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 856  # letflow-queue task id, GH#1873. Registered 2026-09-27T02:59:56Z by ORCH (WF-01 Step 3).
+    description: >
+      Build-order M1 (docs/mobile/build-order.md): MOB-1 in
+      docs/mobile/requirements.md, placement and stack per
+      docs/mobile/architecture.md §2, stack settled by
+      docs/migration/decisions/0012-mobile-tier-stack.md (not re-decided
+      here). This requirement creates apps/mobile/; nothing in it
+      authenticates or fetches (that is REQ-421).
+
+      BUILDS:
+      1. `flutter create --org com.bizdala --project-name letflow
+      --platforms android,ios apps/mobile` (Android applicationId and iOS
+      bundle id com.bizdala.letflow -- must match REQ-418's redirect
+      scheme). Android minSdk 26 in android/app/build.gradle(.kts); iOS
+      deployment target 15.0 in ios/Podfile and the Xcode project.
+      2. pubspec.yaml: environment pins `sdk` to the Dart 3.11 line and a
+      `flutter: 3.41.7` constraint (REQ-420's CI reads the Flutter version
+      from this file); dependencies go_router, flutter_riverpod, dio,
+      flutter_appauth, flutter_secure_storage, intl -- nothing else at
+      runtime yet (the local cache store is REQ-423's choice).
+      3. lib/ layout exactly per architecture.md §2 (bootstrap/, auth/,
+      api/, definitions/, renderers/{form,list,process,task}/, features/,
+      design_system/, i18n/, shared/), a ProviderScope root, and a
+      go_router with a placeholder slug-entry route. A renderer registry
+      in lib/renderers/ keyed by definition type that returns an explicit
+      "unsupported definition type" widget for an unknown type -- never a
+      blank screen (MOB-4's stale-version principle, applied from day one).
+      4. analysis_options.yaml including flutter_lints (or stricter).
+      5. THREE STATIC GUARDS as ordinary Dart tests under
+      apps/mobile/test/guards/ (so they run in `flutter test` and fail CI,
+      not warn; architecture.md §6 requires the boundary rule to fail the
+      build):
+      (a) module boundary, 0039 D3 as restated in architecture.md §6: no
+      file outside lib/features/<id>/ imports from it except the one
+      sanctioned navigation-bootstrap file, and lib/features/a/ imports
+      from lib/features/b/ only if b is in a's declared depends_on (store
+      the declaration in a single Dart/JSON manifest the guard reads);
+      (b) forbidden dependencies: pubspec.yaml and pubspec.lock contain no
+      script runtime (e.g. flutter_js, any lua or wasm runtime package),
+      no CEL package (REQ-294 forbids one), and no webview package
+      (webview_flutter, flutter_inappwebview -- MOB-2 forbids embedded
+      webview OIDC);
+      (c) no tenant identifier compiled in: no string literal in lib/
+      equals a tenant slug or realm name that exists in
+      priv/keycloak/realms/*.json or test/support fixtures (at minimum
+      'bpm-default'), and no asset under apps/mobile/assets/ is
+      tenant-specific.
+      Each guard must include a self-test proving it fires (e.g. runs its
+      checker over an in-test fixture string that violates it).
+      6. apps/mobile/README.md: how to run (`flutter pub get`,
+      `flutter analyze`, `flutter test`, `flutter run -d emulator-5554`),
+      the platform API base URL supplied at build time via
+      --dart-define=LETFLOW_API_BASE_URL (a platform endpoint per
+      environment, not a tenant identifier), and how to reach a local
+      backend from the emulator: `adb reverse tcp:<api-port> tcp:<api-port>`
+      and `adb reverse tcp:<keycloak-port> tcp:<keycloak-port>` so the
+      device reaches both at localhost. State why 10.0.2.2 is not enough:
+      it reaches the API, but Keycloak stamps a token's iss from the host
+      the browser used, so a login through 10.0.2.2 yields an iss the
+      backend's configured issuer (localhost) rejects.
+      Update docs/mobile/README.md's "Nothing is built" line to state the
+      scaffold exists as of this requirement.
+
+      iOS: files are generated and configured; building them is DEFERRED
+      -- the build host is Windows and cannot run Xcode. Recorded, not
+      dropped.
+    acceptance_criteria:
+      - "`cd apps/mobile && flutter analyze` reports 'No issues found!', real output quoted"
+      - "`cd apps/mobile && flutter test` passes and its output lists the three guard test files and their self-tests, real output quoted"
+      - "`cd apps/mobile && flutter build apk --debug` succeeds, and `grep -rn 'minSdk' android/app/build.gradle*` shows 26 and `grep -rn 'applicationId' android/app/build.gradle*` shows com.bizdala.letflow, both quoted"
+      - "each guard's self-test demonstrates it FAILS on a violating fixture: the boundary guard on a cross-feature import not in depends_on, the dependency guard on a pubspec containing webview_flutter, the tenant-identifier guard on a literal 'bpm-default' -- asserted in the test, quoted in the report"
+      - "`git ls-files apps/mobile/lib | cut -d/ -f4 | sort -u` (tracked files only -- git does not track empty directories, so each directory must hold at least one tracked file) shows exactly the top-level directories named in docs/mobile/architecture.md §2 (bootstrap, auth, api, definitions, renderers, features, design_system, i18n, shared) plus main.dart and at most one app/router .dart file, quoted"
+      - "a widget test asserts the renderer registry renders an explicit unsupported-definition-type widget (found by key or text) for an unknown definition type rather than an empty container"
+      - "ios/Podfile declares platform :ios, '15.0' (quoted); the report states the iOS build is deferred because the host is Windows"
+      - "`git diff --name-only origin/main...HEAD` lists only paths under apps/mobile/ and docs/mobile/README.md"
+    depends_on: [REQ-417]
+
+  - id: REQ-420
+    title: "CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml -- flutter analyze, flutter test, Android debug build -- for apps/mobile/**"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 857  # letflow-queue task id, GH#1874. Registered 2026-09-27T02:59:57Z by ORCH (WF-01 Step 3).
+    description: >
+      .github/workflows/ci.yml has jobs `changes`, `backend` and `frontend`
+      and no Flutter job (verified 2026-09-27). Without one, every MOB
+      requirement after REQ-419 would merge with its tests unrun by CI.
+      This requirement is sequenced immediately after REQ-419 and before
+      REQ-421 (MOB-2 depends on it) so that CI exists before the second
+      MOB requirement merges.
+      Owner MOBILE-DEV, by the REQ-138 precedent (FRONTEND-DEV added the
+      frontend job): the job runs flutter, which only MOBILE-DEV's
+      capability row covers. REQ-417 widens MOBILE-DEV's write scope to
+      this job.
+
+      Read lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md in
+      full first; ci.yml's own header warns not to "simplify" its
+      path-filter choices. Follow the existing pattern exactly:
+      1. `changes` job: add a `mobile` output. In the push branch
+      (ISS-0840: push to main always runs every gate) and in both
+      fail-safe branches (no usable base SHA, unreachable base SHA) and in
+      the `fallback` step, emit mobile=true. In the diff branch, mobile is
+      true iff a changed path matches ^(apps/mobile/|\.github/workflows/ci\.yml).
+      Do not change the backend/frontend regexes. Do not add mobile to
+      path-filter-outputs.txt (cd.yml does not deploy mobile).
+      2. A new sibling job `mobile`, name "Mobile gate (flutter analyze +
+      test + build)", runs-on ubuntu-latest, needs: changes, job-level
+      `if: ${{ !cancelled() }}` (NOT always(), NOT a job-level path
+      condition -- same reasoning as backend/frontend), defaults
+      working-directory apps/mobile. Steps: checkout; actions/setup-java
+      (Temurin 17); subosito/flutter-action with flutter-version-file
+      apps/mobile/pubspec.yaml and cache enabled; then, each with step-level
+      `if: needs.changes.outputs.mobile != 'false'` (fail-open):
+      `flutter pub get`, `flutter analyze`, `flutter test`,
+      `flutter build apk --debug`.
+      3. No other job's keys change.
+
+      OPEN QUESTION (flagged, not resolved here): whether "Mobile gate
+      (...)" becomes a third required status-check context on main per
+      docs/migration/decisions/0018-branch-protection-posture.md. Changing
+      branch protection is a 0018 amendment and belongs to REVIEWER/ORCH,
+      not to this requirement. This requirement only makes the job
+      eligible (always-runs, step-gated, so a required context would never
+      be reported missing) and records the question in the job's header
+      comment.
+    acceptance_criteria:
+      - "`python -c \"import yaml,sys; d=yaml.safe_load(open('.github/workflows/ci.yml')); print(sorted(d['jobs'])); print(d['jobs']['mobile']['name']); print(d['jobs']['mobile']['if'])\"` prints ['backend', 'changes', 'frontend', 'mobile'], the mobile job name, and ${{ !cancelled() }}, quoted"
+      - "`git diff origin/main -- .github/workflows/ci.yml` shows no removed or changed line inside the backend or frontend jobs and no change to the backend/frontend regexes -- only additions (the mobile output lines in `changes`, and the new job), quoted"
+      - "every flutter step in the mobile job carries `if: needs.changes.outputs.mobile != 'false'`, and the `changes` job emits mobile=true on the push branch, both fail-safe branches and the fallback step -- verified by quoting the relevant lines"
+      - "the PR that lands this requirement shows the Mobile gate job running all four flutter steps to success (the PR touches ci.yml, so the filter selects mobile) -- the Actions run URL and the four step conclusions quoted from `gh run view --json jobs`"
+      - "a docs-only test PR or the same PR's job log shows the backend and frontend gates' conclusions unchanged by this edit (both still report success on this PR), quoted from `gh pr checks`"
+      - "the job's header comment records the 0018 required-context question as open, quoted"
+    depends_on: [REQ-419]
+
+  - id: REQ-421
+    title: "MOB-2: tenant bootstrap -- slug/deep-link -> unauthenticated tenant-config -> OIDC Auth-Code+PKCE in the system browser -> secure token store -> memberships and installed modules, with four dedicated error screens"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 858  # letflow-queue task id, GH#1875. Registered 2026-09-27T02:59:59Z by ORCH (WF-01 Step 3).
+    description: >
+      Build-order M2, MOB-2 in docs/mobile/requirements.md. The gate for
+      the whole tier: after this, a build can log into a tenant.
+      SECURITY-REVIEWER gate (authentication flow, token handling).
+
+      SEQUENCE:
+      1. Tenant identity from manual slug entry or a deep link
+      (https://<slug>.<platform-host>/..., Android intent filter for
+      https with host *.<platform-host>, where <platform-host> is supplied
+      at build time from the same build configuration as
+      LETFLOW_API_BASE_URL -- e.g. a --dart-define plus a Gradle
+      manifestPlaceholder -- never a tenant slug; iOS universal-link
+      entitlement written but DEFERRED -- no iOS build on this host).
+      Verified App Link status (android:autoVerify) needs
+      /.well-known/assetlinks.json served by the platform host, which no
+      requirement provides: declare the filter without relying on
+      verification and record verification as DEFERRED with that reason. The slug is the only tenant input; nothing tenant
+      specific is compiled in (REQ-419's guard stays green).
+      2. GET {LETFLOW_API_BASE_URL}/api/mobile/tenant-config?slug=<slug>
+      with NO Authorization header. Consume realm_url, client_id (added
+      by REQ-418), locales, default_locale, branding, environment_kind.
+      The endpoint never errors on an unknown slug: by its anti-enumeration
+      never-error rule it returns platform defaults, including realm_url
+      for the default realm "bpm-default" (@default_realm,
+      lib/letflow/routers/mobile_tenant_config.ex:151,199). The app
+      therefore CANNOT detect an unknown slug before login, and must not
+      try to (that would be the enumeration oracle the endpoint refuses to
+      be). "Tenant not found" is detected AFTER login instead: the FIRST
+      entry of GET /api/v1/me/memberships is always the tenant the token
+      itself serves (lib/letflow/routers/me.ex moduledoc, "Response
+      shape": the handler prepends the caller's own current tenant); every
+      later entry is a tenant the subject could switch into by
+      re-authenticating, and the backend scopes every request to the
+      token's tenant, not to the slug the user typed. So: if the first
+      entry's tenant_slug does not equal the entered slug, show
+      tenant-not-found and delete the just-stored tokens -- even when a
+      later entry matches (matching any entry would let the app label
+      tenant A's data as tenant B's; v1 does not perform the
+      re-authentication a switch needs). CANDIDATE users get 403 from /me/memberships by design
+      (lib/letflow/routers/me.ex, "MembershipsRead -- CANDIDATE deliberately
+      excluded"); on that 403 skip the membership check and rely on
+      /me/modules. Document this rule in code comments.
+      3. flutter_appauth authorizeAndExchangeCode with issuer = realm_url,
+      clientId = client_id from step 2 (never a compiled constant),
+      redirectUrl com.bizdala.letflow:/oauth2redirect, PKCE S256
+      (flutter_appauth default). Android: Custom Tabs via the
+      appAuthRedirectScheme manifest placeholder; no webview anywhere
+      (REQ-419's dependency guard forbids webview packages).
+      4. Tokens persisted ONLY through one class in lib/auth/ backed by
+      flutter_secure_storage, keyed by tenant (realm_url) so tenant A's
+      tokens are never presented to tenant B. REQ-422 hardens and guards
+      this; REQ-421 must not introduce any other storage path for tokens.
+      5. Before any tenant content: GET /api/v1/me/memberships and
+      GET /api/v1/me/modules (lib/letflow/routers/me.ex:74, :78) and build
+      the route table from installed_modules (architecture.md §6 -- a
+      module not installed has no route at all).
+      6. Four dedicated error screens: tenant-not-found,
+      network-unavailable, OIDC-failure, secure-storage-unavailable.
+      7. Create lib/api/api_client.dart as the ONLY place a Dio instance
+      is constructed (bearer attach only; refresh/retry/typed errors are
+      REQ-425's). All HTTP in this and later requirements goes through it.
+      8. docs/mobile/requirements.md MOB-2's first acceptance bullet and
+      docs/mobile/architecture.md §3 row 1 list the five-key tenant-config
+      shape; append a dated note to each that REQ-418 added client_id as a
+      sixth key and that the app consumes it (keep the original text).
+
+      LIVE LOGIN caveat: completing a real Keycloak login requires typing
+      credentials into a Custom Tab, which `flutter test` cannot drive.
+      Acceptance is therefore split: the full sequence is proven by widget
+      /unit tests with a fake AppAuth adapter and a fake HTTP layer; a
+      live emulator run proves the app reaches Keycloak's login page for
+      two different slugs; the interactive credential entry is DEFERRED to
+      UAT-RUNNER with that reason recorded.
+    acceptance_criteria:
+      - "a test asserts the tenant-config request carries no Authorization header, and asserts the authorization request built for a slug uses issuer == that response's realm_url, clientId == that response's client_id, redirectUrl 'com.bizdala.letflow:/oauth2redirect' and a PKCE S256 challenge"
+      - "a test drives the whole sequence for two distinct slugs whose fake tenant-config responses carry different realm_url values in ONE app instance with no rebuild, and asserts each ends with tokens stored under its own tenant key and that tenant B's API calls never carry tenant A's access token (MOB-1's two-tenant criterion)"
+      - "a test asserts no tenant content route is reachable before /me/memberships and /me/modules have both resolved, and that a module absent from installed_modules has no route (navigating to its path shows the not-found screen)"
+      - "a test asserts a login whose /me/memberships FIRST entry has a tenant_slug different from the entered slug shows the tenant-not-found screen and leaves no token in the secure store -- including a case where a later entry does match the entered slug; and a test asserts a 403 from /me/memberships (CANDIDATE) proceeds to /me/modules instead of failing"
+      - "a unit test asserts the deep-link parser extracts slug 'acme' from https://acme.<configured platform host>/any/path and rejects a URL on any other host (returning no slug rather than guessing); the AndroidManifest intent filter is quoted showing a host pattern built from the build-time platform host, and the report records App Link verification (assetlinks.json) as DEFERRED with its reason"
+      - "docs/mobile/requirements.md MOB-2 and docs/mobile/architecture.md §3 each carry the dated client_id note, with the original five-key text still present (git diff shows additions only there)"
+      - "four widget tests each force one failure -- tenant-not-found (per the post-login membership rule), SocketException, AppAuth error, secure-storage exception -- and assert the corresponding dedicated screen (by key) is shown, not a generic error or a crash"
+      - "`git grep -n 'Dio(' -- apps/mobile/lib` returns exactly one hit, in lib/api/api_client.dart, quoted"
+      - "live: with `adb reverse` applied for the API port and the Keycloak port, and the backend started with KEYCLOAK_BASE_URL (or BPM_IDP_BASE_URL) set to http://localhost:<keycloak-port> so tenant-config's realm_url is reachable from the device and the issuer matches the backend's (10.0.2.2 is not used: a login through it yields a token iss the backend rejects), `flutter run -d emulator-5554 --dart-define=LETFLOW_API_BASE_URL=http://localhost:<port>` against the local docker compose stack reaches the Keycloak login page in a Custom Tab for two slugs bound to different realms (or, if the local stack has only bpm-default, for one slug, with that limitation stated) -- evidence: `adb logcat` lines or screenshots referenced in the report; interactive credential entry recorded as DEFERRED to UAT-RUNNER"
+      - "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    depends_on: [REQ-418, REQ-419, REQ-420]
+
+  - id: REQ-422
+    title: "MOB-5: on-device security -- secure-storage-only tokens, no token in any log sink, cleartext forbidden (Android network-security-config, iOS ATS), backup exclusion, tenant-scoped token audience, [S] hardening documented"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 859  # letflow-queue task id, GH#1876. Registered 2026-09-27T03:00:00Z by ORCH (WF-01 Step 3).
+    description: >
+      Build-order M3, sequenced immediately after bootstrap on purpose
+      (build-order.md: "Token storage is decided the moment the first
+      token exists"). MOB-5 in docs/mobile/requirements.md, the mobile
+      counterpart of docs/agents/instructions/security-invariants.md.
+      SECURITY-REVIEWER HARD GATE -- every clause is security content.
+
+      BUILDS:
+      1. Token storage: the lib/auth/ token store REQ-421 created is the
+      only code that touches flutter_secure_storage for tokens, with
+      AndroidOptions(encryptedSharedPreferences: true) and an iOS keychain
+      accessibility of first_unlock_this_device (no iCloud sync). No
+      shared_preferences, file or in-memory-global persistence of a token.
+      2. Logging: any Dio logging interceptor is either absent or replaced
+      by a redacting one that never emits the Authorization header value,
+      a request/response body of the token endpoint, or a refresh token.
+      3. Android: AndroidManifest android:usesCleartextTraffic="false" and
+      android:networkSecurityConfig pointing to a main-source-set config
+      whose base-config has cleartextTrafficPermitted="false".
+      DEV-ONLY exception, flagged for SECURITY-REVIEWER: a
+      src/debug/res/xml/ override may permit cleartext for 10.0.2.2 and
+      localhost ONLY (the emulator's host alias, so a developer can reach
+      a local http backend); the release build must not contain it.
+      android:allowBackup="false" (or a data-extraction rule excluding the
+      secure-storage prefs), because restored EncryptedSharedPreferences
+      without their keystore key are unreadable and a backup is a token
+      exfiltration path.
+      3b. App-level transport check. Android's network-security-config
+      governs the platform's Java/Kotlin HTTP stacks; Dio runs on dart:io
+      sockets, which do not necessarily consult it. Do not rely on the
+      manifest alone: lib/api/api_client.dart refuses (as an ApiError,
+      before any socket is opened) any request URL, and bootstrap refuses
+      any tenant-config realm_url, whose scheme is not https in a release
+      build (kReleaseMode); in debug builds http is allowed for localhost
+      and 10.0.2.2 only, mirroring the debug network-security-config.
+      Record in the completion report whether the pinned Flutter version's
+      dart:io honours the Android cleartext policy, with the evidence.
+      4. iOS: Info.plist carries no NSAppTransportSecurity exception
+      (NSAllowsArbitraryLoads absent or false). Verified statically;
+      runtime ATS behaviour DEFERRED (no iOS build on this host).
+      5. Audience scoping: on tenant switch or logout, the previous
+      tenant's tokens are deleted, and a token is only attached to
+      requests for the tenant whose realm issued it (compare the token's
+      iss with the active tenant's realm_url).
+      6. Secret masking: a reusable masked-text widget in
+      lib/design_system/ that masks by default and supports a one-time
+      reveal (MOB-5's "masked by default, one-time reveal on creation").
+      7. [S] items: add a "Security hardening before corporate-tier
+      deployment" section to docs/mobile/architecture.md stating that
+      certificate pinning and root/jailbreak detection are REQUIRED
+      before any corporate-tier deployment and are not implemented in v1.
+
+      All six static checks below live as Dart tests in
+      apps/mobile/test/guards/ so CI (REQ-420) enforces them.
+    acceptance_criteria:
+      - "a guard test asserts the only file under apps/mobile/lib that imports flutter_secure_storage is the lib/auth/ token store, and no file under lib/auth/ or lib/api/ imports shared_preferences or dart:io File APIs -- with a self-test that fails on a violating fixture"
+      - "a test issues a request through the API client with a fake access token 'SECRET-TOKEN-SENTINEL' and a fake token-endpoint response containing a refresh token 'SECRET-REFRESH-SENTINEL', captures every log sink the app uses (debugPrint override, dart:developer log, any logger package), and asserts neither sentinel appears"
+      - "a guard test parses android/app/src/main/AndroidManifest.xml and the main network-security-config and asserts usesCleartextTraffic='false', base-config cleartextTrafficPermitted='false', and allowBackup='false' (or a data-extraction rule excluding secure-storage); and asserts any domain-config permitting cleartext exists only under src/debug/ and names only 10.0.2.2 and localhost"
+      - "`cd apps/mobile && flutter build apk --release` (debug-signed is acceptable) succeeds and `aapt dump xmltree` (or apkanalyzer) of the release APK's manifest shows usesCleartextTraffic false and the release network-security-config contains no cleartext-permitting domain-config, quoted"
+      - "a test asserts that with release-mode transport policy the API client rejects an http:// request URL (and bootstrap rejects an http:// realm_url) without opening a connection (the fake HTTP layer records zero calls), that an https:// URL is allowed, and that the debug policy allows http only for localhost and 10.0.2.2"
+      - "a guard test parses ios/Runner/Info.plist and asserts NSAllowsArbitraryLoads is absent or false; the report states iOS runtime verification is deferred because the host is Windows"
+      - "a test asserts switching from tenant A to tenant B deletes A's tokens from the secure store and that a request for tenant B is never sent with a token whose iss is A's realm"
+      - "a widget test asserts the masked-text widget hides its value by default, reveals it once, and cannot be revealed a second time"
+      - "docs/mobile/architecture.md contains the corporate-tier hardening section naming certificate pinning and root/jailbreak detection as required-before-corporate-tier and not implemented in v1"
+      - "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    depends_on: [REQ-421]
+
+  - id: REQ-423
+    title: "MOB-3 (part 1): local definition cache keyed by (type, id, version), background delta sync against GET /api/v1/definitions/delta, and airplane-mode launch from cache"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 860  # letflow-queue task id, GH#1877. Registered 2026-09-27T03:00:01Z by ORCH (WF-01 Step 3).
+    description: >
+      Build-order M4, first half of MOB-3 (docs/mobile/requirements.md).
+      Split from REQ-424 by the sizing rule: the cache store and sync loop
+      are one deliverable, pinned-version resolution another.
+
+      SERVER CONTRACT (REQ-125, done; lib/letflow/routers/definitions.ex
+      moduledoc and lib/letflow/design/req125-definitions-delta-sync.md):
+      GET /api/v1/definitions/delta?since=<integer cursor>; absent since =
+      full history; response {"items": [...], "next_since": integer};
+      each item rendered through definition_map/1 including status -- a
+      deprecated or archived definition is represented by its status, not
+      a tombstone; a non-numeric or negative since is 400. The cursor is a
+      monotonic server cursor, not a timestamp -- the device must persist
+      and send next_since verbatim and never derive it from its own clock.
+
+      BUILDS:
+      1. A cache repository interface in lib/definitions/ with a real
+      store implementation. The store is "Isar, or equivalent" per
+      decision 0012 -- MOBILE-DEV chooses, and records the choice and
+      reason in apps/mobile/README.md (Isar's maintenance status is a
+      legitimate reason to choose another; the choice must work under
+      `flutter test` on the host, or ship an in-memory implementation of
+      the same interface used by the tests plus one storage-level test of
+      the real store).
+      2. Entries keyed by (type, id, version); the cursor stored per
+      tenant; the whole cache partitioned per tenant so switching tenant
+      never renders another tenant's definitions (tenant isolation on
+      device, mirroring INV-1).
+      3. Sync: on launch render from cache immediately (no definition
+      spinner when the cache is warm), then run delta sync in the
+      background through lib/api/api_client.dart; apply items; a
+      definition whose status is archived is removed from (or marked
+      unavailable in) the cache; a 400 on since resets the cursor and
+      performs a full resync rather than looping.
+      3b. What "render" means at this point: no definition renderer exists
+      yet (REQ-426..428 build them), so this requirement adds a minimal
+      tenant home screen listing the active tenant's cached definitions
+      (type, name/id, version) read from the cache repository -- the entry
+      point the later renderers attach to. The airplane-mode criterion is
+      asserted against this screen.
+      4. No write queue of any kind (MOB-8).
+    acceptance_criteria:
+      - "a test with a pre-populated cache and an HTTP layer that throws SocketException on every call launches the app and asserts the tenant home screen lists every cached definition (by type, id and version) with no loading indicator shown at any frame (airplane-mode launch)"
+      - "a test feeds two sequential fake delta responses and asserts the second request's since equals the first response's next_since exactly, and that the persisted cursor is never computed from DateTime.now()"
+      - "a test asserts a delta item with status 'archived' makes that definition unavailable from the cache on the next read"
+      - "a test asserts a 400 response to a delta request resets the cursor and issues exactly one full-history request (since absent), not a retry loop"
+      - "a test asserts that after switching from tenant A to tenant B, no definition cached for A is returned for B"
+      - "apps/mobile/README.md names the chosen local store and the reason, quoted"
+      - "`git grep -n -i 'queue' -- apps/mobile/lib` returns no hit that is an offline write/outbox queue, quoted with the command"
+      - "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted"
+    depends_on: [REQ-422]
+
+  - id: REQ-424
+    title: "MOB-3 (part 2): pinned form version resolution -- a task's {form_id, form_version} renders exactly that version from cache or server, never the active version"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 861  # letflow-queue task id, GH#1878. Registered 2026-09-27T03:00:02Z by ORCH (WF-01 Step 3).
+    description: >
+      Second half of MOB-3. The failure this exists to prevent is silent
+      substitution of the active version for a pinned one.
+
+      SERVER CONTRACT (REQ-126 and REQ-385, both done;
+      lib/letflow/design/req126-form-version-pinning.md): task list and
+      detail payloads from GET /api/v1/tasks, /tasks/inbox and
+      /tasks/:id carry form_id (== task.node_id) and form_version (==
+      instance_definition_snapshots.definition_ver, fixed at instance
+      creation), and the task detail payload carries the frozen
+      form_schema written onto the tasks row at activation (REQ-273;
+      exposed on the detail response by REQ-286).
+      form_version can be null only in req126 design §5's documented
+      missing-snapshot case. REQ-385 concluded there is no server-side
+      "version returned differs from version requested" path.
+
+      BUILDS: a resolver in lib/definitions/ that, given a task's
+      (form_id, form_version): returns the cached schema stored under
+      exactly that key; on a miss fetches GET /api/v1/tasks/:id and
+      caches the returned form_schema under the task's (form_id,
+      form_version); if offline on a miss, or if form_version is null,
+      returns an explicit "pinned version unavailable" result that the
+      renderer shows as MOB-4's stale-version state. It must never look
+      up "the latest version of form_id" -- there is no code path that
+      does so.
+    acceptance_criteria:
+      - "a test caches form_id F at versions 1 and 2, gives a task pinned to version 1, and asserts version 1's schema is returned"
+      - "a test with version 2 cached and a task pinned to version 1 asserts the resolver fetches GET /api/v1/tasks/:id (recorded by the fake HTTP layer) and returns the fetched schema, never version 2's"
+      - "a test with version 2 cached, a task pinned to version 1 and the network unavailable asserts the result is the pinned-version-unavailable state, and that version 2's schema is not returned"
+      - "a test asserts a task with form_version null yields the pinned-version-unavailable state"
+      - "`git grep -n -i -E 'latest|active' -- apps/mobile/lib/definitions` output is quoted, and every hit is shown not to be a version-selection path for pinned forms"
+      - "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted"
+    depends_on: [REQ-423]
+
+  - id: REQ-425
+    title: "MOB-6: single API client -- bearer attach, exactly-one silent refresh on 401 then retry, exponential backoff on 5xx, typed ApiError (incl. 429 retry-after and module-404), static single-client guard"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 862  # letflow-queue task id, GH#1879. Registered 2026-09-27T03:00:03Z by ORCH (WF-01 Step 3).
+    description: >
+      MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2).
+      Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the
+      renderers' six states classify this requirement's ApiError.
+      SECURITY-REVIEWER gate (refresh-token handling, token clearing).
+
+      Hardens lib/api/api_client.dart (created by REQ-421) into the
+      single client:
+      1. Attach the active tenant's bearer token (REQ-422's iss check).
+      2. On 401: exactly one silent refresh via flutter_appauth's token
+      refresh, then exactly one retry of the original request; concurrent
+      401s share one in-flight refresh. On refresh failure: clear the
+      tenant's tokens (REQ-422 store) and route to login.
+      3. Exponential backoff on 5xx for idempotent methods only (GET),
+      bounded attempts; POST is not auto-retried (no duplicate task
+      completion).
+      4. Normalise every failure to a sealed ApiError type before it
+      leaves lib/api/: at minimum network-unavailable, unauthorized,
+      forbidden (403), not-found, module-not-available (a 404 on any
+      /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404,
+      not 403, and must not render as a generic not-found),
+      backpressure (429, carrying the Retry-After seconds -- the backend
+      emits 429 from lib/letflow/plugs/admission.ex and
+      lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with
+      RFC 9457 field errors), conflict (409), server (5xx after retries).
+      5. A static guard (apps/mobile/test/guards/), the counterpart of
+      the SPA's raw-fetch-outside-client guard in web/tests/guards/: no
+      file outside lib/api/ imports package:dio or package:http or uses
+      dart:io HttpClient; with a self-test.
+    acceptance_criteria:
+      - "a test where the fake server returns 401 once then 200 asserts exactly one refresh call and exactly one retry, and that two concurrent requests both receiving 401 trigger one refresh total"
+      - "a test where refresh fails asserts the tenant's tokens are deleted from the secure store and the router is at the login route"
+      - "a test asserts a GET receiving 503 twice then 200 succeeds with increasing delays between attempts (fake clock), a GET receiving 503 on every attempt stops after the maximum attempt count declared as a named constant in lib/api/ and surfaces ApiError server (the test asserts the exact number of requests sent), and a POST receiving 503 is not retried"
+      - "a test per ApiError variant asserts the mapping from status code/exception, including 404 on /api/v1/modules/exam/x -> module-not-available, 404 elsewhere -> not-found, and 429 with 'Retry-After: 7' -> backpressure(7 seconds)"
+      - "a test asserts no DioException or SocketException escapes lib/api/ -- the public client API returns or throws only ApiError"
+      - "the single-client guard fails its self-test fixture (a file under lib/features/ importing package:dio) and passes on the real tree"
+      - "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    depends_on: [REQ-422]
+
+  - id: REQ-426
+    title: "MOB-4 (part 1): renderer state framework for all six mandatory states (incl. 429 retry-after countdown) and the list renderer with filtering and keyset pagination"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 863  # letflow-queue task id, GH#1880. Registered 2026-09-27T03:00:04Z by ORCH (WF-01 Step 3).
+    description: >
+      First of three MOB-4 requirements (docs/mobile/requirements.md;
+      split by the sizing rule). The six states are the mechanism by
+      which a client that has drifted from the server's definition format
+      fails loudly (architecture.md §5), so they are built first and every
+      renderer uses them.
+
+      BUILDS:
+      1. A shared state wrapper in lib/renderers/ that every renderer
+      uses, with exactly six states: loading, fetch-failure,
+      permission-denied, stale-version, validation-error,
+      429-backpressure -- each mapped from REQ-425's ApiError or from the
+      definition layer (unknown definition type/field type/unevaluable
+      expression, and REQ-424's pinned-version-unavailable, are
+      stale-version). 429 shows a retry-after countdown from the
+      ApiError's seconds and retries when it reaches zero.
+      2. The list renderer over entity records: reads the entity
+      definition (GET /api/v1/entities/definitions/active/:name) and
+      queries records via POST /api/v1/entities/query with filters and
+      keyset pagination on next_cursor (lib/letflow/routers/entities.ex).
+      Read web/src/components/entities/EntityFilterBuilder.tsx and the
+      SPA's entity list page for the filter shape the server accepts --
+      the contract, not the React code, is what is mirrored.
+    acceptance_criteria:
+      - "six widget tests, one per state, each force that state (loading via an uncompleted future; fetch-failure via network ApiError; permission-denied via 403; stale-version via an unknown definition type; validation-error via 422 field errors; backpressure via 429 with Retry-After 3) and assert the state's dedicated widget by key"
+      - "the backpressure test advances a fake clock and asserts the countdown shows 3, 2, 1 and then exactly one retry request is issued -- and the app does not throw"
+      - "a test asserts the list renderer sends the filter in the POST /api/v1/entities/query body and, on scrolling to the end, requests the next page with the previous response's next_cursor, stopping when next_cursor is null"
+      - "a guard or test asserts every renderer under lib/renderers/{form,list,process,task}/ that exists at this point is wrapped by the shared state wrapper (e.g. by type check in a widget test for each)"
+      - "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted"
+    depends_on: [REQ-424, REQ-425]
+
+  - id: REQ-427
+    title: "MOB-4 (part 2): form renderer for every platform field type, with visible_when / computed / cross-field validation evaluated on-device by REQ-294's Dart Expr evaluator (0020 D1a)"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 864  # letflow-queue task id, GH#1881. Registered 2026-09-27T03:00:05Z by ORCH (WF-01 Step 3).
+    description: >
+      Second MOB-4 requirement. MOB-4 lists the field types text, number,
+      boolean, date, datetime, select, multi-select, reference, file,
+      computed, hidden. The SPA's actual type names and parsing are the
+      authority for the wire format: read web/src/utils/formSchemaParser.ts,
+      web/src/components/forms/fieldRegistry.ts, FieldFactory.tsx,
+      DynamicFormRenderer.tsx and useFormExpressions.ts, and
+      web/src/components/forms/ExpressionUnavailableBanner.tsx for how the
+      SPA surfaces an unevaluable expression. If the SPA's type set
+      differs from MOB-4's list, the SPA's set wins and the difference is
+      reported (docs/mobile/requirements.md is then corrected), never
+      papered over.
+
+      Under decision 0020 D1a: visible_when, computed and cross-field
+      validation evaluate on-device through REQ-294's evaluator, for
+      interactivity only -- no authority; the server re-evaluates on
+      submit (REQ-292). An expression the evaluator cannot handle is the
+      stale-version state (REQ-426), never a defaulted, hidden or blank
+      field. The form is fillable offline from a cached schema; it is NOT
+      submittable offline (MOB-8) -- submit with no connectivity shows
+      network-unavailable and discards nothing the user typed, but queues
+      nothing either.
+      A field type the renderer does not know is stale-version, not a
+      skipped field. The file field uploads through the API client only.
+    acceptance_criteria:
+      - "one widget test per field type in the SPA's field registry (at minimum the eleven MOB-4 names) renders a schema containing that field and asserts the corresponding input widget by key, and a test asserts an unknown field type yields the stale-version state"
+      - "a test renders a cached schema with a visible_when and a computed field, with the network unavailable, changes an input, and asserts the dependent field's visibility and the computed value update (offline form population, D1a)"
+      - "a test asserts an expression REQ-294's evaluator rejects puts the form in stale-version and that the affected field is not rendered visible, not silently hidden, and not rendered blank"
+      - "a test asserts a submit with the network unavailable shows network-unavailable, keeps the typed values in the form, and persists nothing to any store (no write queue)"
+      - "a test asserts that when on-device validation passes, submit still sends the request to the server with the user-entered values in the body, and that a 422 returned by the server is rendered as the validation-error state even though the on-device validation passed (server authority, REQ-292; POST /api/v1/tasks/:id/complete returns no field values, so the client never re-derives authority from its own computed values)"
+      - "`git diff origin/main --stat -- lib/ web/` is empty (no backend or SPA change), quoted"
+      - "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted"
+    depends_on: [REQ-294, REQ-426]
+
+  - id: REQ-428
+    title: "MOB-4 (part 3): task renderer (inbox, claim, complete against the task API, pinned form) and process-instance renderer"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 865  # letflow-queue task id, GH#1882. Registered 2026-09-27T03:00:06Z by ORCH (WF-01 Step 3).
+    description: >
+      Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex):
+      GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST
+      /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task
+      form is resolved through REQ-424's pinned resolver and rendered by
+      REQ-427's form renderer; never the active version.
+      Process-instance renderer: read-only view of GET
+      /api/v1/instances/:id and /api/v1/instances/:id/timeline
+      (lib/letflow/routers/instances.ex) -- status, current step, timeline.
+      No cancel/rebind/advance actions (not in MOB-4).
+      All screens use REQ-426's six-state wrapper; claim/complete errors
+      (409 already claimed, 403, 422) map to its states.
+    acceptance_criteria:
+      - "a test lists the inbox from a fake GET /api/v1/tasks/inbox, claims a task (asserting POST /api/v1/tasks/:id/claim), opens it, and completes it (asserting POST /api/v1/tasks/:id/complete with the form values in the body)"
+      - "a test asserts opening a task pinned to form_version 1 while version 2 is cached renders version 1's fields (through REQ-424's resolver), not version 2's"
+      - "a test asserts a 409 on claim renders a state telling the user the task is no longer available and refreshes the inbox, not a crash"
+      - "a test asserts the process-instance screen renders status and timeline entries from fake /instances/:id and /instances/:id/timeline responses and exposes no cancel, rebind or advance action"
+      - "live: against the local docker compose stack on emulator-5554, an already-authenticated session (tokens from a UAT-RUNNER login, or the step recorded DEFERRED to UAT-RUNNER if none is available) lists the seeded inbox -- evidence referenced in the report"
+      - "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted"
+    depends_on: [REQ-424, REQ-427]
+
+  - id: REQ-429
+    title: "MOB-7: internationalisation matching the platform locale policy (REQ-285) -- supported set, fallback to 'en', {locale: value} tenant content, locale-aware date/number formatting, no hardcoded strings"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 866  # letflow-queue task id, GH#1883. Registered 2026-09-27T03:00:07Z by ORCH (WF-01 Step 3).
+    description: >
+      MOB-7 in docs/mobile/requirements.md (build-order M7, after MOB-4).
+      Its "Letflow note" says there is no web locale policy to match. That
+      is stale: REQ-285 adopted one (lib/letflow/design/req285-i18n-layer-adoption.md;
+      decision docs/migration/decisions/0021-web-i18n-library.md;
+      web/src/i18n/sessionLocale.ts defines PLATFORM_SUPPORTED_LOCALES
+      ['en','en-US','en-GB','es','es-ES','fr','fr-FR','de','de-DE','pt-BR']
+      and FALLBACK_LOCALE 'en', and resolveSessionLocale's chain;
+      docs/frontend/frontend-requirements.md "Locale policy"). The mobile
+      tier MATCHES it -- same set, same fallback, same resolution order,
+      with tenant-config's default_locale/locales playing the role the
+      SPA's tenant default plays and the device locale list playing the
+      browser's. Re-read those files at start; if the policy changed
+      since 2026-09-27, match the current one and say so.
+
+      THE SPA HAS TWO LOCALE TIERS, NOT ONE (REQ-VALIDATOR correction,
+      verified 2026-09-27) -- match each separately:
+      (a) FORMATTING locale: PLATFORM_SUPPORTED_LOCALES +
+      resolveSessionLocale (web/src/i18n/sessionLocale.ts). Its own
+      comment says this set is "Decoupled from UI string translation".
+      (b) UI-STRING locale: ENTITIES_UI_LOCALES ['en','ru','kk'] with
+      ENTITIES_UI_FALLBACK_LOCALE 'en', resolved by resolveUiLocale
+      (web/src/i18n/entitiesMessages.ts: first candidate whose base
+      language tag is in the set, else 'en'). The mobile ARB catalogue
+      covers this set, not PLATFORM_SUPPORTED_LOCALES.
+      (c) TENANT CONTENT {locale: value}: the SPA's display resolver is
+      resolveLocalizedText in web/src/modules/exam/ExamSessionPage.tsx
+      (mirrored in ExamListPage.tsx's resolveExamFieldText): UI locale ->
+      'en' -> first non-empty value -> ''; a plain string passes through.
+      entitiesMessages.ts has no {locale: value} resolver.
+
+      BUILDS: intl/ARB-based localisation for every user-visible string in
+      apps/mobile/lib (no hardcoded literals in widgets) over tier (b)'s
+      set, a pure resolveSessionLocale equivalent (tier a) and a pure
+      resolveUiLocale equivalent (tier b) with the same inputs and outputs
+      as the SPA's, tier (c)'s {locale: value} resolution, and date/number
+      formatting through intl with the tier-(a) session locale. Rewrite
+      docs/mobile/requirements.md's MOB-7 Letflow note to point at the
+      REQ-285 policy and this implementation, keeping the 2026-08-22
+      finding as dated history.
+    acceptance_criteria:
+      - "a Dart test asserts the mobile formatting-locale list equals the SPA's PLATFORM_SUPPORTED_LOCALES by reading web/src/i18n/sessionLocale.ts, and the mobile UI-string locale list equals ENTITIES_UI_LOCALES by reading web/src/i18n/entitiesMessages.ts (parse the array literals) rather than hand-copied lists, and asserts both fallbacks are 'en'; the ARB files present under apps/mobile/ are exactly one per ENTITIES_UI_LOCALES entry"
+      - "a table-driven test asserts the Dart formatting-locale resolver returns the same locale as the SPA's resolveSessionLocale for at least six input cases, including an unsupported tenant default, an unsupported device list, and 'pt-BR' exact match -- the expected values taken from the SPA's own tests for that function where they exist; and a second table asserts the Dart UI-locale resolver matches resolveUiLocale's base-tag rule (e.g. ['ru-RU'] -> 'ru', ['de-DE'] -> 'en')"
+      - "a test asserts a tenant {locale: value} map resolves UI locale -> 'en' -> first non-empty value -> '' as resolveLocalizedText in web/src/modules/exam/ExamSessionPage.tsx does, covering each step of that chain and a plain-string value passing through unchanged"
+      - "a test renders a date and a number under 'de-DE' and 'en-US' and asserts the locale-specific formatting differs as intl defines"
+      - "a guard test fails on a string literal passed directly to a Text widget under apps/mobile/lib (outside an allowlist of non-user-visible cases such as keys), with a self-test, and passes on the real tree"
+      - "docs/mobile/requirements.md's MOB-7 note references REQ-285, web/src/i18n/sessionLocale.ts and web/src/i18n/entitiesMessages.ts and states the two-tier split, and the 2026-08-22 text is still present"
+      - "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted"
+    depends_on: [REQ-428]
+
+  - id: REQ-430
+    title: "MOB-8: enforce the v1 scope boundary (no offline write queue, no push invalidation, no on-device form builder) with a static guard, and close out S9 phases M-1..M-3"
+    owner: MOBILE-DEV
+    status: pending
+    stage: S9
+    impl_order: 867  # letflow-queue task id, GH#1884. Registered 2026-09-27T03:00:09Z by ORCH (WF-01 Step 3).
+    description: >
+      MOB-8 in docs/mobile/requirements.md: v1 is online-first with a
+      read-through definition cache; offline writes, push-based cache
+      invalidation and an on-device form builder are out of v1 and
+      recorded as deferred (architecture.md §4). Its own text calls it "a
+      gate": an offline cache grows a write queue one reasonable commit at
+      a time.
+
+      BUILDS:
+      1. A static guard in apps/mobile/test/guards/ that fails if
+      pubspec.yaml gains a push/messaging dependency (firebase_messaging
+      or equivalent), a background-task/workmanager package, or if any
+      file under apps/mobile/lib persists an outgoing request (a store
+      write whose payload is a request body/method/url), with self-tests.
+      2. Reconcile docs/mobile/architecture.md §4's scope table with the
+      shipped feature set, listing each MOB requirement's delivering REQ
+      id, and marking the three exclusions as deferred.
+      3. Record in docs/migration/stage-9-mobile.md which build-order
+      phase gates (build-order.md "Phasing": M-1 two tenants + secure
+      tokens; M-2 airplane-mode + pinned versions never substitute; M-3
+      all six states incl. forced 429) are demonstrated and by which
+      tests, and which parts are DEFERRED (iOS build and runtime checks --
+      Windows host; interactive login -- UAT-RUNNER) with reasons.
+      Stage REVIEWER sign-off and status flips stay with REVIEWER and
+      DOC-UPDATER.
+    acceptance_criteria:
+      - "the scope guard fails each of its self-test fixtures (a pubspec with firebase_messaging; a pubspec with workmanager; a Dart file writing a request method/url/body map to a store) and passes on the real tree, quoted"
+      - "`git grep -n -i -E 'outbox|pending_writes|write_queue|offline_queue' -- apps/mobile` returns no hits, quoted"
+      - "docs/mobile/architecture.md §4 names, for each of MOB-1..MOB-8, the REQ id(s) that delivered it, and lists offline writes, push invalidation and the on-device form builder as deferred"
+      - "docs/migration/stage-9-mobile.md lists each of the three phase gates with the test file(s) that demonstrate it and every deferred item with its reason"
+      - "`cd apps/mobile && flutter analyze && flutter test && flutter build apk --debug` all pass, real output quoted"
+    depends_on: [REQ-428, REQ-429]

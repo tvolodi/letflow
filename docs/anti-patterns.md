@@ -3740,3 +3740,43 @@ occurrence of this class automatically (a `mix letflow.check_issue_refs` rule
 cross-referencing every file's `queue_ref` for duplicates would catch it
 mechanically) -- worth a future small requirement, not filed as its own issue
 by this pass since it did not block ISS-0870's own resolution.
+
+## Manually shell-backgrounding `scripts/test_parallel.sh` with `nohup ... &` leaves a stray beam process tree that survives a "process not running" check, and a second run then starves both attempts on `too_many_connections` (2026-09-27, TEST-RUNNER, WF03-ISS0829-20260927)
+
+A first attempt to run the full suite as a background OS process used a plain
+shell job (`TEST_PARALLEL_N=4 nohup bash scripts/test_parallel.sh > log 2>&1 &`)
+inside a Bash tool call, capturing `$!` and returning. A follow-up Bash tool
+call (fresh shell, no persisted job-control state) ran `ps aux | grep
+test_parallel` and saw nothing, which was read as "the background job was
+killed when the tool call ended." That inference was wrong: on this host the
+underlying Erlang/beam process tree (the `bash scripts/test_parallel.sh` shell
+and its 4 `erl.exe` children) kept running as real OS processes, invisible to
+that particular `ps aux` invocation/quoting. A second, properly-backgrounded
+attempt (via the Bash tool's own `run_in_background` parameter) was then
+launched against the same Postgres instance. Both 4-partition runs (8
+partitions total) connected to the same `letflow_dev` database simultaneously;
+combined pool demand exceeded `max_connections=100`, and 2 of the second run's
+4 partitions aborted immediately with `FATAL 53300: too_many_connections`
+during tenant-template setup (0 tests, exit 1) before producing any `Result:`
+line. The failure looked like a real regression at first glance but was purely
+resource contention from an orphaned duplicate run.
+
+*Preventive:* never manually shell-background a long-running mix/test_parallel
+invocation with `&`/`nohup` from an agent's Bash tool — use the tool's own
+`run_in_background` parameter, which the harness actually tracks and can
+report on. It gives you a task id and output file you can poll deterministically,
+instead of a PID whose liveness you're left to infer yourself.
+
+*Detective:* if you ever manually backgrounded a job and are not 100% sure it
+was torn down, don't trust an empty `ps aux | grep <script name>` from a new
+shell as proof — grep for the actual runtime process instead
+(`ps -ef | grep -i erl.exe` for an Elixir/Erlang project, or the equivalent
+interpreter/runtime process for other stacks), since the wrapper script name
+may not appear in every process listing the same way. A partition that aborts
+at `exit 1` with `0 tests, 0 properties, 0 failures` and no `Result:` line in
+its log (vs. a partition that ran real tests and failed some) is itself a
+strong signal of a setup-time crash — check for `too_many_connections` /
+`DBConnection.ConnectionError` in that partition's log before assuming a
+genuine test regression. If found, `ps -ef | grep erl`, kill any stray process
+tree by PID, confirm Postgres is back to its idle baseline connection count
+via `pg_stat_activity`, and rerun clean before trusting any combined total.

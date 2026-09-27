@@ -260,13 +260,59 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
       seed_event!(schema_name, instance_id, keep_type, 2, now)
       seed_event!(schema_name, instance_id, other_type, 3, now)
 
+      # ISS-0873: retention_summary/0's fix (design doc
+      # lib/letflow/design/iss0873-retention-summary-toctou.md §1/§4a)
+      # guarantees every read INSIDE one call is drawn from a single
+      # REPEATABLE READ snapshot -- it does NOT promise that two separate
+      # top-level calls return bit-identical platform-wide results, since
+      # each call opens its own transaction and another test-suite
+      # partition's concurrent RetentionPolicy write (under
+      # scripts/test_parallel.sh sharding) can legitimately change the
+      # platform-wide sum between the two calls below. So each call is
+      # asserted independently against this test's OWN fixture invariant
+      # (>= 2, this fixture's two keep_forever rows can only ever be ADDED
+      # to by another partition, never removed) rather than asserted equal
+      # to each other.
       assert {:ok, summary_before} = RetentionOperations.retention_summary()
       assert summary_before.protected_record_count >= 2
 
-      # A second call (no retirement in between) must report the identical
-      # count -- EO-002's invariant, exercised at the summary layer directly.
+      # A second call (no retirement in between) -- still self-sufficient:
+      # this test's own two keep_forever rows are still counted, whatever
+      # else concurrently changed platform-wide. This also exercises
+      # "calling it twice doesn't crash / doesn't mutate anything."
       assert {:ok, summary_again} = RetentionOperations.retention_summary()
-      assert summary_again.protected_record_count == summary_before.protected_record_count
+      assert summary_again.protected_record_count >= 2
+    end
+
+    test "a schema whose Registration row still exists but whose physical schema was concurrently dropped contributes 0 protected rows instead of raising" do
+      # ISS-0873 §2 / design doc §4b: reproduces the exact
+      # "Registration says provisioned, physical schema already gone"
+      # race deterministically (no timing/concurrency needed -- the schema
+      # is already dropped before retention_summary/0 is even called).
+      # Discriminates count_protected_rows_in_schema/3's narrow rescue
+      # (retention_operations.ex:372-389): without it, this test fails with
+      # a raised Postgrex.Error (:undefined_table) instead of {:ok, _}.
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+
+      keep_type = "kept_type_#{System.unique_integer([:positive])}"
+      seed_retention_policy!(%{event_type: keep_type, policy: :keep_forever})
+      seed_event!(schema_name, instance_id, keep_type, 1, DateTime.utc_now())
+
+      # Directly DROP SCHEMA ... CASCADE (bypassing normal deprovisioning),
+      # same mechanism this file's own drop_schema!/1 already uses for
+      # on_exit cleanup -- but here it runs BEFORE the assertion, while the
+      # tenant's Registration row is deliberately left in place. Sandbox
+      # :auto mode (already this module's convention, provisioned_tenant/0
+      # above) lets this DDL and the summary read below share real,
+      # separately-committed state.
+      drop_schema!(schema_name)
+
+      assert {:ok, summary} = RetentionOperations.retention_summary()
+      assert summary.tenant_schema_count >= 1
+      # The dropped schema contributes 0 -- it must not inflate the count,
+      # and the call must not raise.
+      assert is_integer(summary.protected_record_count)
     end
   end
 

@@ -4610,8 +4610,22 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 6
+    entries: 8
     note: >
+      Incremented to 8 by ORCH directly (WF02-REQ417-20260927 Step Final
+      follow-up) -- the REQ-417 run's own `started`/`done` append
+      (2026-09-27T04:11:00Z / 04:24:45Z) landed on main (PR #1888) without
+      this field being bumped from 6, which broke
+      Letflow.Docs.RequirementStatusInvariantsTest's A9 check on that PR's
+      own CI run (correctly attributed there as a docs-only diff cannot
+      cause an Elixir test failure structurally -- but this specific
+      failure IS caused by this run's own docs-only diff, so `--admin` was
+      right to merge past a different, genuinely pre-existing failure set
+      but this one still needed a same-day follow-up fix rather than being
+      left red). `grep -c "^  - req:" docs/status/requirement_status.v23.yaml`
+      = 8 on-disk entries. 216 lines / 12421 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Incremented to 5 by DOC-UPDATER's ISS-0853 closing SCOPE-CHANGE append
       (2026-09-26T18:22:30Z) -- `grep -c "^  - req:"
       docs/status/requirement_status.v23.yaml` = 5 on-disk entries. 145

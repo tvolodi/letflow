@@ -7,9 +7,9 @@
   "to_agent": "REVIEWER",
   "file": "handoffs/WF02-REQ418-20260927/step-02d-reviewer.json",
   "created_at": "2026-09-27T07:18:18Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-27T12:10:00Z",
+  "completed_at": "2026-09-27T12:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -42,8 +42,8 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
+    "status": "PASS",
+    "summary": "REQ-418 (letflow-mobile OIDC client + sixth client_id key) passes the idiom/scope-creep/decision-record gate. (1) `git diff --name-only main...HEAD` touches only handoffs/, lib/letflow/design/, lib/letflow/routers/mobile_tenant_config.ex, priv/keycloak/realms/bpm-default.json, and two test files -- nothing under apps/mobile/, web/, or any supervision-tree file (Letflow.Router itself is untouched; no forward/2 line added by this diff since REQ-124 already added the mobile-tenant-config forward). (2) Re-confirmed independently: the bpm-default.json diff is a pure addition (git diff shows zero `-` content lines besides the `--- a/...` header) -- clients[0] (`letflow-web`) is untouched; the new `letflow-mobile` client is `clients[1]`, and test/letflow/api/keycloak_realm_mobile_client_test.exs asserts letflow-web's full object against an inline literal (exact `==`), giving this a second, independent regression guard beyond my own diff read. (3) client_id/0 in mobile_tenant_config.ex (`System.get_env(\"MOBILE_OIDC_CLIENT_ID\") || @default_client_id`) is structurally identical to tenant_config.ex's client_id/0 (`System.get_env(\"OIDC_CLIENT_ID\") || @default_client_id`) -- same env-then-constant shape, same point-of-use read discipline (INV-4 style), deliberately independent env var/default per module's own established pattern (mirrors @default_branding's independence). Idiomatic, no crutch. (4) moduledoc and lib/letflow/design/req124-mobile-tenant-config.md's REQ-418 addendum consistently describe the six-key contract: moduledoc states 'exactly six keys' with client_id last and the three-point disclosure reasoning inline; the addendum states client_id is a sixth key, supersedes the design's own five-key tables on key-count only (addendum-not-rewrite convention), and cross-references req418-mobile-oidc-client.md for full rationale -- no contradiction found. (5) test/letflow/routers/mobile_tenant_config_test.exs's pre-existing REQ-282 AC4 assertion (describe block 'REQ-282 AC4: moduledoc no longer claims branding/locales/default_locale are global', now at lines 617-636) is untouched by this diff (git diff on this file shows only additions -- the REQ-418 describe blocks and an @expected_keys update -- with zero touch to the AC4 block's lines) and passes: the moduledoc's environment_kind byte-identical sentence survives with client_id appended after it, not inserted into it, exactly per the design's substring-preservation requirement. (6) Ran `mix letflow.check` directly (twice, output attached below) -- both full runs report exactly one failure, 242/243 and 240/241 respectively (the difference is Postgres connection contention from running two full suites concurrently on this host, not a code defect); the failing test in both is Letflow.Docs.RequirementStatusInvariantsTest's A4b check against docs/status/requirement_status.v22.yaml (unparseable ISO-8601 timestamps at specific entry_lines in that YAML volume), independently re-confirmed by running `mix test test/docs/requirement_status_invariants_test.exs` alone (19/20 passed, same A4b failure, same file/lines). This is docs/status content unrelated to mobile_tenant_config.ex, tenant_config.ex, or the Keycloak realm file, and matches the pre-existing/flagged failure this task named (test/reports/report-20260926-WF03-ISS0848-20260926.yaml already tracks it as ISS-0848). No idiom violation, no supervision-integrity issue, no scope creep, no decision-record contradiction found. PASS.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
@@ -54,7 +54,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH: dispatch to TEST-DESIGNER (Step 02e or equivalent) -- REVIEWER gate PASSED. Note for ORCH: docs/status/requirement_status.v22.yaml's ISO-8601 timestamp defect (ISS-0848) remains open and pre-existing; not blocking for REQ-418, already queued."
   },
   "rework_count": 0,
   "max_rework": 3

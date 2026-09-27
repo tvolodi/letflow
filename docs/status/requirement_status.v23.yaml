@@ -278,3 +278,32 @@
       running (`ss -tnp | grep 5463 | grep -c 3011743` = 30 held
       connections; ~2d10h uptime), so the entry was corrected in the same
       PR rather than left stale.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-27T06:05:00Z
+    note: >
+      ISS-0827 (MINOR, test/letflow/router_test.exs's REQ-070 AC5 "9
+      deferred routes" assertion stale against router.ex's smaller table
+      since ISS-0822's dead-route removal, commit 65312cd9) resolved and
+      closed in docs/issues/ISS-0827.yaml. Fix on branch
+      fix/ISS0830-router-deferred-count-20260927 (commit 02a001ff): the
+      test's hardcoded @deferred list/count corrected 9 -> 5 entries,
+      test-only change, exactly 1 file
+      (test/letflow/router_test.exs) touched. RELEASE-VALIDATOR
+      independently re-verified: fresh isolated compile clean; live
+      router.ex table byte-matched against the test's new @deferred list;
+      fresh `mix test test/letflow/router_test.exs` -> 20 passed; scope
+      confirmed test-only, exactly 1 file; independent full-suite run
+      4996/4997 passed with the 1 remaining failure confirmed as the
+      pre-existing unrelated ISS-0832 class; RouterTest/router_test.exs
+      confirmed with ZERO hits anywhere in the failure logs -- the
+      persistent ISS-0827-class failure that showed up in nearly every PR
+      this session is genuinely gone. Note: letflow-queue task 830 tracks
+      this same work under a colliding `issue_ref: "ISS-0830"` label; the
+      real, unrelated docs/issues/ISS-0830.yaml on disk (an already-resolved
+      security-invariants staleness issue) was NOT touched -- only
+      docs/issues/ISS-0827.yaml was edited, per this file's own
+      queue_ref/github_ref comment and docs/anti-patterns.md's entry on this
+      filename/queue-id mismatch class.

@@ -273,6 +273,258 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
     assert message =~ ~s(volume status: "current")
   end
 
+  # ── A4b (known_unparseable_at) — ISS-0833's escape hatch ────────────────────
+  #
+  # Design `iss0833-a4b-unparseable-at-declaration.md` §4. Same throwaway-
+  # fixture-directory convention as negative controls 1/2 above: nothing here
+  # reads or writes the real index or a real volume. Each fixture entry has
+  # the `at:` slot occupied by an undocumented `summary:` field (an
+  # unparseable YAML fold marker, `">"`) and the real timestamp two lines
+  # later under an undocumented `timestamp:` field -- the exact shape of the
+  # 9 real REQ-405/409-416 entries the design fixes.
+
+  test "A4b (known_unparseable_at, positive): a correctly-declared exemption citing a real, parseable sibling suppresses the finding and is itself valid" do
+    dir = fixture_dir("a4b-unparseable-pos")
+
+    write_volume!(Path.join(dir, "v1.yaml"), [
+      unparseable_entry("REQ-100", "done", ">", "2026-08-21T00:00:00Z")
+    ])
+
+    write_volume!(Path.join(dir, "v2.yaml"), [conforming_entry("REQ-002", "started")])
+
+    write_index!(Path.join(dir, "index.yaml"), dir,
+      shape_records: [
+        %{
+          path: Path.join(dir, "v1.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          event: "done",
+          kind: "misnamed_field",
+          field: "at",
+          found_as: "summary",
+          found_line: 6
+        },
+        %{
+          path: Path.join(dir, "v1.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          event: "done",
+          kind: "extra_field",
+          field: "timestamp",
+          found_line: 8
+        }
+      ],
+      unparseable_records: [
+        %{
+          path: Path.join(dir, "v1.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          found_as: "summary",
+          found_line: 6,
+          verified_via_field: "timestamp",
+          verified_via_found_line: 8
+        }
+      ]
+    )
+
+    findings = a4b_findings(Path.join(dir, "index.yaml"))
+
+    assert findings.unparseable_at == [],
+           "a correctly cross-referenced exemption must suppress the unparseable_at finding"
+
+    assert findings.invalid_unparseable_at_exemptions == [],
+           "a correctly cross-referenced exemption must not itself be reported as invalid"
+
+    assert a4b_clean?(findings), a4b_message(Path.join(dir, "index.yaml"), findings)
+  end
+
+  test "A4b (known_unparseable_at, negative control A): a citation of a sibling absent from known_shape_anomalies: is caught as an invalid exemption, and the original finding still fires" do
+    dir = fixture_dir("a4b-unparseable-neg-a")
+
+    write_volume!(Path.join(dir, "v1.yaml"), [
+      unparseable_entry("REQ-100", "done", ">", "2026-08-21T00:00:00Z")
+    ])
+
+    write_volume!(Path.join(dir, "v2.yaml"), [conforming_entry("REQ-002", "started")])
+
+    write_index!(Path.join(dir, "index.yaml"), dir,
+      shape_records: [
+        %{
+          path: Path.join(dir, "v1.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          event: "done",
+          kind: "misnamed_field",
+          field: "at",
+          found_as: "summary",
+          found_line: 6
+        },
+        %{
+          path: Path.join(dir, "v1.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          event: "done",
+          kind: "extra_field",
+          field: "timestamp",
+          found_line: 8
+        }
+      ],
+      unparseable_records: [
+        %{
+          path: Path.join(dir, "v1.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          found_as: "summary",
+          found_line: 6,
+          # Orphaned: no known_shape_anomalies: record exists at this
+          # {path, entry_line, kind: extra_field, field, found_line} -- the
+          # real extra_field sibling is declared at found_line 8, not 999.
+          verified_via_field: "timestamp",
+          verified_via_found_line: 999
+        }
+      ]
+    )
+
+    findings = a4b_findings(Path.join(dir, "index.yaml"))
+
+    assert [%{path: _, entry_line: 3, field: "summary", value: ">"}] = findings.unparseable_at,
+           "an orphaned citation must not apply -- the original unparseable_at finding still fires"
+
+    assert [%{entry_line: 3, verified_via_found_line: 999}] =
+             findings.invalid_unparseable_at_exemptions,
+           "the bogus exemption itself must be reported, naming the orphaned citation"
+  end
+
+  test "A4b (known_unparseable_at, negative control B): a citation of a real sibling whose on-disk value does not parse is caught as an invalid exemption, and the original finding still fires" do
+    dir = fixture_dir("a4b-unparseable-neg-b")
+
+    write_volume!(Path.join(dir, "v1.yaml"), [
+      # verified_via correctly cites the real, declared "timestamp" extra
+      # field -- but its ACTUAL on-disk content is a run-id, not a timestamp.
+      unparseable_entry("REQ-100", "done", ">", "WF02-REQ100-20260927")
+    ])
+
+    write_volume!(Path.join(dir, "v2.yaml"), [conforming_entry("REQ-002", "started")])
+
+    write_index!(Path.join(dir, "index.yaml"), dir,
+      shape_records: [
+        %{
+          path: Path.join(dir, "v1.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          event: "done",
+          kind: "misnamed_field",
+          field: "at",
+          found_as: "summary",
+          found_line: 6
+        },
+        %{
+          path: Path.join(dir, "v1.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          event: "done",
+          kind: "extra_field",
+          field: "timestamp",
+          found_line: 8
+        }
+      ],
+      unparseable_records: [
+        %{
+          path: Path.join(dir, "v1.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          found_as: "summary",
+          found_line: 6,
+          verified_via_field: "timestamp",
+          verified_via_found_line: 8
+        }
+      ]
+    )
+
+    findings = a4b_findings(Path.join(dir, "index.yaml"))
+
+    assert [%{path: _, entry_line: 3, field: "summary", value: ">"}] = findings.unparseable_at,
+           "a sibling that is real but does not itself parse must not exempt the finding"
+
+    assert [%{entry_line: 3, verified_via_found_line: 8}] =
+             findings.invalid_unparseable_at_exemptions,
+           "the exemption citing a non-parseable sibling must itself be reported"
+  end
+
+  test "A4b (known_unparseable_at, negative control C): a citation of an open, unpinned volume is caught even though the sibling genuinely parses" do
+    dir = fixture_dir("a4b-unparseable-neg-c")
+
+    # Structurally identical to the positive fixture, except the entry lives
+    # in v2 -- the CURRENT (open, unpinned) volume -- rather than v1.
+    write_volume!(Path.join(dir, "v1.yaml"), [conforming_entry("REQ-001", "done")])
+
+    write_volume!(Path.join(dir, "v2.yaml"), [
+      unparseable_entry("REQ-100", "done", ">", "2026-08-21T00:00:00Z")
+    ])
+
+    write_index!(Path.join(dir, "index.yaml"), dir,
+      shape_records: [
+        %{
+          path: Path.join(dir, "v2.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          event: "done",
+          kind: "misnamed_field",
+          field: "at",
+          found_as: "summary",
+          found_line: 6
+        },
+        %{
+          path: Path.join(dir, "v2.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          event: "done",
+          kind: "extra_field",
+          field: "timestamp",
+          found_line: 8
+        }
+      ],
+      unparseable_records: [
+        %{
+          path: Path.join(dir, "v2.yaml"),
+          entry_line: 3,
+          req: "REQ-100",
+          found_as: "summary",
+          found_line: 6,
+          verified_via_field: "timestamp",
+          verified_via_found_line: 8
+        }
+      ]
+    )
+
+    findings = a4b_findings(Path.join(dir, "index.yaml"))
+
+    # Empirically (verified against the shipped code, not assumed): the
+    # shipped `exempt_unparseable_at?/3` has no pinning check inline (design
+    # §2.4) -- so the exemption itself DOES apply, and `unparseable_at` stays
+    # empty for this entry. What catches the open volume is the SAME
+    # pre-existing `not_closed_and_pinned` sub-check that already runs over
+    # every `known_shape_anomalies:` record -- both the `misnamed_field` and
+    # `extra_field` records here cite v2 and are rejected by it, exactly as
+    # negative control 2 above demonstrates for the pre-ISS-0833 mechanism.
+    assert findings.unparseable_at == [],
+           "exempt_unparseable_at?/3 has no inline pinning check (design §2.4) -- the exemption applies regardless of volume status"
+
+    refute a4b_clean?(findings)
+
+    citing_v2? = &(&1.path == Path.join(dir, "v2.yaml") and &1.entry_line == 3)
+
+    assert Enum.count(findings.not_closed_and_pinned, citing_v2?) == 2,
+           "both the misnamed_field and extra_field known_shape_anomalies: records citing " <>
+             "the open v2 volume must fail the pre-existing closed-and-pinned rule"
+
+    # The known_unparseable_at: record's OWN pinning is checked independently
+    # in invalid_unparseable_at_exemptions/4 (§2.3 step 5) -- so it is ALSO
+    # reported there, not just via not_closed_and_pinned.
+    assert [%{entry_line: 3, verified_via_found_line: 8}] =
+             findings.invalid_unparseable_at_exemptions
+  end
+
   # ── A5 ──────────────────────────────────────────────────────────────────────
 
   test "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly, and every declared record cites a closed, pinned, warranted volume" do
@@ -976,6 +1228,30 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
     """
   end
 
+  # ISS-0833 fixture entry: the `at:` slot is occupied by an undocumented
+  # `summary:` field (mirroring the 9 real REQ-405/409-416 entries design
+  # iss0833-a4b-unparseable-at-declaration.md §1 documents), and the real
+  # timestamp sits a couple of lines later under an undocumented `timestamp:`
+  # field. `summary_value` and `timestamp_value` are the raw (unquoted) text
+  # written after each field's colon -- callers pass an unparseable value
+  # (`">"`, a YAML fold marker) for `summary_value`, and either a genuinely
+  # ISO-8601 value or a non-parseable one for `timestamp_value`, depending on
+  # which fixture is being built.
+  #
+  # Field/line layout, given `write_volume!`'s fixed 2-line file header (`#
+  # fixture volume` / `history:`) and exactly one entry: line 3 `req:`, 4
+  # `event:`, 5 `agent:`, 6 `summary:`, 7 `note:`, 8 `timestamp:`.
+  defp unparseable_entry(req, event, summary_value, timestamp_value) do
+    """
+      - req: #{req}
+        event: #{event}
+        agent: TEST-DESIGNER
+        summary: #{summary_value}
+        note: fixture note
+        timestamp: #{timestamp_value}
+    """
+  end
+
   # Line 1 is the comment, line 2 is `history:`, so the first entry's `- req:`
   # line is line 3 — which is what the fixture records cite.
   defp write_volume!(path, entry_blocks) do
@@ -1000,6 +1276,38 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
         """
       end)
 
+    # ISS-0833: `known_unparseable_at:` is a sibling section to
+    # `known_shape_anomalies:` (design iss0833-a4b-unparseable-at-declaration
+    # §2.2/§2.5). Per §2.5, `verified_via:` is NOT a nested mapping on disk --
+    # `parse_list/1` only recognises two flat indentation levels -- so it is
+    # written as three flat sibling fields (`verified_via_kind`/
+    # `verified_via_field`/`verified_via_found_line`). Omitted entirely
+    # (rather than emitted empty) when no test passes the option, so every
+    # existing call site of this helper is unaffected.
+    unparseable_section =
+      case Keyword.get(opts, :unparseable_records, []) do
+        [] ->
+          ""
+
+        unparseable_records ->
+          "\nknown_unparseable_at:\n" <>
+            Enum.map_join(unparseable_records, "", fn record ->
+              """
+                - path: #{record.path}
+                  entry_line: #{record.entry_line}
+                  req: #{record.req}
+                  field: at
+                  found_as: #{record.found_as}
+                  found_line: #{record.found_line}
+                  verified_via_kind: extra_field
+                  verified_via_field: #{record.verified_via_field}
+                  verified_via_found_line: #{record.verified_via_found_line}
+                  should_have_been: "at: <the real ISO-8601 timestamp>"
+                  cause: "fixture: field misnamed, real value recoverable from a sibling extra_field"
+              """
+            end)
+      end
+
     File.write!(path, """
     roll_rule:
       max_lines: 1200
@@ -1021,6 +1329,7 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
 
     known_shape_anomalies:
     #{String.trim_trailing(records)}
+    #{unparseable_section}
     """)
 
     path

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0829-20260927/step-02-code-designer.json",
   "created_at": "2026-09-27T11:11:05Z",
   "started_at": "2026-09-27T12:00:00Z",
-  "completed_at": "2026-09-27T12:30:00Z",
-  "status": "COMPLETED",
+  "completed_at": "2026-09-27T11:35:00Z",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S11",
@@ -33,7 +33,8 @@
       "Design explicitly confirms no production code (lib/letflow/platform/migration_rollout.ex) needs to change -- this is a test-only fix, matching ISSUE-FIXER's diagnosis",
       "Design states how the fix will be verified against the actual race (e.g. re-run under scripts/test_parallel.sh -N 4 repeatedly, or a targeted concurrent-load repro like ISSUE-FIXER's own reproduction attempt)",
       "No implementation code in the design doc",
-      "This is a first dispatch: claim by setting status to IN_PROGRESS only, then complete normally with a real result block."
+      "This is a first dispatch: claim by setting status to IN_PROGRESS only, then complete normally with a real result block.",
+      "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR FAILed the design on a BLOCKER: lib/letflow/design/iss0829-migration-rollout-test-isolation.md's §2.2, §3.1-3.3, and §4 summary table contain literal .exs code blocks (real assert/Ecto query syntax meant to be pasted near-verbatim into the test file), not signatures/type shapes -- violates WF-02 Step 1b check (e) and code-designer.md's Forbidden clause (no function bodies, no actual .ex/.exs code blocks). The gate confirmed every other part of the design is substantively correct (line citations, no-production-code-change conclusion, and that each replacement genuinely preserves its acceptance criterion's intent) -- ONLY the literal-code-block form is the problem. Fix: rewrite §2.2, §3.1-3.3, and §4 as prose/pseudocode describing each assertion's required semantics (what to query, what invariant to check, which values to compare) without literal Elixir/Ecto syntax -- keep all analysis and conclusions unchanged. This is not a first dispatch: complete the handoff normally (status COMPLETED/FAILED with a real result block) -- do not re-claim via IN_PROGRESS-only."
     ]
   },
   "result": {
@@ -51,6 +52,6 @@
     },
     "next_action": "Route to CODE-DESIGN-VALIDATOR to gate this design, then to TEST-DESIGNER/ELIXIR-DEV (test-only change, per owned_modules: test/letflow/platform/migration_rollout_test.exs) to apply the EO-004/EO-005 assertion replacements exactly as specified in Sec2-Sec3 of the design doc."
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

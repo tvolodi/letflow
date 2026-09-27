@@ -1,0 +1,130 @@
+run_id: WF02-REQ419-20260927
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-27T21:24:00Z
+branch: feature/WF02-REQ419-20260927
+requirement_ids: [REQ-419]
+
+backend_exunit:
+  command: scripts/test_parallel.sh
+  partitions:
+    count: 16
+    source: nproc
+  test_pool_size: 5
+  combined_result: "5017 tests, 6 properties, 4 failures (5019/5023 passed)"
+  exit_code: 1
+  status: FAIL
+  per_partition_summary:
+    - "partition 1: 404 tests, 0 properties, 1 failures, exit 2"
+    - "partition 2: 300 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 374 tests, 0 properties, 1 failures, exit 2"
+    - "partition 4: 241 tests, 0 properties, 0 failures, exit 0"
+    - "partition 5: 300 tests, 0 properties, 0 failures, exit 0"
+    - "partition 6: 306 tests, 0 properties, 0 failures, exit 0"
+    - "partition 7: 411 tests, 0 properties, 0 failures, exit 0"
+    - "partition 8: 381 tests, 2 properties, 0 failures, exit 0"
+    - "partition 9: 199 tests, 2 properties, 0 failures, exit 0"
+    - "partition 10: 386 tests, 0 properties, 2 failures, exit 2"
+    - "partition 11: 278 tests, 0 properties, 0 failures, exit 0"
+    - "partition 12: 386 tests, 0 properties, 0 failures, exit 0"
+    - "partition 13: 269 tests, 1 property, 0 failures, exit 0"
+    - "partition 14: 298 tests, 0 properties, 0 failures, exit 0"
+    - "partition 15: 265 tests, 1 property, 0 failures, exit 0"
+    - "partition 16: 219 tests, 0 properties, 0 failures, exit 0"
+  failures:
+    - test: "Letflow.Docs.RequirementStatusInvariantsTest / A9: every indexed volume's declared entries: count equals what is actually on disk"
+      location: test/docs/requirement_status_invariants_test.exs:716
+      output: |
+        A9 — a volume's declared entries: count has drifted from what is on disk.
+        (path, declared entries:, actual entries on disk) for each mismatch:
+        [{"docs/status/requirement_status.v23.yaml", 16, 17}]
+      attribution: BRANCH-INTRODUCED (NOT pre-existing)
+      attribution_evidence: >
+        git diff --name-only main...HEAD includes docs/status/requirement_status.v23.yaml
+        -- this branch's ORCH-authored commit b70ecbd4 appended one new
+        `- req: REQ-419 / event: started` entry to that volume (17th on-disk
+        entry), but did not update `entries: 16` for volume 23 in
+        docs/status/requirement_status.index.yaml (still declares 16), per
+        HOW-TO-APPEND step 6. This is a self-inflicted bookkeeping miss by
+        this handoff chain's own ORCH step, not a pre-existing failure on
+        main. docs/status/requirement_status.index.yaml is untouched by this
+        branch's diff, so it was never updated to match the new on-disk count.
+      blocking: true
+      routed_to: ORCH (or DOC-UPDATER) to increment `entries: 16` -> 17 for
+        volume 23 in docs/status/requirement_status.index.yaml, in the same
+        spirit as HOW-TO-APPEND step 6, before this branch merges.
+
+    - test: "Letflow.SandboxPoolTest / provisioning does not block the pool's mailbox (ISS-0224 regression) RT-6 (death path c)"
+      location: test/letflow/sandbox_pool_test.exs:1087
+      output: |
+        expected schema sandbox_d819cdeccdea45fba4a913e0dee412c6 to be dropped
+        by SandboxPool's owner-crash reclaim, but it still exists in
+        information_schema.schemata
+      attribution: PRE-EXISTING
+      attribution_evidence: >
+        test/letflow/sandbox_pool_test.exs is not in `git diff --name-only
+        main...HEAD` for this branch, and this branch touches zero
+        lib/letflow/ files. Timing-sensitive reclaim assertion (ISS-0224
+        regression test), unrelated to apps/mobile scaffold. Not attributable
+        to this diff.
+      blocking: false
+
+    - test: "Letflow.IdentityTest / resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1) -- both sub-assertions"
+      location: test/letflow/identity_test.exs:534, test/letflow/identity_test.exs:541
+      output: |
+        ** (Ecto.NoResultsError) expected at least one result but got none in query:
+        from t0 in Letflow.Identity.Tenant, where: t0.idp_realm_id == ^"bpm-default"
+        code: tenant = insert_default_tenant!()
+        (via test/support/bpm_default_realm_displacement.ex:118 with_lock/1)
+      attribution: PRE-EXISTING
+      attribution_evidence: >
+        test/letflow/identity_test.exs is not in `git diff --name-only
+        main...HEAD` for this branch, and this branch touches zero
+        lib/letflow/ files. Note in docs/status/requirement_status.v23.yaml's
+        prior entry (visible before this branch's own append) already flags
+        "Letflow.IdentityTest REQ-019 AC1) reconfirmed incidentally during
+        these independent runs, left for ORCH to file as separate issues, not
+        investigated here" on branch feature/WF03-ISS0829-20260927 -- same
+        symptom already known and tracked separately from this run.
+      blocking: false
+
+flutter_analyze:
+  command: flutter analyze (run from apps/mobile/)
+  output: |
+    Analyzing mobile...
+    No issues found! (ran in 5.3s)
+  status: PASS
+
+flutter_test:
+  command: flutter test (run from apps/mobile/)
+  output: |
+    00:00 +0: loading C:/Users/tvolo/dev/ai-dala/letflow/apps/mobile/test/guards/forbidden_dependencies_guard_test.dart
+    00:00 +0: C:/Users/tvolo/dev/ai-dala/letflow/apps/mobile/test/guards/forbidden_dependencies_guard_test.dart: real pubspec.yaml and pubspec.lock contain no forbidden dependency
+    00:00 +1: C:/Users/tvolo/dev/ai-dala/letflow/apps/mobile/test/guards/forbidden_dependencies_guard_test.dart: self-test: checker fires on a pubspec containing webview_flutter
+    00:00 +2: C:/Users/tvolo/dev/ai-dala/letflow/apps/mobile/test/guards/module_boundary_guard_test.dart: real lib/ tree has zero module boundary violations
+    00:00 +3: C:/Users/tvolo/dev/ai-dala/letflow/apps/mobile/test/guards/module_boundary_guard_test.dart: self-test: checker fires on a violating fixture (Rule 2)
+    00:00 +4: C:/Users/tvolo/dev/ai-dala/letflow/apps/mobile/test/guards/tenant_identifier_guard_test.dart: real lib/ tree and assets/ contain no compiled-in tenant identifier
+    00:00 +5: C:/Users/tvolo/dev/ai-dala/letflow/apps/mobile/test/guards/tenant_identifier_guard_test.dart: self-test: checker fires on a literal "bpm-default"
+    00:00 +6: C:/Users/tvolo/dev/ai-dala/letflow/apps/mobile/test/widgets/renderer_registry_fallback_test.dart: RendererRegistry.build shows the unsupported-definition-type fallback for an unknown definition type, never an empty container
+    00:01 +7: All tests passed!
+  status: PASS
+  tests_listed:
+    - forbidden_dependencies_guard_test.dart (real-pubspec check + self-test)
+    - module_boundary_guard_test.dart (real lib/ check + self-test)
+    - tenant_identifier_guard_test.dart (real lib/+assets check + self-test)
+    - renderer_registry_fallback_test.dart (fallback widget test)
+
+overall_result: PARTIAL
+overall_notes: >
+  apps/mobile/ scaffold (REQ-419) itself is fully green: flutter analyze
+  clean, all 7 flutter tests pass (guards + self-tests + fallback widget
+  test). The backend ExUnit suite has 4 failures: 2 are pre-existing and
+  unrelated to this diff (SandboxPoolTest timing, IdentityTest REQ-019 AC1 --
+  both already untouched files on this branch, the latter already flagged in
+  a prior run-history note). 1 is a genuine regression introduced by THIS
+  branch's own ORCH bookkeeping commit: appending a REQ-419 event to
+  docs/status/requirement_status.v23.yaml without incrementing the matching
+  `entries:` count in docs/status/requirement_status.index.yaml, caught by
+  the A9 invariant test. This must be fixed (one-line count increment,
+  16 -> 17) before this branch is considered clean -- routed back to
+  ORCH/DOC-UPDATER, not ELIXIR-DEV, since no lib/letflow/ code is involved.

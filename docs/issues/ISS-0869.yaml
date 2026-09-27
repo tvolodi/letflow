@@ -64,4 +64,12 @@ fix_direction: >
   is a test-timing tightness issue, not an application defect.
 status: open
 queue_ref: "Q-869"
-github_ref: "GH-1887"
+github_ref: "GH-1897"
+registration_note_2026_09_27: >
+  This record's queue_ref/github_ref were found unregistered when DOC-UPDATER checked
+  during ISS-0847 close-out (queue task 869 did not exist; GH-1887 pointed at an
+  unrelated, already-merged PR for ISS-0868). Registered for real via register_task
+  during this close-out -- queue task id 869 (coincidentally matching), GitHub issue
+  https://github.com/tvolodi/letflow/issues/1897 (newly created). queue_ref was
+  already correct by coincidence; github_ref corrected from the prior fabricated
+  GH-1887 to the real GH-1897.

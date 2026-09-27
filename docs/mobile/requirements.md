@@ -73,6 +73,8 @@ mounts it behind `Letflow.Plugs.AuthPipeline`. An unauthenticated tenant-config
 therefore needs both the route *and* a pipeline placement that does not demand a
 token. This is the tier's single blocking dependency.
 
+**Closed 2026-09-27 by `REQ-124`** (done 2026-08-22).
+
 ---
 
 ## MOB-3 — Offline definition cache, delta sync, version pinning
@@ -98,6 +100,9 @@ silently fall back to the active version.
 appear nowhere in `lib/`. The engine pins *definition* versions
 (`Letflow.Engine.PinResolver`); emitting a pinned **form** version on a task
 payload is a separate contract.
+
+**Closed 2026-09-27 by `REQ-125`** (delta sync, done 2026-08-23) **and `REQ-126`**
+(`form_id`/`form_version` on task payloads, done 2026-08-22).
 
 ---
 

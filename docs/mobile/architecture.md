@@ -74,6 +74,11 @@ Gap 1 is the blocking one: without an unauthenticated tenant-config, the app
 cannot reach the point of showing a login screen. Gaps 2 and 3 block `MOB-3`
 (cache/delta/pinning) but not the shell.
 
+**Closed 2026-09-27.** All three gaps above are now closed: gap 1 by `REQ-124`
+(done 2026-08-22), gap 2 by `REQ-125` (done 2026-08-23), gap 3 by `REQ-126` (done
+2026-08-22) — see `../migration/stage-9-mobile.md`'s gap table for per-gap detail
+and status-log citations.
+
 These three are why S9 depends on S4 rather than running as a fully independent
 track. R-Co could treat mobile as parallel-from-day-one because its backend was
 already shipped; Letflow's is not.

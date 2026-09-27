@@ -30907,7 +30907,7 @@ requirements:
   - id: REQ-417
     title: "Reactivate MOBILE-DEV: un-dormant its role file, roster rows and S9 stage file, add a mobile implementation step to WF-02, and mark S9's three backend gaps closed in docs/mobile/"
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S9
     impl_order: 854  # letflow-queue task id, GH#1871. Registered 2026-09-27T02:59:54Z by ORCH (WF-01 Step 3).
     description: >

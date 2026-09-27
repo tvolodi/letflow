@@ -32,12 +32,13 @@
 └──────────┬───────────┘
            │ PASS
            ▼
-┌──────────────────────┐        ┌──────────────────────┐
-│  STEP 2a: BACKEND    │        │  STEP 2b: FRONTEND   │
-│  lib/ + migrations   │        │  web/ integration    │
-└──────────┬───────────┘        └──────────┬───────────┘
-     FAIL─► REWORK                    FAIL─► REWORK
-           └────────────┬─────────────────┘
+┌──────────────────────┐        ┌──────────────────────┐        ┌──────────────────────┐
+│  STEP 2a: BACKEND    │        │  STEP 2b: FRONTEND   │        │ STEP 2b-mobile:      │
+│  lib/ + migrations   │        │  web/ integration    │        │ MOBILE-DEV apps/     │
+│                      │        │                      │        │ mobile/ change       │
+└──────────┬───────────┘        └──────────┬───────────┘        └──────────┬───────────┘
+     FAIL─► REWORK                    FAIL─► REWORK                   FAIL─► REWORK
+           └────────────┬─────────────────┴─────────────────────────────────┘
                         ▼
            ┌──────────────────────┐
            │  STEP 2c: SECURITY   │ ← SECURITY-REVIEWER ⛔ HARD GATE (in-scope only)
@@ -230,6 +231,34 @@ themselves — see `core-directives.md`'s "Load Scoped Context, Not Whole Files.
 - [ ] Token handling matches `web/`'s existing pattern; no new auth-storage mechanism
 - [ ] Any contract mismatch found was routed to the backend, not shimmed inside `web/`
 
+## Step 2b-mobile — Mobile implementation
+
+**Agent:** `MOBILE-DEV`
+
+```
+1. Verify branch (same check as 2a).
+2. Read lib/letflow/design/<module>.md for the API contract being integrated against,
+   and docs/mobile/ (README.md, architecture.md, requirements.md, build-order.md).
+3. Make the change in apps/mobile/ only. Do not touch web/ or lib/ -- a backend gap
+   goes to ELIXIR-DEV via ORCH; a shared-contract question goes to CODE-DESIGNER.
+4. Run, from apps/mobile/, quoting real output, not a claim:
+      flutter analyze && flutter test
+   If either FAILS, fix and retry.
+5. Self-review against .claude/agents/mobile-dev.md's three tier constraints and
+   Forbidden list (one tenant-agnostic build, no general scripting runtime on-device,
+   online-first read-through cache only, tokens in OS-secure storage only).
+6. Complete the handoff: artifacts_out: ["apps/mobile/..."],
+   next_action: "Route to SECURITY-REVIEWER (2c) when the change touches auth, token
+   storage, or transport (MOB-2, MOB-5, MOB-6); otherwise route to REVIEWER (2d) once
+   2a/2b (if present) also complete".
+```
+
+### Acceptance criteria
+- [ ] `flutter analyze` and `flutter test`, run from `apps/mobile/`, both pass with real output quoted
+- [ ] No general scripting runtime (Lua/JS/WASM) introduced on-device
+- [ ] No token stored anywhere but OS-secure storage
+- [ ] Any contract mismatch found was routed to the backend, not shimmed inside `apps/mobile/`
+
 ## Step 2c — Security gate ⛔ HARD GATE (in-scope changes only)
 
 **Agent:** `SECURITY-REVIEWER`
@@ -239,7 +268,11 @@ Runs after both 2a and 2b return PASS (or whichever applies), before Step 2d.
 ```
 1. Read context.artifacts_in and the branch diff: git diff main...HEAD
 2. Scope test: does this diff touch a tenant-data path per
-   docs/agents/instructions/security-invariants.md's applicability notes?
+   docs/agents/instructions/security-invariants.md's applicability notes? An
+   apps/mobile/ diff touching auth, token storage, or transport (MOB-2, MOB-5,
+   MOB-6) is IN SCOPE under security-reviewer.md's "anything resolving a ... token"
+   clause; its checklist is MOB-5's acceptance criteria in
+   docs/mobile/requirements.md, applied alongside INV-4/INV-5.
    NO  → PASS, summary: "out of scope — no tenant-data path touched",
          next_action: "Route to REVIEWER (2d)"
    YES → continue
@@ -277,10 +310,13 @@ optional "check before calling it done" step.
 **Agent:** `TEST-DESIGNER`
 
 **Scope test (run first — added after REQ-010's WF02 run surfaced the gap):** does
-Step 2a/2b's `artifacts_out` contain any file with **application-executable surface** —
-i.e. is there real Elixir/frontend logic this step could plausibly write a test
-against? A requirement whose only artefacts are `.md` files (a decision record, a
-stage-doc update) has nothing for ExUnit/StreamData to exercise.
+Step 2a/2b/2b-mobile's `artifacts_out` contain any file with **application-executable
+surface** — i.e. is there real Elixir/frontend/Dart logic this step could plausibly
+write a test against? A requirement whose only artefacts are `.md` files (a decision
+record, a stage-doc update) has nothing for ExUnit/StreamData to exercise. Dart tests
+under `apps/mobile/test/` are written by `MOBILE-DEV` in the mobile step (2b-mobile),
+same as `TEST-DESIGNER` writes ExUnit tests, and `TEST-DESIGN-VALIDATOR` still reviews
+them against the acceptance criteria.
 
 **File-extension is a starting heuristic, not the actual test — apply judgement, don't
 pattern-match blindly (gap found during REQ-013's WF02 run: `mix.exs`/`.formatter.exs`/
@@ -368,6 +404,9 @@ invariant checklist.
 2. If no local toolchain: use the Docker fallback documented in docs/anti-patterns.md.
    Report explicitly if neither is available — do not report PASS without having run
    it (No Speculation).
+2b. When the diff touches apps/mobile/: additionally run, from apps/mobile/,
+   `flutter analyze` and `flutter test`, and record their real output in the test
+   report alongside the ExUnit results.
 3. Write test/reports/report-<date>-<run-id>.yaml with the actual output, including the
    derived partition count N, its source (env override/nproc/getconf), and the combined
    pass/fail totals scripts/test_parallel.sh printed.

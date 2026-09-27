@@ -174,3 +174,43 @@
       fix/ISS0834-registry-bom-20260926 (2a751abe) confirmed up to date
       with origin/main (merge-base 5bdcbbcf, zero drift) before this
       append.
+
+  - req: REQ-417
+    event: started
+    agent: ORCH
+    at: 2026-09-27T04:11:00Z
+    note: >
+      WF-02 run WF02-REQ417-20260927, first of the S9 mobile-tier chain
+      (REQ-417..430; REQ-427..430 stay ineligible pending REQ-294, itself
+      dormant on purpose -- see docs/requirements.yaml's own note on task
+      585). Queue task 854 (GH#1871) set_lock'd directly (known id, per
+      TASK_QUEUE.md's "human names a specific issue" path -- a stray
+      get_next_task call first surfaced unrelated task 832/ISS-0832,
+      released back to open untouched). Step 00 (ELIXIR-DEV) PASS:
+      feature/WF02-REQ417-20260927 branched from up-to-date origin/main
+      and pushed. Docs-only change (un-dormants MOBILE-DEV's role file,
+      AGENT_SYSTEM.md, CLAUDE.md, core-directives.md, stage-9-mobile.md,
+      docs/mobile/*, WF-02); no lib/priv/web touched. Proceeding to Step 1
+      (CODE-DESIGNER), expected to route straight to Step 5 per the
+      docs-only scope test (WF-02 Step 3), matching prior precedent
+      (handoffs/registry.json run entry for a decision-record-only
+      requirement skipping 2a/2b/2c/2d/3b/4).
+
+  - req: REQ-417
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-27T04:24:45Z
+    note: >
+      WF-02 run WF02-REQ417-20260927 closed. Docs-only reactivation of
+      MOBILE-DEV: un-dormanted .claude/agents/mobile-dev.md, updated the
+      AGENT_SYSTEM.md roster row, added WF-02's mobile implementation step,
+      marked S9's three backend gaps (REQ-124/125/126) closed in
+      docs/mobile/ and docs/migration/stage-9-mobile.md, plus CLAUDE.md,
+      core-directives.md, requirements.md and README.md touch-ups. No
+      lib/priv/web changed. RELEASE-VALIDATOR independently re-verified all
+      9 acceptance criteria PASS; a second, independent REVIEWER re-check
+      also PASSed all 9 and confirmed the diff is docs-only. Branch
+      feature/WF02-REQ417-20260927, commits 6b8d426d (S9 REQ-417..430
+      expansion), 4224424e (docs-only design artefact), 02c4c07f
+      (reactivation itself). Flipping docs/requirements.yaml's REQ-417
+      status: in_progress -> done in this same append.

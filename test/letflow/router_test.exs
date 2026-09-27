@@ -185,17 +185,21 @@ defmodule Letflow.RouterTest do
   # retired without ever existing — its query surface lands as POST /entities/query on
   # the merged module (REQ-311), not as a module of its own.
   #
+  # The number dropped again, from 9 to 5, by commit 65312cd9 (ISS-0822's dead-route
+  # removal): `Letflow.Routers.Dlq`, `.Services`, `.PlatformMigrations`, and `.Webhooks`
+  # were removed from router.ex's deferred table because they are now mounted in
+  # api_pipeline.ex (S6 complete) -- see router.ex's own moduledoc note under
+  # "## Deferred routes" for the same history. This test file was not updated in that
+  # commit (ISS-0827/ISS-0830), which is what this pass fixes: the hardcoded list and
+  # row count below are brought back in sync with the current, 5-row table.
+  #
   # AC5's property is unchanged: the table names exactly the routes that are genuinely
   # still unmounted. The expected list below stays an explicit literal (never derived
   # from router.ex itself, which would make it a tautology that always passes), and the
   # retirement assertion below it is what keeps the count honest in the other direction.
-  describe "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported" do
-    # The nine module names router.ex's deferred table carries, spelled out literally.
+  describe "REQ-070 AC5: router.ex names all 5 deferred routes and states readiness not-ported" do
+    # The five module names router.ex's deferred table carries, spelled out literally.
     @deferred [
-      "Letflow.Routers.Dlq",
-      "Letflow.Routers.Services",
-      "Letflow.Routers.PlatformMigrations",
-      "Letflow.Routers.Webhooks",
       "Letflow.Routers.SimulationTest",
       "Letflow.Routers.ProcessModules",
       "Letflow.Routers.AgentRequests",
@@ -208,7 +212,7 @@ defmodule Letflow.RouterTest do
     # re-addition of either row by a future edit.
     @retired ["Letflow.Routers.Entities", "Letflow.Routers.EntityQuery"]
 
-    test "all 9 deferred sub-router module names are listed" do
+    test "all 5 deferred sub-router module names are listed" do
       source = File.read!("lib/letflow/router.ex")
 
       for name <- @deferred do
@@ -216,7 +220,7 @@ defmodule Letflow.RouterTest do
       end
     end
 
-    test "the deferred table holds exactly 9 rows, no more" do
+    test "the deferred table holds exactly 5 rows, no more" do
       # Guards the other direction from the membership test above: that one would still
       # pass if a tenth row were added. Counts rows in the deferred table only — the
       # region between its header and the end of the moduledoc — so the mounted

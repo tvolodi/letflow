@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF03-ISS0829-20260927/step-02-code-designer.json",
   "created_at": "2026-09-27T11:11:05Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-27T12:00:00Z",
+  "completed_at": "2026-09-27T12:30:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S11",
@@ -37,19 +37,19 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0829-migration-rollout-test-isolation.md. Confirmed via direct read of migration_rollout_test.exs (EO-004 L334-393, EO-005 L399-437) and migration_rollout.ex (apply_to_existing_rollout/2 L218-256, active_company_tenant_ids/0 L423-432, recompute_rollout_completion/1 L438-452) that no production code needs to change -- the sweep-in-any-active-tenant behavior is the intentional design at req374-tenant-migration-fanout-runner.md Sec9 OQ-1. Identified exact fragile assertions: EO-004 L390-391 (hardcoded rollout.status==\"completed\"/completed_at!=nil, which depends on EVERY outcome row ever swept into the rollout_id being succeeded, not just this test's good/poisoned tenants) and EO-005 L410 (Enum.all? over first_result.outcomes), L412-413/434-435 (Repo.aggregate(Rollout|Outcome, :count, :id) global table counts), and L423 (Enum.all?(second_result.outcomes, & &1.already_current)) -- all global/unscoped and broken by a concurrently-activated tenant legitimately swept into the same rollout_id by active_company_tenant_ids/0's global scan. Designed tenant-scoped replacements for each, following the outcome_for/2 + >= precedent at L288-327 (ISS-0716): EO-005's replacements filter by tenant_id/rollout_id explicitly; EO-004's replacement derives the expected rollout status/completed_at from an independent query of the rollout's own outcome set (asserting the completion INVARIANT rather than a literal that assumes a closed two-tenant universe), since rollout completion is inherently rollout-wide and can't be tenant-filtered away without weakening the AC. Verification plan specified: structural argument (each replacement checked to be scope-free by construction) plus empirical re-runs (scripts/test_parallel.sh -N 4 x3, and ISSUE-FIXER's own 9-file concurrent-load repro harness x1+) plus a regression check that EO-001/002/003 and the untouched precedent test still pass. No implementation code included -- design doc contains only Elixir-flavored pseudocode fragments (query shapes, assertion shapes) illustrating the scoping technique, no actual test-file edits.",
+    "artifacts_out": ["lib/letflow/design/iss0829-migration-rollout-test-isolation.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0829-20260927",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF03-ISS0829-20260927",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate this design, then to TEST-DESIGNER/ELIXIR-DEV (test-only change, per owned_modules: test/letflow/platform/migration_rollout_test.exs) to apply the EO-004/EO-005 assertion replacements exactly as specified in Sec2-Sec3 of the design doc."
   },
   "rework_count": 0,
   "max_rework": 3

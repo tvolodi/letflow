@@ -4610,8 +4610,28 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 14
+    entries: 15
     note: >
+      Incremented to 15 by DOC-UPDATER, reconciled while rebasing
+      fix/ISS0869-playwright-timeout-flake-20260927 onto origin/main a
+      second time. Three independent increments all trace to the same
+      pre-divergence base of 12: DOC-UPDATER's REQ-418 done-event append
+      (WF02-REQ418-20260927, 2026-09-27T10:06:25Z) landed on origin/main
+      first (see that increment's own now-superseded "13" detail below);
+      ORCH's ISS-0832 closing SCOPE-CHANGE append (2026-09-27T10:35:00Z,
+      check_boundaries AC2 subprocess MIX_ENV/MIX_TEST_PARTITION leak)
+      landed on origin/main second, also independently claiming "14" from
+      the same base; this branch's own ISS-0869 closing SCOPE-CHANGE append
+      (2026-09-27T10:15:00Z) was rebased on top of both during this PR's
+      second conflict resolution. `requirement_status.v23.yaml` itself
+      auto-merged its two entry blocks cleanly (both sides' entries
+      concatenate in commit order: 12 pre-existing + 1 REQ-418 + 1 ISS-0832
+      + 1 ISS-0869), so only this index note needed manual reconciliation,
+      both times. `grep -c "^  - req:" docs/status/requirement_status.v23.yaml`
+      = 15 on-disk entries post-rebase. 463 lines / 27023 bytes, well under
+      the 1200-line/120000-byte roll ceiling, so no roll triggered. Prior
+      notes preserved below.
+
       Incremented to 14 by ORCH's own ISS-0832 closing SCOPE-CHANGE append
       (2026-09-27T10:35:00Z, check_boundaries AC2 subprocess MIX_ENV/
       MIX_TEST_PARTITION leak). `grep -c "^  - req:"

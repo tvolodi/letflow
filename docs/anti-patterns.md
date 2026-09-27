@@ -3681,3 +3681,18 @@ Close/discard your PR (don't force your version through), and release your own
 queue task(s) as `done` cross-referencing the real, already-resolved record(s)
 — the underlying defect genuinely is fixed, even though your own filing never
 shipped anything itself.
+
+## Playwright's `Locator.isVisible({ timeout })` does not poll/retry despite the `timeout` option looking like it does (2026-09-27, REVIEWER, ISS-0869)
+
+`page.getByTestId(...).isVisible({ timeout: 10_000 }).catch(() => false)` reads like
+a generous 10s wait, but `Locator.isVisible({ timeout })` is a single, immediate DOM
+check — the `timeout` option only bounds how long Playwright's actionability checks
+may run before that one check, it does not make the check itself poll. A slow-to-
+render element can fail this call even when it finishes rendering well within the
+stated timeout, producing a flaky false negative (`exam-lifecycle.e2e.spec.ts`'s "all
+exam rows have an Edit action" test, ISS-0869).
+
+**Fix:** use `expect(locator).toBeVisible({ timeout })` instead — that assertion
+genuinely auto-retries until the timeout elapses or the condition holds. Prefer it
+over `isVisible({ timeout })` for any wait-for-render check in this codebase's
+Playwright specs.

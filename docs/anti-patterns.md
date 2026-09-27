@@ -3696,3 +3696,47 @@ exam rows have an Edit action" test, ISS-0869).
 genuinely auto-retries until the timeout elapses or the condition holds. Prefer it
 over `isVisible({ timeout })` for any wait-for-render check in this codebase's
 Playwright specs.
+
+## `queue_ref` collisions across two different `docs/issues/*.yaml` files (2026-09-27, ORCH, ISS-0870)
+
+Two independently-filed local issue records can end up declaring the SAME
+`queue_ref: Q-N` value, with no gate catching it. Found for real: both
+`docs/issues/ISS-0446.yaml` and `docs/issues/ISS-0453.yaml` have declared
+`queue_ref: Q-453` since before the 2026-09-09 id-prefixing rename
+(`426e5305`) -- i.e. this predates and is unrelated to that rename, and is a
+plain filing-time mistake on one side. Live-locking task 453 and reading its
+own title/body ("service_task_dispatcher_test throwaway-supervisor on_exit
+is a check-then-act race...") unambiguously matches ISS-0446's subject, not
+ISS-0453's (a completely different flaky-test mechanism, poller/scheduler
+antagonist-loop partial-skip). ISS-0453's own declaration of `Q-453` was
+therefore never actually its task.
+
+**Why this stayed invisible for weeks:** `mix letflow.check_queue_reconciliation`
+(ISS-0848/ISS-0849) checks each yaml file's declared `(queue_ref, status)`
+pair against the live queue independently -- it has no cross-file pass that
+would notice two different files claiming the same queue task id. Nor does
+`mix letflow.check_issue_refs`'s R1-R5 rule set (ISS-0848's own "prefixed
+numbering schema" work) -- none of its five rules cross-references `queue_ref`
+values against each other, only against a file's own well-formedness. A
+collision surfaces only when someone happens to notice the paired file's
+title/body doesn't match while investigating an unrelated status_mismatch
+(this is how ISS-0870 found it) -- there is no automated signal today.
+
+**Symptom to recognize:** a `status_mismatch` finding that seems to resolve
+cleanly by releasing the queue task to match one file's yaml, but the queue
+task's own title/body (visible via `set_lock`'s response, or `GET /tasks`)
+describes a different subject than the file you're reconciling. Don't trust
+the `queue_ref` field alone -- read the live task's own title/body before
+releasing it, especially when a nearby-but-different issue number exists.
+
+**Fix applied this round:** identified ISS-0446 as task 453's true owner
+(content match) and released it `done` to match ISS-0446's genuinely-resolved
+status; left ISS-0453.yaml's own `queue_ref: Q-453` in place (its true task,
+if one was ever separately registered, was not located) but added an explicit
+in-file caution against acting on it, per this entry.
+
+**Not fixed, left as an open gap:** no gate exists yet to catch a second
+occurrence of this class automatically (a `mix letflow.check_issue_refs` rule
+cross-referencing every file's `queue_ref` for duplicates would catch it
+mechanically) -- worth a future small requirement, not filed as its own issue
+by this pass since it did not block ISS-0870's own resolution.

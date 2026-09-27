@@ -328,10 +328,27 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliation do
   # ("Release the queue task with release_lock(status: "blocked"), not "done"").
   defp compatible_queue_statuses(:issue, "instrumented"), do: ["blocked"]
   defp compatible_queue_statuses(:issue, "no_defect"), do: ["blocked"]
-  # 8 undocumented legacy values (reopened, fixed, declined,
-  # closed_not_applicable, resolved_via_duplicate, resolved_not_applicable,
-  # duplicate, done-as-issue-value) deliberately NOT mapped -- see §3.3b's
-  # open question. They fall through to :unrecognized_yaml_status.
+  # AMENDMENT (ISS-0870, 2026-09-27): 6 further legitimate terminal issue-status
+  # values, confirmed case-by-case against real files (not typos -- each is a
+  # genuinely distinct terminal disposition already in use across dozens of
+  # docs/issues/*.yaml records) rather than assumed. All five "closed for a
+  # reason other than a shipped fix" spellings map the same as "resolved":
+  # a queue release of "done" best-effort-closes the linked GitHub issue,
+  # which is the correct outcome for each of these (the issue is settled,
+  # not awaiting further work), same as a plain "resolved". "reopened" is
+  # the mirror of "open" -- an issue explicitly un-terminaled after a prior
+  # resolution attempt didn't hold; it must NOT be treated as done/blocked
+  # or a genuinely-still-broken record would report itself reconciled.
+  defp compatible_queue_statuses(:issue, "done"), do: ["done", "blocked"]
+  defp compatible_queue_statuses(:issue, "resolved_via_duplicate"), do: ["done", "blocked"]
+  defp compatible_queue_statuses(:issue, "closed_not_applicable"), do: ["done", "blocked"]
+  defp compatible_queue_statuses(:issue, "resolved_not_applicable"), do: ["done", "blocked"]
+  defp compatible_queue_statuses(:issue, "declined"), do: ["done", "blocked"]
+  defp compatible_queue_statuses(:issue, "reopened"), do: ["open"]
+  # Remaining undocumented legacy values (fixed, duplicate) deliberately NOT
+  # mapped -- not seen on any live record as of this amendment, still an open
+  # question for whoever next encounters one. They fall through to
+  # :unrecognized_yaml_status.
   defp compatible_queue_statuses(:issue, _unrecognized), do: nil
 
   # -- I/O: token resolution -------------------------------------------------

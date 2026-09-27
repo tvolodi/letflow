@@ -67,6 +67,159 @@ fix_direction: >
      fix the yaml files using them instead.
   4. Re-run mix letflow.check_queue_reconciliation and quote a clean (or
      fully explained remainder) result.
-status: open
+status: resolved
 queue_ref: "Q-870"
 github_ref: "GH-1906"
+resolution_2026_09_27: >
+  All 26 findings investigated individually per ISS-0849's own case-by-case
+  rule (no bulk-force in either direction). Disposition:
+
+  PRIORITY ITEM -- ISS-0868/task868 (investigated first, live, before
+  anything else): re-verified whether the stale-connection-holder problem
+  is ACTUALLY still present right now, rather than trusting either side's
+  word. Full-host `ps` (root-visible, boot since 2026-05-12, not a
+  per-session sandbox), `sudo fuser 5463/tcp`/`lsof -i :5463`, and a direct
+  `pg_stat_activity` query against the real `letflow-1-postgres-1`
+  container all agree: no `mix run --no-halt` process exists anywhere on
+  the host, no PID 3011743, and Postgres itself reports only 6 total
+  backend connections (5 background workers open since server start plus
+  this investigation's own). The problem that was real hours earlier (per
+  docs/anti-patterns.md's own flip-flop history: gone -> found running
+  again by TEST-RUNNER, 2d10h uptime, 30 connections, 2026-09-27 ~07:20Z)
+  is genuinely NOT present now. docs/issues/ISS-0868.yaml flipped
+  `open` -> `resolved` to match queue task 868's own (correct) `done` --
+  the yaml was the stale side this time, not the queue. Left
+  docs/anti-patterns.md's symptom-to-cause entry in place since the
+  condition has recurred before and may again.
+
+  Cross-repo requirement -- REQ-222 (yaml `pending` vs queue task 449
+  `done`): verified live rather than trusting the queue's claim --
+  `GET /tasks?eligible=true` against the real service returns exactly the
+  shape this requirement specifies (a `tasks` key, `blocked_by`/`eligible`
+  computed fields). The endpoint demonstrably exists and works; this
+  repo's yaml had simply never been updated for a cross-repo completion.
+  Flipped `pending` -> `done`. SIDE EFFECT: this made REQ-223/REQ-224's
+  `blocked-by: REQ-222` deferrals stale per
+  `mix letflow.check_deferral_staleness` (a real, correct gate reaction).
+  Verified live that REQ-223 (set_lock eligibility gate) is genuinely NOT
+  implemented yet (locked queue task 857, open/unlocked with an unmet
+  dependency, and it still returned 200 and locked -- released immediately
+  after the check) and that REQ-224 (TASK_QUEUE.md rewrite) is also not
+  done (re-read TASK_QUEUE.md in full; no GET /tasks or set_lock-gate
+  section exists). Registered both for real via `register_task` (tasks
+  871, 872; `depends_on` wired to 449 and 871 respectively) rather than
+  re-scoping the deferral hatch, since both are now genuinely unblocked
+  and claimable -- this is the mechanical registration ORCH would do
+  routinely, not an implementation of either requirement.
+
+  Dormant mobile requirement -- REQ-294 (yaml `pending` vs queue task 585
+  `blocked`): LEFT AS-IS, genuinely intentional, not drift. The
+  requirement's own `impl_order` comment already documents this exact
+  mismatch as deliberate: MOBILE-DEV is dormant per CLAUDE.md's roster,
+  and task 585 was registered only to satisfy
+  `mix letflow.check_deferral_staleness`'s mechanical requirement, then
+  immediately locked+released `blocked` specifically so it can never be
+  claimed via `get_next_task`. This is the one finding
+  `mix letflow.check_queue_reconciliation` still reports after this fix --
+  expected and explained, not a bug.
+
+  Issue-status vocabulary gap (the bulk of the 26): extended
+  `Mix.Tasks.Letflow.CheckQueueReconciliation.compatible_queue_statuses/2`
+  (lib/mix/tasks/letflow.check_queue_reconciliation.ex) to recognize 6
+  further legitimate terminal issue-status values, confirmed case-by-case
+  as real (not typos) against every file that uses them: `done`,
+  `resolved_via_duplicate`, `closed_not_applicable`,
+  `resolved_not_applicable`, `declined` (all -> `{done, blocked}`, same
+  bar as `resolved`) and `reopened` (-> `{open}` only -- the mirror of
+  `open`, not of `resolved`). `docs/agents/protocols/ISSUE_QUEUE.md`'s
+  canonical "Issue status vocabulary" section and
+  `lib/letflow/design/iss0848-queue-reconciliation-check.md`'s §3.3b table
+  both amended to match. Covers ISS-0287, ISS-0340 (see below), ISS-0391,
+  ISS-0393, ISS-0557, ISS-0762, ISS-0763, and the 12 recently-closed
+  ISS-08xx files using `done` (ISS-0824, ISS-0836, ISS-0838..0844,
+  ISS-0849..0851) -- all confirmed genuine terminal dispositions, none a
+  typo. Test coverage added: 12 new/updated cases in
+  test/mix/tasks/letflow_check_queue_reconciliation_test.exs (fixture-based,
+  40 total in that file, all passing); `mix compile --warnings-as-errors`
+  clean.
+
+  `reopened` findings that needed real investigation, not just vocabulary --
+  ISS-0287 and ISS-0340: for both, adding the `reopened` -> `{open}` mapping
+  reclassified a previously-silent `unrecognized_yaml_status` into a real
+  `status_mismatch` (queue reported `done` for both). Investigated each:
+  ISS-0340's own REVIEWER-identified root cause and suggested fix
+  (`Code.ensure_loaded!` before the `function_exported?` assertion) was
+  NEVER applied -- confirmed live, test/letflow/api/context_test.exs:104
+  still has the exact vulnerable shape. ISS-0287's reopen (N=8-partition
+  recurrence of the connection-pool-headroom issue) has no later fix commit
+  addressing it. Both genuinely still broken; queue tasks 287 and 340
+  released back to `open` to match their yaml's own `reopened` status
+  (was `done` on both, incorrectly).
+
+  Issue-file status_mismatch requiring individual resolution:
+  - ISS-0446 (yaml `resolved`) vs queue task 453 (`open`): confirmed a real
+    fix landed (commit 8ee7cdb3, PR #873) -- released task 453 back to
+    `done`. Discovered in the process: docs/issues/ISS-0453.yaml
+    ALSO independently declares `queue_ref: Q-453`, for a completely
+    different flaky-test issue (poller/scheduler antagonist-loop, not
+    service_task_dispatcher_test) -- confirmed by locking task 453 live and
+    reading its own title/body, which is unambiguously ISS-0446's subject.
+    This predates the 2026-09-09 id-prefixing rename, so it's a genuine
+    filing-time collision, not a renumbering artifact. Nulled
+    ISS-0453.yaml's `queue_ref` (per ISSUE_QUEUE.md's R4 null-with-comment
+    convention) rather than leave it pointing at a task that belongs to a
+    different issue; its true task (if any was ever registered) was not
+    located. New docs/anti-patterns.md entry: "`queue_ref` collisions
+    across two different `docs/issues/*.yaml` files" -- no current gate
+    catches this class; flagged as a future small-requirement candidate,
+    not filed as its own issue since it didn't block this fix.
+  - ISS-0454 (yaml `resolved`) vs queue task 454 (`open`): confirmed real
+    fix (commit b7a6dbe7, PR #871) -- released task 454 to `done`. Same
+    session also surfaced a SECOND, closely-related collision:
+    docs/issues/ISS-0447.yaml (the original, broader "8 sites" filing that
+    ISS-0454 was scoped out of) ALSO independently declares
+    `queue_ref: Q-454` (its own text already flagged this). Re-verified
+    live (`grep -rn "if Process.alive?" test/ lib/`) that every site
+    ISS-0447 named is now accounted for -- fixed, correctly classified
+    benign by ISS-0454's own diagnosis, or the pattern no longer exists at
+    that call site in the other 4 files. Marked ISS-0447
+    `resolved_via_duplicate` (superseded_by: ISS-0454) rather than leaving
+    it open against a task that was never really tracking it.
+  - ISS-0745 (yaml `open`) vs queue task 809 (`done`): confirmed
+    docs/issues/ISS-0809.yaml is a genuine, independently-filed and
+    independently-resolved duplicate of the identical defect (same
+    InstanceDetailPage.tsx/definition_name-definition_version root cause,
+    same queue_ref Q-809 collision pattern) -- confirmed live that
+    InstanceDetailPage.tsx now sources the label via `useDefinition`, per
+    ISS-0809's own resolution, not ISS-0745's. Marked ISS-0745
+    `resolved_via_duplicate` (superseded_by: ISS-0809); queue task 809 left
+    `done` (correct).
+  - ISS-0764 (yaml `open`) vs queue task 808 (`done`): identical shape --
+    docs/issues/ISS-0808.yaml is a genuine duplicate (same
+    tenant_status.ex:92-95 PLATFORM_ADMIN raw-roles finding), confirmed
+    live via the inline "# ISS-0808: use Authorization.roles_from_strings/1"
+    comment now in lib/letflow/plugs/tenant_status.ex. Marked ISS-0764
+    `resolved_via_duplicate` (superseded_by: ISS-0808); queue task 808 left
+    `done` (correct).
+
+  RESULT: of 26 original findings, 25 resolved (17 by vocabulary extension
+  covering already-correct pairs, 2 by correcting stale queue state to
+  match a verified-correct yaml [287, 340 -- reopened back to `open`], 1 by
+  correcting stale queue state the OTHER direction [453 -- released to
+  `done`], 1 by correcting stale queue state for a cross-repo requirement
+  [REQ-222 -> `done`], 4 by correcting stale/misattributed yaml to
+  `resolved_via_duplicate` [ISS-0745, ISS-0764, ISS-0447, plus the priority
+  ISS-0868 fix] -- see disposition above for the precise count per
+  category); 1 (REQ-294) intentionally left as a documented, non-drift
+  exception. `mix letflow.check_queue_reconciliation` re-run clean except
+  for that one explained finding (quoted below). Two net-new queue tasks
+  (871, 872) registered as a side effect of REQ-222's own correction, both
+  genuinely unimplemented and correctly left `open`/claimable.
+
+  Final `mix letflow.check_queue_reconciliation` output:
+    sources checked: 756
+    queue tasks seen: 872
+    findings: 1
+    [status_mismatch] requirement REQ-294 (yaml status "pending") -> queue
+    task 585: yaml status "pending" maps to queue {open}; queue task 585
+    reports "blocked" -- intentional, see above.

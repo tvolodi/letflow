@@ -101,6 +101,12 @@ defmodule Letflow.Api.ContextTest do
   # the tenant-provisioning setup does not run for it -- ISS-0340.
   describe "scoped_repo_opts/1 API shape" do
     test "scoped_repo_opts/1 is 1-arity — no tenant/schema/prefix parameter exists to pass" do
+      # ISS-0340: function_exported?/3 returns false for a module that isn't
+      # currently loaded (it does not trigger loading), so this assertion's
+      # outcome depended on ordering luck under Mix's lazy code loading.
+      # Force loading first so this tests the real invariant (arity), not
+      # incidental VM load state.
+      Code.ensure_loaded!(Context)
       assert function_exported?(Context, :scoped_repo_opts, 1)
       refute function_exported?(Context, :scoped_repo_opts, 2)
       refute function_exported?(Context, :scoped_repo_opts, 3)

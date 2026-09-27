@@ -73,3 +73,17 @@ process_note: >
   be the cause. Reproduction rate now high enough across enough unrelated
   PRs that this should be picked up and fixed rather than continuing to
   be bypassed indefinitely -- consider raising severity from MINOR.
+
+  UPDATE 2026-09-27 (DOC-UPDATER, PR #1917 for ISS-0340 merge): reproduced
+  again, both failures, on PR #1917's CI backend gate (a two-line
+  test-comment-only change to test/letflow/api/context_test.exs plus a
+  docs/issues/ISS-0340.yaml status flip -- no file this PR touches is
+  identity_test.exs, bpm_default_realm_displacement.ex, or anything they
+  reference). Same two tests
+  (resolve_tenant_by_realm/1/resolve_realm_by_tenant/1, REQ-019 AC1),
+  same `** (Ecto.NoResultsError) expected at least one result but got
+  none` at test/support/bpm_default_realm_displacement.ex:118 via
+  insert_default_tenant!(), both at test/letflow/identity_test.exs:534
+  and :541. `Result: 1288/1290 passed, 1 excluded; Failed: 2 tests` --
+  no other failures in the run. Admin-merged past it per the same
+  established precedent as the two updates above.

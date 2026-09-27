@@ -1,0 +1,56 @@
+{
+  "handoff_id": "WF03-ISS0829-20260927-step-02",
+  "run_id": "WF03-ISS0829-20260927",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0829-20260927/step-02-code-designer.json",
+  "created_at": "2026-09-27T11:11:05Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S11",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["WF03-ISS0829-20260927-step-01"],
+    "artifacts_in": [
+      "test/letflow/platform/migration_rollout_test.exs",
+      "lib/letflow/platform/migration_rollout.ex",
+      "lib/letflow/design/req374-tenant-migration-fanout-runner.md"
+    ],
+    "owned_modules": [
+      "test/letflow/platform/migration_rollout_test.exs"
+    ]
+  },
+  "task": {
+    "description": "ISSUE-FIXER's diagnosis (handoffs/WF03-ISS0829-20260927/step-01-issue-fixer-diagnosis.json) confirmed the real root cause of ISS-0829: EO-004 and EO-005 in test/letflow/platform/migration_rollout_test.exs assert on GLOBAL rollout state (e.g. rollout.status == \"completed\", a global tenant/write count, or an already_current check) that Letflow.Platform.MigrationRollout's apply_to_existing_rollout/2 (lib/letflow/platform/migration_rollout.ex:218-256) legitimately recomputes against ALL currently-active company tenants (active_company_tenant_ids/0, lines 423-432) on every call -- a deliberate design choice documented in lib/letflow/design/req374-tenant-migration-fanout-runner.md §9 OQ-1. Under scripts/test_parallel.sh's full parallel-suite load, other concurrently-running test files provisioning/activating tenants in the SAME per-partition database can land in that exact window and inflate/change EO-004/EO-005's global counts, breaking their assertions non-deterministically. This is NOT a production code defect -- it's a test-isolation gap. The adjacent 'queryable outcome record' test in the same file (cited by ISSUE-FIXER, ~lines 288-327) already defends against this exact hazard class (per ISS-0716) using >= comparisons and tenant-scoped filtering instead of exact/global assertions. Design the fix to EO-004 and EO-005 following that same established pattern: scope each test's assertions to the tenants IT created (not global state), using >= or tenant-filtered queries where an exact/global assertion is currently fragile. Write the design to lib/letflow/design/iss0829-migration-rollout-test-isolation.md. Design only -- no test-code edits.",
+    "acceptance_criteria": [
+      "Design identifies the exact assertion(s) in EO-004 and EO-005 that currently depend on global/all-tenant state rather than tenant-scoped state",
+      "Design specifies the tenant-scoped replacement for each (following the precedent at ~lines 288-327 of the same file, citing ISS-0716)",
+      "Design explicitly confirms no production code (lib/letflow/platform/migration_rollout.ex) needs to change -- this is a test-only fix, matching ISSUE-FIXER's diagnosis",
+      "Design states how the fix will be verified against the actual race (e.g. re-run under scripts/test_parallel.sh -N 4 repeatedly, or a targeted concurrent-load repro like ISSUE-FIXER's own reproduction attempt)",
+      "No implementation code in the design doc",
+      "This is a first dispatch: claim by setting status to IN_PROGRESS only, then complete normally with a real result block."
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0829-20260927",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0829-20260927",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -7,9 +7,9 @@
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ418-20260927/step-03b-test-design-gate.json",
   "created_at": "2026-09-27T07:49:31Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-27T08:05:00Z",
+  "completed_at": "2026-09-27T08:35:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -41,8 +41,8 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Verified all 8 of REQ-418's acceptance criteria (cross-checked directly against docs/requirements.yaml lines 31106-31114, not just test/specs/REQ-418.md's own claims) each map to a real, non-placeholder test. AC1/AC2 -> test/letflow/api/keycloak_realm_mobile_client_test.exs (11 static assertions on the letflow-mobile client's shape + 2 wildcard-guard/letflow-web-byte-identical assertions; confirmed against the actual priv/keycloak/realms/bpm-default.json client objects, not just the spec's description). AC3/AC4 -> the new test/letflow/integration/keycloak_mobile_client_auth_test.exs: AC3a asserts HTTP 200 + text/html content-type; AC3b asserts non-200, no Location header naming evil.example, and body names redirect_uri; AC3c branches on the two AC-permitted response shapes and asserts specific content for whichever occurred -- none of the three is a vague succeeds/fails check. AC4 asserts both \"letflow-web\" in aud_list AND azp == \"letflow-mobile\" as two distinct assertions. AC5/AC6/AC7 -> test/letflow/routers/mobile_tenant_config_test.exs's REQ-418 describe blocks (six-key exact-shape equality across all four never-error paths, client_id default/env-override/cross-path-identity tests, moduledoc refute/assert substring checks) -- all real, none stubbed. AC8 is the process gate, already satisfied per step-02c/step-02d PASS handoffs. Confirmed the new file's @moduletag :keycloak, async: false, and setup_all `raise \"Keycloak not ready...\"` reachability check exactly mirror keycloak_auth_pipeline_test.exs's established convention (no invented {:skip, ...}). git diff main...HEAD -- mix.exs mix.lock is empty: no new HTTP dependency added; the new file reuses test/support/keycloak_test_client.ex's ensure_started/0, discovery_reachable?/1, direct_access_token/4 and raw :httpc for its two file-specific raw calls, per its own moduledoc rationale. Test isolation: the new file makes no DB calls and mutates no Application.get_env state (unlike keycloak_auth_pipeline_test.exs's setup override of :letflow, :oidc, which is installed/restored within its own on_exit); both files are async: false, and ExUnit serializes all async: false Cases relative to each other regardless of module, so no race exists even if both ran under one --include keycloak invocation. Reproduced `MIX_ENV=test mix compile --warnings-as-errors --force` myself: \"Compiling 308 files (.ex) / Generated letflow app\", matching the spec's quoted output exactly.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
@@ -53,7 +53,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-RUNNER to run `mix test --include keycloak` (or `mix letflow.check.test`) against a real running Keycloak, per test/specs/REQ-418.md's own 'Not run by TEST-DESIGNER' note."
   },
   "rework_count": 0,
   "max_rework": 3

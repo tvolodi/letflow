@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF02-REQ419-20260927-step-02d",
+  "run_id": "WF02-REQ419-20260927",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ419-20260927/step-02d-reviewer.json",
+  "created_at": "2026-09-27T15:51:16Z",
+  "started_at": "2026-09-27T15:51:16Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-419"],
+    "requirement_text": {
+      "REQ-419": "Build-order M1 (docs/mobile/build-order.md): MOB-1 in docs/mobile/requirements.md, placement and stack per docs/mobile/architecture.md §2, stack settled by docs/migration/decisions/0012-mobile-tier-stack.md (not re-decided here). This requirement creates apps/mobile/; nothing in it authenticates or fetches (that is REQ-421). BUILDS a Flutter scaffold via flutter create (applicationId/bundle id com.bizdala.letflow, minSdk 26/iOS 15.0), pubspec dependencies (go_router, flutter_riverpod, dio, flutter_appauth, flutter_secure_storage, intl -- declared only, no code exercising them yet), the lib/ directory layout per architecture.md §2, a renderer registry with an explicit unsupported-definition-type fallback widget (never a blank screen), three static guards under apps/mobile/test/guards/ (module boundary per 0039 D3, forbidden on-device dependencies, no compiled-in tenant identifier) each with a self-test proving it fires, analysis_options.yaml, apps/mobile/README.md, a docs/mobile/README.md update, and ios/Podfile's platform 15.0 line (iOS build itself deferred, Windows host, no Xcode)."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req419-mobile-scaffold.md",
+      "docs/anti-patterns.md",
+      "docs/migration/decisions/0012-mobile-tier-stack.md",
+      "docs/migration/decisions/0020-frontend-architecture.md",
+      ".claude/agents/mobile-dev.md"
+    ],
+    "owned_modules": ["apps/mobile/", "docs/mobile/README.md"]
+  },
+  "task": {
+    "description": "Review the diff on branch feature/WF02-REQ419-20260927 (`git diff origin/main...HEAD`) against your four standard questions (idiomatic vs. crutch, supervision integrity, type-safety gaps, scope creep) and docs/anti-patterns.md. This is a scaffold requirement with no supervision-tree surface (no lib/letflow/process_instance.ex or instance_supervisor.ex involvement -- pure apps/mobile/ Dart/Flutter code), so 'idiomatic vs. crutch' here means: is the lib/ layout genuinely per architecture.md §2, are the three static guards real fail-the-build checks (not busywork grepping with no real failure condition), does the renderer registry's fallback widget genuinely render something explicit rather than an empty container, and is scope held to exactly what REQ-419 asks (no auth flow code snuck in ahead of REQ-421, no webview/scripting runtime, no tenant identifier compiled in -- MOBILE-DEV's own three tier constraints from .claude/agents/mobile-dev.md). Flag as scope creep anything beyond REQ-419's own BUILDS list -- MOBILE-DEV's own report notes one addition beyond the design text (an Android manifestPlaceholders entry for appAuthRedirectScheme, needed only to make flutter build apk --debug succeed with the flutter_appauth dependency present) -- judge whether that is legitimate build-plumbing or scope creep. FAIL if a genuine crutch, scope creep, or a violated tier constraint is found; otherwise PASS with any non-blocking notes recorded.",
+    "acceptance_criteria": [
+      "Each of the four standard questions answered against the actual diff, not a general impression",
+      "The manifestPlaceholders addition explicitly judged: legitimate build-plumbing or scope creep, with reasoning",
+      "Each of MOBILE-DEV's three tier constraints (tenant-agnostic build, no general scripting runtime on-device, no offline write queue) explicitly checked against this diff",
+      "docs/anti-patterns.md checked for any matching prior failure mode"
+    ]
+  },
+  "result": {
+    "status": "PENDING"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

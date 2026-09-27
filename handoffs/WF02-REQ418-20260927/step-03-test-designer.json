@@ -53,7 +53,7 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ418-20260927",
-      "commit_sha_list": ["<pending commit, see next git log>"],
+      "commit_sha_list": ["c132c20d"],
       "remote_branch": "origin/feature/WF02-REQ418-20260927",
       "push_status": "skipped",
       "pr_url": null,

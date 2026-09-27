@@ -287,10 +287,32 @@ defmodule Mix.Tasks.Letflow.CheckBoundariesTaskTest do
 
   describe "system invocation (AC2)" do
     test "exits 0 on the current branch tree (AC2)" do
+      # ISS-0832: explicitly pass through MIX_ENV/MIX_TEST_PARTITION/MIX_BUILD_PATH
+      # to the spawned `mix` subprocess rather than relying on inheritance.
+      # Under a normal single-partition `mix test` run inheritance happens to
+      # work, but under `scripts/test_parallel.sh --partitions N` each partition
+      # runs as its own env-scoped invocation and the child subprocess needs
+      # these forwarded explicitly (same pattern as
+      # test/support/tenant_slug_test.exs's own System.cmd/3 call) so the check
+      # runs against the same build/partition the parent test is running under.
+      # If a future partition-count change reintroduces env-inheritance
+      # assumptions here, this is the test that will start failing again.
+      env =
+        [{"MIX_ENV", System.get_env("MIX_ENV", "test")}] ++
+          case System.get_env("MIX_TEST_PARTITION") do
+            nil -> []
+            partition -> [{"MIX_TEST_PARTITION", partition}]
+          end ++
+          case System.get_env("MIX_BUILD_PATH") do
+            nil -> []
+            build_path -> [{"MIX_BUILD_PATH", build_path}]
+          end
+
       {output, exit_code} =
         System.cmd("mix", ["letflow.check_boundaries"],
           cd: @project_root,
-          stderr_to_stdout: true
+          stderr_to_stdout: true,
+          env: env
         )
 
       assert exit_code == 0, "expected exit 0; got #{exit_code}. Output:\n#{output}"

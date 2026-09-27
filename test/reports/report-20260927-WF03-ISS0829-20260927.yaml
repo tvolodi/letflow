@@ -1,0 +1,178 @@
+run_id: WF03-ISS0829-20260927
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+issue_ids:
+  - ISS-0829
+branch: feature/WF03-ISS0829-20260927
+head_sha_verified: >
+  622f56f4 -- confirmed via `git log --oneline -1` after checkout+pull,
+  matching the dispatch's stated commit exactly: "chore(ORCH): dispatch
+  WF03-ISS0829-20260927 Step 04 to TEST-RUNNER", on top of
+  "gate(REVIEWER): PASS ISS-0829 EO-004/EO-005 test-isolation fix".
+generated_at: "2026-09-27T18:00:00Z"
+change_scope:
+  note: >
+    `git diff origin/main...HEAD --stat`: only
+    test/letflow/platform/migration_rollout_test.exs (+64/-12) touches test
+    code; the rest of the diff is handoff JSON files and a design doc under
+    lib/letflow/design/. ISS-0829's fix is scoped entirely to this one test
+    file's tenant/invariant-scoped EO-004/EO-005 assertions.
+environment:
+  host: "Windows 11, Git Bash / PowerShell dual shell, port 5462 letflow-postgres-1"
+  docker_health_check: >
+    `docker ps` confirmed letflow-postgres-1 healthy on 0.0.0.0:5462->5432/tcp
+    (up 32h at time of check) and letflow-keycloak-1 healthy on :8093. No
+    `docker compose up` was run -- containers were already healthy.
+  toolchain: "local mix/Elixir 1.20.3 (Erlang/OTP 29) toolchain"
+  test_parallel_n: "4 (TEST_PARALLEL_N override per dispatch)"
+incident_during_run: >
+  A first `TEST_PARALLEL_N=4 scripts/test_parallel.sh` attempt was launched
+  via a manually-backgrounded `nohup ... &` shell job. That approach is
+  unreliable on this host: the tool session believed the job had exited
+  (immediate empty `ps aux` check after the call returned), but the actual
+  Erlang/beam process tree (PID 41757 and its children 41759/41839/41842)
+  was still alive and running its own full 4-partition `mix test` invocation
+  in the background, invisibly. When the properly-backgrounded second
+  attempt (via the Bash tool's own `run_in_background`, PID tree 42629) was
+  launched shortly after, both attempts were connecting to the same
+  letflow_dev Postgres instance simultaneously (8 total partitions x
+  TEST_POOL_SIZE=20 against max_connections=100), which starved out
+  partitions 1 and 4 of the second run with `FATAL 53300 too_many_connections`
+  and aborted them before any Result: line (exit 1, 0 tests each). Diagnosed
+  via `ps -ef` showing the stray PID 41757 tree still running an identical
+  `mix test --partitions 4` invocation; killed it (`kill -9` on
+  41757/41759/41839/41842), confirmed Postgres back to baseline (6
+  connections via `pg_stat_activity`), and reran cleanly. The numbers below
+  are from that clean rerun (PID tree 42629, TEST_PARALLEL_GROUP=tp42629),
+  the only run with zero connection contention. Lesson for future runs on
+  this host: a shell `&`-backgrounded job is not reliably killed just
+  because a follow-up `ps aux` check in a new Bash tool call shows nothing --
+  always verify with `ps -ef | grep erl` for stray beam processes before
+  trusting a "not running" read, and prefer the Bash tool's own
+  `run_in_background` over manual `nohup ... &`.
+run_1_targeted:
+  command: "mix test test/letflow/platform/migration_rollout_test.exs --trace"
+  result: "Result: 12 passed"
+  detail: >
+    All 12 tests in the ISS-0829-fixed file passed, including the two
+    tenant/invariant-scoped EO-004/EO-005 assertions this fix added
+    ("test EO-005 -- starting the identical rollout again once every
+    company already holds the change performs zero writes and reports
+    every company as already-current" and its EO-004 sibling). 0 failures.
+run_2_full_suite:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  runs_performed: 2
+  run_1_contaminated:
+    note: >
+      Discarded -- ran concurrently with a stray orphaned process from an
+      earlier manual-backgrounding mistake (see incident note above).
+      combined: 2609 tests, 1 properties, 16 failures (2594/2610 passed);
+      partitions 1 and 4 both aborted at exit 1 with 0 tests
+      (too_many_connections during tenant-template setup). Not used for any
+      conclusion below.
+  run_2_clean:
+    combined_totals:
+      tests: 5008
+      properties: 6
+      failures: 3
+      passed: 5011
+      passed_over_total: "5011/5014"
+    per_partition:
+      - {partition: 1, tests: 1172, properties: 3, failures: 1, exit: 2}
+      - {partition: 2, tests: 1281, properties: 0, failures: 2, exit: 2}
+      - {partition: 3, tests: 1328, properties: 1, failures: 0, exit: 0}
+      - {partition: 4, tests: 1227, properties: 2, failures: 0, exit: 0}
+    full_output_capture: >
+      Ran via the Bash tool's own `run_in_background` (not a manual `&`
+      job) and polled synchronously with repeated in-turn checks against
+      the partition logs and the aggregator's own "Combined:" summary line
+      until it appeared -- no cross-turn notification was relied upon to
+      resume this subagent. Per-partition logs preserved at
+      /tmp/letflow_test_parallel.f0Gy6s/ (script's own non-zero-exit
+      preservation policy).
+iss_0829_regression_class_check: >
+  CONFIRMED CLEAN. Grepped all 4 partition logs for
+  "MigrationRolloutTest"/"migration_rollout" (case-insensitive): 17 hits,
+  all in partition 2, all routine passing SQL activity (INSERT/SELECT/UPDATE
+  against platform_migration_rollouts / platform_migration_rollout_outcomes)
+  with zero assertion-failure or error-level lines among them. None of the
+  3 full-suite failures reference MigrationRolloutTest, EO-004, or EO-005.
+failure_classification:
+  - test: "retire_oldest_eligible_month/1 -- happy path inserts a running row immediately, returns before the fanout completes, and the row later reaches completed"
+    module: Letflow.EventStore.RetentionOperationsTest
+    file: test/letflow/event_store/retention_operations_test.exs:278
+    partition: 1
+    classification: PRE_EXISTING_UNRELATED
+    detail: >
+      match (=) failed: `assert [outcome] = result.outcomes` got a 2-element
+      list back instead of 1 (one tenant unexpectedly already
+      "succeeded" instead of still "running" at the assertion point --
+      looks like a timing/ordering assumption in the test, not touched by
+      this branch). `git diff origin/main...HEAD -- test/letflow/event_store/retention_operations_test.exs`
+      is empty and `git log origin/main..HEAD -- <same file>` shows no
+      commits -- this branch's diff (`git diff origin/main...HEAD --stat`)
+      touches only test/letflow/platform/migration_rollout_test.exs and
+      non-code handoff/design files. Structurally unrelated to ISS-0829.
+  - test: "resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1) resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default) by its idp_realm_id"
+    module: Letflow.IdentityTest
+    file: test/letflow/identity_test.exs:534
+    partition: 2
+    classification: PRE_EXISTING_UNRELATED
+    detail: >
+      `Ecto.NoResultsError` -- `insert_default_tenant!()` in
+      test/support/bpm_default_realm_displacement.ex:118 expected the
+      seeded bpm-default tenant row to exist by idp_realm_id and found
+      none, under parallel-partition contention. `git diff
+      origin/main...HEAD` is empty for both
+      test/letflow/identity_test.exs and
+      test/support/bpm_default_realm_displacement.ex -- neither file is
+      touched by this branch. Structurally unrelated to ISS-0829.
+  - test: "resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1) resolve_realm_by_tenant/1 resolves the seeded default tenant's (bpm-default) idp_realm_id by its tenant id"
+    module: Letflow.IdentityTest
+    file: test/letflow/identity_test.exs
+    partition: 2
+    classification: PRE_EXISTING_UNRELATED
+    detail: >
+      Same root cause and same untouched files as the failure directly
+      above (shared `insert_default_tenant!()` helper race). Structurally
+      unrelated to ISS-0829.
+classification_summary:
+  pre_existing_unrelated: 3
+  new_unclassified: 0
+  attributable_to_iss_0829: 0
+overall_verdict: >
+  PASS for ISS-0829. The targeted test file
+  (test/letflow/platform/migration_rollout_test.exs) passed 12/12 including
+  both new EO-004/EO-005 tenant/invariant-scoped assertions this fix added.
+  In the clean full-parallel-suite run (the load-bearing check, since the
+  original defect only manifested under full-suite contention), 0 of the
+  5008 tests and 6 properties produced any migration-rollout-related
+  failure or error -- the class of defect ISS-0829 targeted did not
+  reappear. All 3 remaining full-suite failures
+  (Letflow.EventStore.RetentionOperationsTest and 2x Letflow.IdentityTest)
+  are structurally confirmed via `git diff origin/main...HEAD` to be in
+  files this branch's diff does not touch at all -- pre-existing and
+  unrelated to ISS-0829, not assumed by count-matching.
+  Combined: 5011/5014 passed, 3 failed (targeted-file total: 12/12 passed).
+notes:
+  - >
+    Full per-partition logs preserved under /tmp/letflow_test_parallel.f0Gy6s/
+    (clean run) and /tmp/letflow_test_parallel.bkB0n9/ (contaminated run,
+    kept for the incident record above) for RELEASE-VALIDATOR's independent
+    inspection.
+  - >
+    Anti-pattern for future runs on this host: do not manually background a
+    long-running mix/test_parallel invocation with shell `&`/`nohup` and
+    trust a subsequent `ps aux` check from a new Bash tool call to prove it
+    is dead -- the underlying OS process tree can outlive what the tool
+    session believes finished. Use the Bash tool's own `run_in_background`
+    parameter instead, and if a stray process is ever suspected, verify with
+    `ps -ef | grep erl` before relaunching, to avoid double-running the
+    suite against the same Postgres instance.
+next_action: >
+  Route to RELEASE-VALIDATOR for independent re-verification. No action
+  needed on the 3 pre-existing failures beyond flagging them for
+  ISSUE-FIXER triage (Letflow.EventStore.RetentionOperationsTest timing
+  assumption; Letflow.IdentityTest / bpm_default_realm_displacement.ex
+  seeded-tenant race under parallel partitions) -- neither blocks ISS-0829.

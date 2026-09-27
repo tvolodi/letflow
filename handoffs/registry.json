@@ -7291,6 +7291,22 @@
                      "completed_at":  "2026-09-27T10:28:36Z",
                      "last_known_step":  "Step Final COMPLETED PASS -- PR #1900 (62fedd30) squash-merged via --admin (structural attribution: pre-existing ISS-0832-class MIX_TEST_PARTITION/MIX_ENV mismatch in CheckBoundariesTaskTest AC2, confirmed untouched by this branch's diff). SECURITY-REVIEWER PASS, REVIEWER PASS, RELEASE-VALIDATOR PASS. Queue task 855 released done.",
                      "note":  "MOB-2 OIDC: new public PKCE-S256 letflow-mobile Keycloak client + sixth client_id key on GET /api/mobile/tenant-config. SECURITY-REVIEWER gated. First requirement of the S9 mobile-tier chain after REQ-417 unblocked it. Rework iteration 1 on Step 01 (CODE-DESIGN-VALIDATOR caught a wrong section/line reference in the design doc plus a missed pre-existing-test-collision risk); PASSed on re-check. All later gates (SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, RELEASE-VALIDATOR) PASSed on first attempt."
+                 },
+                 {
+                     "run_id":  "WF03-ISS0829-20260927",
+                     "workflow_id":  "WF-03",
+                     "status":  "IN_PROGRESS",
+                     "issues":  [
+                                    "ISS-0825",
+                                    "ISS-0829"
+                                ],
+                     "owned_modules":  [
+                                    "test/letflow/platform/migration_rollout_test.exs"
+                                ],
+                     "started_at":  "2026-09-27T10:53:38Z",
+                     "completed_at":  null,
+                     "last_known_step":  "Step 06 COMPLETED PASS -- ISSUE-FIXER closed docs/issues/ISS-0825.yaml (resolved). REVIEWER PASS, TEST-RUNNER PASS, RELEASE-VALIDATOR PASS (independent full-suite re-run, zero failures referencing MigrationRolloutTest). Rework iteration 1 on Step 02 (CODE-DESIGN-VALIDATOR caught literal .exs code blocks in the design doc, violating the no-implementation-code rule); PASSed on re-check. Awaiting Step Final (git-merge, PR #1912).",
+                     "note":  "Queue issue-type task ISS-0829 (local record docs/issues/ISS-0825.yaml) jumped the line ahead of the S9 mobile requirement backlog per get_next_task's LIFO issue priority. Root cause (ISSUE-FIXER): EO-004/EO-005 asserted global rollout/tenant state that MigrationRollout.apply_to_existing_rollout/2 legitimately recomputes over all active tenants on every call (a documented design choice, req374 Sec9 OQ-1) -- not a defect. Fix: tenant/rollout-scoped assertions, test-only, following the file's existing ISS-0716 precedent. Two pre-existing, unrelated failure classes (Letflow.EventStore.RetentionOperationsTest, Letflow.IdentityTest REQ-019 AC1) surfaced incidentally during independent re-verification runs and are pending ORCH filing as separate issues, per the incidental-finding rule."
                  }
              ]
 }

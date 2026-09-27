@@ -386,9 +386,27 @@ defmodule Letflow.Platform.MigrationRolloutTest do
 
       assert good_row_after.completed_at == good_outcome_before.completed_at
 
-      # The rollout itself is now complete (every company succeeded).
-      assert resumed_result.rollout.completed_at != nil
-      assert resumed_result.rollout.status == "completed"
+      # The rollout itself matches its own outcome set's completion
+      # invariant -- not a hardcoded "completed" literal that assumes
+      # good/poisoned are the only tenants ever in scope. A concurrently
+      # leaked tenant swept into this same rollout_id (active_company_tenant_ids/0
+      # scopes over every active tenant in the shared test database -- see
+      # this file's moduledoc and the ISS-0829 design doc §2.2) could still be
+      # outstanding when this call returns, in which case the rollout is
+      # correctly left "running" rather than "completed". Either branch
+      # below is a real assertion on production behavior (the rollout's
+      # stored status always matches its own outcome set), not a value that
+      # depends on how many tenants happen to exist platform-wide.
+      all_rollout_outcomes =
+        Repo.all(from(o in Outcome, where: o.rollout_id == ^first_result.rollout.id))
+
+      if Enum.all?(all_rollout_outcomes, &(&1.status == "succeeded")) do
+        assert resumed_result.rollout.completed_at != nil
+        assert resumed_result.rollout.status == "completed"
+      else
+        assert resumed_result.rollout.completed_at == nil
+        assert resumed_result.rollout.status == "running"
+      end
     end
   end
 
@@ -407,10 +425,24 @@ defmodule Letflow.Platform.MigrationRolloutTest do
       assert {:ok, first_result} =
                MigrationRollout.start_rollout("invoice", attribute, column_spec())
 
-      assert Enum.all?(first_result.outcomes, &(&1.status == "succeeded"))
+      # Scoped to this test's own tenants -- first_result.outcomes may also
+      # contain a concurrently leaked tenant's outcome (active_company_tenant_ids/0
+      # scopes over every active tenant in the shared test database; see
+      # this file's moduledoc and the ISS-0829 design doc §3.1), which has
+      # nothing to do with this test's own claim.
+      assert outcome_for(first_result, good_a.tenant_id).status == "succeeded"
+      assert outcome_for(first_result, good_b.tenant_id).status == "succeeded"
 
-      rollout_count_before = Repo.aggregate(Rollout, :count, :id)
-      outcome_count_before = Repo.aggregate(Outcome, :count, :id)
+      rollout_before = Repo.get!(Rollout, first_result.rollout.id)
+
+      outcome_count_query =
+        from(o in Outcome,
+          where:
+            o.rollout_id == ^first_result.rollout.id and
+              o.tenant_id in ^[good_a.tenant_id, good_b.tenant_id]
+        )
+
+      outcome_count_before = Repo.aggregate(outcome_count_query, :count, :id)
 
       completed_at_a_before = outcome_for(first_result, good_a.tenant_id).completed_at
       completed_at_b_before = outcome_for(first_result, good_b.tenant_id).completed_at
@@ -419,8 +451,13 @@ defmodule Letflow.Platform.MigrationRolloutTest do
       assert {:ok, second_result} =
                MigrationRollout.start_rollout("invoice", attribute, column_spec())
 
-      # Every entry reports already_current: true.
-      assert Enum.all?(second_result.outcomes, & &1.already_current)
+      # Scoped to this test's own tenants -- second_result.outcomes may
+      # also contain a freshly-registered, freshly-swept-in tenant's
+      # outcome (by construction never already_current, since it did not
+      # exist before this call's own sweep -- see design §3.3), which has
+      # nothing to do with this test's own claim.
+      assert outcome_for(second_result, good_a.tenant_id).already_current
+      assert outcome_for(second_result, good_b.tenant_id).already_current
 
       # Every outcome's completed_at is unchanged from before this call.
       assert outcome_for(second_result, good_a.tenant_id).completed_at == completed_at_a_before
@@ -429,10 +466,13 @@ defmodule Letflow.Platform.MigrationRolloutTest do
       # The rollout row itself is unchanged too.
       assert second_result.rollout.completed_at == rollout_completed_at_before
 
-      # The literal "zero writes" claim -- no row in either table changed,
-      # not merely "results look the same" (design §8's own instruction).
-      assert Repo.aggregate(Rollout, :count, :id) == rollout_count_before
-      assert Repo.aggregate(Outcome, :count, :id) == outcome_count_before
+      # The literal "zero writes" claim, scoped to this test's own rollout
+      # row and its own two tenants' outcome rows -- not a global count
+      # over the entire shared table (design §3.2: a swept-in tenant would
+      # still share this test's rollout_id, so the exclusion that actually
+      # matters is by tenant_id, not just rollout_id).
+      assert Repo.get!(Rollout, first_result.rollout.id) == rollout_before
+      assert Repo.aggregate(outcome_count_query, :count, :id) == outcome_count_before
     end
   end
 

@@ -4610,8 +4610,21 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 15
+    entries: 16
     note: >
+      Incremented to 16 by ORCH, reconciled while rebasing
+      feature/WF03-ISS0829-20260927 onto origin/main: this branch's own
+      tip had independently incremented 14 -> 15 for ISSUE-FIXER's
+      ISS-0825/ISS-0829 closing SCOPE-CHANGE append, while origin/main had
+      separately incremented 14 -> 15 for DOC-UPDATER's ISS-0869 closing
+      SCOPE-CHANGE append -- both starting from the same pre-divergence
+      base of 14. `requirement_status.v23.yaml` itself auto-merged with one
+      genuine conflict (both entries share the same `req: SCOPE-CHANGE` /
+      `event: done` header, resolved by duplicating the header before each
+      entry's own agent/at/note fields so both are preserved in full).
+      `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 16
+      on-disk entries post-rebase. Prior note preserved below.
+
       Incremented to 15 by DOC-UPDATER, reconciled while rebasing
       fix/ISS0869-playwright-timeout-flake-20260927 onto origin/main a
       second time. Three independent increments all trace to the same

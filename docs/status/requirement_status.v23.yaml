@@ -461,3 +461,42 @@
       re-confirmed against a fresh full-suite run by this append itself,
       that remains RELEASE-VALIDATOR's/TEST-RUNNER's claim above, not a new
       one made here.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: 2026-09-27T14:15:47Z
+    note: >
+      ISS-0825/ISS-0829 (MINOR, test/letflow/platform/migration_rollout_test.exs
+      EO-004/EO-005 intermittently failing under full parallel-suite
+      contention) resolved and closed in docs/issues/ISS-0825.yaml. Root
+      cause confirmed by direct code trace (not the CPU-contention guess
+      the issue originally suspected): EO-004/EO-005 asserted GLOBAL
+      rollout/outcome-row invariants, but MigrationRollout's repeat-call
+      path (`apply_to_existing_rollout/2`) legitimately recomputes
+      `active_company_tenant_ids/0` over ALL active company tenants in
+      the shared per-partition DB on every call -- a deliberate,
+      explicitly-documented design choice (design doc section 9, OQ-1),
+      not a defect -- so a concurrently-provisioned tenant from another
+      async test could land inside EO-004/EO-005's narrow assertion
+      window under -N4 load. Fix: test-file-only change scoping
+      EO-004/EO-005's assertions to each test's own tenant_ids/rollout_id
+      (direct Repo.get! reloads, scoped equality checks), following the
+      same file's existing ISS-0716 precedent -- no production code
+      changed. TEST-RUNNER (745a931a): targeted file 12 passed/0
+      failures; TEST_PARALLEL_N=4 combined 5011/5014 passed, 3 failures,
+      all structurally pre-existing/unrelated via git-diff attribution,
+      zero referencing MigrationRolloutTest. RELEASE-VALIDATOR
+      (c4d3f257, independent re-run): targeted file 12 passed/0
+      failures; its own independent TEST_PARALLEL_N=4 run combined
+      5008 tests/6 properties/2 failures (5012/5014 passed), both
+      pre-existing Letflow.IdentityTest REQ-019 AC1, confirmed via the
+      same git-diff method; also independently ran `mix
+      letflow.check.test` (N=16) with the same 2-failure class and zero
+      ISS-0069 anti-pattern occurrences; read EO-004/EO-005's actual
+      current test bodies and confirmed both assert real DB-reloaded
+      state, not weakened to always-pass. PASS. Two pre-existing,
+      unrelated failure classes (Letflow.EventStore.RetentionOperationsTest,
+      Letflow.IdentityTest REQ-019 AC1) reconfirmed incidentally during
+      these independent runs, left for ORCH to file as separate issues,
+      not investigated here. Branch feature/WF03-ISS0829-20260927.

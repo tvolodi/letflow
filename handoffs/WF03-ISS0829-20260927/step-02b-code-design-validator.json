@@ -1,0 +1,72 @@
+{
+  "handoff_id": "WF03-ISS0829-20260927-step-02b",
+  "run_id": "WF03-ISS0829-20260927",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0829-20260927/step-02b-code-design-validator.json",
+  "created_at": "2026-09-27T11:21:47Z",
+  "started_at": "2026-09-27T00:00:00Z",
+  "completed_at": "2026-09-27T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S11",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["WF03-ISS0829-20260927-step-02"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0829-migration-rollout-test-isolation.md",
+      "test/letflow/platform/migration_rollout_test.exs",
+      "lib/letflow/platform/migration_rollout.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's design (handoffs/WF03-ISS0829-20260927/step-02-code-designer.json, lib/letflow/design/iss0829-migration-rollout-test-isolation.md). Verify branch feature/WF03-ISS0829-20260927 checked out. Independently re-read test/letflow/platform/migration_rollout_test.exs's EO-004 (~lines 334-393) and EO-005 (~lines 399-437) test bodies and the ISS-0716 precedent (~lines 288-327) yourself -- confirm the design's claimed line numbers and assertion locations are accurate (they may have shifted), that the proposed tenant-scoped replacements genuinely preserve each acceptance criterion's intent (not weakened into a vacuous check), and that no production code change is actually needed (re-verify against lib/letflow/platform/migration_rollout.ex and the req374 design doc's OQ-1 yourself, don't just trust the claim).",
+    "acceptance_criteria": [
+      "Design's cited line numbers/assertion text for EO-004, EO-005, and the ISS-0716 precedent verified against the actual current file",
+      "Each proposed replacement assertion confirmed to still meaningfully test the acceptance criterion it covers (not weakened to always-pass)",
+      "Confirmed no production code (migration_rollout.ex) needs to change",
+      "No implementation code in the design doc",
+      "PASS or FAIL with issues if FAIL; handoff completed per protocol (claim via IN_PROGRESS, then COMPLETED with a real result block)",
+      "RE-CHECK (iteration 1): CODE-DESIGNER rewrote §2.2, §3.1-3.3, and §4 to remove literal .exs/Ecto code per commit 07d8dfb1 -- verify independently that no code fences remain (grep for ``` in the design doc) and that the prose/pseudocode still specifies exactly which values/invariants to check (not vaguer than before). Every other finding was already confirmed accurate in gate_history[0] and does not need re-deriving unless this rework touched it."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RE-CHECK (iteration 1) PASS. Grepped lib/letflow/design/iss0829-migration-rollout-test-isolation.md for code fences (```) -- zero matches, none remain anywhere in the file. Diffed 10dd9405..07d8dfb1 to confirm the rework touched only §2.1 (fragile-assertion citation), §2.2 (EO-004 replacement), §3.1-3.3 (EO-005 replacements), and §4's summary table -- §1 (root-cause recap), §3.4, §5 (verification plan), and §6 (open questions) are byte-identical to the prior iteration, so gate_history[0]'s independent verification of line citations and the no-production-code-change conclusion still stands without re-derivation. Read the rewritten sections in full: each former code block is now prose/pseudocode that names the exact same field paths (resumed_result.rollout.status/completed_at, outcome_for/2 lookups keyed to good_a.tenant_id/good_b.tenant_id, the rollout_id+tenant_id-scoped Outcome count, the reload-and-struct-equality check on the single Rollout row), the same invariant logic (two-branch completed/running split in §2.2 driven by whether every outcome for the rollout_id resolved to succeeded), and the same tenant/rollout scoping as the original literal code -- no loss of specificity, nothing vaguer, nothing left as an open TBD. §4's table rows likewise restate 'what changed' and 'what to check' in prose with the same precision as the removed code. No implementation code (no .ex/.exs syntax, no assert/Repo/Ecto literal syntax) remains anywhere in the doc.",
+    "artifacts_out": ["lib/letflow/design/iss0829-migration-rollout-test-isolation.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0829-20260927",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0829-20260927",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER/ELIXIR-DEV to apply the EO-004/EO-005 assertion replacements in test/letflow/platform/migration_rollout_test.exs exactly as specified in §2-§4 of the design doc (test-only change, no production code)."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-27T11:26:24Z",
+      "status": "FAIL",
+      "summary": "Substance correct (root-cause recap, line citations, tenant-scoping strategy, no-production-code-change conclusion all independently verified accurate) but design contained literal .exs/Ecto code blocks in §2.2, §3.1-3.3, and §4's table -- violates check (e)/code-designer.md's Forbidden clause. No partial credit; FAILed regardless of otherwise-sound analysis.",
+      "issues": ["§2.2, §3.1-3.3, and §4's summary table contain literal Elixir/Ecto code, not prose/pseudocode"],
+      "next_action": "Rework CODE-DESIGNER: revise lib/letflow/design/iss0829-migration-rollout-test-isolation.md to remove literal .exs code blocks per the issues above, keeping all other content. Re-submit to CODE-DESIGN-VALIDATOR."
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-27T12:10:00Z",
+      "status": "PASS",
+      "summary": "Grep confirmed zero code fences remain; diff against the prior FAILed version confirmed the rework touched only §2.1/2.2, §3.1-3.3, and §4, with all other sections byte-identical. Rewritten prose/pseudocode preserves the exact same field paths, invariant logic, and tenant/rollout scoping as the removed literal code -- no loss of specificity introduced by the rework.",
+      "issues": [],
+      "next_action": "Route to TEST-DESIGNER/ELIXIR-DEV to apply the design."
+    }
+  ]
+}

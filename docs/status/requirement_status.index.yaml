@@ -4610,8 +4610,18 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 11
+    entries: 12
     note: >
+      Incremented to 12 by RELEASE-VALIDATOR's REQ-416 `verified` append
+      (2026-09-27T09:55:00Z, ISS-0847 S11 re-verification: mix letflow.check
+      to completion / npm run check / the S10 Playwright specs / REQ-416's
+      own e2e test all re-run independently; one already-tracked flake
+      (ISS-0340) and one freshly-filed non-blocking flake (ISS-0869) are the
+      only remaining failures). `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 12 on-disk entries. 367
+      lines / 21193 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior note preserved below.
+
       Incremented to 11 by DOC-UPDATER's ISS-0827 closing SCOPE-CHANGE append
       (2026-09-27T06:05:00Z, router_test.exs's REQ-070 AC5 stale
       @deferred-routes count 9 -> 5, matching ISS-0822's already-shrunk

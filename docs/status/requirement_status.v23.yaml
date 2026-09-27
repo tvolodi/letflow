@@ -307,3 +307,61 @@
       docs/issues/ISS-0827.yaml was edited, per this file's own
       queue_ref/github_ref comment and docs/anti-patterns.md's entry on this
       filename/queue-id mismatch class.
+
+  - req: REQ-416
+    event: verified
+    agent: RELEASE-VALIDATOR
+    at: 2026-09-27T09:55:00Z
+    note: >
+      ISS-0847 (S11 re-verification, filed after S11 was declared complete on
+      2026-09-25 while main's full backend suite was red) independently
+      re-verified on `main` @ 94517238, after all five of ISS-0847's own
+      blocking dependencies (ISS-0838, ISS-0839, ISS-0827, ISS-0833, ISS-0834)
+      resolved. All four re-verification steps:
+      (1) `mix letflow.check` ran to completion from a fresh test DB, no
+      timeout cutoff -- `scripts/test_parallel.sh` aggregate:
+      `combined: 4991 tests, 6 properties, 1 failures (4996/4997 passed)`;
+      the one failure (`Letflow.Api.ContextTest` "scoped_repo_opts/1 is
+      1-arity") is the already-open, already-root-caused intermittent flake
+      ISS-0340 (a code-loading-order race in a pure introspection
+      assertion -- confirmed the suggested `Code.ensure_loaded!/1` fix is
+      still unapplied in test/letflow/api/context_test.exs, matching
+      ISS-0340's own documented mechanism exactly), not a new failure or an
+      S11 regression.
+      (2) `npm run check` in web/ passed clean: tsc clean, eslint clean,
+      vitest 205 tests passed, guards 4 files/52 tests passed including a
+      full vite build.
+      (3) The S10 Playwright specs stage-11 P2 names ("full backend suite
+      and the S10 Playwright specs green") -- categories, tags,
+      question-bank, exam-lifecycle, employee-portal, exam-taking,
+      exam-result, exam-result-by-id (37 tests) -- run against a live
+      instance on current main (fresh dev DB, fresh mix run --no-halt
+      backend, Keycloak/Postgres already-running shared containers):
+      `37 passed (40.1s)`, 0 failures, after fixing three purely-local
+      dev-DB bootstrap gaps that are NOT S11 defects (the freshly reset dev
+      DB needed its exam-suite entity definitions created+activated via the
+      same Definitions.create_definition/2 + activate_definition/4 path
+      test/support/exam_fixtures.ex already uses -- pack install alone only
+      ever leaves definitions :inactive by design; the fixed e2e candidate's
+      two REQ-345 fixture exams needed max_attempts bumped via a real PUT-
+      equivalent update_record/2 call after this validation run's own
+      repeated local re-runs exhausted their max_attempts:5, the identical
+      mechanism the stage-10 P5-close-out RELEASE-VALIDATOR re-run already
+      documented and fixed the same way on 2026-09-14). One genuine,
+      independent test-timing flake found along the way and filed
+      separately as ISS-0869 (exam-lifecycle.e2e.spec.ts "all exam rows
+      have an Edit action" -- the real table with real Edit/Delete actions
+      renders correctly per the failure's own page snapshot; the test's own
+      10s visibility poll lost the race once, passed on an immediate retry;
+      not the same root cause as the pre-existing ISS-0663).
+      (4) REQ-416's own end-to-end test
+      (test/letflow/modules/bilimbaga_solution_e2e_test.exs) run standalone
+      against a fresh test DB: `Result: 1 passed`; its "no direct SQL"
+      acceptance grep
+      (`git grep -nE "Repo\.(insert_all|query)|Ecto\.Adapters\.SQL\.query"`)
+      returns only a comment-text hit, zero code hits.
+      Verdict: S11 fully verified -- every remaining failure is either
+      already-tracked (ISS-0340) or freshly filed and non-blocking
+      (ISS-0869, proven non-functional). docs/migration/stage-11-modular-
+      platform.md's Status line updated with this result and today's date
+      in the same commit as this append.

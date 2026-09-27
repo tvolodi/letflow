@@ -126,3 +126,28 @@ routing:
     sections cross-reference this as still open. Not registered as a queue
     task; a future run should pose this as a design question to CODE-DESIGNER
     before sizing it as a requirement.
+  piece1_verified: >
+    2026-09-27: RELEASE-VALIDATOR independently re-verified fix_direction piece 1
+    (the review-queue/list GUI surface) as shipped and live in code, re-running
+    the tests itself rather than trusting prior reports:
+      - `mix test test/letflow/routers/promotions_test.exs` -> 26 passed
+        (backend `GET /api/v1/promotions` route,
+        `lib/letflow/routers/promotions.ex`).
+      - `npx vitest run src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx`
+        -> 9 passed (frontend list page + nav entry at
+        `web/src/components/layout/AppShell.tsx:34`, route at
+        `web/src/router.tsx:67`).
+      - `mix compile --warnings-as-errors` -> clean.
+    REQ-397 and REQ-398 (this issue's own two filed requirements covering piece 1)
+    are both confirmed `status: done` in `docs/requirements.yaml`, with full gate
+    histories in `docs/status/requirement_status.v21.yaml`/`v22.yaml`. Piece 2
+    (`still_open`, above) remains a genuinely undecided design question, not yet
+    posed to CODE-DESIGNER -- per this record's own `routing.note`, `status`
+    stays `open` rather than flipping to `resolved` until both pieces are
+    accounted for. letflow-queue task 759 (this record's `queue_ref: Q-759`) was
+    released `blocked` (not `done`) by DOC-UPDATER on 2026-09-27 under
+    `agent_id: orch-main-20260927`, so `get_next_task` stops re-offering this
+    largely-inactionable-right-now issue while it stays honestly `open` rather
+    than falsely `done`/closed. Next actionable step: a future run poses piece 2
+    as a design question to CODE-DESIGNER before it can be sized as a
+    requirement and re-registered.

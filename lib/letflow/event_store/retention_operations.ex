@@ -121,7 +121,7 @@ defmodule Letflow.EventStore.RetentionOperations do
     # re-raise whatever exception occurred inside the fun.
     {:ok, result} =
       Repo.transaction(fn ->
-        Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        set_isolation_level_or_degrade()
 
         schemas = provisioned_tenant_schemas()
 
@@ -410,6 +410,59 @@ defmodule Letflow.EventStore.RetentionOperations do
           Repo.query!(~s{ROLLBACK TO SAVEPOINT #{@savepoint_name}})
           Repo.query!(~s{RELEASE SAVEPOINT #{@savepoint_name}})
           0
+
+        _other ->
+          reraise e, __STACKTRACE__
+      end
+  end
+
+  # ISS-0873 §8 amendment: retention_summary/0's REPEATABLE READ, READ ONLY
+  # guarantee (§1) depends on `SET TRANSACTION ISOLATION LEVEL` being the
+  # transaction's first statement. When retention_summary/0 is itself called
+  # from inside an already-open transaction (e.g. Letflow.DataCase's Sandbox
+  # wrapping transaction, or any real caller composing this function inside
+  # its own Repo.transaction/1), that SET statement is rejected by Postgres
+  # with 25001 (active_sql_transaction) -- neither Repo.in_transaction?/0
+  # (measures only whether *this process* explicitly opened a transaction,
+  # not whether the underlying connection is already inside one for any
+  # other reason) nor a Repo.transaction/2 isolation-level option (Postgres
+  # adapter has none; only Ecto.Adapters.Tds does) can detect or avoid this
+  # in advance. Instead: attempt the SET wrapped in its own SAVEPOINT (same
+  # shape as count_protected_rows_in_schema/3's own SAVEPOINT, a distinct
+  # name so the two are individually identifiable in pg_stat_activity /
+  # pg_locks). On success, RELEASE and the genuine REPEATABLE READ, READ
+  # ONLY guarantee holds for the rest of this transaction, unchanged from
+  # §1's original design. On the matched 25001, ROLLBACK TO SAVEPOINT then
+  # RELEASE SAVEPOINT to un-poison the connection, log a warning, and let
+  # the rest of retention_summary/0 proceed at whatever isolation level the
+  # ambient transaction already has -- a documented, narrow residual risk
+  # (the original pre-§1 TOCTOU window reopens for this invocation only),
+  # accepted rather than crashing a read-only admin summary. See design doc
+  # §8.3 for the full reasoning; any other exception reraises unchanged, no
+  # savepoint cleanup needed -- the outer transaction's own rollback on that
+  # reraise discards it for free.
+  @isolation_savepoint_name "retention_summary_isolation"
+
+  defp set_isolation_level_or_degrade do
+    Repo.query!(~s{SAVEPOINT #{@isolation_savepoint_name}})
+    Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+    Repo.query!(~s{RELEASE SAVEPOINT #{@isolation_savepoint_name}})
+    :ok
+  rescue
+    e in Postgrex.Error ->
+      case e do
+        %Postgrex.Error{postgres: %{code: :active_sql_transaction}} ->
+          Repo.query!(~s{ROLLBACK TO SAVEPOINT #{@isolation_savepoint_name}})
+          Repo.query!(~s{RELEASE SAVEPOINT #{@isolation_savepoint_name}})
+
+          Logger.warning(
+            "retention_summary/0 invoked from inside an already-open transaction; " <>
+              "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY was rejected " <>
+              "(active_sql_transaction) -- proceeding at the ambient isolation level " <>
+              "instead of the intended REPEATABLE READ, READ ONLY snapshot"
+          )
+
+          :ok
 
         _other ->
           reraise e, __STACKTRACE__

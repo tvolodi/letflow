@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ418-20260927/step-01-code-designer.json",
   "created_at": "2026-09-27T05:09:06Z",
   "started_at": "2026-09-27T05:20:00Z",
-  "completed_at": "2026-09-27T05:22:00Z",
-  "status": "PENDING",
+  "completed_at": "2026-09-27T06:05:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -53,18 +53,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Wrote lib/letflow/design/req418-mobile-oidc-client.md covering both parts of REQ-418. Part 1: exact letflow-mobile Keycloak client JSON (clientId, publicClient, standardFlowEnabled, directAccessGrantsEnabled false, implicitFlowEnabled false, serviceAccountsEnabled false, pkce.code.challenge.method S256, post.logout.redirect.uris, redirectUris exactly one custom-scheme entry, webOrigins [], realm-roles mapper + mandatory oidc-audience-mapper naming letflow-web), with field-by-field rationale, an explicit byte-for-byte 'letflow-web unchanged' statement, and the ISS-0275 recurrence-risk explanation for why the audience mapper is mandatory (Oidcc.Token.validate_jwt/3's verify_aud_claim, azp not checked). Part 2: sixth client_id key on GET /api/mobile/tenant-config, env-then-constant resolution (MOBILE_OIDC_CLIENT_ID || 'letflow-mobile'), every moduledoc/table/disclosure-section location that must move from five to six keys (including the 'exactly five keys' -> renumbered 'seventh key' sentence), the three-point client_id security reasoning verbatim, and the test file (@expected_keys) update. Listed every REQ-418 acceptance-criterion test (static realm-JSON test, 3 live curl checks, admin evaluate-scopes check, six-key exact-shape test across all 4 never-error paths, client_id-value tests) with the exact file each belongs in. No implementation code -- JSON/map shape sketches and @spec-only signatures. Explicitly flagged as a SECURITY-REVIEWER hard gate (identity configuration + public unauthenticated response shape) per security-invariants.md.",
+    "summary": "REWORK ITERATION 1 fix. CODE-DESIGN-VALIDATOR FAILed on a BLOCKER: §2.3 item 4 misidentified the moduledoc location of the sentence to extend with `client_id` -- claimed it lived in the 'locales / default_locale / branding are per-tenant; environment_kind remains global' section (lines 97-114), when it actually lives at lines 80-83, at the end of the 'The never-error rule is LOAD-BEARING here too' section. Re-read lib/letflow/routers/mobile_tenant_config.ex directly (offset 1, limit 130) and confirmed: the sentence '`environment_kind` is the one field that is still, and remains, byte-identical across every branch by construction (env-derived, not tenant-derived, not touched by this requirement).' is at lines 80-83, inside the section whose header ('## The never-error rule is LOAD-BEARING here too') is at line 42. Lines 97-114 instead contain a different sentence at lines 111-113 ('`environment_kind` remains the one field genuinely sourced from application config/env ... the other three no longer are.'). Rewrote §2.3 item 4 to name the correct section/line range (80-83), explicitly distinguish it from the lines-111-113 sentence so ELIXIR-DEV cannot confuse the two, and require any extension to be appended AFTER the matched phrase rather than inserted into it. Also confirmed (Read, offset 520, limit 30) that test/letflow/routers/mobile_tenant_config_test.exs lines 535-536 hard-match this exact sentence verbatim via `assert normalized =~ \"...\"` (substring match against whitespace-collapsed moduledoc, REQ-282 AC4 describe block at lines 525-544) -- added a new row to §2.4's test-file plan naming this pre-existing assertion explicitly, explaining why the append-only wording constraint in §2.3 item 4 lets it pass with zero change to the test file, and instructing ELIXIR-DEV to run that specific test after the moduledoc edit and treat a failure as a sign the edit (not the test) needs fixing. No other design content changed.",
     "artifacts_out": ["lib/letflow/design/req418-mobile-oidc-client.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ418-20260927",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF02-REQ418-20260927",
-      "push_status": "ok",
+      "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to CODE-DESIGN-VALIDATOR for the hard gate on this design before ELIXIR-DEV implements."
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-gate on the corrected design."
   },
   "rework_count": 1,
   "max_rework": 3

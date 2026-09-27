@@ -297,17 +297,40 @@ anywhere in the file**:
    feature,"** must become **"Adding a seventh key…"** — that sentence is a
    structural invariant statement about the module (the *next* undecided key), not a
    historical fact about this change, so it must be renumbered forward, not deleted.
-4. **Per-field-variance paragraph** ("locales / default_locale / branding are
-   per-tenant; environment_kind remains global" section, lines 97–114): must gain a
-   clause placing `client_id` alongside `environment_kind` in the
-   "byte-identical-across-every-branch, by construction" category — e.g. extending
-   the sentence "`environment_kind` is the one field that is still, and remains,
-   byte-identical across every branch by construction" to name `client_id` as a
-   second such field (or an added sentence immediately after it), **not** folding
-   `client_id` into the three per-tenant fields' fallback-helper description, since
-   `client_id` has no `settings`-derived variance at all — it is resolved with no
-   tenant input whatsoever, a stronger invariance than the three per-tenant fields'
-   "same-if-no-settings-stored" convergence.
+4. **End of the "The never-error rule is LOAD-BEARING here too" section** (moduledoc
+   lines 80–83 — **not** the "locales / default_locale / branding are per-tenant;
+   environment_kind remains global" section at lines 97–114, which contains a
+   different, textually distinct sentence at lines 111–113
+   — `` `environment_kind` remains the one field genuinely sourced from application
+   config/env (`LETFLOW_ENVIRONMENT_KIND`), unrelated to any tenant, unchanged by
+   this requirement — it is global in the sense the whole paragraph used to claim of
+   all four fields; the other three no longer are.`` — that sentence must NOT be
+   confused with, or edited in place of, the one below): the sentence
+   `` `environment_kind` is the one field that is still, and remains, byte-identical
+   across every branch by construction (env-derived, not tenant-derived, not touched
+   by this requirement). `` (lines 80–83) must gain a clause placing `client_id`
+   alongside `environment_kind` in the "byte-identical-across-every-branch, by
+   construction" category — e.g. extending it to read "`environment_kind` and
+   `client_id` are the two fields that are still, and remain, byte-identical across
+   every branch by construction" (or an added sentence immediately after it), **not**
+   folding `client_id` into the three per-tenant fields' fallback-helper description,
+   since `client_id` has no `settings`-derived variance at all — it is resolved with
+   no tenant input whatsoever, a stronger invariance than the three per-tenant
+   fields' "same-if-no-settings-stored" convergence.
+
+   **Test-collision warning (mandatory read before editing this sentence):** this
+   exact sentence, verbatim, is hard-matched by the pre-existing REQ-282 AC4
+   assertion at `test/letflow/routers/mobile_tenant_config_test.exs` lines 535–536:
+   `` assert normalized =~ "`environment_kind` is the one field that is still, and
+   remains, byte-identical across every branch by construction" ``. That assertion
+   checks a *substring*, not full-string equality, against the moduledoc with all
+   whitespace collapsed (`normalized = String.replace(moduledoc, ~r/\s+/, " ")`,
+   line 530). Editing this sentence must preserve that exact substring
+   uninterrupted — i.e. any extension must be **appended after** "byte-identical
+   across every branch by construction" (e.g. "...by construction, and `client_id`
+   joins it as a second such field.") rather than rewritten in a way that inserts
+   text into the middle of the matched phrase or paraphrases any word inside it. See
+   §2.4 for the corresponding test-file guidance.
 5. **Existing tests' exact-key assertion literal** — not moduledoc prose, but the
    same five→six change: `test/letflow/routers/mobile_tenant_config_test.exs`'s
    module attribute `@expected_keys ["branding", "default_locale",
@@ -349,6 +372,7 @@ verbatim in substance:
 | `client_id` value — env override | same new block | With `MOBILE_OIDC_CLIENT_ID` set (e.g. via `System.put_env/2` in the test, `on_exit` cleanup), `body["client_id"]` equals that env value |
 | `client_id` identical across all four paths | same new block | For a fixed env state, `client_id` from the resolvable-slug, unknown-slug, missing-`?slug=`, and lookup-failure responses are all `==` to each other — the byte-identical-by-construction claim from §2.2, asserted directly rather than only inferred from the shared six-key check |
 | Moduledoc no longer says "exactly five keys" | same file, extending the existing `Code.fetch_docs/1`-based moduledoc test pattern (lines 291–297, 525–544) | `refute moduledoc =~ "exactly five keys"`; `assert moduledoc =~ "client_id"`; `assert moduledoc =~` the three-point-reasoning language (e.g. a distinctive substring such as `"is not a secret"` and `"platform-global"`) |
+| **Existing REQ-282 AC4 assertion at lines 535–536 must still pass unmodified** | same file, `describe "REQ-282 AC4: moduledoc no longer claims branding/locales/default_locale are global"` block (lines 525–544) | This test's `assert normalized =~ "`environment_kind` is the one field that is still, and remains, byte-identical across every branch by construction"` (lines 535–536) is a **pre-existing regression assertion, not something this change adds or edits**. Because §2.3 item 4 requires the `client_id` clause to be *appended after* that exact phrase rather than inserted into it, this substring survives untouched in the edited moduledoc and the assertion continues to pass with **no change to the test file at this line**. ELIXIR-DEV must run this specific test after editing the moduledoc sentence and confirm it still passes — if it fails, the moduledoc edit broke the substring instead of appending after it, and the edit (not the test) must be corrected. Do **not** loosen or rewrite this assertion to accommodate a differently-worded moduledoc edit; the wording constraint in §2.3 item 4 exists specifically so this assertion needs no change. |
 | `req124-mobile-tenant-config.md` addendum recorded | not a code test — a documentation deliverable ELIXIR-DEV must produce alongside the code change: a dated `## Addendum (REQ-418, <date>)` section appended to `lib/letflow/design/req124-mobile-tenant-config.md`, stating that `client_id` was added as a sixth key per REQ-418, pointing at this file for the full rationale, and noting §9's acceptance-criteria table and §6's response-shape table are now superseded on key-count (five→six) without rewriting them in place — REQ-VALIDATOR-style addendum-not-rewrite convention already used elsewhere in this design corpus (e.g. `req128-keycloak-dev-stack.md`'s "Correction after..." sections) |
 
 ### 2.5 Cross-module dependencies (Part 2)

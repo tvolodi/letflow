@@ -1,0 +1,69 @@
+{
+  "handoff_id": "WF02-REQ418-20260927-step-02",
+  "run_id": "WF02-REQ418-20260927",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ418-20260927/step-02-elixir-dev.json",
+  "created_at": "2026-09-27T05:22:04Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-418"],
+    "requirement_text": {
+      "REQ-418": "See handoffs/WF02-REQ418-20260927/step-01-code-designer.json's context.requirement_text for the full verbatim requirement, copied there by ORCH from docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["WF02-REQ418-20260927-step-01", "WF02-REQ418-20260927-step-01b"],
+    "artifacts_in": [
+      "lib/letflow/design/req418-mobile-oidc-client.md",
+      "priv/keycloak/realms/bpm-default.json",
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "lib/letflow/design/req124-mobile-tenant-config.md",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "lib/letflow/design/iss0275-audience-mapper-fix.md",
+      "lib/letflow/routers/tenant_config.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "priv/keycloak/realms/bpm-default.json",
+      "lib/letflow/routers/mobile_tenant_config.ex",
+      "lib/letflow/design/req124-mobile-tenant-config.md",
+      "test/letflow/routers/mobile_tenant_config_test.exs",
+      "test/letflow/api/keycloak_realm_mobile_client_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Implement REQ-418 per the now-PASSed design (lib/letflow/design/req418-mobile-oidc-client.md, gate PASS in handoffs/WF02-REQ418-20260927/step-01b-design-gate.json). Branch feature/WF02-REQ418-20260927 is already checked out remotely with the design docs committed -- checkout it locally and pull first. PART 1: add the letflow-mobile client to priv/keycloak/realms/bpm-default.json exactly per the design's §1 (publicClient true, standardFlowEnabled true, directAccessGrantsEnabled false, implicitFlowEnabled false, serviceAccountsEnabled false, pkce.code.challenge.method S256, post.logout.redirect.uris, redirectUris exactly [\"com.bizdala.letflow:/oauth2redirect\"], webOrigins [], roles mapper + mandatory oidc-audience-mapper). Do NOT modify the letflow-web client object. Add the static realm-JSON ExUnit test (test/letflow/api/keycloak_realm_mobile_client_test.exs) asserting every field plus the letflow-web-unchanged inline-literal equality, per the design's §4 test-file map. PART 2: add the sixth client_id key to GET /api/mobile/tenant-config (lib/letflow/routers/mobile_tenant_config.ex) with System.get_env(\"MOBILE_OIDC_CLIENT_ID\") || \"letflow-mobile\" resolution; update the moduledoc/table/disclosure-section per §2.3 items 1-4 (including the corrected lines-80-83 extension, distinct from lines 111-113, and preserving test/letflow/routers/mobile_tenant_config_test.exs's ~lines 535-536 REQ-282 AC4 assertion verbatim); update @expected_keys and add the client_id-value tests per §2.4. Record the addendum in lib/letflow/design/req124-mobile-tenant-config.md. Run `mix letflow.check` and quote real output. Do NOT touch apps/mobile/ (doesn't exist yet) or the web endpoint. This is a SECURITY CHANGE -- after implementing, this run routes to SECURITY-REVIEWER (step 02c) before REVIEWER (step 02d); do not skip ahead.",
+    "acceptance_criteria": [
+      "priv/keycloak/realms/bpm-default.json's letflow-mobile client matches the design's §1 shape exactly; letflow-web's client object is byte-for-byte unchanged (prove via git diff showing no hunk touching it)",
+      "New static test (test/letflow/api/keycloak_realm_mobile_client_test.exs) asserts letflow-mobile's full shape and letflow-web's unchanged shape via inline literal equality, and passes",
+      "GET /api/mobile/tenant-config returns exactly six keys including client_id, resolved per MOBILE_OIDC_CLIENT_ID env-then-constant, identical across all four never-error paths -- asserted by an exact key-set equality test (not subset)",
+      "mobile_tenant_config.ex's moduledoc no longer says 'exactly five keys'; states six keys and the three-point client_id security reasoning verbatim per the design",
+      "test/letflow/routers/mobile_tenant_config_test.exs's pre-existing REQ-282 AC4 assertion (~lines 535-536) still passes unmodified (or is updated consistently if the design called for that -- state which)",
+      "lib/letflow/design/req124-mobile-tenant-config.md carries a dated addendum recording this contract change",
+      "`mix letflow.check` passes, real output quoted in the completion report",
+      "This is a first dispatch: claim by setting status to IN_PROGRESS only; then complete normally with a real result block including git_evidence (commit sha list, push status) once your commits land on feature/WF02-REQ418-20260927."
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ418-20260927",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ418-20260927",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

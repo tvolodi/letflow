@@ -97,7 +97,21 @@ related:
 source: >
   PR #864 (ADHOC-ADR0017-20260903), CI run 33819989575 job on commit
   92b5ce92, observed live during this run's merge-gate check.
-queue_ref: Q-453
+queue_ref: null   # CORRECTED 2026-09-27 (ISS-0870): was `Q-453`, which is WRONG for
+# this file. Locking task 453 live and reading its own title/body shows it is
+# docs/issues/ISS-0446.yaml's issue (service_task_dispatcher_test
+# throwaway-supervisor teardown race), not this one -- both files had
+# independently declared `queue_ref: Q-453` since before the 2026-09-09
+# id-prefixing rename (426e5305), so this was a filing-time mistake on one
+# side, not a renumbering artifact. ISS-0446's own content match is
+# unambiguous; this file's true queue task (if one was ever separately
+# registered for the antagonist-loop/partial-skip mechanism) has not been
+# located, so this is nulled per ISSUE_QUEUE.md's R4 convention rather than
+# left pointing at a task that belongs to a different issue. Do NOT
+# set_lock/release_lock task 453 on this file's behalf -- doing so would act
+# on ISS-0446's task. Re-register this file with `register_task` if/when it
+# is next picked up, per TASK_QUEUE.md. See docs/anti-patterns.md's "queue_ref
+# collision across two issue files" entry.
 status: open
 data_point_20260907: >
   Another occurrence, different specific assertion in the same file/

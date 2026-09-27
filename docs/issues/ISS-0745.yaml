@@ -81,4 +81,24 @@ queue_ref: "Q-809"
 # queue-id/filename divergence for this project (see TASK_QUEUE.md).
 # queue_ref/github_ref here are authoritative.
 github_ref: "GH-1797"
-status: open
+status: resolved_via_duplicate
+resolution_2026_09_27: >
+  ISS-0870 investigation: queue task 809 (this file's own queue_ref) reports
+  "done", which mix letflow.check_queue_reconciliation flagged as a mismatch
+  against this file's prior status: open. Verified this is the queue-id
+  collision this file's own NOTE above already documents (task 809 auto-
+  titled "ISS-0809", not this file's id) -- a separate, later local record,
+  docs/issues/ISS-0809.yaml, was filed against literally the same defect
+  (identical root cause: ProcessInstance.definition_name/definition_version
+  typed as required-non-optional in web/src/types/api.ts, same
+  InstanceDetailPage.tsx call site) and was independently resolved
+  (resolved_in_run: WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925).
+  Confirmed live: web/src/pages/instances/InstanceDetailPage.tsx now sources
+  the label from useDefinition(instance?.definition_id) rather than the
+  nonexistent instance.definition_name/definition_version fields -- this
+  file's own fix_direction, delivered under ISS-0809's queue task instead of
+  this one. Queue task 809's "done" is therefore CORRECT; this file's status
+  was the stale side. Marked resolved_via_duplicate (superseded_by:
+  ISS-0809) rather than plain resolved, since the actual fixing run and
+  queue release both belong to that record, not this one.
+superseded_by: ISS-0809

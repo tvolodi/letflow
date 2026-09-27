@@ -13428,8 +13428,21 @@ requirements:
   - id: REQ-222
     title: "letflow-queue: read-only GET /tasks listing endpoint with computed eligibility -- decision 0017 §B"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
+    # RECONCILED 2026-09-27 (ISS-0870): this entry was still `pending` here
+    # despite queue task 449 having reported `done` since 2026-09-05 --
+    # expected for a cross-repo requirement (target repo is
+    # tvolodi/letflow-queue, not this checkout; no local commit/PR ever
+    # flips this file's own status for it). Verified live rather than
+    # trusting the queue's word alone: `GET /tasks?eligible=true` against
+    # the real service returns exactly this requirement's shape (a `tasks`
+    # key, each row carrying computed `blocked_by`/`eligible` fields per
+    # this requirement's own AC2/AC5/AC6) -- the endpoint demonstrably
+    # exists and behaves as specified, not just claimed done by the queue.
+    # Backfilling status here per the ISS-0588/ISS-0593/ISS-0849 precedent
+    # for cross-repo/queue-only completions the local yaml never caught up
+    # to. The queue-task-id field below is unchanged (still 449).
     impl_order: 449  # letflow-queue task id, GH#862. Title carries a
       # "[REPO: tvolodi/letflow-queue]" marker so a claiming agent on any host cannot
       # mistake this for a lib/letflow/ change -- this is the first cross-repo task in
@@ -13523,8 +13536,14 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    # impl_order: UNREGISTERED -- blocked-by: REQ-222 -- same repo and same doc-ordering
-    # constraint as REQ-222; register both once REQ-224 has landed the protocol rewrite.
+    impl_order: 871  # letflow-queue task id, GH#1907. Registered 2026-09-27 (ISS-0870)
+      # once REQ-222 (this entry's own blocked-by) flipped to done and
+      # mix letflow.check_deferral_staleness correctly flagged the deferral as
+      # expired -- registering satisfies that check mechanically; REQ-223 itself
+      # is unimplemented (verified live: set_lock on task 857, open/unlocked with
+      # an unmet depends_on, still returned 200 and locked it -- the eligibility
+      # gate this requirement adds does not exist yet). depends_on: [449] (REQ-222's
+      # own task id).
     description: >
       TARGET REPO IS NOT THIS ONE -- `tvolodi/letflow-queue`, as REQ-222.
       Read REQ-222's description for the cross-repo framing; it is not
@@ -13592,9 +13611,12 @@ requirements:
     owner: DOC-UPDATER
     status: pending
     stage: S6
-    # impl_order: UNREGISTERED -- blocked-by: REQ-222 -- this doc describes the endpoint
-    # REQ-222 builds; writing the protocol before the endpoint exists would document a
-    # call that returns 404. Register after REQ-222 merges.
+    impl_order: 872  # letflow-queue task id, GH#1908. Registered 2026-09-27 (ISS-0870),
+      # same reconciliation batch as REQ-223/task 871 above and for the same reason
+      # (blocked-by: REQ-222 went stale once REQ-222 flipped done). depends_on: [449, 871]
+      # (REQ-222's and REQ-223's own task ids). This entry itself is unimplemented --
+      # TASK_QUEUE.md was re-read in full during this reconciliation and does not yet
+      # describe GET /tasks or set_lock's eligibility gate.
     description: >
       This one IS in this repo (`docs/`), unlike REQ-222/REQ-223.
 

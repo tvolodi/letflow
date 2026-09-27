@@ -334,6 +334,47 @@ nothing shipped, so `instrumented` was false. The gap was found by that run's ow
 diagnosis and fixed in the same run rather than filed, because Step 5 could not legally
 close the issue without a terminal status that told the truth.
 
+**AMENDMENT (ISS-0870, 2026-09-27): six further terminal values, in live use across the
+registry before this amendment named them.** `mix letflow.check_queue_reconciliation`'s
+first several live runs (ISS-0848/ISS-0849/ISS-0870) kept flagging these as
+`:unrecognized_yaml_status` even though each was already a real, deliberate terminal
+disposition on multiple files — the vocabulary list above had simply never been updated
+to match. Case-by-case review (ISS-0870) confirmed none is a typo for an existing value;
+each names a genuinely distinct outcome `resolved`/`instrumented`/`no_defect` cannot
+honestly stand in for:
+
+- `done` — an issue-file synonym for `resolved` seen on several records this session
+  (e.g. ISS-0836, ISS-0838..0844, ISS-0849..0851): a root cause was actually removed,
+  same bar as `resolved`, just spelled the way `docs/requirements.yaml`'s own vocabulary
+  spells it. Treated identically to `resolved` for queue-release purposes
+  (`release_lock(status: "done")`).
+- `resolved_via_duplicate` — the defect was genuinely fixed, but under a *different*
+  issue's queue task/run, because a separate record was independently filed against the
+  same root cause and got there first (or the sibling record's fix happens to cover this
+  one too). MUST carry `superseded_by: ISS-NNNN` naming the record whose run actually did
+  the work — same discipline as `instrumented`'s `superseded_by`, but here the successor
+  is the one that's ALREADY resolved, not one still carrying open work. Release
+  `"done"` — the underlying defect really is gone, just recorded under the other id.
+- `closed_not_applicable` / `resolved_not_applicable` — investigated and found to be out
+  of current scope (not "no defect exists," which is `no_defect`'s job, but "this
+  shouldn't be attempted as scoped" — e.g. superseded by a different architectural
+  direction, or the target the issue asks to change no longer exists). Release `"done"`
+  or `"blocked"` depending on whether the record's own text asserts the concern is fully
+  settled (`"done"`) or merely shelved pending a future re-scope (`"blocked"`).
+- `declined` — considered and explicitly rejected as a change to make (a cost/benefit or
+  policy call, not a defect-existence finding) — release `"done"` or `"blocked"` by the
+  same rule as the row above.
+- `reopened` — the mirror image of `open`: a prior terminal status (usually `resolved`)
+  didn't hold, and this record was explicitly un-terminaled per this project's
+  append-only-history convention (the earlier `resolved_at`/`resolved_in_run` fields stay
+  on record, with `reopened_*` fields added alongside, not overwriting them). Behaves
+  exactly like `open` for every purpose, including queue release (`"open"`, never
+  `"done"`/`"blocked"`) — a `reopened` record asserts the defect is back, not settled.
+
+`fixed` and `duplicate` remain unrecognized as of this amendment — neither was found on
+any live record, so there is nothing yet to confirm a mapping against; the next agent to
+find one should apply this same case-by-case process rather than guessing.
+
 ## Closing an issue's GitHub mirror — evidence is mandatory
 
 `WF-03_issue_resolving.md` Step 5 owns the close procedure itself; this section states

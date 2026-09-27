@@ -86,7 +86,7 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliationTest do
     end
 
     test "a legacy/undocumented issue yaml status is its own finding kind, not a status_mismatch" do
-      sources = [source(:issue, "ISS-0123", "reopened", 123)]
+      sources = [source(:issue, "ISS-0123", "fixed", 123)]
       queue_tasks = [task(123, "done")]
 
       report = CheckQueueReconciliation.reconcile(sources, queue_tasks)
@@ -94,8 +94,45 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliationTest do
       assert [%{kind: :unrecognized_yaml_status, source: %{id: "ISS-0123"}, reason: reason}] =
                report.findings
 
-      assert reason =~ "reopened"
+      assert reason =~ "fixed"
       refute Enum.any?(report.findings, &(&1.kind == :status_mismatch))
+    end
+  end
+
+  describe "reconcile/2 -- AMENDMENT (ISS-0870): the 6 newly-recognized issue-status values" do
+    test "'reopened' vs queue done is a real status_mismatch, not unrecognized -- ISS-0287/ISS-0340's own shape" do
+      sources = [source(:issue, "ISS-0287", "reopened", 287)]
+      queue_tasks = [task(287, "done")]
+
+      report = CheckQueueReconciliation.reconcile(sources, queue_tasks)
+
+      assert [%{kind: :status_mismatch, source: %{id: "ISS-0287"}, queue_status: "done"}] =
+               report.findings
+    end
+
+    test "'reopened' vs queue open is clean -- the correct, expected pairing" do
+      sources = [source(:issue, "ISS-0287", "reopened", 287)]
+      queue_tasks = [task(287, "open")]
+
+      report = CheckQueueReconciliation.reconcile(sources, queue_tasks)
+
+      assert report.findings == []
+    end
+
+    test "each of 'done', 'resolved_via_duplicate', 'closed_not_applicable', 'resolved_not_applicable', 'declined' is clean against a done queue task" do
+      values =
+        ~w(done resolved_via_duplicate closed_not_applicable resolved_not_applicable declined)
+
+      sources =
+        values
+        |> Enum.with_index(1)
+        |> Enum.map(fn {status, i} -> source(:issue, "ISS-08#{i}", status, i) end)
+
+      queue_tasks = Enum.map(1..length(values), &task(&1, "done"))
+
+      report = CheckQueueReconciliation.reconcile(sources, queue_tasks)
+
+      assert report.findings == []
     end
   end
 
@@ -220,13 +257,74 @@ defmodule Mix.Tasks.Letflow.CheckQueueReconciliationTest do
       refute CheckQueueReconciliation.status_compatible?(:issue, "no_defect", "open")
     end
 
-    test "the 8 undocumented legacy issue-status values are never compatible (unmapped by design)" do
-      for legacy <- ~w(reopened fixed declined closed_not_applicable resolved_via_duplicate
-                       resolved_not_applicable duplicate done) do
+    test "'fixed' and 'duplicate' remain unmapped -- never seen on any live record" do
+      for legacy <- ~w(fixed duplicate) do
         refute CheckQueueReconciliation.status_compatible?(:issue, legacy, "open")
         refute CheckQueueReconciliation.status_compatible?(:issue, legacy, "blocked")
         refute CheckQueueReconciliation.status_compatible?(:issue, legacy, "done")
       end
+    end
+
+    test "AMENDMENT (ISS-0870): 'done' (issue-vocabulary synonym for resolved) accepts done and blocked, rejects open" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "done", "done")
+      assert CheckQueueReconciliation.status_compatible?(:issue, "done", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "done", "open")
+    end
+
+    test "AMENDMENT (ISS-0870): 'resolved_via_duplicate' accepts done and blocked, rejects open" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "resolved_via_duplicate", "done")
+
+      assert CheckQueueReconciliation.status_compatible?(
+               :issue,
+               "resolved_via_duplicate",
+               "blocked"
+             )
+
+      refute CheckQueueReconciliation.status_compatible?(:issue, "resolved_via_duplicate", "open")
+    end
+
+    test "AMENDMENT (ISS-0870): 'closed_not_applicable' accepts done and blocked, rejects open" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "closed_not_applicable", "done")
+
+      assert CheckQueueReconciliation.status_compatible?(
+               :issue,
+               "closed_not_applicable",
+               "blocked"
+             )
+
+      refute CheckQueueReconciliation.status_compatible?(:issue, "closed_not_applicable", "open")
+    end
+
+    test "AMENDMENT (ISS-0870): 'resolved_not_applicable' accepts done and blocked, rejects open" do
+      assert CheckQueueReconciliation.status_compatible?(
+               :issue,
+               "resolved_not_applicable",
+               "done"
+             )
+
+      assert CheckQueueReconciliation.status_compatible?(
+               :issue,
+               "resolved_not_applicable",
+               "blocked"
+             )
+
+      refute CheckQueueReconciliation.status_compatible?(
+               :issue,
+               "resolved_not_applicable",
+               "open"
+             )
+    end
+
+    test "AMENDMENT (ISS-0870): 'declined' accepts done and blocked, rejects open" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "declined", "done")
+      assert CheckQueueReconciliation.status_compatible?(:issue, "declined", "blocked")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "declined", "open")
+    end
+
+    test "AMENDMENT (ISS-0870): 'reopened' accepts ONLY open -- it is the mirror of open, not of resolved" do
+      assert CheckQueueReconciliation.status_compatible?(:issue, "reopened", "open")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "reopened", "done")
+      refute CheckQueueReconciliation.status_compatible?(:issue, "reopened", "blocked")
     end
 
     test "requirement and issue tables are independent -- issue-side unmapped 'cancelled'" do

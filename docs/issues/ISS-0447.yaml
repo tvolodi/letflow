@@ -87,4 +87,30 @@ queue_ref_note: >
   from the filed issue id. The real issue is ISS-0447 (this file). Same
   behaviour was observed on task 453/ISS-0446 in the run that filed this.
   Treat this file as authoritative; task 454 is the lock to release.
-status: open
+status: resolved_via_duplicate
+superseded_by: ISS-0454
+resolution_2026_09_27: >
+  ISS-0870 investigation: a concurrent session (WF03-ISS0454-20260904,
+  25 minutes after this file's own commit 8ee7cdb3) independently re-grepped
+  the same defect class, apparently not seeing this file yet, and filed its
+  OWN separate local record, docs/issues/ISS-0454.yaml -- which also claims
+  queue_ref: Q-454 (the identical queue_ref collision this file's own
+  queue_ref_note above already flags). Rather than treat that as a second,
+  unresolved instance, checked whether ISS-0454's actual fix work covers
+  this file's full scope: ISS-0454's fresh re-grep at the time found only 4
+  live sites (not this file's original 8), classified each (2 racy -- both
+  fixed with ISS-0452's try/catch form; 2 benign -- unlinked targets,
+  correctly left alone), and verified via full suite + 6 repeated targeted
+  runs. Re-verified live now (2026-09-27): `grep -rn "if Process.alive?"
+  test/ lib/` finds exactly those same 2 benign sites
+  (tenant_fixture_test.exs:528, sandbox_pool_test.exs:672) and nothing else
+  matching this file's original site list -- the other 4 files this file
+  named (promotion_assertion_rerun_test.exs, platform_events_test.exs,
+  fixture_loader_test.exs, service_catalog_reaper_test.exs x2,
+  tenant_schema_reaper_test.exs) no longer contain the pattern at all.
+  Every site this file raised is therefore accounted for: fixed, correctly
+  classified benign, or the pattern no longer exists at that call site.
+  Marked resolved_via_duplicate rather than plain resolved since the actual
+  fixing/classification work happened under ISS-0454's queue task and run,
+  not this file's own. Queue task 454's "done" status is correct; this
+  file's prior "open" was the stale side.

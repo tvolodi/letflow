@@ -53,6 +53,41 @@ fix_direction: >
      var already exists per earlier session precedent, ISS-0848's own
      verification run used it) rather than requiring each investigating
      agent to discover and apply it fresh.
-status: open
+status: resolved
 queue_ref: "Q-868"
 github_ref: "GH-1886"
+resolution_2026_09_27: >
+  Re-verified live before touching anything (ISS-0870 priority item; this
+  file's status had flip-flopped twice already -- see docs/anti-patterns.md's
+  ISS-0868 entry). This host is NOT sandboxed per-session (root-level `ps`
+  shows full system boot from 2026-05-12, `sudo docker ps` visible) so the
+  check is authoritative, not a per-container illusion:
+    - `ps -eo pid,ppid,etimes,user,cmd` (full host process table, 416
+      processes): no `mix run --no-halt` process anywhere, and no PID
+      3011743 (`/proc/3011743` does not exist). The only long-lived
+      beam.smp is letflow-queue's own release (uptime ~19.8 days, unrelated
+      service, not a Postgrex connection holder against letflow_dev).
+    - `sudo fuser 5463/tcp` / `sudo lsof -i :5463`: only the two
+      `docker-pr` (docker-proxy) LISTEN sockets; zero established client
+      connections at the OS level.
+    - Authoritative check, direct from Postgres itself:
+      `docker exec letflow-1-postgres-1 psql -U letflow -d letflow_dev -c
+      "select pid, usename, datname, client_addr, backend_start, state,
+      query from pg_stat_activity order by backend_start;"` returned 6 rows
+      total: 5 background-worker connections open since server start
+      (2026-09-04 04:13:15, `autovacuum`-class, no `usename`/`datname`) plus
+      this investigation's own single `psql` connection. No 30-connection
+      holder, no unexplained long-lived application connection of any kind.
+  Conclusion: the stale-process condition genuinely does not exist right
+  now. Given the documented flip-flop history (self-resolved -> found
+  running again by TEST-RUNNER during ISS-0831 close-out, 2d10h uptime,
+  30 held connections, 2026-09-27 ~07:20Z), this may recur if someone starts
+  another long-lived `mix run --no-halt` against the shared Postgres again
+  -- docs/anti-patterns.md's ISS-0868 entry (symptom-to-cause mapping,
+  TEST_CONNECTION_HEADROOM mitigation) is left in place for that future
+  occurrence rather than removed. Queue task 868 (reporting "done") is
+  therefore CORRECT as of now; docs/issues/ISS-0868.yaml is the side that
+  was stale -- flipped `status: open` -> `resolved` here to match, rather
+  than releasing the queue task back to open. Resolved by ORCH
+  (ADHOC-20260927-ISS0870, priority item), verified live rather than
+  inferred.

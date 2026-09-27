@@ -1228,7 +1228,20 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # `MIX_ENV=test mix run --no-start -e` calling
       # File.read!("docs/requirements.yaml") |> audit(), returning
       # deferral_count == 2, stale_count == 0. The detector is unchanged.
-      assert result.deferral_count == 2
+      #
+      # UPDATE (ISS-0870, 2026-09-27): the count dropped from 2 to 0 by the
+      # same registered-it-properly mechanism as the REQ-284/REQ-291
+      # precedent above. REQ-222 (letflow-queue's GET /tasks endpoint) was
+      # confirmed live to already be implemented and shipped in the target
+      # repo -- its yaml was simply never backfilled to `done` here -- which
+      # expired both REQ-223's and REQ-224's `blocked-by: REQ-222`
+      # deferrals. Neither had any other live blocker, so both were
+      # registered for real (queue tasks 871, 872; GH#1907/#1908) rather
+      # than re-scoped, removing both from the deferred set entirely. Net:
+      # 2 - 2 = 0. Re-derived, not guessed: confirmed live via
+      # `mix letflow.check_deferral_staleness`, returning
+      # "0 deferred of 397 entries; 0 stale". The detector is unchanged.
+      assert result.deferral_count == 0
       assert result.stale_count == 0
 
       # The substance, not just the count: every deferral present is
@@ -1237,10 +1250,7 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # counted.
       assert Enum.all?(result.deferrals, &(&1.verdict == :legitimate))
 
-      assert Enum.sort(Enum.map(result.deferrals, & &1.id)) == [
-               "REQ-223",
-               "REQ-224"
-             ]
+      assert Enum.sort(Enum.map(result.deferrals, & &1.id)) == []
     end
 
     test "T-REG-STILL-GREEN -- the bounded `status` addition kept ISS-0231 green" do

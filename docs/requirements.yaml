@@ -31221,7 +31221,7 @@ requirements:
   - id: REQ-420
     title: "CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml -- flutter analyze, flutter test, Android debug build -- for apps/mobile/**"
     owner: MOBILE-DEV
-    status: in_progress
+    status: done
     stage: S9
     impl_order: 857  # letflow-queue task id, GH#1874. Registered 2026-09-27T02:59:57Z by ORCH (WF-01 Step 3).
     description: >

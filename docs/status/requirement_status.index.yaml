@@ -4610,8 +4610,14 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 21
+    entries: 22
     note: >
+      Incremented to 22 by DOC-UPDATER's own REQ-420 "done" event append
+      (WF02-REQ420-20260928, 2026-09-28T09:20:00Z) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 22 on-disk entries. 704
+      lines / 42136 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior note preserved below.
+
       Incremented to 21 by ORCH's own REQ-420 "started" event append
       (WF02-REQ420-20260928, 2026-09-28T02:56:00Z) -- `grep -c "^  - req:"
       docs/status/requirement_status.v23.yaml` = 21 on-disk entries. 653

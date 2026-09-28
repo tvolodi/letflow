@@ -651,3 +651,54 @@
       user instruction continuing sequentially through the mobile chain
       after REQ-419's merge. Branch feature/WF02-REQ420-20260928, pushed
       from origin/main with no divergence (git pull --ff-only exited 0).
+
+  - req: REQ-420
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-28T09:20:00Z
+    note: >
+      WF-02 run WF02-REQ420-20260928 closed. Added a path-filtered Mobile
+      gate job to .github/workflows/ci.yml, parallel to the existing
+      backend/frontend gates per the ISS-0591/ISS-0592 path-filter-dedup
+      pattern: `changes` job gained a `mobile` output (true on push/both
+      fail-safe branches/fallback, or when a diff path matches
+      `^(apps/mobile/|\.github/workflows/ci\.yml)`, backend/frontend
+      regexes untouched); new sibling job `mobile` ("Mobile gate (flutter
+      analyze + test + build)"), needs: changes, job-level
+      `if: ${{ !cancelled() }}`, working-directory apps/mobile, steps
+      checkout/setup-java(Temurin 17)/subosito-flutter-action/then
+      step-gated (`if: needs.changes.outputs.mobile != 'false'`) pub
+      get/analyze/test/build apk --debug; header comment records the
+      0018 required-status-check open question as explicitly deferred to
+      REVIEWER/ORCH, not resolved here. TEST-DESIGNER's scope-test found
+      all 6 acceptance criteria are command-output/CI-run demonstrations
+      with no ExUnit/Dart-test executable surface (no lib/priv/test
+      changes), so 3b/4 were correctly skipped straight to
+      RELEASE-VALIDATOR. RELEASE-VALIDATOR independently re-verified all
+      6 ACs plus its own standing full-suite duty: AC1 (python
+      yaml.safe_load direct read: jobs
+      ['backend','changes','frontend','mobile'], mobile job name/`if`
+      exact match), AC2 (git diff origin/main confirmed additions-only,
+      zero backend/frontend regex/key changes), AC3 (all four flutter
+      steps' step-level `if` and the four mobile=true emission sites read
+      directly), AC4/AC5 against this PR's own real, completed CI run --
+      PR #1926, run 36373390164: `gh pr checks 1926` and `gh run view
+      --json jobs` both quoted, Mobile gate job (databaseId
+      108774224795) conclusion success with all 8 steps (checkout,
+      setup-java, setup-flutter, pub get, analyze, test, build debug apk,
+      post-steps) success, Backend gate and Frontend gate both conclusion
+      success/unaffected -- AC6 (mobile job's header comment read
+      directly, confirms the 0018 open question recorded verbatim).
+      Full local suite independently re-run twice (first attempt hit the
+      documented transient host-overload DB-connection-pool-exhaustion
+      class, ISS-0219/ISS-0222, unrelated to this diff; retry clean):
+      5027/5027 passed, 0 failures; independent `mix letflow.check.test`
+      also exited 0 clean. PASS
+      (handoffs/WF02-REQ420-20260928/step-05-release-validator.json).
+      docs/migration/decisions/0018-branch-protection-posture.md checked:
+      REQ-420's own text names it only as an explicitly-deferred OPEN
+      QUESTION for a future REVIEWER/ORCH amendment, not something this
+      requirement resolves -- confirmed no update to that file is
+      required. README.md checked for stale CI job-name/gate references --
+      none found needing a change. Flipping docs/requirements.yaml's
+      REQ-420 status: in_progress -> done in this same append.

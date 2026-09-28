@@ -1,0 +1,62 @@
+{
+  "handoff_id": "WF02-REQ420-20260928-step-06",
+  "run_id": "WF02-REQ420-20260928",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ420-20260928/step-06-doc-updater.json",
+  "created_at": "2026-09-28T09:15:30Z",
+  "started_at": "2026-09-28T09:15:30Z",
+  "completed_at": "2026-09-28T09:22:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-420"],
+    "requirement_text": {
+      "REQ-420": "CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml -- flutter analyze, flutter test, Android debug build -- for apps/mobile/**\n\n.github/workflows/ci.yml has jobs `changes`, `backend` and `frontend` and no Flutter job (verified 2026-09-27). Without one, every MOB requirement after REQ-419 would merge with its tests unrun by CI. This requirement is sequenced immediately after REQ-419 and before REQ-421 (MOB-2 depends on it) so that CI exists before the second MOB requirement merges.\nOwner MOBILE-DEV, by the REQ-138 precedent (FRONTEND-DEV added the frontend job): the job runs flutter, which only MOBILE-DEV's capability row covers. REQ-417 widens MOBILE-DEV's write scope to this job.\n\nRead lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md in full first; ci.yml's own header warns not to \"simplify\" its path-filter choices. Follow the existing pattern exactly:\n1. `changes` job: add a `mobile` output. In the push branch (ISS-0840: push to main always runs every gate) and in both fail-safe branches (no usable base SHA, unreachable base SHA) and in the `fallback` step, emit mobile=true. In the diff branch, mobile is true iff a changed path matches ^(apps/mobile/|\\.github/workflows/ci\\.yml). Do not change the backend/frontend regexes. Do not add mobile to path-filter-outputs.txt (cd.yml does not deploy mobile).\n2. A new sibling job `mobile`, name \"Mobile gate (flutter analyze + test + build)\", runs-on ubuntu-latest, needs: changes, job-level `if: ${{ !cancelled() }}` (NOT always(), NOT a job-level path condition -- same reasoning as backend/frontend), defaults working-directory apps/mobile. Steps: checkout; actions/setup-java (Temurin 17); subosito/flutter-action with flutter-version-file apps/mobile/pubspec.yaml and cache enabled; then, each with step-level `if: needs.changes.outputs.mobile != 'false'` (fail-open): `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`.\n3. No other job's keys change.\n\nOPEN QUESTION (flagged, not resolved here): whether \"Mobile gate (...)\" becomes a third required status-check context on main per docs/migration/decisions/0018-branch-protection-posture.md. Changing branch protection is a 0018 amendment and belongs to REVIEWER/ORCH, not to this requirement. This requirement only makes the job eligible (always-runs, step-gated, so a required context would never be reported missing) and records the question in the job's header comment."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ420-20260928/step-01-code-designer.json",
+      "handoffs/WF02-REQ420-20260928/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ420-20260928/step-02b-mobile-dev.json",
+      "handoffs/WF02-REQ420-20260928/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ420-20260928/step-02d-reviewer.json",
+      "handoffs/WF02-REQ420-20260928/step-03-test-designer.json",
+      "handoffs/WF02-REQ420-20260928/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ420-20260928/step-05-release-validator.json",
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v23.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR PASSed REQ-420 (Step 5). 1) Flip REQ-420's status from in_progress to done in docs/requirements.yaml. 2) Append a 'done' event to the current run-history volume (docs/status/requirement_status.v23.yaml per docs/status/requirement_status.index.yaml -- append only) summarizing what REQ-420 built and RELEASE-VALIDATOR's full independent re-verification, including the real CI run (PR #1926, run 36373390164). Reconcile the index's volume-23 entries/lines/bytes note against the actual on-disk file in the same commit. 3) Check whether docs/migration/decisions/0018-branch-protection-posture.md needs an update -- REQ-420 names it only as an explicitly deferred open question, confirm that reasoning holds rather than silently skipping a real gap. 4) Check README.md for stale CI job-name/gate documentation, update only if genuinely stale.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-420 status is 'done'",
+      "A 'done' event appended to docs/status/requirement_status.v23.yaml with a real UTC timestamp from the clock, append-only (git diff --numstat shows 0 deletions on that file)",
+      "docs/status/requirement_status.index.yaml's volume-23 entries/lines/bytes note matches the actual on-disk file after the append",
+      "docs/migration/decisions/0018-branch-protection-posture.md reasoning re-confirmed (open question stays open, not resolved by this requirement) -- no edit needed unless that reasoning is found to be wrong",
+      "README.md checked for stale CI job/gate documentation, updated only if stale"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-420 closed out. (1) docs/requirements.yaml REQ-420 status flipped in_progress -> done. (2) Appended a 'done' event to docs/status/requirement_status.v23.yaml with real clock timestamp 2026-09-28T09:20:00Z, summarizing the path-filtered Mobile gate job added to .github/workflows/ci.yml (changes job's new `mobile` output, the new `mobile` sibling job with step-gated flutter pub get/analyze/test/build, the 0018 open-question header comment) and RELEASE-VALIDATOR's full independent re-verification of all 6 ACs plus its standing full-suite duty, including the real completed CI run PR #1926 / run 36373390164 (Mobile gate job success, all 8 steps success, Backend/Frontend gates unaffected/success) and the local suite re-run clean at 5027/5027 passed; verified via `git diff --numstat` that the append added 51 lines / 0 deletions on that file (append-only preserved) and 1/1 on docs/requirements.yaml (the status-field flip). (3) `grep -c \"^  - req:\" docs/status/requirement_status.v23.yaml` = 22 on-disk entries after the append (was 21); docs/status/requirement_status.index.yaml's volume-23 entry corrected from entries: 21 to entries: 22, with a new note recording 704 lines / 42136 bytes (both re-measured directly via `wc -l`/`wc -c` on the working-tree file, CRLF as the roll_rule specifies), well under the 1200-line/120000-byte roll ceiling -- no roll triggered -- and the prior note preserved below it, unedited. (4) docs/migration/decisions/0018-branch-protection-posture.md: confirmed by re-reading REQ-420's own requirement text that it names this file only as an OPEN QUESTION explicitly deferred to a future REVIEWER/ORCH amendment ('Changing branch protection is a 0018 amendment and belongs to REVIEWER/ORCH, not to this requirement'), matching RELEASE-VALIDATOR's AC6 finding that the mobile job's header comment records this question as open and unresolved -- reasoning holds, no update made to that file, this is not a gap. (5) README.md checked via grep for 'backend gate', 'frontend gate', 'mobile gate', 'ci.yml', 'workflows/ci' -- zero matches; README.md does not document individual CI job names or gates anywhere, so nothing there is stale and no edit was made.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v23.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ420-20260928/step-06-doc-updater.json"
+    ],
+    "issues": [],
+    "next_action": "Route to ORCH for Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,54 @@
+{
+  "handoff_id": "1f2a3b4c-5d6e-421f-8a9b-421002020202",
+  "run_id": "WF02-REQ421-20260928",
+  "workflow_id": "WF-02",
+  "step": "02b-mobile",
+  "from_agent": "ORCH",
+  "to_agent": "MOBILE-DEV",
+  "file": "handoffs/WF02-REQ421-20260928/step-02b-mobile-dev.json",
+  "created_at": "2026-09-28T05:20:00Z",
+  "started_at": "2026-09-28T05:20:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-421"],
+    "requirement_text": {
+      "REQ-421": "See handoffs/WF02-REQ421-20260928/step-01-code-designer.json's context.requirement_text for the full verbatim requirement description -- not restated here. Read it in full before starting; the LIVE LOGIN caveat at its end is load-bearing for this step's acceptance criterion #9."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["5c457c49-2e03-41dc-94f4-f7cee31c5a4c", "8b1e4a2f-3c6d-4e0a-9f21-421001010102"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ421-20260928/step-01-code-designer.json",
+      "lib/letflow/design/req421-mobile-tenant-bootstrap.md",
+      "lib/letflow/design/req418-mobile-oidc-client.md",
+      "lib/letflow/design/req419-mobile-scaffold.md",
+      "docs/mobile/README.md",
+      "docs/mobile/architecture.md",
+      "docs/mobile/requirements.md",
+      "docs/mobile/build-order.md",
+      ".claude/agents/mobile-dev.md",
+      "apps/mobile/"
+    ],
+    "owned_modules": ["apps/mobile/", "docs/mobile/requirements.md", "docs/mobile/architecture.md"]
+  },
+  "task": {
+    "description": "Verify branch: git branch --show-current must equal feature/WF02-REQ421-20260928. Implement REQ-421 in apps/mobile/ exactly per lib/letflow/design/req421-mobile-tenant-bootstrap.md's design (do not deviate from its signatures/shapes without recording why) -- deep-link/slug parsing, the AndroidManifest intent-filter, the tenant-config client, the OIDC flutter_appauth flow, the ONE token-store class in lib/auth/, the post-auth bootstrap (memberships/modules, tenant-not-found rule, CANDIDATE fallback, route table gating on installed_modules), the four dedicated error screens, lib/api/api_client.dart as the sole Dio-construction site, and the two docs/mobile/*.md dated-note additions (additive only -- keep original text, git diff there must show additions only). Per WF-02 Step 3's scope note, YOU write the Dart test code (widget/unit tests under apps/mobile/test/) alongside the implementation, using fake AppAuth/HTTP adapters per the design's test seams -- this satisfies the requirement's non-live acceptance criteria 1-8 and 10 (the flutter analyze / flutter test / Dio-construction-count / docs-note criteria). Run `flutter pub get && flutter analyze && flutter test` from apps/mobile/ and fix until both pass, quoting real output. Self-review against .claude/agents/mobile-dev.md's tier constraints (no general scripting runtime on-device, no webview, tokens only in flutter_secure_storage, online-first).\n\nTHEN attempt the LIVE acceptance criterion (#9): with Docker's Postgres/Keycloak already healthy and an Android emulator AVD (Medium_Phone_37.1) available on this host, bring up whatever this project's docker-compose stack needs for the Letflow backend + Keycloak, boot the emulator, apply `adb reverse` for the API port and the Keycloak port, set KEYCLOAK_BASE_URL (or BPM_IDP_BASE_URL) so tenant-config's realm_url is reachable from the device on localhost and its issuer matches the backend's (do NOT use 10.0.2.2 -- the requirement text explains why: it yields a token iss the backend rejects), then `flutter run -d emulator-5554 --dart-define=LETFLOW_API_BASE_URL=http://localhost:<port>` (and whatever platform-host dart-define the design settled on for slug/deep-link resolution) and confirm the app reaches Keycloak's login page in a Custom Tab for the slug(s) available on this local stack -- capture `adb logcat` lines or a screenshot reference as evidence. Do NOT attempt to type real credentials or complete the login -- that is explicitly DEFERRED to UAT-RUNNER; reaching the login page is the whole of this criterion. If the local stack only has the default realm (bpm-default), that is an acceptable, explicitly-stated limitation -- prove it for one slug rather than blocking on a second realm that doesn't exist locally. If this live step is genuinely blocked by something outside your control (e.g. the emulator/Docker infra itself is unusable, not just fiddly), STOP, document exactly what you tried and why it's blocked, and report PARTIAL rather than claiming PASS on this criterion -- do not spend unbounded time on infra debugging beyond one reasonable retry.\n\nWhen finished (whether full PASS or PARTIAL on the live criterion): mix format is not applicable here (Dart, not Elixir) -- run `dart format --set-exit-if-changed .` from apps/mobile/ as the equivalent and fix if it fails.",
+    "acceptance_criteria": [
+      "a test asserts the tenant-config request carries no Authorization header, and asserts the authorization request built for a slug uses issuer == that response's realm_url, clientId == that response's client_id, redirectUrl 'com.bizdala.letflow:/oauth2redirect' and a PKCE S256 challenge",
+      "a test drives the whole sequence for two distinct slugs whose fake tenant-config responses carry different realm_url values in ONE app instance with no rebuild, and asserts each ends with tokens stored under its own tenant key and that tenant B's API calls never carry tenant A's access token",
+      "a test asserts no tenant content route is reachable before /me/memberships and /me/modules have both resolved, and that a module absent from installed_modules has no route (navigating to its path shows the not-found screen)",
+      "a test asserts a login whose /me/memberships FIRST entry has a tenant_slug different from the entered slug shows the tenant-not-found screen and leaves no token in the secure store -- including a case where a later entry does match the entered slug; and a test asserts a 403 from /me/memberships (CANDIDATE) proceeds to /me/modules instead of failing",
+      "a unit test asserts the deep-link parser extracts slug 'acme' from https://acme.<configured platform host>/any/path and rejects a URL on any other host (returning no slug rather than guessing); the AndroidManifest intent filter is quoted showing a host pattern built from the build-time platform host, and the report records App Link verification (assetlinks.json) as DEFERRED with its reason",
+      "docs/mobile/requirements.md MOB-2 and docs/mobile/architecture.md §3 each carry the dated client_id note, with the original five-key text still present (git diff shows additions only there)",
+      "four widget tests each force one failure -- tenant-not-found, SocketException, AppAuth error, secure-storage exception -- and assert the corresponding dedicated screen (by key) is shown, not a generic error or a crash",
+      "`git grep -n 'Dio(' -- apps/mobile/lib` returns exactly one hit, in lib/api/api_client.dart, quoted",
+      "live: reaches Keycloak's login page in a Custom Tab for at least one slug via a real emulator run against the local docker-compose stack, with adb logcat/screenshot evidence quoted or referenced; interactive credential entry explicitly recorded as DEFERRED to UAT-RUNNER",
+      "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

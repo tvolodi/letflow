@@ -4610,8 +4610,17 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 33
+    entries: 34
     note: >
+      Bumped to 34 by ORCH after appending ISS-0880's close-out entry
+      (fix/ISS0880-req421-ac3-route-gating, 2026-09-29T02:35:00Z --
+      ported the AC3-clause-1 test a concurrent sibling run's stricter
+      TEST-DESIGN-VALIDATOR pass had produced, closing a coverage gap in
+      already-merged PR #1954). `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 34 on-disk entries;
+      well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered.
+
       Bumped to 33 by DOC-UPDATER after appending REQ-421's `done` event
       (WF02-REQ421-20260928, 2026-09-28T20:49:14Z -- MOB-2 mobile tenant
       bootstrap/OIDC auth flow closed) in the same commit as the append.

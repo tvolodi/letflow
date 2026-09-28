@@ -53,13 +53,11 @@ defmodule Letflow.Plugs.AuthPipelineTest do
   use Letflow.DataCase, async: false
 
   alias Letflow.Identity
-  alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.Plugs.AuthPipeline
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
-  import Ecto.Query
   import Plug.Test
   import Plug.Conn
 
@@ -67,56 +65,22 @@ defmodule Letflow.Plugs.AuthPipelineTest do
     "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
   end
 
-  defp unique_slug(prefix \\ "tenant") do
-    Letflow.TenantSlugFixture.unique_slug(prefix)
-  end
-
-  # REQ-063: switches to Sandbox :auto mode FIRST (before inserting the tenant row
-  # at all) and provisions a real tenant schema (CREATE SCHEMA + full migration
-  # replay, including the three now-tenant-scoped identity tables). Both the
-  # `tenants` row and its schema must be created under the SAME connection
-  # discipline — inserting the tenant under DataCase's normal rolled-back sandbox
-  # transaction first, then switching to :auto for the schema, would leave
-  # provision_tenant_schema/1's :auto-mode connection unable to see a tenant row
-  # that only exists inside the not-yet-committed (and never-to-be-committed)
-  # sandboxed transaction, surfacing as {:error, :tenant_not_found} (confirmed
-  # empirically while drafting this file). Mirrors identity_test.exs's/
-  # tenant_provisioning_test.exs's/event_store_test.exs's established
-  # provisioned_tenant!/1-style helper, cleaned up explicitly in on_exit/1 since
-  # :auto-mode state is real, committed Postgres state, not rolled back
-  # automatically.
-  defp insert_tenant!(attrs) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(attrs, :enabled)
-      |> Repo.insert!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: _schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+  # Provisioned via Letflow.TenantFixture (ISS-0112 / GH#366) — replaces the former
+  # hand-rolled `insert_tenant!/1` (Sandbox :auto mode + Tenant.create_changeset/3 +
+  # provision_tenant_schema/1 + replay_migrations/1 + on_exit/1 teardown), which
+  # TenantFixture.provisioned_tenant!/1 already reproduces statement for statement.
+  # `oidc_mode: :enabled` matches this file's original `:enabled` third changeset
+  # argument.
+  defp insert_tenant_for_realm!(realm) do
+    %{tenant: tenant} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "tenant",
+        display_name: "Auth Pipeline Test Tenant",
+        oidc_mode: :enabled,
+        idp_realm_id: realm
+      )
 
     tenant
-  end
-
-  defp insert_tenant_for_realm!(realm) do
-    insert_tenant!(%{
-      slug: unique_slug(),
-      display_name: "Auth Pipeline Test Tenant",
-      idp_realm_id: realm
-    })
   end
 
   defp insert_bpm_default_tenant! do
@@ -129,11 +93,15 @@ defmodule Letflow.Plugs.AuthPipelineTest do
     # via on_exit/1) — see Letflow.Support.BpmDefaultRealmDisplacement's moduledoc.
     Letflow.Support.BpmDefaultRealmDisplacement.displace!()
 
-    insert_tenant!(%{
-      slug: unique_slug("bpm-default-tenant"),
-      display_name: "BPM Default Realm Tenant",
-      idp_realm_id: "bpm-default"
-    })
+    %{tenant: tenant} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "bpm-default-tenant",
+        display_name: "BPM Default Realm Tenant",
+        oidc_mode: :enabled,
+        idp_realm_id: "bpm-default"
+      )
+
+    tenant
   end
 
   defp user_count_for_tenant(_tenant_id, schema_name) do

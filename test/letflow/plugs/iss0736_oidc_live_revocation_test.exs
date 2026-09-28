@@ -47,48 +47,18 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
 
   alias Letflow.Identity
   alias Letflow.Identity.GroupMember
-  alias Letflow.Identity.Tenant
   alias Letflow.Identity.TenantRole
   alias Letflow.Identity.User
   alias Letflow.Oidc.Iss0736RoleClaimTokenVerifierDouble
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
-  defp unique_slug(prefix) do
-    Letflow.TenantSlugFixture.unique_slug(prefix)
-  end
-
-  # Ported verbatim (naming/shape) from
-  # test/letflow/plugs/auth_pipeline_test.exs's insert_tenant!/1 +
-  # insert_bpm_default_tenant!/0 -- see that file's moduledoc for the full
-  # reasoning on why :auto mode must be entered before the tenant row itself
-  # is inserted.
-  defp insert_tenant!(attrs) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(attrs, :enabled)
-      |> Repo.insert!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: _schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    tenant
-  end
-
+  # Provisioned via Letflow.TenantFixture (ISS-0112 / GH#366) — replaces the former
+  # hand-rolled `insert_tenant!/1` (Sandbox :auto mode + Tenant.create_changeset/3 +
+  # provision_tenant_schema/1 + replay_migrations/1 + on_exit/1 teardown), which
+  # TenantFixture.provisioned_tenant!/1 already reproduces statement for statement.
+  # `oidc_mode: :enabled` matches this file's original `:enabled` third changeset
+  # argument.
   defp insert_bpm_default_tenant! do
     # "bpm-default" is the one realm Letflow.Oidc.TokenVerifierDouble's fixed
     # sentinel token always claims (config/test.exs wires this double in for
@@ -98,11 +68,15 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
     # tenant under that same realm. See Letflow.Support.BpmDefaultRealmDisplacement.
     Letflow.Support.BpmDefaultRealmDisplacement.displace!()
 
-    insert_tenant!(%{
-      slug: unique_slug("bpm-default-tenant"),
-      display_name: "ISS-0736 Live Revocation Test Tenant",
-      idp_realm_id: "bpm-default"
-    })
+    %{tenant: tenant} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "bpm-default-tenant",
+        display_name: "ISS-0736 Live Revocation Test Tenant",
+        oidc_mode: :enabled,
+        idp_realm_id: "bpm-default"
+      )
+
+    tenant
   end
 
   defp dispatch(conn), do: Letflow.Router.call(conn, Letflow.Router.init([]))

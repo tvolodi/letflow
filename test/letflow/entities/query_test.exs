@@ -26,56 +26,23 @@ defmodule Letflow.Entities.QueryTest do
   alias Letflow.Entities.Query.Types
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
-  alias Letflow.Identity.Tenant
   alias Letflow.Repo
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
-
-  import Ecto.Query
+  alias Letflow.TenantFixture
 
   # ---------------------------------------------------------------------------------
-  # Fixtures -- same shape as test/letflow/entities/records_test.exs's
-  # provisioned_tenant/0.
+  # Fixtures -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366).
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req230-query"),
-        display_name: "REQ-230 Entity Query Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
 
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req230-query",
+        display_name: "REQ-230 Entity Query Test Tenant"
+      )
 
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
     assert {:ok, _seed_result} = Letflow.Entities.EventTypes.seed!(schema_name)
 
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   defp valid_definition(overrides) do

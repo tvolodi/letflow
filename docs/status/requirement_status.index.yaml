@@ -4610,8 +4610,24 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 29
+    entries: 30
     note: >
+      Corrected to 30 by DOC-UPDATER while merging ISS-0112 Batch 5
+      (fix/ISS0112-batch5-tenant-fixture-migration-20260928,
+      2026-09-28T15:50:00Z) -- caught by test/docs/requirement_status_invariants_test.exs's
+      A9 check failing on this PR's CI. `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 30 on-disk entries;
+      927 lines / 54686 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. This PR's own diff makes no
+      requirement_status append of its own -- the drift was pre-existing on
+      `main` (ORCH's own ISS-0877 SCOPE-CHANGE/done entry at
+      2026-09-28T14:55:30Z landed without this index's `entries:` field
+      being bumped in the same commit, the exact recurring failure mode
+      this note's own predecessor already describes below). Fixing it here,
+      in its own commit, rather than deferring to whichever PR merges next,
+      because it blocks every PR's backend gate (A9 is unconditional) until
+      corrected. Prior note preserved below.
+
       Incremented to 29 by DOC-UPDATER's own REQ-224 "done" event append
       (WF02-REQ224-20260928, 2026-09-28T16:10:00Z) -- `grep -c "^  - req:"
       docs/status/requirement_status.v23.yaml` = 29 on-disk entries. 896

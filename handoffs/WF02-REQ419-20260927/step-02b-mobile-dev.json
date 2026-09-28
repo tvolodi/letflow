@@ -59,7 +59,6 @@
       "diff_scope": "apps/mobile/** and docs/mobile/README.md only, plus this handoff"
     }
   },
-  "next_action": "Route to REVIEWER (Step 2d) -- SECURITY-REVIEWER not required, this requirement does not touch auth/token storage/transport",
   "rework_count": 0,
   "max_rework": 3
 }

@@ -12,13 +12,17 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Builder(
-            builder: (context) => registry.build(context, 'not-a-real-type', const {}),
+            builder: (context) =>
+                registry.build(context, 'not-a-real-type', const {}),
           ),
         ),
       );
 
       expect(find.byKey(unsupportedDefinitionTypeKey), findsOneWidget);
-      expect(find.textContaining('Unsupported definition type'), findsOneWidget);
+      expect(
+        find.textContaining('Unsupported definition type'),
+        findsOneWidget,
+      );
     },
   );
 }

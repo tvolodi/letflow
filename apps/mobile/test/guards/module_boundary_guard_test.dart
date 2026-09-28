@@ -34,9 +34,7 @@ class BoundaryViolation {
 /// `import '../b/other.dart';`. Dart import statements are always
 /// single-line quoted string literals, so a plain-text scan (no
 /// `analyzer` package dependency) is sufficient.
-final RegExp _importRegex = RegExp(
-  '''import\\s+['"]([^'"]+)['"]''',
-);
+final RegExp _importRegex = RegExp('''import\\s+['"]([^'"]+)['"]''');
 
 /// Extracts the feature id from a normalized (`/`-separated) path if it
 /// points inside `lib/features/<id>/`, else null.
@@ -65,9 +63,10 @@ String _resolveImportTarget(String importingFileRelPath, String target) {
   final importingDir = importingFileRelPath.contains('/')
       ? importingFileRelPath.substring(0, importingFileRelPath.lastIndexOf('/'))
       : '';
-  final segments = <String>[...importingDir.split('/'), ...target.split('/')]
-      .where((s) => s.isNotEmpty)
-      .toList();
+  final segments = <String>[
+    ...importingDir.split('/'),
+    ...target.split('/'),
+  ].where((s) => s.isNotEmpty).toList();
   final resolved = <String>[];
   for (final segment in segments) {
     if (segment == '.') continue;
@@ -86,7 +85,8 @@ Map<String, List<String>> _readManifest(String manifestContent) {
   final decoded = jsonDecode(manifestContent) as Map<String, dynamic>;
   final features = (decoded['features'] as Map<String, dynamic>?) ?? {};
   return features.map((id, value) {
-    final deps = (value as Map<String, dynamic>)['depends_on'] as List<dynamic>?;
+    final deps =
+        (value as Map<String, dynamic>)['depends_on'] as List<dynamic>?;
     return MapEntry(id, deps?.cast<String>() ?? const <String>[]);
   });
 }
@@ -107,11 +107,13 @@ List<BoundaryViolation> checkModuleBoundaries({
   // itself a violation.
   for (final featureId in featureDirsPresent) {
     if (!manifest.containsKey(featureId)) {
-      violations.add(BoundaryViolation(
-        'lib/features/$featureId/',
-        0,
-        'feature directory has no entry in module_manifest.json',
-      ));
+      violations.add(
+        BoundaryViolation(
+          'lib/features/$featureId/',
+          0,
+          'feature directory has no entry in module_manifest.json',
+        ),
+      );
     }
   }
 
@@ -131,21 +133,25 @@ List<BoundaryViolation> checkModuleBoundaries({
 
       if (!importerInsideSameFeature && !isSanctionedFile) {
         if (importingFeatureId == null) {
-          violations.add(BoundaryViolation(
-            path,
-            1,
-            'imports lib/features/$targetFeatureId/ from outside features/'
-                ' and is not the sanctioned navigation-bootstrap file',
-          ));
+          violations.add(
+            BoundaryViolation(
+              path,
+              1,
+              'imports lib/features/$targetFeatureId/ from outside features/'
+              ' and is not the sanctioned navigation-bootstrap file',
+            ),
+          );
         } else {
           final allowedDeps = manifest[importingFeatureId] ?? const <String>[];
           if (!allowedDeps.contains(targetFeatureId)) {
-            violations.add(BoundaryViolation(
-              path,
-              2,
-              'lib/features/$importingFeatureId/ imports lib/features/'
-                  '$targetFeatureId/ which is not in its depends_on list',
-            ));
+            violations.add(
+              BoundaryViolation(
+                path,
+                2,
+                'lib/features/$importingFeatureId/ imports lib/features/'
+                '$targetFeatureId/ which is not in its depends_on list',
+              ),
+            );
           }
         }
       }
@@ -162,7 +168,8 @@ Map<String, String> _readRealLibFiles(Directory libDir) {
   final files = <String, String>{};
   for (final entity in libDir.listSync(recursive: true)) {
     if (entity is File && entity.path.endsWith('.dart')) {
-      final relPath = 'lib/${_relativeTo(libDir, entity).replaceAll('\\', '/')}';
+      final relPath =
+          'lib/${_relativeTo(libDir, entity).replaceAll('\\', '/')}';
       files[relPath] = entity.readAsStringSync();
     }
   }

@@ -1,46 +1,60 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'bootstrap/navigation_bootstrap.dart';
+
 /// The one sanctioned "app/router" file (REQ-419 design §3). Defines the
-/// top-level app widget and the [GoRouter] instance.
-///
-/// This requirement (REQ-419, MOB-1 scaffold) ships a single placeholder
-/// route only — no auth, no fetch. The real bootstrap sequence (tenant
-/// slug resolution, `tenant-config` call, login) is REQ-421's scope
-/// (MOB-2).
-class LetflowApp extends StatelessWidget {
+/// top-level app widget and the [GoRouter] instance, gated on
+/// `BootstrapController`'s state (REQ-421 design §5.4). The real provider
+/// wiring (`ApiClient`, `TenantTokenStore`, `ActiveRealmHolder`,
+/// `bootstrapControllerProvider`) lives in `bootstrap/navigation_bootstrap.dart`
+/// so both this file's router and that file's own widgets can depend on it
+/// without a circular import.
+class LetflowApp extends ConsumerWidget {
   const LetflowApp({super.key});
 
-  static final GoRouter _router = GoRouter(
-    routes: [
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const SlugEntryPlaceholderScreen(),
-      ),
-    ],
-  );
-
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Letflow',
-      routerConfig: _router,
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.watch(bootstrapControllerProvider);
+    final router = _buildRouter(controller);
+    return MaterialApp.router(title: 'Letflow', routerConfig: router);
   }
 }
 
-/// Placeholder for the tenant slug-entry screen. Manual text-entry shape
-/// per REQ-419's design (§3, open question 1) — a real bootstrap flow
-/// (slug resolution, `tenant-config` fetch, login) is built in REQ-421.
-class SlugEntryPlaceholderScreen extends StatelessWidget {
-  const SlugEntryPlaceholderScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('Letflow — tenant entry (placeholder)'),
+GoRouter _buildRouter(BootstrapController controller) {
+  return GoRouter(
+    refreshListenable: controller,
+    initialLocation: '/',
+    redirect: (context, state) {
+      final phase = controller.state.phase;
+      // No tenant-content route is reachable until bootstrap succeeds
+      // (design §5.2/§5.4's ordering invariant).
+      if (phase != BootstrapPhase.success && state.matchedLocation != '/') {
+        return '/';
+      }
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) {
+          final uiState = controller.state;
+          if (uiState.phase == BootstrapPhase.failure &&
+              uiState.failureReason != null) {
+            return buildErrorScreen(
+              uiState.failureReason!,
+              onRetry: controller.resetToEntry,
+            );
+          }
+          return const TenantSlugEntryScreen();
+        },
       ),
-    );
-  }
+      // REQ-421 ships zero real feature modules — buildRouteTable's real
+      // output is the empty set (design §5.4, OQ-4). A module absent from
+      // `installed_modules` has no route entry here, so `GoRouter`'s own
+      // default not-found page is shown for it (AC3).
+      ...buildRouteTable(controller.state.installedModules),
+    ],
+  );
 }

@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ421-20260928/step-02b-mobile-dev.json",
   "created_at": "2026-09-28T05:20:00Z",
   "started_at": "2026-09-28T05:20:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-28T10:35:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -48,7 +48,59 @@
       "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented REQ-421 in apps/mobile/ per lib/letflow/design/req421-mobile-tenant-bootstrap.md: the deep-link/manual-slug parser and TenantSlugEntryScreen (lib/bootstrap/navigation_bootstrap.dart), the tenant-config client and single Dio-construction site (lib/api/api_client.dart, new), the OIDC flutter_appauth flow and the one token-store class (lib/auth/auth.dart), the post-auth bootstrap sequence with the first-entry-only tenant-not-found check and CANDIDATE 403 skip, the four dedicated error screens (lib/bootstrap/error_screens.dart, new), the AndroidManifest deep-link intent-filter and Gradle platformHost placeholder, an iOS Runner.entitlements (written, unbuilt, per REQ-419's iOS deferral), and the two docs/mobile/*.md additive dated notes (git diff on both files shows insertions only, verified). Wrote 44 new/adjusted Dart tests across test/{auth,api,bootstrap,android,docs,widgets,support}/ using fake AppAuth/HTTP/secure-storage-platform adapters. `flutter analyze`: 'No issues found!' `flutter test`: 'All tests passed!' (44 tests). `dart format --set-exit-if-changed .`: 'Formatted 35 files (0 changed)' (a second run after the fix). `git grep -n --untracked 'Dio(' -- lib` returns exactly one hit: 'lib/api/api_client.dart:142:    final dio = Dio('. Two implementation notes recorded as issues below (both resolved, not left as gaps): (1) flutter_appauth 12.1.0 signals user-cancellation via a thrown FlutterAppAuthUserCancelledException, not a null return as the design's §3.1 prose assumed -- RealAppAuthAdapter (lib/auth/auth.dart) absorbs exactly that exception so AppAuthAdapter's null-on-cancel contract still holds; (2) design §5.3 says the active-realm pointer is set 'as the last step of BootstrapSuccess construction', but §5.2 step 4 requires the memberships call to carry the just-stored bearer token automatically -- the pointer is therefore set immediately after tokenStore.store() succeeds (before memberships/modules), which is the only ordering that satisfies both statements; reset to null on any post-store failure path so a not-found/network-failed tenant is never left 'active'. LIVE (AC9): brought up the already-healthy letflow-postgres-1/letflow-keycloak-1 containers (docker ps), started the backend (`LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt`, confirmed `Running Letflow.Router with Bandit ... at 0.0.0.0:4000`), and set `KEYCLOAK_BASE_URL=http://localhost:8093` (the real running container's port; `Letflow.Routers.MobileTenantConfig.idp_base_url/0` reads this env var directly, independent of config/dev.exs's own keycloak_port.exs-derived value, which is a pre-existing backend quirk outside owned_modules -- worked around, not modified) so tenant-config's disclosed realm_url (curl-verified: http://localhost:8093/realms/bpm-default) matches the actual Keycloak the backend itself trusts. Booted Medium_Phone_37.1 (emulator-5554), ran `adb reverse tcp:4000 tcp:4000` and `tcp:8093 tcp:8093`, then `flutter run -d emulator-5554 --dart-define=LETFLOW_API_BASE_URL=http://localhost:4000 --dart-define=LETFLOW_PLATFORM_HOST=letflow.example`. First attempt crashed (logcat: 'FATAL EXCEPTION ... IllegalArgumentException: only https connections are permitted', net.openid.appauth.connectivity.DefaultConnectionBuilder) because the local dev realm_url is http, not https; fixed by deriving `allowInsecureConnections` from `config.realmUrl`'s own scheme in authenticateWithTenant (never hardcoded true) and added a covering unit test. Second run: entered slug 'bpm-default' in TenantSlugEntryScreen, submitted; the app launched a Chrome Custom Tab whose address bar read 'localhost:8093' (screenshot), and Android's own task/Recents thumbnail for that Custom Tab task displayed the title 'Sign in to Letflow Default ... localhost:8093' -- Keycloak's standard login-page title for the bpm-default realm's display name (screenshot); logcat for this run has no FATAL EXCEPTION (the http-only crash is gone). Interactive credential entry was not attempted -- explicitly DEFERRED to UAT-RUNNER per the requirement text. Also hit a manifest bug along the way: the AndroidManifest.xml intent-filter doc comment used a literal '--' inside an XML comment ('DEFERRED -- reason:'), which is illegal XML and failed :app:processDebugMainManifest with a SAXParseException; fixed by rewording to a comma. Only the default realm (bpm-default) exists on this local stack, matching the requirement's stated acceptable limitation (proven for one slug). Stopped the emulator, backend, and killed the stray server process after the run (the harness flagged the host as low on memory during this step and killed two of my polling watchers -- not command failures, just background-shell pressure reaping; the app/backend processes themselves were unaffected until I deliberately killed them for cleanup).",
+    "artifacts_out": [
+      "apps/mobile/lib/api/api_client.dart",
+      "apps/mobile/lib/api/api.dart",
+      "apps/mobile/lib/auth/auth.dart",
+      "apps/mobile/lib/bootstrap/navigation_bootstrap.dart",
+      "apps/mobile/lib/bootstrap/bootstrap_models.dart",
+      "apps/mobile/lib/bootstrap/error_screens.dart",
+      "apps/mobile/lib/app.dart",
+      "apps/mobile/lib/renderers/renderer_registry.dart",
+      "apps/mobile/android/app/src/main/AndroidManifest.xml",
+      "apps/mobile/android/app/build.gradle.kts",
+      "apps/mobile/ios/Runner/Runner.entitlements",
+      "apps/mobile/pubspec.yaml",
+      "apps/mobile/pubspec.lock",
+      "apps/mobile/test/support/fake_http_gateway.dart",
+      "apps/mobile/test/support/fake_app_auth_adapter.dart",
+      "apps/mobile/test/support/fake_secure_storage_platform.dart",
+      "apps/mobile/test/support/fake_dio_http_client_adapter.dart",
+      "apps/mobile/test/bootstrap/parse_tenant_slug_test.dart",
+      "apps/mobile/test/bootstrap/route_table_test.dart",
+      "apps/mobile/test/bootstrap/bootstrap_sequence_test.dart",
+      "apps/mobile/test/auth/authenticate_with_tenant_test.dart",
+      "apps/mobile/test/auth/tenant_token_store_test.dart",
+      "apps/mobile/test/api/api_client_test.dart",
+      "apps/mobile/test/android/android_manifest_test.dart",
+      "apps/mobile/test/docs/dated_notes_test.dart",
+      "apps/mobile/test/widgets/error_screens_test.dart",
+      "apps/mobile/test/guards/forbidden_dependencies_guard_test.dart",
+      "apps/mobile/test/guards/module_boundary_guard_test.dart",
+      "apps/mobile/test/guards/tenant_identifier_guard_test.dart",
+      "apps/mobile/test/widgets/renderer_registry_fallback_test.dart",
+      "docs/mobile/requirements.md",
+      "docs/mobile/architecture.md",
+      "handoffs/WF02-REQ421-20260928/step-02b-mobile-dev.json"
+    ],
+    "issues": [
+      {"severity": "MINOR", "description": "Design §3.1 assumed authorizeAndExchangeCode returns null on user cancellation; flutter_appauth 12.1.0 (the pinned version) instead throws FlutterAppAuthUserCancelledException. Resolved in RealAppAuthAdapter (lib/auth/auth.dart), which absorbs exactly that exception so the AppAuthAdapter interface's own null-on-cancel contract still holds -- not a behavior gap, a package-version correction.", "affected_requirement": "REQ-421"},
+      {"severity": "MINOR", "description": "Design §5.3 says the active-realm pointer is set 'as the last step of BootstrapSuccess construction, before any tenant-content request is issued', but §5.2 step 4 requires the memberships call itself to carry the just-stored bearer token automatically -- both cannot be literally true. Implementation sets the pointer immediately after tokenStore.store() succeeds (before memberships/modules), the only ordering satisfying both statements, and resets it to null on any post-store failure so a not-found/failed tenant is never left 'active'.", "affected_requirement": "REQ-421"},
+      {"severity": "MINOR", "description": "AC9 live evidence is a Custom Tab address-bar screenshot (localhost:8093) plus an Android Recents task-thumbnail screenshot titled 'Sign in to Letflow Default ... localhost:8093' (Keycloak's real page title for bpm-default), not a full-screen capture of the rendered login form -- a fresh AVD's own Chrome/Google first-run interstitials (unrelated to this app) repeatedly intercepted taps during navigation. UAT-RUNNER, which performs real credential entry, will naturally capture a full-screen login-form screenshot as part of its own run.", "affected_requirement": "REQ-421"}
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ421-20260928",
+      "commit_sha_list": ["PENDING-FILLED-AFTER-COMMIT"],
+      "remote_branch": "origin/feature/WF02-REQ421-20260928",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (WF-02 Step 3) -- the design's own moduledoc states this is a required hard gate before REVIEWER/TEST-DESIGNER, given this is the authentication/token-handling implementation."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

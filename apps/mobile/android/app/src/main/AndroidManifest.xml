@@ -24,6 +24,23 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Tenant deep-link / App-Link intent filter (REQ-421 design
+                 §1.4). `autoVerify="false"` is deliberate, not an oversight:
+                 verified App Links require `/.well-known/assetlinks.json`
+                 served by the platform host, which no requirement
+                 provisions. App Link verification is DEFERRED, reason:
+                 no requirement provisions that file, and serving it is
+                 infrastructure outside this requirement's owned_modules
+                 (apps/mobile/, apps/mobile/android/). The manual-slug path
+                 (TenantSlugEntryScreen) remains fully available regardless. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="*.${platformHost}" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

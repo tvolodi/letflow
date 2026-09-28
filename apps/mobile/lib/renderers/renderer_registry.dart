@@ -5,10 +5,8 @@ import 'package:flutter/material.dart';
 /// [definition] is the raw JSON definition payload as decoded from the
 /// server response — renderers registered against a given
 /// `definitionType` are responsible for interpreting their own shape.
-typedef DefinitionWidgetBuilder = Widget Function(
-  BuildContext context,
-  Map<String, dynamic> definition,
-);
+typedef DefinitionWidgetBuilder =
+    Widget Function(BuildContext context, Map<String, dynamic> definition);
 
 /// Key found by widget tests asserting the unsupported-definition-type
 /// fallback is shown (never an empty container) — MOB-4's stale-version
@@ -53,7 +51,10 @@ class RendererRegistry {
 /// `docs/mobile/architecture.md` §5 and `MOB-4`'s six mandatory renderer
 /// states.
 class UnsupportedDefinitionTypeWidget extends StatelessWidget {
-  const UnsupportedDefinitionTypeWidget({super.key, required this.definitionType});
+  const UnsupportedDefinitionTypeWidget({
+    super.key,
+    required this.definitionType,
+  });
 
   final String definitionType;
 

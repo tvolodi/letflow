@@ -62,6 +62,13 @@ tenant content.
 
 - `GET /tenant-config` returns `{ realm_url, locales, default_locale, branding,
   environment_kind }` **without a bearer token**.
+- **Added 2026-09-28 (`REQ-418`).** The response gained a sixth key,
+  `client_id`, alongside the original five — `{ realm_url, locales,
+  default_locale, branding, environment_kind, client_id }`. `REQ-421`'s
+  mobile app consumes this `client_id` as the OIDC `clientId` parameter
+  (never a compiled constant) — see
+  `lib/letflow/design/req418-mobile-oidc-client.md` §2 and
+  `lib/letflow/design/req421-mobile-tenant-bootstrap.md` §3.1.
 - OIDC runs in Custom Tabs (Android) / `SFSafariViewController` (iOS) — **never**
   an embedded webview.
 - Dedicated error screens exist for each of: tenant-not-found,

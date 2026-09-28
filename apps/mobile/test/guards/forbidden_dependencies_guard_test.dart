@@ -93,10 +93,12 @@ List<ForbiddenDependencyViolation> checkForbiddenDependencies(
     }
     for (final substring in _forbiddenSubstrings) {
       if (lower.contains(substring)) {
-        violations.add(ForbiddenDependencyViolation(
-          name,
-          'name contains forbidden substring "$substring"',
-        ));
+        violations.add(
+          ForbiddenDependencyViolation(
+            name,
+            'name contains forbidden substring "$substring"',
+          ),
+        );
         break;
       }
     }
@@ -105,24 +107,29 @@ List<ForbiddenDependencyViolation> checkForbiddenDependencies(
 }
 
 void main() {
-  test('real pubspec.yaml and pubspec.lock contain no forbidden dependency', () {
-    final yamlContent = File('pubspec.yaml').readAsStringSync();
-    final lockFile = File('pubspec.lock');
-    final lockContent = lockFile.existsSync() ? lockFile.readAsStringSync() : '';
+  test(
+    'real pubspec.yaml and pubspec.lock contain no forbidden dependency',
+    () {
+      final yamlContent = File('pubspec.yaml').readAsStringSync();
+      final lockFile = File('pubspec.lock');
+      final lockContent = lockFile.existsSync()
+          ? lockFile.readAsStringSync()
+          : '';
 
-    final names = <String>{
-      ...extractPubspecYamlDependencyNames(yamlContent),
-      ...extractPubspecLockPackageNames(lockContent),
-    }.toList();
+      final names = <String>{
+        ...extractPubspecYamlDependencyNames(yamlContent),
+        ...extractPubspecLockPackageNames(lockContent),
+      }.toList();
 
-    final violations = checkForbiddenDependencies(names);
+      final violations = checkForbiddenDependencies(names);
 
-    expect(
-      violations,
-      isEmpty,
-      reason: violations.map((v) => v.toString()).join('\n'),
-    );
-  });
+      expect(
+        violations,
+        isEmpty,
+        reason: violations.map((v) => v.toString()).join('\n'),
+      );
+    },
+  );
 
   test('self-test: checker fires on a pubspec containing webview_flutter', () {
     const fixtureYaml = 'dependencies:\n  webview_flutter: ^3.0.0\n';

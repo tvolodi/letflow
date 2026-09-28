@@ -739,3 +739,47 @@
       required. README.md checked for stale CI job-name/gate references --
       none found needing a change. Flipping docs/requirements.yaml's
       REQ-420 status: in_progress -> done in this same append.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-28T12:47:00Z
+    note: >
+      Committed and merged (PR #1932) leftover uncommitted docs edits found
+      dirty in the working tree at the start of this ORCH loop iteration,
+      from an interrupted prior session: finished ISS-0852's found_line
+      corrections in docs/status/requirement_status.index.yaml's
+      known_shape_anomalies (each now points at the actual timestamp value,
+      needed for the A4b unparseable_at check), and fixed an invalid JS
+      import in REQ-403's acceptance-criteria test fixture ("import x from
+      ..." with an unused default binding -> "import '...'"). Unrelated to
+      this iteration's selected task (ISS-0174/ISS-0108); committed
+      separately so the intended work could branch from a clean tree.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-28T12:52:46Z
+    note: >
+      WF-03 run WF03-ISS0174-20260928 (letflow-queue task 174, GH#360)
+      closed ISS-0108. Step 0.5/1 diagnosis (ISSUE-FIXER role, run directly
+      by ORCH per the run's small scope) found the root cause already
+      structurally removed by REQ-370 (commit 21177271, merged after this
+      issue's 2026-08-20 filing): test/letflow/identity_test.exs's
+      insert_default_tenant!/0 no longer inserts a second bpm-default
+      tenant row under idp_realm_id "bpm-default" -- it now reuses the
+      migration-seeded row via
+      Letflow.Support.BpmDefaultRealmDisplacement.with_lock/Repo.get_by!,
+      eliminating the tenants_idp_realm_id_partial_index collision this
+      issue diagnosed, independent of the sandbox-mode-leak timing
+      originally hypothesized as the trigger (that leak is real but
+      separate, tracked by ISS-0113, not resolved by this run). Verified
+      live: `MIX_ENV=test mix test test/letflow/identity_test.exs
+      test/support/bpm_default_realm_displacement_test.exs` -> "Finished
+      in 254.9 seconds (0.00s async, 254.9s sync)" / "Result: 65 passed",
+      no Ecto.InvalidChangesetError. Steps 2-4 (design/implement/test)
+      skipped as inapplicable -- no code change needed. PR #1934 merged
+      (docs/issues/ISS-0108.yaml flipped to status: resolved). GH#360 was
+      already closed with no evidence comment (2026-08-26) -- corrected
+      with a retroactive evidence comment this run. letflow-queue task 174
+      released status: done (best-effort closed GH#360's mirror, already
+      closed). Flipping docs/issues/ISS-0108.yaml only -- no
+      docs/requirements.yaml entry exists for this issue-type task.

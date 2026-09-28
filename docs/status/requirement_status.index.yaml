@@ -4610,8 +4610,12 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 30
+    entries: 31
     note: >
+      Bumped to 31 by ORCH after appending the ISS-0876 SCOPE-CHANGE/done
+      entry (2026-09-28T18:54:12Z), in the same commit as the append, to
+      avoid repeating the drift this note's predecessor already describes
+      below.
       Corrected to 30 by DOC-UPDATER while merging ISS-0112 Batch 5
       (fix/ISS0112-batch5-tenant-fixture-migration-20260928,
       2026-09-28T15:50:00Z) -- caught by test/docs/requirement_status_invariants_test.exs's

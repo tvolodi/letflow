@@ -1,0 +1,61 @@
+{
+  "handoff_id": "WF02-REQ419-20260927-step-05",
+  "run_id": "WF02-REQ419-20260927",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ419-20260927/step-05-release-validator.json",
+  "created_at": "2026-09-27T17:43:46Z",
+  "started_at": "2026-09-27T17:43:46Z",
+  "completed_at": "2026-09-27T19:05:07Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-419"],
+    "requirement_text": {
+      "REQ-419": "Build-order M1 (docs/mobile/build-order.md): MOB-1 in docs/mobile/requirements.md, placement and stack per docs/mobile/architecture.md §2, stack settled by docs/migration/decisions/0012-mobile-tier-stack.md (not re-decided here). This requirement creates apps/mobile/; nothing in it authenticates or fetches (that is REQ-421).\n\nBUILDS:\n1. `flutter create --org com.bizdala --project-name letflow --platforms android,ios apps/mobile` (Android applicationId and iOS bundle id com.bizdala.letflow -- must match REQ-418's redirect scheme). Android minSdk 26 in android/app/build.gradle(.kts); iOS deployment target 15.0 in ios/Podfile and the Xcode project.\n2. pubspec.yaml: environment pins `sdk` to the Dart 3.11 line and a `flutter: 3.41.7` constraint; dependencies go_router, flutter_riverpod, dio, flutter_appauth, flutter_secure_storage, intl -- nothing else at runtime yet.\n3. lib/ layout exactly per architecture.md §2 (bootstrap/, auth/, api/, definitions/, renderers/{form,list,process,task}/, features/, design_system/, i18n/, shared/), a ProviderScope root, and a go_router with a placeholder slug-entry route. A renderer registry keyed by definition type returning an explicit \"unsupported definition type\" widget for an unknown type -- never a blank screen.\n4. analysis_options.yaml including flutter_lints (or stricter).\n5. THREE STATIC GUARDS under apps/mobile/test/guards/, each with a self-test proving it fires: (a) module boundary (0039 D3), (b) forbidden dependencies (no script runtime, no CEL, no webview), (c) no compiled-in tenant identifier.\n6. apps/mobile/README.md and a docs/mobile/README.md 'Nothing is built' line update.\n\niOS: files are generated and configured; building them is DEFERRED -- the build host is Windows and cannot run Xcode. Recorded, not dropped."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ419-20260927/step-01-code-designer.json",
+      "handoffs/WF02-REQ419-20260927/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ419-20260927/step-02b-mobile-dev.json",
+      "handoffs/WF02-REQ419-20260927/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ419-20260927/step-02d-reviewer.json",
+      "handoffs/WF02-REQ419-20260927/step-03-test-designer.json",
+      "handoffs/WF02-REQ419-20260927/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ419-20260927/step-04-test-runner.json",
+      "handoffs/WF02-REQ419-20260927/step-04-test-runner-recheck1.json",
+      "test/reports/report-20260927-WF02-REQ419-20260927-recheck1.yaml",
+      "test/specs/REQ-419.md",
+      "lib/letflow/design/req419-mobile-scaffold.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-419 before it is marked done. 1) Re-run scripts/test_parallel.sh yourself (TEST_PARALLEL_N=4 is the documented clean value for this host per the prior TEST-RUNNER recheck -- do not simply trust its report). 2) Confirm each of REQ-419's 8 acceptance criteria against the actual code/tests directly, not against any prior agent's summary: run flutter analyze and flutter test yourself from apps/mobile/; run flutter build apk --debug and the two grep checks; run the git ls-files directory-listing check; inspect ios/Podfile for the platform line; run git diff --name-only origin/main...HEAD and confirm scope (apps/mobile/ + docs/mobile/README.md, plus the expected ORCH/agent bookkeeping paths -- docs/requirements.yaml, docs/status/, handoffs/WF02-REQ419-20260927/, lib/letflow/design/req419-mobile-scaffold.md, test/specs/REQ-419.md, docs/issues/ISS-0874.yaml -- judge whether that bookkeeping-plus-scaffold shape satisfies AC8's intent or whether it's a genuine scope violation). 3) Check docs/status/requirement_status.yaml and docs/requirements.yaml for staleness relative to what actually shipped (REQ-419's status is currently in_progress -- do not flip it yourself, that is DOC-UPDATER's job at Step 6, but confirm nothing else drifted). 4) Re-derive the backend failure attribution structurally yourself (per core-directives.md) -- do not accept the prior TEST-RUNNER runs' attributions on their say-so; your re-run will very likely not reproduce their exact failure set, and that is expected.",
+    "acceptance_criteria": [
+      "Independent full-suite re-run performed and quoted, TEST_PARALLEL_N noted",
+      "Every one of REQ-419's 8 acceptance criteria independently reverified against actual code/output, not against a prior summary",
+      "Every backend failure in your own re-run independently attributed structurally (pre-existing via git-diff, or unattributed and blocking) -- not inherited from TEST-RUNNER's attribution",
+      "docs/requirements.yaml / docs/status staleness check performed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-419 independently re-verified. All 8 acceptance criteria reproduced directly against actual code/output (not against prior-agent summaries). Full backend suite re-run independently at TEST_PARALLEL_N=4 (the documented clean value on this host): 5017 tests, 6 properties, 2 failures (5021/5023 passed), zero crashed partitions. Both failures are Letflow.IdentityTest 'resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1)' (test/letflow/identity_test.exs:534, :541) -- structurally pre-existing: test/letflow/identity_test.exs and test/support/bpm_default_realm_displacement.ex are absent from `git diff --name-only origin/main...HEAD` for this branch (route 1: the failing module and its dependency are not in the diff). Not blocking. The two other failures noted in TEST-RUNNER's recheck1 (SandboxPoolTest RT-6, Iss0778PlatformRoleSeedingE2eTest T4) did NOT reproduce in this independent run -- consistent with their already-documented intermittent/shared-fixture-timing nature (ISS-0874), not evidence they were ever spurious to begin with. `mix letflow.check.test` also run independently, twice: first without a TEST_PARALLEL_N override, which hit the same nproc-derived host-overload crash class documented for scripts/test_parallel.sh (partition crashed at test/support/tenant_template.ex:139 ensure_template!/0 with a 15000ms connection-checkout timeout, ISS-0219/ISS-0222-class, not a code regression); second with TEST_PARALLEL_N=4, which ran clean of crashes but was short-circuited by lib/mix/tasks/letflow.check.test.ex:257-264's own logic, which Mix.raise()s on any real test failure BEFORE ever reaching its ISS-0069 substring scan (letflow.check.test.ex:266) -- so neither run actually exercised the ISS-0069-specific check end-to-end; both were blocked by the same 2 pre-existing IdentityTest failures above. Compensating evidence gathered directly: grepped my own from-scratch test_parallel.sh run's full partition logs (/tmp/letflow_test_parallel.s3y2Pf/partition-*.log) for the fixed substring 'default values for the optional arguments' -- zero matches (grep exit 1) across all 4 partitions. Combined with the structural fact that `git diff --name-only origin/main...HEAD` contains zero .ex/.exs files (REQ-419 is Flutter-only; MOBILE-DEV touched no Elixir test helper), the ISS-0069 defect class (a dead default argument in an Elixir test helper) cannot exist in this branch's diff regardless of the check's own short-circuit. Mobile ACs, all re-run directly from apps/mobile/ myself: AC1 `flutter analyze` -> 'No issues found! (ran in 30.9s)'. AC2 `flutter test` -> 7/7 passed, all three guard files' real-tree + self-test cases and the renderer-registry widget test present and green. AC3 `flutter build apk --debug` -> 'Built build\\app\\outputs\\flutter-apk\\app-debug.apk'; grep confirms minSdk = 26 and applicationId = \"com.bizdala.letflow\" in android/app/build.gradle.kts. AC4 confirmed within AC2's output (three self-tests each fire on their violating fixture). AC5 `git ls-files apps/mobile/lib | cut -d/ -f4 | sort -u` -> api, app.dart, auth, bootstrap, definitions, design_system, features, i18n, main.dart, renderers, shared -- exact match to architecture.md §2's nine directories plus main.dart plus one app/router file. AC6 confirmed within AC2's output (renderer_registry_fallback_test.dart passes). AC7 `grep -n \"platform :ios\" ios/Podfile` -> 'platform :ios, '15.0''; iOS build itself deferred (Windows host, no Xcode) -- recorded, not silently dropped. AC8 `git diff --name-only origin/main...HEAD` lists only apps/mobile/** plus docs/mobile/README.md, docs/issues/ISS-0874.yaml, docs/requirements.yaml, docs/status/*, handoffs/WF02-REQ419-20260927/*, lib/letflow/design/req419-mobile-scaffold.md, test/reports/*, test/specs/REQ-419.md -- zero lib/letflow/ or web/ paths. Judged: this bookkeeping-plus-scaffold shape satisfies AC8's intent (the requirement's own owned_modules concern is that REQ-419 not reach into web/ or lib/letflow/, which it does not; the extra paths are the standard ORCH/DOC-UPDATER/RELEASE-VALIDATOR audit trail every WF-02 run produces, not scope creep). Staleness check: docs/requirements.yaml's REQ-419 entry (status: in_progress) matches the handoff's context.requirement_text and task.acceptance_criteria verbatim; docs/status/requirement_status.v23.yaml (current volume, confirmed current via requirement_status.index.yaml) shows only a single 'started' event for REQ-419 at 2026-09-27T15:07:21Z, no premature 'done'/'verified' event -- nothing drifted. Not flipping status myself; that is DOC-UPDATER's job at Step 6.",
+    "acceptance_criteria_evidence": {
+      "full_suite_rerun": "TEST_PARALLEL_N=4 scripts/test_parallel.sh (this host's documented clean value): partition 1: 1172 tests/3 properties/0 failures exit 0; partition 2: 1290 tests/0 properties/2 failures exit 2; partition 3: 1328 tests/1 property/0 failures exit 0; partition 4: 1227 tests/2 properties/0 failures exit 0. combined: 5017 tests, 6 properties, 2 failures (5021/5023 passed).",
+      "mobile_acs": "flutter analyze, flutter test, flutter build apk --debug, git ls-files, grep(Podfile/build.gradle.kts), git diff --name-only -- all re-run directly from apps/mobile/ / repo root by RELEASE-VALIDATOR, not copied from step-02b-mobile-dev.json.",
+      "failure_attribution": "Both of this run's 2 failures: Letflow.IdentityTest REQ-019 AC1 (identity_test.exs:534,541) -- route 1, failing file + its dependency (bpm_default_realm_displacement.ex) absent from git diff --name-only origin/main...HEAD. Not inherited from TEST-RUNNER's recheck1 report -- independently re-derived from this run's own output and this run's own git diff.",
+      "mix_check_test": "Run twice independently (no override: nproc-derived-N host-overload crash, ISS-0219/ISS-0222 class; TEST_PARALLEL_N=4: clean of crashes, short-circuited pre-ISS-0069-scan by the same 2 pre-existing IdentityTest failures per letflow.check.test.ex:257-264). Compensating direct grep of own full-suite partition logs for the ISS-0069 target substring: zero matches. git diff contains zero .ex/.exs files, so the defect class is structurally inapplicable to this branch regardless.",
+      "staleness_check": "docs/requirements.yaml REQ-419 status: in_progress, text matches handoff verbatim. docs/status/requirement_status.v23.yaml (current volume) has only a 'started' event for REQ-419, no premature done/verified."
+    },
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

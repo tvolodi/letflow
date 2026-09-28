@@ -1,0 +1,71 @@
+{
+  "handoff_id": "WF02-REQ419-20260927-step-01b",
+  "run_id": "WF02-REQ419-20260927",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ419-20260927/step-01b-code-design-validator.json",
+  "created_at": "2026-09-27T15:20:03Z",
+  "started_at": "2026-09-27T15:20:03Z",
+  "completed_at": "2026-09-27T15:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-419"],
+    "requirement_text": {
+      "REQ-419": "Build-order M1 (docs/mobile/build-order.md): MOB-1 in docs/mobile/requirements.md, placement and stack per docs/mobile/architecture.md §2, stack settled by docs/migration/decisions/0012-mobile-tier-stack.md (not re-decided here). This requirement creates apps/mobile/; nothing in it authenticates or fetches (that is REQ-421).\n\nBUILDS:\n1. `flutter create --org com.bizdala --project-name letflow --platforms android,ios apps/mobile` (Android applicationId and iOS bundle id com.bizdala.letflow -- must match REQ-418's redirect scheme). Android minSdk 26 in android/app/build.gradle(.kts); iOS deployment target 15.0 in ios/Podfile and the Xcode project.\n2. pubspec.yaml: environment pins `sdk` to the Dart 3.11 line and a `flutter: 3.41.7` constraint (REQ-420's CI reads the Flutter version from this file); dependencies go_router, flutter_riverpod, dio, flutter_appauth, flutter_secure_storage, intl -- nothing else at runtime yet (the local cache store is REQ-423's choice).\n3. lib/ layout exactly per architecture.md §2 (bootstrap/, auth/, api/, definitions/, renderers/{form,list,process,task}/, features/, design_system/, i18n/, shared/), a ProviderScope root, and a go_router with a placeholder slug-entry route. A renderer registry in lib/renderers/ keyed by definition type that returns an explicit \"unsupported definition type\" widget for an unknown type -- never a blank screen (MOB-4's stale-version principle, applied from day one).\n4. analysis_options.yaml including flutter_lints (or stricter).\n5. THREE STATIC GUARDS as ordinary Dart tests under apps/mobile/test/guards/ (so they run in `flutter test` and fail CI, not warn; architecture.md §6 requires the boundary rule to fail the build):\n(a) module boundary, 0039 D3 as restated in architecture.md §6: no file outside lib/features/<id>/ imports from it except the one sanctioned navigation-bootstrap file, and lib/features/a/ imports from lib/features/b/ only if b is in a's declared depends_on (store the declaration in a single Dart/JSON manifest the guard reads);\n(b) forbidden dependencies: pubspec.yaml and pubspec.lock contain no script runtime (e.g. flutter_js, any lua or wasm runtime package), no CEL package (REQ-294 forbids one), and no webview package (webview_flutter, flutter_inappwebview -- MOB-2 forbids embedded webview OIDC);\n(c) no tenant identifier compiled in: no string literal in lib/ equals a tenant slug or realm name that exists in priv/keycloak/realms/*.json or test/support fixtures (at minimum 'bpm-default'), and no asset under apps/mobile/assets/ is tenant-specific.\nEach guard must include a self-test proving it fires (e.g. runs its checker over an in-test fixture string that violates it).\n6. apps/mobile/README.md: how to run (`flutter pub get`, `flutter analyze`, `flutter test`, `flutter run -d emulator-5554`), the platform API base URL supplied at build time via --dart-define=LETFLOW_API_BASE_URL (a platform endpoint per environment, not a tenant identifier), and how to reach a local backend from the emulator: `adb reverse tcp:<api-port> tcp:<api-port>` and `adb reverse tcp:<keycloak-port> tcp:<keycloak-port>` so the device reaches both at localhost. State why 10.0.2.2 is not enough: it reaches the API, but Keycloak stamps a token's iss from the host the browser used, so a login through 10.0.2.2 yields an iss the backend's configured issuer (localhost) rejects. Update docs/mobile/README.md's \"Nothing is built\" line to state the scaffold exists as of this requirement.\n\niOS: files are generated and configured; building them is DEFERRED -- the build host is Windows and cannot run Xcode. Recorded, not dropped."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req419-mobile-scaffold.md",
+      "docs/mobile/architecture.md",
+      "docs/mobile/requirements.md",
+      "docs/migration/decisions/0039-frontend-module-boundaries.md"
+    ],
+    "owned_modules": ["apps/mobile/", "docs/mobile/README.md"]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req419-mobile-scaffold.md against REQ-419's 8 acceptance criteria (in task.acceptance_criteria below) and CODE-DESIGN-VALIDATOR's standard checklist (no TBD/deferral language on an in-scope item, signatures/types fully specified, error handling shape stated, cross-module deps listed, no implementation code/.dart bodies present -- signatures and type shapes only). Read the design file directly, not CODE-DESIGNER's own claims. FAIL immediately on any check failure, listing every failed check by acceptance criterion, no partial credit. On PASS, next_action: 'Route to MOBILE-DEV (Step 2b-mobile)'. Note: the design doc itself records three OPEN QUESTIONS (placeholder route shape, exact dev ports for the adb reverse commands, disposition of flutter create's stock widget_test.dart) -- an explicitly-flagged open question is not itself grounds for FAIL under this gate's own rule ('Open questions listed explicitly, not silently resolved'); judge whether MOBILE-DEV can proceed with each as stated (e.g. because the requirement text itself leaves it unspecified, or a reasonable default is named) versus whether it actually blocks a concrete acceptance criterion from being buildable.",
+    "acceptance_criteria": [
+      "`cd apps/mobile && flutter analyze` reports 'No issues found!', real output quoted",
+      "`cd apps/mobile && flutter test` passes and its output lists the three guard test files and their self-tests, real output quoted",
+      "`cd apps/mobile && flutter build apk --debug` succeeds, and `grep -rn 'minSdk' android/app/build.gradle*` shows 26 and `grep -rn 'applicationId' android/app/build.gradle*` shows com.bizdala.letflow, both quoted",
+      "each guard's self-test demonstrates it FAILS on a violating fixture: the boundary guard on a cross-feature import not in depends_on, the dependency guard on a pubspec containing webview_flutter, the tenant-identifier guard on a literal 'bpm-default' -- asserted in the test, quoted in the report",
+      "`git ls-files apps/mobile/lib | cut -d/ -f4 | sort -u` (tracked files only) shows exactly the top-level directories named in docs/mobile/architecture.md §2 (bootstrap, auth, api, definitions, renderers, features, design_system, i18n, shared) plus main.dart and at most one app/router .dart file, quoted",
+      "a widget test asserts the renderer registry renders an explicit unsupported-definition-type widget (found by key or text) for an unknown definition type rather than an empty container",
+      "ios/Podfile declares platform :ios, '15.0' (quoted); the report states the iOS build is deferred because the host is Windows",
+      "`git diff --name-only origin/main...HEAD` lists only paths under apps/mobile/ and docs/mobile/README.md"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "validated_by": "CODE-DESIGN-VALIDATOR",
+    "validated_at": "2026-09-27T15:45:00Z",
+    "design_artifact": "lib/letflow/design/req419-mobile-scaffold.md",
+    "acceptance_criteria_check": [
+      {"ac": "flutter analyze reports 'No issues found!'", "status": "COVERED", "ref": "design §3 (lint-clean placeholder files), §5 (flutter_lints analysis_options.yaml)"},
+      {"ac": "flutter test passes, lists 3 guard files + self-tests", "status": "COVERED", "ref": "design §6 — each guard file has a real-tree test() and a self-test() in the same file"},
+      {"ac": "flutter build apk --debug; minSdk=26, applicationId=com.bizdala.letflow", "status": "COVERED", "ref": "design §0 (identity derivation from REQ-418 redirect scheme), §1 (exact build.gradle.kts/Groovy key names and literal values)"},
+      {"ac": "each guard self-test FAILS on violating fixture (cross-feature import not in depends_on / webview_flutter in pubspec / literal 'bpm-default')", "status": "COVERED", "ref": "design §6a (features/a depends_on:[] importing features/b), §6b (pubspec fixture with webview_flutter), §6c (string literal 'bpm-default') — fixtures match AC4's three cases exactly"},
+      {"ac": "git ls-files apps/mobile/lib top-level dirs == architecture.md §2 set + main.dart + <=1 app/router file", "status": "COVERED", "ref": "design §3 tree: bootstrap/ auth/ api/ definitions/ renderers/ features/ design_system/ i18n/ shared/ + main.dart + app.dart (the one sanctioned app/router file) — exact match, cut -d/ -f4 semantics verified"},
+      {"ac": "widget test asserts explicit unsupported-definition-type widget, not empty container", "status": "COVERED", "ref": "design §4 — RendererRegistry.build fallback returns UnsupportedDefinitionTypeWidget with Key('unsupported-definition-type') and text containing 'Unsupported definition type'; explicitly rules out Container()/SizedBox.shrink()"},
+      {"ac": "ios/Podfile declares platform :ios, '15.0'; report states iOS build deferred (Windows host)", "status": "COVERED", "ref": "design §1 (Podfile + pbxproj locations, all 3 build configs) and §9 (explicit deferral statement, matches REQ-419 text verbatim)"},
+      {"ac": "git diff --name-only origin/main...HEAD scoped to apps/mobile/ and docs/mobile/README.md only", "status": "COVERED", "ref": "design §8 (README update, scoped to owned_modules) and explicit note that the separate stale 'Status' line is out of scope, left to DOC-UPDATER"}
+    ],
+    "standard_checklist": {
+      "no_TBD_or_deferral_on_in_scope_item": "PASS — grep for TBD/deferred language in the design doc found none; the doc's own 3 flagged OPEN QUESTIONS (route shape, dev-port literals, stock widget_test.dart disposition) each name a concrete recommended default and do not block any acceptance criterion from being buildable, per this gate's own rule that an explicitly-flagged open question is not automatic FAIL",
+      "signatures_and_types_fully_specified": "PASS — RendererRegistry typedef/class/method signatures (§4) and JSON manifest shape (§6a) are complete; no ambiguous types",
+      "error_handling_shape_stated": "PASS — renderer registry's 'error' path is fully specified as a fallback-widget return (never a thrown exception or blank container), which is the correct error shape for this component; guard checkers' violation-reporting shape (list of violations, asserted non-empty) is specified for all 3 guards",
+      "cross_module_dependencies_listed": "PASS — REQ-418 (redirect scheme/client), REQ-421 (auth/bootstrap), REQ-423 (local cache store), REQ-426..428 (renderers), REQ-429 (design_system/i18n), decision 0039 D3 (module boundary), decision 0012 (stack) all named with concrete linkage, not just referenced in passing",
+      "no_implementation_code_present": "PASS — verified via targeted grep for function-body markers (opening braces, return statements, widget build() overrides) across the design doc: zero matches. Content is limited to YAML/JSON config shapes, Dart typedef/class/method signatures (no bodies), file-tree layout, and prose describing detection logic — consistent with 'design only' framing stated in the doc's own header"
+    },
+    "additional_note": "Handoff context.artifacts_in cites 'docs/migration/decisions/0039-frontend-module-boundaries.md', which does not exist on disk; the actual file is docs/migration/decisions/0039-platform-module-solution-layering.md (confirmed via architecture.md §6's own citation and directory listing). This is a stale filename in the handoff's artifacts_in list, not a defect in the design doc itself — the design doc does not cite the wrong filename and its content (module boundary rule, depends_on manifest) is verified consistent with the correct decision file via architecture.md §6. Not grounds for FAIL; flagged for ORCH to correct in future handoffs.",
+    "verdict": "PASS",
+    "next_action": "Route to MOBILE-DEV (Step 2b-mobile)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

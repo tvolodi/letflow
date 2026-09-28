@@ -1,4 +1,17 @@
 id: ISS-0874
+# github_ref: GH-1918 -- pre-existing real GH issue mirroring this file's
+# earlier WF02-REQ419-20260927 filing (title: "Letflow.Plugs.
+# Iss0778PlatformRoleSeedingE2eTest T4 intermittent failure..."), preserved
+# here so it isn't orphaned by this add/add rebase-conflict reconciliation
+# (2026-09-28, ORCH) -- both this branch and origin/main independently filed
+# ISS-0874 for the exact same T4 finding; origin/main's version (below) is
+# the fuller, already-root-caused one (ISSUE-FIXER's ISS-0766 diagnosis
+# pass) and is kept as the canonical content. queue_ref: Q-874 from this
+# branch's own version was NOT carried over -- it fits the documented
+# anti-pattern of a filename-derived (ISS-0874 -> "Q-874") queue ref guess
+# rather than one returned by register_task, so it is unverified and
+# dropped rather than propagated.
+github_ref: GH-1918
 title: >
   test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs's T4 fails
   with the same Ecto.NoResultsError signature as ISS-0766, sharing its

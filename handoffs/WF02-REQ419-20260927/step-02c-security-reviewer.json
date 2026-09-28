@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF02-REQ419-20260927-step-02c",
+  "run_id": "WF02-REQ419-20260927",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ419-20260927/step-02c-security-reviewer.json",
+  "created_at": "2026-09-27T15:48:08Z",
+  "started_at": "2026-09-27T15:48:08Z",
+  "completed_at": "2026-09-27T15:50:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-419"],
+    "requirement_text": {
+      "REQ-419": "Build-order M1 (docs/mobile/build-order.md): MOB-1 in docs/mobile/requirements.md, placement and stack per docs/mobile/architecture.md §2, stack settled by docs/migration/decisions/0012-mobile-tier-stack.md (not re-decided here). This requirement creates apps/mobile/; nothing in it authenticates or fetches (that is REQ-421). BUILDS a Flutter scaffold: flutter create with applicationId/bundle id com.bizdala.letflow, minSdk 26 / iOS 15.0, pubspec dependencies go_router/flutter_riverpod/dio/flutter_appauth/flutter_secure_storage/intl (added as dependencies only -- no auth flow, no token storage code -- this requirement does not authenticate or fetch, that is REQ-421), the lib/ directory layout, a renderer registry with an explicit unsupported-definition-type fallback, three static guards (module boundary, forbidden on-device dependencies, no compiled-in tenant identifier), and README updates. iOS build itself deferred (Windows host, no Xcode)."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req419-mobile-scaffold.md",
+      "docs/agents/instructions/security-invariants.md",
+      ".claude/agents/security-reviewer.md"
+    ],
+    "owned_modules": ["apps/mobile/", "docs/mobile/README.md"]
+  },
+  "task": {
+    "description": "Run your standard scope test against `git diff origin/main...HEAD` on branch feature/WF02-REQ419-20260927 (`git checkout feature/WF02-REQ419-20260927` if needed). Per WF-02 Step 2b-mobile's own routing note, an apps/mobile/ diff touching auth, token storage, or transport (MOB-2/MOB-5/MOB-6) is in scope under your 'anything resolving a ... token' clause; otherwise it is out of scope. Note for your scope test: this diff adds flutter_appauth and flutter_secure_storage as pubspec.yaml dependencies and adds an Android manifestPlaceholders entry (appAuthRedirectScheme = com.bizdala.letflow, required only to make `flutter build apk --debug` succeed with the flutter_appauth dependency present) -- but writes NO auth flow code, NO token-storage code, and makes no network call; REQ-421 is where MOB-2's actual OIDC flow lands. Decide for yourself whether that is enough to bring this diff in scope (dependency + manifest placeholder only, no logic) or whether it is correctly out of scope per your own applicability notes -- do not defer to this note's framing. If out of scope: PASS with a one-line reason. If in scope: run INV-1..INV-8 (APPLIES/NOT-APPLICABLE per invariant) and FAIL on any applicable invariant violation.",
+    "acceptance_criteria": [
+      "Scope test explicitly stated and justified against the actual diff, not assumed",
+      "If in scope: every applicable invariant verdicted PASS/FAIL with the check performed named",
+      "If out of scope: one-line reason naming what tenant-data/auth/token/transport surface is or is not present"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope_test": "OUT OF SCOPE. Full diff read directly (git diff origin/main...HEAD, 94 files): apps/mobile/{android,ios} are unmodified flutter-create boilerplate; apps/mobile/lib/auth/auth.dart and apps/mobile/lib/api/api.dart are one-`library;`-statement placeholder files containing only doc comments describing REQ-421/REQ-425 future work -- no auth flow code, no token-storage code, no HTTP client instantiation, no network call. pubspec.yaml adds flutter_appauth/flutter_secure_storage/dio/go_router/flutter_riverpod/intl as declared dependencies only (no code exercising them). android/app/build.gradle.kts sets manifestPlaceholders[\"appAuthRedirectScheme\"] = \"com.bizdala.letflow\" -- this is a public custom URL-scheme identifier (the app's own bundle-id-derived redirect scheme, per REQ-418's Keycloak client registration), not secret material; it resolves flutter_appauth's manifest merge so `flutter build apk --debug` succeeds, and is not a value that could leak tenant data or credentials if disclosed (it already is, in this diff). No API route, no migration, no response-shaping code, no lookup-by-ID handler, and no lib/letflow/ backend change of any kind (only lib/letflow/design/req419-mobile-scaffold.md, a design doc, plus the WF-02 handoff files and a routine docs/requirements.yaml status flip / requirement_status volume append). grep of apps/mobile/lib and apps/mobile/test for http/token/secret/password/storage/dio/fetch surfaced only doc-comment prose naming future REQ-421 work, zero executable matches. Per the task's own framing (in scope only if auth/token-storage/transport logic -- MOB-2/MOB-5/MOB-6 -- is actually present), this diff is dependency-declaration + build-plumbing only, with zero logic in any of those categories, so it does not meet the 'anything resolving a secret' clause (the manifest placeholder is a public scheme string, not a resolved secret) or any other scope-test trigger. Verdict: out of scope -- no tenant-data path, no auth/token/transport logic, no secret resolution touched.",
+    "invariants_assessed": "Not run -- scope test above determined the diff is out of scope, so no INV-1..INV-8 checklist applies per the scope-test gate stated in this role's own instructions.",
+    "reviewed_by": "SECURITY-REVIEWER",
+    "reviewed_at": "2026-09-27T15:50:04Z"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

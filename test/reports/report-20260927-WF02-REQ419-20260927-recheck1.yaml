@@ -1,0 +1,155 @@
+run_id: WF02-REQ419-20260927
+step: "04-recheck1"
+agent: TEST-RUNNER
+date: 2026-09-27T22:39:00Z
+branch: feature/WF02-REQ419-20260927
+requirement_ids: [REQ-419]
+prior_report: test/reports/report-20260927-WF02-REQ419-20260927.yaml
+handoff: handoffs/WF02-REQ419-20260927/step-04-test-runner-recheck1.json
+
+purpose: >
+  Re-check that ORCH's fix in commit 21290c77 (docs/status/requirement_status.index.yaml
+  volume-23 entries: 16 -> 17) resolves the A9 branch-introduced regression under the
+  full scripts/test_parallel.sh parallel load, and confirm the two previously-known
+  pre-existing failures (SandboxPoolTest RT-6, IdentityTest REQ-019 AC1) remain the
+  only other failures.
+
+attempt_1:
+  command: scripts/test_parallel.sh
+  partitions:
+    count: 16
+    source: nproc
+  test_pool_size: 5
+  combined_result: "3205 tests, 5 properties, 3 failures (3207/3210 passed)"
+  exit_code: 0
+  status: DISCARDED -- not usable as a clean signal
+  notes: >
+    6 of 16 partitions (1, 2, 4, 5, 13, 14) crashed with no Result: line before
+    reaching any test -- all six failed identically at test startup
+    (test/support/tenant_template.ex:139 ensure_template!/0, called from
+    test_helper.exs:94) with a DBConnection.ConnectionError: "checked out the
+    connection for longer than 15000ms" during the tenant-template compile/
+    advisory-lock step, consistent with this script's own documented ISS-0219/
+    ISS-0222 host-load caveats for nproc-derived N on this host. This dropped
+    combined coverage from the ~5023-test baseline (see prior report) to 3210
+    tests -- a real coverage gap, not just noise -- so this attempt was not
+    treated as informative and was re-run at a lower, script-documented-clean
+    partition count instead of being reported as-is.
+    Separately, partition 7 (which did produce a Result: line) failed
+    Letflow.Engine.Lua.ExecutorTest "REQ-158 ... changes the returned hash" on
+    a `{:error, {:wallclock_timeout, 5000}}` -- a timing-budget test failing
+    under the same host-overload conditions that crashed the other six
+    partitions. Not seen in attempt_2 below; attributed to attempt_1's host
+    contention, not a real regression.
+
+attempt_2:
+  command: TEST_PARALLEL_N=4 scripts/test_parallel.sh
+  rationale: >
+    scripts/test_parallel.sh's own ISS-0219 comment names TEST_PARALLEL_N=4 as
+    "verified clean on the host this note was written from" when the
+    nproc-derived N overloads this host's Postgres/CPU budget at launch, which
+    is what attempt_1 hit. Re-run at that override to get a complete, uncrashed
+    signal.
+  partitions:
+    count: 4
+    source: env override
+  test_pool_size: 20
+  combined_result: "5017 tests, 6 properties, 4 failures (5019/5023 passed)"
+  exit_code: 1
+  status: FAIL (real failure count) -- but all 4 failures structurally pre-existing
+  per_partition_summary:
+    - "partition 1: 1172 tests, 3 properties, 0 failures, exit 0"
+    - "partition 2: 1290 tests, 0 properties, 3 failures, exit 2"
+    - "partition 3: 1328 tests, 1 property, 1 failures, exit 2"
+    - "partition 4: 1227 tests, 2 properties, 0 failures, exit 0"
+  total_tests_matches_prior_baseline: true # 5023 total here vs 5023 in the prior (pre-recheck) report -- same coverage, no crashed partitions this time
+  failures:
+    - test: "Letflow.Docs.RequirementStatusInvariantsTest A9 (every indexed volume's declared entries: count equals what is actually on disk)"
+      status: PASSING -- not present in either attempt's failure list.
+      direct_confirmation: >
+        Also ran directly and in isolation: `mix test test/docs/requirement_status_invariants_test.exs`
+        -> "Result: 24 passed" (24/24), no failures. ORCH's fix (commit 21290c77,
+        volume-23 entries: 16 -> 17) confirmed to hold under both isolated and
+        full-parallel-load conditions.
+
+    - test: "Letflow.SandboxPoolTest / provisioning does not block the pool's mailbox (ISS-0224 regression) RT-6 (death path c)"
+      location: test/letflow/sandbox_pool_test.exs:1087 (partition 3)
+      attribution: PRE-EXISTING (matches prior report, same symptom)
+      attribution_evidence: >
+        test/letflow/sandbox_pool_test.exs is not in `git diff --name-only main...HEAD`
+        for this branch (verified this run: diff is apps/mobile/-only plus
+        docs/mobile/README.md, docs/requirements.yaml, docs/status/*, and
+        handoffs/ bookkeeping -- zero lib/letflow/ or test/letflow/ files).
+      blocking: false
+
+    - test: "Letflow.IdentityTest / resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1) -- both sub-assertions"
+      location: test/letflow/identity_test.exs:534, :541 (partition 2)
+      attribution: PRE-EXISTING (matches prior report, same symptom)
+      attribution_evidence: >
+        test/letflow/identity_test.exs and test/support/bpm_default_realm_displacement.ex
+        are not in `git diff --name-only main...HEAD` for this branch. This run's second
+        sub-failure surfaced as `Postgrex.Error query_canceled` inside
+        BpmDefaultRealmDisplacement.acquire_dedicated_lock! rather than attempt_1's
+        `Ecto.NoResultsError` -- a different proximate symptom of the same underlying
+        shared-fixture timing/lock contention in test/support/bpm_default_realm_displacement.ex,
+        not a new failure family.
+      blocking: false
+
+    - test: "Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest / ISS-0778 T4 (freshly-onboarded tenant, PLATFORM_ADMIN OIDC token, zero manual bootstrap)"
+      location: test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs:179 (partition 2)
+      output: |
+        ** (Ecto.ConstraintError) constraint error when attempting to delete struct:
+        "tenant_schemas_tenant_id_fkey" (foreign_key_constraint)
+        code: Letflow.Support.BpmDefaultRealmDisplacement.displace!()
+        at test/support/bpm_default_realm_displacement.ex:102
+      attribution: PRE-EXISTING (not previously catalogued by name, but structurally
+        attributable the same way as the other two)
+      attribution_evidence: >
+        test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs and
+        test/support/bpm_default_realm_displacement.ex are both absent from
+        `git diff --name-only main...HEAD` for this branch. Same shared fixture
+        (test/support/bpm_default_realm_displacement.ex) implicated as the
+        IdentityTest REQ-019 AC1 failure above -- a foreign-key constraint hit while
+        that fixture's displace!/0 tries to delete a tenant concurrently with another
+        partition's own use of the same shared "bpm-default" realm-displacement
+        machinery. Not attributable to this branch's apps/mobile/-only diff. Flagged
+        as a new observation for ORCH to file as its own issue (the shared fixture
+        appears to have more than one latent race, not just the one REQ-019 AC1
+        already tracks) -- not investigated further here per TEST-RUNNER's own
+        instructions role (route real bugs, don't diagnose them here).
+      blocking: false
+
+flutter_analyze:
+  status: NOT RE-RUN
+  reason: >
+    Per this recheck's own dispatch instructions: prior Step 4 run already confirmed
+    PASS and nothing mobile-side changed since (git diff --name-only confirms zero
+    apps/mobile/ changes since that run). See prior report for the actual output.
+
+flutter_test:
+  status: NOT RE-RUN
+  reason: Same as flutter_analyze above.
+
+overall_result: PASS
+overall_notes: >
+  The A9 regression is fixed and confirmed under both an isolated run (24/24) and a
+  full-suite parallel run (TEST_PARALLEL_N=4, no crashed partitions, full 5023-test
+  baseline coverage). The only 4 remaining failures across attempt_2 are all
+  structurally pre-existing by git-diff evidence -- none touch any file this branch's
+  diff changes (apps/mobile/-only plus docs/mobile/README.md and ORCH/DOC-UPDATER
+  bookkeeping). Two failures (SandboxPoolTest RT-6, IdentityTest REQ-019 AC1) match
+  the prior report's already-known pre-existing failures exactly. One
+  (Iss0778PlatformRoleSeedingE2eTest T4) is a newly-observed failure in this recheck,
+  sharing the same underlying shared-fixture (test/support/bpm_default_realm_displacement.ex)
+  timing/lock-contention root cause as the IdentityTest failure, and is likewise
+  pre-existing and unrelated to REQ-419. Recommend ORCH file this third symptom as
+  its own tracked issue against that shared fixture rather than folding it silently
+  into the existing REQ-019 note, since it is a distinct proximate error
+  (FK constraint violation vs NoResultsError/query_canceled) even if the same file
+  is implicated.
+  A first attempt at TEST_PARALLEL_N=16 (nproc-derived) was discarded: 6 of 16
+  partitions crashed at test startup under host connection contention (a documented
+  ISS-0219/ISS-0222-class host-load issue, not a code regression), dropping observed
+  coverage from 5023 to 3210 tests. Re-running at TEST_PARALLEL_N=4 (the script's own
+  documented clean value for this host) restored full coverage with no crashed
+  partitions.

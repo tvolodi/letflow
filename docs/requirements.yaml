@@ -31139,7 +31139,7 @@ requirements:
   - id: REQ-419
     title: "MOB-1: scaffold apps/mobile/ (Flutter, Android API 26+ / iOS 15+) as a generic definition-interpreter shell with the settled stack and three static guards"
     owner: MOBILE-DEV
-    status: pending
+    status: done
     stage: S9
     impl_order: 856  # letflow-queue task id, GH#1873. Registered 2026-09-27T02:59:56Z by ORCH (WF-01 Step 3).
     description: >

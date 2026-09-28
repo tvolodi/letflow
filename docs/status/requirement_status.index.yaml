@@ -5448,14 +5448,16 @@ known_shape_anomalies:
     kind: misnamed_field
     field: at
     found_as: "workflow"
-    found_line: 862
+    found_line: 860
     should_have_been: "at: 2026-09-25T03:39:10Z (the real timestamp already recorded, just under the extra timestamp: field two lines above)"
     cause: >
       This entry's field order is req/event/timestamp/agent/workflow/note. Position 4
       (where at: belongs) is occupied by workflow: WF02-REQ405-20260925, a run-id-style
       value, not a timestamp -- the real ISO-8601 timestamp is present, but under the
       extra timestamp: field at line 860 instead of at:. Same root incident ISS-0833
-      was originally filed about.
+      was originally filed about. (found_line corrected from 862 to 860 by ISS-0852:
+      found_line must point to the actual timestamp value so the A4b unparseable_at
+      check can verify it; found_as is unchanged since it drives the A4b key.)
   - path: docs/status/requirement_status.v22.yaml
     entry_line: 858
     req: REQ-405
@@ -5497,7 +5499,7 @@ known_shape_anomalies:
     kind: misnamed_field
     field: at
     found_as: "summary"
-    found_line: 1116
+    found_line: 1113
     should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
     cause: >
       Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
@@ -5552,7 +5554,7 @@ known_shape_anomalies:
     kind: misnamed_field
     field: at
     found_as: "summary"
-    found_line: 1132
+    found_line: 1129
     should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
     cause: >
       Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
@@ -5607,7 +5609,7 @@ known_shape_anomalies:
     kind: misnamed_field
     field: at
     found_as: "summary"
-    found_line: 1149
+    found_line: 1146
     should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
     cause: >
       Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
@@ -5662,7 +5664,7 @@ known_shape_anomalies:
     kind: misnamed_field
     field: at
     found_as: "summary"
-    found_line: 1163
+    found_line: 1160
     should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
     cause: >
       Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
@@ -5717,7 +5719,7 @@ known_shape_anomalies:
     kind: misnamed_field
     field: at
     found_as: "summary"
-    found_line: 1178
+    found_line: 1175
     should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
     cause: >
       Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
@@ -5772,7 +5774,7 @@ known_shape_anomalies:
     kind: misnamed_field
     field: at
     found_as: "summary"
-    found_line: 1195
+    found_line: 1192
     should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
     cause: >
       Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
@@ -5827,7 +5829,7 @@ known_shape_anomalies:
     kind: misnamed_field
     field: at
     found_as: "summary"
-    found_line: 1210
+    found_line: 1207
     should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
     cause: >
       Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).
@@ -5882,7 +5884,7 @@ known_shape_anomalies:
     kind: misnamed_field
     field: at
     found_as: "summary"
-    found_line: 1224
+    found_line: 1221
     should_have_been: "at: <the timestamp actually recorded under the extra timestamp: field>"
     cause: >
       Written as `summary:` instead of `at:` -- these entries put the free-text summary where the timestamp field belongs and never state at: at all (the real timestamp lives under the extra `timestamp:` field instead).

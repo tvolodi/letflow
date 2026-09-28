@@ -894,3 +894,34 @@
       ISS-0877 (queue task 877, GH#1942) rather than fixed in this run.
       docs/requirements.yaml's REQ-224 status: in_progress -> done in this
       same append.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-28T14:55:30Z"
+    note: >
+      ISS-0877 (MINOR, letflow-queue task 877, GH#1942) resolved and closed
+      in docs/issues/ISS-0877.yaml. ISSUE_QUEUE.md's "Picking up a queued
+      issue later" section, steps 2-3 of the "A human names a specific
+      issue" procedure, still described the bounded claim-then-release
+      get_next_task lookup dance that REQ-224/decision 0017 already deleted
+      from TASK_QUEUE.md in favor of the read-only GET /tasks lookup --
+      found by REVIEWER during REQ-224's WF-02 gate, filed as ISS-0877
+      rather than fixed there since ISSUE_QUEUE.md's filing flow was
+      explicitly out of REQ-224's scope. Rewrote steps 2-3 to call
+      GET /tasks (optionally ?task_type=issue) to find the matching
+      github_issue_number row and set_lock it directly, with no
+      claim-then-release-on-mismatch step (a GET /tasks lookup never claims
+      anything, so there is nothing to hand back). Handled as an ORCH direct
+      action per ORCHESTRATOR.md Sec.10 (single file, no new public
+      function/module/@spec, no migration, no supervision-tree file, no
+      tenant-data path, no test-asserted behaviour change) -- still through
+      the full branch/PR/merge procedure per GIT_MERGE.md (branch
+      feature/ORCH-ISS0877-20260928, PR #1944, squash-merged f2118382), never
+      a direct push to main. CI: Backend/Frontend/Mobile gates all passed
+      (docs-only diff). Post-merge verification: re-read
+      docs/agents/protocols/ISSUE_QUEUE.md on main at f2118382, confirmed
+      both acceptance criteria met (GET /tasks used in place of get_next_task
+      probe-and-release; grep for "release.*back to open"/"claim-then-release"
+      finds no remaining stale instruction). letflow-queue task 877 released
+      status: done (best-effort closed GH#1942).

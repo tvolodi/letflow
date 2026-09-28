@@ -182,3 +182,35 @@ progress_note_2026-08-21T13:53:50Z: >
   Status left `open` -- real progress recorded, nothing resolved. Queue task 180
   released as done (this run's own work is complete) without closing the underlying
   issue.
+
+progress_2026_09_28: >
+  Batch 1 of 10 (per lib/letflow/design/iss0112-tenant-fixture-migration-plan.md
+  section 2's 10-PR batch plan) merged: the 8 category-D files --
+  test/letflow/definitions/export_import_test.exs, migrations_test.exs,
+  promotion_conflict_test.exs, promotion_plan_test.exs,
+  promotion_review_migration_test.exs, search_paginated_test.exs, search_test.exs,
+  semantic_validation_activation_test.exs -- migrated from their inline
+  copy-pasted provisioned_tenant/on_exit fixture block onto a single
+  Letflow.TenantFixture.provisioned_tenant!/1 call each. migrations_test.exs also
+  needed a local applied_versions_in/1 helper (reads schema_migrations directly
+  from the tenant schema) since the shared fixture does not surface
+  applied_versions to its caller; verified equivalent under both the fixture's
+  :clone and :replay provisioning paths.
+
+  RELEASE-VALIDATOR fully PASSed: fresh isolated compile clean; exact 8-file
+  scope confirmed with no creep; all 8 diffs spot-checked directly; the
+  migrations_test.exs equivalence claim independently re-verified by reading the
+  fixture/template code itself; test/letflow/definitions/ 468/468 twice; full
+  suite 5027/5027 clean after ruling out a self-inflicted DB-contention false
+  alarm on the first attempt. SECURITY-REVIEWER not invoked, per the plan's
+  section 5 (test-only fixture consolidation, no lib/ or migrations/ changes).
+
+  Merged via branch fix/ISS0112-batch1-tenant-fixture-migration-20260928 (PR
+  number and squash-merge commit to be recorded once opened/merged).
+
+  9 batches remain (of the plan's 63 files-in-scope total: 31 category-D, 7
+  B-only, 4 A-only, 15 C-only, 3 A-and-B, 3 A-and-C -- see the plan's section 1
+  and 2 for the full per-batch breakdown and ordering rationale). Status left
+  `open`: ISS-0112 is not resolved until all 10 batches land. Queue task 180
+  (Q-180) NOT released -- it stays locked/in-progress with ORCH for the
+  remaining batches in this work session.

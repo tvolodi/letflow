@@ -1,0 +1,177 @@
+run_id: WF02-REQ421-20260928
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-28T17:55:00Z
+branch: feature/WF02-REQ421-20260928
+requirement_ids: [REQ-421]
+
+backend_exunit:
+  command: scripts/test_parallel.sh
+  notes: >
+    First two attempts at the nproc-derived N=16 failed during
+    ecto.create/ecto.migrate setup (a different partition each time,
+    DBConnection.ConnectionError "connection not available ... dropped from
+    queue after 5981-5989ms"), before any partition reached a test Result:
+    line. Host Postgres (letflow-postgres-1, up 2 days) showed genuinely
+    heavy I/O at the time (269-273s checkpoint completions logged, 474GB
+    cumulative block I/O in `docker stats`, a sibling checkout's own
+    letflow-2-postgres-1 container also running concurrently on the same
+    Docker Desktop VM). This exact failure shape is a documented, named
+    pre-existing host-capacity limitation in scripts/test_parallel.sh's own
+    header comment (ISS-0219): "on a host whose nproc-derived N exceeds what
+    its Postgres instance/CPU budget can sustain, every partition can crash
+    outright during ecto.create/ecto.migrate ... set TEST_PARALLEL_N
+    explicitly to a smaller value for this host (4 has been verified clean
+    on the host this note was written from)". Re-ran with TEST_PARALLEL_N=4
+    per that documented workaround; this run completed all 4 partitions'
+    setup and the full test phase.
+  partitions:
+    count: 4
+    source: "env override (TEST_PARALLEL_N=4, per ISS-0219's documented
+      workaround for this host after N=16/nproc failed setup twice)"
+  test_pool_size: 20
+  combined_result: "5021 tests, 6 properties, 2 failures (5025/5027 passed)"
+  exit_code: 1
+  status: FAIL
+  per_partition_summary:
+    - "partition 1: 1172 tests, 5 properties, 1 failures, exit 2"
+    - "partition 2: 1287 tests, 0 properties, 1 failures, exit 2"
+    - "partition 3: 1333 tests, 1 property, 0 failures, exit 0"
+    - "partition 4: 1229 tests, 0 properties, 0 failures, exit 0"
+  failures:
+    - test: "Letflow.Docs.RequirementStatusInvariantsTest / A9: every indexed volume's declared entries: count equals what is actually on disk"
+      location: test/docs/requirement_status_invariants_test.exs:716
+      output: |
+        A9 — a volume's declared entries: count has drifted from what is on disk.
+        (path, declared entries:, actual entries on disk) for each mismatch:
+        [{"docs/status/requirement_status.v23.yaml", 23, 24}]
+      attribution: BRANCH-INTRODUCED (NOT pre-existing)
+      attribution_evidence: >
+        git diff --name-only main...HEAD includes
+        docs/status/requirement_status.v23.yaml -- this branch's Step 00
+        (ORCH) appended one new `- req: REQ-421 / event: started` entry
+        (dated 2026-09-28T04:37:00Z, the 24th on-disk entry), but
+        docs/status/requirement_status.index.yaml still declares
+        `entries: 23` for volume 23 and is itself untouched by this
+        branch's diff. Same mechanism/same fix class already recorded
+        twice in that index's own history for this exact volume (REQ-417's
+        and REQ-419's "started"-event appends), per HOW-TO-APPEND step 6.
+        This is a self-inflicted bookkeeping miss in this run's own Step
+        00, not a pre-existing failure on main.
+      blocking: true
+      routed_to: >
+        ORCH (Step 00 follow-up, same pattern as the REQ-419/REQ-417
+        precedents already logged in
+        docs/status/requirement_status.index.yaml's volume-23 history) --
+        increment `entries: 23` -> 24 for volume 23 in
+        docs/status/requirement_status.index.yaml to match the real
+        24-entry on-disk file, before this branch is considered clean.
+
+    - test: "Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest / ISS-0778 T4 (design §5): freshly-onboarded tenant, PLATFORM_ADMIN OIDC token, zero manual bootstrap"
+      location: test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs:179
+      output: |
+        ** (ExUnit.TimeoutError) test timed out after 60000ms
+        stacktrace shows a Postgrex bind_execute hang inside
+        Letflow.EventStore.Registry.insert_with_monotonicity_check/2, called
+        from Letflow.Entities.EventTypes.seed!/1, called from
+        Letflow.TenantProvisioning.maybe_seed_entity_event_types/2.
+      attribution: UNATTRIBUTED -- reported for filing, not folded into a known set
+      attribution_evidence: >
+        Structural check (a): none of the failing test file
+        (test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs) or
+        its full stack-trace dependency chain
+        (lib/letflow/event_store/registry.ex,
+        lib/letflow/entities/event_types.ex,
+        lib/letflow/tenant_provisioning.ex) appear in
+        `git diff --name-only main...HEAD` for this branch, which touches
+        only apps/mobile/, docs/mobile/, docs/status/,
+        docs/requirements.yaml, handoffs/, and
+        lib/letflow/design/req421-mobile-tenant-bootstrap.md -- zero
+        lib/letflow/ application code. This test file DOES have an
+        existing tracking issue (docs/issues/ISS-0874.yaml), but that
+        issue's symptom is a different error shape entirely
+        (`Ecto.NoResultsError` from a permanently-orphaned bpm-default
+        singleton row, root-caused and resolved via ISS-0766's
+        `ensure_seeded!/1` fix, RELEASE-VALIDATOR-verified 5027/5027 clean
+        after that fix). This run's failure is an `ExUnit.TimeoutError`
+        during an INSERT inside EventTypes.seed!, a distinct symptom with
+        no existing issue record -- per core-directives.md rule 3, this is
+        called out as such rather than folded into ISS-0874's
+        already-resolved record. Plausible contributing mechanism (not
+        asserted as proven root cause): this host's Postgres instance was
+        independently observed under heavy I/O load this session
+        (checkpoint completions of 269-273s, 474GB cumulative block I/O,
+        a concurrently-running sibling checkout's own Postgres container
+        on the same Docker Desktop VM) -- consistent with, but not
+        conclusive proof of, a query-timeout symptom elsewhere in the
+        suite. Not re-attempted in isolation this run.
+      blocking: false
+      needs_filing: true
+
+flutter_analyze:
+  command: flutter analyze (run from apps/mobile/)
+  output: |
+    Analyzing mobile...
+    No issues found! (ran in 12.8s)
+  status: PASS
+
+flutter_test:
+  command: flutter test (run from apps/mobile/)
+  output: |
+    00:00 +0: loading .../test/android/android_manifest_test.dart
+    00:00 +0: ... AndroidManifest.xml declares a deep-link intent filter with a host pattern built from the build-time platformHost placeholder
+    00:00 +1: ... App Link verification (assetlinks.json) is recorded as DEFERRED, with its reason, not silently added
+    00:00 +2: ... iOS universal-link entitlement mirrors the Android host pattern, also written but DEFERRED (no apple-app-site-association is provisioned)
+    00:00 +3: ... test/api/api_client_test.dart: the tenant-config request (getUnauthenticated) carries no Authorization header, even when a token exists for the active realm
+    00:00 +4: ... an authenticated get() DOES attach the bearer token for the active realm
+    00:00 +5: ... a GET issued with no active realm carries no Authorization header (not a thrown error)
+    00:00 +6: ... exactly one Dio(...) construction site in apps/mobile/lib, in lib/api/api_client.dart
+    00:00 +7: ... test/auth/authenticate_with_tenant_test.dart: issuer/clientId come from the tenant-config response, redirectUrl is the fixed literal, and PKCE proceeds via the package default
+    00:00 +8: ... allowInsecureConnections is true only when realm_url itself is http -- never hardcoded true
+    00:00 +9: ... clientId is never a compiled literal -- it always traces to the TenantConfig value passed in
+    00:00 +10: ... returns null on user cancellation (not a thrown exception)
+    00:00 +11: ... lets a genuine OIDC-protocol failure propagate (not silently converted to the same null cancellation returns)
+    00:00 +12: ... test/auth/tenant_token_store_test.dart: stores and reads tokens independently per realmUrl
+    00:00 +13: ... deleting one realm's tokens never affects another's
+    00:00 +14: ... read returns null for a realm nothing was ever stored under
+    00:00 +15: ... a PlatformException from secure storage propagates on store()
+    00:00 +16: ... test/bootstrap/bootstrap_sequence_test.dart: two distinct slugs/realm_urls, one app instance, no rebuild: each ends with tokens stored under its own tenant key
+    00:00 +17: ... first-membership-entry mismatch (even with a later matching entry) shows tenant-not-found and leaves no token in the secure store
+    00:00 +18: ... a 403 from /me/memberships (CANDIDATE) proceeds to /me/modules instead of failing
+    00:00 +19: ... user cancellation returns null, not a failure, and no token is stored
+    00:00 +20-26: ... test/bootstrap/parse_tenant_slug_test.dart: 7 slug-extraction cases (matching subdomain, path/query irrelevant, foreign host rejected, bare platform host rejected, nested subdomain rejected, non-https rejected, http rejected, never throws)
+    00:01 +27-38: ... test/bootstrap/route_table_test.dart: buildRouteTable installed-module routing (2 cases) + 9 not-found-screen navigation cases
+    00:01 +39-43: ... test/widgets/error_screens_test.dart: TenantNotFoundScreen, NetworkUnavailableScreen, OidcFailureScreen, SecureStorageUnavailableScreen cases
+    00:02 +44: All tests passed!
+  status: PASS
+  total_tests: 44
+  note: >
+    Matches the 44-tests-passing figure cited by prior steps -- confirmed
+    independently by actually running `flutter test` from apps/mobile/,
+    not by citing that number.
+
+overall_result: PARTIAL
+overall_notes: >
+  apps/mobile/ (REQ-421/MOB-2) itself is fully green: `flutter analyze`
+  clean (no issues), all 44 `flutter test` cases pass. The backend ExUnit
+  suite has 2 failures out of 5027: (1) a genuine, in-diff regression --
+  this run's own Step 00 (ORCH) appended a status-history event to
+  docs/status/requirement_status.v23.yaml without bumping the matching
+  `entries:` declared count in docs/status/requirement_status.index.yaml
+  (same recurring bookkeeping-miss class already twice recorded in that
+  same index's own history), caught by the A9 invariant test -- this must
+  be fixed (one-line count increment, 23 -> 24) before this branch is
+  clean, routed to ORCH, not ELIXIR-DEV/FRONTEND-DEV/TEST-DESIGNER, since
+  no lib/letflow/ code is involved. (2) an ExUnit.TimeoutError in
+  Iss0778PlatformRoleSeedingE2eTest's T4, structurally outside this
+  branch's diff (neither the test file nor any module in its failure
+  stack trace appears in `git diff --name-only main...HEAD`) but NOT the
+  same symptom as the existing (already-resolved) ISS-0874 tracking issue
+  for that file -- reported here for ORCH to file as a new issue per
+  ISSUE_QUEUE.md, not folded into ISS-0874's closed record and not
+  fixed on this branch.
+  Backend suite setup itself required TEST_PARALLEL_N=4 (see
+  backend_exunit.notes) after the nproc-derived N=16 failed
+  ecto.create/ecto.migrate setup twice under genuinely heavy host
+  Postgres I/O -- a documented (ISS-0219), host-capacity limitation, not
+  a code defect.

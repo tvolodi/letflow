@@ -1,0 +1,62 @@
+{
+  "handoff_id": "6a7b8c9d-1e2f-421c-8a9b-421002020203",
+  "run_id": "WF02-REQ421-20260928",
+  "workflow_id": "WF-02",
+  "step": "02c-security",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ421-20260928/step-02c-security-reviewer.json",
+  "created_at": "2026-09-28T00:00:00Z",
+  "started_at": "2026-09-28T11:00:00Z",
+  "completed_at": "2026-09-28T11:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-421"],
+    "requirement_text": {
+      "REQ-421": "See handoffs/WF02-REQ421-20260928/step-01-code-designer.json's context.requirement_text for the full verbatim requirement description -- not restated here."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ421-20260928/step-01-code-designer.json",
+      "handoffs/WF02-REQ421-20260928/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ421-20260928/step-02b-mobile-dev.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ421-20260928/step-02b-mobile-dev.json",
+      "lib/letflow/design/req421-mobile-tenant-bootstrap.md",
+      "docs/agents/instructions/security-invariants.md",
+      ".claude/agents/security-reviewer.md",
+      "apps/mobile/lib/auth/auth.dart",
+      "apps/mobile/lib/api/api_client.dart",
+      "apps/mobile/lib/bootstrap/navigation_bootstrap.dart",
+      "apps/mobile/lib/bootstrap/error_screens.dart",
+      "apps/mobile/android/app/src/main/AndroidManifest.xml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run `git diff main...HEAD` against the actual implementation (not step-02b-mobile-dev.json's summary), apply security-invariants.md INV-1..INV-8 (and INV-9), determine APPLIES/NOT-APPLICABLE per invariant, run 'How to verify' for each APPLIES invariant, and specifically verify: token-store keying by realm_url (not slug) directly in apps/mobile/lib/auth/auth.dart; tenant-not-found delete-before-return ordering directly in code; the active-realm-pointer reset-to-null-on-failure path actually exists in implementation (not just asserted by the design doc); no secret/credential/token value logged, committed, or captured in any test fixture or evidence artifact; and that the two MOBILE-DEV-recorded MINOR issues (FlutterAppAuthUserCancelledException absorption, active-realm-pointer-set-immediately-after-store ordering) introduce no security gap.",
+    "acceptance_criteria": [
+      "Every INV-1..INV-8 invariant is explicitly marked APPLIES or NOT-APPLICABLE against this diff, with a one-line reason each",
+      "Every APPLIES invariant's 'How to verify' check is actually run, not asserted",
+      "Token storage keying (realm_url, not slug) is verified directly in apps/mobile/lib/auth/auth.dart, not taken from the design doc or handoff summary",
+      "The tenant-not-found token-delete-before-failure-return ordering is verified directly in code",
+      "The active-realm pointer reset-to-null-on-failure path (raised as a MINOR design-ambiguity note by MOBILE-DEV) is verified to actually exist in the implementation",
+      "No secret/credential/token value appears logged, committed, or captured in any test fixture or evidence artifact from this step or the prior one",
+      "FAIL immediately with all findings as BLOCKER if any applicable invariant fails -- no partial credit"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran `git diff main...HEAD --stat` (39 files, all under apps/mobile/, docs/mobile/*.md additive notes, and one new lib/letflow/design/req421-mobile-tenant-bootstrap.md design doc -- no lib/letflow/, priv/repo/migrations/, or config/ code touched; confirmed separately with `git diff main...HEAD --stat -- lib/ priv/ config/` returning only the design .md). Scope test: this is an apps/mobile/ auth/token-storage/transport diff (MOB-2), IN SCOPE per security-reviewer.md's own scope note, even though it touches no backend tenant-data path directly -- reviewed as a client consuming existing backend contracts.\n\nINV-1 (tenant data isolation, Ecto :prefix) -- NOT-APPLICABLE. No new/changed Ecto schema, migration, or business-table query in this diff; confirmed via the lib/priv/config diff-stat above showing zero Elixir changes.\nINV-2 (server-side field authorisation) -- NOT-APPLICABLE. No new or changed API response-shaping code on the server; the mobile client consumes the existing mobile_tenant_config.ex/me.ex allowlisted response shapes unchanged (no router file touched).\nINV-3 (untrusted runtime sandboxing) -- NOT-APPLICABLE. No Lua/WASM host-capability change; this diff adds no scripting runtime (REQ-419's forbidden-dependencies guard, re-verified by test/guards/forbidden_dependencies_guard_test.dart, keeps this true).\nINV-4 (secrets by reference only) -- APPLIES and PASS. Ran `grep -rniE \"(password|secret|client_secret|token)\\s*(=|:)\\s*\\\"[^\\\"]{8,}\\\"\" apps/mobile/ handoffs/WF02-REQ421-20260928/` and `grep -rni \"print(|debugPrint(|log(\" apps/mobile/lib apps/mobile/test` -- zero hits in both. Manually read apps/mobile/lib/auth/auth.dart in full: TenantTokenStore never logs a token; clientId/issuer are sourced from the tenant-config response at each call (auth.dart's authenticateWithTenant), never a compiled constant; this is a public OAuth client (PKCE, no client_secret anywhere in the flow, correct for a mobile app) so there is no client_secret to leak in the first place. step-02b-mobile-dev.json's result.summary quotes AC9 live evidence as a Custom-Tab address-bar screenshot and an Android Recents thumbnail title -- both describe only the realm host (localhost:8093) and Keycloak's public realm display name, no credential or token value; no logcat text is pasted verbatim into any handoff or test fixture. PASS.\nINV-5 (not-found/forbidden indistinguishability) -- NOT-APPLICABLE to this diff's own code (no new lookup-by-ID server endpoint added or changed here), but noted: the client-side tenant-not-found logic in navigation_bootstrap.dart correctly respects the backend's existing INV-5/anti-enumeration design (mobile_tenant_config.ex never errors on an unknown slug; tenant-identity is verified post-login via /me/memberships' first entry, not via an oracle on the config call) rather than working around it.\nINV-6 (new data-access paths prove their scoping) -- APPLIES; this handoff is the proof artifact itself, listing each invariant's applicability and verification per the meta-invariant's own requirement.\nINV-7 (no SQL string interpolation) -- NOT-APPLICABLE. No SQL, no Repo.query call anywhere in this diff (Dart/Flutter only).\nINV-8 (no unhandled crashes on realistic failure paths) -- NOT-APPLICABLE in its literal Elixir/shared-process sense (no Letflow OTP process touched). Noted as good practice, not a requirement: runTenantBootstrap in navigation_bootstrap.dart wraps every I/O step (tenant-config fetch, OIDC exchange, token store, memberships, modules) in try/catch with typed BootstrapFailureReason outcomes -- no bare pattern match on external calls.\nINV-9 (tenant-controlled outbound URL validation, SSRF) -- NOT-APPLICABLE. INV-9 governs a Letflow *server* process making outbound requests from tenant-controlled input (Letflow.Webhooks); the mobile app is a client making its own outbound requests to a URL the backend itself already disclosed (realm_url) -- no Letflow server-side outbound path is touched by this diff.\n\nTargeted acceptance-criteria checks (read code directly, not the design doc or handoff prose):\n1. Token-store keying: apps/mobile/lib/auth/auth.dart, TenantTokenStore._keyFor(String realmUrl) => 'letflow.tenant_tokens.$realmUrl' -- store/read/delete all take realmUrl, never the slug. Confirmed directly in the class body (lines ~95-115 of the diff'd file).\n2. Tenant-not-found delete-before-return ordering: apps/mobile/lib/bootstrap/navigation_bootstrap.dart, runTenantBootstrap -- on membership-first-entry mismatch: `await tokenStore.delete(config.realmUrl); activeRealm.currentRealmUrl = null; return const BootstrapFailure(BootstrapFailureReason.tenantNotFound);` -- delete is awaited and completes, and the active-realm pointer is nulled, strictly before the failure value is returned to the caller. No window where a caller of runTenantBootstrap could observe a still-stored token alongside a tenantNotFound result.\n3. Active-realm-pointer reset-to-null-on-failure: verified directly in code, not taken on the design doc's word -- every failure path in runTenantBootstrap reached AFTER `activeRealm.currentRealmUrl = config.realmUrl` is set (membership mismatch, membership non-200/non-403 status, membership-call exception, modules non-200 status, modules-call exception) explicitly sets `activeRealm.currentRealmUrl = null;` before returning a BootstrapFailure. The only path that leaves the pointer set is BootstrapSuccess (correct -- that's the intended live-tenant state). Confirmed by reading all five failure branches individually in the diff.\n4. The two MOBILE-DEV MINOR issues: (a) RealAppAuthAdapter absorbing FlutterAppAuthUserCancelledException and returning null preserves the AppAuthAdapter interface's documented null-on-cancel contract; every other exception type still propagates unmodified to runTenantBootstrap's catch block, which maps it to oidcFailure -- no swallowed protocol-failure path, no bypass. (b) The active-realm-pointer-set-immediately-after-store ordering is exactly the ordering verified safe in point 3 above (reset to null on every subsequent failure) -- confirmed as a real implementation property, not merely the design doc's claim.\n5. No-Authorization-header on tenant-config call: apps/mobile/lib/api/api_client.dart's fetchTenantConfig calls client.getUnauthenticated(...), which sets `options: Options(extra: const {'skipAuth': true})`; the bearer interceptor in _bearerInterceptor checks `options.extra['skipAuth'] == true` first and returns via handler.next(options) without ever reading activeRealm or attaching a header. Confirmed directly in code.\n6. PKCE S256: apps/mobile/test/auth/authenticate_with_tenant_test.dart asserts `request.codeVerifier` is null because AuthorizationTokenRequest's constructor has no codeVerifier parameter -- confirmed this is flutter_appauth's own S256-by-default behavior (package does not accept an override at this call site), matching auth.dart's own comment.\n7. redirectUrl match: kOidcRedirectUrl = 'com.bizdala.letflow:/oauth2redirect' is a fixed literal used in both authenticateWithTenant's AuthorizationTokenRequest and (per REQ-418/419 designs, unmodified here) the Keycloak client's sole registered redirectUris entry -- not derived from tenant config, so no tenant-controlled redirect-URI injection surface.\n8. CANDIDATE 403 handling: reviewed as a UX-layer convenience only, not a security boundary -- the backend (unmodified by this diff) scopes every request to the token's own tenant regardless of what the client believes about memberships; the client-side membership check exists purely to catch a slug/tenant mismatch and show an error screen. A 403 causing the client to skip that UX check and proceed to /me/modules cannot itself grant access to another tenant's data, since /me/modules is likewise scoped server-side to the token's tenant.\n\nSecrets/logging sweep of prior step's artifacts: reviewed step-02b-mobile-dev.json's result.summary in full -- it references environment variables (KEYCLOAK_BASE_URL) and realm URLs but no token, password, or client_secret value; the 'FATAL EXCEPTION' logcat line quoted is an IllegalArgumentException message about connection scheme, not credential material.\n\nNo BLOCKER or MINOR security findings. All APPLIES invariants (INV-4, INV-6) verified PASS by direct code inspection; INV-1/2/3/5/7/8/9 correctly NOT-APPLICABLE to this diff's actual content.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ421-20260928/step-02c-security-reviewer.json"
+    ],
+    "issues": [],
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

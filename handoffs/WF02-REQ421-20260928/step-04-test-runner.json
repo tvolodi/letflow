@@ -1,0 +1,68 @@
+{
+  "handoff_id": "9d0e1f2a-4b5c-421f-8a9b-421002020206",
+  "run_id": "WF02-REQ421-20260928",
+  "workflow_id": "WF-02",
+  "step": "04-test-run",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ421-20260928/step-04-test-runner.json",
+  "created_at": "2026-09-28T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-421"],
+    "requirement_text": {
+      "REQ-421": "See handoffs/WF02-REQ421-20260928/step-02b-mobile-dev.json's context.requirement_text for the full verbatim requirement description. This step (WF-02 Step 4) does not need it restated in full -- the task below is your complete scope."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ421-20260928/step-02b-mobile-dev.json",
+      "handoffs/WF02-REQ421-20260928/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "scripts/test_parallel.sh",
+      "apps/mobile/"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Branch feature/WF02-REQ421-20260928 is already checked out (commits 43e529b0, 5113be40). This run's diff touches only apps/mobile/ and docs/mobile/*.md -- no lib/ or priv/ Elixir changes. Per WF-02 Step 4: run scripts/test_parallel.sh for the full backend ExUnit suite (Unblock-Everything -- a pre-existing failure masking results must still be fixed or forwarded per ISSUE_QUEUE.md; use the Docker fallback in docs/anti-patterns.md if no local toolchain). Per Step 4's 2b addendum for a diff touching apps/mobile/: additionally run, from apps/mobile/, `flutter analyze` and `flutter test`, and record their real output in the report. Do not report PASS without having actually run each command and quoting real output. Any failure attribution to 'pre-existing' must follow core-directives.md's structural attribution rule (named evidence, not count-matching) -- see WF-02 Step 4's full text if unsure.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run for real, combined pass/fail totals quoted (partition count N and its source stated)",
+      "flutter analyze run for real from apps/mobile/, output quoted",
+      "flutter test run for real from apps/mobile/, output quoted (expect 44 tests passing per prior steps -- confirm independently, don't just cite that number)",
+      "test/reports/report-<date>-<run-id>.yaml written with actual output",
+      "any failure is attributed as pre-existing only with named structural evidence, or reported as unattributed/forwarded per ISSUE_QUEUE.md -- never by count-matching"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "apps/mobile/ (REQ-421/MOB-2) is fully green: `flutter analyze` from apps/mobile/ reports 'No issues found! (ran in 12.8s)'; `flutter test` from apps/mobile/ reports 'All tests passed!' with all 44 cases passing, confirmed by actually running it (not by citing the prior-step figure). scripts/test_parallel.sh: the nproc-derived N=16 failed ecto.create/ecto.migrate setup twice in a row (different partition each time, DBConnection.ConnectionError after ~6s queue wait, before any partition reached a test Result: line) while this host's Postgres was independently observed under heavy I/O (269-273s checkpoint completions, 474GB cumulative block I/O in `docker stats`, a sibling checkout's own Postgres container running concurrently on the same Docker Desktop VM). This exact failure shape is documented by name in scripts/test_parallel.sh's own ISS-0219 header comment, which prescribes setting TEST_PARALLEL_N explicitly lower; re-run with TEST_PARALLEL_N=4 completed cleanly through setup and the full test phase: combined 5021 tests, 6 properties, 2 failures (5025/5027 passed). Of the 2 failures: (1) Letflow.Docs.RequirementStatusInvariantsTest's A9 check (docs/status/requirement_status.v23.yaml declared entries: 23 vs actual 24) is a genuine, in-diff regression -- this run's own Step 00 (ORCH) appended a REQ-421 'started' event to that volume without bumping the matching `entries:` count in docs/status/requirement_status.index.yaml (same recurring bookkeeping-miss class already twice recorded in that index's own history for REQ-417 and REQ-419). This blocks a clean PASS and is routed back to ORCH, not to ELIXIR-DEV/FRONTEND-DEV/TEST-DESIGNER, since no lib/letflow/ code is involved. (2) Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest's T4 failed with ExUnit.TimeoutError (60s) inside Letflow.EventStore.Registry.insert_with_monotonicity_check/2 via Letflow.Entities.EventTypes.seed!/1 -- structurally outside this branch's diff (neither the test file nor any module in its failure stack trace appears in `git diff --name-only main...HEAD`), but this is a DIFFERENT symptom than the existing, already-resolved docs/issues/ISS-0874.yaml record for the same file (that issue was an Ecto.NoResultsError from a since-fixed orphaned-singleton mechanism, RELEASE-VALIDATOR-verified 5027/5027 clean after its fix). Per core-directives.md's failure-attribution rule, this is reported as UNATTRIBUTED with no existing issue record, for ORCH to file per ISSUE_QUEUE.md -- not folded into ISS-0874's closed record, and not fixed on this branch.",
+    "artifacts_out": [
+      "test/reports/report-20260928-WF02-REQ421-20260928.yaml"
+    ],
+    "issues": [
+      {
+        "type": "BLOCKING",
+        "description": "docs/status/requirement_status.index.yaml's volume-23 entries: count (23) is stale against the real 24-entry on-disk docs/status/requirement_status.v23.yaml after this run's Step 00 REQ-421 'started' event append, breaking RequirementStatusInvariantsTest's A9 check.",
+        "routed_to": "ORCH",
+        "fix": "Increment entries: 23 -> 24 for volume 23 in docs/status/requirement_status.index.yaml, matching the HOW-TO-APPEND step 6 / REQ-417 / REQ-419 precedent already recorded in that same index."
+      },
+      {
+        "type": "NON-BLOCKING - needs filing",
+        "description": "test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs's T4 failed with ExUnit.TimeoutError (60s) in a Postgrex insert path (EventTypes.seed! / EventStore.Registry.insert_with_monotonicity_check), a different symptom than the already-resolved ISS-0874 (Ecto.NoResultsError) tracked for the same file. No existing issue record covers this TimeoutError symptom.",
+        "routed_to": "ORCH (for issue filing per ISSUE_QUEUE.md)",
+        "fix": "Not diagnosed here -- structurally outside this branch's diff (test file and its full stack-trace dependency chain absent from git diff --name-only main...HEAD). File as a new issue; do not fold into ISS-0874's closed record."
+      }
+    ],
+    "evidence": {
+      "backend_exunit_combined": "5021 tests, 6 properties, 2 failures (5025/5027 passed), TEST_PARALLEL_N=4 (env override after N=16/nproc failed setup twice, per ISS-0219)",
+      "flutter_analyze": "No issues found! (ran in 12.8s)",
+      "flutter_test": "All tests passed! (44 test cases)"
+    },
+    "next_action": "Rework ORCH (Step 00 bookkeeping: bump docs/status/requirement_status.index.yaml's volume 23 entries count 23 -> 24; also file the new ISS for the Iss0778PlatformRoleSeedingE2eTest T4 TimeoutError per ISSUE_QUEUE.md). Re-dispatch to TEST-RUNNER (Step 4) once the bookkeeping fix lands."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

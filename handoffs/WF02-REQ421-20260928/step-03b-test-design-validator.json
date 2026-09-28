@@ -1,0 +1,59 @@
+{
+  "handoff_id": "8c9d0e1f-3a4b-421e-8a9b-421002020205",
+  "run_id": "WF02-REQ421-20260928",
+  "workflow_id": "WF-02",
+  "step": "03b-test-design-gate",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ421-20260928/step-03b-test-design-validator.json",
+  "created_at": "2026-09-28T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-421"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ421-20260928/step-02b-mobile-dev.json",
+      "handoffs/WF02-REQ421-20260928/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ421-20260928/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ421-20260928/step-02b-mobile-dev.json",
+      "apps/mobile/test/"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Step 3b hard gate on the 44 Dart tests MOBILE-DEV wrote in step-02b-mobile-dev.json, validated against REQ-421's acceptance criteria.",
+    "acceptance_criteria": [
+      "a test asserts the tenant-config request carries no Authorization header, and asserts the authorization request built for a slug uses issuer == that response's realm_url, clientId == that response's client_id, redirectUrl 'com.bizdala.letflow:/oauth2redirect' and a PKCE S256 challenge",
+      "a test drives the whole sequence for two distinct slugs whose fake tenant-config responses carry different realm_url values in ONE app instance with no rebuild, and asserts each ends with tokens stored under its own tenant key and that tenant B's API calls never carry tenant A's access token",
+      "a test asserts no tenant content route is reachable before /me/memberships and /me/modules have both resolved, and that a module absent from installed_modules has no route (navigating to its path shows the not-found screen)",
+      "a test asserts a login whose /me/memberships FIRST entry has a tenant_slug different from the entered slug shows the tenant-not-found screen and leaves no token in the secure store -- including a case where a later entry does match the entered slug; and a test asserts a 403 from /me/memberships (CANDIDATE) proceeds to /me/modules instead of failing",
+      "a unit test asserts the deep-link parser extracts slug 'acme' from https://acme.<configured platform host>/any/path and rejects a URL on any other host (returning no slug rather than guessing); the AndroidManifest intent filter is quoted showing a host pattern built from the build-time platform host, and the report records App Link verification (assetlinks.json) as DEFERRED with its reason",
+      "docs/mobile/requirements.md MOB-2 and docs/mobile/architecture.md §3 each carry the dated client_id note, with the original five-key text still present (git diff shows additions only there)",
+      "four widget tests each force one failure -- tenant-not-found, SocketException, AppAuth error, secure-storage exception -- and assert the corresponding dedicated screen (by key) is shown, not a generic error or a crash",
+      "`git grep -n 'Dio(' -- apps/mobile/lib` returns exactly one hit, in lib/api/api_client.dart, quoted",
+      "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted (test fixtures self-sufficient, no shared hardcoded state, no wall-clock/unseeded-randomness dependence)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read all 17 files under apps/mobile/test/ (not MOBILE-DEV's summary) and mapped each to its acceptance criterion. AC1: test/auth/authenticate_with_tenant_test.dart asserts issuer/clientId/redirectUrl trace to the tenant-config response (never a compiled literal, verified with two distinct configs) and that codeVerifier is always null at this call site (AuthorizationTokenRequest has no explicit-verifier constructor param, proving PKCE proceeds via flutter_appauth's S256-by-default native path) plus allowInsecureConnections derives from realm_url's own scheme; test/api/api_client_test.dart asserts the unauthenticated tenant-config call carries no Authorization header even when a token exists for the active realm (real interceptor wired in). AC2: test/bootstrap/bootstrap_sequence_test.dart drives 'acme' then 'beta' through one shared ApiClient/TenantTokenStore/ActiveRealmHolder instance (no rebuild), asserts each token is stored under its own realm_url key, that the two /me/modules calls carried token-acme then token-beta respectively, and that a fresh call after both carries only tenant B's token. AC3: test/bootstrap/route_table_test.dart proves buildRouteTable omits a route entirely for a non-installed module and that navigating to its path renders go_router's not-found page, not the module's own content. AC4: bootstrap_sequence_test.dart's 'wrong-tenant' case has a first membership entry that mismatches and a second entry that matches -- asserts tenant-not-found and empty token store despite the later match; the 'candidate-tenant' case asserts a 403 from /me/memberships still proceeds to /me/modules (1 call recorded). AC5: test/bootstrap/parse_tenant_slug_test.dart covers matching-subdomain extraction, path/query irrelevance, wrong host, bare host, nested subdomain, non-https scheme (including the OIDC redirect URI itself), and http-only rejection -- all correctly returning null rather than guessing; test/android/android_manifest_test.dart reads and quotes the real AndroidManifest.xml intent-filter (host built from ${platformHost}, autoVerify=false) and separately asserts assetlinks.json does not exist with a doc-comment recording the DEFERRED reason (no platform-served .well-known endpoint). AC6: test/docs/dated_notes_test.dart guards both files' original five-key text plus the dated note; I independently ran `git diff main -- docs/mobile/requirements.md docs/mobile/architecture.md` myself and confirmed both diffs are addition-only hunks (no removed lines), matching the criterion's own git-diff wording. AC7: test/widgets/error_screens_test.dart drives the real BootstrapController/LetflowApp widget tree through four distinct forced failures (membership mismatch, SocketException from tenant-config fetch, thrown FlutterAppAuthPlatformException, thrown PlatformException from the fake secure-storage platform) and asserts by Key that exactly the matching dedicated screen shows and the other three do not. AC8: ran `git grep -n 'Dio(' -- apps/mobile/lib` myself: exactly one hit, apps/mobile/lib/api/api_client.dart:142; api_client_test.dart also asserts this programmatically with --untracked. AC9: ran `cd apps/mobile && flutter analyze` myself -- 'No issues found! (ran in 25.6s)'; ran `flutter test` myself -- 'All tests passed!' with 44 distinct test cases (verified unique count via file-by-file reading; the compact reporter's repeated identical lines for the same testWidgets case during pumpAndSettle are reporter heartbeat lines, not re-runs -- confirmed no loop/parameterization exists in route_table_test.dart or error_screens_test.dart that would produce genuine duplicate test cases). Fixture self-sufficiency: every test file creates its own FakeSecureStoragePlatform/FakeDioHttpClientAdapter/FakeHttpGateway/FakeAppAuthAdapter instance in its own setUp or test body -- no module-level mutable state shared across files or across tests within a file, and TenantTokenStore/ApiClient instances are freshly constructed per setUp. No @Skip/@Tag(skip:)/xtest/xtestWidgets/TODO-implement found anywhere under apps/mobile/test/ (grep for skip/TODO/xtest only matched the unrelated identifier 'skipAuth'). No hardcoded secrets or real connection strings -- all realm_url/client_id/token values are synthetic fixture literals (idp.example, fake-access-token, etc.) confined to test/. fakeTokenResponse's DateTime.now()+1h expiration is wall-clock-derived but never asserted against (only used to populate a far-future, unchecked field), so it introduces no flakiness. No test depends on another test's prior execution: each test (re)establishes its own fakes and inputs from scratch. All 9 acceptance criteria have direct, passing, non-skipped coverage.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ421-20260928/step-03b-test-design-validator.json"
+    ],
+    "issues": [],
+    "evidence": {
+      "flutter_analyze": "No issues found! (ran in 25.6s)",
+      "flutter_test": "All tests passed! (44 distinct test cases across 17 files)",
+      "git_grep_dio": "apps/mobile/lib/api/api_client.dart:142:    final dio = Dio(",
+      "docs_diff_additions_only": "git diff main -- docs/mobile/requirements.md docs/mobile/architecture.md shows only added lines (+) in both files, no removed (-) lines"
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

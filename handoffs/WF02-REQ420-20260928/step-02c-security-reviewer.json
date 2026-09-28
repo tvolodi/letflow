@@ -1,0 +1,51 @@
+{
+  "handoff_id": "WF02-REQ420-20260928-step-02c",
+  "run_id": "WF02-REQ420-20260928",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ420-20260928/step-02c-security-reviewer.json",
+  "created_at": "2026-09-28T04:00:00Z",
+  "started_at": "2026-09-28T04:00:00Z",
+  "completed_at": "2026-09-28T04:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-420"],
+    "requirement_text": {
+      "REQ-420": "CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml -- flutter analyze, flutter test, Android debug build -- for apps/mobile/**\n\n.github/workflows/ci.yml has jobs `changes`, `backend` and `frontend` and no Flutter job (verified 2026-09-27). Without one, every MOB requirement after REQ-419 would merge with its tests unrun by CI. This requirement is sequenced immediately after REQ-419 and before REQ-421 (MOB-2 depends on it) so that CI exists before the second MOB requirement merges.\nOwner MOBILE-DEV, by the REQ-138 precedent (FRONTEND-DEV added the frontend job): the job runs flutter, which only MOBILE-DEV's capability row covers. REQ-417 widens MOBILE-DEV's write scope to this job.\n\nRead lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md in full first; ci.yml's own header warns not to \"simplify\" its path-filter choices. Follow the existing pattern exactly:\n1. `changes` job: add a `mobile` output. In the push branch (ISS-0840: push to main always runs every gate) and in both fail-safe branches (no usable base SHA, unreachable base SHA) and in the `fallback` step, emit mobile=true. In the diff branch, mobile is true iff a changed path matches ^(apps/mobile/|\\.github/workflows/ci\\.yml). Do not change the backend/frontend regexes. Do not add mobile to path-filter-outputs.txt (cd.yml does not deploy mobile).\n2. A new sibling job `mobile`, name \"Mobile gate (flutter analyze + test + build)\", runs-on ubuntu-latest, needs: changes, job-level `if: ${{ !cancelled() }}` (NOT always(), NOT a job-level path condition -- same reasoning as backend/frontend), defaults working-directory apps/mobile. Steps: checkout; actions/setup-java (Temurin 17); subosito/flutter-action with flutter-version-file apps/mobile/pubspec.yaml and cache enabled; then, each with step-level `if: needs.changes.outputs.mobile != 'false'` (fail-open): `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`.\n3. No other job's keys change.\n\nOPEN QUESTION (flagged, not resolved here): whether \"Mobile gate (...)\" becomes a third required status-check context on main per docs/migration/decisions/0018-branch-protection-posture.md. Changing branch protection is a 0018 amendment and belongs to REVIEWER/ORCH, not to this requirement. This requirement only makes the job eligible (always-runs, step-gated, so a required context would never be reported missing) and records the question in the job's header comment."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ420-20260928/step-01-code-designer.json",
+      "handoffs/WF02-REQ420-20260928/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ420-20260928/step-02b-mobile-dev.json"
+    ],
+    "artifacts_in": [
+      ".github/workflows/ci.yml",
+      "handoffs/WF02-REQ420-20260928/step-02b-mobile-dev.json",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [".github/workflows/ci.yml"]
+  },
+  "task": {
+    "description": "Run the standard scope test against `git diff main...HEAD -- .github/workflows/ci.yml` on branch feature/WF02-REQ420-20260928. REQ-420 adds a path-filtered Mobile gate job (flutter analyze/test/build) as a new sibling to the existing backend/frontend jobs. Determine whether the diff touches a tenant-data path (API route, migration, secrets, response shaping, auth, token storage, transport) before concluding out of scope.",
+    "acceptance_criteria": [
+      "Scope test explicitly stated and justified against the actual diff, not assumed",
+      "If out of scope: one-line reason naming what tenant-data/auth/token/secret surface is or is not present",
+      "If in scope: every applicable invariant (INV-1..INV-8) verdicted PASS/FAIL with the check performed named"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope_test": "OUT OF SCOPE -- no tenant-data path touched. Full diff read directly (git diff main...HEAD -- .github/workflows/ci.yml): the only changes are (1) a new `mobile` output on the existing `changes` job, computed from a path regex `^(apps/mobile/|\\.github/workflows/ci\\.yml)` against changed file paths -- a build-routing decision, not tenant data; (2) `mobile=true` emitted unconditionally on the push branch and both fail-safe branches, matching the existing backend/frontend fail-open pattern; (3) a new sibling `mobile` job running `actions/checkout@v4`, `actions/setup-java@v4` (Temurin 17, a public toolchain distribution, not a secret), `subosito/flutter-action@v2` (public SDK installer, `flutter-version-file` points at `apps/mobile/pubspec.yaml`, a repo file, not a credential), then four fail-open-gated `flutter pub get`/`analyze`/`test`/`build apk --debug` steps. No step reads, writes, or references `secrets.*`, `env.*` holding credentials, `GITHUB_TOKEN`, cloud credentials, or any other secret-resolving context -- grepped the full diff for `secret`, `token`, `password`, `credential`, `env:` with zero matches beyond the unrelated string 'apps/mobile' path filter. No API route, no migration file, no response-shaping code, no lookup-by-ID handler, no auth code, no token storage, no network transport code (flutter test/build run against the checked-out repo only, no external tenant service call). This is pure CI-workflow wiring adding a build/test gate for an as-yet-authless mobile scaffold (REQ-419) -- structurally identical in kind to the existing backend/frontend jobs, which this diff does not modify (verified: no line inside `jobs.backend` or `jobs.frontend` appears in the diff, and `changes`'s existing backend/frontend regex lines are unchanged, only new mobile-specific lines added alongside them).",
+    "invariants_assessed": "Not run -- scope test above determined the diff is out of scope (no tenant-data path, no secret-resolution, no auth/token/transport code), so per this role's own applicability notes the INV-1..INV-8 checklist does not apply.",
+    "reviewed_by": "SECURITY-REVIEWER",
+    "reviewed_at": "2026-09-28T04:05:00Z",
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

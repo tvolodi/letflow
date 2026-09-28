@@ -1631,8 +1631,7 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
 
       {_ast, bare_2_arity_count} =
         Macro.prewalk(ast, 0, fn
-          {{:., _, [{:__aliases__, _, [:Executor]}, :execute_with_manifest]}, _, args} = node,
-          acc
+          {{:., _, [{:__aliases__, _, [:Executor]}, :execute_with_manifest]}, _, args} = node, acc
           when length(args) == 2 ->
             {node, acc + 1}
 

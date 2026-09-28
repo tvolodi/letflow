@@ -412,3 +412,51 @@ progress_2026_09_28: >
   resolved until all 10 batches land. Queue task 180 (Q-180) NOT released
   by this run -- it stays locked/in-progress with ORCH for the remaining
   batches.
+
+  Batch 6 of 10 merged next: the 4 category-A-only files --
+  test/letflow/audit_capture_test.exs, test/letflow/audit_dispositions_test.exs,
+  test/letflow/audit_test.exs,
+  test/letflow/tenant_provisioning/task_completed_backfill_test.exs --
+  migrated the same way onto Letflow.TenantFixture.provisioned_tenant!/1
+  with `teardown: false`, composed inside each file's existing
+  SandboxAutoMode.provision!/2 wrapper.
+
+  RELEASE-VALIDATOR fully PASSed: scope confirmed to exactly these 4 test
+  files, zero lib/ changes; `teardown: false` composition and Sandbox-mode
+  semantics independently re-verified against test/support/tenant_fixture.ex's
+  teardown-gating logic; format/compile clean; 27/27 on target files;
+  full-suite scripts/test_parallel.sh 5030/5030 clean (test/reports/
+  report-20260928-ISS0112-batch6-20260928.yaml: 5029/5030 with the single
+  remaining failure identified as the pre-existing known ISS-0453
+  scheduler-poller flake, unrelated to this diff); `mix letflow.check.test`
+  clean.
+
+  Merged via PR #<PR_NUMBER> (branch
+  fix/ISS0112-batch6-tenant-fixture-migration-20260928, squash-merge
+  commit <MERGE_COMMIT>, based on main commit 2435c409).
+
+  With Batch 6 landed, Batches 1-6 total 8 + 8 + 8 + 7 + 7 + 4 = 42 of the
+  plan's 63 files-in-scope total now migrated.
+
+  4 batches remain (per
+  lib/letflow/design/iss0112-tenant-fixture-migration-plan.md section 2's
+  batch table):
+  - Batch 7 (category A∩B, 3 files): entities/records_test.exs,
+    tenant_provisioning/column_promotion_test.exs,
+    tenant_provisioning/entity_event_type_seeding_test.exs
+  - Batch 8 (category C-only 1/2, 7 files): definitions/promotion_review_store_test.exs,
+    definitions/store_test.exs, engine_cancel_instance_test.exs,
+    engine_complete_task_test.exs, engine_execution_error_test.exs,
+    engine/lua/platform_test.exs, engine/pin_rebind_test.exs
+  - Batch 9 (category C-only 2/2, 8 files): event_store/partition_maintenance_test.exs,
+    event_store/registry_test.exs, event_store_test.exs, identity/group_test.exs,
+    identity/tenant_role_test.exs, identity/user_test.exs,
+    plugs/api_pipeline_integration_test.exs, repository/activation_test.exs
+  - Batch 10 (category A∩C, do last/most complex, 3 files):
+    engine_concurrency_test.exs, repository_test.exs, role_registry_test.exs
+
+  That is 3 + 7 + 8 + 3 = 21 files remaining, matching 42 done + 21
+  remaining = 63 total in scope. Status left `open`: ISS-0112 is not
+  resolved until all 10 batches land. Queue task 180 (Q-180) NOT released
+  by this run -- it stays locked/in-progress with ORCH for the remaining
+  batches.

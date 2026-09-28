@@ -55,8 +55,8 @@ defmodule Letflow.IdentityMigrationTest do
 
   alias Letflow.Identity.Tenant
   alias Letflow.IdentityMigration
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   @drop_migration_file Path.expand(
                          "../../priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs",
@@ -110,30 +110,13 @@ defmodule Letflow.IdentityMigrationTest do
 
   # Provisions a real tenant (row + schema + full migration replay, including the
   # three per-tenant identity tables) -- the copy/guard target every test in this
-  # file needs.
+  # file needs. Provisioned via Letflow.TenantFixture (ISS-0112 / GH#366).
   defp provisioned_tenant! do
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(
-        %{slug: unique_slug(), display_name: "REQ-063 Copy Test"},
-        :disabled
+    %{tenant: tenant, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req063-idmig",
+        display_name: "REQ-063 Copy Test"
       )
-      |> Repo.insert!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
     %{tenant: tenant, schema_name: schema_name}
   end

@@ -1,0 +1,290 @@
+id: ISS-0876
+queue_ref: Q-876
+github_ref: GH-1941
+title: >
+  Letflow.Engine.Lua.ExecutorTest AC3/AC4/manifest-hash tests call the bare
+  2-arity execute_with_manifest/2 API, which ISS-0426's Group-1 fix never
+  enumerated -- they still race the unmitigated Task.yield wallclock kill
+discovered_by: TEST-RUNNER (per queue task description)
+discovered_in_run: WF02-REQ421-20260928 (Step 4 retry, scripts/test_parallel.sh
+  TEST_PARALLEL_N=2)
+discovered_at: "2026-09-28T00:00:00Z"
+severity: MAJOR
+
+tags:
+  - backend
+  - test-flake
+  - lua
+  - wasm-adjacent
+  - wallclock-timeout
+  - iss-0426-followup
+
+description: >
+  Queue task 876 (github_issue_number 1941) reports that during
+  WF02-REQ421-20260928 Step 4 retry, test/letflow/engine/lua/executor_test.exs:64
+  ("global isolation (AC3): a global written in execution 1 is absent in
+  execution 2") failed with {:error, {:wallclock_timeout, 5000}} instead of
+  {:ok, _}. This test carries no @tag :lua_wallclock_race. The filer explicitly
+  asked for genuine investigation, not a rubber-stamp duplicate-of-ISS-0426
+  close, and specifically flagged it as NOT one of the things ISS-0778/ISS-0875
+  cover (both are about a different file, iss0778_platform_role_seeding_e2e_test.exs,
+  and a different mechanism, a Postgres advisory lock / orphaned-row repair --
+  zero relation to the Lua executor's wall-clock kill; correctly not folded in
+  by proximity).
+
+  The source report, test/reports/report-20260928-WF02-REQ421-20260928.yaml,
+  does NOT exist in this checkout (confirmed via `ls`/glob -- not found, same
+  gap ISS-0875's diagnosis hit for the same run). This diagnosis rests on the
+  queue task's own description plus direct reproduction attempts and direct
+  source/diff reads against current main (HEAD at diagnosis time, tip
+  3dbbd17b, includes ISS-0426's fix commit 370fd93f and ISS-0875's no_defect
+  closure).
+
+step_0_5_registry_lookup: >
+  Read docs/issues/ISS-0426.yaml (status: resolved) in full -- the "Group-1
+  fix" this issue questions. ISS-0426's own resolution text is explicit and
+  precise about scope: its fix restructured exactly "14 Group 1 call sites (11
+  nil-heap, 3 heap-limited)" across 11 tests, all identified in
+  lib/letflow/design/iss426-wallclock-test-contention.md's §2.1 table, and all
+  of those 11 tests belong to REQ-154 (instruction budget), REQ-155 AC-4
+  (regression guard), REQ-156 AC-1/AC-2 (heap limit), and REQ-162 AC1/AC4/AC7
+  (script error) -- NONE of the 14 enumerated call sites is the AC3 "global
+  isolation" test (executor_test.exs:64-79) or its AC4 "distinct state"
+  sibling (:84-97), which belong to REQ-153/LUA-02, a different requirement
+  entirely.
+
+  grep -c '@tag :lua_wallclock_race' test/letflow/engine/lua/executor_test.exs
+  confirms exactly 11 tagged tests exist (matching the file's own self-check
+  test at line 1376, "exactly 11 tests in this file carry @tag
+  :lua_wallclock_race") and none of their line numbers is 64. The filer's claim
+  that this test "is one of the 14 Group-1 call sites" is therefore not quite
+  accurate as literally stated -- it was never IN ISS-0426's enumerated table
+  at all, Group 1 or Group 2 -- but the filer's underlying worry (this test is
+  unprotected against the exact race ISS-0426 was filed to fix) turns out to be
+  correct; see step_1_diagnosis.
+
+  Also read docs/issues/ISS-0778.yaml and docs/issues/ISS-0875.yaml per the
+  filing's own note that this was deliberately not folded into either: both
+  concern test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs's T4
+  block and a Postgres advisory-lock/orphaned-singleton-row mechanism
+  (BpmDefaultRealmDisplacement) -- a completely different file, subsystem, and
+  failure mechanism than the Lua executor's wall-clock kill. Correctly not
+  duplicates; no relevant overlap found.
+
+step_1_diagnosis: >
+  ROOT CAUSE, CONFIRMED BY SOURCE/DIFF READ (not by reproduction alone):
+
+  Letflow.Engine.Lua.Executor.execute_with_manifest/2 (lib/letflow/engine/lua/executor.ex:307-313)
+  is a thin wrapper that calls execute_with_manifest/3 with
+  `max_instructions: default_budget(), timeout_ms: default_timeout_ms(),
+  max_heap_words: default_max_heap_words()` -- all three read from Application
+  config. `default_timeout_ms/0` reads `:letflow, :lua_wallclock_timeout_ms`
+  (5000 in both config/config.exs:31 and config/test.exs:206);
+  `default_max_heap_words/0` reads `:letflow, :lua_max_heap_words`, which is
+  `nil` in config/config.exs:40 and is NOT overridden in config/test.exs. With
+  `max_heap_words: nil`, execute_with_manifest/3 (executor.ex:364-373) takes
+  the `nil ->` branch: `Task.Supervisor.async_nolink(...) |> Task.yield(timeout_ms)
+  |> handle_yield_result(task, timeout_ms)` -- this is byte-for-byte the exact
+  mechanism ISS-0426 diagnosed as racing under BEAM scheduler contention
+  (design doc §1.1, "root cause -- verified, unchanged").
+
+  The AC3 test (executor_test.exs:64-79) and AC4 test (:84-97) call
+  `Executor.execute_with_manifest(script, hash)` -- the bare 2-arity form --
+  so they go through exactly this path, with no timeout override. Confirmed by
+  reading `git show 370fd93f -- lib/letflow/engine/lua/executor.ex`: the two
+  diff hunks touching that file start at original-file line 493 and 550
+  (`@@ -493,6 +493,39 @@` and `@@ -550,6 +583,86 @@`); execute_with_manifest/2,3's
+  bodies (lines 307-379) are outside both hunks -- untouched, confirming the
+  design doc's own §3 point 1 claim ("execute_with_manifest/2,3 ...
+  byte-for-byte unchanged"). Confirmed likewise for the test file: `git show
+  370fd93f -- test/letflow/engine/lua/executor_test.exs` shows every hunk
+  starting at original line 250 or later; nothing before line 250 (which
+  covers AC1/AC2/AC3/AC4/AC5/AC6/AC7/manifest-hash/REQ-158, i.e.
+  executor_test.exs's first ~244 lines) was touched by the ISS-0426 fix commit
+  at all.
+
+  WHY THIS TEST WAS NEVER ENUMERATED (not a slip in an otherwise-sound design,
+  but a real gap in the design's own search methodology, stated plainly): the
+  design doc's own §1.2 describes its enumeration method as re-reading "every
+  `execute_with_manifest(...timeout_ms: ...)` call site" -- a search pattern
+  keyed on the literal `timeout_ms:` keyword argument. That pattern cannot find
+  a bare 2-arity call, because a 2-arity call has no `timeout_ms:` argument at
+  all -- it isn't a different kind of Group-1 site the table missed by
+  oversight in counting, it is a call SHAPE the search method was
+  structurally incapable of finding. The design's own §1.4 states "no test in
+  this file calls [the 2-arity path] in its failing/at-risk paths" -- this
+  claim is factually wrong for the tests below; it was asserted without a
+  targeted search for bare 2-arity calls (confirmed: no `grep` for
+  `execute_with_manifest(` without a following `opts`/`timeout_ms` argument
+  appears anywhere in the design doc's methodology sections).
+
+  FULL LIST of at-risk 2-arity call sites found by `grep -n
+  "execute_with_manifest("  test/letflow/engine/lua/executor_test.exs`, cross-
+  checked against each call's arity, and filtered to exclude the three sites
+  that short-circuit in `normalize_script_ref/1` before any Task is ever
+  spawned (invalid `script_ref` shapes at lines 235, 236, 239 -- these return
+  `{:error, :invalid_script_ref}` synchronously and are NOT at risk):
+    - :64, :73  -- AC3 "global isolation" (THE FILED FAILURE)
+    - :88, :93  -- AC4 "distinct state"
+    - :188      -- "manifest hash correctness" (bare-binary script_ref)
+    - :192      -- "a Lua syntax error returns {:error, reason}"
+    - :209      -- REQ-158 "a %{manifest:, script_source:} script_ref..."
+    - :225, :228 -- REQ-158 "changing the manifest's capabilities..."
+  9 call sites across 7 tests, all workload-fast (each script executes in
+  microseconds), all asserting an outcome unrelated to timing (global/table
+  leakage, hash correctness, syntax-error shape) -- structurally the same
+  "generous timeout wrapping tiny work, any timeout outcome is a wrong-branch
+  failure" shape as AC7 (ISS-0426's originally filed defect), and none of the
+  9 has been restructured onto ISS-0426's synchronous seams, nor tagged
+  `:lua_wallclock_race`.
+
+  REPRODUCTION ATTEMPTS (all against current main, HEAD 3dbbd17b, includes
+  ISS-0426's fix f/370fd93f and ISS-0875's no_defect closure):
+  1. Single direct run: `mix test test/letflow/engine/lua/executor_test.exs:64`
+     -> "Result: 1 passed, 55 excluded". No timeout.
+  2. 8 concurrent independent `mix test test/letflow/engine/lua/executor_test.exs:64`
+     OS processes (different --seed each), run simultaneously alongside 12
+     OS-level CPU-burner busy-loop processes on this 16-core host (a
+     higher single-test contention level than the original report's
+     TEST_PARALLEL_N=2 full-suite run) -- all 8 completed cleanly: "Result: 1
+     passed, 55 excluded" in every run, 0 failures, 0 wallclock_timeout
+     outcomes.
+  3. Attempted `TEST_PARALLEL_N=2 scripts/test_parallel.sh
+     test/letflow/engine/lua/executor_test.exs` (matching the queue task's own
+     reported command, single-file target) -- INCONCLUSIVE by environment/
+     tooling artifact, not by a clean/dirty result: partition 1 ran 45 tests,
+     0 failures, exit 0; partition 2 exited 1 with no Result: line at all --
+     its own log shows `mix test`'s literal output "Paths given to \"mix
+     test\" did not match any directory/file: test/letflow/engine/lua/executor_test.exs".
+     This is `--partitions N` interacting badly with a single-file target
+     (ExUnit's ExUnit.Filters.partition_tests logic assigns whole test IDs
+     per-partition by hash, and when the target is a single file whose test
+     count doesn't divide the way the partition machinery expects, at least
+     one partition process can receive an already-empty/invalid file-set
+     argument) -- a tooling artifact of this diagnosis's own narrowed-scope
+     repro attempt (the real ISS-0426 flake and this queue task's own report
+     both used the FULL suite as the target, not one file), not a signal
+     either for or against the race. A full, unscoped
+     `scripts/test_parallel.sh` run (matching the original report's actual
+     invocation shape) was not attempted in this pass -- same category of
+     environment/time-budget limitation ISS-0875's diagnosis disclosed for its
+     own full-suite reproduction attempts.
+
+  CONCLUSION: the root cause is CONFIRMED structurally (source/diff read, not
+  reproduction) -- this is a real, unaddressed gap in ISS-0426's Group-1 fix
+  scope, not a duplicate of ISS-0426 (which never claimed to cover this call
+  shape) and not host-noise/no_defect (the mechanism producing the filed
+  {:error, {:wallclock_timeout, 5000}} is demonstrably still live and reachable
+  from this exact test, unlike ISS-0875's investigation where the reported
+  mechanism could not be located at all). Direct reproduction under contention
+  did not succeed in this pass, consistent with ISS-0426's own honesty note
+  that its originally filed flake was never reproduced on demand either
+  (needed full 6-way suite-level scheduler pressure, not single-test or
+  single-file contention) -- reproduction was attempted per the task's
+  instruction but is not the basis for this verdict; the structural
+  source-read is.
+
+  WHAT A FIX NEEDS TO CHANGE: extend ISS-0426's own Group-1 treatment (§2.1.1's
+  synchronous `run_script/3`-direct seam, since every one of the 9 at-risk
+  call sites above is nil-heap -- none passes `max_heap_words`) to these 9
+  call sites in the 7 listed tests, OR tag them `@tag :lua_wallclock_race` and
+  let them inherit ISS-0426's existing isolated-partition mitigation (the
+  weaker "safety valve" option ISS-0426's own design allows for any Group-1-
+  shaped site). Whichever CODE-DESIGNER picks, the search method used to find
+  these 9 sites (a full `execute_with_manifest(` grep across the file, arity-
+  checked by hand, not a `timeout_ms:`-keyed search) should also be applied to
+  every OTHER test file that calls `Executor.execute_with_manifest/2` directly
+  (a repo-wide grep for `execute_with_manifest(` with 2 arguments outside this
+  file was not performed in this diagnosis pass and is worth CODE-DESIGNER
+  checking) in case the same 2-arity blind spot exists elsewhere.
+
+affected_files:
+  - test/letflow/engine/lua/executor_test.exs
+  - lib/letflow/engine/lua/executor.ex
+  - lib/letflow/design/iss426-wallclock-test-contention.md
+
+related:
+  - ISS-0426  # the fix this issue found a scope gap in -- NOT a duplicate; ISS-0426's own enumeration never included these call sites
+  - ISS-0778  # different file/mechanism, correctly not folded in (per filer's own note, confirmed by this diagnosis)
+  - ISS-0875  # different file/mechanism, correctly not folded in (per filer's own note, confirmed by this diagnosis)
+  - REQ-153
+  - REQ-155
+  - REQ-156
+  - REQ-158
+  - REQ-162
+
+severity_rationale: >
+  MAJOR, matching ISS-0426's own original severity: the root cause is the
+  identical production mechanism ISS-0426 was filed against (the unmitigated
+  Task.yield wall-clock race), confirmed still live and reachable from 7
+  tests/9 call sites via a call shape (bare execute_with_manifest/2) ISS-0426's
+  own enumeration never covered. Not flagged as a "recurrence" of ISS-0426 per
+  WF-03 Step 0.5's rule (that rule applies when "the same root cause has
+  recurred" from a fix that didn't hold for the call sites it targeted) --
+  ISS-0426's fix holds perfectly for all 14 call sites it targeted; this is a
+  genuinely separate, never-covered call-site class, which is why this is
+  filed as its own record per core-directives.md's structural-attribution
+  rule, exactly as the filer required.
+
+recommended_next_step: >
+  Route to CODE-DESIGNER for a fix design extending ISS-0426's Group-1
+  treatment (or tag-isolation) to the 9 call sites / 7 tests listed above.
+  This is NOT no_defect (the mechanism is real and confirmed by source read,
+  not merely unreproduced) and NOT instrumented (no fix has shipped yet for
+  this issue to under-cover). Continue WF-03 at Step 2.
+
+status: resolved
+resolved_in_run: WF03-ISS0876-20260928
+resolved_at: "2026-09-28T00:00:00Z"
+
+resolution_summary: >
+  ELIXIR-DEV repointed all 9 at-risk bare 2-arity
+  Executor.execute_with_manifest/2 call sites this diagnosis identified
+  (test/letflow/engine/lua/executor_test.exs, originally lines 64/73/88/93/
+  188/192/209/225/228) onto Executor.run_script_sync/3 or
+  run_with_heap_limit_sync/4, per the design at
+  lib/letflow/design/iss876-wallclock-2arity-gap.md (commit 5867633c on
+  branch feature/WF03-ISS0876-20260928). REVIEWER and SECURITY-REVIEWER
+  both PASSed. TEST-DESIGNER added 4 tests to the same file (169 insertions,
+  committed at WF-03 Step Final): 2 behavioral-equivalence tests in the
+  "ISS-0426: seam equivalence (property a)" describe block --
+  "run_script_sync/3 returns the same manifest_hash as
+  execute_with_manifest/3 for a non-empty manifest" (line 1346) and
+  "run_script_sync/3 returns the same {:error, _} shape as
+  execute_with_manifest/3 for a Lua syntax error" (line 1375) -- plus 2
+  AST-based structural/regression-guard tests in the new "ISS-0876: bare
+  2-arity execute_with_manifest/2 elimination" describe block (line 1600):
+  "no bare 2-arity Executor.execute_with_manifest/2 call remains except the
+  3 short-circuit exclusions" (line 1629, pins the count of remaining bare
+  2-arity calls to exactly 3 -- the legitimately-excluded
+  normalize_script_ref/1 short-circuit sites) and "the file contains
+  exactly 31 run_script_sync/3 or run_with_heap_limit_sync/4 call sites"
+  (line 1675, regression guard against a future revert back onto the
+  racing path). TEST-DESIGN-VALIDATOR independently applied a mutant
+  (reverting one conversion back to bare 2-arity) and confirmed both
+  structural tests fail correctly, then confirmed a clean revert.
+  TEST-RUNNER: this file's own scope is 49 passed/11 excluded/0 failures;
+  the full mix letflow.check.test run has 3 failures, all in files this
+  branch never touches (ServiceTaskWiringTest, RequirementStatusInvariantsTest,
+  RetentionOperationsTest) -- unrelated, pre-existing, already being filed
+  separately. RELEASE-VALIDATOR independently re-derived the root-cause
+  removal from source (grep confirmed exactly 3 remaining bare 2-arity
+  calls, all at the 3 legitimately-excluded sites), re-ran the test file
+  clean, re-ran the full suite and confirmed the same 3 unrelated failures
+  are flaky/pre-existing (2 of 3 passed on isolated re-run), and PASSed
+  release-readiness.
+
+regression_tests:
+  - path: test/letflow/engine/lua/executor_test.exs
+    describe: "ISS-0876: bare 2-arity execute_with_manifest/2 elimination"
+    tests:
+      - "no bare 2-arity Executor.execute_with_manifest/2 call remains except the 3 short-circuit exclusions"
+      - "the file contains exactly 31 run_script_sync/3 or run_with_heap_limit_sync/4 call sites"
+  - path: test/letflow/engine/lua/executor_test.exs
+    describe: "ISS-0426: seam equivalence (property a)"
+    tests:
+      - "run_script_sync/3 returns the same manifest_hash as execute_with_manifest/3 for a non-empty manifest"
+      - "run_script_sync/3 returns the same {:error, _} shape as execute_with_manifest/3 for a Lua syntax error"
+
+test_report: test/reports/report-20260928-WF03-ISS0876-20260928.yaml
+design_doc: lib/letflow/design/iss876-wallclock-2arity-gap.md

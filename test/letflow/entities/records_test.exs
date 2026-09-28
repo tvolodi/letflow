@@ -31,6 +31,7 @@ defmodule Letflow.Entities.RecordsTest do
   alias Letflow.EventStore.Registry.EventType
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
   alias Letflow.Test.SandboxAutoMode
@@ -38,21 +39,16 @@ defmodule Letflow.Entities.RecordsTest do
   import Ecto.Query
 
   # ---------------------------------------------------------------------------------
-  # Fixtures -- same shape as test/letflow/entities/definitions_test.exs's
-  # provisioned_tenant/0.
+  # Fixtures -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366),
+  # teardown: false because this file wraps provisioning in
+  # SandboxAutoMode.provision!/2 and needs its own on_exit to force :auto mode
+  # back on before the drop/delete cleanup and restore :manual afterward (the
+  # ISS-0580 leak fix) -- TenantFixture's own default teardown does not do that
+  # composition, so it stays disabled and this file's pre-existing on_exit is
+  # kept untouched, matching category A's documented pattern. The extra
+  # EventTypes.seed!/1 call after provisioning is this file's own
+  # category-B step, likewise kept unchanged.
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req228-entities"),
-        display_name: "REQ-228 Entity Records Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
 
   defp drop_schema!(schema_name) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
@@ -60,7 +56,12 @@ defmodule Letflow.Entities.RecordsTest do
 
   defp provisioned_tenant do
     SandboxAutoMode.provision!(Letflow.Repo, fn ->
-      tenant = insert_tenant!()
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        TenantFixture.provisioned_tenant!(
+          slug_prefix: "req228-entities",
+          display_name: "REQ-228 Entity Records Test Tenant",
+          teardown: false
+        )
 
       on_exit(fn ->
         # ISS-0580 rework: this callback runs AFTER the test process (and thus
@@ -73,13 +74,13 @@ defmodule Letflow.Entities.RecordsTest do
         # on_exit/1 handling of this exact hazard.
         Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
-        case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+        case TenantProvisioning.schema_name_for_tenant(tenant_id) do
           {:ok, schema_name} -> drop_schema!(schema_name)
           {:error, :invalid_tenant_id} -> :ok
         end
 
-        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
+        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
 
         # REVIEWER fix (ISS-0580): restore :manual after cleanup -- leaving the
         # force-:auto above unrestored would reopen this exact leak, once per
@@ -89,13 +90,9 @@ defmodule Letflow.Entities.RecordsTest do
         SandboxAutoMode.exit_auto_mode!(Letflow.Repo)
       end)
 
-      assert {:ok, %Registration{schema_name: schema_name}} =
-               TenantProvisioning.provision_tenant_schema(tenant.id)
-
-      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
       assert {:ok, _seed_result} = EventTypes.seed!(schema_name)
 
-      %{tenant_id: tenant.id, schema_name: schema_name}
+      %{tenant_id: tenant_id, schema_name: schema_name}
     end)
   end
 

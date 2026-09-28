@@ -1,0 +1,65 @@
+{
+  "handoff_id": "WF02-REQ420-20260928-step-02d",
+  "run_id": "WF02-REQ420-20260928",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ420-20260928/step-02d-reviewer.json",
+  "created_at": "2026-09-28T00:20:00Z",
+  "started_at": "2026-09-28T00:20:00Z",
+  "completed_at": "2026-09-28T00:24:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-420"],
+    "requirement_text": {
+      "REQ-420": "CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml -- flutter analyze, flutter test, Android debug build -- for apps/mobile/**\n\n.github/workflows/ci.yml has jobs `changes`, `backend` and `frontend` and no Flutter job (verified 2026-09-27). Without one, every MOB requirement after REQ-419 would merge with its tests unrun by CI. This requirement is sequenced immediately after REQ-419 and before REQ-421 (MOB-2 depends on it) so that CI exists before the second MOB requirement merges.\nOwner MOBILE-DEV, by the REQ-138 precedent (FRONTEND-DEV added the frontend job): the job runs flutter, which only MOBILE-DEV's capability row covers. REQ-417 widens MOBILE-DEV's write scope to this job.\n\nRead lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md in full first; ci.yml's own header warns not to \"simplify\" its path-filter choices. Follow the existing pattern exactly:\n1. `changes` job: add a `mobile` output. In the push branch (ISS-0840: push to main always runs every gate) and in both fail-safe branches (no usable base SHA, unreachable base SHA) and in the `fallback` step, emit mobile=true. In the diff branch, mobile is true iff a changed path matches ^(apps/mobile/|\\.github/workflows/ci\\.yml). Do not change the backend/frontend regexes. Do not add mobile to path-filter-outputs.txt (cd.yml does not deploy mobile).\n2. A new sibling job `mobile`, name \"Mobile gate (flutter analyze + test + build)\", runs-on ubuntu-latest, needs: changes, job-level `if: ${{ !cancelled() }}` (NOT always(), NOT a job-level path condition -- same reasoning as backend/frontend), defaults working-directory apps/mobile. Steps: checkout; actions/setup-java (Temurin 17); subosito/flutter-action with flutter-version-file apps/mobile/pubspec.yaml and cache enabled; then, each with step-level `if: needs.changes.outputs.mobile != 'false'` (fail-open): `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`.\n3. No other job's keys change.\n\nOPEN QUESTION (flagged, not resolved here): whether \"Mobile gate (...)\" becomes a third required status-check context on main per docs/migration/decisions/0018-branch-protection-posture.md. Changing branch protection is a 0018 amendment and belongs to REVIEWER/ORCH, not to this requirement. This requirement only makes the job eligible (always-runs, step-gated, so a required context would never be reported missing) and records the question in the job's header comment."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ420-20260928/step-01-code-designer.json",
+      "handoffs/WF02-REQ420-20260928/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ420-20260928/step-02b-mobile-dev.json",
+      "handoffs/WF02-REQ420-20260928/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req420-ci-mobile-gate.md",
+      "handoffs/WF02-REQ420-20260928/step-02b-mobile-dev.json",
+      "docs/migration/decisions/0018-branch-protection-posture.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [".github/workflows/ci.yml"]
+  },
+  "task": {
+    "description": "Review the diff on branch feature/WF02-REQ420-20260928 (`git diff main...HEAD -- .github/workflows/ci.yml`) against the four standard REVIEWER questions and docs/anti-patterns.md. Specifically verify: (1) the new `mobile` job/path-filter mechanism is byte-for-byte structurally identical in pattern to `backend`/`frontend` (job-level `if: ${{ !cancelled() }}`, never a job-level path condition; step-level fail-open `if: ... != 'false'`), not an improvised alternative; (2) supervision integrity is not applicable (no lib/letflow/ OTP code touched); (3) scope is held to exactly .github/workflows/ci.yml plus this run's own bookkeeping files, confirmed via `git diff --name-only main...HEAD`; (4) the new job's header comment's framing of the 0018 required-status-check open question is independently cross-checked against 0018's own text (not just trusted from the design doc's citation), confirming it correctly leaves the decision to a future amendment rather than silently deciding it here.",
+    "acceptance_criteria": [
+      "Idiomatic-vs-crutch judgment stated against the actual diff, confirming pattern parity with backend/frontend",
+      "Supervision question explicitly marked N/A with reasoning",
+      "Scope-creep check backed by the real `git diff --name-only` file list",
+      "0018 cross-check performed directly against 0018's own text, not only against the design doc's paraphrase, with an explicit verdict on whether the header comment defers rather than decides",
+      "docs/anti-patterns.md checked for any matching prior CI/workflow failure mode"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "reviewer": "REVIEWER",
+    "reviewed_at": "2026-09-28T00:24:00Z",
+    "diff_reviewed": "git diff main...HEAD -- .github/workflows/ci.yml (full hunk); git diff --name-only main...HEAD (9 files)",
+    "findings": {
+      "idiomatic_vs_crutch": "PASS. The `changes` job's `mobile` output is computed with the exact same five-site pattern as `backend`/`frontend`: added to the `outputs:` map (`steps.filter.outputs.mobile || steps.fallback.outputs.mobile`); `mobile=true` emitted on the push-to-main branch (ISS-0840 fail-open), both fail-safe branches (no usable base SHA; base SHA unreachable after targeted fetch), and the `fallback` step (path-detection didn't complete cleanly); and a real diff-branch regex block (`^(apps/mobile/|\\.github/workflows/ci\\.yml)`) placed immediately after the unchanged frontend regex, following the identical if/else `mobile=true`/`mobile=false` shape. No existing backend/frontend regex or `backend=`/`frontend=` line is altered -- confirmed line-by-line in the diff; only new `echo \"mobile=true\"` lines are inserted alongside them, plus two comment-wording edits ('both gates' -> 'all gates') that are text-only, not logic changes. The new `jobs.mobile` block uses `if: ${{ !cancelled() }}` at job level -- NOT `always()`, NOT a job-level path condition -- and gates only the four flutter steps with step-level `if: needs.changes.outputs.mobile != 'false'` (fail-open, matching backend/frontend's `!= 'false'` form, not an inverted `== 'true'`). This is the same mechanism for the same reason 0018/ISS-0591/ISS-0592 established it: a job-level path condition on a job that might later become a required status check would leave that check permanently unreported (and thus permanently blocking `main`) whenever the path filter excludes it, which is exactly the failure class this pattern exists to avoid. No improvised alternative mechanism appears anywhere in the diff.",
+      "supervision": "N/A. No lib/letflow/ OTP code, gen_statem, GenServer, or Letflow.InstanceSupervisor touched -- this is CI YAML only. Confirmed via `git diff --name-only main...HEAD`: the only non-bookkeeping file changed is `.github/workflows/ci.yml`.",
+      "scope_creep": "PASS. `git diff --name-only main...HEAD` returns exactly: `.github/workflows/ci.yml`, `docs/requirements.yaml`, `docs/status/requirement_status.index.yaml`, `docs/status/requirement_status.v23.yaml`, and this run's own handoff files (`step-01-code-designer.json`, `step-01b-code-design-validator.json`, `step-02b-mobile-dev.json`, `step-02c-security-reviewer.json`) plus `lib/letflow/design/req420-ci-mobile-gate.md`. No file under `apps/mobile/`, `lib/letflow/`, or any other job's owned path is touched. Within `ci.yml` itself, every changed line inside `jobs.backend`/`jobs.frontend` is absent from the diff -- both existing jobs' `steps:`, `if:`, `name:`, and regex strings are byte-for-byte unchanged, satisfying the design's own AC2. `mobile` is correctly NOT added to `path-filter-outputs.txt` (that file is `cd.yml`'s QA-deploy gate input, and there is no mobile deployment target yet -- adding it there would have been the actual scope-creep move, and it was not made). The new job's steps (checkout, setup-java Temurin 17, subosito/flutter-action, then the four flutter commands) map 1:1 to REQ-420's own text with nothing extra added (no lint/coverage/artifact-upload step beyond what was specified).",
+      "decision_record_consistency_0018": "PASS, independently cross-checked against 0018's own text (not the design doc's paraphrase alone). 0018's own 'What this record does not decide' section states verbatim: 'Whether a third required check (e.g. a future security-scan job) should be added later. Any future CI job added as required follows Step 1/2 of this record's own procedure; this record does not pre-authorize or block that, it only sets the process.' This confirms the new job's header comment is accurate on two counts: (a) 0018 itself already frames this exact question (a new job becoming required) as explicitly open and unresolved, so the header comment is not inventing a controversy 0018 already settled; (b) 0018 explicitly assigns the future step to 'this record's own procedure' (Step 1/2, confirm-check-run-name then PUT branch protection), which is consistent with the header comment's framing that the decision 'belongs to REVIEWER/ORCH' via 'a future 0018 amendment' -- it does not silently decide the question here (no branch-protection API call is made in this diff, `mobile` is not added to any `contexts` list, and 0018's Step 1/2 procedure is not invoked). The header comment correctly leaves the decision open rather than deciding it, and correctly does not misrepresent 0018 as having already required this job.",
+      "anti_patterns_check": "No entries in docs/anti-patterns.md specifically about a new path-filtered CI job (the existing CI-related entries at lines ~1578/1611/1689/1910/1920 concern a status-field enum mistake, a formatter-check failure, and a dead-default-argument recurrence -- all distinct incident classes, not path-filter/job-addition mistakes). No anti-pattern match against this diff."
+    },
+    "non_blocking_notes": [
+      "The design doc's own §6 'flutter pub get gating' note is worth restating for the record: `flutter pub get` is gated under the same fail-open `if:` as `analyze`/`test`/`build apk` rather than left unconditional the way backend's Elixir/Rust setup steps are. This is a legitimate, explicitly-flagged divergence from backend's finer-grained split, not an inconsistency -- subosito/flutter-action's own `cache: true` already caches the SDK, so there is no equivalent 'always warm the toolchain cache' step being skipped. Not a blocker; noting it here so a future reviewer doesn't mistake it for an overlooked inconsistency.",
+      "Two comment-wording edits ('both gates' -> 'all gates' at the push branch and fallback step) are cosmetic and correctly scoped inside the `changes` job's own script, not inside backend/frontend's job blocks -- confirmed not to count against AC2's 'no changed line inside backend/frontend' bar."
+    ],
+    "next_action": "Route to TEST-DESIGNER (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

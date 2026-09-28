@@ -28,12 +28,10 @@ defmodule Letflow.EventStore.MigrationsTest do
 
   use Letflow.DataCase, async: false
 
-  import Ecto.Query
-
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.IdempotencyRecord
   alias Letflow.EventStore.StoredPayload
-  alias Letflow.Identity.Tenant
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
 
@@ -72,21 +70,6 @@ defmodule Letflow.EventStore.MigrationsTest do
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
-
-  # oidc_mode: :disabled avoids Tenant.create_changeset/3's idp_realm_id requirement --
-  # irrelevant to anything this file tests, matching identity_test.exs's and
-  # tenant_provisioning_test.exs's own use of :disabled.
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req023"),
-        display_name: "REQ-023 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
 
   defp table_exists_in_schema?(schema_name, table_name) do
     %{rows: [[exists?]]} =
@@ -156,8 +139,17 @@ defmodule Letflow.EventStore.MigrationsTest do
     rows |> List.flatten() |> MapSet.new()
   end
 
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+  # The set of migration versions actually recorded against this tenant's schema --
+  # read straight from the live catalog, not from TenantProvisioning.replay_migrations/2's
+  # return value, since TenantFixture.provisioned_tenant!/1 does not surface that return
+  # value to its caller. Equivalent under both of the fixture's provisioning paths:
+  # `:replay` populates schema_migrations by actually running the migrations, and
+  # `:clone` (the fixture's default) copies the fully-migrated template's
+  # schema_migrations rows verbatim -- either way, a freshly provisioned tenant's
+  # schema_migrations holds exactly the full registered set.
+  defp applied_versions_in(schema_name) do
+    %{rows: rows} = Repo.query!(~s(SELECT version FROM "#{schema_name}".schema_migrations))
+    rows |> Enum.map(fn [version] -> version end) |> Enum.sort()
   end
 
   defp errors_on(changeset) do
@@ -189,22 +181,17 @@ defmodule Letflow.EventStore.MigrationsTest do
 
   describe "the six event-store migrations replayed into a provisioned tenant schema" do
     setup do
-      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+      %{schema_name: schema_name, tenant: tenant} =
+        TenantFixture.provisioned_tenant!(
+          slug_prefix: "req023",
+          display_name: "REQ-023 Test Tenant"
+        )
 
-      tenant = insert_tenant!()
-
-      assert {:ok, %Registration{schema_name: schema_name}} =
-               TenantProvisioning.provision_tenant_schema(tenant.id)
-
-      on_exit(fn ->
-        drop_schema!(schema_name)
-        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-      end)
-
-      assert {:ok, applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-      %{tenant: tenant, schema_name: schema_name, applied_versions: applied_versions}
+      %{
+        tenant: tenant,
+        schema_name: schema_name,
+        applied_versions: applied_versions_in(schema_name)
+      }
     end
 
     test "replay_migrations/2 applies every registered tenant-scoped migration and all six event-store tables land in the tenant's own schema, never in public",

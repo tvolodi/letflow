@@ -19,60 +19,26 @@ defmodule Letflow.Entities.DefinitionsTest do
 
   use Letflow.DataCase, async: false
 
+  import Ecto.Query
+
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EntityDefinition
-  alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.Repository
   alias Letflow.Repository.Artifact
   alias Letflow.Repository.ArtifactKind
   alias Letflow.Repository.ArtifactVersion
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
-
-  import Ecto.Query
+  alias Letflow.TenantFixture
 
   # ---------------------------------------------------------------------------------
-  # Fixtures -- same shape as test/letflow/repository_test.exs's provisioned_tenant/0.
+  # Fixtures -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366).
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req226-entities"),
-        display_name: "REQ-226 Entity Definitions Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
 
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req226-entities",
+      display_name: "REQ-226 Entity Definitions Test Tenant"
+    )
   end
 
   defp valid_definition(overrides \\ %{}) do

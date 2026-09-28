@@ -54,53 +54,32 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
   alias Letflow.EventStore.EventHistoryRetirementOutcome
   alias Letflow.EventStore.RetentionOperations
   alias Letflow.EventStore.RetentionPolicy
-  alias Letflow.Identity.Tenant
   alias Letflow.Repo
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # ===========================================================================
-  # Tenant / schema fixtures -- mirrors partition_maintenance_test.exs's own
-  # provisioned_tenant/1. Duplicated per DIRECTIVE T-4.
+  # Tenant / schema fixtures -- provisions via Letflow.TenantFixture (ISS-0112 /
+  # GH#366). `drop_schema!/1` stays -- called directly by the "concurrently dropped
+  # schema" regression test below (ISS-0873).
   # ===========================================================================
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req377"),
-        display_name: "REQ-377 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
 
   defp drop_schema!(schema_name) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
+  # template: :replay (not the fixture's :clone default) -- this file's own
+  # create_events_month_partition!/3 issues `CREATE TABLE ... PARTITION OF events`,
+  # which requires a genuinely partitioned `events` table. A :clone-provisioned
+  # tenant's events/events_archive are plain, unpartitioned tables (Postgres's LIKE
+  # ... INCLUDING ALL does not copy the PARTITION BY clause -- see
+  # Letflow.TenantFixture's own req376_partition_management_table?/1 doc), so :clone
+  # would fail every test here with "events is not partitioned" (42P17).
   defp provisioned_tenant(_context \\ %{}) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req377",
+      display_name: "REQ-377 Test Tenant",
+      template: :replay
+    )
   end
 
   defp unique_idempotency_key(prefix \\ "IDK377") do

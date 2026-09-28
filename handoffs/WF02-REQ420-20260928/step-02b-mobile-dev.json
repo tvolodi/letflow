@@ -1,0 +1,56 @@
+{
+  "handoff_id": "WF02-REQ420-20260928-step-02b",
+  "run_id": "WF02-REQ420-20260928",
+  "workflow_id": "WF-02",
+  "step": "02b-mobile",
+  "from_agent": "ORCH",
+  "to_agent": "MOBILE-DEV",
+  "file": "handoffs/WF02-REQ420-20260928/step-02b-mobile-dev.json",
+  "created_at": "2026-09-28T00:00:00Z",
+  "started_at": "2026-09-28T00:00:00Z",
+  "completed_at": "2026-09-28T00:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-420"],
+    "requirement_text": {
+      "REQ-420": "CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml -- flutter analyze, flutter test, Android debug build -- for apps/mobile/**\n\n.github/workflows/ci.yml has jobs `changes`, `backend` and `frontend` and no Flutter job (verified 2026-09-27). Without one, every MOB requirement after REQ-419 would merge with its tests unrun by CI. This requirement is sequenced immediately after REQ-419 and before REQ-421 (MOB-2 depends on it) so that CI exists before the second MOB requirement merges.\nOwner MOBILE-DEV, by the REQ-138 precedent (FRONTEND-DEV added the frontend job): the job runs flutter, which only MOBILE-DEV's capability row covers. REQ-417 widens MOBILE-DEV's write scope to this job.\n\nRead lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md in full first; ci.yml's own header warns not to \"simplify\" its path-filter choices. Follow the existing pattern exactly:\n1. `changes` job: add a `mobile` output. In the push branch (ISS-0840: push to main always runs every gate) and in both fail-safe branches (no usable base SHA, unreachable base SHA) and in the `fallback` step, emit mobile=true. In the diff branch, mobile is true iff a changed path matches ^(apps/mobile/|\\.github/workflows/ci\\.yml). Do not change the backend/frontend regexes. Do not add mobile to path-filter-outputs.txt (cd.yml does not deploy mobile).\n2. A new sibling job `mobile`, name \"Mobile gate (flutter analyze + test + build)\", runs-on ubuntu-latest, needs: changes, job-level `if: ${{ !cancelled() }}` (NOT always(), NOT a job-level path condition -- same reasoning as backend/frontend), defaults working-directory apps/mobile. Steps: checkout; actions/setup-java (Temurin 17); subosito/flutter-action with flutter-version-file apps/mobile/pubspec.yaml and cache enabled; then, each with step-level `if: needs.changes.outputs.mobile != 'false'` (fail-open): `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`.\n3. No other job's keys change.\n\nOPEN QUESTION (flagged, not resolved here): whether \"Mobile gate (...)\" becomes a third required status-check context on main per docs/migration/decisions/0018-branch-protection-posture.md. Changing branch protection is a 0018 amendment and belongs to REVIEWER/ORCH, not to this requirement. This requirement only makes the job eligible (always-runs, step-gated, so a required context would never be reported missing) and records the question in the job's header comment."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ420-20260928/step-01-code-designer.json",
+      "handoffs/WF02-REQ420-20260928/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req420-ci-mobile-gate.md",
+      "handoffs/WF02-REQ420-20260928/step-01b-code-design-validator.json"
+    ],
+    "owned_modules": [".github/workflows/ci.yml"]
+  },
+  "task": {
+    "description": "Implement REQ-420 exactly per lib/letflow/design/req420-ci-mobile-gate.md (CODE-DESIGN-VALIDATOR PASSed it in Step 1b -- read it directly, it is the authoritative build spec, containing the literal target YAML for both the `changes` job's edits and the complete new `mobile` job block). Branch feature/WF02-REQ420-20260928 already checked out -- verified with `git branch --show-current` before touching anything. Added a `mobile` output to the `changes` job (set true on the push branch, both fail-safe branches, and the fallback step; computed via the regex ^(apps/mobile/|\\.github/workflows/ci\\.yml) on the diff branch), left path-filter-outputs.txt untouched, and added the new `mobile` job exactly as specified (name, runs-on, needs, job-level if, working-directory default, checkout, setup-java Temurin 17, subosito/flutter-action with flutter-version-file + cache, and four fail-open-gated flutter steps), including the job's header comment recording the 0018 open question. Did not touch apps/mobile/ itself or any other job's keys.",
+    "acceptance_criteria": [
+      "`python -c \"import yaml,sys; d=yaml.safe_load(open('.github/workflows/ci.yml')); print(sorted(d['jobs'])); print(d['jobs']['mobile']['name']); print(d['jobs']['mobile']['if'])\"` prints ['backend', 'changes', 'frontend', 'mobile'], the mobile job name, and ${{ !cancelled() }}",
+      "`git diff origin/main -- .github/workflows/ci.yml` shows no removed or changed line inside the backend or frontend jobs and no change to the backend/frontend regexes -- only additions",
+      "every flutter step in the mobile job carries `if: needs.changes.outputs.mobile != 'false'`, and the changes job emits mobile=true on the push branch, both fail-safe branches and the fallback step",
+      "the PR's own CI run shows the Mobile gate job's four steps succeeding (DEFERRED to post-push CI run)",
+      "backend/frontend gates' conclusions unaffected by this PR (DEFERRED to post-push CI run)",
+      "the job's header comment records the 0018 required-context question as open"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented all three edits from lib/letflow/design/req420-ci-mobile-gate.md verbatim. `changes` job: added `mobile: ${{ steps.filter.outputs.mobile || steps.fallback.outputs.mobile }}` to `outputs:`; added `echo \"mobile=true\" >> \"$GITHUB_OUTPUT\"` to the push branch (with the comment text changed from 'both gates' to 'all gates', per design §2b), both fail-safe branches (no usable base SHA; base SHA unreachable after targeted fetch), and the fallback step (also 'both gates' -> 'all gates' wording); added the new diff-branch regex block `^(apps/mobile/|\\.github/workflows/ci\\.yml)` immediately after the unchanged frontend regex block. Did not touch the backend or frontend regex strings, any existing backend=/frontend= line, or the `path-filter-outputs.txt` step (still writes only backend/frontend, per REQ-420's own instruction that cd.yml does not deploy mobile). Appended the new `jobs.mobile` block as a sibling after `jobs.frontend`, byte-for-byte per the design's §3 verbatim block: name 'Mobile gate (flutter analyze + test + build)', runs-on ubuntu-latest, needs: changes, `if: ${{ !cancelled() }}`, defaults.run.working-directory apps/mobile, steps actions/checkout@v4, actions/setup-java@v4 (temurin, 17), subosito/flutter-action@v2 (flutter-version-file: apps/mobile/pubspec.yaml, cache: true), then flutter pub get / flutter analyze / flutter test / flutter build apk --debug, each `if: needs.changes.outputs.mobile != 'false'`. Included the job's header comment recording the 0018 required-status-check question as open, matching the design's exact wording.\n\nVerification (real output):\n\n`python -c \"import yaml,sys; d=yaml.safe_load(open('.github/workflows/ci.yml')); print(sorted(d['jobs'])); print(d['jobs']['mobile']['name']); print(d['jobs']['mobile']['if'])\"` ->\n['backend', 'changes', 'frontend', 'mobile']\nMobile gate (flutter analyze + test + build)\n${{ !cancelled() }}\n\n`git diff origin/main -- .github/workflows/ci.yml` (full diff reviewed): every hunk inside the `changes` job is a pure added line (new `mobile:` output line, new `echo \"mobile=true\"` lines in the push branch/both fail-safe branches/fallback step, new mobile regex block after the untouched frontend regex block, two comment-wording edits from 'both gates' to 'all gates' which are the only non-addition text changes and are outside `jobs.backend`/`jobs.frontend`); no line inside `jobs.backend` or `jobs.frontend` appears in the diff at all; the backend regex (`^(lib/|priv/repo/migrations/|test/|mix\\.exs|mix\\.lock|\\.tool-versions|config/|\\.github/workflows/ci\\.yml)`) and frontend regex (`^(web/|\\.github/workflows/ci\\.yml)`) are unchanged (not present in the diff). The new `jobs.mobile` block is a pure addition at end of file.\n\n`grep -n \"path-filter-outputs.txt\" .github/workflows/ci.yml` -> only the three pre-existing lines (backend=/frontend=/cat), confirming mobile was not added there.\n\n`grep -n \"if: needs.changes.outputs.mobile\" .github/workflows/ci.yml` -> four matches (lines 477, 481, 485, 489), one per flutter step (pub get, analyze, test, build apk --debug).\n\n`git diff --name-only origin/main...HEAD` (pre-final-commit) -> docs/requirements.yaml, docs/status/requirement_status.index.yaml, docs/status/requirement_status.v23.yaml, handoffs/WF02-REQ420-20260928/step-01-code-designer.json, handoffs/WF02-REQ420-20260928/step-01b-code-design-validator.json, lib/letflow/design/req420-ci-mobile-gate.md -- these are the prior commits on this branch (design + dispatch steps); this step's own commit adds only .github/workflows/ci.yml and this handoff file, staying within write scope.\n\nDEFERRED to ORCH's Step Final verification (after push): AC4 (PR's own CI run showing the Mobile gate job's four steps succeeding, quoted from `gh run view --json jobs`) and AC5 (backend/frontend gates' conclusions unchanged on this PR, quoted from `gh pr checks`) -- neither is satisfiable pre-push since no CI run exists yet for this commit. Not fabricated here.\n\nDid not touch apps/mobile/ or any other job's keys (backend/frontend `steps:`, `services:`, `runs-on:`, `if:`, `name:` all confirmed unchanged by the diff review above).",
+    "acceptance_criteria_evidence": {
+      "yaml_python_check": "PASS - ['backend', 'changes', 'frontend', 'mobile'] / Mobile gate (flutter analyze + test + build) / ${{ !cancelled() }}",
+      "diff_no_backend_frontend_changes": "PASS - full git diff origin/main -- .github/workflows/ci.yml reviewed; only additions, backend/frontend regexes and job keys untouched",
+      "fail_open_conditions_and_mobile_true_emission": "PASS - 4 flutter steps each carry if: needs.changes.outputs.mobile != 'false' (lines 477/481/485/489); mobile=true emitted on push branch, both fail-safe branches, and fallback step",
+      "pr_ci_run_mobile_steps": "DEFERRED - no CI run exists pre-push; ORCH verifies post-push at Step Final",
+      "backend_frontend_gates_unaffected": "DEFERRED - same as above, live-CI verification post-push",
+      "header_comment_0018_question": "PASS - job header comment records the 0018 required-status-check open question verbatim per the design"
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

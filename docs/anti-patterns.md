@@ -3828,3 +3828,40 @@ underlying database itself is already corrupted before that run starts —
 check the row directly via `psql`/`Repo.get_by` against the actual test
 database in use, rather than assuming a live intra-suite race, before
 investing time in synchronization-primitive theories.
+
+## TEST-DESIGNER's test files were left uncommitted, only caught by TEST-RUNNER's own `git status` check before trusting a "tests pass" claim (REQ-223)
+
+During REQ-223's cross-repo (`letflow-queue`) implementation, TEST-DESIGNER's
+turn produced new/changed test files for the eligibility-gate coverage but
+the turn ended without those files actually being committed to the feature
+branch — the working tree was left with real, uncommitted test-file changes
+alongside whatever *was* committed. Nothing downstream would have caught
+this automatically: a "tests pass locally" claim from that same uncommitted
+tree is true on disk but says nothing about what a clean checkout of the
+branch — the thing CI, a reviewer, or a later agent on a different host
+actually sees — would run. TEST-RUNNER's own independent-verification
+mandate (check the real state, don't trust the prior agent's report) is
+what surfaced it: a `git status --porcelain` pass on the branch before
+trusting the "tests pass" claim showed the test files as untracked/modified
+rather than committed, immediately before believing a coverage claim that
+would otherwise have been silently false on the branch as it actually
+existed remotely.
+
+This is a narrower, less severe cousin of the fabricated-SHA entry above
+(2026-09-23, WF02-REQ388) — no claim was fabricated here, the files
+genuinely existed and the tests genuinely passed locally — but the failure
+mode is the same class: a "done"/"passing" claim implicitly depends on the
+work being committed, and nothing enforces that except a downstream agent
+actually running `git status` on the branch rather than trusting the prior
+agent's own account of its turn.
+
+**Correct alternative:** any agent reporting "tests written" or "tests
+pass" for a change that is supposed to land on a branch must run and quote
+`git status --porcelain` (and ideally `git diff --stat` against the
+branch's own last commit) in that same turn before making the claim, the
+same discipline the fabricated-SHA entry above already requires for
+commit/push claims — an uncommitted file is not part of "the branch" no
+matter how correct its content is. Downstream roles (TEST-RUNNER,
+REVIEWER, RELEASE-VALIDATOR) should keep treating a fresh `git status`
+check as a mandatory first step before relying on any prior agent's
+committed-state claim, exactly as happened here.

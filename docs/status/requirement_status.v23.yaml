@@ -783,3 +783,26 @@
       released status: done (best-effort closed GH#360's mirror, already
       closed). Flipping docs/issues/ISS-0108.yaml only -- no
       docs/requirements.yaml entry exists for this issue-type task.
+
+  - req: REQ-223
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-28T13:20:00Z
+    note: >
+      Cross-repo requirement (target repo is tvolodi/letflow-queue, not this
+      checkout -- same pattern as REQ-222 immediately above it in
+      docs/requirements.yaml). letflow-queue task 871 (GH#1907), decision
+      0017 §D's safety half: set_lock/2 now applies the same eligibility
+      predicate REQ-222 extracted (open, unlocked, every depends_on id done)
+      in addition to its existing lock-ownership check, returning 409
+      {:error, :not_eligible, unmet_dependency_ids} for an ineligible task,
+      with the locked-by-other check taking priority when both apply and an
+      explicit same-agent-re-lock carve-out preserving the crash-recovery
+      path. README.md's set_lock bullet updated in the same commit (per that
+      repo's own implementing agent). Shipped as letflow-queue commit
+      77b0f36 on branch feature/req-223-set-lock-eligibility -- that repo's
+      own merge to master has not yet landed at the time of this append;
+      ORCH merges it immediately following this DOC-UPDATER step. Flipping
+      docs/requirements.yaml's REQ-223 status: pending -> done in this same
+      append, with a dated note (matching REQ-222's own "RECONCILED" note
+      style) recording the shipped commit/branch pending that repo's merge.

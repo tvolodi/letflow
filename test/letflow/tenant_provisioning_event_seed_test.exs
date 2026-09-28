@@ -62,32 +62,16 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.EventStore.Registry.EventType
-  alias Letflow.Identity.Tenant
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   import Ecto.Query
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers -- mirrors event_store_test.exs's provisioned_tenant/1 /
-  # append_attrs/2 / seed_projection!/4 pattern exactly (see moduledoc).
+  # append_attrs/2 / seed_projection!/4 pattern exactly (see moduledoc). Provisioned
+  # via Letflow.TenantFixture (ISS-0112 / GH#366).
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("iss0072"),
-        display_name: "ISS-0072 Regression Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
 
   # THE key fixture: provisions a tenant exactly the way a real, production
   # tenant is provisioned -- real CREATE SCHEMA, real default-manifest
@@ -95,28 +79,17 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
   # maybe_seed_platform_event_types/2's `using_default_manifest?` guard is
   # true and the real seed path runs) -- and registers NOTHING itself. Any
   # event type this test can successfully append was seeded by production
-  # code alone.
+  # code alone. `template: :replay` (not TenantFixture's default `:clone`) is
+  # deliberate and load-bearing here: this file's whole point is to exercise
+  # the real `provision_tenant_schema/1` + `replay_migrations/2` (default
+  # manifest) path per tenant, not a copy of a pre-built template schema --
+  # see moduledoc's "Why this file provisions tenants the normal way".
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "iss0072",
+      display_name: "ISS-0072 Regression Test Tenant",
+      template: :replay
+    )
   end
 
   defp unique_idempotency_key(prefix \\ "ISS0072") do

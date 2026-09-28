@@ -30255,7 +30255,7 @@ requirements:
     acceptance_criteria:
       - "a Vitest test passes an inline fixture module definition plus an installed list containing its id to the registry functions and asserts its routes and nav items are returned; with an installed list not containing its id, it asserts both results are empty arrays"
       - "a Vitest test for the `GET /api/v1/me/modules` client/hook with a mocked response asserts the parsed `installed_modules` list, and that its query key is tenant-scoped the same way `useMemberships`'s is"
-      - "from `web/`, `echo \"import x from '@/modules/sample/index'\" | npx eslint --stdin --stdin-filename src/pages/BoundaryProbe.tsx` exits non-zero reporting `no-restricted-imports`, and the same input with `--stdin-filename src/modules/registry.ts` exits 0; both outputs quoted"
+      - "from `web/`, `echo \"import '@/modules/sample/index'\" | npx eslint --stdin --stdin-filename src/pages/BoundaryProbe.tsx` exits non-zero reporting `no-restricted-imports`, and the same input with `--stdin-filename src/modules/registry.ts` exits 0; both outputs quoted"
       - "from `web/`, `echo \"import x from '@/modules/b/index'\" | npx eslint --stdin --stdin-filename src/modules/a/index.ts` exits non-zero reporting `no-restricted-imports`, output quoted"
       - "`git diff web/package.json web/package-lock.json` adds no dependency, and `npm run check` passes in `web/`, real output quoted"
     depends_on: [REQ-403]

@@ -50,25 +50,12 @@ defmodule Letflow.EventStore.RegistryTest do
   alias Letflow.EventStore.Registry
   alias Letflow.EventStore.Registry.EventType
   alias Letflow.EventStore.Registry.ValidationFailure
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning.Registration
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req024"),
-        display_name: "REQ-024 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
 
   defp unique_name(prefix \\ "EVENT_TYPE") do
     "#{prefix}_#{System.unique_integer([:positive, :monotonic])}"
@@ -92,10 +79,6 @@ defmodule Letflow.EventStore.RegistryTest do
       )
 
     List.flatten(rows)
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
   # Works around a genuine functional gap ELIXIR-DEV's own Step 2a handoff
@@ -150,37 +133,33 @@ defmodule Letflow.EventStore.RegistryTest do
   # it -- every test gets its OWN freshly-provisioned, freshly-migrated,
   # empty event_type_registry table, so no event-type-name collisions are
   # possible between tests even without per-test unique naming, though tests
-  # still use unique_name/1 for clarity and defense-in-depth.
+  # still use unique_name/1 for clarity and defense-in-depth. Also called
+  # directly, more than once per test, from a handful of test bodies below
+  # (a second, independent tenant) -- safe per
+  # `TenantFixture.provisioned_tenant!/1`'s own moduledoc ("async: true
+  # callers" section): its `Sandbox.mode(:auto)` line is the only
+  # mode-changing call it makes and it is never restored, so a second call
+  # within the same test, or a concurrent Task spawned after it (this file's
+  # own AC2 concurrency test), simply reuses the already-:auto pool.
+  #
+  # ISS-0112/GH#366 (batch 9): provisions via Letflow.TenantFixture instead of
+  # the previous inline insert-tenant!/provision_tenant_schema/
+  # replay_migrations sequence. `template: :replay` (not the fixture's own
+  # :clone default) is required here -- `ensure_migration_module_loaded!/0`'s
+  # workaround only matters when `replay_migrations/2` genuinely runs for
+  # this specific migration file, which the :clone path does not exercise
+  # per test.
   defp provisioned_tenant(_context) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
     ensure_migration_module_loaded!()
 
-    tenant = insert_tenant!()
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req024",
+        display_name: "REQ-024 Test Tenant",
+        template: :replay
+      )
 
-    # Registered immediately after the tenant row commits -- before
-    # provision_tenant_schema/replay_migrations even run -- so that a
-    # failure in either of THOSE steps still cleans up the tenant row (and
-    # whatever schema/registration state, if any, got created before the
-    # failure) rather than leaking real, committed :auto-mode data that
-    # would then collide with a later run's own unique_integer-suffixed
-    # slug. drop_schema!/1's IF EXISTS and Repo.delete_all/1's zero-rows
-    # case both tolerate "never got that far" cleanly.
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   # A minimal, valid register_type/2 attrs map -- every field required by

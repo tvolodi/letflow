@@ -38,6 +38,21 @@ android {
         // is added here — this is app-identity wiring only (REQ-419);
         // REQ-421 implements the actual OIDC flow.
         manifestPlaceholders["appAuthRedirectScheme"] = "com.bizdala.letflow"
+
+        // Platform-host manifest placeholder for the deep-link intent
+        // filter (REQ-421 design §1.3/§1.4, OQ-5). Fed from a Gradle
+        // property (`-Pplatform-host=<value>`) passed alongside the same
+        // build invocation's `--dart-define=LETFLOW_PLATFORM_HOST=<value>`
+        // -- Gradle and Dart's build-time-environment constants are two
+        // separate mechanisms, so one canonical value is threaded through
+        // both rather than inventing a second define name. Empty string is
+        // a safe default for a plain `flutter build`/`flutter run` that
+        // doesn't pass the property (no host means the intent filter's
+        // `*.` host pattern matches no real host, same fail-closed shape as
+        // the Dart-side `LETFLOW_PLATFORM_HOST` empty-string default in
+        // `parseTenantSlugFromDeepLink`).
+        val platformHost = (project.findProperty("platform-host") as String?) ?: ""
+        manifestPlaceholders["platformHost"] = platformHost
     }
 
     buildTypes {

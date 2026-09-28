@@ -79,6 +79,12 @@ cannot reach the point of showing a login screen. Gaps 2 and 3 block `MOB-3`
 2026-08-22) — see `../migration/stage-9-mobile.md`'s gap table for per-gap detail
 and status-log citations.
 
+**Added 2026-09-28 (`REQ-418`).** The response now returns six keys, not
+five: `client_id` was added as a sixth, platform-global value so the mobile
+app's OIDC client id is never compiled into the app binary. See
+`lib/letflow/design/req418-mobile-oidc-client.md` §2.3 for the full
+disclosure rationale.
+
 These three are why S9 depends on S4 rather than running as a fully independent
 track. R-Co could treat mobile as parallel-from-day-one because its backend was
 already shipped; Letflow's is not.

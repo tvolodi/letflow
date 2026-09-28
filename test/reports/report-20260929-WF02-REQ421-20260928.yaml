@@ -1,0 +1,226 @@
+run_id: WF02-REQ421-20260928
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-29T00:35:00Z
+branch: feature/WF02-REQ421-20260928
+requirement_ids: [REQ-421]
+notes: >
+  Fresh, from-scratch Step 4 re-run on the branch after ORCH rebased it
+  onto latest origin/main and fixed the A9 index-count drift previously
+  flagged by report-20260928-WF02-REQ421-20260928.yaml. `git diff
+  --name-only origin/main...HEAD` confirmed this branch's diff is still
+  limited to apps/mobile/, docs/mobile/*.md, and doc-bookkeeping files --
+  zero lib/ or priv/ Elixir changes.
+
+backend_exunit:
+  command: scripts/test_parallel.sh
+  partitions:
+    count: 16
+    source: "nproc (no TEST_PARALLEL_N override needed this run -- all
+      16 partition databases seeded+migrated cleanly on the first
+      attempt, unlike the prior 20260928 run which needed
+      TEST_PARALLEL_N=4 under heavier host contention)"
+  test_pool_size: 5
+  combined_result: "5028 tests, 6 properties, 3 failures (5031/5034 passed)"
+  status: FAIL
+  per_partition_summary:
+    - "partition 1: 404 tests, 0 properties, 0 failures, exit 0"
+    - "partition 2: 300 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 374 tests, 0 properties, 1 failures, exit 2"
+    - "partition 4: 241 tests, 0 properties, 0 failures, exit 0"
+    - "partition 5: 298 tests, 0 properties, 0 failures, exit 0"
+    - "partition 6: 309 tests, 0 properties, 0 failures, exit 0"
+    - "partition 7: 411 tests, 0 properties, 0 failures, exit 0"
+    - "partition 8: 383 tests, 0 properties, 0 failures, exit 0"
+    - "partition 9: 203 tests, 4 properties, 0 failures, exit 0"
+    - "partition 10: 380 tests, 0 properties, 0 failures, exit 0"
+    - "partition 11: 287 tests, 0 properties, 0 failures, exit 0"
+    - "partition 12: 386 tests, 0 properties, 0 failures, exit 0"
+    - "partition 13: 270 tests, 1 property, 2 failures, exit 2"
+    - "partition 14: 298 tests, 0 properties, 0 failures, exit 0"
+    - "partition 15: 265 tests, 1 property, 0 failures, exit 0"
+    - "partition 16: 219 tests, 0 properties, 0 failures, exit 0"
+  requirement_status_invariants_check: >
+    test/docs/requirement_status_invariants_test.exs's A9 case (the
+    index entries: count drift flagged in the prior 20260928 report) did
+    NOT fail in this run -- confirms ORCH's fix holds under the real
+    full-suite run, not just the isolated `mix test
+    test/docs/requirement_status_invariants_test.exs` (24 passed, 0
+    failures) ORCH quoted separately.
+  iss0778_t4_check: >
+    test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs's T4
+    (the ExUnit.TimeoutError from the prior 20260928 report, closed
+    no_defect as ISS-0875 after it failed to reproduce) also did NOT
+    fail in this run -- second consecutive clean run, consistent with
+    ISS-0875's no_defect closure.
+  failures:
+    - test: "Letflow.Plugs.AuthPipelineTest / acceptance criterion 4 — realm-ownership guard rejects mismatch, no JIT under wrong tenant / the realm-ownership guard rejects a tenant that does not own the token's claimed realm, called with the exact arguments AuthPipeline itself passes"
+      location: test/letflow/plugs/auth_pipeline_test.exs:220
+      output: |
+        ** (Ecto.InvalidChangesetError) could not perform insert because changeset is invalid.
+        Errors
+            %{idp_realm_id: [{"has already been taken",
+               [constraint: :unique, constraint_name: "tenants_idp_realm_id_partial_index"]}]}
+        Applied changes
+            %{status: :active, display_name: "Auth Pipeline Test Tenant",
+              slug: "tenant-9706aadd-fc53-46ad-b049-6e159974ef73",
+              idp_realm_id: "owned-by-a-1"}
+      attribution: "UNATTRIBUTED (new) -- filed as docs/issues/ISS-0878.yaml"
+      attribution_evidence: >
+        Structural check (a): test/letflow/plugs/auth_pipeline_test.exs
+        does not appear in `git diff --name-only origin/main...HEAD`
+        (this branch's diff is apps/mobile/, docs/mobile/*.md, and
+        doc-bookkeeping only) -- pre-existing, not a regression from
+        this branch. Structural check (b): no existing issue in
+        docs/issues/ matches this exact symptom (searched for
+        "idp_realm_id", "tenants_idp_realm_id_partial_index",
+        "AuthPipelineTest", "auth_pipeline_test" -- no hits). Root cause
+        identified via code inspection (not yet isolated-reproduced):
+        this file's own `unique_realm/1` helper
+        (test/letflow/plugs/auth_pipeline_test.exs:64-66) builds its
+        suffix from `System.unique_integer([:positive, :monotonic])`,
+        which is unique only within one BEAM VM process -- its counter
+        restarts at 1 in every fresh process. scripts/test_parallel.sh
+        runs N independent `mix test --partitions N` OS processes
+        (separate BEAM VMs) against one shared Postgres instance, whose
+        `tenants_idp_realm_id_partial_index` is a single global unique
+        index. Two partitions each making their own first
+        `unique_realm("owned-by-a")` call independently produce the
+        literal "owned-by-a-1", colliding on that global index. Same
+        general class as ISS-0873 (cross-partition contention on
+        unscoped/non-partition-local state) and directly related to
+        ISS-0329's fix (which assumed `unique_realm/1`, once
+        introduced, was already collision-proof across partitions --
+        this finding shows the process-local `System.unique_integer/1`
+        source is not). Full reasoning and fix direction recorded in
+        docs/issues/ISS-0878.yaml.
+      blocking: false
+      needs_filing: false
+      filed_as: docs/issues/ISS-0878.yaml
+
+    - test: "Letflow.EventStore.RetentionOperationsTest / retire_oldest_eligible_month/1 -- happy path / a schema with no eligible month for the chosen month is recorded skipped, not failed"
+      location: test/letflow/event_store/retention_operations_test.exs:339
+      output: |
+        Refute with in failed
+        code:  refute :failed in statuses
+        left:  :failed
+        right: [:failed, :failed, :failed, :skipped, :succeeded]
+      attribution: "PRE-EXISTING (same file/root-cause class as ISS-0873, resolved -- but this specific test case is a new sighting not covered by that closure)"
+      attribution_evidence: >
+        test/letflow/event_store/retention_operations_test.exs and
+        lib/letflow/event_store/retention_operations.ex are both absent
+        from `git diff --name-only origin/main...HEAD` for this branch
+        -- not a regression from this branch's diff. docs/issues/ISS-0873.yaml
+        (status: resolved) diagnosed and fixed a cross-partition TOCTOU
+        race in this exact module/file, but its fix targeted a
+        different test case ("protected_record_count sums keep_forever
+        rows...", the `retention_summary/0` bit-identical-across-two-calls
+        assertion) -- not this run's two failing "retire_oldest_eligible_month/1
+        -- happy path" cases. ISS-0873's own root-cause writeup
+        documents `retire_oldest_eligible_month/1`'s reliance on the
+        SAME unscoped-global-read mechanism it fixed for
+        `retention_summary/0` (provisioned_tenant_schemas/0,
+        keep_forever_event_types/0), so this is very likely the same
+        underlying mechanism resurfacing in sibling test cases ISS-0873's
+        fix did not cover, not a distinct new defect -- but that is not
+        a byte-identical match to the closed issue's symptom, so it is
+        called out here explicitly rather than silently folded in.
+      blocking: false
+      needs_filing: true
+      routed_to: >
+        ISSUE-FIXER, to determine whether ISS-0873's fix needs
+        extending to retire_oldest_eligible_month/1's own
+        provisioned_tenant_schemas/0-derived fanout (the same
+        unscoped-global-read mechanism), or whether this is a distinct
+        mechanism warranting its own issue record.
+
+    - test: "Letflow.EventStore.RetentionOperationsTest / retire_oldest_eligible_month/1 -- happy path / inserts a running row immediately, returns before the fanout completes, and the row later reaches completed"
+      location: test/letflow/event_store/retention_operations_test.exs:303
+      output: |
+        match (=) failed
+        code:  assert [outcome] = result.outcomes
+        left:  [outcome]
+        right: [%{status: :succeeded, schema_name: "tenant_3a3dc29dbb184f7fa44ef180746cee16", ...},
+                %{reason: ":invalid_schema_name", status: :failed, schema_name: "tenant_template_build_2a2c91e7d0a8ffa9b51c28c03a691b4f", ...},
+                %{reason: ":invalid_schema_name", status: :failed, schema_name: "tenant_template_build_b5fd2e1c7b5f2f00d58f644c4cd5b65c", ...},
+                %{reason: ":invalid_schema_name", status: :failed, schema_name: "tenant_template_build_e90e871bc81027cae32430a05e916e5f", ...}]
+      attribution: "PRE-EXISTING (same file/root-cause class as ISS-0873, resolved -- but this specific test case is a new sighting not covered by that closure)"
+      attribution_evidence: >
+        Same file/mechanism analysis as the sibling failure immediately
+        above. The extra `tenant_template_build_*` schemas appearing in
+        `result.outcomes` are consistent with ISS-0873's diagnosed
+        mechanism: `retire_oldest_eligible_month/1`'s fanout reads
+        `provisioned_tenant_schemas/0` (a platform-wide, unscoped-to-this-
+        test read across ALL provisioned tenant schemas, including
+        transient `tenant_template_build_*` schemas some OTHER partition
+        was concurrently provisioning/dropping at the moment of this
+        read), not just this test's own fixture schema. Not a regression
+        from this branch's diff (file absent from
+        `git diff --name-only origin/main...HEAD`).
+      blocking: false
+      needs_filing: true
+      routed_to: "Same as above -- ISSUE-FIXER, likely the same root-cause ticket as the sibling failure."
+
+flutter_analyze:
+  command: flutter analyze (run from apps/mobile/)
+  output: |
+    Resolving dependencies...
+    Downloading packages...
+    Got dependencies!
+    15 packages have newer versions incompatible with dependency constraints.
+    Analyzing mobile...
+    No issues found! (ran in 57.2s)
+  status: PASS
+
+flutter_test:
+  command: flutter test (run from apps/mobile/)
+  output: |
+    00:00 +0: loading .../test/android/android_manifest_test.dart
+    00:00 +0..+2: android_manifest_test.dart -- deep-link intent filter host pattern; App Link verification DEFERRED with reason; iOS universal-link entitlement mirrors Android, also DEFERRED
+    00:00 +3..+6: api_client_test.dart -- unauthenticated tenant-config request carries no Authorization header; authenticated get() attaches bearer token; no-active-realm GET carries no Authorization header; exactly one Dio(...) construction site
+    00:01 +7..+11: authenticate_with_tenant_test.dart -- issuer/clientId/redirectUrl/PKCE sourcing; allowInsecureConnections only for http realm_url; clientId never a compiled literal; null on cancellation; genuine OIDC failure propagates
+    00:01 +12..+15: tenant_token_store_test.dart -- per-realmUrl storage; deletion isolation; null for unknown realm; PlatformException propagates on store()
+    00:02 +16..+19: bootstrap_sequence_test.dart -- two-tenant no-rebuild token isolation; first-membership-entry mismatch; 403 CANDIDATE proceeds to /me/modules; cancellation returns null with no token stored
+    00:03 +20..+26: parse_tenant_slug_test.dart -- 7 slug-extraction cases
+    00:03..+04 +27..+36: route_table_test.dart -- installed-module routing (2 cases) + not-found-screen navigation (7 cases)
+    00:05 +37..+38: tenant_identifier_guard_test.dart -- no compiled-in tenant identifier; self-test fires on literal "bpm-default"
+    00:05..07 +39..+43: error_screens_test.dart -- TenantNotFoundScreen (x2), NetworkUnavailableScreen, OidcFailureScreen, SecureStorageUnavailableScreen
+    00:07 +44: All tests passed!
+  status: PASS
+  total_tests: 44
+
+overall_result: PARTIAL
+overall_notes: >
+  apps/mobile/ (REQ-421/MOB-2) is fully green: flutter analyze clean (no
+  issues), all 44 flutter test cases pass, run for real from apps/mobile/
+  this session. The prior report's A9 bookkeeping-drift failure did not
+  recur (ORCH's fix confirmed under the real full-suite run, not just in
+  isolation) and the ISS-0778 T4 timeout did not recur (second
+  consecutive clean run, consistent with ISS-0875's no_defect closure).
+
+  The backend ExUnit suite has 3 failures out of 5034 this run, none of
+  them touching any file in this branch's diff
+  (`git diff --name-only origin/main...HEAD` confirmed limited to
+  apps/mobile/, docs/mobile/*.md, and doc-bookkeeping files for all
+  three): (1) a newly-identified idp_realm_id collision in
+  Letflow.Plugs.AuthPipelineTest, root-caused via code inspection to
+  test/letflow/plugs/auth_pipeline_test.exs's own unique_realm/1 helper
+  using a process-local-only System.unique_integer/1 source that two
+  separate test_parallel.sh partitions can independently collide on --
+  filed as docs/issues/ISS-0878.yaml (no exact prior issue match found).
+  (2)+(3) two Letflow.EventStore.RetentionOperationsTest failures in
+  retire_oldest_eligible_month/1's happy-path cases, same
+  file/mechanism class as the already-resolved ISS-0873 (cross-partition
+  unscoped-global-read contention) but not the exact test case ISS-0873's
+  fix covered -- reported here for ISSUE-FIXER to determine whether
+  ISS-0873's fix needs extending, rather than silently folded into that
+  closed record.
+
+  None of the three failures is attributable to REQ-421/this branch's
+  diff. Recommendation: this branch's own scope (MOB-2) is verified
+  clean; the three backend failures are pre-existing test-isolation
+  flakes under full-parallel-suite contention and should be routed to
+  ISSUE-FIXER/TEST-DESIGNER rather than block this branch, but
+  RELEASE-VALIDATOR should independently confirm this same
+  non-reproduction-in-branch-diff conclusion before sign-off, per this
+  role's own no-single-source-of-truth principle.

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- REQ-421 design §1.4 / OQ-3: universal-link entitlement mirroring
+	     the Android intent-filter's host pattern. Written but DEFERRED --
+	     not built or verified on this (Windows) host, matching REQ-419
+	     §9's existing iOS build deferral. No
+	     `apple-app-site-association` file is provisioned by this
+	     requirement, for the same reason as Android's `assetlinks.json`
+	     gap: no requirement provisions/serves that file, and doing so is
+	     infrastructure outside this requirement's owned_modules. The
+	     literal `${PLATFORM_HOST}` below is an Xcode build-setting
+	     substitution, the iOS-side analogue of the Android Gradle
+	     `manifestPlaceholders["platformHost"]` wiring -- not a compiled-in
+	     tenant identifier (the platform host is build-config-derived,
+	     same category as `LETFLOW_API_BASE_URL`, not a tenant slug). -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:*.${PLATFORM_HOST}</string>
+	</array>
+</dict>
+</plist>

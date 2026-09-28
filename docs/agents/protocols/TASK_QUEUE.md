@@ -6,7 +6,7 @@ and live at `https://queue-test.ai-dala.com` (test only — see "Deployment stat
 below). A prod deployment at `queue.ai-dala.com` is not yet planned; every example in
 this file uses the live test URL.
 
-**Read by:** `ORCH` (all four functions), every other agent (read-only via `ORCH`'s
+**Read by:** `ORCH` (all five operations), every other agent (read-only via `ORCH`'s
 dispatch — see "Who calls what" below).
 
 ---
@@ -35,50 +35,73 @@ than reintroducing Issues as something an agent reads to decide what to do.
 
 ---
 
-## Hard rule: agents do not read `docs/requirements.yaml` to pick work
+## Hard rule: no agent works a task it does not hold a lock on
 
-**This is a change from the single-host framing in earlier sections of this doc set.**
-Once `letflow-queue` is live for a given run:
+**The governing invariant, stated once (decision 0017 §F, amending — not repealing —
+this section's earlier framing):**
 
-- No agent may read `docs/requirements.yaml` and decide "I'll work on REQ-N" on its own
-  initiative. Task selection happens through `get_next_task` only.
+> No agent works a task it does not hold a lock on, and no lock is obtained anywhere but
+> from the queue.
+
+Everything below follows from that.
+
+**Still forbidden:**
+- Working any task without holding its lock, obtained from the queue (`set_lock` or
+  `get_next_task`) — non-negotiable, unchanged by decision 0017.
+- Reading `docs/requirements.yaml`, or any other file, to **select** work in place of the
+  queue. No agent may read the yaml and decide "I'll work on REQ-N" on its own
+  initiative. `docs/requirements.yaml` remains a **read-only mirror** for human/agent
+  reference and cross-linking (e.g. citing `stage`, prior context) once a task's id is
+  already known — never the dispatch mechanism. It is kept in sync by ORCH via
+  `register_task` (see below), not edited freely by any producing agent.
+- **Falling back to file-order selection when the queue is unreachable** (network down,
+  not yet deployed, or `$QUEUE_AUTH_TOKEN` unavailable) — **including a session that
+  believes itself to be single-host**. An unreachable queue remains a blocked state to
+  report, because no lock can be obtained from it; it is never a trigger to degrade to
+  reading the file yourself. A session cannot reliably know it is the only host running
+  Letflow agents, and "single-host, no multi-host risk" was exactly the reasoning that
+  failed on 2026-08-19: two concurrent runs both selected REQ-048 because one of them was
+  in fallback mode and couldn't see the other's in-flight claim, producing a fully
+  duplicated WF-02 run that had to be discovered and cancelled after the fact (see
+  `docs/anti-patterns.md`). When the queue is unreachable, ORCH reports
+  `no_eligible_task (queue unreachable)` and stops.
 - No agent may hand-edit a task's status/lock state to route around the queue.
-- `docs/requirements.yaml` becomes a **read-only mirror** for human/agent
-  reference and cross-linking (e.g. citing `stage`, prior context) — not the
-  dispatch mechanism. It is kept in sync by ORCH via `register_task` (see below),
-  not edited freely by any producing agent.
-- This rule binds **every agent**, not just ORCH — see
-  `docs/agents/instructions/core-directives.md`'s updated Zero Manual Work /
-  Humanless Operation sections.
 
-**As of 2026-08-19, fallback selection is forbidden.** If `letflow-queue` is
-unreachable (network down, not yet deployed, or `$QUEUE_AUTH_TOKEN` unavailable) —
-**including a session that believes itself to be single-host** — ORCH MUST NOT fall
-back to reading `docs/requirements.yaml` to pick unscoped work on its own initiative.
-A session cannot reliably know it is the only host running Letflow agents, and
-"single-host, no multi-host risk" was exactly the reasoning that failed on 2026-08-19:
-two concurrent runs both selected REQ-048 because one of them was in fallback mode and
-couldn't see the other's in-flight claim, producing a fully duplicated WF-02 run that
-had to be discovered and cancelled after the fact (see `docs/anti-patterns.md`).
+This does not block work that is *not* agent-selected: a specific `REQ-XXX` named
+directly by the user, or another human-originated instruction, is not "agent discretion
+over selection" and may still proceed without the queue for *selection* purposes — but
+see "A human names a specific issue" below: skipping selection is not the same as
+skipping the queue's claim/release entirely, and doing so leaves a real duplicate-work
+window open to any other host running `get_next_task` against the same still-open item.
 
-When the queue is unreachable, ORCH reports `no_eligible_task (queue unreachable)` and
-stops — it does not silently, or even explicitly, degrade to file-order selection. This
-does not block work that is *not* agent-selected: a specific `REQ-XXX` named directly by
-the user, or another human-originated instruction, is not "agent discretion over
-selection" and may still proceed without the queue for *selection* purposes — but see
-"A human names a specific issue" below: skipping selection is not the same as skipping
-the queue's claim/release entirely, and doing so leaves a real duplicate-work window
-open to any other host running `get_next_task` against the same still-open item.
+**Now permitted (decision 0017 §B/§C, added 2026-09-04):**
+- **Reading full queue state via `GET /tasks` for any purpose** — a reachability check,
+  a dashboard, deciding what to work on next, or plain curiosity. See "`GET /tasks` —
+  list full queue state (read-only)" below. This is new: earlier drafts of this section
+  asserted agents may not read queue state at all, which decision 0017 supersedes —
+  reading was never the racy half (the claim's atomicity lives entirely in
+  `get_next_task`'s/`set_lock`'s `UPDATE`, not in withholding the listing).
+- **Choosing among eligible tasks seen that way**, provided the choice is realized
+  through `set_lock` and the `409`/`:not_eligible` answers are obeyed (see `set_lock`
+  below). Seeing a task is never itself a claim; `set_lock` is what actually arbitrates
+  it, and a wrong pick is simply refused.
+
+This rule binds **every agent**, not just ORCH — see
+`docs/agents/instructions/core-directives.md`'s updated Zero Manual Work /
+Humanless Operation sections.
 
 ### Reachability checks must not have side effects
 
-**Test reachability with `GET /health`** (no auth required, touches nothing) —
-**never** with `get_next_task` used as a probe. `get_next_task` is not read-only: it
-atomically claims and locks whatever it returns, and its GitHub-import step can also
-mutate queue state (importing not-yet-tracked open issues as new tasks) even when the
-claim itself is later released. A `get_next_task` call made "just to check the service
-is up" with a disposable `agent_id` (e.g. `"probe"`) still produces a real lock on a
-real task that a concurrent host could have been about to claim — release it
+Two side-effect-free ways exist to ask the service something without claiming anything:
+**`GET /health`** (no auth required, touches nothing — the standard reachability probe)
+and, as of decision 0017, **`GET /tasks`** (auth required, still a pure read — see
+below, and it can answer richer questions than "is it up," such as "is there eligible
+work"). **Never** probe with `get_next_task` used this way. `get_next_task` is not
+read-only: it atomically claims and locks whatever it returns, and its GitHub-import
+step can also mutate queue state (importing not-yet-tracked open issues as new tasks)
+even when the claim itself is later released. A `get_next_task` call made "just to check
+the service is up" with a disposable `agent_id` (e.g. `"probe"`) still produces a real
+lock on a real task that a concurrent host could have been about to claim — release it
 immediately if this happens by mistake, the same as any other hand-back (2026-08-20,
 ISS-0086/GH#303's own resolution run — this happened for real, see
 `docs/anti-patterns.md`).
@@ -94,46 +117,116 @@ availability check, and the service locked a real task to that throwaway id, whi
 sat unclaimable by any host for 57 minutes until the same session tried to claim it for
 real, got `409`, and had to work out from context which id held the lock. Recovery is
 the same as any accidental probe-claim: `release_lock` under the id that actually holds
-it, back to `open`, then claim properly. **There is currently no read-only way to ask
-"does the queue have eligible work" other than actually claiming something** — REQ-222
-(tracked in `docs/requirements.yaml`, target repo `tvolodi/letflow-queue`) covers adding
-a real read-only listing with computed eligibility; until it lands, do not simulate a
-dry-run by adding invented query parameters, since the service's own silent-ignore
-behavior makes that indistinguishable from a real claim.
+it, back to `open`, then claim properly. **`GET /tasks` (below) is now the read-only way
+to ask "does the queue have eligible work"** — it shipped 2026-09-04 (decision 0017 §B);
+do not simulate a dry-run with `get_next_task` and invented query parameters, since the
+service's own silent-ignore behavior makes that indistinguishable from a real claim.
+
+---
+
+## `GET /tasks` — list full queue state (read-only)
+
+Added 2026-09-04 (decision 0017 §B), as the fifth `letflow-queue` operation. Returns
+every task's current state, with two computed fields no other endpoint exposes:
+`blocked_by` (the subset of `depends_on` not yet `status: "done"` — `[]` means none) and
+`eligible` (boolean, the exact predicate `get_next_task`/`set_lock` apply: `status ==
+"open"` AND every `depends_on` id `"done"` AND unlocked). It performs **no write of any
+kind** — no lock, no status transition — and it specifically does not run
+`get_next_task`'s GitHub-import step.
+
+```bash
+curl "https://queue-test.ai-dala.com/tasks?status=open&eligible=true" \
+  -H "Authorization: Bearer $QUEUE_AUTH_TOKEN"
+```
+
+Filters, all optional and combinable (intersect, not union): `status`, `task_type`,
+`stage` (each an exact-match string), `eligible` (`true`/`false`, accepts a real boolean
+or the strings `"true"`/`"false"`).
+
+Response (`200`) — the shape is `{"tasks": [...]}`, **not** the `{"data":, "error":}`
+envelope every other endpoint uses (a listing has no single-resource success/error split
+to represent):
+
+```json
+{
+  "tasks": [
+    {
+      "id": 42,
+      "impl_order": 42,
+      "issue_ref": null,
+      "title": "Implement REQ-042",
+      "description": "Add the foo endpoint per docs/requirements.yaml",
+      "acceptance_criteria": ["mix test passes"],
+      "depends_on": [12, 13],
+      "stage": "S2",
+      "task_type": "requirement",
+      "status": "open",
+      "locked_by": null,
+      "locked_at": null,
+      "github_issue_number": null,
+      "body": null,
+      "blocked_by": [13],
+      "eligible": false,
+      "inserted_at": "2026-08-15T00:00:00Z",
+      "updated_at": "2026-08-15T00:00:00Z"
+    }
+  ]
+}
+```
+
+**Seeing a task here does not authorize working it.** This is exactly the call site
+decision 0017's own Consequences section names as the risk it accepts ("a visible queue
+is easier to select from without locking than an invisible one — an agent that can see
+the board can rationalize acting on what it saw"), so the governing invariant is
+restated here: **no agent works a task it does not hold a lock on, and no lock is
+obtained anywhere but from the queue.** An `eligible: true` row is grounds to attempt
+`set_lock` on that task's `id` — nothing more — and the attempt can still lose to a
+concurrent `409`. See also `docs/anti-patterns.md`'s "Selecting from a visible queue
+without locking" entry.
 
 ### A human names a specific issue/GH-issue-number directly
 
 Selection is exempt from the Hard Rule (above), but **locking is not** — the task still
 needs to be claimed before work starts and released when done, or nothing stops a second
 host's own `get_next_task` from independently claiming the same still-open item mid-run.
-Bounded procedure (full detail and rationale in `ISSUE_QUEUE.md`'s "Picking up a queued
-issue later" section — this is the summary):
 
-1. Known `queue_task_id` (recorded in the issue's yaml)? → `set_lock` it directly.
-2. Not known? → exactly **one** real `get_next_task` call, real `agent_id`. Matches by
-   `github_issue_number` → proceed locked, backfill `queue_task_id`. Doesn't match →
-   `release_lock` it back to `open` (no `status`) immediately, report the mismatch, do
-   not chase further down the stack.
-3. On completion: `release_lock(status: "done")` whatever was actually locked in 1/2. If
-   2 never found a match, state that plainly — the queue's mirror stays out of sync for
-   that item, bounded risk once its GitHub issue is closed (closed issues are never
-   re-imported, see the "GitHub Issues visibility" section's `get_next_task` bullet
-   below), but still a real gap worth noting.
+**As of decision 0017, `GET /tasks` replaces the old bounded claim-then-release lookup
+dance outright** — that dance (one real `get_next_task` call spent purely to look
+something up, released back on a mismatch) existed solely because there was no
+side-effect-free lookup (`docs/migration/decisions/0017-task-queue-selection-model.md`,
+evidence E3). Procedure now:
 
-**Legacy note — recovering from a *pre-2026-08-19* fallback session.** Before this rule
-existed, a requirement completed in fallback mode still had a real, already-registered
-queue task sitting `open`/unlocked if it was registered before the fallback session
-(check its `impl_order:` comment in `docs/requirements.yaml` — that's the queue task
-id). This reconciliation path is retained only to clean up state from before the rule
-changed — it is not a currently sanctioned way to work around the queue. Do
-not leave the queue silently out of sync indefinitely: once `$QUEUE_AUTH_TOKEN` becomes
-available again (a later session, a different host, a human supplying it), reconcile
-by claiming and releasing each affected task —
+1. **Look it up.** Known `queue_task_id`/`impl_order` already recorded (in the issue's
+   yaml, or a requirement's `impl_order:` field)? Use it directly. Otherwise,
+   `GET /tasks` (optionally `?task_type=issue`) and find the row whose
+   `github_issue_number` matches.
+2. `set_lock` the matched task's id.
+3. Work it, then `release_lock(status: "done")`.
+
+No release-back-to-`open` step exists anymore — a `GET /tasks` lookup never claims
+anything, so there is nothing to hand back on a mismatch; a mismatch just means the
+lookup found no match, report that and look again rather than chasing further down the
+stack.
+
+**Legacy note — recovering from a *pre-2026-08-19* fallback session.** This is a
+separate, already-historical scenario from the claim-then-release dance just retired
+above (it is about reconciling requirements completed *before* the Hard Rule existed at
+all, not about looking up a known issue), and still stands on its own. Before the Hard
+Rule existed, a requirement completed in fallback mode still had a real,
+already-registered queue task sitting `open`/unlocked if it was registered before the
+fallback session (check its `impl_order:` comment in `docs/requirements.yaml` — that's
+the queue task id). This reconciliation path is retained only to clean up state from
+before the rule changed — it is not a currently sanctioned way to work around the queue.
+Do not leave the queue silently out of sync indefinitely: once `$QUEUE_AUTH_TOKEN`
+becomes available again (a later session, a different host, a human supplying it),
+reconcile by claiming and releasing each affected task —
 
 ```bash
 # Claiming and immediately releasing (rather than a hypothetical direct-status-write
 # endpoint) because letflow-queue deliberately exposes no generic update operation —
-# see its README's "Design" section, exactly four endpoints, on purpose.
+# see its README's "Design" section: the core invariant is not an operation count but
+# exactly one mutating claim path (get_next_task's atomic UPDATE ... RETURNING), and
+# there is still no way to bypass it, even now that GET /tasks exists as a read.
 curl "https://queue-test.ai-dala.com/tasks/next?agent_id=orch-reconcile" \
   -H "Authorization: Bearer $QUEUE_AUTH_TOKEN"
 # confirm the returned id matches the REQ's impl_order before releasing
@@ -157,9 +250,10 @@ recorded as known anomalies in the index.
 
 ---
 
-## The four functions
+## The four mutating functions
 
-All calls are HTTP requests to the deployed `letflow-queue` instance, bearer-token
+`GET /tasks` (above) is the fifth, read-only operation — the four below are the ones
+that write. All calls are HTTP requests to the deployed `letflow-queue` instance, bearer-token
 authenticated (`Authorization: Bearer $QUEUE_AUTH_TOKEN`, token supplied via
 environment — never hardcoded, same convention as REQ-103's dev bootstrap token). This
 env var name must match `letflow-queue`'s own `QUEUE_AUTH_TOKEN` exactly (see its
@@ -383,11 +477,12 @@ the requirement backlog FIFO exactly as before this priority split existed.
 
 ### 3. `set_lock` — lock a task you already know the id of
 
-**Who calls this:** `ORCH` only. Two legitimate uses:
+**Who calls this:** `ORCH` only. Three legitimate uses:
 - **Recovery** — re-claiming a task this same host already held before a crash/restart,
-  using the same `agent_id`.
+  using the same `agent_id`. Not gated on eligibility at all (see check 1 below) — this
+  branch always succeeds, even if the task's status has since changed to non-`"open"`.
 - **Targeted claim of a known-id task named directly by a human** — see "A human names a
-  specific issue" below. **This is not merely a recovery mechanism at the API level**:
+  specific issue" above. **This is not merely a recovery mechanism at the API level**:
   per `letflow-queue`'s own `README.md`, the service accepts any `agent_id` on an
   unlocked task, not only one that previously held it — "Unlocked, or already locked by
   the same `agent_id` → `200`... Locked by a *different* `agent_id` → `409 Conflict`."
@@ -395,6 +490,10 @@ the requirement backlog FIFO exactly as before this priority split existed.
   recovery-only and left no documented way to target-claim a specific already-known task
   id outside the `get_next_task` priority order (2026-08-20, ISS-0086/GH#303's own
   resolution run).
+- **Targeted claim of a task chosen from `GET /tasks`** (decision 0017 §C, added
+  2026-09-04) — an agent may select any eligible task it can see via `GET /tasks` and
+  claim it here. Seeing the task is never itself authorization to work it; `set_lock` is
+  what actually arbitrates the choice, by applying the eligibility check below.
 
 ```bash
 curl -X POST https://queue-test.ai-dala.com/tasks/42/lock \
@@ -403,18 +502,48 @@ curl -X POST https://queue-test.ai-dala.com/tasks/42/lock \
   -d '{"agent_id": "'"$HOSTNAME"'-orch"}'
 ```
 
-409 Conflict means another host currently holds it — do not force past this without
-using `release_lock`'s `force` override deliberately and with a stated reason (see
-below).
+Checked, strictly in this order against the loaded task and the caller's `agent_id`
+(`letflow-queue`'s own `set_lock/2`; decision 0017 §D added check 3):
 
-**This only works if the id is already known.** There is no lookup-by-`github_issue_number`
-or lookup-by-title endpoint (the service is deliberately four operations, per its own
-README's "Design" section) — the id has to come from a prior `register_task` response
-(now recorded as `queue_task_id` in `docs/issues/ISS-NNNN.yaml` or as `impl_order` in
-`docs/requirements.yaml`, per `ISSUE_QUEUE.md`'s 2026-08-20 update) or from having seen
-it in a prior `get_next_task`/`set_lock` response. An issue with no recorded id and no
-prior sighting cannot be target-claimed at all — see "A human names a specific issue"
-below for the bounded fallback.
+1. **Same-agent recovery.** If the task is already locked by this same `agent_id`, the
+   lock is set/refreshed and `200` is returned unconditionally — not gated on
+   eligibility at all (e.g. reacquiring your own lock after a crash, even if the task's
+   status has since changed to non-`"open"`).
+2. **Locked by a different agent.** Else, if the task is locked by any other `agent_id`,
+   `409 Conflict`: `{"data": null, "error": "task is locked by a different agent"}`.
+   Checked *before* eligibility, so a task that is both locked-by-another and ineligible
+   still reports this reason, not the eligibility one.
+3. **Eligibility (decision 0017 §D, added 2026-09-04).** Else (the task is unlocked),
+   the task must be `status: "open"` and have no unmet `depends_on` ids — the same
+   predicate `get_next_task`/`GET /tasks`'s `eligible` field use. Acceptable when
+   `get_next_task` was the only selector, because the predicate had already been applied
+   before a task was ever handed out; once agents select for themselves via `GET /tasks`
+   this becomes the load-bearing gate. If unmet, `409 Conflict`:
+   ```json
+   { "data": null, "error": "task is not eligible to be locked", "unmet_dependency_ids": [12, 14] }
+   ```
+   `unmet_dependency_ids` is `[]` when the sole cause of ineligibility is non-`"open"`
+   status.
+
+Unknown task id → `404`: `{"data": null, "error": "task not found"}`.
+
+**A `409` from either check 2 or check 3 means pick a different task. It is NEVER routed
+around with `release_lock`'s `force` override** (decision 0017 §E). `force` remains
+scoped to its existing "unstick a task after a host died mid-work" purpose (see
+`release_lock` below) — it was never about eligibility, and this is called out
+specifically because free selection via `GET /tasks` makes forcing past a `409` more
+tempting than it was when `get_next_task` was the only selector.
+
+**This only works if the id is already known.** There is no lookup-by-title endpoint —
+`GET /tasks` (above) is the read-only way to learn an id from `github_issue_number`,
+`status`, `task_type`, or `stage`; the service's core invariant is not an operation count
+but exactly one mutating claim path (`get_next_task`'s atomic `UPDATE ... RETURNING` —
+see its own README's "Design" section), which `GET /tasks` does not weaken since it
+performs no write at all. The id itself has to come from a prior `register_task`
+response (now recorded as `queue_task_id` in `docs/issues/ISS-NNNN.yaml` or as
+`impl_order` in `docs/requirements.yaml`, per `ISSUE_QUEUE.md`'s 2026-08-20 update), from
+a `GET /tasks` listing, or from having seen it in a prior `get_next_task`/`set_lock`
+response.
 
 ### 4. `release_lock` — release a claim, optionally transitioning status
 
@@ -516,7 +645,7 @@ for a full hand-back to the pool).
 
 | Role | Calls `letflow-queue` directly? |
 |---|---|
-| `ORCH` | Yes — all four functions, per the triggers above |
+| `ORCH` | Yes — all five operations (the four mutating functions plus `GET /tasks`), per the triggers above |
 | Every other role (`ELIXIR-DEV`, `REVIEWER`, `TEST-RUNNER`, etc.) | **No.** They receive the task's content via the handoff ORCH writes (same as today — the handoff schema in `docs/agents/shared/HANDOFF_PROTOCOL.md` already carries `context.requirement_ids` and `task.description`). Producing/validating agents never call the queue API and never read `docs/requirements.yaml` to pick their own next task. |
 
 This mirrors the design brief's framing directly: "AI agents manipulate files on their

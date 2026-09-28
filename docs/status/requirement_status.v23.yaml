@@ -807,6 +807,29 @@
       append, with a dated note (matching REQ-222's own "RECONCILED" note
       style) recording the shipped commit/branch pending that repo's merge.
 
+  - req: REQ-224
+    event: started
+    agent: ORCH
+    at: 2026-09-28T15:05:00Z
+    note: >
+      letflow-queue task 872 (GH#1908) claimed via get_next_task, branch
+      feature/WF02-REQ224-20260928. Unlike REQ-222/REQ-223 this requirement
+      IS in this repo -- docs/agents/protocols/TASK_QUEUE.md,
+      docs/anti-patterns.md, and docs/agents/ORCHESTRATOR.md all rewritten
+      against decision 0017 (queue arbitrates claims, does not choose the
+      work). No lib/ or web/ change -- routed as a docs-only WF-02 run:
+      DOC-UPDATER writes the content (re-reading letflow-queue's merged
+      code directly per AC9, not trusting this requirement's own
+      description of what REQ-222/REQ-223 shipped) -> REVIEWER idiom/
+      decision-record-consistency gate -> TEST-DESIGNER's Step 3 scope
+      test (no executable surface) routes straight to RELEASE-VALIDATOR
+      -> DOC-UPDATER flips status. CODE-DESIGNER/ELIXIR-DEV/FRONTEND-DEV/
+      SECURITY-REVIEWER steps not dispatched: no lib/letflow/design/
+      artefact applies to a protocol-doc rewrite (no module interface,
+      @spec, or tenant-data path in scope), matching the same
+      inapplicable-step-skip pattern WF-02 Step 3 already documents for
+      TEST-DESIGNER on docs-only requirements.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH
@@ -846,3 +869,28 @@
       the LIFO issue-priority re-selection loop). PR merged via squash
       following GIT_MERGE.md's full branch-and-PR procedure (no direct
       push to main).
+
+  - req: REQ-224
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-28T16:10:00Z
+    note: >
+      WF02-REQ224-20260928 (queue task 872, GH#1908). Content rewrite across
+      TASK_QUEUE.md/docs/anti-patterns.md/ORCHESTRATOR.md §1 against
+      decision 0017 -- Hard Rule restated around the lock invariant,
+      GET /tasks documented, claim-then-release lookup dance deleted,
+      set_lock's 409/not_eligible case documented, "exactly four
+      operations" citations corrected, ORCHESTRATOR.md §1 updated to
+      mention GET /tasks + set_lock as a sanctioned selection path with
+      get_next_task remaining the default. REVIEWER: PASS (idiom/
+      decision-record-consistency gate). RELEASE-VALIDATOR: PASS, all 9
+      acceptance criteria independently re-confirmed, including AC9
+      (REQ-222/REQ-223 behaviour re-checked against real letflow-queue
+      source at commit 305e777 rather than trusting this requirement's own
+      description). REVIEWER's one non-blocking finding -- ISSUE_QUEUE.md
+      still describes the now-deleted claim-then-release dance -- was out
+      of this requirement's scope (NOT IN THIS REQUIREMENT explicitly
+      excludes ISSUE_QUEUE.md's filing flow) and was filed separately as
+      ISS-0877 (queue task 877, GH#1942) rather than fixed in this run.
+      docs/requirements.yaml's REQ-224 status: in_progress -> done in this
+      same append.

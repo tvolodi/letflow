@@ -1,0 +1,27 @@
+id: ISS-0877
+title: "ISSUE_QUEUE.md still describes the claim-then-release lookup dance REQ-224 deleted from TASK_QUEUE.md"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ224-20260928
+discovered_at: 2026-09-28T14:40:00Z
+severity: MINOR
+description: >
+  docs/agents/protocols/ISSUE_QUEUE.md ("Picking up a queued issue later," steps 1-3)
+  still tells an agent to spend one real get_next_task call purely to look up a known
+  github_issue_number and release_lock it back to open on a mismatch -- the exact
+  bounded claim-then-release dance that REQ-224 (decision 0017) just deleted from
+  TASK_QUEUE.md and replaced with a GET /tasks lookup (no claim, no release-back).
+
+  Found during REVIEWER's REQ-224 WF-02 gate (2026-09-28). Non-blocking for REQ-224
+  itself -- ISSUE_QUEUE.md's filing flow was explicitly out of REQ-224's scope ("no
+  change to ISSUE_QUEUE.md's filing flow") -- but it is now a live cross-document
+  contradiction: an agent following ISSUE_QUEUE.md literally would still burn a
+  get_next_task call and hand it back, exactly the pattern decision 0017/E3 retired.
+
+  Fix: update ISSUE_QUEUE.md's known-github_issue_number lookup steps to use
+  GET /tasks instead, matching TASK_QUEUE.md's post-0017 "A human names a specific
+  issue" section.
+affected_files:
+  - docs/agents/protocols/ISSUE_QUEUE.md
+queue_ref: Q-877
+github_ref: GH-1942
+status: open

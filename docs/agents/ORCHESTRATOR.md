@@ -44,6 +44,13 @@ depends_on — unchanged schema) but is a mirror for task-selection purposes onc
 queue is live, kept in sync via `register_task` and DOC-UPDATER's normal status-flip
 step.
 
+**`get_next_task` remains the default path.** Per decision 0017, selection may also go
+through `GET /tasks` + `set_lock` — reading full queue state and choosing among eligible
+tasks, provided the choice is realized through `set_lock` and its `409`/`:not_eligible`
+answers are obeyed — as a sanctioned alternative when ORCH has a reason to prefer a
+specific eligible task over whatever `get_next_task` would hand out. Full procedure and
+the still-binding lock invariant: `TASK_QUEUE.md`'s Hard Rule and `GET /tasks` sections.
+
 **No fallback selection.** If `letflow-queue` is not deployed, unreachable, or
 `$QUEUE_AUTH_TOKEN` is unavailable, ORCH MUST NOT pick a requirement itself by reading
 `docs/requirements.yaml` — even in a session that believes itself single-host. Report

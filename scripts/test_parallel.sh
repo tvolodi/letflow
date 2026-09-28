@@ -50,6 +50,18 @@
 # tmp_dir is removed automatically; a run with any real failures always
 # preserves it regardless of this var.
 #
+# Overridable knob: TEST_PER_PARTITION_HEADROOM=<non-negative integer>
+# (default 0, a deliberate no-op -- N*0=0 leaves Step 1.5's formula
+# unchanged) -- ISS-0287 §4.1, adds an N-scaling connection-budget margin
+# (N * TEST_PER_PARTITION_HEADROOM) to Step 1.5's pool clamp, for once a
+# real per-partition overshoot has been measured (see
+# lib/letflow/design/iss0287-pool-headroom-n-scaling.md §4.1/OQ-2).
+#
+# Overridable knob: TEST_PARALLEL_SAMPLE_CONNECTIONS=<any non-empty value>
+# (default unset/off) -- ISS-0287 §4.3, opt-in pg_stat_activity
+# connection-count sampler logged to the run's own tmp_dir, purely
+# diagnostic (see design doc §4.3). Zero cost when unset.
+#
 # ISS-0222: running this script again immediately after a prior full-suite run
 # on the same host (no gap between two consecutive launches) can produce a
 # transient "too_many_connections"/DBConnection.ConnectionError in one
@@ -109,6 +121,56 @@ if [ "$compile_exit" -ne 0 ]; then
   exit "$compile_exit"
 fi
 
+# --- Step 1.4: verify host Postgres ceiling assumptions (ISS-0287 §4.2) ----
+#
+# Step 1.5 below treats TEST_MAX_CONNECTIONS/TEST_SUPERUSER_RESERVED as
+# known facts about the real server (defaults 100/3), but they are
+# hardcoded assumptions, not measurements -- decision 0009 already flags
+# TEST_MAX_CONNECTIONS as host/container-config-dependent, and
+# lib/letflow/design/iss0287-pool-headroom-n-scaling.md §3.1(3) names an
+# unverified-ceiling mismatch as a candidate cause of the ISS-0287 N=8
+# reopening. This step queries the real, live Postgres instance (if
+# reachable) via `psql` and WARNs -- never hard-fails -- on a mismatch: a
+# config-drift gap, not an arithmetic gap, and no formula change fixes a
+# wrong input to a correct formula (design doc §4.2). It is best-effort
+# evidence gathering, not a gate: missing `psql`, an unreachable DB, or any
+# query failure all degrade to a single WARN and the script continues
+# exactly as it would have before this step existed.
+_test_parallel_db_port="${LETFLOW_DB_PORT:-}"
+if [ -z "$_test_parallel_db_port" ] && [ -f ".env" ]; then
+  _test_parallel_db_port=$(grep -E '^LETFLOW_DB_PORT=' ".env" | tail -n 1 | cut -d= -f2- | tr -d '[:space:]')
+fi
+_test_parallel_db_port="${_test_parallel_db_port:-5462}"
+_test_parallel_db_host="${LETFLOW_DB_HOST:-localhost}"
+_test_parallel_db_user="${LETFLOW_DB_USER:-letflow}"
+_test_parallel_db_password="${LETFLOW_DB_PASSWORD:-letflow}"
+
+if ! command -v psql >/dev/null 2>&1; then
+  echo "test_parallel: WARN psql not found -- skipping host Postgres ceiling verification (ISS-0287 §4.2); TEST_MAX_CONNECTIONS/TEST_SUPERUSER_RESERVED assumptions unverified against the live server" >&2
+else
+  _live_max_conn=$(PGPASSWORD="$_test_parallel_db_password" psql -h "$_test_parallel_db_host" -p "$_test_parallel_db_port" -U "$_test_parallel_db_user" -d postgres -tAc "show max_connections;" 2>/dev/null | tr -d '[:space:]')
+  _live_superuser_reserved=$(PGPASSWORD="$_test_parallel_db_password" psql -h "$_test_parallel_db_host" -p "$_test_parallel_db_port" -U "$_test_parallel_db_user" -d postgres -tAc "show superuser_reserved_connections;" 2>/dev/null | tr -d '[:space:]')
+
+  if [ -z "$_live_max_conn" ] || [ -z "$_live_superuser_reserved" ]; then
+    echo "test_parallel: WARN could not reach Postgres at $_test_parallel_db_host:$_test_parallel_db_port to verify host ceiling assumptions (ISS-0287 §4.2) -- continuing with configured/default TEST_MAX_CONNECTIONS/TEST_SUPERUSER_RESERVED unverified" >&2
+  else
+    _assumed_max_conn="${TEST_MAX_CONNECTIONS:-100}"
+    _assumed_superuser_reserved="${TEST_SUPERUSER_RESERVED:-3}"
+    _host_check_mismatch=0
+    if [ "$_live_max_conn" != "$_assumed_max_conn" ]; then
+      echo "test_parallel: WARN live Postgres max_connections=$_live_max_conn does not match assumed TEST_MAX_CONNECTIONS=$_assumed_max_conn -- set TEST_MAX_CONNECTIONS=$_live_max_conn explicitly if this is intentional (config-drift, not an arithmetic defect; see decision 0009's ISS-0287 §4.2 addendum)" >&2
+      _host_check_mismatch=1
+    fi
+    if [ "$_live_superuser_reserved" != "$_assumed_superuser_reserved" ]; then
+      echo "test_parallel: WARN live Postgres superuser_reserved_connections=$_live_superuser_reserved does not match assumed TEST_SUPERUSER_RESERVED=$_assumed_superuser_reserved -- set TEST_SUPERUSER_RESERVED=$_live_superuser_reserved explicitly if this is intentional (config-drift, not an arithmetic defect; see decision 0009's ISS-0287 §4.2 addendum)" >&2
+      _host_check_mismatch=1
+    fi
+    if [ "$_host_check_mismatch" -eq 0 ]; then
+      echo "test_parallel: host ceiling verified -- live max_connections=$_live_max_conn, superuser_reserved_connections=$_live_superuser_reserved match assumed/configured defaults"
+    fi
+  fi
+fi
+
 # --- Step 1.5: clamp per-partition pool_size to fit Postgres's ceiling ----
 #
 # ISS-0194: config/test.exs sizes each partition's own Ecto pool as
@@ -146,13 +208,14 @@ fi
 # addendum.
 #
 # TEST_POOL_SIZE, if the caller already set it, is never overridden here --
-# an explicit choice always wins over this clamp.
+# an explicit choice always wins over this clamp. ISS-0287 §4.1 (lib/letflow/design/iss0287-pool-headroom-n-scaling.md): TEST_PER_PARTITION_HEADROOM adds an N-scaling margin below, default 0 (no-op: N×0=0 reduces to today's formula exactly).
 if [ -z "${TEST_POOL_SIZE:-}" ]; then
   max_conn="${TEST_MAX_CONNECTIONS:-100}"
   headroom="${TEST_CONNECTION_HEADROOM:-10}"
   min_pool="${TEST_MIN_POOL_SIZE:-2}"
   superuser_reserved="${TEST_SUPERUSER_RESERVED:-3}"
   nonpool_reserve="${TEST_NONPOOL_CONNECTION_RESERVE:-5}"
+  per_partition_headroom="${TEST_PER_PARTITION_HEADROOM:-0}"
 
   if ! printf '%s' "$max_conn" | grep -Eq '^[1-9][0-9]*$'; then
     echo "test_parallel: ERROR TEST_MAX_CONNECTIONS='$max_conn' is not a positive integer" >&2
@@ -169,21 +232,22 @@ if [ -z "${TEST_POOL_SIZE:-}" ]; then
     exit 1
   fi
 
+  if ! printf '%s' "$per_partition_headroom" | grep -Eq '^[0-9]+$'; then echo "test_parallel: ERROR TEST_PER_PARTITION_HEADROOM='$per_partition_headroom' is not a non-negative integer" >&2; exit 1; fi
   usable_ceiling=$((max_conn - superuser_reserved))
-  budget=$((usable_ceiling - headroom - nonpool_reserve))
+  budget=$((usable_ceiling - headroom - nonpool_reserve - (N * per_partition_headroom)))
   if [ "$budget" -lt "$min_pool" ]; then
-    echo "test_parallel: ERROR TEST_MAX_CONNECTIONS=$max_conn minus TEST_SUPERUSER_RESERVED=$superuser_reserved minus TEST_CONNECTION_HEADROOM=$headroom minus TEST_NONPOOL_CONNECTION_RESERVE=$nonpool_reserve leaves no room for even the TEST_MIN_POOL_SIZE=$min_pool floor" >&2
+    echo "test_parallel: ERROR TEST_MAX_CONNECTIONS=$max_conn minus TEST_SUPERUSER_RESERVED=$superuser_reserved minus TEST_CONNECTION_HEADROOM=$headroom minus TEST_NONPOOL_CONNECTION_RESERVE=$nonpool_reserve minus (N=$N times TEST_PER_PARTITION_HEADROOM=$per_partition_headroom) leaves no room for even the TEST_MIN_POOL_SIZE=$min_pool floor" >&2
     exit 1
   fi
 
   computed_pool=$((budget / N))
   if [ "$computed_pool" -lt "$min_pool" ]; then
-    echo "test_parallel: WARN N=$N partitions would need pool_size=$computed_pool to fit within $budget connections (max_connections=$max_conn - superuser_reserved=$superuser_reserved - headroom=$headroom - nonpool_reserve=$nonpool_reserve); clamping to the TEST_MIN_POOL_SIZE floor of $min_pool instead. This means N*pool_size ($((N * min_pool))) may still exceed the connection budget -- reduce N (TEST_PARALLEL_N=<n>) if you hit too_many_connections." >&2
+    echo "test_parallel: WARN N=$N partitions would need pool_size=$computed_pool to fit within $budget connections (max_connections=$max_conn - superuser_reserved=$superuser_reserved - headroom=$headroom - nonpool_reserve=$nonpool_reserve - N*per_partition_headroom=$((N * per_partition_headroom))); clamping to the TEST_MIN_POOL_SIZE floor of $min_pool instead. This means N*pool_size ($((N * min_pool))) may still exceed the connection budget -- reduce N (TEST_PARALLEL_N=<n>) if you hit too_many_connections." >&2
     export TEST_POOL_SIZE="$min_pool"
   else
     export TEST_POOL_SIZE="$computed_pool"
   fi
-  echo "test_parallel: TEST_POOL_SIZE=$TEST_POOL_SIZE (computed: N=$N, max_connections=$max_conn, superuser_reserved=$superuser_reserved, headroom=$headroom, nonpool_reserve=$nonpool_reserve)"
+  echo "test_parallel: TEST_POOL_SIZE=$TEST_POOL_SIZE (computed: N=$N, max_connections=$max_conn, superuser_reserved=$superuser_reserved, headroom=$headroom, nonpool_reserve=$nonpool_reserve, per_partition_headroom=$per_partition_headroom)"
 else
   echo "test_parallel: TEST_POOL_SIZE=$TEST_POOL_SIZE (caller override, not computed)"
 fi
@@ -263,6 +327,13 @@ cleanup_tmp_dir() {
                                # here is what recovers this script's own real
                                # exit status; any earlier statement would
                                # clobber it before it can be read.
+
+  # ISS-0287 §4.3: defensive kill of the opt-in connection sampler (started
+  # in Step 2 below, if enabled) on ANY exit path, not just the normal one
+  # after Step 3 -- so a background polling loop never outlives this script.
+  if [ -n "${_test_parallel_sampler_pid:-}" ]; then
+    kill "$_test_parallel_sampler_pid" 2>/dev/null
+  fi
 
   if [ "$exit_code" -eq 0 ] && [ -z "${TEST_PARALLEL_KEEP_LOGS:-}" ]; then
     rm -rf "$tmp_dir"
@@ -350,6 +421,38 @@ declare -a properties
 declare -a tests_count
 declare -a failures
 
+# ISS-0287 §4.3: opt-in pg_stat_activity connection-count sampler, gated
+# behind TEST_PARALLEL_SAMPLE_CONNECTIONS=1 (default unset/off -- adds zero
+# cost to an ordinary run). Diagnostic-only, not a fix: while partitions run
+# (this step and Step 3), polls pg_stat_activity every 1s and appends a
+# timestamped count to $tmp_dir/connection_samples.log, to measure whether
+# real concurrent connection count ever exceeds the formula's modeled worst
+# case -- see lib/letflow/design/iss0287-pool-headroom-n-scaling.md §4.3.
+# Each poll is a short-lived `psql` connection (opened, queried, closed),
+# NOT a connection this script's own TEST_POOL_SIZE arithmetic budgets for
+# -- noted, not silently assumed harmless, per the design's own OQ-4: this
+# adds a small, transient, one-connection-at-a-time load of its own,
+# informally covered by TEST_CONNECTION_HEADROOM's existing ad-hoc-tooling
+# margin, same as a human's own interactive psql session would be.
+_test_parallel_sampler_pid=""
+if [ -n "${TEST_PARALLEL_SAMPLE_CONNECTIONS:-}" ]; then
+  if ! command -v psql >/dev/null 2>&1; then
+    echo "test_parallel: WARN TEST_PARALLEL_SAMPLE_CONNECTIONS set but psql not found -- sampler not started" >&2
+  else
+    _test_parallel_sampler_log="$tmp_dir/connection_samples.log"
+    echo "test_parallel: connection sampler enabled -- logging to $_test_parallel_sampler_log every 1s"
+    (
+      while true; do
+        _sample_ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        _sample_count=$(PGPASSWORD="$_test_parallel_db_password" psql -h "$_test_parallel_db_host" -p "$_test_parallel_db_port" -U "$_test_parallel_db_user" -d postgres -tAc "SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'letflow_mixtest_%';" 2>/dev/null | tr -d '[:space:]')
+        echo "$_sample_ts count=${_sample_count:-ERROR}" >> "$_test_parallel_sampler_log"
+        sleep 1
+      done
+    ) &
+    _test_parallel_sampler_pid=$!
+  fi
+fi
+
 i=1
 while [ "$i" -le "$N" ]; do
   # MIX_BUILD_PATH is set per-invocation (command-scoped), not exported
@@ -371,6 +474,14 @@ while [ "$i" -le "$N" ]; do
   exits[$i]=$?
   i=$((i + 1))
 done
+
+# ISS-0287 §4.3: stop the sampler (if started above) now that every
+# partition has finished, so its log file reflects the run's full duration.
+if [ -n "$_test_parallel_sampler_pid" ]; then
+  kill "$_test_parallel_sampler_pid" 2>/dev/null
+  wait "$_test_parallel_sampler_pid" 2>/dev/null
+  echo "test_parallel: connection sampler stopped ($_test_parallel_sampler_log)"
+fi
 
 # --- Step 4: aggregate each partition's real reported counts (AC1, AC2) ---
 #

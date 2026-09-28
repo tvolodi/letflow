@@ -437,6 +437,42 @@ defmodule Letflow.Support.TenantFixtureTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # idp_realm_id opt (ISS-0112b) --
+  # lib/letflow/design/iss0112b-tenant-fixture-idp-realm-id-opt.md §7.1
+  # ---------------------------------------------------------------------------------
+
+  describe "idp_realm_id opt" do
+    test "threads a caller-supplied value through to the returned tenant" do
+      realm_id = "iss0112b-" <> Ecto.UUID.generate()
+
+      %{tenant: tenant} =
+        TenantFixture.provisioned_tenant!(
+          slug_prefix: "iss0112b-positive",
+          oidc_mode: :enabled,
+          idp_realm_id: realm_id
+        )
+
+      assert tenant.idp_realm_id == realm_id
+    end
+
+    test "defaults to nil when the opt is omitted, matching today's behaviour" do
+      %{tenant: tenant} =
+        TenantFixture.provisioned_tenant!(slug_prefix: "iss0112b-default")
+
+      assert tenant.idp_realm_id == nil
+    end
+
+    test "characterization: oidc_mode: :enabled without idp_realm_id still raises, per Tenant.create_changeset/3's existing validation (design §2.2)" do
+      assert_raise Ecto.InvalidChangesetError, fn ->
+        TenantFixture.provisioned_tenant!(
+          slug_prefix: "iss0112b-enabled-no-realm",
+          oidc_mode: :enabled
+        )
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------------
 

@@ -38,28 +38,12 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
   import Ecto.Query
 
   alias Letflow.Definitions.PromotionReview
-  alias Letflow.Identity.Tenant
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
-
-  # oidc_mode: :disabled avoids Tenant.create_changeset/3's idp_realm_id requirement --
-  # irrelevant to anything this file tests, matching every other provisioning test in
-  # this project's own use of :disabled.
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req035"),
-        display_name: "REQ-035 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
 
   defp table_exists_in_schema?(schema_name, table_name) do
     %{rows: [[exists?]]} =
@@ -109,10 +93,6 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
       [_definition] -> nil
       [_definition, predicate] -> predicate
     end
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
   # 64 lowercase hex characters, deterministic given the counter -- never
@@ -208,25 +188,10 @@ defmodule Letflow.Definitions.PromotionReviewMigrationTest do
 
   describe "REQ-035's promotion_reviews migration replayed into a provisioned tenant schema" do
     setup do
-      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-      tenant = insert_tenant!()
-
-      assert {:ok, %Registration{schema_name: schema_name}} =
-               TenantProvisioning.provision_tenant_schema(tenant.id)
-
-      # Registered before replay_migrations/2 runs, so a migration that raises still
-      # gets its schema dropped -- this database is shared with a concurrently running
-      # worktree and must not accumulate strays.
-      on_exit(fn ->
-        drop_schema!(schema_name)
-        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-      end)
-
-      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-      %{tenant: tenant, schema_name: schema_name}
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req035",
+        display_name: "REQ-035 Test Tenant"
+      )
     end
 
     # -------------------------------------------------------------------------------

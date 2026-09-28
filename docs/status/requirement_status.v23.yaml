@@ -638,3 +638,16 @@
       migration-seeded singleton row must be self-healing against abnormal
       process termination, not just correct under normal on_exit flow).
       PR merge commit and branch details recorded by ORCH's own merge step.
+
+  - req: REQ-420
+    event: started
+    agent: ORCH
+    at: 2026-09-28T02:56:00Z
+    note: >
+      CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml
+      (flutter analyze, flutter test, Android debug build) for
+      apps/mobile/**, sequenced immediately after REQ-419 so CI exists
+      before the next MOB requirement (REQ-421) merges. Selected by direct
+      user instruction continuing sequentially through the mobile chain
+      after REQ-419's merge. Branch feature/WF02-REQ420-20260928, pushed
+      from origin/main with no divergence (git pull --ff-only exited 0).

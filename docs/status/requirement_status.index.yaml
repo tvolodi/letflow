@@ -4610,8 +4610,14 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 20
+    entries: 21
     note: >
+      Incremented to 21 by ORCH's own REQ-420 "started" event append
+      (WF02-REQ420-20260928, 2026-09-28T02:56:00Z) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 21 on-disk entries. 653
+      lines / 38921 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior note preserved below.
+
       Incremented to 20 by ORCH, reconciled while merging origin/main into
       feature/WF02-REQ419-20260927 for Step Final (second reconciliation of
       this branch's run): origin/main had independently appended a further

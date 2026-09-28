@@ -28,12 +28,23 @@ affected_files:
   - docs/agents/protocols/ISSUE_QUEUE.md
 queue_ref: Q-285
 github_ref: GH-562
-status: open
+status: in_progress
 follow_up: >
   Filed as tvolodi/letflow-queue#5 (2026-08-22, ORCH LOOP-20260822-orch),
   cross-linked back to this record. Do not attempt a code fix in this repo
   -- the defect, if real, lives in letflow-queue's own get_next_task /
   GitHub-import logic, which is out of scope for this repo to change.
+
+  UPDATE (2026-09-28, ISSUE-FIXER, run ISS-0285-followup-20260928): root
+  cause conclusively localized and fixed in tvolodi/letflow-queue, but the
+  fix is NOT YET merged or deployed, so this record stays `in_progress`
+  rather than `resolved` -- the underlying defect (already-resolved issues
+  re-surfacing as claimable get_next_task results) is still live in
+  production until a human or a dedicated future run reviews, merges, and
+  deploys tvolodi/letflow-queue#7. See `second_diagnosis` below for the
+  root cause and fix detail, and `further_occurrences` for this session's
+  recurrences (ISS-0808, ISS-0809, ISS-0774/ISS-0776) that prompted
+  revisiting this record.
 diagnosis:
   diagnosed_by: ORCH (LOOP-20260822-orch)
   diagnosed_at: 2026-08-22T18:30:00Z
@@ -100,3 +111,78 @@ further_occurrences:
       already resolved, no rework needed). Recommend attaching this
       occurrence to tvolodi/letflow-queue#5 as a fourth data point,
       specifically the updated_at-near-claim-time observation.
+  - note: >
+      This exact class recurred repeatedly across this session
+      (2026-09-24..2026-09-28): ISS-0808, ISS-0809, ISS-0774/ISS-0776, and
+      others, each requiring the same manual "check docs/issues/*.yaml for
+      an already-resolved match, release queue task done, redo no work"
+      workaround this record already documents for ISS-0164/ISS-0129/
+      ISS-0128/ISS-0119. Volume of recurrence is what prompted the
+      second_diagnosis below rather than filing yet another duplicate
+      occurrence note.
+second_diagnosis:
+  diagnosed_by: ISSUE-FIXER (run ISS-0285-followup-20260928)
+  diagnosed_at: "2026-09-28T00:00:00Z"
+  method: >
+    Cloned tvolodi/letflow-queue fresh and read README.md's "GitHub Issues
+    sync" section plus lib/letflow_queue/tasks.ex in full (register_task/1,
+    get_next_task/1, import_open_github_issues/0, import_github_issue/1,
+    release_lock/2, tap_maybe_close_github_issue/2). Reproduced the defect
+    with a new regression test in the queue repo's own
+    test/letflow_queue/github_sync_test.exs, confirmed to FAIL against the
+    pre-fix code before writing the fix (mutation-testing discipline: the
+    test genuinely discriminates, not just passes trivially).
+  finding: >
+    H1/H2 from the original 2026-08-22 diagnosis are superseded. The
+    dedup-on-import check (`import_github_issue/1`'s `exists?` on
+    `github_issue_number`) works correctly and does not create duplicate
+    rows -- confirmed unchanged and still passing its own pre-existing
+    test ("does not re-import an issue whose number is already present on
+    an existing task"). The actual defect: `import_open_github_issues/0`
+    (called at the top of every `get_next_task/1`) ONLY ever adds a task
+    row for a `github_issue_number` not yet tracked locally. It never
+    revisits a number it already tracks. So once a task is created for a
+    given GitHub issue, nothing in the service ever again checks whether
+    that issue is still open on GitHub -- the only path that updates a
+    tracked task's status to "done" is `release_lock/2`, called
+    exclusively by the resolving agent/run itself. Whenever a fix landed
+    through any path that didn't end in a `release_lock(status: "done")`
+    call against the correct queue task id (a cross-host numbering
+    mismatch per the 2026-08-22 diagnosis's own note on ISS-0119/task 119;
+    a cherry-pick or direct commit that never touched the queue; a missed
+    step in a run's own close-out), the queue task -- and therefore
+    `get_next_task` -- had no way to ever find out. It stayed `status:
+    "open"`, unlocked, and eligible forever, and would be handed back out
+    on every subsequent `get_next_task` call from any host indefinitely.
+    This matches every documented occurrence including this session's
+    (ISS-0808, ISS-0809, ISS-0774/ISS-0776): in each case the local
+    `docs/issues/*.yaml` record was independently `resolved`, but the
+    linked queue task had never been released.
+  action_taken: >
+    Fixed in tvolodi/letflow-queue on branch
+    fix/iss-285-stale-closed-issue-resurfacing (PR
+    https://github.com/tvolodi/letflow-queue/pull/7, NOT merged). Added
+    `sync_stale_closed_tasks/1`, called from `import_open_github_issues/0`
+    right after the existing import step, reusing the same
+    `list_open_issues` response (no extra GitHub API call): any
+    currently `open` + unlocked + GitHub-linked task whose issue number is
+    no longer among the repo's open issues is transitioned to `"done"` --
+    the same terminal status a normal `release_lock(status: "done")`
+    would have produced. Locked tasks (an active worker holds them) are
+    deliberately left untouched. Added 3 regression tests to
+    test/letflow_queue/github_sync_test.exs under
+    `describe "get_next_task/1 stale-closed-issue reconciliation
+    (ISS-0285)"`; confirmed to fail against the pre-fix code and pass
+    against the fix; `mix precommit` (compile --warnings-as-errors,
+    deps.unlock --unused, format --check-formatted, full test suite)
+    green: 114 tests, 0 failures.
+
+    This PR is deliberately left OPEN, not merged -- letflow-queue is a
+    live, shared service other concurrently-running sessions depend on
+    for their own task coordination, and this run has no authority to
+    restart/redeploy it out from under them. A human or a dedicated
+    future run must review, merge, and deploy it before this record can
+    honestly move to `resolved`/`done`. Until then this record stays
+    `in_progress`: the fix exists and is verified in isolation, but the
+    live defect this record describes is still reproducible in
+    production.

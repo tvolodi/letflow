@@ -3944,3 +3944,29 @@ coordinator should check the actual repo/PR state directly (`git status`,
 non-response -- the state check here confirmed real, verified progress
 each time, which is what made taking over low-risk rather than guessing
 blind.
+
+## A test-design-gate PASS narrative reads as covering a multi-clause acceptance criterion when it only covers one clause (2026-09-29, ORCH/TEST-DESIGN-VALIDATOR, ISS-0880)
+
+REQ-421's AC3 had two clauses joined by "and": (1) no tenant-content
+route reachable before two specific API calls both resolve, (2) a module
+absent from `installed_modules` has no route. A merged TEST-DESIGN-
+VALIDATOR handoff (PR #1954) wrote a PASS summary for "AC3" that
+described only clause 2's test (`route_table_test.dart`) in detail and
+never separately addressed clause 1 — the summary read as complete
+because it was fluent and specific about *something* real, not because
+it actually covered the whole criterion. A concurrent sibling run's
+TEST-DESIGN-VALIDATOR pass on the same requirement caught the gap only
+by explicitly splitting the criterion's own "and" into two separate
+line items and checking each independently — the missing clause had
+*zero* test anywhere, not a weak or partial one, so the check was cheap
+once framed that way.
+
+**Correct approach for TEST-DESIGN-VALIDATOR (and any gate reading a
+multi-clause acceptance criterion):** when a criterion's text contains
+"and"/"also"/a semicolon-separated list, decompose it into its literal
+clauses first and require a named test for each clause separately,
+before writing any summary. Do not accept a PASS narrative that reads
+as thorough about one clause as evidence the other clause was checked
+too — grep for the second clause's own subject (here: the phase/redirect
+mechanism, not the module-table mechanism) across the test files before
+concluding coverage exists.

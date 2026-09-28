@@ -1,0 +1,79 @@
+id: ISS-0880
+title: >
+  TEST-DESIGN-VALIDATOR gave a false PASS on REQ-421 (MOB-2)'s AC3: its
+  first clause (no tenant-content route reachable before /me/memberships
+  and /me/modules both resolve) had zero test coverage, though the gate's
+  own handoff record claimed full AC3 coverage
+discovered_by: TEST-DESIGN-VALIDATOR
+discovered_in_run: WF02-REQ421-20260928 (a concurrent sibling run of the
+  same requirement, running independently while PR #1954 was already
+  landing this requirement on main)
+discovered_at: "2026-09-29T02:20:00Z"
+tags:
+  - mobile
+  - test-coverage-gap
+  - pipeline-quality
+  - post-merge-finding
+severity: MINOR
+description: >
+  Two sibling sessions independently ran WF-02 for REQ-421 (MOB-2: mobile
+  tenant bootstrap / OIDC auth flow) concurrently. One merged first, as
+  PR #1954 (commit 4c82a020 on main), including a step-03b
+  (TEST-DESIGN-VALIDATOR) handoff that claims all 9 Dart-test acceptance
+  criteria pass, specifically stating for AC3: "test/bootstrap/
+  route_table_test.dart proves buildRouteTable omits a route entirely for
+  a non-installed module and that navigating to its path renders
+  go_router's not-found page" -- this addresses only AC3's SECOND clause.
+
+  AC3's full text (docs/requirements.yaml, REQ-421) has two clauses joined
+  by "and": (1) "a test asserts no tenant content route is reachable
+  before /me/memberships and /me/modules have both resolved", and (2) "a
+  module absent from installed_modules has no route (navigating to its
+  path shows the not-found screen)". Clause 1 -- the redirect-while-
+  bootstrapping gate in apps/mobile/lib/app.dart's `redirect` closure
+  (`if (phase != BootstrapPhase.success && state.matchedLocation != '/')
+  return '/';`) -- had, and as merged to main in #1954 still has, no test
+  anywhere exercising it. route_table_test.dart builds a bare GoRouter
+  independently of app.dart's real redirect wiring, so it cannot have
+  caught this gap; the merged step-03b handoff's PASS on AC3 is a false
+  positive, not a partial/ambiguous read.
+
+  The other sibling session's own TEST-DESIGN-VALIDATOR run (mine, ORCH,
+  re-running the same gate independently) caught this by reading the
+  actual test files against the actual acceptance-criterion text rather
+  than trusting a prior summary, FAILed once on it, and MOBILE-DEV fixed
+  it with apps/mobile/test/bootstrap/route_gating_test.dart (two widget
+  tests, `BootstrapPhase.unauthenticated` and `BootstrapPhase.loading`,
+  both pumping the real LetflowApp/_buildRouter tree so the actual
+  redirect closure runs, not a reimplementation of it). That fix was
+  validated (flutter analyze clean, flutter test 46/46, RELEASE-VALIDATOR
+  independent PASS) on the losing sibling's branch, which is superseded
+  by #1954 for REQ-421 itself but whose fix is still needed on main.
+
+  No production-code defect: apps/mobile/lib/app.dart's redirect logic
+  itself is correct (confirmed by both sibling sessions' REVIEWER passes
+  and by this fix's own tests going green against it unchanged). This is
+  purely a test-coverage gap that a HARD GATE should have caught and
+  didn't -- worth recording so a future TEST-DESIGN-VALIDATOR run treats
+  multi-clause acceptance criteria as requiring evidence for EACH clause
+  independently, not just a plausible-sounding overall narrative.
+severity_rationale: >
+  MINOR -- no shipped defect, `app.dart`'s redirect gate works correctly
+  and always has; this is a coverage/process gap, closed by adding the
+  missing test, not a behavior fix.
+fix_direction: >
+  Port apps/mobile/test/bootstrap/route_gating_test.dart (already written
+  and independently validated on the sibling branch
+  feature/WF02-REQ421-20260928) onto main unchanged. No production code
+  change needed.
+affected_files:
+  - apps/mobile/test/bootstrap/route_gating_test.dart
+  - apps/mobile/lib/app.dart (read-only reference; not changed by this fix)
+status: resolved
+resolution: >
+  Ported apps/mobile/test/bootstrap/route_gating_test.dart onto main via
+  branch fix/ISS0880-req421-ac3-route-gating. flutter analyze clean,
+  flutter test 46/46 (was 44) re-verified against main's actual
+  app.dart/navigation_bootstrap.dart, unchanged from the sibling branch's
+  validated version.
+queue_ref: Q-880

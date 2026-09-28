@@ -806,3 +806,43 @@
       docs/requirements.yaml's REQ-223 status: pending -> done in this same
       append, with a dated note (matching REQ-222's own "RECONCILED" note
       style) recording the shipped commit/branch pending that repo's merge.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-28T14:21:07Z"
+    note: >
+      WF03-ISS0875-20260928 done (queue task 875, GH#1936). Investigated
+      the reported 60s ExUnit.TimeoutError in a Postgrex insert path in
+      test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs's T4,
+      discovered incidentally by TEST-RUNNER during an unrelated
+      WF02-REQ421-20260928 mobile-only run. Confirmed via Step 0.5 this is
+      a different symptom than the closed ISS-0874/ISS-0766 records for
+      the same test file/T4 block (NoResultsError, not a hang/timeout) --
+      not foldable, needed its own diagnosis. ISSUE-FIXER (Step 1)
+      reproduced directly against current main (already includes
+      ISS-0766's ensure_seeded!/1 fix, commit f4e5abe3): a single T4 run
+      passed in 2.6s; four concurrent independent mix test OS processes
+      against the SAME shared database (a harder contention case than
+      partitioned runs, since PostgreSQL advisory locks are scoped
+      per-database) all passed in 3.3-9.5s, no hang anywhere in the
+      ensure_seeded!/1 insert or the advisory-lock path. The exact
+      originally-reported command (TEST_PARALLEL_N=4
+      scripts/test_parallel.sh, full suite) could not be completed
+      end-to-end in two independent attempts -- ISSUE-FIXER's own 10-minute
+      tool budget, then ORCH's background retry, killed outright by this
+      host's own low-memory reaper before producing any output -- both
+      environment-resource events, not test results, and stated explicitly
+      as the verdict's limitation rather than treated as negative evidence.
+      Closed docs/issues/ISS-0875.yaml status: no_defect (verdict_in_run/
+      verdict_at set, not resolved_in_run/resolved_at), full evidence block
+      per ISSUE_QUEUE.md's no_defect bar: measurement quoted, candidate
+      mechanisms named individually, method limitation stated, run-id/
+      timestamp recorded. No code file was changed -- diagnosis-only diff
+      (docs/issues/ISS-0875.yaml). GitHub issue #1936 closed with the
+      no_defect comment template. letflow-queue task 875 released
+      status: blocked (no_defect, never done -- per TASK_QUEUE.md's
+      release_lock section, avoids both falsely claiming resolution and
+      the LIFO issue-priority re-selection loop). PR merged via squash
+      following GIT_MERGE.md's full branch-and-PR procedure (no direct
+      push to main).

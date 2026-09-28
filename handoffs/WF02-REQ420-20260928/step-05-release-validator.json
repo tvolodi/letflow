@@ -1,0 +1,67 @@
+{
+  "handoff_id": "WF02-REQ420-20260928-step-05",
+  "run_id": "WF02-REQ420-20260928",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ420-20260928/step-05-release-validator.json",
+  "created_at": "2026-09-28T08:00:00Z",
+  "started_at": "2026-09-28T08:00:00Z",
+  "completed_at": "2026-09-28T09:15:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-420"],
+    "requirement_text": {
+      "REQ-420": "CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml -- flutter analyze, flutter test, Android debug build -- for apps/mobile/**\n\n.github/workflows/ci.yml has jobs `changes`, `backend` and `frontend` and no Flutter job (verified 2026-09-27). Without one, every MOB requirement after REQ-419 would merge with its tests unrun by CI. This requirement is sequenced immediately after REQ-419 and before REQ-421 (MOB-2 depends on it) so that CI exists before the second MOB requirement merges.\nOwner MOBILE-DEV, by the REQ-138 precedent (FRONTEND-DEV added the frontend job): the job runs flutter, which only MOBILE-DEV's capability row covers. REQ-417 widens MOBILE-DEV's write scope to this job.\n\nRead lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md in full first; ci.yml's own header warns not to \"simplify\" its path-filter choices. Follow the existing pattern exactly:\n1. `changes` job: add a `mobile` output. In the push branch (ISS-0840: push to main always runs every gate) and in both fail-safe branches (no usable base SHA, unreachable base SHA) and in the `fallback` step, emit mobile=true. In the diff branch, mobile is true iff a changed path matches ^(apps/mobile/|\\.github/workflows/ci\\.yml). Do not change the backend/frontend regexes. Do not add mobile to path-filter-outputs.txt (cd.yml does not deploy mobile).\n2. A new sibling job `mobile`, name \"Mobile gate (flutter analyze + test + build)\", runs-on ubuntu-latest, needs: changes, job-level `if: ${{ !cancelled() }}` (NOT always(), NOT a job-level path condition -- same reasoning as backend/frontend), defaults working-directory apps/mobile. Steps: checkout; actions/setup-java (Temurin 17); subosito/flutter-action with flutter-version-file apps/mobile/pubspec.yaml and cache enabled; then, each with step-level `if: needs.changes.outputs.mobile != 'false'` (fail-open): `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`.\n3. No other job's keys change.\n\nOPEN QUESTION (flagged, not resolved here): whether \"Mobile gate (...)\" becomes a third required status-check context on main per docs/migration/decisions/0018-branch-protection-posture.md. Changing branch protection is a 0018 amendment and belongs to REVIEWER/ORCH, not to this requirement. This requirement only makes the job eligible (always-runs, step-gated, so a required context would never be reported missing) and records the question in the job's header comment."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ420-20260928/step-01-code-designer.json",
+      "handoffs/WF02-REQ420-20260928/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ420-20260928/step-02b-mobile-dev.json",
+      "handoffs/WF02-REQ420-20260928/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ420-20260928/step-02d-reviewer.json",
+      "handoffs/WF02-REQ420-20260928/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      ".github/workflows/ci.yml",
+      "test/specs/REQ-420.md",
+      "handoffs/WF02-REQ420-20260928/step-01-code-designer.json",
+      "handoffs/WF02-REQ420-20260928/step-03-test-designer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-420 (CI Mobile gate job) before it is marked done. Steps 3b/4 (TEST-DESIGN-VALIDATOR, TEST-RUNNER) were skipped -- TEST-DESIGNER's scope test (step-03) found all 6 acceptance criteria are command-output/CI-run demonstrations with no ExUnit/Dart-test executable surface. Verify that scope-test reasoning independently, re-run the full local suite anyway per standing independent-verification duty, verify AC1/AC2/AC3/AC6 by direct inspection of .github/workflows/ci.yml, verify AC4/AC5 by polling this PR's own live CI run (PR #1926, run 36373390164) to completion and quoting its real per-job/per-step conclusions, and check docs/requirements.yaml + docs/status for staleness.",
+    "acceptance_criteria": [
+      "Full local suite re-run independently (scripts/test_parallel.sh) and quoted, plus independent mix letflow.check.test run, to confirm no regression -- not one of REQ-420's own 6 ACs but standing RELEASE-VALIDATOR duty",
+      "AC1 verified by running the exact python yaml.safe_load command against the actual file and quoting real output",
+      "AC2 verified by running git diff origin/main -- .github/workflows/ci.yml and confirming additions-only, no backend/frontend regex or key changes",
+      "AC3 verified by reading the actual if: conditions and mobile=true emission lines directly",
+      "AC4 and AC5 verified against this PR's own real, completed CI run (not a hypothetical/future run) via gh pr checks and gh run view --json jobs, with every Mobile gate step's conclusion and the Backend/Frontend gate conclusions quoted",
+      "AC6 verified by reading the mobile job's header comment directly out of the committed YAML",
+      "docs/requirements.yaml and docs/status/requirement_status index+current volume checked for staleness (REQ-420 should still show in_progress / only a started event)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-420 independently re-verified. Scope-test reasoning from step-03-test-designer.json confirmed correct on independent read: REQ-420's only artifact is .github/workflows/ci.yml, a declarative GitHub Actions workflow file, and all 6 acceptance criteria are, by their own text, command-output/CI-run demonstrations (python yaml introspection, git diff, direct file read, gh run view/gh pr checks against a real live run) with no ExUnit/Dart-test executable surface -- correctly routed straight to RELEASE-VALIDATOR skipping 3b/4. Standing independent-verification duty discharged first: full local suite re-run at TEST_PARALLEL_N=4 via scripts/test_parallel.sh -- first attempt hit a transient DB-connection-pool-exhaustion failure during partition-3 ecto.create/migrate (DBConnection.ConnectionError, 'connection not available ... dropped from queue after 5984ms'), the documented host-overload class (ISS-0219/ISS-0222); retried and it completed clean: partition 1: 1172 tests/5 properties/0 failures; partition 2: 1287 tests/0 properties/0 failures; partition 3: 1333 tests/1 property/0 failures; partition 4: 1229 tests/0 properties/0 failures; combined: 5021 tests, 6 properties, 0 failures (5027/5027 passed), zero crashed partitions. Independently also ran TEST_PARALLEL_N=4 mix letflow.check.test: exited 0, final line 'mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.' -- no ISS-0069-class failure, consistent with this branch's diff containing zero .ex/.exs test-helper files (REQ-420 is CI-YAML-only). AC1: ran `python -c \"import yaml,sys; d=yaml.safe_load(open('.github/workflows/ci.yml')); print(sorted(d['jobs'])); print(d['jobs']['mobile']['name']); print(d['jobs']['mobile']['if'])\"` directly -> ['backend', 'changes', 'frontend', 'mobile'] / Mobile gate (flutter analyze + test + build) / ${{ !cancelled() }} -- exact match. AC2: ran `git diff origin/main -- .github/workflows/ci.yml` directly -- confirmed additions-only: new `mobile:` output line in the changes job's outputs block, new `echo \"mobile=true\"` lines in the push branch and both fail-safe branches and the fallback step, a new diff-branch regex block `^(apps/mobile/|\\.github/workflows/ci\\.yml)` appended after the unchanged frontend regex, and the entirely new `jobs.mobile` block appended at end of file; zero removed/changed lines inside `backend` or `frontend`, backend/frontend regexes byte-for-byte unchanged. AC3: confirmed directly in the same diff -- all four flutter steps (Install dependencies/flutter pub get, Analyze, Test, Build debug APK) carry `if: needs.changes.outputs.mobile != 'false'`; `changes` job emits `mobile=true` in the push branch, both fail-safe branches ('No usable base SHA' and 'Base SHA not reachable'), and the `fallback` step. AC4/AC5: polled `gh pr checks 1926` (returned already-completed: Backend gate pass 14m41s, Frontend gate pass 1m44s, Mobile gate pass 6m3s, Detect changed paths pass 9s) then confirmed with `gh run view 36373390164 --json jobs` -- Mobile gate (databaseId 108774224795) conclusion 'success', its 8 steps all conclusion 'success': Check out repository, Set up Java (Temurin 17), Set up Flutter, Install dependencies, Analyze, Test, Build debug APK, plus post-steps; Backend gate (databaseId 108774224758) conclusion 'success' (14m39s span); Frontend gate (databaseId 108774224773) conclusion 'success' (1m44s span); Detect changed paths conclusion 'success'. No genuine failure of any kind on this run -- nothing to attribute or block on. AC6: read the mobile job's header comment directly from the committed YAML -- confirmed it records the 0018 required-status-check open question verbatim, attributing the decision to REVIEWER/ORCH and explaining why this job is made eligible (always-runs, step-gated) without resolving the question itself. Staleness check: docs/requirements.yaml REQ-420 entry (line 31221) status: in_progress, text matches step-01's context.requirement_text verbatim; docs/status/requirement_status.index.yaml confirms volume 23 (docs/status/requirement_status.v23.yaml) is current; that volume's REQ-420 entry (line 642) shows exactly one event -- 'started', agent ORCH, at 2026-09-28T02:56:00Z -- no premature done/verified event. Nothing drifted.",
+    "acceptance_criteria_evidence": {
+      "full_suite_rerun": "TEST_PARALLEL_N=4 scripts/test_parallel.sh, second attempt (first hit a transient host-overload DB-connection-pool exhaustion during partition-3 migrate, unrelated to this diff): partition 1: 1172 tests, 5 properties, 0 failures, exit 0; partition 2: 1287 tests, 0 properties, 0 failures, exit 0; partition 3: 1333 tests, 1 property, 0 failures, exit 0; partition 4: 1229 tests, 0 properties, 0 failures, exit 0; combined: 5021 tests, 6 properties, 0 failures (5027/5027 passed).",
+      "mix_check_test": "TEST_PARALLEL_N=4 mix letflow.check.test exited 0: 'mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.'",
+      "AC1": "python yaml.safe_load command run directly against .github/workflows/ci.yml -> ['backend', 'changes', 'frontend', 'mobile'] / Mobile gate (flutter analyze + test + build) / ${{ !cancelled() }}",
+      "AC2": "git diff origin/main -- .github/workflows/ci.yml quoted in full: additions-only (changes job's new mobile output + mobile=true emission lines in push/fail-safe/fallback branches + new diff-branch regex; entirely new mobile job block); zero backend/frontend lines touched.",
+      "AC3": "same diff quotes all four flutter steps' `if: needs.changes.outputs.mobile != 'false'` and the changes job's mobile=true emissions in push branch, both fail-safe branches, and fallback step.",
+      "AC4_AC5": "gh pr checks 1926 -> Backend gate pass 14m41s, Frontend gate pass 1m44s, Mobile gate pass 6m3s, Detect changed paths pass 9s. gh run view 36373390164 --json jobs -> Mobile gate conclusion success with all 8 steps (checkout, setup-java, setup-flutter, install deps/pub get, analyze, test, build debug apk, post-steps) conclusion success; Backend gate conclusion success; Frontend gate conclusion success.",
+      "AC6": "mobile job's header comment in .github/workflows/ci.yml quoted directly, recording the 0018 required-status-check open question as open and unresolved, attributed to REVIEWER/ORCH.",
+      "staleness_check": "docs/requirements.yaml REQ-420 status: in_progress, text matches handoff verbatim (line 31221). docs/status/requirement_status.index.yaml confirms v23 current; requirement_status.v23.yaml line 642 shows only a single 'started' event for REQ-420, no premature done/verified event."
+    },
+    "issues": [],
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

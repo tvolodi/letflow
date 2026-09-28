@@ -1,0 +1,69 @@
+{
+  "handoff_id": "WF02-REQ420-20260928-step-01b",
+  "run_id": "WF02-REQ420-20260928",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ420-20260928/step-01b-code-design-validator.json",
+  "created_at": "2026-09-28T03:12:55Z",
+  "started_at": "2026-09-28T03:12:55Z",
+  "completed_at": "2026-09-28T03:12:55Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-420"],
+    "requirement_text": {
+      "REQ-420": "CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml -- flutter analyze, flutter test, Android debug build -- for apps/mobile/**\n\n.github/workflows/ci.yml has jobs `changes`, `backend` and `frontend` and no Flutter job (verified 2026-09-27). Without one, every MOB requirement after REQ-419 would merge with its tests unrun by CI. This requirement is sequenced immediately after REQ-419 and before REQ-421 (MOB-2 depends on it) so that CI exists before the second MOB requirement merges.\nOwner MOBILE-DEV, by the REQ-138 precedent (FRONTEND-DEV added the frontend job): the job runs flutter, which only MOBILE-DEV's capability row covers. REQ-417 widens MOBILE-DEV's write scope to this job.\n\nRead lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md in full first; ci.yml's own header warns not to \"simplify\" its path-filter choices. Follow the existing pattern exactly:\n1. `changes` job: add a `mobile` output. In the push branch (ISS-0840: push to main always runs every gate) and in both fail-safe branches (no usable base SHA, unreachable base SHA) and in the `fallback` step, emit mobile=true. In the diff branch, mobile is true iff a changed path matches ^(apps/mobile/|\\.github/workflows/ci\\.yml). Do not change the backend/frontend regexes. Do not add mobile to path-filter-outputs.txt (cd.yml does not deploy mobile).\n2. A new sibling job `mobile`, name \"Mobile gate (flutter analyze + test + build)\", runs-on ubuntu-latest, needs: changes, job-level `if: ${{ !cancelled() }}` (NOT always(), NOT a job-level path condition -- same reasoning as backend/frontend), defaults working-directory apps/mobile. Steps: checkout; actions/setup-java (Temurin 17); subosito/flutter-action with flutter-version-file apps/mobile/pubspec.yaml and cache enabled; then, each with step-level `if: needs.changes.outputs.mobile != 'false'` (fail-open): `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`.\n3. No other job's keys change.\n\nOPEN QUESTION (flagged, not resolved here): whether \"Mobile gate (...)\" becomes a third required status-check context on main per docs/migration/decisions/0018-branch-protection-posture.md. Changing branch protection is a 0018 amendment and belongs to REVIEWER/ORCH, not to this requirement. This requirement only makes the job eligible (always-runs, step-gated, so a required context would never be reported missing) and records the question in the job's header comment."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF02-REQ420-20260928/step-01-code-designer.json"],
+    "artifacts_in": [
+      "lib/letflow/design/req420-ci-mobile-gate.md",
+      ".github/workflows/ci.yml",
+      "lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md",
+      "docs/migration/decisions/0018-branch-protection-posture.md"
+    ],
+    "owned_modules": [".github/workflows/ci.yml"]
+  },
+  "task": {
+    "description": "Independently validate lib/letflow/design/req420-ci-mobile-gate.md against REQ-420's 6 acceptance criteria (task.acceptance_criteria below) and CODE-DESIGN-VALIDATOR's standard checklist (no TBD/deferral language on an in-scope item, mobile-output edit fully specified for all 4 cases plus diff regex verbatim, full jobs.mobile block fully specified including every step's exact if: condition, no backend/frontend job keys or regexes touched, header comment records the 0018 open question, YAML-verbatim is the correct concreteness level per the CI-YAML exception -- not grounds for fail by itself). Cross-checked directly against docs/migration/decisions/0018-branch-protection-posture.md and lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md, and against the live .github/workflows/ci.yml, not merely CODE-DESIGNER's citations of them. FAIL immediately on any check failure, no partial credit.",
+    "acceptance_criteria": [
+      "python -c \"import yaml,sys; d=yaml.safe_load(open('.github/workflows/ci.yml')); print(sorted(d['jobs'])); print(d['jobs']['mobile']['name']); print(d['jobs']['mobile']['if'])\" prints ['backend', 'changes', 'frontend', 'mobile'], the mobile job name, and ${{ !cancelled() }}, quoted",
+      "git diff origin/main -- .github/workflows/ci.yml shows no removed or changed line inside the backend or frontend jobs and no change to the backend/frontend regexes -- only additions (the mobile output lines in changes, and the new job), quoted",
+      "every flutter step in the mobile job carries if: needs.changes.outputs.mobile != 'false', and the changes job emits mobile=true on the push branch, both fail-safe branches and the fallback step -- verified by quoting the relevant lines",
+      "the PR that lands this requirement shows the Mobile gate job running all four flutter steps to success, the Actions run URL and the four step conclusions quoted from gh run view --json jobs",
+      "a docs-only test PR or the same PR's job log shows the backend and frontend gates' conclusions unchanged by this edit, quoted from gh pr checks",
+      "the job's header comment records the 0018 required-context question as open, quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "validated_by": "CODE-DESIGN-VALIDATOR",
+    "validated_at": "2026-09-28T03:12:55Z",
+    "design_artifact": "lib/letflow/design/req420-ci-mobile-gate.md",
+    "acceptance_criteria_check": [
+      {"ac": "AC1 job list/name/if literal strings", "status": "COVERED", "ref": "design §3 job block: name 'Mobile gate (flutter analyze + test + build)', if: ${{ !cancelled() }}, verbatim; §5 maps to the exact python one-liner expected output"},
+      {"ac": "AC2 git diff shows only additions to changes job, no backend/frontend line changed, regexes untouched", "status": "COVERED", "ref": "design §2a-2g show every changes-job edit as before/after blocks, each a pure insertion alongside existing backend=/frontend= lines; §4 states explicitly no backend/frontend keys touched -- confirmed independently against live .github/workflows/ci.yml (read in full), the backend regex (^(lib/|priv/repo/migrations/|test/|mix\\.exs|mix\\.lock|\\.tool-versions|config/|\\.github/workflows/ci\\.yml)) and frontend regex (^(web/|\\.github/workflows/ci\\.yml)) are exactly as the design says they remain"},
+      {"ac": "AC3 every flutter step has the fail-open if:, changes job emits mobile=true on push/both fail-safes/fallback", "status": "COVERED", "ref": "design §2b/2c/2d/2f each show the added echo \"mobile=true\" line; §3 four flutter steps each carry if: needs.changes.outputs.mobile != 'false' verbatim"},
+      {"ac": "AC4 PR run shows all four flutter steps succeeding, quoted from gh run view", "status": "COVERED (correctly deferred as live-CI verification)", "ref": "design §5 item 2 explicitly flags this as 'implementer's job once this design is built and pushed; not satisfiable at design time... flagged, not silently resolved' -- same treatment REQ-419's design gave its own live-CI-only ACs (AC3/AC7), which this project's prior CODE-DESIGN-VALIDATOR pass (WF02-REQ419) accepted as correct, not a TBD"},
+      {"ac": "AC5 backend/frontend gates' conclusions unchanged on this PR, quoted from gh pr checks", "status": "COVERED (correctly deferred as live-CI verification)", "ref": "design §5 item 5, same treatment as AC4 -- follows directly from §4's 'no keys change' guarantee, live verification is implementer's job"},
+      {"ac": "AC6 header comment records the 0018 open question as open", "status": "COVERED", "ref": "design §3 job header comment block states the OPEN QUESTION verbatim, matching REQ-420's own wording ('belongs to REVIEWER/ORCH, not to this requirement')"}
+    ],
+    "standard_checklist": {
+      "no_TBD_or_deferral_on_in_scope_item": "PASS -- grep for TBD/deferred/unspecified language in the design doc found none; AC4/AC5 are explicitly flagged as live-CI verifications outside design-time scope (not silently resolved, not left ambiguous for the implementer to guess), which is the correct treatment for a claim that genuinely cannot be satisfied before a real CI run exists, consistent with core-directives' 'Never Call a Red Pipeline OK Without a Source'",
+      "changes_job_mobile_output_edit_fully_specified_all_4_cases_plus_regex": "PASS -- §2b (push branch), §2c (fail-safe: no usable base SHA), §2d (fail-safe: base SHA unreachable), §2f (fallback step) each show the exact added echo \"mobile=true\" line as a before/after block against the live file's real current text (independently confirmed matching .github/workflows/ci.yml lines 160-217); §2e gives the exact diff-branch regex block verbatim, ^(apps/mobile/|\\.github/workflows/ci\\.yml), matching REQ-420's own instruction character-for-character; §2g confirms path-filter-outputs.txt is correctly left untouched per REQ-420's explicit instruction",
+      "full_mobile_job_block_fully_specified": "PASS -- §3's fenced YAML gives the complete job: name, runs-on: ubuntu-latest, needs: changes, job-level if: ${{ !cancelled() }}, defaults.run.working-directory: apps/mobile, and all seven steps (checkout@v4, setup-java@v4 temurin 17, subosito/flutter-action@v2 with flutter-version-file/cache, then flutter pub get / analyze / test / build apk --debug each with the exact literal if: needs.changes.outputs.mobile != 'false') -- nothing left implicit",
+      "no_backend_frontend_job_keys_or_regexes_touched": "PASS -- independently diffed design's stated backend/frontend regex text against the live ci.yml file (lines 199, 205): byte-for-byte identical to what the design claims remains unchanged; §4 states no jobs.backend/jobs.frontend key changes, and §3's new job is a pure sibling addition, order-independent per the design's own note",
+      "header_comment_records_0018_open_question": "PASS -- §3's job comment block (design lines 224-232) states the open question in full, cross-checked against 0018's own text ('Whether a third required check... should be added later... this record does not pre-authorize or block that, it only sets the process') -- consistent, no contradiction; the design correctly does NOT add mobile to 0018's contexts list",
+      "yaml_verbatim_concreteness_is_the_correct_level": "PASS (not a defect) -- per this project's documented CI-YAML exception (also applied to lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md and the REQ-136/138 inline design note in ci.yml itself), the literal target YAML is the design artefact here; the YAML itself was checked against the live file and the cited decision/design docs and found correct, not merely present"
+    },
+    "cross_check_against_0018_and_iss0591_iss0592": "Independently re-read both documents in full (not from CODE-DESIGNER's citation). 0018 fixes exactly two required-status-check contexts (Backend gate, Frontend gate) and explicitly leaves 'whether a third required check should be added later' as an open, unresolved process question owned by REVIEWER/ORCH -- the design's stance (mobile is NOT added as a required context, and this is recorded as an open question in the job comment rather than silently decided either way) is consistent with 0018's own text, not a re-decision of it. iss0591-iss0592's design establishes the exact needs:changes / if: ${{ !cancelled() }} (not always()) / step-level fail-open != 'false' / defaults.run.working-directory pattern that backend and frontend both use today (confirmed against the live ci.yml file, lines 246-419); the REQ-420 design's jobs.mobile block reproduces this pattern element-for-element with the same rationale restated (not merely asserted) in its own §0 and §3 notes. No contradiction found between the design and either source document.",
+    "additional_note": "The design's own §6 flags one non-blocking open question beyond the required 0018 one (whether flutter pub get should be split out as an unconditional step like backend's setup/gated-run split, rather than grouped under the same fail-open condition as the other three flutter steps) -- this follows REQ-420's own literal instruction (all four steps listed under one if: condition) and is correctly flagged for REVIEWER rather than silently resolved either way. Not grounds for FAIL: it does not leave any acceptance criterion ambiguous, and the design states which choice it made and why.",
+    "verdict": "PASS",
+    "next_action": "Route to MOBILE-DEV (Step 2b-mobile)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

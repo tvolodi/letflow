@@ -422,22 +422,24 @@ resolving run-id and timestamp, then `release_lock(status: "done")`.
 discretion over selection" (see `TASK_QUEUE.md`'s Hard Rule exception) and may proceed
 without `get_next_task` choosing it — but the task must still be locked before work
 starts and released when done, or nothing stops a second host's own `get_next_task`
-call from independently claiming the same still-open item. Concretely:
+call from independently claiming the same still-open item. **As of decision 0017,
+`GET /tasks` replaces the old bounded claim-then-release lookup dance** — that dance (a
+real `get_next_task` call spent purely to look something up, released back on a
+mismatch) existed solely because there was no side-effect-free lookup; `GET /tasks`
+is that lookup and performs no write of any kind. Concretely:
 
 1. If the issue's `docs/issues/ISS-NNNN.yaml` already records a `queue_task_id`: call
    `set_lock` directly on that id. (It works on any currently-unlocked task you already
    know the id of, not only a task this same agent held before — see
    `TASK_QUEUE.md`'s `set_lock` section.)
 2. If `queue_task_id` is null or the issue predates this field (filed under the
-   pre-2026-08-20 version of this protocol, see "Updated" note above): make **exactly
-   one** real `get_next_task` call (the run's real `agent_id` — never a disposable
-   "probe" id). If the returned task's `github_issue_number` matches, proceed locked and
-   backfill `queue_task_id` into the yaml immediately, closing this gap for next time. If
-   it doesn't match, `release_lock` it back to `open` (no `status`) immediately, state
-   the mismatch plainly, and do not chase further down the priority stack — repeated
-   claim/release thrashes a shared service other hosts depend on. (What you got back
-   instead is itself real, current information — a different open task exists at higher
-   priority — surface it, don't just discard it.)
+   pre-2026-08-20 version of this protocol, see "Updated" note above): call
+   `GET /tasks` (optionally `?task_type=issue`) and find the row whose
+   `github_issue_number` matches. If found, `set_lock` its id, then backfill
+   `queue_task_id` into the yaml immediately, closing this gap for next time. If no row
+   matches, state that plainly and do not chase further down the priority stack — a
+   `GET /tasks` lookup never claims anything, so there is nothing to hand back on a
+   mismatch, only a lookup that found no match.
 3. On completion, `release_lock(status: "done")` the task actually locked in step 1/2.
    If step 2 never found a match, note explicitly that the queue's mirror stayed out of
    sync for this item; this is bounded (not indefinite) risk once the GitHub issue is

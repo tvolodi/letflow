@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ421-20260928/step-01b-code-design-validator.json",
   "created_at": "2026-09-28T05:05:00Z",
   "started_at": "2026-09-28T05:05:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-28T05:45:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -37,7 +37,15 @@
       "Cross-module dependencies (flutter_appauth, flutter_secure_storage, dio, routing package, riverpod/whatever REQ-419 established) listed explicitly"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified all 9 of step-01's acceptance criteria against lib/letflow/design/req421-mobile-tenant-bootstrap.md itself (not step-01's summary). Per-criterion: AC1 PASS (§2.2 getUnauthenticated/skipAuth mechanism -- no Authorization header; §3.1 table sources issuer=config.realmUrl, clientId=config.clientId, fixed redirectUrl literal, PKCE S256 package default). AC2 PASS (§4.1 keys TenantTokenStore by realmUrl not slug; §5.3 states no module-level tenant singleton -- all values threaded per-invocation; §7.2 active-realm pointer overwritten only at BootstrapSuccess, before any tenant-content request). AC3 PASS (§5.2 ordering invariant + §5.4 buildRouteTable: a moduleId absent from installedModules gets no route entry at all, router redirect gates all paths until BootstrapSuccess). AC4 PASS (§5.2 step 4 explicitly reads memberships[0] only, deletes tokens via tokenStore.delete before returning BootstrapFailure(tenantNotFound) even if a later entry matches; 403 branch skips the check and proceeds to /me/modules). AC5 PASS (§1.1 parser: https-only, single-label subdomain match, platformHost-as-parameter with no global read, returns null never throws; §1.4 AndroidManifest intent-filter XML quoted with autoVerify=\"false\" and android:host=\"*.${platformHost}\", App-Link verification recorded DEFERRED with an explicit infrastructure-gap reason, iOS entitlement also DEFERRED consistent with REQ-419 §9). AC6 PASS -- verified byte-for-byte against the live files: docs/mobile/requirements.md line 63 and docs/mobile/architecture.md line 69 match the design's quoted 'current text' exactly, and §8's appended notes are additive-only, original five-key text preserved. AC7 PASS (§6 table: 4 named widgets/keys -- tenant-not-found-screen, network-unavailable-screen, oidc-failure-screen, secure-storage-unavailable-screen -- each with an exact, non-overlapping trigger, explicit 'never a generic error widget substituting for one of these four'). AC8 PASS (§7.1 states exactly one Dio(...) call site inside ApiClient.create in lib/api/api_client.dart; confirmed via git grep that apps/mobile/lib currently has zero Dio( hits, consistent with pre-implementation state -- design commits MOBILE-DEV to the single-site invariant). AC9 PASS (§11 resolution table maps all 9 criteria to concrete sections; grepped the doc for TBD/deferral language -- the only hit is the AC9 table's own restatement of the criterion text, not an actual deferral; all five open questions in §12 are flagged as non-blocking, reversible naming/build-tooling choices, not missing required elements). Cross-checked design's citations of lib/letflow/routers/mobile_tenant_config.ex (six-key mobile_config_map/2 shape, default_realm/client_id fallback) and lib/letflow/routers/me.ex (CANDIDATE excluded from :MembershipsRead giving 403; :MyModulesRead granted to all roles; first-entry-prepended membership response shape) directly against those source files -- all citations accurate. Scanned every code block in the design doc for implementation bodies (return/if/for/while/switch/try-catch patterns): none found outside one prose sentence using the word 'return' in running text -- every code block is a class/field/signature/enum declaration only, no executable Dart bodies. Cross-module dependencies (§9 table) explicitly list flutter_appauth, flutter_secure_storage, dio, go_router, flutter_riverpod, plus both backend router modules and every app-internal file touched -- all present, none left implicit. No FAIL findings on any check.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ421-20260928/step-01b-code-design-validator.json"
+    ],
+    "issues": [],
+    "next_action": "Route to SECURITY-REVIEWER (required hard gate per this design's own header, before REVIEWER/TEST-DESIGNER) to gate the authentication flow and token handling in lib/letflow/design/req421-mobile-tenant-bootstrap.md."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

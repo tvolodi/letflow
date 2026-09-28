@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF02-REQ420-20260928-step-03",
+  "run_id": "WF02-REQ420-20260928",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ420-20260928/step-03-test-designer.json",
+  "created_at": "2026-09-28T03:30:00Z",
+  "started_at": "2026-09-28T03:30:00Z",
+  "completed_at": "2026-09-28T03:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-420"],
+    "requirement_text": {
+      "REQ-420": "CI: add a path-filtered Mobile gate job to .github/workflows/ci.yml -- flutter analyze, flutter test, Android debug build -- for apps/mobile/**\n\n.github/workflows/ci.yml has jobs `changes`, `backend` and `frontend` and no Flutter job (verified 2026-09-27). Without one, every MOB requirement after REQ-419 would merge with its tests unrun by CI. This requirement is sequenced immediately after REQ-419 and before REQ-421 (MOB-2 depends on it) so that CI exists before the second MOB requirement merges.\nOwner MOBILE-DEV, by the REQ-138 precedent (FRONTEND-DEV added the frontend job): the job runs flutter, which only MOBILE-DEV's capability row covers. REQ-417 widens MOBILE-DEV's write scope to this job.\n\nRead lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md in full first; ci.yml's own header warns not to \"simplify\" its path-filter choices. Follow the existing pattern exactly:\n1. `changes` job: add a `mobile` output. In the push branch (ISS-0840: push to main always runs every gate) and in both fail-safe branches (no usable base SHA, unreachable base SHA) and in the `fallback` step, emit mobile=true. In the diff branch, mobile is true iff a changed path matches ^(apps/mobile/|\\.github/workflows/ci\\.yml). Do not change the backend/frontend regexes. Do not add mobile to path-filter-outputs.txt (cd.yml does not deploy mobile).\n2. A new sibling job `mobile`, name \"Mobile gate (flutter analyze + test + build)\", runs-on ubuntu-latest, needs: changes, job-level `if: ${{ !cancelled() }}` (NOT always(), NOT a job-level path condition -- same reasoning as backend/frontend), defaults working-directory apps/mobile. Steps: checkout; actions/setup-java (Temurin 17); subosito/flutter-action with flutter-version-file apps/mobile/pubspec.yaml and cache enabled; then, each with step-level `if: needs.changes.outputs.mobile != 'false'` (fail-open): `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`.\n3. No other job's keys change.\n\nOPEN QUESTION (flagged, not resolved here): whether \"Mobile gate (...)\" becomes a third required status-check context on main per docs/migration/decisions/0018-branch-protection-posture.md. Changing branch protection is a 0018 amendment and belongs to REVIEWER/ORCH, not to this requirement. This requirement only makes the job eligible (always-runs, step-gated, so a required context would never be reported missing) and records the question in the job's header comment."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      ".github/workflows/ci.yml",
+      "handoffs/WF02-REQ420-20260928/step-01-code-designer.json"
+    ],
+    "owned_modules": ["test/specs/REQ-420.md"]
+  },
+  "task": {
+    "description": "Run WF-02 Step 3's scope test against REQ-420. Its only artifact is .github/workflows/ci.yml, a GitHub Actions workflow definition (declarative job/step wiring, not application logic). Judge whether the 6 acceptance criteria in step-01's task.acceptance_criteria have any executable surface an ExUnit/Dart test could meaningfully exercise, or whether they are all command-output/inspection demonstrations (python yaml.safe_load introspection, git diff, gh run view, gh pr checks, direct file read) -- per the same pattern already applied to REQ-419's AC1/AC3/AC5/AC7/AC8.",
+    "acceptance_criteria": [
+      "Read .github/workflows/ci.yml's diff and REQ-420's 6 acceptance criteria before deciding",
+      "If no executable surface exists: write test/specs/REQ-420.md recording the scope-test verdict and mapping each of the 6 criteria to its actual (non-test) verification method, write no test code, and route directly to RELEASE-VALIDATOR (Step 5), skipping Steps 3b/4",
+      "If executable surface exists: write test/specs/REQ-420.md and real test code per the normal Step 3 procedure",
+      "Do not manufacture a test (e.g. grepping YAML for a keyword) that proves nothing about real behavior just to produce an artifact"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test applied: REQ-420's only change is .github/workflows/ci.yml, a GitHub Actions workflow definition (declarative if:/needs:/uses:/run: wiring). Read the diff (additions-only in `changes` job's mobile output/fail-safe branches/fallback step, plus the new sibling `mobile` job block, per the requirement text) and all 6 acceptance criteria from step-01-code-designer.json. All six are, by their own text, verified by command execution against the real file/real CI run rather than by test code: AC1 (python yaml.safe_load introspection), AC2 (git diff origin/main inspection for additions-only), AC3 (direct grep/read of the if:-conditions and mobile=true emission lines), AC4 (gh run view --json jobs against this PR's own live Actions run -- inherently requires a real push, not fabricable by a local test), AC5 (gh pr checks against the same live run), AC6 (reading the header comment text directly out of the committed YAML). None exercise application logic; AC4/AC5 specifically cannot be satisfied by any test file since they require GitHub Actions to have actually run this exact commit. Writing a test that greps ci.yml for a keyword would assert on YAML string structure rather than real behavior -- exactly the manufactured-busywork anti-pattern core-directives.md and docs/anti-patterns.md warn against. Wrote test/specs/REQ-420.md documenting this verdict and mapping each of the 6 criteria to its real verification method. Wrote no test code (none applicable). This mirrors the REQ-419 precedent for its own command-output-demonstration criteria (AC1/AC3/AC5/AC7/AC8 there).",
+    "artifacts_out": ["test/specs/REQ-420.md"],
+    "issues": [],
+    "next_action": "Route directly to RELEASE-VALIDATOR (Step 5) -- Steps 3b/4 skipped, RELEASE-VALIDATOR verifies acceptance criteria by reading .github/workflows/ci.yml directly and by inspecting this PR's own CI run once pushed, rather than by test result."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -46,6 +46,7 @@ defmodule Letflow.TenantProvisioning.TaskCompletedBackfillTest do
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.Registry.EventType
   alias Letflow.Identity.Tenant
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Backfill
   alias Letflow.TenantProvisioning.Registration
@@ -54,22 +55,14 @@ defmodule Letflow.TenantProvisioning.TaskCompletedBackfillTest do
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers -- duplicated from
   # test/letflow/engine_form_expression_reevaluation_test.exs per design doc §5.2,
-  # with provisioned_tenant/0's sandbox-mode handling brought in line with
-  # test/letflow/tenant_provisioning/column_promotion_test.exs's ISS-0580-safe
-  # pattern instead (SECURITY-REVIEWER rework -- see moduledoc).
+  # with provisioned_tenant/0 now provisioning via Letflow.TenantFixture
+  # (ISS-0112 / GH#366), teardown: false because this file wraps provisioning
+  # in SandboxAutoMode.provision!/2 and needs its own on_exit to force :auto
+  # mode back on before the drop/delete cleanup and restore :manual afterward
+  # (the ISS-0580 leak fix) -- TenantFixture's own default teardown does not
+  # do that composition, so it stays disabled and this file's pre-existing
+  # on_exit is kept untouched, matching category A's documented pattern.
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("iss0583"),
-        display_name: "ISS-0583 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
 
   defp drop_schema!(schema_name) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
@@ -77,7 +70,12 @@ defmodule Letflow.TenantProvisioning.TaskCompletedBackfillTest do
 
   defp provisioned_tenant do
     SandboxAutoMode.provision!(Letflow.Repo, fn ->
-      tenant = insert_tenant!()
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        TenantFixture.provisioned_tenant!(
+          slug_prefix: "iss0583",
+          display_name: "ISS-0583 Test Tenant",
+          teardown: false
+        )
 
       on_exit(fn ->
         # ISS-0580 rework: this callback runs AFTER the test process (and thus
@@ -91,13 +89,13 @@ defmodule Letflow.TenantProvisioning.TaskCompletedBackfillTest do
         # this exact hazard.
         Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
-        case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+        case TenantProvisioning.schema_name_for_tenant(tenant_id) do
           {:ok, schema_name} -> drop_schema!(schema_name)
           {:error, :invalid_tenant_id} -> :ok
         end
 
-        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
+        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
 
         # REVIEWER fix (ISS-0580): restore :manual after cleanup -- leaving the
         # force-:auto above unrestored would reopen this exact leak, once per
@@ -107,12 +105,7 @@ defmodule Letflow.TenantProvisioning.TaskCompletedBackfillTest do
         SandboxAutoMode.exit_auto_mode!(Letflow.Repo)
       end)
 
-      assert {:ok, %Registration{schema_name: schema_name}} =
-               TenantProvisioning.provision_tenant_schema(tenant.id)
-
-      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-      %{tenant_id: tenant.id, schema_name: schema_name}
+      %{tenant_id: tenant_id, schema_name: schema_name}
     end)
   end
 

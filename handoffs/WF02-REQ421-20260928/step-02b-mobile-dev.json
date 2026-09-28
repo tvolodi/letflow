@@ -93,7 +93,7 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ421-20260928",
-      "commit_sha_list": ["PENDING-FILLED-AFTER-COMMIT"],
+      "commit_sha_list": ["43e529b071bda2c354382c45416d79363a7c1b87"],
       "remote_branch": "origin/feature/WF02-REQ421-20260928",
       "push_status": "ok",
       "pr_url": null,

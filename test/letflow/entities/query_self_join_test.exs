@@ -17,51 +17,48 @@ defmodule Letflow.Entities.QuerySelfJoinTest do
   alias Letflow.Entities.Records
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.ColumnPromotion
   alias Letflow.TenantProvisioning.Registration
 
   import Ecto.Query
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req324-self-join"),
-        display_name: "REQ-324 Self-Join Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
+  # ---------------------------------------------------------------------------------
+  # Fixtures -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366),
+  # teardown: false because this file's own on_exit also deletes its
+  # domain-specific ColumnPromotion rows before the Tenant row (needed:
+  # entity_column_promotions.tenant_id has on_delete: :nothing, so it must
+  # be cleared before Tenant is deleted or the standard fixture teardown's
+  # own Tenant delete would violate the FK).
+  # ---------------------------------------------------------------------------------
 
   defp drop_schema!(schema_name) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
   end
 
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req324-self-join",
+        display_name: "REQ-324 Self-Join Test Tenant",
+        teardown: false
+      )
 
     on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+      case TenantProvisioning.schema_name_for_tenant(tenant_id) do
         {:ok, schema_name} -> drop_schema!(schema_name)
         {:error, :invalid_tenant_id} -> :ok
       end
 
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(cp in ColumnPromotion, where: cp.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
+      Repo.delete_all(from(cp in ColumnPromotion, where: cp.tenant_id == ^tenant_id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
     end)
 
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
     assert {:ok, _seed_result} = Letflow.Entities.EventTypes.seed!(schema_name)
 
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   defp create_active_definition!(schema, definition) do

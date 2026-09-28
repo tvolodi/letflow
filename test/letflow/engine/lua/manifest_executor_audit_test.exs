@@ -27,43 +27,13 @@ defmodule Letflow.Engine.Lua.ManifestExecutorAuditTest do
   alias Letflow.Engine.Lua.Manifest
   alias Letflow.Engine.LuaScriptAudit
   alias Letflow.Engine.LuaScriptAudit.AuditRecord
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(
-        %{
-          slug: Letflow.TenantSlugFixture.unique_slug("req158"),
-          display_name: "REQ-158 Test Tenant"
-        },
-        :disabled
-      )
-      |> Repo.insert!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} ->
-          Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-
-        {:error, :invalid_tenant_id} ->
-          :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req158",
+      display_name: "REQ-158 Test Tenant"
+    )
   end
 
   defp audit_rows(schema_name) do

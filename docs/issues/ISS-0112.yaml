@@ -209,7 +209,34 @@ progress_2026_09_28: >
   fix/ISS0112-batch1-tenant-fixture-migration-20260928, squash-merge commit
   recorded once merged).
 
-  9 batches remain (of the plan's 63 files-in-scope total: 31 category-D, 7
+  Batch 2 of 10 merged next: the 8 category-D/plain-default files --
+  test/letflow/definitions/snapshot_store_test.exs,
+  test/letflow/engine_form_expression_reevaluation_test.exs,
+  test/letflow/engine/lua/manifest_executor_audit_test.exs,
+  test/letflow/engine/lua_script_audit_test.exs,
+  test/letflow/engine/migrations_test.exs,
+  test/letflow/engine_plugin_error_routing_test.exs,
+  test/letflow/engine/service_task_routing_test.exs,
+  test/letflow/engine/snapshot_writer_test.exs -- migrated the same way onto
+  Letflow.TenantFixture.provisioned_tenant!/1. Each file's now-dead
+  insert_tenant!/1 and drop_schema!/1 helpers removed, along with now-unused
+  Tenant/TenantProvisioning/Registration aliases, except where a test still
+  calls TenantProvisioning directly (lua_script_audit_test.exs's and
+  engine/migrations_test.exs's own registration-order tests), where the
+  alias was kept.
+
+  RELEASE-VALIDATOR fully PASSed: fresh isolated compile clean; exact 8-file
+  scope confirmed with no creep; 5/8 diffs spot-checked directly; 1478/1478
+  in-scope tests 3x; full suite 5027/5027 clean twice (including the
+  stricter `mix letflow.check.test`), after ruling out one transient
+  `:wallclock_timeout` false alarm on a Lua executor test under an
+  8-way-parallel partition as unrelated to this migration.
+
+  Merged via PR #1929 (branch
+  fix/ISS0112-batch2-tenant-fixture-migration-20260928, squash-merge commit
+  recorded once merged).
+
+  8 batches remain (of the plan's 63 files-in-scope total: 31 category-D, 7
   B-only, 4 A-only, 15 C-only, 3 A-and-B, 3 A-and-C -- see the plan's section 1
   and 2 for the full per-batch breakdown and ordering rationale). Status left
   `open`: ISS-0112 is not resolved until all 10 batches land. Queue task 180

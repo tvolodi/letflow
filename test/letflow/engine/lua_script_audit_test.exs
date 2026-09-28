@@ -37,9 +37,8 @@ defmodule Letflow.Engine.LuaScriptAuditTest do
   alias Letflow.Engine.LuaScriptAudit
   alias Letflow.Engine.LuaScriptAudit.AuditRecord
   alias Letflow.Engine.LuaScriptAudit.Executor
-  alias Letflow.Identity.Tenant
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   # ---------------------------------------------------------------------------------
   # Test-double Executor implementations (module scope -- @behaviour implementations
@@ -100,45 +99,14 @@ defmodule Letflow.Engine.LuaScriptAuditTest do
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req058"),
-        display_name: "REQ-058 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
   # Mirrors engine/migrations_test.exs's provisioned_tenant/0 exactly (this file's
-  # moduledoc). Provisions a real tenant and replays the full manifest.
+  # moduledoc). Provisions a real tenant and replays the full manifest, via
+  # Letflow.TenantFixture (ISS-0112 / GH#366).
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req058",
+      display_name: "REQ-058 Test Tenant"
+    )
   end
 
   defp table_exists_in_schema?(schema_name, table_name) do

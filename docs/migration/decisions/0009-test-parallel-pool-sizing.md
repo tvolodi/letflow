@@ -505,3 +505,125 @@ recording why with live evidence, and (b) adds a narrowly-scoped
 `LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD` env-var escape hatch used by exactly
 one call site (the ISS-0426 nested subprocess) to remove its one avoidable
 source of real DB connection pressure.
+
+## Addendum (2026-09-28, ISS-0287 reopened again — N-scaling gap) —
+   instrumentation-first response; decision (B)'s rejection of Option (C)
+   upheld, no ceiling added
+
+ISS-0287 reopened a second time (2026-08-28, TEST-RUNNER, WF02-REQ165-20260828):
+the same `too_many_connections`/`DBConnection.ConnectionError` signature as the
+original ISS-0287 fix reproduced 1-of-3 consecutive `scripts/test_parallel.sh`
+runs, this time at N=8 (auto-derived from `nproc` on that host), a value the
+formula's own regression test had never covered (only N=4 and N=16 were
+checked). See `lib/letflow/design/iss0287-pool-headroom-n-scaling.md` for the
+full design (CODE-DESIGN-VALIDATOR-PASSed) this addendum records the outcome of.
+
+**This reopening's own hypothesis was checked and disproven, not assumed.**
+The reopening's own stated theory — that each of the N partitions
+independently runs a copy of `tenant_schema_reaper_test.exs`'s ISS-0110 guard
+test, so the non-pooled-connection reserve should scale with N — is false as
+literally stated: `mix test --partitions N` (Mix's own source,
+`filter_by_partition/3`) assigns whole test **files**, not individual tests,
+to exactly one partition each, so that file (and the nested ISS-0426
+subprocess, the suite's only other non-pooled source) can only ever be loaded
+by one of the N partitions regardless of N. Multiplying
+`TEST_NONPOOL_CONNECTION_RESERVE` by N would have reserved against a scenario
+that structurally cannot occur.
+
+**The formula's own worst-case arithmetic was also re-derived algebraically,
+not just re-checked at a few points, and found NOT to degrade with N.** For
+any fixed `budget` (N-independent), `computed_pool = ⌊budget / N⌋` satisfies
+`N × computed_pool ≤ budget` for every positive integer N — the accounted
+margin (`usable_ceiling − N×TEST_POOL_SIZE − nonpool_reserve − headroom`) is a
+near-constant 2 connections at N=4, N=8, and N=16 alike under today's
+defaults, not a margin that shrinks as N grows. The literal premise "the
+reservation doesn't scale with N so it runs out at higher N" is not supported
+by the formula's own arithmetic — see the design doc §2/§3 for the full
+derivation.
+
+**What plausibly does scale with N, per the design's §3.1, is something the
+formula's four inputs cannot see at all: host oversubscription (more
+concurrent BEAM VMs contending for the same core count) and a
+birthday-paradox-shaped rise in the *observed* failure rate from running more
+concurrent partitions, each an independent chance at a transient
+one-connection overshoot — a timing effect, not an arithmetic one — plus,
+orthogonally, the possibility that a given host's real `max_connections`
+simply doesn't match the formula's assumed default at all.** None of these
+three candidate mechanisms was proven by this design; §5's measurement plan
+is designed to distinguish them empirically rather than guess.
+
+**Decision: instrumentation-first, per the design's exact recommendation — no
+N-ceiling added, decision (B) above (clamp `pool_size`, never reduce `N`)
+stands, unchanged and un-reopened.** Three additions were made to
+`scripts/test_parallel.sh`, all inert or opt-in at their shipped defaults:
+
+1. `TEST_PER_PARTITION_HEADROOM` (default 0): a new term in Step 1.5's
+   formula, `budget = usable_ceiling − headroom − nonpool_reserve − (N ×
+   per_partition_headroom)` — the structurally correct place for a margin
+   that scales with concurrently-running-partition count, once §5's
+   measurement produces a real, non-guessed value for it. Defaulting to 0
+   (not a guessed positive number) is deliberate: `N × 0 = 0` reduces the
+   formula to exactly today's behavior — verified directly, not merely
+   argued, by diffing this script's pre- and post-change Step 1.5 output at
+   N ∈ {1..32} with the knob unset; every value matched byte-for-byte.
+2. A host Postgres ceiling verification step (before Step 1.5, ISS-0287
+   §4.2): queries the live server's real `max_connections` and
+   `superuser_reserved_connections` (via `psql`, if available) and WARNs —
+   never hard-fails — on a mismatch against `TEST_MAX_CONNECTIONS`/
+   `TEST_SUPERUSER_RESERVED`'s configured/default values. This addresses the
+   third candidate mechanism above (an unverified, possibly wrong, ceiling
+   assumption) directly, without touching the clamp arithmetic at all.
+   Degrades silently-but-loudly (one WARN, script continues) when `psql`
+   isn't installed or the DB isn't reachable — this is evidence-gathering,
+   not a gate, and must never block a run that would otherwise pass.
+3. `TEST_PARALLEL_SAMPLE_CONNECTIONS` (default unset/off): an opt-in
+   `pg_stat_activity` connection-count sampler, polling once per second while
+   partitions run and logging to the run's own tmp_dir, to gather the
+   missing empirical evidence needed to distinguish the oversubscription/
+   collision-probability mechanism from the ceiling-mismatch mechanism the
+   next time this reopens. Zero cost unless explicitly enabled.
+
+**Why not decision (C) (cap auto-derived N) this time either.** The design's
+own §6 weighs this honestly rather than deferring: capping N would sidestep
+exactly the oversubscription mechanism a headroom term structurally cannot
+compensate for (it lives in OS/BEAM scheduling, not connection-count
+arithmetic) — but decision (B) above already rejected reducing N once, on the
+grounds that it throws away the parallelism REQ-113 was built to add, and
+this reopening's own evidence does not yet show that a per-partition headroom
+term (once measured) can't practically absorb the effect. Re-deciding (C) now
+would be exactly the "silently re-decide a locked decision" anti-pattern
+core-directives.md warns against — REQ-113's parallelism goal, and 0009's own
+prior weighing of it, are still on record and still apply. If §5's
+measurement later shows a per-partition headroom term would have to shrink
+`TEST_POOL_SIZE` to uselessly small values at high N to compensate, that
+would be new evidence changing the calculus 0009 already recorded, and
+belongs as a formal addendum proposal to REVIEWER at that point — not a
+unilateral implementation decision made here.
+
+**What this addendum does not change.** Decision (B) itself (clamp
+`pool_size`, never `N`); `TEST_MAX_CONNECTIONS`, `TEST_CONNECTION_HEADROOM`,
+`TEST_MIN_POOL_SIZE`, `TEST_SUPERUSER_RESERVED`, or
+`TEST_NONPOOL_CONNECTION_RESERVE`'s meanings or defaults; `N`-derivation;
+anything under `test/support/tenant_schema_reaper_test.exs` or
+`test/letflow/engine_concurrency_test.exs` (both out of scope per the design's
+own scope statement). `TEST_PER_PARTITION_HEADROOM` ships at 0 — an operator
+or a future addendum sets it nonzero only once §5's empirical runs produce a
+measured value, not before.
+
+**Verification (this addendum's own).** `test/scripts/test_parallel_pool_sizing_test.sh`
+(the existing regression suite, unmodified) — 5/5 passing, unchanged from
+before this change. Direct no-op check: extracted Step 1.5's arithmetic block
+from the pre- and post-change script and `eval`'d both at N ∈ {1, 2, 3, 4, 5,
+6, 7, 8, 9, 12, 16, 24, 32} with `TEST_PER_PARTITION_HEADROOM` unset — every
+`TEST_POOL_SIZE` output matched exactly (e.g. N=8: 10 both before and after).
+Confirmed the new knob is not dead code: at `TEST_PER_PARTITION_HEADROOM=1`,
+N=4/8/16 compute `TEST_POOL_SIZE`=19/9/4 respectively (down from 20/10/5),
+matching `budget − N` exactly at each N. A full `scripts/test_parallel.sh`
+run (N=2, real Postgres, real test files) confirmed the host-ceiling-check
+and sampler-gating additions don't break a real invocation: the script ran
+Step 1.4 (WARNed and continued, since this verification host has no `psql`
+installed), computed `TEST_POOL_SIZE` correctly, and one real partition ran
+its real tests to completion (4/4 passed).
+TEST-DESIGNER extends the regression test with the N-sweep and dedicated N=8
+case the design's §5 calls for, and runs the empirical N=8/`TEST_PARALLEL_N`-unset
+verification passes against a real host — not repeated here.

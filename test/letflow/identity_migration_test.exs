@@ -56,7 +56,6 @@ defmodule Letflow.IdentityMigrationTest do
   alias Letflow.Identity.Tenant
   alias Letflow.IdentityMigration
   alias Letflow.TenantFixture
-  alias Letflow.TenantProvisioning
 
   @drop_migration_file Path.expand(
                          "../../priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs",

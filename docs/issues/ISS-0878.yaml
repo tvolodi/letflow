@@ -1,0 +1,104 @@
+id: ISS-0878
+title: >
+  Letflow.Plugs.AuthPipelineTest's unique_realm/1 uses a per-BEAM-process
+  monotonic counter, so two parallel test_parallel.sh partitions can
+  independently generate the same idp_realm_id and collide on
+  tenants_idp_realm_id_partial_index
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ421-20260928
+discovered_at: "2026-09-29T00:32:00Z"
+tags:
+  - backend
+  - test-flake
+  - shared-db-isolation
+severity: MINOR
+description: >
+  Found during TEST-RUNNER's Step 4 full-suite verification for
+  WF02-REQ421-20260928 (`scripts/test_parallel.sh`, N=16 nproc-derived,
+  combined 5028 tests / 6 properties / 3 failures, 5031/5034 passed).
+
+  `git diff --name-only origin/main...HEAD` for this branch confirmed
+  test/letflow/plugs/auth_pipeline_test.exs is NOT touched (this branch's
+  diff is limited to apps/mobile/, docs/mobile/, and doc-bookkeeping
+  files), so this failure is pre-existing, not a regression from this
+  branch.
+
+  Partition 3 failed:
+  "acceptance criterion 4 — realm-ownership guard rejects mismatch, no
+  JIT under wrong tenant / the realm-ownership guard rejects a tenant
+  that does not own the token's claimed realm..."
+  (test/letflow/plugs/auth_pipeline_test.exs:220) with:
+
+      ** (Ecto.InvalidChangesetError) could not perform insert because
+      changeset is invalid.
+      Errors: %{idp_realm_id: [{"has already been taken", [constraint:
+      :unique, constraint_name: "tenants_idp_realm_id_partial_index"]}]}
+      Applied changes: %{..., idp_realm_id: "owned-by-a-1"}
+
+  Root-cause mechanism (code inspection, not yet reproduced in isolation):
+  auth_pipeline_test.exs:64-66 defines its own
+  `unique_realm(prefix) -> "#{prefix}-#{System.unique_integer([:positive,
+  :monotonic])}"`. `System.unique_integer/1` is unique only WITHIN one
+  BEAM VM process -- its monotonic counter restarts from 1 in every
+  fresh VM. `scripts/test_parallel.sh` shards the suite across N
+  independent `mix test --partitions N` OS processes (separate BEAM
+  VMs), all against the same shared Postgres instance
+  (tenants_idp_realm_id_partial_index is a single, global partial unique
+  index, not partition-scoped). Two different partitions each calling
+  `unique_realm("owned-by-a")` as the FIRST such call in their own
+  process both produce the literal string "owned-by-a-1" -- an exact
+  collision on the global unique index once both partitions attempt the
+  insert.
+
+  This is the same general class already diagnosed for
+  `retention_operations_test.exs` (ISS-0873: "cross-partition TOCTOU
+  race on unscoped global reads/writes under test_parallel.sh") and the
+  same specific mechanism ISS-0329 fixed a FIXED-STRING realm collision
+  for elsewhere in this file's own module (ISS-0329's fix note: "Closing
+  the fixed-realm window means two concurrent partitions can no longer
+  collide on idp_realm_id" -- ISS-0329 assumed `unique_realm/1`, once
+  introduced, was collision-proof across partitions; this finding shows
+  it is not, because `System.unique_integer/1` is only process-local
+  unique, not globally unique).
+
+  NOT the same symptom as any currently-open issue: searched
+  docs/issues/ for "idp_realm_id", "tenants_idp_realm_id_partial_index",
+  "AuthPipelineTest", "auth_pipeline_test" -- no exact match found.
+
+severity_rationale: >
+  MINOR -- only reproduces under full parallel-suite contention (same
+  class as ISS-0873), requires two different partitions to independently
+  make their FIRST unique_realm(prefix) call with the same prefix in the
+  same narrow window, and has not been observed to reproduce twice in a
+  row. No evidence of a production defect; this is purely a test-fixture
+  collision-avoidance gap.
+
+fix_direction: >
+  NOT INVESTIGATED beyond the code-inspection root cause above (no fix
+  attempted, per TEST-RUNNER's scope -- diagnosis routes to
+  TEST-DESIGNER, not fixed directly). Conceptual direction: replace or
+  supplement `System.unique_integer/1` in `unique_realm/1` (this file,
+  and any other test file using the same process-local-only pattern)
+  with a source that is unique across separate OS processes -- e.g. mix
+  the OS process id (`System.pid/0`) or `:erlang.unique_integer/0`
+  combined with a partition identifier
+  (`System.get_env("MIX_TEST_PARTITION")`) into the generated string,
+  or switch to a UUID/random-suffix scheme. TEST-DESIGNER should audit
+  whether other test files share this exact `unique_realm/1` definition
+  (grep showed at least
+  test/letflow/api/authorization_ac9_test.exs:49 and
+  test/letflow/oidc/provider_registry_multi_realm_test.exs:83 use the
+  identical pattern) versus the collision-proof helper already
+  established in test/letflow/identity_test.exs -- consolidating onto
+  one shared, genuinely-cross-process-unique helper (same spirit as
+  ISS-0112's TenantFixture consolidation) would close this for all
+  call sites at once rather than one file at a time.
+
+affected_files:
+  - test/letflow/plugs/auth_pipeline_test.exs
+  - test/letflow/api/authorization_ac9_test.exs
+  - test/letflow/oidc/provider_registry_multi_realm_test.exs
+
+status: open
+queue_ref: Q-878
+github_ref: GH-1951

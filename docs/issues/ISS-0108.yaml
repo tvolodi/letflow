@@ -141,3 +141,34 @@ github_issue_note: >
   release_lock(status: "done") on task 173 will attempt to close #361, not
   #360 -- a harmless no-op since #361 is already closed, but whoever resolves
   this must close #360 by hand.
+status: resolved
+resolved_in_run: "WF03-ISS0174-20260928"
+resolved_at: "2026-09-28T12:50:30Z"
+resolution: >
+  Fixed as a side effect of unrelated, later work -- REQ-370
+  (priv/repo/migrations/20260918173137_seed_default_tenant.exs, commit
+  21177271, merged after this issue's 2026-08-20 filing) added a real,
+  permanent, idempotent seed migration binding exactly one tenant row to
+  idp_realm_id "bpm-default", and the same change rewrote
+  test/letflow/identity_test.exs's insert_default_tenant!/0 (the helper this
+  issue's own investigation_note identified as the collision site) to STOP
+  inserting a second row under that idp_realm_id -- it now does
+  `Letflow.Support.BpmDefaultRealmDisplacement.with_lock(fn -> Repo.get_by!(Tenant,
+  idp_realm_id: "bpm-default") end)`, reusing the migration-seeded row instead.
+  This removes the root cause structurally, not probabilistically: there is no
+  longer a second INSERT for two tests (or two processes) to race on, so the
+  `tenants_idp_realm_id_partial_index` collision this issue diagnosed cannot
+  recur regardless of the sandbox-mode-leak timing the original investigation_note
+  hypothesized as the trigger. That leak (Letflow.TenantFixture.provisioned_tenant!/1
+  leaving Sandbox mode at :auto) is a real, separate, still-open concern -- tracked
+  by ISS-0113 -- but is no longer this issue's mechanism because the vulnerable
+  INSERT it depended on is gone.
+
+  Verified live this run: `MIX_ENV=test mix test test/letflow/identity_test.exs
+  test/support/bpm_default_realm_displacement_test.exs` -> `Finished in 254.9
+  seconds (0.00s async, 254.9s sync)` / `Result: 65 passed`, no
+  Ecto.InvalidChangesetError, no tenants_idp_realm_id_partial_index failure.
+  The record was never flipped when REQ-370 merged (same class as ISS-0786's
+  own resolution note) -- this run's diagnosis (WF-03 Step 1) found the fix
+  already shipped rather than designing a new one, so Steps 2-4 were skipped
+  as inapplicable; no code change was made this run.

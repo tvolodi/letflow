@@ -32,14 +32,11 @@ defmodule Letflow.Engine.MigrationsTest do
 
   use Letflow.DataCase, async: false
 
-  import Ecto.Query
-
   alias Letflow.Engine.Task
   alias Letflow.Engine.TokenRecord, as: Token
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.Identity.Tenant
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
   @req043_migration_modules [
     Letflow.Repo.Migrations.AlterInstanceProjectionsAddEngineColumns,
@@ -57,48 +54,17 @@ defmodule Letflow.Engine.MigrationsTest do
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req043"),
-        display_name: "REQ-043 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
   # Mirrors event_store_test.exs's provisioned_tenant/1 exactly (see this file's
   # moduledoc). Provisions a real tenant, replays the FULL manifest (not just
   # REQ-043's three entries) because tokens/tasks' foreign keys require
   # instance_projections to already exist -- exercising the real dependency chain
-  # a fresh tenant actually goes through, not a hand-picked subset.
+  # a fresh tenant actually goes through, not a hand-picked subset. Via
+  # Letflow.TenantFixture (ISS-0112 / GH#366).
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req043",
+      display_name: "REQ-043 Test Tenant"
+    )
   end
 
   defp table_exists_in_schema?(schema_name, table_name) do

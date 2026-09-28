@@ -590,3 +590,51 @@
       (handoffs/WF02-REQ419-20260927/step-05-release-validator.json).
       Flipping docs/requirements.yaml's REQ-419 status: in_progress ->
       done in this same append.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-28T05:40:00Z
+    note: >
+      ISS-0766 (MAJOR, the session's single most persistent CI-noise source
+      -- Letflow.IdentityTest REQ-019 AC1's Ecto.NoResultsError, recurring
+      across PRs #1672, #1794, #1917 and others per this issue's own
+      process_note history) resolved and closed in docs/issues/ISS-0766.yaml.
+      Fix on branch fix/ISS0766-self-healing-realm-seed-20260927 (commits
+      760709a5 fix, c54b3df4 regression test): both `displace!/0` and
+      `with_lock/1` in test/support/bpm_default_realm_displacement.ex now
+      call a new idempotent `ensure_seeded!/1` helper before reading/deleting
+      the migration-seeded "bpm-default" tenant row, reusing the exact
+      `INSERT ... ON CONFLICT (slug) DO NOTHING` shape the seed migration
+      uses, under the same pre-existing pg_advisory_lock -- so an abnormally
+      interrupted displace!/0 caller (SIGKILL/OOM-kill/CI cancellation) no
+      longer permanently orphans the singleton row. RELEASE-VALIDATOR fully
+      PASSed: fresh isolated compile clean; its own independent A/B mutation
+      proof using REAL DB corruption via psql (corrupted a real test DB's
+      bpm-default row directly, confirmed the fix branch self-heals to
+      62/62 passed, confirmed the pre-fix commit reproduces the exact
+      documented Ecto.NoResultsError against that same corrupted database,
+      restored clean and reconfirmed); regression test
+      test/support/bpm_default_realm_displacement_test.exs 3/3 passing; full
+      suite run to completion, 5027/5027 passed, ZERO failures anywhere --
+      the ISS-0766 symptom confirmed absent for the first time this
+      session; scope confirmed clean, exactly 3 files
+      (test/support/bpm_default_realm_displacement.ex,
+      test/support/bpm_default_realm_displacement_test.exs,
+      test/specs/ISS-0766.md); auth_pipeline_test.exs AC4 (no-binding case)
+      confirmed unaffected. ISS-0874 (T4's duplicate-mechanism
+      cross-reference) resolved as a side effect of this same fix, closed
+      in docs/issues/ISS-0874.yaml in the same commit -- no separate code
+      change, per that issue's own fix_direction. Queue task 874 (real,
+      github_issue_number 1918) released `done`, citing ISS-0766's fix.
+      Queue task id 766 itself was NOT touched: it is an unrelated,
+      already-`done` REQ-398 frontend task -- ISS-0766 has no
+      letflow-queue task registered under any id (confirmed by a full scan
+      of all 874 live queue tasks for any title/description match on
+      "displace", "bpm_default_realm_displacement", "resolve_tenant_by_realm",
+      "Ecto.NoResultsError", or "0766" -- none found besides ISS-0874's own
+      cross-reference). Added a docs/anti-patterns.md entry on this bug's
+      general class (a test-support fixture mutating a shared
+      migration-seeded singleton row must be self-healing against abnormal
+      process termination, not just correct under normal on_exit flow).
+      PR merge commit and branch details recorded by ORCH's own merge step.

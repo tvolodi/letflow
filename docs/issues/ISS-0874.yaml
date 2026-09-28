@@ -76,7 +76,31 @@ fix_direction: >
   the same advisory lock, rather than treating "row absent" as steady
   state). Once ISS-0766 is fixed, this issue closes as a duplicate with no
   separate code change.
-status: open
+status: resolved
+resolution_2026_09_28: >
+  Resolved as a side effect of ISS-0766's fix, not a separate code change --
+  exactly as this file's own fix_direction anticipated. ISS-0766's
+  2026-09-28 closure (branch fix/ISS0766-self-healing-realm-seed-20260927,
+  commit c54b3df4) added an idempotent `ensure_seeded!/1` repair to BOTH
+  `displace!/0` and `with_lock/1` in
+  test/support/bpm_default_realm_displacement.ex -- since T4
+  (test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs) calls
+  `displace!/0` directly (this file's own "Fixture mechanics" citation),
+  the same self-healing repair covers T4's failure mode identically to
+  identity_test.exs's. RELEASE-VALIDATOR's full-suite re-verification for
+  ISS-0766 (5027/5027 passed, zero failures) ran the complete suite
+  including this file's T4, confirming no separate fix or regression test
+  is warranted here. See docs/issues/ISS-0766.yaml's
+  `resolution_2026_09_28` for the full fix description and verification
+  evidence.
+
+  Queue-task note: this file's own `github_issue_number` (1918, queue task
+  id 874) is a real, separately-registered letflow-queue task and was
+  released `done` directly. ISS-0766 itself has NO corresponding
+  letflow-queue task under any id -- queue task id 766 exists but is an
+  unrelated, already-`done` REQ-398 frontend task (a queue_ref/id
+  collision of the same class documented elsewhere in
+  docs/anti-patterns.md); it was left untouched.
 process_note: >
   Filed 2026-09-27 by ISSUE-FIXER while root-causing ISS-0766, per that
   issue's own dispatch instructions ("a second test file... was just found

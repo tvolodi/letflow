@@ -146,3 +146,20 @@ queue_ref: Q-774  # letflow-queue task id 774, issue_ref ISS-0776 (local
   # 2026-09-21 by ORCH.
 github_ref: GH-1688
 status: open
+update_2026_09_28: >
+  ORCH: since this issue's last investigation, ISS-0766 (a separate,
+  unrelated-looking full-suite flake, later root-caused as a permanent
+  shared-DB corruption from an abnormally-terminated test process) was
+  fixed and merged (commit f4e5abe3). As part of that fix's verification,
+  the full suite ran completely clean THREE independent times in a row
+  (TEST-RUNNER, RELEASE-VALIDATOR, and TEST-DESIGN-VALIDATOR's own runs,
+  all 5027/5027 or equivalent, 0 failures anywhere) -- neither of this
+  issue's two target flakes (HelpTest tie-break, SandboxPoolTest) appeared
+  in any of those three clean runs. This is further evidence (not proof)
+  that both remain low-frequency and possibly related to the same class of
+  host-level contention/corruption ISS-0766 addressed, though neither was
+  confirmed to share ISS-0766's specific mechanism. Still no concrete
+  reproduction in hand. Per this issue's own prior recommendation
+  (attempt 2's conclusion), releasing the queue task back as blocked
+  rather than re-investigating without a fresh, real failure to chase --
+  re-open/re-select only when a future run produces one.

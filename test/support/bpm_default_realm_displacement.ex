@@ -19,6 +19,29 @@ defmodule Letflow.Support.BpmDefaultRealmDisplacement do
   row with the SAME `slug`/`display_name`/`idp_realm_id`, so every later test still
   finds the permanently-seeded tenant it expects.
 
+  ## Self-healing repair (ISS-0766 — REQUIRED, do not remove)
+
+  The migration-seeded `"bpm-default"` row is a singleton — `mix ecto.migrate` never
+  re-inserts it once the seed migration is recorded as applied. This project's test
+  databases (`letflow_test#{N}`) are long-lived and reused across many unrelated
+  `mix test`/`scripts/test_parallel.sh` invocations, so if the OS process running a
+  `displace!/0` caller is ever killed abnormally (SIGKILL, OOM-kill, CI
+  timeout/cancellation) between its `Repo.delete!` and its `on_exit`-deferred
+  restoration, the row is gone from that physical database PERMANENTLY — and every
+  later `displace!/0`/`with_lock/1` call against that same database would otherwise
+  observe `nil` forever, with no re-seeding path (confirmed via live reproduction:
+  killing a `scripts/test_parallel.sh` run mid-flight left `letflow_test1` with zero
+  rows bound to `"bpm-default"`, reproducing `test/letflow/identity_test.exs`'s
+  REQ-019 AC1 failures deterministically on every subsequent run). Both `displace!/0`
+  and `with_lock/1` therefore call `ensure_seeded!/1` first, under the advisory lock,
+  which idempotently re-inserts the row
+  (`INSERT ... ON CONFLICT (slug) DO NOTHING`, the exact shape
+  `priv/repo/migrations/20260918173137_seed_default_tenant.exs` uses) on the SAME
+  dedicated connection that holds the lock — so a genuinely-fresh/never-seeded
+  database and a previously-corrupted one are repaired identically, and no
+  lost-update race between two repairing callers is possible (the advisory lock
+  already serializes them).
+
   ## Mutual exclusion (REQUIRED — do not remove)
 
   **Two escalating bugs fixed while building this, both reproduced live, neither
@@ -76,9 +99,14 @@ defmodule Letflow.Support.BpmDefaultRealmDisplacement do
   def displace! do
     lock_conn = acquire_dedicated_lock!()
     Ecto.Adapters.SQL.Sandbox.mode(Repo, :auto)
+    ensure_seeded!(lock_conn)
 
     case Repo.get_by(Tenant, idp_realm_id: "bpm-default") do
       nil ->
+        # ISS-0766: ensure_seeded!/1 above just guaranteed this row exists (inserting
+        # it if a prior caller's interrupted on_exit permanently lost it, a no-op
+        # otherwise) -- reaching `nil` here would mean that repair itself silently
+        # failed, so this is kept only as a defensive branch, never expected to run.
         ExUnit.Callbacks.on_exit(fn -> release_dedicated_lock!(lock_conn) end)
         :ok
 
@@ -115,10 +143,37 @@ defmodule Letflow.Support.BpmDefaultRealmDisplacement do
     lock_conn = acquire_dedicated_lock!()
 
     try do
+      # ISS-0766: repair before reading -- a caller here (e.g.
+      # test/letflow/identity_test.exs's `insert_default_tenant!/0`) only ever reads
+      # the binding, so it would otherwise inherit a permanently-corrupted database
+      # forever with no way to self-heal on its own.
+      ensure_seeded!(lock_conn)
       fun.()
     after
       release_dedicated_lock!(lock_conn)
     end
+  end
+
+  # ISS-0766: idempotently re-inserts the migration-seeded "bpm-default" tenant row
+  # if (and only if) it is currently missing -- reusing the exact
+  # `INSERT ... ON CONFLICT (slug) DO NOTHING` shape
+  # `priv/repo/migrations/20260918173137_seed_default_tenant.exs` uses, executed on
+  # `lock_conn` (the same dedicated connection already holding the advisory lock)
+  # rather than through `Repo`, so it commits immediately regardless of `Repo`'s
+  # current sandbox mode and needs no coordination with the caller's own Ecto
+  # transaction/connection.
+  defp ensure_seeded!(lock_conn) do
+    Postgrex.query!(
+      lock_conn,
+      """
+      INSERT INTO tenants (id, slug, display_name, status, idp_realm_id, inserted_at, updated_at)
+      VALUES (gen_random_uuid(), 'bpm-default', 'Default Tenant', 'active', 'bpm-default', NOW(), NOW())
+      ON CONFLICT (slug) DO NOTHING
+      """,
+      []
+    )
+
+    :ok
   end
 
   defp acquire_dedicated_lock! do

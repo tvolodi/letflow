@@ -4610,8 +4610,24 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 19
+    entries: 20
     note: >
+      Incremented to 20 by ORCH, reconciled while merging origin/main into
+      feature/WF02-REQ419-20260927 for Step Final (second reconciliation of
+      this branch's run): origin/main had independently appended a further
+      SCOPE-CHANGE entry (ISS-0766/ISS-0874 closing append,
+      2026-09-28T05:40:00Z, self-healing bpm-default realm-seed fix) after
+      this branch's own prior 19-entry reconciliation below. Both this
+      branch's three appends (ISS-0873, REQ-419 started, REQ-419 done) and
+      origin/main's SCOPE-CHANGE append are present on disk after this
+      merge's own resolution of requirement_status.v23.yaml itself --
+      `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 20
+      on-disk entries, ordered chronologically (REQ-419 done at
+      2026-09-27T19:08:16Z precedes SCOPE-CHANGE at
+      2026-09-28T05:40:00Z). 640 lines / 38313 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered. All prior
+      notes preserved below.
+
       Incremented to 19 by ORCH, reconciled while rebasing
       feature/WF02-REQ419-20260927 onto origin/main for Step Final: after
       the prior 16 -> 18 reconciliation below (composing origin/main's
@@ -4649,6 +4665,13 @@ volumes:
       side's own 17 alone. 553 lines / 32765 bytes, well under the
       1200-line/120000-byte roll ceiling, so no roll triggered. Both prior
       notes preserved below.
+
+      Incremented to 18 by DOC-UPDATER's ISS-0766/ISS-0874 closing
+      SCOPE-CHANGE append (2026-09-28T05:40:00Z, self-healing bpm-default
+      realm-seed fix) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 18 on-disk entries. 583
+      lines / 34402 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior note preserved below.
 
       Incremented to 17 by DOC-UPDATER's ISS-0873 closing SCOPE-CHANGE append
       (2026-09-27T20:42:41Z, cross-partition TOCTOU race in

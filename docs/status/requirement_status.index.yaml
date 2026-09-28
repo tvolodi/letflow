@@ -4610,8 +4610,15 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 32
+    entries: 33
     note: >
+      Bumped to 33 by DOC-UPDATER after appending REQ-421's `done` event
+      (WF02-REQ421-20260928, 2026-09-28T20:49:14Z -- MOB-2 mobile tenant
+      bootstrap/OIDC auth flow closed) in the same commit as the append.
+      `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 33
+      on-disk entries; 1004 lines / 60047 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Bumped to 32 by ORCH while rebasing feature/WF02-REQ421-20260928 (a
       run interrupted mid-WF-02 by ISS-0876's discovery, resumed this
       session) onto main: the rebase's own conflict in

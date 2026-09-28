@@ -978,3 +978,27 @@
       (0f857b0a) and pushed. Queue task 858 locked. Flipping
       docs/requirements.yaml's REQ-421 status: pending -> in_progress
       in this same append.
+
+  - req: REQ-421
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-28T20:49:14Z
+    note: >
+      WF02-REQ421-20260928 closed. MOB-2 (mobile tenant bootstrap: slug/
+      deep-link -> unauthenticated GET /api/mobile/tenant-config ->
+      OIDC Auth-Code+PKCE in the system browser -> secure token store ->
+      GET /api/v1/me/memberships and installed modules, with four
+      dedicated error screens) implemented on apps/mobile/.
+      RELEASE-VALIDATOR (Step 5) independently re-verified all 10
+      acceptance criteria directly against actual test code, PASS.
+      SECURITY-REVIEWER's auth/token-handling gate sign-off spot-checked
+      by RELEASE-VALIDATOR as substantive. Mobile suite clean:
+      `flutter analyze` and `flutter test` both clean. Backend full
+      suite's 3 failures are pre-existing and unrelated, structurally
+      attributed outside this branch's diff, already filed as ISS-0878/
+      ISS-0879 and already merged to main separately. A live emulator
+      run reached Keycloak's own login page; interactive credential
+      entry is correctly deferred to UAT-RUNNER, per this requirement's
+      own text (SEQUENCE step 2's OIDC hand-off is to the system browser,
+      not an in-app credential form). Flipping docs/requirements.yaml's
+      REQ-421 status: in_progress -> done in this same append.

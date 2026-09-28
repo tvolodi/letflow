@@ -71,99 +71,49 @@ defmodule Letflow.EngineExecutionErrorTest do
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.EventStore.Registry
-  alias Letflow.Identity.Tenant
   alias Letflow.Repo
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # ---------------------------------------------------------------------------------
-  # Fixtures / helpers
-  # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: "req061-#{System.unique_integer([:positive, :monotonic])}",
-        display_name: "REQ-061 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
-  # "EXECUTION_ERROR" is now auto-seeded by replay_migrations/2's default manifest
-  # (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- every AC except AC2 needs it
-  # registered, and provisioning now does that for free; AC2 is the one test that
-  # deliberately needs it *unregistered*, handled by
-  # provisioned_tenant_without_execution_error_type/0 above, which deletes the
+  # Fixtures / helpers -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366).
+  #
+  # "EXECUTION_ERROR" is auto-seeded by TenantProvisioning.replay_migrations/2's
+  # default manifest (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- every AC
+  # except AC2 needs it registered, and provisioning does that for free; AC2 is the
+  # one test that deliberately needs it *unregistered*, handled by
+  # provisioned_tenant_without_execution_error_type/0 below, which deletes the
   # auto-seeded row back out.
+  # ---------------------------------------------------------------------------------
+
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req061",
+      display_name: "REQ-061 Test Tenant"
+    )
   end
 
   # AC2's own fixture -- identical except "EXECUTION_ERROR" is never registered.
-  # replay_migrations/2's default manifest now auto-seeds "EXECUTION_ERROR" itself
-  # (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this fixture used to reach the
-  # "unregistered EXECUTION_ERROR" state simply by skipping its own
-  # register_event_type!/2 call, which stopped working once provisioning started
-  # seeding it unconditionally (ISS-0073/GH#267: the real conflict was "this test's
-  # premise is no longer reachable via the default manifest", not just a duplicate
-  # registration). Fixed by deleting the auto-seeded row straight back out after
-  # provisioning, via the real `Letflow.EventStore.Registry.EventType` schema/prefix
-  # -- this reconstructs the exact "no row for EXECUTION_ERROR" state
+  # replay_migrations/2's default manifest auto-seeds "EXECUTION_ERROR" itself
+  # (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this fixture reaches the
+  # "unregistered EXECUTION_ERROR" state by deleting the auto-seeded row straight
+  # back out after provisioning, via the real `Letflow.EventStore.Registry.EventType`
+  # schema/prefix -- this reconstructs the exact "no row for EXECUTION_ERROR" state
   # `EventStore.append/2`'s `Registry.validate_payload/3` needs to legitimately
   # return `{:error, :unknown_event_type}`, still proving AC2's atomicity claim
   # rather than asserting on a state that can no longer occur naturally.
   defp provisioned_tenant_without_execution_error_type do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req061",
+        display_name: "REQ-061 Test Tenant"
+      )
 
     Repo.delete_all(
       from(et in Registry.EventType, where: et.name == "EXECUTION_ERROR"),
       prefix: schema_name
     )
 
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   defp unique_name(prefix \\ "req061-def") do

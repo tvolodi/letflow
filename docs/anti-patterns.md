@@ -3780,3 +3780,51 @@ strong signal of a setup-time crash — check for `too_many_connections` /
 genuine test regression. If found, `ps -ef | grep erl`, kill any stray process
 tree by PID, confirm Postgres is back to its idle baseline connection count
 via `pg_stat_activity`, and rerun clean before trusting any combined total.
+
+## A test-support fixture that mutates a shared, migration-seeded singleton row must be self-healing against abnormal process termination, not just correct under normal `on_exit` flow (2026-09-27/28, ISSUE-FIXER/ELIXIR-DEV, ISS-0766/ISS-0874)
+
+`test/support/bpm_default_realm_displacement.ex`'s `displace!/0` deleted the
+migration-seeded "bpm-default" tenant row and relied entirely on an
+`ExUnit.Callbacks.on_exit/1` callback to restore it. That callback only ever
+runs on a *normal* test completion path. This project's test databases
+(`letflow_test#{N}`) are long-lived and reused across many unrelated `mix
+test`/`scripts/test_parallel.sh` invocations, with no run-unique component in
+the database name — so if the OS process running a `displace!/0` caller is
+ever killed abnormally (SIGKILL, OOM-kill, CI job cancellation/timeout, or an
+orphaned stray process, exactly the class ISS-0829's own TEST-RUNNER report
+caught live) between the delete and the deferred restore, the row is gone
+from that physical database PERMANENTLY. `mix ecto.migrate` will not
+re-insert it (the seed migration is already recorded as applied, so it's
+skipped on any later run), and every later caller of `displace!/0` or the
+same binding's read path inherits the corruption deterministically, with no
+live race or parallelism required to reproduce it. This was the single most
+persistent CI-noise source of the whole session (`Ecto.NoResultsError`
+recurring in `test/letflow/identity_test.exs`'s REQ-019 AC1 tests across many
+unrelated PRs, admin-merged past each time on the mistaken assumption it was
+a bounded live-timing race) before it was root-caused via direct
+reproduction: killing a `scripts/test_parallel.sh` run mid-flight and
+confirming via a direct SQL query that the row was really gone.
+
+*Preventive:* when a test fixture takes exclusive, destructive ownership of a
+shared row that only exists because a migration seeded it once (a
+singleton with no natural re-creation path), do not treat "restore it in
+`on_exit`" as sufficient — `on_exit` is a normal-completion hook, not a
+crash handler, and this class of shared test infrastructure routinely runs
+under conditions (CI timeouts/cancellations, OOM-kills) where it never fires.
+Instead, make the row's presence a *repaired invariant*, checked and
+idempotently re-inserted (`INSERT ... ON CONFLICT DO NOTHING`, reusing the
+migration's own insert shape) by every caller that depends on it — reads
+included — before it reads or mutates the row, not only by the caller that
+happens to displace it. If the mutation is guarded by a lock (here, a real
+Postgres advisory lock, already correctly serializing cross-OS-process
+access), perform the repair under that same lock rather than inventing a new
+synchronization primitive.
+
+*Detective:* a test failure whose root cause is "expected at least one
+result but got none" against a row a migration is supposed to have seeded,
+that reproduces inconsistently across unrelated PRs/diffs and sometimes
+reproduces even in a single standalone file run, is a strong signal the
+underlying database itself is already corrupted before that run starts —
+check the row directly via `psql`/`Repo.get_by` against the actual test
+database in use, rather than assuming a live intra-suite race, before
+investing time in synchronization-primitive theories.

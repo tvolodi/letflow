@@ -174,7 +174,60 @@ fix_direction: >
   reproduction (not itself practical as an automated test). Route only to
   REVIEWER/SECURITY-REVIEWER as usual for a tenant-identity-table write
   path; no new design artifact is warranted.
-status: open
+status: resolved
+resolution_2026_09_28: >
+  Fixed on branch fix/ISS0766-self-healing-realm-seed-20260927 (commit
+  c54b3df4, 2 commits: 760709a5 fix, c54b3df4 regression test). Implements
+  this issue's own fix_direction option (a): both `displace!/0` and
+  `with_lock/1` in test/support/bpm_default_realm_displacement.ex now call a
+  new idempotent `ensure_seeded!/1` helper BEFORE reading/deleting the
+  "bpm-default" binding, reusing the exact `INSERT ... ON CONFLICT (slug) DO
+  NOTHING` shape priv/repo/migrations/20260918173137_seed_default_tenant.exs
+  already uses. The repair runs on the same dedicated Postgrex connection
+  that already holds the pre-existing pg_advisory_lock (@lock_key
+  847_331_009), so a genuinely-fresh/never-seeded database and a
+  previously-orphaned/corrupted one are repaired identically, and no new
+  lost-update race between two repairing callers is introduced -- the
+  existing advisory lock, confirmed correct in this issue's own root-cause
+  writeup, is reused as designed rather than replaced. `displace!/0`'s `nil
+  ->` branch is now a defensive-only path (ensure_seeded!/1 already
+  guaranteed the row exists by the time it runs), documented as such in the
+  module's own moduledoc and code comments. Regression coverage added in
+  test/support/bpm_default_realm_displacement_test.exs (new file, 182
+  lines): deletes the bpm-default row via raw SQL bypassing
+  displace!/with_lock (simulating the exact corrupted-DB precondition this
+  issue documents), then proves with_lock/1 self-heals it via
+  ensure_seeded!/1 -- a caller's Repo.get_by!/2 succeeds instead of raising
+  Ecto.NoResultsError -- plus an idempotency check and a displace!/0 smoke
+  test. test/specs/ISS-0766.md documents the criteria and mutation proof.
+
+  RELEASE-VALIDATOR independently re-verified and fully PASSed (2026-09-28):
+  fresh isolated compile clean; RELEASE-VALIDATOR's own independent A/B
+  mutation proof using REAL DB corruption via psql (not a simulated/mocked
+  precondition) -- corrupted a real test database's bpm-default row
+  directly via psql, confirmed the fix branch self-heals (62/62 passed),
+  confirmed the pre-fix commit reproduces the exact documented
+  Ecto.NoResultsError failure against the same corrupted database, then
+  restored the database to clean state and confirmed clean again;
+  regression test test/support/bpm_default_realm_displacement_test.exs
+  3/3 passing; full suite run to completion with zero cutoff:
+  5027/5027 passed, ZERO failures anywhere in the run -- the ISS-0766
+  symptom (identity_test.exs's REQ-019 AC1 Ecto.NoResultsError, reproduced
+  repeatedly across many unrelated PRs per this file's own process_note
+  history) is confirmed absent; scope confirmed clean, exactly 3 files
+  changed across both commits (test/support/bpm_default_realm_displacement.ex,
+  test/support/bpm_default_realm_displacement_test.exs,
+  test/specs/ISS-0766.md); test/letflow/plugs/auth_pipeline_test.exs's AC4
+  ("tenant resolution fails" / no-binding case) confirmed unaffected by the
+  new ensure_seeded!/1 repair path.
+
+  This is the single most persistent CI-noise source of the whole session
+  (documented recurrence on PR #1672, #1794, #1917, and others via this
+  file's own process_note above) and is now closed with direct-reproduction
+  evidence on both sides (bug and fix), not inference alone.
+
+  ISS-0874 (T4, the duplicate-mechanism cross-reference) is resolved as a
+  side effect of this same fix -- see its own file for the closing note.
 process_note: >
   UPDATE 2026-09-21 (RELEASE-VALIDATOR, during REQ-397/PR #1672's
   re-verification): the "does NOT reproduce under scripts/test_parallel.sh"

@@ -4610,8 +4610,21 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 26
+    entries: 29
     note: >
+      Incremented to 29 by DOC-UPDATER's own REQ-224 "done" event append
+      (WF02-REQ224-20260928, 2026-09-28T16:10:00Z) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 29 on-disk entries. 896
+      lines / 53704 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Note: the prior recorded count of 26
+      had already drifted from reality by the time this append was made --
+      the on-disk file actually held 28 entries (ORCH's own REQ-224
+      "started" event and a SCOPE-CHANGE/ISS-0875 append had both landed
+      without this index's `entries:` field being updated in the same
+      commit); 29 = 28 on-disk + this append, confirmed directly via the
+      grep above rather than computed as 26 + 1. Prior note preserved
+      below.
+
       Incremented to 26 by DOC-UPDATER's own REQ-223 "done" event append
       (cross-repo, tvolodi/letflow-queue commit 77b0f36,
       2026-09-28T13:20:00Z) -- `grep -c "^  - req:"

@@ -13617,7 +13617,7 @@ requirements:
   - id: REQ-224
     title: "TASK_QUEUE.md rewritten against decision 0017: Hard Rule restated around the lock invariant, claim-then-release lookup dance deleted"
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     impl_order: 872  # letflow-queue task id, GH#1908. Registered 2026-09-27 (ISS-0870),
       # same reconciliation batch as REQ-223/task 871 above and for the same reason

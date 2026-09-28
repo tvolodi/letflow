@@ -892,6 +892,50 @@ whatever was actually locked once the fix is merged — full bounded procedure i
 `TASK_QUEUE.md`'s "A human names a specific issue" section. Test queue reachability with
 `GET /health`, never with a disposable `get_next_task` probe.
 
+**2026-09-28 note (decision 0017, `GET /tasks` shipped 2026-09-04):** mistake (1) above
+— `get_next_task` used as a reachability probe — is now **structurally impossible** for
+the lookup that caused it: `GET /tasks` gives a side-effect-free way to find a task by
+`github_issue_number` (or any other field), so the bounded claim-then-release procedure
+this entry originally pointed at has itself been deleted from `TASK_QUEUE.md` and
+replaced with "look it up via `GET /tasks`, `set_lock` it, work it,
+`release_lock(status: "done")`" — there is no longer a `get_next_task` call in that path
+at all to misuse as a probe. `GET /health` remains the plain up/down check. **Mistake
+(2) is unchanged and still binding**: the exemption from *selection* is never an
+exemption from *locking* — decision 0017 only changed how a task is found and who may
+choose among eligible ones; it did not touch the Hard Rule's "no agent works a task it
+does not hold a lock on" invariant, and a task seen via `GET /tasks` still must be
+`set_lock`'d before work starts, exactly as before.
+
+## Selecting from a visible queue without locking (pre-emptive)
+
+**This is not a real incident.** No date, run-id, or `ISS-` number is attached because
+none has happened — this entry exists because `docs/migration/decisions/0017-task-queue-selection-model.md`
+names the risk explicitly in its own Consequences section before it could occur, and the
+project's convention is to write the warning where agents actually read it
+(`TASK_QUEUE.md`), not only in the decision record, and to write it *before* the failure
+rather than after.
+
+**The risk:** `GET /tasks` (added 2026-09-04, decision 0017 §B) lets any agent see the
+whole queue — every task's `status`, `depends_on`, `blocked_by`, `eligible`, and lock
+state — without claiming anything. A visible board is easier to act on without locking
+than an invisible one: an agent that can see a task marked `eligible: true` can
+rationalize starting work directly from that listing ("I can see it's open and unlocked,
+so it's fine to begin"), skipping `set_lock` entirely because the read already looked
+authoritative enough.
+
+**It would not be.** `GET /tasks` performs no write of any kind — it does not claim, and
+its `eligible` field is a snapshot that can go stale the instant another host locks the
+same row. The invariant `TASK_QUEUE.md`'s Hard Rule states is unchanged by the new
+endpoint's existence: **no agent works a task it does not hold a lock on, and no lock is
+obtained anywhere but from the queue.** Seeing a task, however clearly `eligible`, is
+never itself a lock. The correct sequence is always look (`GET /tasks`, optional) →
+claim (`set_lock`, mandatory, and can still lose to a `409`) → work → release. Collapsing
+that to look → work skips the one step that actually arbitrates who gets the task, and
+reintroduces exactly the two-hosts-claim-the-same-task race the queue exists to close —
+just via the new read endpoint as the rationalization, rather than a missing lookup as
+the excuse (contrast the entry above, where the *cause* was no lookup at all; this one's
+hypothesized cause is the opposite: too easy a lookup).
+
 ## Validating a design's type table for well-formedness instead of against its own normative section
 
 During WF03-ISS0109-20260821, a design artefact declared §3.5 normative for

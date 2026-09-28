@@ -205,8 +205,9 @@ progress_2026_09_28: >
   alarm on the first attempt. SECURITY-REVIEWER not invoked, per the plan's
   section 5 (test-only fixture consolidation, no lib/ or migrations/ changes).
 
-  Merged via branch fix/ISS0112-batch1-tenant-fixture-migration-20260928 (PR
-  number and squash-merge commit to be recorded once opened/merged).
+  Merged via PR #1928 (branch
+  fix/ISS0112-batch1-tenant-fixture-migration-20260928, squash-merge commit
+  recorded once merged).
 
   9 batches remain (of the plan's 63 files-in-scope total: 31 category-D, 7
   B-only, 4 A-only, 15 C-only, 3 A-and-B, 3 A-and-C -- see the plan's section 1

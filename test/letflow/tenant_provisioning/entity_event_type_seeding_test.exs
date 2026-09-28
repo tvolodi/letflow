@@ -20,6 +20,21 @@ defmodule Letflow.TenantProvisioning.EntityEventTypeSeedingTest do
   real tenant schema. Fixture shape mirrors
   `test/letflow/entities/records_test.exs`'s own `provisioned_tenant/0`,
   minus the manual `EventTypes.seed!/1` call.
+
+  ISS-0112 batch-7 migration note: this file grep-matched the A∩B batch
+  category (SandboxAutoMode teardown + EventTypes.seed! step), but a fresh
+  read (per the migration plan's §3 step 1) found it is NOT actually a B
+  file -- the whole point of this regression test is that it deliberately
+  omits the manual `EventTypes.seed!/1` call the B pattern would add, to
+  prove `replay_migrations/2`'s own `maybe_seed_entity_event_types/2` path
+  seeds those event types on its own. Only the A half (teardown: false
+  composed with this file's own on_exit) applies here; no B-pattern seed!
+  call was added. Also note `TenantFixture.provisioned_tenant!/1` defaults
+  to `template: :clone` (schema-clone fast path, ISS-0427), which does NOT
+  call `replay_migrations/2` at all -- that would silently skip the exact
+  code path (`maybe_seed_entity_event_types/2`) this regression test
+  exists to exercise. `template: :replay` is passed explicitly below to
+  keep that path live.
   """
 
   use Letflow.DataCase, async: false
@@ -29,6 +44,7 @@ defmodule Letflow.TenantProvisioning.EntityEventTypeSeedingTest do
   alias Letflow.EventStore.Registry
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
   alias Letflow.Test.SandboxAutoMode
@@ -42,22 +58,11 @@ defmodule Letflow.TenantProvisioning.EntityEventTypeSeedingTest do
   ]
 
   # ---------------------------------------------------------------------------------
-  # Fixture -- same shape as test/letflow/entities/records_test.exs's
-  # provisioned_tenant/0, WITHOUT the manual EventTypes.seed!/1 call. That
-  # omission is the entire point of this regression test.
+  # Fixture -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366),
+  # teardown: false + template: :replay (see moduledoc note above for why
+  # :replay is required here, and why this file omits the B-pattern
+  # EventTypes.seed!/1 call other A∩B-classified files in this batch add).
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("iss0721-entity-event-seed"),
-        display_name: "ISS-0721 Entity Event Type Seeding Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
 
   defp drop_schema!(schema_name) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
@@ -65,7 +70,16 @@ defmodule Letflow.TenantProvisioning.EntityEventTypeSeedingTest do
 
   defp provisioned_tenant_no_manual_seed do
     SandboxAutoMode.provision!(Letflow.Repo, fn ->
-      tenant = insert_tenant!()
+      # No migration_source given -> using_default_manifest? is true inside
+      # replay_migrations/2 -> maybe_seed_entity_event_types/2's true clause
+      # runs. Deliberately NO `EventTypes.seed!/1` call here.
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        TenantFixture.provisioned_tenant!(
+          slug_prefix: "iss0721-entity-event-seed",
+          display_name: "ISS-0721 Entity Event Type Seeding Test Tenant",
+          teardown: false,
+          template: :replay
+        )
 
       on_exit(fn ->
         # Same ISS-0580 hazard as every other provisioned_tenant/0 fixture in
@@ -75,26 +89,18 @@ defmodule Letflow.TenantProvisioning.EntityEventTypeSeedingTest do
         # checked out for THIS (OnExitHandler) process.
         Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
-        case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+        case TenantProvisioning.schema_name_for_tenant(tenant_id) do
           {:ok, schema_name} -> drop_schema!(schema_name)
           {:error, :invalid_tenant_id} -> :ok
         end
 
-        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
+        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
 
         SandboxAutoMode.exit_auto_mode!(Letflow.Repo)
       end)
 
-      assert {:ok, %Registration{schema_name: schema_name}} =
-               TenantProvisioning.provision_tenant_schema(tenant.id)
-
-      # No migration_source given -> using_default_manifest? is true inside
-      # replay_migrations/2 -> maybe_seed_entity_event_types/2's true clause
-      # runs. Deliberately NO `EventTypes.seed!/1` call here.
-      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-      %{tenant_id: tenant.id, schema_name: schema_name}
+      %{tenant_id: tenant_id, schema_name: schema_name}
     end)
   end
 

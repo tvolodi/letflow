@@ -81,7 +81,11 @@ defmodule Letflow.Engine.VariableSchemaTest do
         display_name: "REQ-109 VariableSchema Test Tenant"
       )
 
-    %{tenant_id: tenant_id, schema_name: schema_name, applied_versions: applied_versions_in(schema_name)}
+    %{
+      tenant_id: tenant_id,
+      schema_name: schema_name,
+      applied_versions: applied_versions_in(schema_name)
+    }
   end
 
   defp unique_name do

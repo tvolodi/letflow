@@ -967,3 +967,14 @@
       landed first) and re-ran CI clean after the force-push. CI: Backend/
       Frontend/Mobile gates all passed. Squash-merged c7d1fac5, never a
       direct push to main. GitHub issue #1941 closed.
+
+  - req: REQ-421
+    event: started
+    agent: ORCH
+    at: 2026-09-28T04:37:00Z
+    note: >
+      WF02-REQ421-20260928 Step 00 (git setup) PASS -- branch
+      feature/WF02-REQ421-20260928 created from origin/main
+      (0f857b0a) and pushed. Queue task 858 locked. Flipping
+      docs/requirements.yaml's REQ-421 status: pending -> in_progress
+      in this same append.

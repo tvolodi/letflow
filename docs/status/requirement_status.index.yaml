@@ -4610,8 +4610,18 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 31
+    entries: 32
     note: >
+      Bumped to 32 by ORCH while rebasing feature/WF02-REQ421-20260928 (a
+      run interrupted mid-WF-02 by ISS-0876's discovery, resumed this
+      session) onto main: the rebase's own conflict in
+      docs/status/requirement_status.v23.yaml (REQ-421's "started" entry
+      vs. main's later ISS-0876/ISS-0877 entries, both genuine appends)
+      was resolved by keeping both, REQ-421's after main's, giving 32
+      on-disk entries (`grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 32) -- bumped here in the
+      same commit per this note's own recurring-drift lesson below.
+
       Bumped to 31 by ORCH after appending the ISS-0876 SCOPE-CHANGE/done
       entry (2026-09-28T18:54:12Z), in the same commit as the append, to
       avoid repeating the drift this note's predecessor already describes

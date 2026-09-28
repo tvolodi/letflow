@@ -31286,7 +31286,7 @@ requirements:
   - id: REQ-421
     title: "MOB-2: tenant bootstrap -- slug/deep-link -> unauthenticated tenant-config -> OIDC Auth-Code+PKCE in the system browser -> secure token store -> memberships and installed modules, with four dedicated error screens"
     owner: MOBILE-DEV
-    status: pending
+    status: in_progress
     stage: S9
     impl_order: 858  # letflow-queue task id, GH#1875. Registered 2026-09-27T02:59:59Z by ORCH (WF-01 Step 3).
     description: >

@@ -37,14 +37,12 @@ defmodule Letflow.Plugs.AuthPipelineConfigurableVerifierTest do
 
   use Letflow.DataCase, async: false
 
-  alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.Oidc.ConfigurableTokenVerifierDouble
   alias Letflow.Plugs.AuthPipeline
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
 
-  import Ecto.Query
   import Plug.Test
   import Plug.Conn
 
@@ -66,51 +64,20 @@ defmodule Letflow.Plugs.AuthPipelineConfigurableVerifierTest do
     "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
   end
 
-  defp unique_slug(prefix \\ "tenant") do
-    Letflow.TenantSlugFixture.unique_slug(prefix)
-  end
-
-  # REQ-063: this file was already `async: false` (needed for the global
-  # Application-config swap in `setup` above), so it does not itself change
-  # async-mode. But it now ALSO needs `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo,
-  # :auto)` before inserting the tenant row, per the same reasoning
-  # `test/letflow/plugs/auth_pipeline_test.exs`'s own `insert_tenant!/1` comment
-  # documents in full: `TenantProvisioning.provision_tenant_schema/1`'s `:auto`-mode
-  # connection cannot see a tenant row that only exists inside a not-yet-committed
-  # sandboxed transaction, and `Ecto.Migrator` (called by `replay_migrations/2`)
-  # cannot run at all under the sandbox's shared single connection. Every tenant
-  # this file seeds now needs a real, provisioned + migrated schema, not just a bare
-  # `tenants` row, for `AuthPipeline.provision_user/3`'s internal JIT-provisioning
-  # step to succeed against.
+  # Provisioned via Letflow.TenantFixture (ISS-0112 / GH#366) — replaces the former
+  # hand-rolled Sandbox :auto mode + Tenant.create_changeset/3 +
+  # provision_tenant_schema/1 + replay_migrations/1 + on_exit/1 teardown sequence,
+  # which TenantFixture.provisioned_tenant!/1 already reproduces statement for
+  # statement. `oidc_mode: :enabled` matches this file's original `:enabled` third
+  # changeset argument.
   defp insert_tenant_for_realm!(realm) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(
-        %{
-          slug: unique_slug(),
-          display_name: "Configurable Verifier Test Tenant",
-          idp_realm_id: realm
-        },
-        :enabled
+    %{tenant: tenant} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "tenant",
+        display_name: "Configurable Verifier Test Tenant",
+        oidc_mode: :enabled,
+        idp_realm_id: realm
       )
-      |> Repo.insert!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: _schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
     tenant
   end

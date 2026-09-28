@@ -25,13 +25,10 @@ defmodule Letflow.Api.AuthorizationAc9Test do
 
   alias Letflow.Api.Authorization
   alias Letflow.Api.Authorization.AccessContext
-  alias Letflow.Identity.Tenant
   alias Letflow.Oidc.ConfigurableTokenVerifierDouble
   alias Letflow.Plugs.AuthPipeline
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
-  import Ecto.Query
   import Plug.Test
   import Plug.Conn
 
@@ -50,31 +47,21 @@ defmodule Letflow.Api.AuthorizationAc9Test do
   end
 
   defp unique_realm(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-  defp unique_slug(prefix \\ "tenant"), do: Letflow.TenantSlugFixture.unique_slug(prefix)
 
+  # Provisioned via Letflow.TenantFixture (ISS-0112 / GH#366) — replaces the former
+  # hand-rolled Sandbox :auto mode + Tenant.create_changeset/3 +
+  # provision_tenant_schema/1 + replay_migrations/1 + on_exit/1 teardown sequence,
+  # which TenantFixture.provisioned_tenant!/1 already reproduces statement for
+  # statement. `oidc_mode: :enabled` matches this file's original `:enabled` third
+  # changeset argument.
   defp insert_tenant_for_realm!(realm) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(
-        %{slug: unique_slug(), display_name: "AC9 Test Tenant", idp_realm_id: realm},
-        :enabled
+    %{tenant: tenant} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "tenant",
+        display_name: "AC9 Test Tenant",
+        oidc_mode: :enabled,
+        idp_realm_id: realm
       )
-      |> Repo.insert!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{}} = TenantProvisioning.provision_tenant_schema(tenant.id)
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
     tenant
   end

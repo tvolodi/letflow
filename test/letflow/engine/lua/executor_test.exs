@@ -1331,6 +1331,62 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert {:error, :memory_limit_exceeded} = sync_result
       assert sync_result == racing_result
     end
+
+    # ISS-0876 addition -- non-empty-manifest hash equivalence. Every equivalence test
+    # above (this describe block, added by ISS-0426) exercises @empty_manifest
+    # (script_id: "", capabilities: []) only. ISS-0876 repointed the 3 REQ-158 call
+    # sites (executor_test.exs's "REQ-158: manifest-aware script_ref" describe block,
+    # lines ~224-231/242-247) onto run_script_sync/3 with a NON-empty manifest for the
+    # first time -- a property ISS-0426's own suite never exercised. Proves
+    # run_script_sync/3's returned manifest_hash for a non-empty manifest matches
+    # execute_with_manifest/3's racing counterpart (map-shaped script_ref, per
+    # normalize_script_ref/1, executor.ex:389-391) for the identical (manifest,
+    # script) pair -- same pattern as the :ok-outcome test above, just with a
+    # non-empty manifest input.
+    test "run_script_sync/3 returns the same manifest_hash as execute_with_manifest/3 for a non-empty manifest" do
+      manifest = %Manifest{script_id: "script-abc", capabilities: ["variable:read"]}
+      script = "return 1 + 1"
+
+      sync_result = Executor.run_script_sync(manifest, script, 500_000)
+
+      racing_result =
+        Executor.execute_with_manifest(%{manifest: manifest, script_source: script}, "h",
+          max_instructions: 500_000,
+          timeout_ms: 5_000,
+          max_heap_words: nil
+        )
+
+      assert {:ok, %{manifest_hash: sync_hash}} = sync_result
+      assert {:ok, %{manifest_hash: racing_hash}} = racing_result
+      assert sync_hash == racing_hash
+    end
+
+    # ISS-0876 addition -- Lua.CompilerException / syntax-error shape equivalence.
+    # ISS-0426's own equivalence suite (this describe block's leading comment, per the
+    # "(a) seam equivalence" property description above) covers :ok, budget_exceeded,
+    # script_error, and memory_limit_exceeded only -- never the Lua.CompilerException
+    # branch (executor.ex's `rescue e in Lua.CompilerException -> {:error,
+    # Exception.message(e)}` arm), which is exactly the outcome shape ISS-0876's site 6
+    # (executor_test.exs:209, "a Lua syntax error returns {:error, reason}") now
+    # reaches via run_script_sync/3. Proves run_script_sync/3 and
+    # execute_with_manifest/3 return the identical {:error, _} value for the same
+    # invalid-syntax script -- closing the one outcome-shape gap ISS-0876's
+    # conversions introduce beyond what ISS-0426 already proved equivalent.
+    test "run_script_sync/3 returns the same {:error, _} shape as execute_with_manifest/3 for a Lua syntax error" do
+      script = "this is not lua ==="
+
+      sync_result = Executor.run_script_sync(@empty_manifest, script, 500_000)
+
+      racing_result =
+        Executor.execute_with_manifest(script, "h",
+          max_instructions: 500_000,
+          timeout_ms: 5_000,
+          max_heap_words: nil
+        )
+
+      assert {:error, _} = sync_result
+      assert sync_result == racing_result
+    end
   end
 
   describe "ISS-0426: memory limit still binds through the unbounded-wait seam (property b)" do
@@ -1524,6 +1580,119 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
 
       assert output =~ ~r/Result: 11 passed/,
              "expected the isolated run to report exactly 11 passed tests -- output:\n#{output}"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0876 -- bare 2-arity execute_with_manifest/2 elimination (design
+  # lib/letflow/design/iss876-wallclock-2arity-gap.md). This design's own "Mutation/
+  # fail-first ... does NOT apply here") states the code under test
+  # (run_script_sync/3) already existed before this fix -- only its CALLERS changed.
+  # Per the design's own prescribed proof (§4 items 1-3): a structural source check
+  # that the bare 2-arity form is gone from every at-risk site (test 1 below), two
+  # behavioral-equivalence tests closing the two outcome-shape gaps this fix's
+  # conversions introduce beyond ISS-0426's own equivalence suite (added to the
+  # "ISS-0426: seam equivalence (property a)" describe block above, non-empty-manifest
+  # hash equivalence and Lua.CompilerException shape equivalence), and a call-site
+  # count regression guard (test 2 below) pinning the total so a future revert of any
+  # one of these 9 conversions fails loudly instead of silently reintroducing the
+  # race.
+  describe "ISS-0876: bare 2-arity execute_with_manifest/2 elimination" do
+    # Structural check (design §4 item 1, primary evidence -- no flake reproduction
+    # needed): parses THIS file's own source with Code.string_to_quoted/1 and walks
+    # the AST for actual `Executor.execute_with_manifest(_, _)` CALL nodes whose
+    # argument list has exactly 2 elements -- the bare-2-arity shape that reaches
+    # execute_with_manifest/2's unmitigated default-timeout path. AST-based, not a
+    # text/regex scan, for the same reason this file's own "exactly 11 tests carry
+    # @tag :lua_wallclock_race" self-check (above) uses Macro.prewalk/3 rather than
+    # a substring count: this describe block's own comments and the module's
+    # moduledoc-style prose above legitimately mention "execute_with_manifest(" and
+    # "execute_with_manifest/2" many times over, which a raw substring/regex count
+    # would over-count against. `function_exported?(Executor, :execute_with_manifest,
+    # 2)` (AC1, line ~42) is an atom argument to a different function, not a call to
+    # Executor.execute_with_manifest itself, and is correctly NOT matched by this AST
+    # pattern (it has no `{:., _, [{:__aliases__, _, [:Executor]},
+    # :execute_with_manifest]}` call node at all).
+    #
+    # Expected count: exactly 3 -- the 3 short-circuit `normalize_script_ref/1`
+    # rejection sites the design (§2, "Not converted" note) explicitly excludes:
+    # `Executor.execute_with_manifest(12345, "h")`,
+    # `Executor.execute_with_manifest(%{}, "h")`, and
+    # `Executor.execute_with_manifest(%{manifest: :not_a_manifest, script_source:
+    # "h"}, "h")` (the "a script_ref that is neither a binary nor a %{manifest:,
+    # script_source:} map returns {:error, :invalid_script_ref}" test, REQ-158
+    # describe block above) -- all three return `{:error, :invalid_script_ref}`
+    # synchronously inside normalize_script_ref/1, before execute_with_manifest/3
+    # ever reads `opts` or spawns a `Task`, so they are not at risk and this design
+    # deliberately leaves them as bare 2-arity calls (converting them would be
+    # editing an unreachable-by-the-race path for no safety benefit).
+    test "no bare 2-arity Executor.execute_with_manifest/2 call remains except the 3 short-circuit exclusions" do
+      {:ok, ast} = Code.string_to_quoted(File.read!(__ENV__.file))
+
+      {_ast, bare_2_arity_count} =
+        Macro.prewalk(ast, 0, fn
+          {{:., _, [{:__aliases__, _, [:Executor]}, :execute_with_manifest]}, _, args} = node,
+          acc
+          when length(args) == 2 ->
+            {node, acc + 1}
+
+          node, acc ->
+            {node, acc}
+        end)
+
+      assert bare_2_arity_count == 3,
+             "expected exactly 3 bare 2-arity Executor.execute_with_manifest/2 call " <>
+               "sites (the 3 normalize_script_ref/1 short-circuit exclusions design " <>
+               "§2 names) -- found #{bare_2_arity_count}. A count above 3 means a " <>
+               "call site was reverted (or newly added) onto the unmitigated " <>
+               "execute_with_manifest/2 wallclock-racing path; a count below 3 means " <>
+               "one of the 3 legitimately-excluded short-circuit sites was converted " <>
+               "or removed, which this design does not call for."
+    end
+
+    # Call-site count regression guard (design §4 item 3): pins the total number of
+    # Executor.run_script_sync/3 and Executor.run_with_heap_limit_sync/4 CALL nodes
+    # (not function definitions -- there are none in this test file) in this file to
+    # 31, mirroring this file's own "exactly 11 @tag :lua_wallclock_race" self-check
+    # idiom (above) -- AST-based so this describe block's own prose mentioning
+    # "run_script_sync(" does not inflate the count.
+    #
+    # The 31 breaks down as: 14 (ISS-0426's own Group-1 conversions) + 9 (this
+    # design's conversions, §2's table) = 23 "protected call sites" whose presence as
+    # run_script_sync/run_with_heap_limit_sync calls (rather than a bare
+    # execute_with_manifest/2 or a racing execute_with_manifest/3) is what keeps
+    # {:error, {:wallclock_timeout, _}} unreachable from each of those 23 tests by
+    # construction, PLUS 8 comparison calls the "ISS-0426: seam equivalence (property
+    # a)" and "ISS-0426: memory limit still binds ... (property b)" describe blocks
+    # (above) make deliberately, on the run_script_sync/run_with_heap_limit_sync side
+    # of an equivalence assertion against a racing execute_with_manifest/3
+    # counterpart -- 6 pre-existing (ISS-0426's own equivalence suite) + 2 added by
+    # this design (the non-empty-manifest-hash and Lua.CompilerException equivalence
+    # tests added above). 23 + 8 = 31. If a future edit reverts one of the 9 §2
+    # conversions back to a bare execute_with_manifest/2 call, this count drops to 30
+    # and this test fails loudly -- the same "silently re-widened back to the racing
+    # path" guard design §4 item 3 asks for.
+    test "the file contains exactly 31 run_script_sync/3 or run_with_heap_limit_sync/4 call sites" do
+      {:ok, ast} = Code.string_to_quoted(File.read!(__ENV__.file))
+
+      {_ast, sync_seam_call_count} =
+        Macro.prewalk(ast, 0, fn
+          {{:., _, [{:__aliases__, _, [:Executor]}, fun]}, _, _args} = node, acc
+          when fun in [:run_script_sync, :run_with_heap_limit_sync] ->
+            {node, acc + 1}
+
+          node, acc ->
+            {node, acc}
+        end)
+
+      assert sync_seam_call_count == 31,
+             "expected exactly 31 Executor.run_script_sync/3 or " <>
+               "Executor.run_with_heap_limit_sync/4 call sites (23 protected " <>
+               "conversion sites -- 14 ISS-0426 + 9 ISS-0876 -- plus 8 equivalence-" <>
+               "suite comparison calls -- 6 ISS-0426 + 2 ISS-0876) -- found " <>
+               "#{sync_seam_call_count}. A drop below 31 likely means one of the 9 " <>
+               "ISS-0876 conversions (design §2) was reverted back onto the racing " <>
+               "execute_with_manifest/2 path."
     end
   end
 end

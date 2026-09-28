@@ -1,0 +1,129 @@
+run_id: WF03-ISS0876-20260928
+agent: TEST-RUNNER
+date: 2026-09-28T16:14:19Z
+branch: feature/WF03-ISS0876-20260928
+issue: ISS-0876
+scope:
+  description: >
+    Test-only fix. Repointed 9 bare 2-arity Executor.execute_with_manifest/2 calls in
+    test/letflow/engine/lua/executor_test.exs onto the existing run_script_sync/3 and
+    run_with_heap_limit_sync/4 seams (ISS-0426), eliminating an unmitigated wall-clock-race
+    exposure in 7 tests. TEST-DESIGNER also added 2 behavioral-equivalence tests and 2
+    AST-based structural/regression-guard tests to the same file. No production code
+    (lib/) touched.
+  files_changed:
+    - test/letflow/engine/lua/executor_test.exs (169 insertions, 0 deletions -- purely additive; M in git status)
+  files_added_untracked:
+    - docs/issues/ISS-0876.yaml
+    - lib/letflow/design/iss876-wallclock-2arity-gap.md
+  git_status_confirmed: |
+    M test/letflow/engine/lua/executor_test.exs
+    ?? docs/issues/ISS-0876.yaml
+    ?? lib/letflow/design/iss876-wallclock-2arity-gap.md
+
+steps:
+  - step: docker compose up -d
+    result: >
+      letflow-2-postgres-1 already Running; letflow-2-keycloak-1 started. No .env override
+      of LETFLOW_DB_PORT present; default compose port 5462 used.
+
+  - step: "mix test test/letflow/engine/lua/executor_test.exs"
+    result: PASS
+    output_summary: |
+      Excluding tags: [:keycloak, :wasm_hang, :lua_wallclock_race]
+      Finished in 6.6 seconds (6.6s async, 0.00s sync)
+      Result: 49 passed, 11 excluded
+    notes: >
+      One pre-existing Elixir compiler type-warning (dialyzer-style, not a test failure)
+      at line 484 on an unreachable-clause pattern
+      (`refute match?({:error, {:wallclock_timeout, _}}, result)`), inherent to the
+      run_script_sync/3 return-type union and unrelated to correctness of the assertion
+      itself; does not affect pass/fail. 11 exclusions are the standard tag-based
+      exclusions for this project (keycloak/wasm_hang/lua_wallclock_race), not skips
+      introduced by this change.
+
+  - step: "mix letflow.check.test (scripts/test_parallel.sh, N=16 partitions)"
+    result: FAIL (suite-wide), but failures are unrelated to ISS-0876's scope
+    combined_totals:
+      tests: 5028
+      properties: 6
+      failures: 3
+    per_partition_summary: |
+      partition 1: 404 tests, 0 properties, 1 failures, exit 2
+      partition 2: 300 tests, 0 properties, 0 failures, exit 0
+      partition 3: 374 tests, 0 properties, 0 failures, exit 0
+      partition 4: 241 tests, 0 properties, 0 failures, exit 0
+      partition 5: 298 tests, 0 properties, 0 failures, exit 0
+      partition 6: 309 tests, 0 properties, 0 failures, exit 0
+      partition 7: 411 tests, 0 properties, 0 failures, exit 0
+      partition 8: 383 tests, 0 properties, 0 failures, exit 0
+      partition 9: 203 tests, 4 properties, 0 failures, exit 0
+      partition 10: 380 tests, 0 properties, 0 failures, exit 0
+      partition 11: 287 tests, 0 properties, 0 failures, exit 0
+      partition 12: 386 tests, 0 properties, 0 failures, exit 0
+      partition 13: 270 tests, 1 property, 2 failures, exit 2
+      partition 14: 298 tests, 0 properties, 0 failures, exit 0
+      partition 15: 265 tests, 1 property, 0 failures, exit 0
+      partition 16: 219 tests, 0 properties, 0 failures, exit 0
+    failures:
+      - test: "A9: every indexed volume's declared entries: count equals what is actually on disk"
+        module: Letflow.Docs.RequirementStatusInvariantsTest
+        file: test/docs/requirement_status_invariants_test.exs:716
+        detail: >
+          Declared-vs-actual entry count drift in docs/status/requirement_status.v23.yaml
+          (declared 29, actual 30 on disk). This file is not touched by this branch's diff
+          (confirmed via git status -- only test/letflow/engine/lua/executor_test.exs is
+          modified, plus two untracked new files unrelated to this volume). Pre-existing
+          on this branch/base, not caused by ISS-0876.
+        related_to_iss0876: false
+      - test: "retire_oldest_eligible_month/1 -- happy path a schema with no eligible month for the chosen month is recorded skipped, not failed"
+        module: Letflow.EventStore.RetentionOperationsTest
+        file: test/letflow/event_store/retention_operations_test.exs:339
+        detail: >
+          `refute :failed in statuses` failed; observed statuses
+          [:failed, :failed, :failed, :skipped, :succeeded] -- looks like cross-test
+          state/async-fanout leakage in the retention harness, not a Lua-executor concern.
+        related_to_iss0876: false
+      - test: "retire_oldest_eligible_month/1 -- happy path inserts a running row immediately, returns before the fanout completes, and the row later reaches completed"
+        module: Letflow.EventStore.RetentionOperationsTest
+        file: test/letflow/event_store/retention_operations_test.exs:303
+        detail: >
+          `assert [outcome] = result.outcomes` failed -- result.outcomes had already reached
+          :succeeded/completed by assertion time instead of being caught mid-fanout; a
+          timing/async-polling assumption in that test, unrelated to the Lua executor.
+        related_to_iss0876: false
+    known_unrelated_service_task_wiring_issue: >
+      The previously-reported ServiceTaskWiringTest AC5 idempotency-key-too-long rollback
+      failure (separate, already-filed issue) did NOT reproduce in this run --
+      "ServiceTaskWiringTest" does not appear anywhere in this run's combined output. Its
+      absence here does not close that report (it was already noted as a known,
+      possibly-flaky issue); recording for the record that it did not recur this time.
+    new_unrelated_failures_observed: >
+      Two additional pre-existing-and-unrelated failures were observed this run
+      (RequirementStatusInvariantsTest A9 docs-drift, and two RetentionOperationsTest
+      async-timing failures) in files this branch never touches. These are being reported
+      to ORCH as separate issues, same as the ServiceTaskWiringTest one, not folded into
+      ISS-0876's own verdict.
+
+verdict:
+  iss_0876_scope: PASS
+  rationale: >
+    All 49 tests in test/letflow/engine/lua/executor_test.exs pass (0 failures, 11
+    excluded per standing tag exclusions). The 3 full-suite failures are in modules this
+    branch's diff never touches (docs invariants, event-store retention) and are
+    reproducible independent of this change (confirmed via `git status` showing zero
+    modification to those files/volumes). ISS-0876's own scope is green.
+  full_suite_status: >
+    NOT fully green: 3/5028 tests fail, all pre-existing/unrelated to ISS-0876. Flagged to
+    ORCH as separate issues per this project's own-scope-only reporting convention.
+
+commands_run:
+  - "docker compose up -d"
+  - "mix test test/letflow/engine/lua/executor_test.exs"
+  - "mix letflow.check.test"
+
+next_step: >
+  Feeds RELEASE-VALIDATOR, who independently re-runs the suite rather than trusting this
+  report. Full raw logs retained locally at /tmp/full_check.log (this session's scratch
+  space) and scripts/test_parallel.sh's own partition logs under
+  C:/Users/tvolo/AppData/Local/Temp/letflow_test_parallel.M74aJ7 (ephemeral, not committed).

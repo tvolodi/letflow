@@ -75,6 +75,7 @@ defmodule Letflow.TenantFixture do
           slug_prefix: String.t(),
           display_name: String.t(),
           oidc_mode: :enabled | :disabled,
+          idp_realm_id: String.t() | nil,
           expected_tables: [String.t()] | :default,
           teardown: boolean(),
           template: :clone | :replay
@@ -237,6 +238,7 @@ defmodule Letflow.TenantFixture do
     slug_prefix = Keyword.get(opts, :slug_prefix, "tenant-fixture")
     display_name = Keyword.get(opts, :display_name, "Tenant Fixture")
     oidc_mode = Keyword.get(opts, :oidc_mode, :disabled)
+    idp_realm_id = Keyword.get(opts, :idp_realm_id, nil)
     expected = Keyword.get(opts, :expected_tables, :default)
     template = Keyword.get(opts, :template, :clone)
     owner = owning_test()
@@ -246,7 +248,8 @@ defmodule Letflow.TenantFixture do
       |> Tenant.create_changeset(
         %{
           slug: Letflow.TenantSlugFixture.unique_slug(slug_prefix),
-          display_name: display_name
+          display_name: display_name,
+          idp_realm_id: idp_realm_id
         },
         oidc_mode
       )

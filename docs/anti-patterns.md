@@ -3909,3 +3909,38 @@ matter how correct its content is. Downstream roles (TEST-RUNNER,
 REVIEWER, RELEASE-VALIDATOR) should keep treating a fresh `git status`
 check as a mandatory first step before relying on any prior agent's
 committed-state claim, exactly as happened here.
+
+## A worker agent running a long verification step (e.g. the full local `mix test`, ~80 min) goes silent long enough to look stuck, when it is actually doing legitimate extra confirmation work (2026-09-28, ORCH, ISS-0876)
+
+An ELIXIR-DEV agent finished its committed, verified fix for ISS-0876
+(clean tree, 4 commits ahead of origin, not yet pushed) and then, on its
+own initiative, kicked off a full local `mix test` run as supplementary
+confirmation before handing off. That run took ~80 minutes. During it,
+the agent did not respond to two separate ORCH status-check messages
+sent ~15 minutes apart, because it was blocked inside a single long
+foreground tool call and had no opportunity to drain its message queue
+until that call returned. From ORCH's side this was indistinguishable
+from a genuinely stuck/hung agent: same symptom (no reply, no state
+change), two very different causes (hung vs. legitimately busy).
+
+**What ORCH did:** treated "unresponsive + unchanged branch state for
+>1h after two check-ins" as sufficient grounds to take over -- pushed
+the already-verified branch and opened the PR directly, then told the
+agent to stand down. This was the right call given the state was fully
+verified and low-risk to push (matches the personal operating-rules
+recoverability/blast-radius test: pushing a branch and opening a PR is
+easily reversible, requires no destructive action, and CI is still the
+authoritative gate before merge). The agent's full-suite run later
+confirmed 0 failures, consistent with the already-passing scoped run.
+
+**Correct alternative:** an agent about to run a long, non-essential
+verification step (full suite beyond what the workflow's own gate
+requires) should say so explicitly in its last message *before* starting
+it ("kicking off full mix test as extra confirmation, ~80min, will
+report when done or if asked") so a coordinator polling for status has
+context for silence rather than reading it as a hang. Conversely, a
+coordinator should check the actual repo/PR state directly (`git status`,
+`gh pr view`) before deciding an agent is stuck purely from message
+non-response -- the state check here confirmed real, verified progress
+each time, which is what made taking over low-risk rather than guessing
+blind.

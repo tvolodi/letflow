@@ -925,3 +925,45 @@
       probe-and-release; grep for "release.*back to open"/"claim-then-release"
       finds no remaining stale instruction). letflow-queue task 877 released
       status: done (best-effort closed GH#1942).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-28T18:54:12Z"
+    note: >
+      ISS-0876 (letflow-queue task 876, GH#1941) resolved and closed in
+      docs/issues/ISS-0876.yaml. Found incidentally by REQ-421's WF-02 run:
+      a Letflow.Engine.Lua.ExecutorTest global-isolation wallclock_timeout,
+      a possible gap in ISS-0426's Group-1 fix. ISSUE-FIXER (Step 0.5 + Step
+      1, dispatched as sonnet subagent) confirmed via evidence this was a
+      genuine gap, not a duplicate of ISS-0426: nine bare 2-arity
+      Executor.execute_with_manifest/2 call sites in
+      test/letflow/engine/lua/executor_test.exs (originally lines 64/73/88/
+      93/188/192/209/225/228) were never migrated onto run_script_sync/3 by
+      ISS-0426's fix and still routed through the unmitigated Task.yield
+      wallclock race. Routed to CODE-DESIGNER
+      (lib/letflow/design/iss876-wallclock-2arity-gap.md) then ELIXIR-DEV,
+      who repointed all 9 sites onto run_script_sync/3 or
+      run_with_heap_limit_sync/4. SECURITY-REVIEWER and REVIEWER both
+      PASSed. TEST-DESIGNER added 4 regression tests (2 behavioral-
+      equivalence, 2 AST-based structural guards asserting no bare 2-arity
+      call sites remain outside the 3 intentional short-circuit
+      exclusions) -- mutation-tested by reverting one converted call site
+      and confirming both new guard tests fail as expected, then reverting.
+      TEST-RUNNER and RELEASE-VALIDATOR both PASSed (mix test on the target
+      file: 49 passed, 11 excluded, 0 failures; full local mix test as
+      supplementary confirmation: 5037 passed, 27 excluded, 0 failures).
+      One unrelated pre-existing failure (Letflow.Engine.ServiceTaskWiringTest
+      AC5, idempotency_key-too-long rollback) surfaced during an earlier
+      mix letflow.check.test run -- filed as a separate queued issue rather
+      than addressed here (different subsystem, no shared code path).
+      ELIXIR-DEV's agent became unresponsive for over an hour with a fully
+      verified, clean branch sitting unpushed (it was running the ~80min
+      full local mix test as extra confirmation, not actually stuck); ORCH
+      pushed the branch and opened the PR directly after two unanswered
+      status checks to avoid stalling the loop. PR #1948 (branch
+      feature/WF03-ISS0876-20260928) required one rebase onto main mid-
+      review (a concurrent session's unrelated ISS-0112 batch-6 PR #1947
+      landed first) and re-ran CI clean after the force-push. CI: Backend/
+      Frontend/Mobile gates all passed. Squash-merged c7d1fac5, never a
+      direct push to main. GitHub issue #1941 closed.

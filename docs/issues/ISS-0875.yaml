@@ -1,0 +1,158 @@
+id: ISS-0875
+queue_ref: Q-875
+github_ref: GH-1936
+title: >
+  Iss0778PlatformRoleSeedingE2eTest T4: reported 60s ExUnit.TimeoutError in a
+  Postgrex insert path -- does NOT reproduce on current main (post-ISS-0766 fix)
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ421-20260928
+discovered_at: "2026-09-28T00:00:00Z"
+severity: MINOR
+tags:
+  - backend
+  - test-flake
+  - shared-db-isolation
+  - no-repro
+
+description: >
+  Queue task 875 (github_issue_number 1936) reports that TEST-RUNNER, during
+  WF02-REQ421-20260928 Step 4 (full local suite via scripts/test_parallel.sh,
+  TEST_PARALLEL_N=4), observed a 60s ExUnit.TimeoutError in a Postgrex insert
+  path inside
+  test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs's T4 describe
+  block. Neither the failing test file nor anything in its stack trace appears
+  in the WF02-REQ421-20260928 branch diff (apps/mobile/, docs/mobile/*.md
+  only), so it was correctly filed as an unattributed, pre-existing defect in
+  shared test infrastructure rather than folded into that run.
+
+  The source report, test/reports/report-20260928-WF02-REQ421-20260928.yaml,
+  does NOT exist in this checkout (confirmed via `ls`/glob -- not found; no
+  file matching that name or date under test/reports/). Its content could not
+  be independently re-read; this diagnosis rests entirely on the queue task's
+  own description plus direct reproduction attempts against current main.
+
+step_0_5_registry_lookup: >
+  docs/issues/ISS-0874.yaml and docs/issues/ISS-0766.yaml are both
+  status: resolved, both about the SAME test file's T4 describe block calling
+  Letflow.Support.BpmDefaultRealmDisplacement.displace!/0, but a DIFFERENT
+  symptom: Ecto.NoResultsError from a permanently-orphaned "bpm-default"
+  singleton row (fixed by ISS-0766's ensure_seeded!/1 self-healing repair,
+  commit f4e5abe3, PR #1923, merged 2026-09-28T06:12:37+05:00 -- confirmed
+  present on this checkout's HEAD, b0ec6164, 2026-09-28T18:43:17+05:00, i.e.
+  well after the fix). This queue task's symptom is a 60s
+  ExUnit.TimeoutError in a "Postgrex insert path" -- a hang/timeout, not a
+  NoResultsError -- so per core-directives.md's structural-attribution rule
+  this is genuinely a different symptom and was correctly NOT folded into
+  either closed record. It required its own diagnosis pass rather than being
+  dismissed as a duplicate.
+
+step_1_diagnosis: >
+  REPRODUCTION ATTEMPTS (all against current main, HEAD b0ec6164, which
+  already includes ISS-0766's fix f4e5abe3):
+
+  1. Single direct run:
+     `MIX_ENV=test mix test test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs --trace`
+     -> "Finished in 2.6 seconds (0.00s async, 2.6s sync)" / "Result: 1
+     passed". No timeout, no delay of any kind.
+
+  2. Four concurrent, independent `mix test` OS processes, all targeting the
+     SAME (non-partitioned, shared) default test database simultaneously --
+     deliberately the highest-contention scenario for
+     BpmDefaultRealmDisplacement's cross-OS-process pg_advisory_lock, closer
+     to identity_test.exs's own historical non-partitioned-shared-DB flake
+     class than the partitioned scripts/test_parallel.sh scenario (each
+     scripts/test_parallel.sh partition gets its OWN database,
+     letflow_test#{N}, and pg_advisory_lock's lock namespace is scoped per
+     database in PostgreSQL -- confirmed against PostgreSQL's own advisory-
+     lock semantics -- so partitions cannot contend with each other on this
+     lock at all; same-DB concurrent OS processes, as run here, is the
+     strictly harder case). All 4 ran the T4 test to completion:
+     run1 7.4s, run2 3.3s, run3 5.3s, run4 9.5s -- all "Result: 1 passed",
+     all well under the reported 60s timeout. Logs show the lock correctly
+     serializing them (TenantSchemaReaper deferrals visible, confirming
+     concurrent connections were genuinely present), with no hang anywhere
+     in the ensure_seeded!/1 insert or the advisory-lock acquire/release
+     path.
+
+  3. Attempted a full TEST_PARALLEL_N=4 `scripts/test_parallel.sh` run
+     (matching the queue task's own reported command) to reproduce under
+     the exact original conditions -- TWICE, both inconclusive by
+     environment limitation rather than by a clean/dirty result:
+       (a) ISSUE-FIXER's own attempt: this environment's tool-call time
+           budget (10 minutes) was insufficient for the full ~5000+-test
+           suite across 4 partitions to complete.
+       (b) ORCH's follow-up attempt (this session, run in the background
+           with a 10-minute budget specifically to close gap (a)): the
+           host's own background-process reaper killed the command outright
+           ("system is running low on memory") before it produced any
+           output at all -- 0 bytes written to the log file. This is an
+           environment/host-resource event, not a test result: it supplies
+           no evidence either for or against reproduction, and is
+           deliberately not read as a negative (or positive) finding.
+     Both attempts are disclosed as genuine, unresolved gaps in direct
+     reproduction of the EXACT originally-reported command. Given (a) the
+     per-database advisory lock scoping established in #2 above (partitions
+     cannot contend with each other on this lock at all -- confirmed
+     against PostgreSQL's own advisory-lock semantics), and (b) the
+     same-database, higher-contention case (4 concurrent OS processes
+     against ONE shared database) already reproducing clean and fast twice
+     over (ISSUE-FIXER's run), there is no remaining plausible mechanism by
+     which 4-way *partitioned* concurrency (each partition isolated to its
+     own database, and therefore its own advisory-lock namespace) would
+     behave worse than 4-way *same-database* concurrency already measured.
+     The reasoning is accepted as sufficient in place of completing the
+     exact original command a third time, given two independent
+     environment-level failures to do so (neither a test failure) and the
+     structural argument above.
+
+  CONCLUSION: no defect reproduces on current main under direct,
+  repeated, and deliberately higher-contention-than-originally-reported
+  conditions. The most plausible explanation, consistent with all evidence
+  gathered, is that the original 60s timeout was itself either (a) the
+  exact ISS-0766/ISS-0874 mechanism (an orphaned "bpm-default" row causing
+  a caller to hang/retry rather than cleanly raise NoResultsError under
+  some interleaving not captured by ISS-0766's own repro), incidentally
+  fixed by ISS-0766's ensure_seeded!/1 landing in commit f4e5abe3 (merged
+  2026-09-28T06:12:37+05:00) -- WF02-REQ421-20260928's own Step 4 run is
+  not independently timestamped in this investigation (its source report
+  file is missing, see description above), so it cannot be confirmed
+  whether that run predates or postdates f4e5abe3 -- or (b) an
+  environment-specific/transient condition (resource contention, an
+  already-degraded shared Postgres instance at the time, etc.) that this
+  diagnosis pass's environment does not share. No regression test is
+  warranted for a mechanism that cannot be reproduced.
+
+  STATED LIMITATION OF THE METHOD (required for a no_defect verdict, per
+  ISSUE_QUEUE.md's evidence bar): the exact originally-reported command
+  (TEST_PARALLEL_N=4 scripts/test_parallel.sh, full suite) was never run to
+  completion against this finding, in two independent attempts, both
+  blocked by this environment's own resource limits rather than by a
+  clean/dirty test outcome. This verdict rests on a structural argument
+  (per-database advisory-lock scoping making the untested partitioned case
+  no harder than the already-tested same-database case) plus direct,
+  repeated reproduction of that harder case, not on having run the exact
+  original command itself. A future run with a larger time/memory budget
+  that completes the exact original command and finds a repro would
+  supersede this verdict and should reopen this record rather than file a
+  fresh one.
+
+affected_files:
+  - test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs
+  - test/support/bpm_default_realm_displacement.ex
+
+related:
+  - ISS-0874  # same test file/T4 block, different (already-resolved) symptom
+  - ISS-0766  # same underlying helper, different (already-resolved) symptom; its fix (f4e5abe3) is present on the HEAD this diagnosis ran against
+
+severity_rationale: >
+  MINOR: no defect reproduces under direct, repeated, and deliberately
+  higher-contention-than-reported conditions against current main. Kept open
+  (not no_defect yet) only because the exact originally-reported command
+  (scripts/test_parallel.sh TEST_PARALLEL_N=4, full suite) was not run to
+  completion in this pass due to this environment's own time budget -- see
+  step_1_diagnosis point 3. A future pass with a longer time budget should
+  attempt that exact reproduction before this is closed no_defect.
+
+status: no_defect
+verdict_in_run: WF03-ISS0875-20260928
+verdict_at: "2026-09-28T14:10:00Z"

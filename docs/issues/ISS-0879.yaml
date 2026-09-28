@@ -1,0 +1,92 @@
+id: ISS-0879
+title: >
+  Letflow.EventStore.RetentionOperationsTest's retire_oldest_eligible_month/1
+  happy-path cases fail intermittently under test_parallel.sh -- same
+  unscoped-global-read mechanism ISS-0873 fixed for retention_summary/0, but
+  two sibling test cases its fix did not cover
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ421-20260928
+discovered_at: "2026-09-29T00:32:00Z"
+tags:
+  - backend
+  - test-flake
+  - shared-db-isolation
+  - iss-0873-followup
+severity: MINOR
+description: >
+  Found during TEST-RUNNER's Step 4 full-suite verification for
+  WF02-REQ421-20260928 (`scripts/test_parallel.sh`, N=16 nproc-derived,
+  combined 5028 tests / 6 properties / 3 failures, 5031/5034 passed). Full
+  raw output recorded in
+  test/reports/report-20260929-WF02-REQ421-20260928.yaml.
+
+  `git diff --name-only origin/main...HEAD` for that branch confirmed
+  test/letflow/event_store/retention_operations_test.exs and
+  lib/letflow/event_store/retention_operations.ex are both absent from the
+  diff -- not a regression from that branch.
+
+  Two failures, both in `retire_oldest_eligible_month/1`'s "happy path"
+  describe block:
+
+  1. test/letflow/event_store/retention_operations_test.exs:339 ("a schema
+     with no eligible month for the chosen month is recorded skipped, not
+     failed") -- `refute :failed in statuses` failed; actual statuses were
+     `[:failed, :failed, :failed, :skipped, :succeeded]` (extra :failed
+     entries beyond what the test set up).
+
+  2. test/letflow/event_store/retention_operations_test.exs:303 ("inserts a
+     running row immediately, returns before the fanout completes, and the
+     row later reaches completed") -- `assert [outcome] = result.outcomes`
+     failed; `result.outcomes` held 4 entries instead of 1, 3 of them
+     `%{reason: :invalid_schema_name, status: :failed, schema_name:
+     "tenant_template_build_..."}` for schemas this test never created.
+
+  Root-cause hypothesis (not yet confirmed in isolation): `docs/issues/
+  ISS-0873.yaml` (status: resolved) diagnosed and fixed a cross-partition
+  TOCTOU race in this exact module -- `retire_oldest_eligible_month/1`'s
+  fanout reads `provisioned_tenant_schemas/0` (a platform-wide, unscoped
+  read across ALL provisioned tenant schemas across every concurrent
+  `test_parallel.sh` partition, not scoped to this test's own fixtures) --
+  but that fix's regression coverage targeted a different test case
+  (`retention_summary/0`'s "protected_record_count sums keep_forever rows"
+  bit-identical-across-two-calls assertion), not either of these two
+  `retire_oldest_eligible_month/1` happy-path cases. The extra
+  `tenant_template_build_*`/`:failed` entries are consistent with another
+  partition's concurrently-provisioned or concurrently-torn-down tenant
+  schema rows leaking into this test's own unscoped read window -- the same
+  general mechanism, but not proven identical without isolated
+  reproduction.
+
+  NOT the same symptom as any currently open issue: searched docs/issues/
+  for "retire_oldest_eligible_month", "RetentionOperationsTest",
+  "provisioned_tenant_schemas" -- ISS-0873 is the only match and it is
+  closed/resolved, with these two specific test cases outside its own
+  regression-test coverage.
+
+severity_rationale: >
+  MINOR -- only reproduces under full parallel-suite contention (same class
+  as ISS-0873 and ISS-0878), no evidence of a production defect (the
+  extra-schema leakage is an artifact of test isolation under
+  `test_parallel.sh`, not of `retire_oldest_eligible_month/1`'s real
+  runtime behaviour against a single tenant), and has not been observed to
+  reproduce on every run (report notes only 2 of N partitions affected this
+  run).
+
+fix_direction: >
+  NOT INVESTIGATED beyond the code-inspection hypothesis above (no fix
+  attempted -- TEST-RUNNER's own scope stops at diagnosis-routing). Needs
+  ISSUE-FIXER to determine, with isolated reproduction, whether ISS-0873's
+  fix needs extending to retire_oldest_eligible_month/1's own
+  provisioned_tenant_schemas/0-derived fanout (the same unscoped-global-read
+  mechanism, per that issue's own root-cause writeup), or whether this is a
+  distinct mechanism (e.g. a genuinely different leak path specific to the
+  fanout's own schema-status bookkeeping) warranting its own fix separate
+  from ISS-0873's.
+
+affected_files:
+  - test/letflow/event_store/retention_operations_test.exs
+  - lib/letflow/event_store/retention_operations.ex
+
+status: open
+queue_ref: Q-879
+github_ref: GH-1952

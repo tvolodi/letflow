@@ -63,16 +63,22 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
   describe "global isolation (AC3)" do
     test "a global written in execution 1 is absent in execution 2" do
       # Execution 1: set a global
-      assert {:ok, _} = Executor.execute_with_manifest("MY_GLOBAL = 42", "any-hash")
+      assert {:ok, _} =
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
+                 "MY_GLOBAL = 42",
+                 100_000
+               )
 
       # Execution 2 through the same executor: if MY_GLOBAL leaked, Lua's error() fires
       # and the executor returns {:error, _}. assert {:ok, _} therefore PROVES absence.
       # (Asserting {:ok, _} on `return MY_GLOBAL` would be vacuous because execute_with_manifest
       # discards the Lua return value -- both nil and 42 would yield {:ok, _} there.)
       assert {:ok, _} =
-               Executor.execute_with_manifest(
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
                  "if MY_GLOBAL ~= nil then error('global_leaked: MY_GLOBAL = ' .. tostring(MY_GLOBAL)) end",
-                 "any-hash"
+                 100_000
                ),
              "MY_GLOBAL must be absent (nil) in a fresh executor invocation"
     end
@@ -85,14 +91,20 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
   describe "distinct state (AC4)" do
     test "a table mutated in execution 1 is pristine in execution 2" do
       # Execution 1: create and populate a table
-      assert {:ok, _} = Executor.execute_with_manifest("T = {}; T.x = 99", "h1")
+      assert {:ok, _} =
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
+                 "T = {}; T.x = 99",
+                 100_000
+               )
 
       # Execution 2 through the same executor: if T leaked, Lua's error() fires and the
       # executor returns {:error, _}. assert {:ok, _} PROVES T is nil/absent.
       assert {:ok, _} =
-               Executor.execute_with_manifest(
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
                  "if T ~= nil then error('table_T_leaked: T.x = ' .. tostring(T.x)) end",
-                 "h2"
+                 100_000
                ),
              "table T from execution 1 must not survive into execution 2"
     end
@@ -185,11 +197,20 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       expected_hash = Manifest.compute_hash(%Manifest{script_id: "", capabilities: []}, script)
 
       assert {:ok, %{manifest_hash: ^expected_hash}} =
-               Executor.execute_with_manifest(script, "ignored")
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
+                 script,
+                 100_000
+               )
     end
 
     test "a Lua syntax error returns {:error, reason}" do
-      assert {:error, _reason} = Executor.execute_with_manifest("this is not lua ===", "h")
+      assert {:error, _reason} =
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
+                 "this is not lua ===",
+                 100_000
+               )
     end
   end
 
@@ -206,10 +227,7 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       expected_hash = Manifest.compute_hash(manifest, script)
 
       assert {:ok, %{manifest_hash: ^expected_hash}} =
-               Executor.execute_with_manifest(
-                 %{manifest: manifest, script_source: script},
-                 "ignored"
-               )
+               Executor.run_script_sync(manifest, script, 100_000)
     end
 
     test "changing the manifest's capabilities (script source unchanged) changes the returned hash" do
@@ -222,10 +240,10 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       }
 
       assert {:ok, %{manifest_hash: hash_a}} =
-               Executor.execute_with_manifest(%{manifest: manifest_a, script_source: script}, "h")
+               Executor.run_script_sync(manifest_a, script, 100_000)
 
       assert {:ok, %{manifest_hash: hash_b}} =
-               Executor.execute_with_manifest(%{manifest: manifest_b, script_source: script}, "h")
+               Executor.run_script_sync(manifest_b, script, 100_000)
 
       refute hash_a == hash_b,
              "a modified capability list must change the manifest_hash Executor returns"

@@ -50,56 +50,42 @@ defmodule Letflow.Engine.VariableSchemaTest do
   alias Letflow.Definitions
   alias Letflow.Engine.VariableSchema
   alias Letflow.Engine.VariableSchemaTest.NeverQueriedRepo
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # The manifest version under test -- lib/letflow/tenant_provisioning.ex:361.
   @variable_schemas_migration_version 20_260_821_000_002
 
   # ---------------------------------------------------------------------------------
-  # Fixtures / helpers
+  # Fixtures / helpers -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366).
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req109-vs"),
-        display_name: "REQ-109 VariableSchema Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
+  # The set of migration versions actually recorded against this tenant's schema --
+  # read straight from the live catalog, not from TenantProvisioning.replay_migrations/2's
+  # return value, since TenantFixture.provisioned_tenant!/1 does not surface that return
+  # value to its caller. Equivalent under both of the fixture's provisioning paths:
+  # `:replay` populates schema_migrations by actually running the migrations, and
+  # `:clone` (the fixture's default) copies the fully-migrated template's
+  # schema_migrations rows verbatim -- either way, a freshly provisioned tenant's
+  # schema_migrations holds exactly the full registered set.
+  defp applied_versions_in(schema_name) do
+    %{rows: rows} = Repo.query!(~s(SELECT version FROM "#{schema_name}".schema_migrations))
+    rows |> Enum.map(fn [version] -> version end) |> Enum.sort()
   end
 
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
-  # Returns the schema name AND the versions replay_migrations/1 actually applied --
-  # AC1's manifest half is asserted from that list rather than from a source grep.
+  # Returns the schema name AND the versions actually applied -- AC1's manifest half
+  # is asserted from that list rather than from a source grep.
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req109-vs",
+        display_name: "REQ-109 VariableSchema Test Tenant"
+      )
 
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name, applied_versions: applied_versions}
+    %{
+      tenant_id: tenant_id,
+      schema_name: schema_name,
+      applied_versions: applied_versions_in(schema_name)
+    }
   end
 
   defp unique_name do

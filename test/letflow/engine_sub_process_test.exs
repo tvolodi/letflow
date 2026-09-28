@@ -30,63 +30,28 @@ defmodule Letflow.EngineSubProcessTest do
   alias Letflow.Engine.VariableSchema
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # ---------------------------------------------------------------------------------
-  # Fixtures / helpers
+  # Fixtures / helpers -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366).
+  #
+  # INSTANCE_STARTED, TASK_COMPLETED, EXECUTION_ERROR, SUB_PROCESS_COMPLETED, and
+  # INSTANCE_CANCELLED are all auto-seeded by replay_migrations/2's default manifest
+  # (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this fixture used to
+  # self-register the latter four against a permissive `%{"type" => "object"}` schema
+  # (ISS-0073/GH#267: that duplicate registration now collides with provisioning's own
+  # seed and hard-fails). Removed rather than reconciled: this file's actual event
+  # payloads are produced by the same production writers (Engine.complete_task/3,
+  # ExecutionError.append_execution_error_event/2, the SUB_PROCESS_COMPLETED and
+  # cancel_instance/3 paths) that provisioning's own stricter schema was written to
+  # validate, so relying on the real seed here isn't a coverage loss.
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req062"),
-        display_name: "REQ-062 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
 
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    # INSTANCE_STARTED, TASK_COMPLETED, EXECUTION_ERROR, SUB_PROCESS_COMPLETED, and
-    # INSTANCE_CANCELLED are now all auto-seeded by replay_migrations/2's default
-    # manifest (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this fixture used to
-    # self-register the latter four against a permissive `%{"type" => "object"}`
-    # schema (ISS-0073/GH#267: that duplicate registration now collides with
-    # provisioning's own seed and hard-fails). Removed rather than reconciled: this
-    # file's actual event payloads are produced by the same production writers
-    # (Engine.complete_task/3, ExecutionError.append_execution_error_event/2, the
-    # SUB_PROCESS_COMPLETED and cancel_instance/3 paths) that provisioning's own
-    # stricter schema was written to validate, so relying on the real seed here isn't
-    # a coverage loss -- see this module's own passing runs post-ISS-0073-fix as
-    # confirmation the stricter schema still accepts every payload this file writes.
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req062",
+      display_name: "REQ-062 Test Tenant"
+    )
   end
 
   defp unique_name(prefix \\ "req062-def") do

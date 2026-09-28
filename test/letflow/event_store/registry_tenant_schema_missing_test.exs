@@ -36,31 +36,16 @@ defmodule Letflow.EventStore.RegistryTenantSchemaMissingTest do
 
   use Letflow.DataCase, async: false
 
-  import Ecto.Query
-
   alias Letflow.EventStore.Registry
   alias Letflow.EventStore.Registry.EventType
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # ---------------------------------------------------------------------------------
-  # Fixtures / helpers -- mirrors registry_test.exs's own provisioned_tenant/1 and
-  # drop_schema!/1 exactly (see that file's moduledoc for the full Sandbox-:auto-mode
-  # reasoning this file reuses rather than re-deriving).
+  # Fixtures / helpers -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366).
+  # `drop_schema!/1` stays -- called directly to deliberately drop a tenant's schema
+  # mid-test while leaving its Registration row in place (the exact race this file
+  # reproduces).
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant!(prefix) do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug(prefix),
-        display_name: "ISS-0343 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
 
   defp drop_schema!(schema_name) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
@@ -84,28 +69,21 @@ defmodule Letflow.EventStore.RegistryTenantSchemaMissingTest do
 
   # Provisions a real tenant + schema, then DROPS the schema WITHOUT deleting the
   # Registration row -- the exact "Registration exists, physical schema does not"
-  # window ISS-0343 tolerates. Cleans up the Registration/Tenant rows via on_exit
-  # (the schema is already gone by the time each test body runs).
+  # window ISS-0343 tolerates. Registration/Tenant row cleanup still happens via
+  # TenantFixture's own on_exit teardown (its "DROP SCHEMA IF EXISTS" is a no-op by
+  # the time it runs, since the schema is already gone).
   defp tenant_with_vanished_schema(prefix) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!(prefix)
-
-    on_exit(fn ->
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: prefix,
+        display_name: "ISS-0343 Test Tenant"
+      )
 
     # The race this reproduces: the schema is dropped, but the Registration row
     # (checked first, by resolve_schema_name/1) is deliberately left in place.
     drop_schema!(schema_name)
 
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   # ---------------------------------------------------------------------------------
@@ -145,25 +123,15 @@ defmodule Letflow.EventStore.RegistryTenantSchemaMissingTest do
 
   describe "control: a tenant whose schema was NOT dropped is unaffected by the fix" do
     test "get_type/2 and register_type/2 behave exactly as before for a healthy tenant" do
-      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-      tenant = insert_tenant!("iss0343-control")
+      %{tenant_id: tenant_id} =
+        TenantFixture.provisioned_tenant!(
+          slug_prefix: "iss0343-control",
+          display_name: "ISS-0343 Test Tenant"
+        )
 
-      on_exit(fn ->
-        case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-          {:ok, schema_name} -> drop_schema!(schema_name)
-          {:error, :invalid_tenant_id} -> :ok
-        end
+      assert {:error, :unknown_event_type} = Registry.get_type("NEVER_REGISTERED", tenant_id)
 
-        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-      end)
-
-      assert {:ok, %Registration{}} = TenantProvisioning.provision_tenant_schema(tenant.id)
-      assert {:ok, _} = TenantProvisioning.replay_migrations(tenant.id)
-
-      assert {:error, :unknown_event_type} = Registry.get_type("NEVER_REGISTERED", tenant.id)
-
-      assert {:ok, %EventType{}} = Registry.register_type(valid_attrs(), tenant.id)
+      assert {:ok, %EventType{}} = Registry.register_type(valid_attrs(), tenant_id)
     end
   end
 end

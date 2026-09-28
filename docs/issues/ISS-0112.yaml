@@ -236,7 +236,36 @@ progress_2026_09_28: >
   fix/ISS0112-batch2-tenant-fixture-migration-20260928, squash-merge commit
   recorded once merged).
 
-  8 batches remain (of the plan's 63 files-in-scope total: 31 category-D, 7
+  Batch 3 of 10 merged next: the 8 category-D/plain-default files --
+  test/letflow/engine_sub_process_test.exs,
+  test/letflow/engine_variable_schema_merge_test.exs,
+  test/letflow/engine/variable_schema_test.exs,
+  test/letflow/entities/definitions_test.exs,
+  test/letflow/event_store/migrations_test.exs,
+  test/letflow/event_store/registry_tenant_schema_missing_test.exs,
+  test/letflow/event_store/retention_operations_test.exs,
+  test/letflow/help_test.exs -- migrated the same way onto
+  Letflow.TenantFixture.provisioned_tenant!/1. engine/variable_schema_test.exs and
+  event_store/migrations_test.exs both assert on
+  TenantProvisioning.replay_migrations/2's actual applied_versions return value,
+  which provisioned_tenant!/1 does not surface to its caller, so both got a local
+  applied_versions_in/1 helper -- confirmed byte-identical to the precedent
+  Batch 1 already established in definitions/migrations_test.exs. A `template:
+  :replay` structural fix was also needed (independently re-derived by
+  RELEASE-VALIDATOR).
+
+  RELEASE-VALIDATOR fully PASSed: fresh isolated compile clean; exact 8-file
+  scope confirmed with no creep; 8/8 diffs spot-checked directly; the
+  applied_versions_in/1 reuse confirmed byte-identical to Batch 1's precedent;
+  1470/1470 in-scope tests; 4 independent full-suite runs (3 clean, 2 showing a
+  single unrelated known-class transient flake in files outside this diff,
+  confirmed non-reproducing).
+
+  Merged via PR #<PR_NUMBER> (branch
+  fix/ISS0112-batch3-tenant-fixture-migration-20260928, squash-merge commit
+  <MERGE_COMMIT>).
+
+  7 batches remain (of the plan's 63 files-in-scope total: 31 category-D, 7
   B-only, 4 A-only, 15 C-only, 3 A-and-B, 3 A-and-C -- see the plan's section 1
   and 2 for the full per-batch breakdown and ordering rationale). Status left
   `open`: ISS-0112 is not resolved until all 10 batches land. Queue task 180

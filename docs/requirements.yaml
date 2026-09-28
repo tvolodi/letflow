@@ -13534,7 +13534,7 @@ requirements:
   - id: REQ-223
     title: "letflow-queue: set_lock refuses an ineligible task (unmet depends_on / non-open status) -- decision 0017 §D"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 871  # letflow-queue task id, GH#1907. Registered 2026-09-27 (ISS-0870)
       # once REQ-222 (this entry's own blocked-by) flipped to done and
@@ -13544,6 +13544,14 @@ requirements:
       # an unmet depends_on, still returned 200 and locked it -- the eligibility
       # gate this requirement adds does not exist yet). depends_on: [449] (REQ-222's
       # own task id).
+    # SHIPPED 2026-09-28: letflow-queue commit 77b0f36, branch
+    # feature/req-223-set-lock-eligibility, pending that repo's own merge to
+    # master (ORCH merges immediately following this DOC-UPDATER append). Same
+    # cross-repo pattern as REQ-222 above -- no local commit/PR in this
+    # checkout ever flips this file's own status for a letflow-queue-target
+    # requirement; flipped here on the implementing agent's own report of the
+    # commit, matching REQ-222's own "verified live" precedent in spirit
+    # though the merge itself had not yet landed at the moment of this append.
     description: >
       TARGET REPO IS NOT THIS ONE -- `tvolodi/letflow-queue`, as REQ-222.
       Read REQ-222's description for the cross-repo framing; it is not

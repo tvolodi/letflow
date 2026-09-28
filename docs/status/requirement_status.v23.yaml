@@ -638,3 +638,40 @@
       migration-seeded singleton row must be self-healing against abnormal
       process termination, not just correct under normal on_exit flow).
       PR merge commit and branch details recorded by ORCH's own merge step.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-28T02:15:00Z
+    note: >
+      ISS-0287 (MINOR, reopened -- mid-run Postgres connection-pool
+      exhaustion possibly not generalizing to higher partition counts,
+      reopened at auto-derived N=8) re-resolved and closed in
+      docs/issues/ISS-0287.yaml. RELEASE-VALIDATOR's own independent
+      re-verification: fresh compile clean; 39/39 regression tests passing;
+      its own independent 3rd mutation (beyond TEST-DESIGNER's own two)
+      confirmed genuinely discriminating; a full-suite run at N=8 -- the
+      exact partition count that originally reproduced the reopening --
+      showed 1 unrelated pre-existing flake (MigrationReplayBootTest),
+      confirmed clean in 3 isolated reruns and unrelated to this diff;
+      scope confirmed clean across exactly 4 files
+      (docs/migration/decisions/0009-test-parallel-pool-sizing.md,
+      scripts/test_parallel.sh, test/scripts/test_parallel_pool_sizing_test.sh,
+      test/specs/ISS-0287.md); decision-record addendum confirmed accurate.
+      The reopening's own stated mechanism (that the reaper test's unpooled
+      connection could multiply with N) was investigated and disproven --
+      Mix `--partitions` assigns whole files, never splitting a file's
+      connections across partitions, so that connection cannot multiply --
+      and the existing headroom-clamp formula was proven algebraically
+      N-invariant. With no discriminating N-dependent mechanism found and
+      only a single non-recurring reproduction (1 of 3 runs, both immediate
+      reruns clean), this shipped as instrumentation rather than a guessed
+      fix for an unconfirmed mechanism: an inert-by-default
+      TEST_PER_PARTITION_HEADROOM knob (proven no-op default across N in
+      {1..32}), a new Step 1.4 host-ceiling WARN-not-fail check against live
+      Postgres max_connections/superuser_reserved_connections, and an
+      opt-in TEST_PARALLEL_SAMPLE_CONNECTIONS pg_stat_activity sampler for
+      future diagnostic measurement if this ever recurs with real data to
+      look at. Branch fix/ISS0287-pool-headroom-n-scaling-20260928, commits
+      b7d26898 (fix) and 32756592 (test). No docs/requirements.yaml entry
+      is linked to this issue -- no REQ status flip in this append.

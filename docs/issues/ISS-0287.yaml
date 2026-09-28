@@ -31,12 +31,15 @@ affected_files:
   - scripts/test_parallel.sh
 queue_ref: Q-287
 github_ref: GH-569
-status: reopened
+status: resolved
 resolved_in_run: WF03-ISS0287-20260823
 resolved_at: "2026-08-22T23:18:01Z"
 reopened_at: "2026-08-28T02:58:00Z"
 reopened_by: TEST-RUNNER (WF02-REQ165-20260828, Step 4)
 reopened_in_run: WF02-REQ165-20260828
+reresolved_at: "2026-09-28T02:15:00Z"
+reresolved_by: RELEASE-VALIDATOR
+reresolved_in_run: WF03-ISS0287-20260928
 reopened_reason: >
   TEST-RUNNER's REQ-165 Step 4 full-suite run (test/reports/report-2026-08-28-WF02-REQ165-20260828.yaml)
   reproduced the identical failure signature (test/support/tenant_schema_reaper_test.exs,
@@ -56,6 +59,56 @@ reopened_reason: >
   whether N=8 is simply outside the fix's validated range, is for whoever picks this
   up to determine.
 resolution: >
+  RE-RESOLVED 2026-09-28 (supersedes the 2026-08-22 resolution below, which
+  remains for history). This reopening's own stated mechanism -- that the
+  headroom formula needed to budget the reaper test's non-pooled connection
+  as a function of N, because it could "multiply" across partitions at N=8 --
+  was investigated and disproven, not confirmed: Mix's `--partitions` flag
+  assigns whole test FILES to a partition, never splitting a single file's
+  connections across partitions, so tenant_schema_reaper_test.exs's one
+  unpooled ISS-0110 guard connection cannot multiply with N; and the existing
+  clamp formula's worst-case headroom margin was re-derived algebraically and
+  confirmed N-invariant (it depends on TEST_POOL_SIZE and the two fixed
+  reserve knobs, never on partition count). Because the reopening's own
+  reproduction was a single, non-recurring event (1 of 3 test_parallel.sh
+  runs at auto-derived N=8, with the two immediately-following reruns on the
+  same commit fully clean) and no discriminating N-dependent mechanism could
+  be found, this was shipped as instrumentation rather than a guessed fix for
+  an unconfirmed mechanism: a new, inert-by-default `TEST_PER_PARTITION_HEADROOM`
+  env knob (default 0, proven a no-op across N in {1..32}) ready to absorb a
+  real per-partition margin once one is ever measured; a new Step 1.4 that
+  WARNs (never hard-fails) when the live Postgres's real max_connections/
+  superuser_reserved_connections diverge from the script's configured/default
+  assumptions; and an opt-in `TEST_PARALLEL_SAMPLE_CONNECTIONS` pg_stat_activity
+  sampler for future diagnostic measurement if the flake ever recurs with
+  real data to look at. Design: lib/letflow/design/iss0287-pool-headroom-n-scaling.md,
+  CODE-DESIGN-VALIDATOR-PASSed, REVIEWER-PASSed (decision 0009's existing
+  rejection of a hard N-ceiling upheld, no ceiling added). Fix commit
+  b7d26898 (fix(ISS-0287): instrumentation-first N-scaling response for
+  pool-headroom clamp); decision-record addendum in the same commit updates
+  docs/migration/decisions/0009-test-parallel-pool-sizing.md with the
+  disproven-mechanism note and the N-invariance proof. Regression coverage
+  commit 32756592 extends test/scripts/test_parallel_pool_sizing_test.sh from
+  5 to 39 cases, closing the coverage gap that let the N=8 reopening through
+  undetected: an N-sweep (N in {1,2,3,4,5,6,7,8,9,12,16,24,32}) proving the
+  new knob's default is byte-identical no-op at every N, the same sweep with
+  the knob set to a real value proving it actually shrinks budget/pool
+  correctly (including the WARN-clamp path at N=32), a real-host nproc-derived
+  case, Step 1.4's WARN-not-fail host-ceiling check under mocked psql, and the
+  opt-in sampler's gating. RELEASE-VALIDATOR independently re-verified: fresh
+  isolated compile clean; 39/39 target-file tests passing; RELEASE-VALIDATOR's
+  own independent 3rd mutation (beyond the two TEST-DESIGNER already ran)
+  confirmed genuinely discriminating; a full-suite run at N=8 -- the exact
+  partition count that originally reproduced this reopening -- showed only 1
+  unrelated pre-existing flake (Letflow's MigrationReplayBootTest), confirmed
+  clean in 3 isolated reruns and unrelated to this diff; scope confirmed
+  clean across exactly the 4 files this branch touches
+  (docs/migration/decisions/0009-test-parallel-pool-sizing.md,
+  scripts/test_parallel.sh, test/scripts/test_parallel_pool_sizing_test.sh,
+  test/specs/ISS-0287.md); the decision-record addendum independently
+  confirmed accurate against the live formula. PASS.
+
+  ORIGINAL 2026-08-22 RESOLUTION (superseded above, kept for history):
   Root cause confirmed: scripts/test_parallel.sh's connection-pool headroom clamp
   formula did not budget for Postgres's superuser_reserved_connections (3) or for
   an unbudgeted raw non-pooled connection opened by test/support/tenant_schema_reaper_test.exs's

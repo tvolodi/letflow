@@ -4610,8 +4610,26 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 20
+    entries: 21
     note: >
+      Incremented to 21 by DOC-UPDATER, reconciled while rebasing
+      fix/ISS0287-pool-headroom-n-scaling-20260928 onto origin/main for its
+      Step Final: this branch's own tip had independently incremented
+      18 -> 19 for its own ISS-0287 re-closing SCOPE-CHANGE append
+      (2026-09-28T02:15:00Z, instrumentation-first N-scaling response),
+      claimed against a pre-divergence base of 18 (the ISS-0766/ISS-0874
+      close), while origin/main had separately advanced 18 -> 20 via
+      feature/WF02-REQ419-20260927's own reconciled Step Final (ISS-0873,
+      REQ-419 started, REQ-419 done), also starting from that same
+      pre-divergence base of 18. `requirement_status.v23.yaml` itself
+      auto-merged cleanly during the rebase (both sides' entries
+      concatenate: 18 pre-existing + 2 origin/main REQ-419-run appends +
+      1 ISS-0287 append = 21), so only this index note needed manual
+      reconciliation. `grep -c "^  - req:" docs/status/requirement_status.v23.yaml`
+      = 21 on-disk entries post-rebase. 677 lines / 39994 bytes, well
+      under the 1200-line/120000-byte roll ceiling, so no roll triggered.
+      All prior notes preserved below.
+
       Incremented to 20 by ORCH, reconciled while merging origin/main into
       feature/WF02-REQ419-20260927 for Step Final (second reconciliation of
       this branch's run): origin/main had independently appended a further

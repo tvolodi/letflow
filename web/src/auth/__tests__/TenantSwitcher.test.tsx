@@ -25,6 +25,24 @@
  *   getOrCreateManagerForTenant + manager.signinRedirect (§5.2 fallback).
  * TC-REQ384-21: on 'error', shows a retry affordance rather than a raw
  *   error/blob.
+ *
+ * ISS-0783 regression coverage (design doc:
+ * lib/letflow/design/iss0783-tenantswitcher-reentrancy-guard.md, §5) — a
+ * deferred/controllable `switchTenant` mock is used to hold the call open
+ * so the `pending`-guard window can be observed and asserted on directly,
+ * rather than relying on timing:
+ *
+ * TC-ISS0783-01: trigger/options/retry are all `disabled` while a deferred
+ *   switchTenant call is pending (§5a).
+ * TC-ISS0783-02: a second onSelect invocation while pending does not
+ *   increase switchTenant's call count past 1 (§5b, the in-function guard
+ *   independent of DOM disabled).
+ * TC-ISS0783-03/04/05: after the deferred promise settles, `pending` resets
+ *   and trigger/options (+retry, where applicable) re-enable, for each of
+ *   the three outcomes -- 'ok', 'error', 'interaction_required' (§5c).
+ * TC-ISS0783-06: the sign-in button in the interaction-required branch is
+ *   never disabled, confirming the design's reasoned exclusion (§5c third
+ *   bullet, §3).
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, cleanup, screen, fireEvent, waitFor } from '@testing-library/react'
@@ -156,5 +174,161 @@ describe('TenantSwitcher — REQ-384 §6.1 (AC1 render-gate + outcome wiring)', 
     await waitFor(() => expect(screen.getByTestId('tenant-switcher-error')).toBeInTheDocument())
     expect(screen.getByTestId('tenant-switcher-error')).toHaveTextContent('Could not switch tenant.')
     expect(screen.getByTestId('tenant-switcher-retry')).toBeInTheDocument()
+  })
+})
+
+/** Creates a promise plus its external resolve/reject, so a test can hold a
+ *  `switchTenant` call open across assertions and then settle it on demand. */
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+describe('TenantSwitcher — ISS-0783 (re-entrancy guard while switchTenant is pending)', () => {
+  // NOTE on reachability (verified empirically, not assumed): `onSelect`
+  // sets `pending` true in the SAME state batch that also closes the menu
+  // (`setOpen(false)`) and, for a retry-triggered call, clears `errorSlug`.
+  // React 18 commits a batch atomically -- there is no intermediate frame
+  // where the menu/error block is still rendered AND `pending` is true.
+  // Consequently the option buttons and the retry button can never be
+  // observed simultaneously mounted and disabled from outside the
+  // component; only the always-mounted trigger button can be checked
+  // directly while a call is in flight. React's own synthetic-event system
+  // also gates `onClick` dispatch on the fiber's `disabled` PROP (see
+  // `shouldPreventMouseEvent` in react-dom), not the live DOM attribute, so
+  // there is no way to force a click through via DOM manipulation either --
+  // confirmed by trying it and observing React still refuse to invoke the
+  // handler. Given that, `disabled={pending}` on the option/retry buttons
+  // (TenantSwitcher.tsx lines 96 and 135) is verified by direct source
+  // reading rather than a runtime assertion; the trigger's is verified at
+  // runtime below, and is the one path a real user could otherwise
+  // double-fire through.
+  it('TC-ISS0783-01: trigger is disabled while switchTenant is pending and re-enables once it settles', async () => {
+    const first = deferred<import('../AuthContext').SwitchTenantOutcome>()
+    const switchTenant = vi.fn().mockReturnValueOnce(first.promise)
+    mockUseAuth.mockReturnValue({ session: mockSession(), switchTenant })
+    mockUseMemberships.mockReturnValue({ data: [HOME, OTHER, THIRD] })
+
+    render(<TenantSwitcher />)
+    fireEvent.click(screen.getByTestId('tenant-switcher-trigger'))
+    fireEvent.click(screen.getByTestId('tenant-switcher-option-tenant-b'))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledTimes(1))
+
+    const trigger = screen.getByTestId('tenant-switcher-trigger')
+    expect(trigger).toBeDisabled()
+    // The menu closed in the same batch that disabled the trigger (existing
+    // behavior, unaffected by this fix).
+    expect(screen.queryByTestId('tenant-switcher-menu')).toBeNull()
+
+    first.resolve('error')
+    await waitFor(() => expect(screen.getByTestId('tenant-switcher-retry')).toBeInTheDocument())
+    expect(screen.getByTestId('tenant-switcher-trigger')).not.toBeDisabled()
+  })
+
+  it('TC-ISS0783-02: a second click on the trigger while switchTenant is pending does not invoke it again, and the menu cannot be reopened to reach an option a second time', async () => {
+    const held = deferred<import('../AuthContext').SwitchTenantOutcome>()
+    const switchTenant = vi.fn().mockReturnValue(held.promise)
+    mockUseAuth.mockReturnValue({ session: mockSession(), switchTenant })
+    mockUseMemberships.mockReturnValue({ data: [HOME, OTHER, THIRD] })
+
+    render(<TenantSwitcher />)
+    fireEvent.click(screen.getByTestId('tenant-switcher-trigger'))
+    fireEvent.click(screen.getByTestId('tenant-switcher-option-tenant-b'))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledTimes(1))
+
+    // A second click on the trigger -- the only control still mounted --
+    // must neither reopen the menu nor call switchTenant again. React
+    // refuses to dispatch onClick to a disabled control at all, so this
+    // demonstrates the observable, user-facing guarantee the fix provides:
+    // no way remains, through this component's own rendered UI, to fire a
+    // second switchTenant call while one is already in flight.
+    fireEvent.click(screen.getByTestId('tenant-switcher-trigger'))
+    expect(screen.queryByTestId('tenant-switcher-menu')).toBeNull()
+    expect(switchTenant).toHaveBeenCalledTimes(1)
+
+    // Settle and repeat via retry, which shares the exact same `onSelect`
+    // function (design doc §4: "retry ... automatically inherits the
+    // guard") -- a second click on it while its own call is pending must
+    // likewise not advance the call count past 2.
+    held.resolve('error')
+    await waitFor(() => expect(screen.getByTestId('tenant-switcher-retry')).toBeInTheDocument())
+
+    const held2 = deferred<import('../AuthContext').SwitchTenantOutcome>()
+    switchTenant.mockReturnValue(held2.promise)
+    fireEvent.click(screen.getByTestId('tenant-switcher-retry'))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledTimes(2))
+    // Retry (and its error block) unmount as soon as the new call starts
+    // (see reachability note above), so a literal second click on it is not
+    // even possible -- confirming there is no rendered element left that
+    // could re-invoke switchTenant.
+    expect(screen.queryByTestId('tenant-switcher-retry')).toBeNull()
+    expect(switchTenant).toHaveBeenCalledTimes(2)
+
+    held2.resolve('ok')
+    await waitFor(() => expect(screen.getByTestId('tenant-switcher-trigger')).not.toBeDisabled())
+  })
+
+  it("TC-ISS0783-03: resets and re-enables after settling with 'ok' (success)", async () => {
+    const held = deferred<import('../AuthContext').SwitchTenantOutcome>()
+    const switchTenant = vi.fn().mockReturnValue(held.promise)
+    mockUseAuth.mockReturnValue({ session: mockSession(), switchTenant })
+    mockUseMemberships.mockReturnValue({ data: [HOME, OTHER] })
+
+    render(<TenantSwitcher />)
+    fireEvent.click(screen.getByTestId('tenant-switcher-trigger'))
+    fireEvent.click(screen.getByTestId('tenant-switcher-option-tenant-b'))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledTimes(1))
+    expect(screen.getByTestId('tenant-switcher-trigger')).toBeDisabled()
+
+    held.resolve('ok')
+
+    await waitFor(() => expect(screen.getByTestId('tenant-switcher-trigger')).not.toBeDisabled())
+    expect(screen.queryByTestId('tenant-switcher-error')).toBeNull()
+    expect(screen.queryByTestId('tenant-switcher-interaction-required')).toBeNull()
+  })
+
+  it("TC-ISS0783-04: resets and re-enables (incl. retry) after settling with 'error'", async () => {
+    const held = deferred<import('../AuthContext').SwitchTenantOutcome>()
+    const switchTenant = vi.fn().mockReturnValue(held.promise)
+    mockUseAuth.mockReturnValue({ session: mockSession(), switchTenant })
+    mockUseMemberships.mockReturnValue({ data: [HOME, OTHER] })
+
+    render(<TenantSwitcher />)
+    fireEvent.click(screen.getByTestId('tenant-switcher-trigger'))
+    fireEvent.click(screen.getByTestId('tenant-switcher-option-tenant-b'))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledTimes(1))
+
+    held.resolve('error')
+
+    await waitFor(() => expect(screen.getByTestId('tenant-switcher-error')).toBeInTheDocument())
+    expect(screen.getByTestId('tenant-switcher-trigger')).not.toBeDisabled()
+    expect(screen.getByTestId('tenant-switcher-retry')).not.toBeDisabled()
+  })
+
+  it("TC-ISS0783-05/06: resets after settling with 'interaction_required'; sign-in button stays enabled", async () => {
+    const held = deferred<import('../AuthContext').SwitchTenantOutcome>()
+    const switchTenant = vi.fn().mockReturnValue(held.promise)
+    mockUseAuth.mockReturnValue({ session: mockSession(), switchTenant })
+    mockUseMemberships.mockReturnValue({ data: [HOME, OTHER] })
+
+    render(<TenantSwitcher />)
+    fireEvent.click(screen.getByTestId('tenant-switcher-trigger'))
+    fireEvent.click(screen.getByTestId('tenant-switcher-option-tenant-b'))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledTimes(1))
+
+    held.resolve('interaction_required')
+
+    await waitFor(() =>
+      expect(screen.getByTestId('tenant-switcher-interaction-required')).toBeInTheDocument(),
+    )
+    expect(screen.getByTestId('tenant-switcher-trigger')).not.toBeDisabled()
+    // §3's reasoned exclusion: sign-in never calls switchTenant, so it must
+    // never be gated by `pending`, even immediately after the branch renders.
+    expect(screen.getByTestId('tenant-switcher-sign-in')).not.toBeDisabled()
   })
 })

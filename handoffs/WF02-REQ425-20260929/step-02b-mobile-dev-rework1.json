@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-02b-mobile-dev-rework1.json",
   "created_at": "2026-09-29T12:25:41Z",
   "started_at": "2026-09-29T12:25:41Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T13:40:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S9",
@@ -41,18 +41,22 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Fixed the cross-tenant refresh race SECURITY-REVIEWER flagged in step 02c. Root cause: _RefreshCoordinator._doRefresh captured `realmUrl = _activeRealm.currentRealmUrl` once before awaiting the flutter_appauth refresh network call, then unconditionally (a) stored the refreshed tokens back under that captured realmUrl and (b) let ApiClient._handleUnauthorized retry the original request via `_dio.fetch`, which re-runs the bearer interceptor against whatever tenant is active AT RETRY TIME. A switchTenant/logout racing the await could therefore resurrect a just-deleted tenant's tokens and/or have the retry silently served as a different tenant. Fix (apps/mobile/lib/api/api_client.dart): (1) the bearer-attach interceptor now tags every outgoing request's `extra` with `_letflowIssuedForRealm` (the realm active at send time); (2) `_doRefresh` re-reads `_activeRealm.currentRealmUrl`/`clientId` immediately after the refresh call resolves (both on the success path and the catch path) and, on any mismatch against what it captured before the await, discards the refresh result entirely -- no token store write, no token delete, no login routing -- rather than acting on behalf of a tenant that has since changed; (3) `refreshOnce()`/`_doRefresh` now return a tri-state `_RefreshOutcome` (success/failed/aborted) instead of a bare bool, so ApiClient._handleUnauthorized can tell a genuine refresh failure apart from a mid-race abort; (4) `_handleUnauthorized` additionally re-checks the request's tagged `_letflowIssuedForRealm` against the current active realm immediately before reissuing the retry, and throws `UnauthorizedError` (never a silent re-auth as a different tenant) on any mismatch or on `_RefreshOutcome.aborted`/`failed`. Added a `duringRefresh` hook to `test/support/fake_app_auth_adapter.dart` (fires synchronously as the refresh network call starts, before its simulated delay resolves) and two regression tests in `test/api/api_client_hardening_test.dart` under a new 'cross-tenant refresh race (rework 1)' group: one simulating a tenant switch mid-refresh (asserts the old tenant's stored tokens are untouched, the new tenant acquires none, exactly one refresh call, no retry sent, no spurious login routing) and one simulating a logout mid-refresh (asserts the deleted tenant's tokens stay deleted, not resurrected). `flutter analyze`: 'No issues found! (ran in 61.3s)'. `flutter test` (full suite, 114 tests): 'All tests passed!' -- includes the two new regression tests (ids +6/+7 in the api_client_hardening_test.dart-only run) and every pre-existing AC1-AC5 test for this requirement, unmodified and still green.",
+    "artifacts_out": [
+      "apps/mobile/lib/api/api_client.dart",
+      "apps/mobile/test/api/api_client_hardening_test.dart",
+      "apps/mobile/test/support/fake_app_auth_adapter.dart"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["ddae1fca410edfb01c61c98184390777dc82ee7c"],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (2c) for a fresh full re-review"
   },
   "rework_count": 1,
   "max_rework": 3

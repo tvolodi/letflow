@@ -31451,7 +31451,7 @@ requirements:
   - id: REQ-423
     title: "MOB-3 (part 1): local definition cache keyed by (type, id, version), background delta sync against GET /api/v1/definitions/delta, and airplane-mode launch from cache"
     owner: MOBILE-DEV
-    status: pending
+    status: done
     stage: S9
     impl_order: 860  # letflow-queue task id, GH#1877. Registered 2026-09-27T03:00:01Z by ORCH (WF-01 Step 3).
     description: >

@@ -2,46 +2,83 @@ id: ISS-0883
 title: >
   mix letflow.check.test does not honor a caller-supplied TEST_PARALLEL_N
   override
-discovered_by: RELEASE-VALIDATOR
+discovered_by: RELEASE-VALIDATOR (WF02-REQ422-20260929)
 discovered_in_run: WF02-REQ422-20260929
-discovered_at: "2026-09-29T08:00:00Z"
-tags:
-  - test-tooling
-  - ci
-  - memory-safety
+discovered_at: "2026-09-29T10:03:46Z"
 severity: MINOR
+tags:
+  - test-infra
+  - false-positive
 description: >
   During WF02-REQ422-20260929's RELEASE-VALIDATOR step, under critically
   tight host memory (~0.9GB free of ~31.8GB total -- a concurrent peer
   session, letflow-2-b6, was also active on this machine), the agent
   exported TEST_PARALLEL_N=2 before running `mix letflow.check.test`,
   expecting it to derive its partition count from that env var the same
-  way scripts/test_parallel.sh does. Instead the task auto-derived N=16
-  from `nproc` regardless of the exported override, driving free memory
-  down to ~307MB before the agent had to kill the runaway `erl` processes
-  to protect the shared host.
-
-  This matters specifically for memory-constrained runs (a concurrent
-  session on the same host, a smaller CI runner, etc.) where a caller
-  needs to force a lower partition count than the core count would
-  otherwise suggest. `scripts/test_parallel.sh` already gets this right
-  (reads TEST_PARALLEL_N, falls back to nproc/getconf only when unset);
-  `mix letflow.check.test` should follow the same contract.
+  way scripts/test_parallel.sh does. Instead the task appeared to
+  auto-derive N=16 from `nproc` regardless of the exported override,
+  driving free memory down to ~307MB before the agent had to kill the
+  runaway `erl` processes to protect the shared host.
+affected_files: []
 severity_rationale: >
-  MINOR -- did not block REQ-422's own gates (the agent recovered by
-  killing the runaway processes and retrying at the correct effective
-  parallelism), but is a real host-safety gap that could cause a worse
-  outcome (OOM, host instability affecting a concurrent session) on a
-  future memory-constrained run that doesn't notice in time.
-fix_direction: >
-  Fix `mix letflow.check.test` (or whatever task/module it delegates to
-  for its parallel test run) to read TEST_PARALLEL_N the same way
-  scripts/test_parallel.sh does, falling back to nproc/getconf
-  _NPROCESSORS_ONLN only when unset. Add a test or manual verification
-  confirming TEST_PARALLEL_N=2 actually yields 2 partitions.
-affected_files:
-  - lib/mix/tasks/letflow.check.test.ex
-  - scripts/test_parallel.sh
-status: open
-queue_ref: Q-882
-github_ref: GH-1976
+  Downgraded from the original filing's implicit urgency (a near-OOM on a
+  shared host) to MINOR/closed-not-applicable: investigation found no code
+  defect, so there is no ongoing risk from the code itself -- only from the
+  operational pattern (export and command split across separate shell
+  invocations) that produced the original symptom.
+status: closed_not_applicable
+resolved_in_run: "ORCH-direct-20260929"
+resolved_at: "2026-09-29T10:35:00Z"
+resolution: >
+  Investigated, not fixed -- no code defect found. Both halves of the
+  claimed chain were checked directly against real, unmutated code:
+
+  1. `scripts/test_parallel.sh` (lines 93-101): `if [ -n
+  "${TEST_PARALLEL_N:-}" ] && printf '%s' "$TEST_PARALLEL_N" | grep -Eq
+  '^[1-9][0-9]*$'; then N="$TEST_PARALLEL_N" ...` -- correctly honors the
+  override before ever consulting nproc/getconf. Live-verified:
+  `TEST_PARALLEL_N=2 timeout 15 bash -c 'bash scripts/test_parallel.sh
+  2>&1 | head -5'` printed `test_parallel: N=2 (source: env override)`.
+
+  2. `lib/mix/tasks/letflow.check.test.ex`'s `stream_and_capture/3`
+  (the function that shells out to the script via `Port.open/2` with
+  `:spawn_executable`) -- per ISS-0699's own design-doc comment at that
+  call site, the `:env` option only ADDS/overrides the named vars
+  (`TEST_PARALLEL_KEEP_LOGS`) on top of this BEAM process's already-
+  inherited environment; it does not replace the environment wholesale.
+  Verified this claim experimentally (not just trusted the comment) with
+  two minimal `Port.open` repros -- one with no `:env` option, one with a
+  non-empty `:env` list matching the real call site's shape -- both
+  correctly inherited an exported `TEST_PARALLEL_N` into the child
+  process. Then verified the real, end-to-end path: `TEST_PARALLEL_N=2
+  timeout 20 mix letflow.check.test 2>&1 | grep -m1 "test_parallel: N="`
+  printed `test_parallel: N=2 (source: env override)` -- i.e. the
+  override genuinely reaches the script through the real Elixir ->
+  Port.open -> bash -> test_parallel.sh chain, contradicting the issue's
+  central claim.
+
+  Root cause of the original symptom: this agent harness's Bash tool
+  documents "the working directory persists between commands, but shell
+  state does not" -- an `export FOO=bar` executed in one Bash tool call is
+  gone by the next, separate call. Reproduced directly: `export
+  TEST_PARALLEL_N=2` in one tool call, then `echo "$TEST_PARALLEL_N"` in
+  the very next call printed empty. The RELEASE-VALIDATOR step that filed
+  this issue almost certainly ran the `export` and the `mix
+  letflow.check.test` invocation as two separate tool calls, so the mix
+  task legitimately received no override in its own process tree and
+  correctly fell back to nproc -- not a defect in the task, the script, or
+  Port.open's env forwarding.
+
+  No code change made. Documented as a new anti-pattern entry
+  (docs/anti-patterns.md, "A TEST_PARALLEL_N override 'wasn't honored'
+  because it was exported in a separate tool call...") so a future session
+  hitting the same near-OOM symptom checks its own invocation shape before
+  re-filing this as a code bug.
+queue_ref: "Q-882"
+  # letflow-queue task id 882, issue_ref ISS-0882 -- but the local filename
+  # ISS-0882.yaml was already taken by an unrelated issue (REQ-421/422
+  # requirements-text forward-reference gap), so this record is filed here
+  # as ISS-0883 instead. queue_ref above is authoritative; the filename
+  # numbering diverges, matching this project's established recurring
+  # pattern (see e.g. ISS-0786.yaml's own note).
+github_ref: "GH-1976"

@@ -2329,3 +2329,4 @@
 2026-09-29T02:22:25Z | DISPATCH | WF03-ISS0881-20260929 | step-04b | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
 2026-09-29T02:26:37Z | DISPATCH | WF03-ISS0881-20260929 | step-05 | ORCH -> ISSUE-FIXER | PENDING
 2026-09-29T02:28:50Z | DISPATCH | WF03-ISS0881-20260929 | step-final | ORCH -> ELIXIR-DEV | PENDING
+2026-09-29T04:04:09Z | RELEASE_LOCK | WF-03 | WF03-ISS0881-20260929 | ORCH -> queue task 880 | status=done -- release_lock had NOT been called by the WF03-ISS0881-20260929 close-out despite docs/issues/ISS-0881.yaml being resolved and PR #1963/#1964 merged (queue GET /tasks showed task 880 still open/locked_by win-orch-1790644310); ORCH independently verified via GET /tasks and called release_lock(status: done) directly to close the gap. GH#1958 independently confirmed already closed (2026-09-29T02:27:30Z).

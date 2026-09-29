@@ -1,0 +1,47 @@
+id: ISS-0883
+title: >
+  mix letflow.check.test does not honor a caller-supplied TEST_PARALLEL_N
+  override
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ422-20260929
+discovered_at: "2026-09-29T08:00:00Z"
+tags:
+  - test-tooling
+  - ci
+  - memory-safety
+severity: MINOR
+description: >
+  During WF02-REQ422-20260929's RELEASE-VALIDATOR step, under critically
+  tight host memory (~0.9GB free of ~31.8GB total -- a concurrent peer
+  session, letflow-2-b6, was also active on this machine), the agent
+  exported TEST_PARALLEL_N=2 before running `mix letflow.check.test`,
+  expecting it to derive its partition count from that env var the same
+  way scripts/test_parallel.sh does. Instead the task auto-derived N=16
+  from `nproc` regardless of the exported override, driving free memory
+  down to ~307MB before the agent had to kill the runaway `erl` processes
+  to protect the shared host.
+
+  This matters specifically for memory-constrained runs (a concurrent
+  session on the same host, a smaller CI runner, etc.) where a caller
+  needs to force a lower partition count than the core count would
+  otherwise suggest. `scripts/test_parallel.sh` already gets this right
+  (reads TEST_PARALLEL_N, falls back to nproc/getconf only when unset);
+  `mix letflow.check.test` should follow the same contract.
+severity_rationale: >
+  MINOR -- did not block REQ-422's own gates (the agent recovered by
+  killing the runaway processes and retrying at the correct effective
+  parallelism), but is a real host-safety gap that could cause a worse
+  outcome (OOM, host instability affecting a concurrent session) on a
+  future memory-constrained run that doesn't notice in time.
+fix_direction: >
+  Fix `mix letflow.check.test` (or whatever task/module it delegates to
+  for its parallel test run) to read TEST_PARALLEL_N the same way
+  scripts/test_parallel.sh does, falling back to nproc/getconf
+  _NPROCESSORS_ONLN only when unset. Add a test or manual verification
+  confirming TEST_PARALLEL_N=2 actually yields 2 partitions.
+affected_files:
+  - lib/mix/tasks/letflow.check.test.ex
+  - scripts/test_parallel.sh
+status: open
+queue_ref: Q-882
+github_ref: GH-1976

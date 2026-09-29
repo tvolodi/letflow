@@ -1,0 +1,56 @@
+id: ISS-0882
+title: >
+  REQ-421 requirement text forward-references key rotation/biometric
+  gating/tamper detection as REQ-422 scope, but REQ-422 has none of it
+discovered_by: CODE-DESIGN-VALIDATOR
+discovered_in_run: WF02-REQ422-20260929
+discovered_at: "2026-09-29T05:10:00Z"
+tags:
+  - mobile
+  - docs
+  - requirements-text
+severity: MINOR
+description: >
+  During WF02-REQ422-20260929, CODE-DESIGN-VALIDATOR (step-01b) and
+  REVIEWER (step-02d) both independently flagged that docs/requirements.yaml's
+  REQ-421 entry text forward-references key rotation, biometric gating, and
+  tamper detection as work belonging to REQ-422 (MOB-5). REQ-422's own
+  requirement text and acceptance_criteria in docs/requirements.yaml contain
+  none of those items -- MOB-5 as actually specified and built is token
+  storage/logging/transport/cleartext/audience-scoping/masking hardening
+  only. REQ-422 is now done and merged (PR #1973, commit 9ff7a428) without
+  those items, correctly, since they were never in its own acceptance
+  criteria.
+
+  REQ-421's text should be corrected (or annotated) so a future reader is
+  not misled into thinking REQ-422 covers key rotation/biometric gating/
+  tamper detection. If that work is still wanted, it needs its own new
+  requirement with real acceptance criteria, not an unscoped forward-
+  reference riding on REQ-421's text.
+filename_numbering_anomaly: >
+  This record is filed as ISS-0882 rather than ISS-0881 despite being
+  registered via letflow-queue as task id 881 (queue_ref: Q-881,
+  github_issue_number 1975) -- docs/issues/ISS-0881.yaml already exists on
+  main (merged via PR #1959, resolved) for a completely unrelated issue
+  (SandboxPoolTest "ISS-0224 regression RT-6 (death path c)"), itself filed
+  under the same known anomaly class. Per docs/agents/protocols/TASK_QUEUE.md
+  ("the id equality this bullet used to assert is SUPERSEDED... 27
+  contradict it"), filename-to-queue-id equality was never a reliable
+  invariant in this project. ORCH picked the next unused ISS-NNNN filename
+  (ISS-0882) instead of overwriting the existing, already-closed
+  ISS-0881.yaml record.
+severity_rationale: >
+  MINOR -- a documentation-accuracy defect (misleading requirement-text
+  cross-reference), not a functional defect. Already correctly worked
+  around by REQ-422's own gate agents (neither item was silently added nor
+  silently dropped -- both flagged it and left it for ORCH to file).
+fix_direction: >
+  Edit docs/requirements.yaml's REQ-421 entry to remove or properly scope
+  the key rotation/biometric gating/tamper detection forward-reference (or
+  point it at a new, separately-drafted requirement id once one exists via
+  REQ-ANALYST/WF-01). Low-risk documentation-only change; no code impact.
+affected_files:
+  - docs/requirements.yaml
+status: open
+queue_ref: Q-881
+github_ref: GH-1975

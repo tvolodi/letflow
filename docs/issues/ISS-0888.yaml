@@ -16,3 +16,9 @@ affected_files:
 queue_ref: Q-888
 github_ref: GH-1995
 status: open
+progress_2026_09_29: >
+  Partly done by ai-dala-infra T-0150: actor accounts for swiftroute/meridian/vortex now exist with
+  realm-qualified secrets (scripts/qa-uat-env.sh); persona ids now equal Keycloak usernames
+  (actor-<realm>-<name>). STILL OPEN: promo-proposer-uat / uat-promo-conflict-proposer have no host
+  secret (skipped, no --adopt); no master-realm admin credential for UAT runs (qa-admin only; specs
+  hard-coding admin/admin are ISS-0896). Keep open for those parts.

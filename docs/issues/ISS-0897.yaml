@@ -1,0 +1,16 @@
+id: ISS-0897
+title: "Meridian and vortex QA process definitions + seed scripts missing (scripts/seed_{meridian,vortex}_definition.sh, test/fixtures/qa/*_process_definition.json)"
+discovered_by: ORCH
+discovered_in_run: ai-dala-infra 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), filed by ORCH
+discovered_at: "2026-09-29T19:45:00Z"
+severity: MAJOR
+description: "Provide test/fixtures/qa/{meridian,vortex}_process_definition.json and scripts/seed_{meridian,vortex}_definition.sh with the same contract as scripts/seed_swiftroute_definition.sh: idempotent, QA_AUTH_TOKEN/QA_URL env, prints resulting definition id and key. Deploy+activate meridian proc-meridian-loan-origination and proc-meridian-regulatory-compliance-review; vortex proc-vortex-production-order-release, proc-vortex-supplier-quality-deviation, and proc-vortex-quality-deviation (used by entity-list-filter-and-page.yaml). Also decide how sys-tenant-onboarding is meant to exist as a deployable definition (seeded, built-in, or scenario-side). Infra side is ready: tokens via scripts/qa-uat-env.sh token meridian-admin-user / vortex-admin-user, tenants active. Keys must resolve (see the swiftroute null-key issue). Unblocks 3 meridian + 4 vortex narrative scenarios. Related: ISS-0892. Provenance: ai-dala-infra run 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), step-04 P5/D2/D6/R9 and step-06. Filed by ORCH. QA now has realms+tenants swiftroute/meridian/vortex and 22 actor accounts (realm-qualified secrets via ai-dala-infra scripts/qa-uat-env.sh)."
+affected_files:
+  - scripts/seed_meridian_definition.sh
+  - scripts/seed_vortex_definition.sh
+  - test/fixtures/qa/meridian_process_definition.json
+  - test/fixtures/qa/vortex_process_definition.json
+  - scripts/seed_swiftroute_definition.sh
+queue_ref: Q-892  # queue allocated issue_ref ISS-0892, which collides with an existing local file (Q-887, GH-1994); local filename shifted to next free number ISS-0897 and GH-2001 retitled to match
+github_ref: GH-2001
+status: open

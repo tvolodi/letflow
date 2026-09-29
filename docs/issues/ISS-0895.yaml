@@ -1,0 +1,12 @@
+id: ISS-0895
+title: "Swiftroute tenant-onboarding-happy needs slug 'swiftroute' unregistered but other swiftroute scenarios need it registered: redesign scenario to onboard a different slug"
+discovered_by: ORCH
+discovered_in_run: ai-dala-infra 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), filed by ORCH
+discovered_at: "2026-09-29T19:45:00Z"
+severity: MINOR
+description: "test/fixtures/uat/scenarios/swiftroute/tenant-onboarding-happy precondition requires slug swiftroute to be UNREGISTERED and registers it (driving a Keycloak realm-creation saga needing master access). The other swiftroute scenarios and cross-tenant probes require the swiftroute tenant/realm to exist, and QA now has it registered (T-0150), so the onboarding scenario is permanently precondition-blocked on QA (tenants are deactivate-only, immutable idp_realm_id). Decide and implement: re-point the scenario at a throwaway slug (e.g. swiftroute-uat, with unique-per-run suffix so reruns do not collide), or mark it env-scoped/expected-unrunnable on shared QA. Note a throwaway-slug onboarding also needs a master-realm credential (see the admin/admin hard-code issue and ISS-0888) and leaves undeletable tenant rows and schemas. Provenance: ai-dala-infra run 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), step-04 P5/D2/D6/R9 and step-06. Filed by ORCH. QA now has realms+tenants swiftroute/meridian/vortex and 22 actor accounts (realm-qualified secrets via ai-dala-infra scripts/qa-uat-env.sh)."
+affected_files:
+  - test/fixtures/uat/scenarios/swiftroute/
+queue_ref: Q-895
+github_ref: GH-2004
+status: open

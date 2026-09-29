@@ -55,9 +55,11 @@ change.
   log Dio traffic for debugging retry/backoff behavior." This design registers it —
   see §6.
 - `ApiClient.forTesting(Dio dio)` — the `@visibleForTesting` seam every existing test
-  in `apps/mobile/test/api/api_client_test.dart` uses; this design preserves it
-  unchanged in shape (tests keep constructing a real `Dio` over a fake
-  `HttpClientAdapter` and wrapping it).
+  in `apps/mobile/test/api/api_client_test.dart` uses (tests construct a real `Dio`
+  over a fake `HttpClientAdapter` and wrap it). **This design changes its shape** (§5.1)
+  — today's zero-arg-beyond-`dio` factory has no seam for a test to inject or inspect a
+  token store, which this requirement's own refresh/retry mechanism (§2.1) now requires;
+  see §5.1 for the added parameters and §2.6 for the exact test-inspection seam.
 - `TenantTokenStore`/`TokenSet`/`issuerOf` live in `apps/mobile/lib/auth/auth.dart`
   (REQ-421/422) — this design's refresh coordinator calls into that existing store; it
   does not add a second token-storage path (would violate the token-storage-boundary
@@ -445,6 +447,63 @@ policy. (The transport-policy and bearer-attach interceptors remain `onRequest`
 interceptors, unaffected by this distinction — they run regardless of the eventual
 response status.)
 
+### 2.6 Test-inspection seam for `_RefreshCoordinator`'s token-store effects (exact)
+
+This closes the gap CODE-DESIGN-VALIDATOR's iteration-1 re-check found: AC1 (concurrent
+401 dedup) and AC2 (refresh-failure token deletion) both need a test-constructed
+`ApiClient` wired to a token store the test can both control (feed it existing tokens)
+and inspect afterward (assert deletion happened). `TenantTokenStore` (`lib/auth/auth.dart`,
+read in full above) is a **concrete, non-abstract, `const`-constructible class** —
+`TenantTokenStore(FlutterSecureStorage _storage)` — not an interface with a
+production/fake split of its own; REQ-421/422 already solved "how does a test get an
+inspectable `TenantTokenStore`" by faking one layer lower, at
+`FlutterSecureStoragePlatform`, not by faking `TenantTokenStore` itself. This design
+reuses that exact, already-existing idiom rather than inventing a second one:
+
+- **The seam is `FakeSecureStoragePlatform`**
+  (`apps/mobile/test/support/fake_secure_storage_platform.dart`, already exists,
+  already used by `apps/mobile/test/auth/tenant_token_store_test.dart` and
+  `apps/mobile/test/bootstrap/bootstrap_sequence_test.dart` — read in full above). A
+  test does exactly what those existing tests already do:
+  ```
+  final fakePlatform = FakeSecureStoragePlatform();
+  FlutterSecureStoragePlatform.instance = fakePlatform;
+  final tokenStore = const TenantTokenStore(FlutterSecureStorage());
+  final activeRealm = ActiveRealmHolder()..currentRealmUrl = 'https://idp.example/realms/a';
+  ```
+  `tokenStore` here is a **real** `TenantTokenStore` — no new fake class of that type is
+  introduced — backed by the in-memory `fakePlatform`, so every `store`/`read`/`delete`
+  call `_RefreshCoordinator` makes against it is a real method call on real production
+  code, landing in `fakePlatform`'s in-memory map instead of a real Keystore/Keychain.
+- **Pre-seeding (for AC1/AC2's "starts authenticated" setup):** the test calls
+  `await tokenStore.store(activeRealm.currentRealmUrl!, someTokenSet)` before
+  constructing the `ApiClient`, so the bearer-attach interceptor has a token to attach
+  on the first request and `_RefreshCoordinator._doRefresh` has a `refreshToken` to read
+  on a 401.
+- **Post-condition inspection (AC2's "tokens deleted from the secure store"):** the test
+  calls `await tokenStore.read(activeRealm.currentRealmUrl!)` after the refresh-failure
+  flow completes and asserts it returns `null` (equivalently,
+  `fakePlatform.containsKey(key: ..., options: {})` — `read` is simpler and does not
+  require reconstructing `TenantTokenStore`'s private `_keyFor` format, so this design
+  specifies `tokenStore.read(...) == null` as the exact assertion). This is a real
+  round-trip through `TenantTokenStore.delete` → `FlutterSecureStorage.delete` →
+  `fakePlatform`'s in-memory map, not a mock-call-count assertion, so it also proves
+  `delete` was called with the correct `realmUrl` (a wrong-realm delete would leave
+  `read` for the *actual* realm still non-null, which the assertion would then catch as
+  a failure).
+- **Refresh-call-count inspection (AC1's "exactly one refresh call"):** this is
+  observed on `FakeAppAuthAdapter` (§5.2, already exists per REQ-422 §2.4), not on the
+  token store — the fake adapter records the number of times `refresh` was invoked; the
+  test asserts that count is exactly `1` after two concurrent 401-triggering requests.
+  `tokenStore`/`fakePlatform` in this scenario only need to hold *some* valid token set
+  for the first read; they are not what AC1's "exactly one" assertion is checked
+  against.
+- **`ApiClient` construction for these tests** uses `ApiClient.forTesting` (§5.1, now
+  carrying `tokenStore`/`activeRealm` parameters) wrapping a `Dio` configured with a
+  fake `HttpClientAdapter` that returns the scripted 401-then-200 (or persistent-401)
+  response sequence — the same `Dio`+fake-adapter construction every existing
+  `api_client_test.dart` test already uses, unchanged by this design.
+
 ---
 
 ## 3. 5xx backoff for GET only
@@ -629,6 +688,9 @@ class ApiClient implements HttpGateway {
   @visibleForTesting
   factory ApiClient.forTesting(
     Dio dio, {
+    required TenantTokenStore tokenStore,    // NEW — see §2.6 for the exact
+                                              // test seam (FakeSecureStoragePlatform)
+    required ActiveRealmHolder activeRealm,  // NEW — see §2.6
     required AppAuthAdapter appAuthAdapter,
     required LoginRouter routeToLogin,
     Future<void> Function(Duration) delayFn = Future.delayed,
@@ -784,6 +846,7 @@ explicitly rather than leaving it open a second requirement in a row.
 | `lib/api/api.dart` (this app) | Gains `export 'api_error.dart';` |
 | `test/guards/single_api_client_guard_test.dart` (this app, **new file**) | §4 |
 | `test/support/fake_app_auth_adapter.dart` (this app) | Gains a controllable `refresh` stub |
+| `test/support/fake_secure_storage_platform.dart` (this app, unchanged) | §2.6's test-inspection seam — a real `TenantTokenStore` backed by this fake platform, reused as-is from REQ-421/422's existing tests |
 | `Letflow.Api.Error`/`Letflow.Api.Response` (backend, `lib/letflow/api/`) | Unchanged — this design only reads their already-shipped wire shapes (RFC 9457 `errors` array, `Retry-After` header) to write the mobile-side parser; no backend change |
 | `Letflow.Plugs.Admission`/`Letflow.Plugs.PublicReadRateLimit` (backend) | Unchanged — source of the 429 responses §1.4 parses |
 
@@ -824,8 +887,8 @@ are all pure-Dart/`dio`-only constructs.
 
 | # | Acceptance criterion (paraphrased) | Resolved by |
 |---|---|---|
-| 1 | 401-once-then-200 → exactly one refresh + one retry; two concurrent 401s → one refresh total | §2.1 (`_RefreshCoordinator`), §2.2 (sequence), §2.3 (concurrency behavior) |
-| 2 | Refresh failure → tokens deleted from secure store + router at login route | §2.2 step 5, §2.4 (routing mechanism) |
+| 1 | 401-once-then-200 → exactly one refresh + one retry; two concurrent 401s → one refresh total | §2.1 (`_RefreshCoordinator`), §2.2 (sequence), §2.3 (concurrency behavior), §2.6 (test-construction/inspection seam) |
+| 2 | Refresh failure → tokens deleted from secure store + router at login route | §2.2 step 5, §2.4 (routing mechanism), §2.6 (test-inspection seam) |
 | 3 | GET: 503×2 then 200 succeeds with increasing delays (fake clock); GET: 503 always → stops at named max-attempts constant, exact request count asserted, surfaces `ServerError`; POST: 503 not retried | §3.1 (`kMaxServerRetryAttempts`), §3.2 (formula + injectable `delayFn`), §3.3 (POST non-retry rule) |
 | 4 | Per-`ApiError`-variant mapping test, including 404-on-module-path vs. 404-elsewhere, and 429+`Retry-After: 7` → `backpressure(7)` | §1.1 (variant list), §1.2 (mapping rule), §1.3 (module-path regex, worked examples), §1.4 (`Retry-After` parsing, exact case) |
 | 5 | No `DioException`/`SocketException` escapes `lib/api/`; public API returns/throws only `ApiError` | §5.1 (throwing convention on every public method) |

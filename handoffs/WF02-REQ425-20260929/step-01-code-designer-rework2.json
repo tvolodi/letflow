@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-01-code-designer-rework2.json",
   "created_at": "2026-09-29T11:41:43Z",
   "started_at": "2026-09-29T11:41:43Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T12:30:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -40,18 +40,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Fixed the single defect from step-01b-code-design-validator-recheck1.json: ApiClient.forTesting (design Sec 5.1) had no seam for injecting a token store, though _RefreshCoordinator (Sec 2.1) requires one. Read the real apps/mobile/lib/api/api_client.dart (forTesting at line 166, .create at 138-158, ActiveRealmHolder defined at 115-117) and apps/mobile/lib/auth/auth.dart (TenantTokenStore at line 90 -- a concrete, const-constructible class wrapping FlutterSecureStorage, not an interface) before editing, plus apps/mobile/test/support/fake_secure_storage_platform.dart and apps/mobile/test/auth/tenant_token_store_test.dart to find the real existing test-inspection idiom rather than inventing a parallel one. Changes made to lib/letflow/design/req425-mobile-api-client-hardening.md: (1) Sec 5.1's ApiClient.forTesting factory now takes required tokenStore (TenantTokenStore) and activeRealm (ActiveRealmHolder) parameters alongside the existing appAuthAdapter/routeToLogin/delayFn; (2) new Sec 2.6 'Test-inspection seam for _RefreshCoordinator's token-store effects' states the exact seam -- a test swaps FlutterSecureStoragePlatform.instance with the already-existing FakeSecureStoragePlatform, constructs a real const TenantTokenStore(FlutterSecureStorage()) over it (the same idiom tenant_token_store_test.dart and bootstrap_sequence_test.dart already use), pre-seeds tokens via tokenStore.store(...) before constructing the ApiClient, and asserts post-refresh-failure state via tokenStore.read(realmUrl) == null (a real round-trip through TenantTokenStore.delete, not a mock-call assertion); refresh-call-count (AC1) is asserted on FakeAppAuthAdapter's existing call counter, not the token store; (3) Sec 0's current-state bullet on forTesting updated to say this design changes its shape rather than preserving it unchanged; (4) Sec 9's AC1/AC2 resolution-map rows and Sec 7's cross-module dependency table updated to cite Sec 2.6. Grepped the whole file afterward for TBD and forTesting( -- no stray TBD language, exactly the two forTesting references (Sec 0's prose mention and Sec 5.1's signature), both consistent.",
+    "artifacts_out": ["lib/letflow/design/req425-mobile-api-client-hardening.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["PENDING_COMMIT"],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) for a fresh full pass"
   },
   "rework_count": 2,
   "max_rework": 3

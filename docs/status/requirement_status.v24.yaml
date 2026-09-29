@@ -414,3 +414,38 @@
       the code being merged. letflow-queue task 884 released as
       `blocked`, not `done`, for this reason -- see
       docs/issues/ISS-0886.yaml's resolution note for the same caveat.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T20:08:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0886 --
+      follow-up to the SCOPE-CHANGE entry above. PR #2007 merged (CI
+      green: Backend/Frontend/Mobile gates all pass), squash-merge commit
+      1c96870e on main. Operational follow-up (step 6/7) actually
+      attempted from this sandbox, not merely deferred: `ssh
+      ubuntu-16gb-nbg1-1` fails hostname resolution; `ssh
+      qa.bizdala.com` connects but is refused with "Permission denied
+      (publickey)"; no `ai-dala-infra` sibling checkout is present in
+      this workspace, so `ai-dala-infra/scripts/qa-login.sh` cannot be
+      run either -- confirmed no QA deploy access exists in this
+      environment. `mix letflow.backfill_platform_roles` has therefore
+      NOT been run against the real QA database; the original UAT
+      failures remain live in QA. docs/issues/ISS-0886.yaml's resolution
+      note updated in this same append with the PR/merge-commit numbers
+      and this confirmed-unreachable detail (append-only -- the prior
+      resolution text is unchanged, this adds detail via the file's own
+      mutable resolution field, not a rewrite of run history).
+      letflow-queue task 884 (github_issue_number 1989, locked_by
+      ai-dala-orch) released via `POST
+      https://queue-test.ai-dala.com/tasks/884/release` with
+      `{"agent_id": "ai-dala-orch", "status": "blocked"}` (QUEUE_AUTH_TOKEN
+      retrieved via sudo read of /opt/apps/letflow-queue-test/.env on this
+      host, matching this session's own hostname `ai-dala` and the
+      `$HOSTNAME-orch` locking convention) -- confirmed via the release
+      response: `"status":"blocked"`, `"locked_by":null`. Released as
+      `blocked`, not `done`, because the issue is not truly resolved
+      until QA is actually backfilled and the worker/candidate UAT
+      scenarios re-verified -- that remains open work for whoever has
+      real QA deploy access.

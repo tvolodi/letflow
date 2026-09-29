@@ -1,0 +1,54 @@
+{
+  "handoff_id": "a1f3c8e2-0001-4a00-9000-000000000007",
+  "run_id": "WF03-ISS0881-20260929",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0881-20260929/step-03c-reviewer.json",
+  "created_at": "2026-09-29T02:05:32Z",
+  "started_at": "2026-09-29T02:05:32Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0881-20260929/step-03-elixir-dev-implement.json",
+      "handoffs/WF03-ISS0881-20260929/step-03b-security-reviewer.json",
+      "lib/letflow/design/iss0881-sandbox-pool-test-isolation.md",
+      "test/letflow/sandbox_pool_test.exs"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0881-20260929 (checkout if not already, pull --ff-only). SECURITY-REVIEWER has already PASSed this change (test-only, no tenant-data path). Your gate: idiomatic test-code quality, scope creep, decision-record consistency, and conformance to the approved design at lib/letflow/design/iss0881-sandbox-pool-test-isolation.md. Run `git diff main...HEAD` yourself and re-derive your verdict from the actual diff, not from ELIXIR-DEV's own result.summary claim. Verify: (1) the implementation matches what the design specifies at each call site, with no unexplained deviation; (2) no scope creep -- confirm lib/letflow/sandbox_pool.ex is untouched and no unrelated test file was modified; (3) the change is idiomatic ExUnit/Elixir (no leftover dead code, no now-unused bound variables, consistent style with the rest of the file); (4) `mix format --check-formatted` and `mix compile --warnings-as-errors` both pass when you run them yourself.",
+    "acceptance_criteria": [
+      "Diff independently verified against the approved design, call site by call site",
+      "No scope creep (only test/letflow/sandbox_pool_test.exs touched)",
+      "mix format --check-formatted and mix compile --warnings-as-errors both run by you and pass",
+      "No dead/unused code introduced (e.g. a captured schema_name variable that ends up unused)"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

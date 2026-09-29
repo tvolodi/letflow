@@ -84,12 +84,22 @@ resolution: >
   clean; independently re-confirmed tenant-isolation and
   no-privilege-escalation claims by reading the actual code; scope
   confirmed to exactly 3 files; decision-record consistency confirmed).
-  Merged via PR (see PR body for number/merge commit).
+  Merged via PR #2007 (squash-merged, merge commit 1c96870e, CI green:
+  Backend/Frontend/Mobile gates all pass).
   IMPORTANT -- this closes the CODE gap only. The QA database itself
   (bpm-default, bilimbaga) still has NOT been backfilled as of this
   resolution -- the original UAT failures (403 for every non-admin OIDC
   user on pre-existing tenants) remain live in QA until `mix
   letflow.backfill_platform_roles` is actually run against the real QA
-  database and the worker/candidate UAT scenarios are re-verified. See
-  this run's own follow-up note for whether that step was completed from
-  this environment.
+  database and the worker/candidate UAT scenarios are re-verified.
+  CONFIRMED NOT DONE from this environment: this sandbox has no QA
+  deploy access -- `ssh ubuntu-16gb-nbg1-1` fails hostname resolution,
+  and `ssh qa.bizdala.com` connects but is refused with "Permission
+  denied (publickey)"; no `ai-dala-infra` sibling checkout is present in
+  this workspace to run `ai-dala-infra/scripts/qa-login.sh` either. QA
+  application is a follow-up action item for whoever has real QA deploy
+  access (SSH to ubuntu-16gb-nbg1-1 / `/opt/apps/letflow-qa`) -- run `mix
+  letflow.backfill_platform_roles` there, then re-run the
+  worker-user/bpm-default and candidate-user/bilimbaga UAT scenarios from
+  WF05-FULL-20260929 to confirm the 403s are gone. letflow-queue task 884
+  released as `blocked` (not `done`) for this same reason.

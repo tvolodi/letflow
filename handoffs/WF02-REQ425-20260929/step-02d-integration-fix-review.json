@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-02d-integration-fix-review.json",
   "created_at": "2026-09-29T15:20:13Z",
   "started_at": "2026-09-29T15:20:13Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T15:22:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -36,18 +36,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Reviewed commit 298e8e84 (git show 298e8e84 -- apps/mobile/lib/definitions/pinned_form_resolver.dart apps/mobile/test/definitions/pinned_form_resolver_test.dart) against ApiClient.get's real contract in apps/mobile/lib/api/api_client.dart (_sendWithBackoff, lines ~465-511): the loop only ever `return response` when statusCode is 2xx (401 routes through _handleUnauthorized, which itself only returns on success or throws); every other status, and every DioException, ends in `throw classifyError(...)`. So `ApiClient.get()` can never return a Response with a non-2xx statusCode -- the removed `if (response.statusCode != 200)` branch was genuinely unreachable, confirming this is dead-code removal, not a behavior change. (1) No-behavior-change: PinnedFormResolved/PinnedFormUnavailable outcomes for all four input classes (cache-hit, cache-miss-fetch-success incl. null form_schema, cache-miss-fetch-exception, null-form-version) are unchanged -- both the old dead branch and the surviving catch(_) returned the identical PinnedFormUnavailable(fetchFailed), and the dio.Response import/local var removal is a pure type-narrowing cleanup with no logic change. (2) No scope creep: diff touches only pinned_form_resolver.dart (removed dio import, Response<dynamic> local -> dynamic, dead branch, doc-comment updates) and its own test file; nothing else in lib/definitions/ or beyond was touched. (3) Updated test genuinely exercises the real path: the AC3 404 case now does `_FakeGateway(errorToThrow: const NotFoundError())` and the resolver's own catch(_) block catches it via the same code path as the network-exception test, asserting the identical PinnedFormUnavailable(fetchFailed) outcome -- not a rubber-stamp, it reflects ApiClient's real throwing contract. Verified independently: cd apps/mobile && flutter analyze lib/definitions/pinned_form_resolver.dart test/definitions/pinned_form_resolver_test.dart -> 'No issues found!'; flutter test test/definitions/pinned_form_resolver_test.dart -> all 6 tests pass ('All tests passed!').",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ425-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "TEST-DESIGNER may proceed (WF-02 step 2d gate cleared)."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -624,3 +624,52 @@
       fix/ISS-0893-swiftroute-definition-key-mismatch), squash-merged to
       main (see PR for merge commit SHA). letflow-queue task Q-893
       released as done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T23:02:51Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0897
+      (MAJOR, meridian/vortex QA process definitions + seed scripts missing)
+      -- resolved: two new idempotent seed scripts
+      (scripts/seed_meridian_definition.sh, scripts/seed_vortex_definition.sh)
+      with the same QA_AUTH_TOKEN/QA_URL contract as
+      scripts/seed_swiftroute_definition.sh, four fixture JSONs under
+      test/fixtures/qa/ transcribed 1:1 from the verified
+      test/fixtures/simulation/{meridian,vortex}/*.yaml sources, and five new
+      alias sidecars under test/fixtures/uat/process-definition-aliases/
+      (proc-meridian-loan-origination,
+      proc-meridian-regulatory-compliance-review,
+      proc-vortex-production-order-release, proc-vortex-quality-deviation,
+      proc-vortex-supplier-quality-deviation), reusing the ISS-0893 alias
+      mechanism verbatim. proc-vortex-quality-deviation and
+      proc-vortex-supplier-quality-deviation intentionally both alias the
+      same "Supplier Quality Deviation" definition (design decision C,
+      lib/letflow/design/iss0897-meridian-vortex-definition-seeding.md) --
+      entity-list-filter-and-page.yaml's use of the former is corpus-side
+      naming drift for the same real workflow, not a distinct sixth
+      definition; independently verified twice (CODE-DESIGNER against the
+      scenario's own content, then RELEASE-VALIDATOR re-deriving the same
+      conclusion directly from the source files). sys-tenant-onboarding
+      confirmed out of scope (scenario-side-only, per ISS-0893's prior
+      finding). Full gate chain: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR
+      PASS -> ELIXIR-DEV implement (commit 69c37c11, branch
+      iss0897-meridian-vortex-definition-seeding) -> REVIEWER PASS ->
+      RELEASE-VALIDATOR PASS. docs/issues/ISS-0897.yaml set to status:
+      resolved (resolved_in_run:
+      iss0897-meridian-vortex-definition-seeding-20260929) in this same
+      append -- this is an ISSUE, not a REQ, so no docs/requirements.yaml
+      entry is touched. OPERATIONAL FOLLOW-UP NOT EXECUTED, DOCUMENTED:
+      actually running the two new seed scripts against the live QA host to
+      deploy+activate the five definitions was NOT done from this sandbox --
+      no QA_AUTH_TOKEN and no reachable QA host/credential-source sibling
+      checkout are available here (same documented constraint as
+      ISS-0886/ISS-0893's own resolutions). This is a stated, unexecuted
+      follow-up for a QA-reachable session, not a false completion claim;
+      scripts/uat_preflight.sh will keep reporting a definitions GAP for the
+      3 meridian + 4 vortex narrative scenarios until that deploy step runs.
+      Merged via PR #2016 (branch
+      iss0897-meridian-vortex-definition-seeding), squash-merged to main
+      (see PR for merge commit SHA). letflow-queue task 892 (queue_ref
+      Q-892) to be released as done in the same run.

@@ -5021,7 +5021,7 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 15
+    entries: 16
     note: >
       MERGE RECONCILIATION by ORCH (ISS-0893's fix branch into main): this
       volume's note history diverged again across two lines of work that
@@ -5031,7 +5031,12 @@ volumes:
       14 (REQ-426 + ISS-0886 x2 + ISS-0895 + ISS-0894). After merging both
       branches, the on-disk file has all appends from both; recounted
       directly rather than trusting either side's pre-merge arithmetic:
-      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 15
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 15.
+      Then DOC-UPDATER (ISS-0897 closure, run
+      iss0897-meridian-vortex-definition-seeding-20260929) appended one more
+      SCOPE-CHANGE entry in the same commit as this bump: recounted directly
+      again, `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` =
+      16.
       on-disk entries. 626 lines / 37691 bytes (working-tree), well under
       the 1200-line/120000-byte roll ceiling, so no roll triggered.
 

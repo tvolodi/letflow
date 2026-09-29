@@ -1,0 +1,56 @@
+{
+  "handoff_id": "a1f3c8e2-0001-4a00-9000-000000000008",
+  "run_id": "WF03-ISS0881-20260929",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0881-20260929/step-04-test-designer.json",
+  "created_at": "2026-09-29T02:07:35Z",
+  "started_at": "2026-09-29T02:07:35Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/design/iss0881-sandbox-pool-test-isolation.md",
+      "handoffs/WF03-ISS0881-20260929/step-03-elixir-dev-implement.json",
+      "test/letflow/sandbox_pool_test.exs",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0881-20260929 (checkout if not already, pull --ff-only). Write a fail-then-pass regression test proving ISS-0881's fix actually closes the race, per docs/agents/workflows/WF-03_issue_resolving.md's Step 4 rules.\n\nThe difficulty this issue poses: the real bug only manifests under scripts/test_parallel.sh's genuine cross-OS-process full-suite contention (ISSUE-FIXER's own Step 1 diagnosis could not reliably reproduce it live even with an 18-iteration 2-process contention rig -- see handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json's result.summary). A literal 'run the full parallel suite and watch it flip' fail-then-pass proof is therefore impractical to demand deterministically. Instead, construct a DETERMINISTIC regression test that directly simulates the race window without needing real full-suite contention: within a new test in test/letflow/sandbox_pool_test.exs (or a small dedicated describe block), reproduce the exact mechanism ISSUE-FIXER diagnosed -- capture `baseline`, run a real SandboxPool operation (e.g. mirror RT-6's crash-and-recover scenario, or a simpler provisioning case), and INJECT an extraneous, unrelated `sandbox_%` schema into Postgres via a raw connection (e.g. `Repo.query!(\"CREATE SCHEMA sandbox_noise_test_<unique>\")`, with its own on_exit dropping it) DURING the baseline-to-final window, before capturing `final`. This deterministically reproduces what an unrelated concurrent partition would do, on demand, in a single process.\n\nFAIL-FIRST PROOF (this is a fix to EXISTING behavior/assertions, not new code, so the standard fail-then-pass rule applies, not the mutation-testing addendum for a from-scratch module): apply this project's documented mutant-testing technique from WF-03_issue_resolving.md ('A mutant is a TEMPORARY PROBE... apply mutants in a throwaway git worktree of the branch, so the working checkout is never mutated at all' -- PREFERRED technique) to revert JUST the specific assertion your new test targets back to the OLD platform-wide `sandbox_schema_names() == baseline` shape (i.e. the pre-ISS-0881-fix code) in a throwaway worktree, run your new test there, and confirm it FAILS (because your injected noise schema breaks the old equality assertion). Then run your new test against the actual current branch (post-fix, scoped assertions) and confirm it PASSES (because the injected noise schema is irrelevant to a scoped membership check). Remove the throwaway worktree when done. Record both real command outputs in your result.summary -- this is the fail-then-pass evidence WF-03 requires.\n\nComplete the handoff yourself (claim IN_PROGRESS first), commit your new test + completed handoff to the feature branch and push, run `mix letflow.lint_handoffs --dir handoffs/WF03-ISS0881-20260929` before finishing. next_action should point to TEST-DESIGN-VALIDATOR (Step 4b). Leave the checkout on feature/WF03-ISS0881-20260929 (not the throwaway worktree).",
+    "acceptance_criteria": [
+      "A new deterministic test exists that injects an extraneous sandbox_% schema during the baseline-to-final window of a real SandboxPool operation",
+      "The test is shown to FAIL against the pre-ISS-0881-fix (reverted) assertion shape, with real command output quoted",
+      "The same test is shown to PASS against the current (post-fix) code, with real command output quoted",
+      "The mutant/revert was applied and removed via a throwaway git worktree (preferred technique) or, if applied in place, reverted and verified per WF-03's own revert-and-verify procedure with git status --porcelain confirmed empty afterward",
+      "The new test's own on_exit cleans up the injected noise schema unconditionally"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

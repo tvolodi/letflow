@@ -29,51 +29,25 @@ defmodule Letflow.Plugs.ApiPipelineIntegrationTest do
 
   use Letflow.DataCase, async: false
 
-  alias Letflow.Identity.Tenant
   alias Letflow.Plugs.TenantStatus
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
-  import Ecto.Query
   import Plug.Test
   import Plug.Conn
 
-  defp unique_slug(prefix \\ "tenant") do
-    "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-  end
-
-  # Mirrors auth_pipeline_test.exs's insert_tenant!/1 exactly: switches Sandbox to
-  # :auto mode BEFORE inserting the tenant row (so the row and its schema are both
-  # visible under the same connection discipline), provisions + migrates a real
-  # tenant schema (needed for AuthPipeline's JIT-provisioning step to succeed), and
-  # cleans both up explicitly in on_exit/1 since :auto-mode state is real, committed
-  # Postgres state that is never rolled back automatically.
-  defp insert_tenant!(attrs) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(attrs, :enabled)
-      |> Repo.insert!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: _schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    tenant
-  end
-
+  # ISS-0112/GH#366 (batch 9): provisions via Letflow.TenantFixture, which
+  # subsumes the previous inline "switch Sandbox to :auto, insert tenant,
+  # provision_tenant_schema, replay_migrations, on_exit cleanup" sequence.
+  # `oidc_mode: :enabled` matches this file's previous unconditional
+  # `Tenant.create_changeset(attrs, :enabled)` (AuthPipeline's JIT-provisioning
+  # step needs `users` to exist under the tenant's own schema per REQ-063).
+  # No `teardown: false` composition needed -- this file never switches
+  # Sandbox mode back to :manual, so TenantFixture's own default on_exit
+  # teardown is the only teardown needed. Safe under this file's own
+  # Task.async concurrent-isolation test (AC5) per
+  # `TenantFixture.provisioned_tenant!/1`'s own moduledoc ("async: true
+  # callers" section): its `Sandbox.mode(:auto)` line is the only
+  # mode-changing call it makes and it is never restored.
   defp insert_tenant_for_realm!(realm) do
     # REQ-370's seed migration permanently binds exactly one tenant to
     # idp_realm_id "bpm-default" (partial unique index) -- every test in this file
@@ -84,11 +58,15 @@ defmodule Letflow.Plugs.ApiPipelineIntegrationTest do
     # Letflow.Support.BpmDefaultRealmDisplacement's moduledoc.
     if realm == "bpm-default", do: Letflow.Support.BpmDefaultRealmDisplacement.displace!()
 
-    insert_tenant!(%{
-      slug: unique_slug(),
-      display_name: "API Pipeline Integration Test Tenant",
-      idp_realm_id: realm
-    })
+    %{tenant: tenant} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "tenant",
+        display_name: "API Pipeline Integration Test Tenant",
+        idp_realm_id: realm,
+        oidc_mode: :enabled
+      )
+
+    tenant
   end
 
   # Named (not anonymous) telemetry handler function, matching

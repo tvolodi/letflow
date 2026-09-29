@@ -32,21 +32,25 @@ defmodule Letflow.Identity.TenantRoleTest do
   import Ecto.Query
 
   alias Letflow.Identity.{Group, Tenant, TenantRole}
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
 
-  defp unique_slug, do: Letflow.TenantSlugFixture.unique_slug("req063-trole")
-
+  # ISS-0112/GH#366 (batch 9): provisions via Letflow.TenantFixture.
+  # teardown: false because this file needs its own on_exit to force :auto
+  # mode back on before the drop/delete cleanup (this setup switches to
+  # :manual + a bare checkout below, for SET search_path) -- TenantFixture's
+  # own default teardown does not do that composition, so it stays disabled
+  # and this file's pre-existing on_exit is kept, mirroring category A's
+  # documented pattern (audit_capture_test.exs) even though this file predates
+  # the SandboxAutoMode module and does the same restore inline.
   setup do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(
-        %{slug: unique_slug(), display_name: "REQ-063 TenantRole Test"},
-        :disabled
+    %{tenant: tenant, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req063-trole",
+        display_name: "REQ-063 TenantRole Test",
+        teardown: false
       )
-      |> Repo.insert!()
 
     on_exit(fn ->
       # This callback runs AFTER the test process (and thus the {:shared, self()}
@@ -65,11 +69,6 @@ defmodule Letflow.Identity.TenantRoleTest do
       Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
       Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
     end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
     # REQ-063 rework (iteration 2): restore a REAL sandboxed transaction before
     # issuing SET search_path -- :auto mode above checked in (discarded) whatever

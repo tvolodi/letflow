@@ -94,6 +94,7 @@ defmodule Letflow.Identity.UserTest do
 
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
 
@@ -103,27 +104,33 @@ defmodule Letflow.Identity.UserTest do
   # tenant_test.exs.
   defp unique_username, do: "user-#{Ecto.UUID.generate()}"
 
-  defp unique_slug, do: Letflow.TenantSlugFixture.unique_slug("req063-user")
-
-  # REQ-063: provisions a real tenant schema (still needs Sandbox :auto mode for
-  # Ecto.Migrator's migration replay -- see moduledoc), WITHOUT touching
-  # search_path or sandbox transaction state. Returns the tenant/schema_name pair;
-  # callers that need `search_path` pointed at it call
-  # `point_search_path_at!/1` separately (kept apart specifically so the "same
-  # username, two different schemas" test below can provision BOTH schemas first,
-  # while still in :auto mode, before entering a shared sandboxed transaction --
-  # see that test for why interleaving provisioning with an active shared
-  # transaction is unsafe).
+  # REQ-063: provisions a real tenant schema via Letflow.TenantFixture (ISS-0112 /
+  # GH#366, batch 9), WITHOUT touching search_path or sandbox transaction state.
+  # Returns the tenant/schema_name pair; callers that need `search_path` pointed
+  # at it call `point_search_path_at!/1` separately (kept apart specifically so
+  # the "same username, two different schemas" test below can provision BOTH
+  # schemas first, while still in :auto mode, before entering a shared sandboxed
+  # transaction -- see that test for why interleaving provisioning with an
+  # active shared transaction is unsafe). Calling this twice within one test
+  # (that test's own case) is safe: `provisioned_tenant!/1`'s own :auto-mode
+  # line is the only mode-changing call it makes, and it never restores
+  # :manual, so a second call finds the pool already in :auto and no-ops that
+  # line (`tenant_fixture.ex`'s own moduledoc, "async: true callers" section).
+  #
+  # teardown: false because this file needs its own on_exit to force :auto mode
+  # back on before the drop/delete cleanup (point_search_path_at!/1 below
+  # switches to :manual + a bare checkout for SET search_path) --
+  # TenantFixture's own default teardown does not do that composition, so it
+  # stays disabled and this file's pre-existing on_exit is kept, mirroring
+  # category A's documented pattern (audit_capture_test.exs) even though this
+  # file predates the SandboxAutoMode module and does the same restore inline.
   defp provision_tenant_schema! do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(
-        %{slug: unique_slug(), display_name: "REQ-063 User Test"},
-        :disabled
+    %{tenant: tenant, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req063-user",
+        display_name: "REQ-063 User Test",
+        teardown: false
       )
-      |> Repo.insert!()
 
     on_exit(fn ->
       # This callback runs AFTER the test process (and thus any {:shared, self()}
@@ -142,11 +149,6 @@ defmodule Letflow.Identity.UserTest do
       Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
       Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
     end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
     %{tenant: tenant, schema_name: schema_name}
   end

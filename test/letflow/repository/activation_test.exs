@@ -63,14 +63,12 @@ defmodule Letflow.Repository.ActivationTest do
 
   alias Letflow.Api.Pagination
   alias Letflow.Audit.Entry, as: AuditEntry
-  alias Letflow.Identity.Tenant
   alias Letflow.Repository
   alias Letflow.Repository.Activation
   alias Letflow.Repository.ActivationGroup
   alias Letflow.Repository.ActivationHistory
   alias Letflow.Repository.ArtifactVersion
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # No shared `errors_on/1` helper exists in `Letflow.DataCase` -- inlined
   # here, standard `Ecto.Changeset.traverse_errors/2` idiom.
@@ -87,43 +85,24 @@ defmodule Letflow.Repository.ActivationTest do
   # provisioned_tenant/0 (this file's direct structural precedent).
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req203-act"),
-        display_name: "REQ-203 Activation Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
+  # ISS-0112/GH#366 (batch 9): provisions via Letflow.TenantFixture instead of
+  # the previous inline insert-tenant!/provision_tenant_schema/
+  # replay_migrations sequence. This file never switches Sandbox mode back to
+  # :manual, so no `teardown: false` composition is needed -- TenantFixture's
+  # own default on_exit teardown is the only teardown needed. Safe under this
+  # file's own AC1/AC2 concurrency test (this module's moduledoc) per
+  # `TenantFixture.provisioned_tenant!/1`'s own moduledoc ("async: true
+  # callers" section): its `Sandbox.mode(:auto)` line is the only
+  # mode-changing call it makes and it is never restored, so the spawned Task
+  # gets its own real, independent Postgres connection automatically.
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req203-act",
+        display_name: "REQ-203 Activation Test Tenant"
+      )
 
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   defp version_attrs(overrides) do

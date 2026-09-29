@@ -556,3 +556,55 @@ progress_2026_09_28: >
   total in scope. Status left `open`: ISS-0112 is not resolved until all
   10 batches land. Queue task 180 (Q-180) NOT released by this run -- it
   stays locked/in-progress with ORCH for the remaining batches.
+
+  Batch 9 of 10 merged next: the second and final category-C-only
+  (Task.async/Task.start) batch, 8 files --
+  test/letflow/event_store/partition_maintenance_test.exs,
+  test/letflow/event_store/registry_test.exs,
+  test/letflow/event_store_test.exs, test/letflow/identity/group_test.exs,
+  test/letflow/identity/tenant_role_test.exs,
+  test/letflow/identity/user_test.exs,
+  test/letflow/plugs/api_pipeline_integration_test.exs,
+  test/letflow/repository/activation_test.exs -- migrated onto
+  Letflow.TenantFixture.provisioned_tenant!/1. Three files
+  (identity/group_test.exs, identity/tenant_role_test.exs,
+  identity/user_test.exs) were reclassified from category C to category A
+  on a fresh per-file read: they turned out to have no real Task.async/
+  Task.start (only a comment mentioning it), only a hand-rolled Sandbox
+  restore-to-:manual + checkout for SET search_path, so they were migrated
+  with teardown: false, keeping each file's own pre-existing on_exit/1
+  untouched -- the same composition already established for category A's
+  audit_capture_test.exs. event_store/partition_maintenance_test.exs and
+  event_store/registry_test.exs both needed template: :replay (not the
+  fixture's :clone default): partition_maintenance_test.exs's tests
+  DETACH/ATTACH real partitions of events/events_archive, which :clone
+  leaves plain/unpartitioned; registry_test.exs's ensure_migration_module_loaded!/0
+  workaround only matters when replay_migrations/2 genuinely runs. Zero
+  lib/ or priv/repo/migrations/ changes.
+
+  RELEASE-VALIDATOR fully PASSed after deep independent verification:
+  scope confirmed to exactly these 8 test files (second/final category C
+  batch); zero lib/ changes; the 3 identity files' C-to-A reclassification
+  independently re-confirmed (no real Task.async, teardown:false
+  composition verified conflict-free); both template: :replay
+  justifications independently re-derived from actual code; format/compile
+  clean; 2 seeded runs 112/112 both; `mix letflow.check.test` clean; full
+  suite scripts/test_parallel.sh 5034/5034 clean.
+
+  Merged via PR #<PR_NUMBER> (branch
+  fix/ISS0112-batch9-tenant-fixture-migration-20260928, squash-merge
+  commit <MERGE_COMMIT>, based on main commit 4f7b407d).
+
+  With Batch 9 landed, Batches 1-9 total 8 + 8 + 8 + 7 + 7 + 4 + 3 + 7 + 8
+  = 60 of the plan's 63 files-in-scope total now migrated.
+
+  Only 1 batch remains (per
+  lib/letflow/design/iss0112-tenant-fixture-migration-plan.md section 2's
+  batch table):
+  - Batch 10 (category A∩C, do last/most complex, 3 files):
+    engine_concurrency_test.exs, repository_test.exs, role_registry_test.exs
+
+  That is 3 files remaining, matching 60 done + 3 remaining = 63 total in
+  scope. Status left `open`: ISS-0112 is not resolved until Batch 10 lands.
+  Queue task 180 (Q-180) NOT released by this run -- it stays
+  locked/in-progress with ORCH for the final batch.

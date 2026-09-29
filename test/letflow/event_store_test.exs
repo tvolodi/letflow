@@ -80,56 +80,37 @@ defmodule Letflow.EventStoreTest do
   alias Letflow.EventStore.Registry
   alias Letflow.EventStore.RetentionPolicy
   alias Letflow.EventStore.StoredPayload
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req025"),
-        display_name: "REQ-025 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
   # Mirrors registry_test.exs's/tenant_provisioning_test.exs's provisioned_tenant/1
   # exactly -- see this file's moduledoc for the full reasoning. Callable both as a
   # `setup` function and directly from inside a test body (registry_test.exs's own
-  # "tenant-isolated" test does the latter for a second tenant) -- on_exit/1 may be
-  # called from either context.
+  # "tenant-isolated" test does the latter for a second tenant, and this file's own
+  # "tenant_id (AC6)" tests call it twice per test) -- safe per
+  # `TenantFixture.provisioned_tenant!/1`'s own moduledoc ("async: true callers"
+  # section): its `Sandbox.mode(:auto)` line is the only mode-changing call it
+  # makes and it is never restored, so a second call within the same test (or a
+  # concurrent Task spawned after it, see the AC2 concurrency test below) simply
+  # no-ops that line and reuses the already-:auto pool.
+  #
+  # ISS-0112/GH#366 (batch 9): provisions via Letflow.TenantFixture instead of the
+  # previous inline insert-tenant!/provision_tenant_schema/replay_migrations
+  # sequence. No `teardown: false` composition needed here (unlike the identity/*
+  # files in this same batch) -- this file never switches Sandbox mode back to
+  # :manual, so TenantFixture's own default on_exit teardown is the only teardown
+  # this needs.
   defp provisioned_tenant(_context \\ %{}) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req025",
+        display_name: "REQ-025 Test Tenant"
+      )
 
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   defp unique_idempotency_key(prefix \\ "IDK") do

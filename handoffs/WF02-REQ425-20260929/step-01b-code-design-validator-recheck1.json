@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-01b-code-design-validator-recheck1.json",
   "created_at": "2026-09-29T11:38:26Z",
   "started_at": "2026-09-29T11:38:26Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T12:05:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -38,10 +38,12 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Full re-check of the whole document (not just the three reworked sections). The three iteration-0 defects are genuinely fixed: no TBD language anywhere in the document (grepped), Sec 4.2's self-test fixture is now a spec-only table (no executable Dart test bodies, no void main()/test()/expect() blocks anywhere in the file), and Sec 5.1 declares 'post' exactly once. However, a new, independent defect surfaces on this full-document pass: Sec 5.1's ApiClient.forTesting factory signature omits the TenantTokenStore/ActiveRealmHolder parameters that Sec 2.1's _RefreshCoordinator requires to do its work (read/store/delete tokens). The design's own current-state section (Sec 0) and the real api_client.dart (`factory ApiClient.forTesting(Dio dio) => ApiClient._(dio);`, apps/mobile/lib/api/api_client.dart:166) confirm forTesting today takes no tokenStore/activeRealm and that .create is the only site wiring the bearer interceptor to a token store (api_client.dart:138-156). Sec 5.1's new forTesting signature (lines 629-635) adds appAuthAdapter/routeToLogin/delayFn but still has no way to inject a fake/inspectable TenantTokenStore or ActiveRealmHolder. AC1 (concurrent-401 dedup test observing exactly one refresh call) and AC2 (refresh-failure test asserting tokens are deleted from the secure store) both require constructing an ApiClient via forTesting with a fake token store the test can then inspect for deletion -- as specified, there is no such seam, so these two acceptance criteria's tests are not actually implementable against the given signature. This is a fully-specified-signature failure directly blocking two of the seven acceptance criteria, not a stylistic nit.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "Sec 5.1 (line 630-635): ApiClient.forTesting's signature has no TenantTokenStore/ActiveRealmHolder parameters, but Sec 2.1's _RefreshCoordinator (constructed inside ApiClient, used by every 401 path) requires both to read/store/delete tokens. AC1 ('two concurrent requests both receiving 401 trigger one refresh total') and AC2 ('refresh fails asserts the tenant's tokens are deleted from the secure store') both need a test-constructed ApiClient (via forTesting) whose token store is a fake the test can inspect; the design gives no way to supply or observe one. Route back to CODE-DESIGNER to add explicit tokenStore/activeRealm parameters (or an equivalent named seam) to ApiClient.forTesting and state how the test fixture inspects post-refresh/post-failure token-store state."
+    ],
     "git_evidence": {
       "branch_name": null,
       "commit_sha_list": [],
@@ -50,7 +52,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to CODE-DESIGNER for rework iteration 2: fully specify ApiClient.forTesting's parameters (tokenStore/activeRealm or equivalent) so AC1 and AC2's tests are constructible as literally specified, then re-run the full Step 1b gate over the whole document again."
   },
   "rework_count": 1,
   "max_rework": 3,
@@ -66,6 +68,16 @@
         "Sec 5.1 declares 'post' twice with conflicting doc comments"
       ],
       "next_action": "Route back to CODE-DESIGNER for rework: strip TBD language from Sec 5.2, remove/replace Sec 4.2's executable test bodies with spec-only prose, resolve the duplicate 'post' declaration in Sec 5.1."
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-29T12:05:00Z",
+      "status": "FAIL",
+      "summary": "Iteration-0's three defects (TBD in Sec 5.2, executable test bodies in Sec 4.2, duplicate 'post' in Sec 5.1) are confirmed fixed on this full re-read. New defect found on the full-document pass: Sec 5.1's ApiClient.forTesting signature omits TenantTokenStore/ActiveRealmHolder, which Sec 2.1's _RefreshCoordinator requires -- AC1 and AC2's tests are not constructible as specified.",
+      "issues": [
+        "Sec 5.1: ApiClient.forTesting has no tokenStore/activeRealm parameter despite _RefreshCoordinator (Sec 2.1) requiring both, blocking AC1 and AC2's test construction"
+      ],
+      "next_action": "Route back to CODE-DESIGNER for rework iteration 2: add tokenStore/activeRealm (or equivalent) to ApiClient.forTesting's signature and state the test-inspection seam for post-refresh/post-failure token-store state."
     }
   ]
 }

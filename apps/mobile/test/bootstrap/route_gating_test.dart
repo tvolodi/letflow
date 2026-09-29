@@ -18,6 +18,7 @@ import 'package:letflow/app.dart';
 import 'package:letflow/auth/auth.dart';
 import 'package:letflow/bootstrap/navigation_bootstrap.dart';
 import 'package:letflow/definitions/definitions.dart';
+import 'package:letflow/definitions/pinned_form_cache.dart';
 
 import '../support/fake_app_auth_adapter.dart';
 
@@ -65,7 +66,9 @@ void main() {
         tokenStore: const TenantTokenStore(FlutterSecureStorage()),
         activeRealm: ActiveRealmHolder(),
         definitionCache: ActiveDefinitionCacheHolder(),
+        pinnedFormCache: ActivePinnedFormCacheHolder(),
         cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
+        pinnedFormCacheOpener: (_) async => InMemoryPinnedFormCacheRepository(),
         appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
       );
       // Default state, per BootstrapController's field initializer, is
@@ -103,7 +106,9 @@ void main() {
         tokenStore: const TenantTokenStore(FlutterSecureStorage()),
         activeRealm: ActiveRealmHolder(),
         definitionCache: ActiveDefinitionCacheHolder(),
+        pinnedFormCache: ActivePinnedFormCacheHolder(),
         cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
+        pinnedFormCacheOpener: (_) async => InMemoryPinnedFormCacheRepository(),
         appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
       );
 

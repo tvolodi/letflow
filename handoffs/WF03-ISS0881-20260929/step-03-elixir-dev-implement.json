@@ -1,0 +1,54 @@
+{
+  "handoff_id": "a1f3c8e2-0001-4a00-9000-000000000005",
+  "run_id": "WF03-ISS0881-20260929",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0881-20260929/step-03-elixir-dev-implement.json",
+  "created_at": "2026-09-29T01:57:06Z",
+  "started_at": "2026-09-29T01:57:06Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0881-sandbox-pool-test-isolation.md",
+      "handoffs/WF03-ISS0881-20260929/step-02b-code-design-validator.json",
+      "test/letflow/sandbox_pool_test.exs"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0881-20260929 (checkout if not already, pull --ff-only). Implement the PASSed design at lib/letflow/design/iss0881-sandbox-pool-test-isolation.md exactly -- it is CODE-DESIGN-VALIDATOR-approved, so implement what it specifies rather than re-deciding the approach. Read the design doc in full before writing any code.\n\nThis is a test-file-only change to test/letflow/sandbox_pool_test.exs: replace every platform-wide `sandbox_schema_names() == baseline`-style equality assertion with the scoped membership/diff checks the design specifies at each call site it enumerates (RT-6, RT-3, the ISS-0292/RT-8 diff-order test, and any others the design names), widening pattern matches to capture each test's own schema name(s) where the design says to. Do NOT touch lib/letflow/sandbox_pool.ex -- the design confirms no production code change is needed, and doing so would be out of this fix's scope.\n\nAfter implementing: run `mix compile --warnings-as-errors` (must be clean) and `mix test test/letflow/sandbox_pool_test.exs` (must be green -- this is the existing, non-flaky-under-isolation baseline; the actual regression-proof-under-contention comes later at Step 4, not from you). Report the real output of both.\n\nComplete the handoff yourself (claim IN_PROGRESS first) with a real result block, do not touch the task block, commit your implementation + the completed handoff to the feature branch and push, run `mix letflow.lint_handoffs --dir handoffs/WF03-ISS0881-20260929` before finishing. next_action should point to SECURITY-REVIEWER (Step 3b) -- note in your summary that this is a test-only change touching no tenant-data path, API route, migration, or secret, so SECURITY-REVIEWER's own scope test is expected to find it NOT APPLICABLE, but SECURITY-REVIEWER still runs and states that itself; you do not get to skip it. Leave the checkout on feature/WF03-ISS0881-20260929.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix test test/letflow/sandbox_pool_test.exs passes (real output quoted, not assumed)",
+      "Every call site the design doc names is updated exactly as specified",
+      "lib/letflow/sandbox_pool.ex is untouched",
+      "No implementation deviates from the approved design without being flagged as a deviation with reasoning"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

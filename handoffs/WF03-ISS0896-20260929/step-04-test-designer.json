@@ -9,7 +9,7 @@
   "created_at": "2026-09-29T20:19:05Z",
   "started_at": "2026-09-29T20:19:05Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -32,20 +32,23 @@
       "the thrown-error-on-failure path is confirmed not to leak the attempted credential value in its message"
     ]
   },
+  "completed_at": "2026-09-30T01:24:00Z",
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Wrote web/tests/unit/e2e-helpers/get-master-admin-token.test.ts (new directory -- no prior web/tests/unit subdirectory tested helpers.ts's getMasterAdminToken specifically; resolveCredential.test.ts and iss-0706-e2e-health-precondition.test.ts already covered other exports of the same file, so this is a sibling, not a duplicate). 4 tests, all passing against the shipped code (`npx vitest run tests/unit/e2e-helpers/get-master-admin-token.test.ts` -> 'Test Files 1 passed (1) / Tests 4 passed (4)'): TC-1 env vars unset -> POST form username/password are 'admin'/'admin'; TC-2 env vars set -> POST form username/password match the env values, not the fallback; TC-3 non-ok response -> throws, and the thrown message is asserted to contain '401' but NOT the attempted username/password markers ('leaky-user-marker'/'leaky-password-marker'); TC-4 ok response -> returns access_token from the JSON body.\n\ngetMasterAdminToken is a NEW function -- no pre-fix version exists to run a literal pre-fix/post-fix proof against (WF-03's non-existence rule applies). Fail-then-pass proof was done via mutation, in a throwaway git worktree (`git worktree add ../letflow-mutant-wt HEAD`, node_modules symlinked in rather than reinstalled) so the working checkout was never mutated at all:\n\nMutant A (hardcode username/password back to literal 'admin'/'admin', bypassing resolveCredential entirely, in the worktree's web/tests/e2e/helpers.ts): re-ran the 4-test suite -> 3 passed, 1 failed. Failing test: TC-2 ('env vars set -> POSTs the env-var credentials, not the fallback'), with actual failure `expected 'admin' to be 'real-master-admin'`. TC-1/TC-3/TC-4 still passed (TC-1 happens to still pass since the mutant's hardcoded values equal the fallback values it's supposed to produce anyway).\n\nMutant B (removed the `if (!response.ok()) { ... throw ... }` block entirely): re-ran the 4-test suite -> 3 passed, 1 failed. Failing test: TC-3 ('non-ok response -> throws, without leaking the attempted username/password'), with actual failure `expected 'Cannot read properties of undefined (...)' to contain '401'` -- the mutant still throws (TypeError from reading .access_token off undefined json), but not the specific, status-carrying error TC-3 requires, so the test correctly still catches the mutant. TC-1/TC-2/TC-4 still passed.\n\nBoth mutants reverted: mutant A reverted via targeted Edit before mutant B was applied; the whole worktree (including mutant B) was then discarded via `git checkout -- web/tests/e2e/helpers.ts` inside the worktree, followed by `git status --porcelain web/` (worktree) showing empty except the untracked new test-file copy, and the suite re-run green (4/4 passed) against the restored code. The worktree was then removed (`git worktree remove ../letflow-mutant-wt --force`; `git worktree list` no longer shows it). Final check in the actual working checkout: `git status --porcelain web/` shows only the new test file (`?? web/tests/unit/e2e-helpers/`), no other web/ files touched, and the suite re-run there is also green (4/4 passed). The main checkout was never mutated at any point -- all mutation happened only in the throwaway worktree.",
+    "artifacts_out": [
+      "web/tests/unit/e2e-helpers/get-master-admin-token.test.ts"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0896-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

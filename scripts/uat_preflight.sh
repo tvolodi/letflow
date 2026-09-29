@@ -153,6 +153,34 @@ files = sorted(f for f in glob.glob(os.path.join(scen_dir, "**", "*.yaml"), recu
 if not files: usage_err("no scenario files under " + scen_dir)
 scenarios = [parse_scenario(f) for f in files]
 
+# ---------------------------------------------------------------- env-limitation sidecars
+# test/fixtures/uat/scenario-env-limitations/<scenario_id>.yaml -- NOT scenario files,
+# deliberately outside scen_dir's glob. See docs/agents/workflows/WF-05_uat_run.md Step 0
+# item 3 ("environment-structural (permanent)") and ISS-0895.
+env_limit_dir = os.path.join(REPO, "test/fixtures/uat/scenario-env-limitations")
+env_limitations = {}  # scenario_id -> dict
+def parse_env_limitation(path):
+    raw = open(path, encoding="utf-8").read()
+    d = {}
+    if yaml:
+        try:
+            d = yaml.safe_load(raw) or {}
+        except Exception:
+            d = {}
+    if not d:  # tolerant fallback
+        for key in ("scenario_id", "classification", "issue_ref", "recorded_by", "recorded_at"):
+            m = re.search(r"^%s:\s*(\S+)" % key, raw, re.M)
+            if m: d[key] = m.group(1).strip("\"'")
+        m = re.search(r"^applies_to_environments:\s*\[([^\]]*)\]", raw, re.M)
+        d["applies_to_environments"] = [x.strip().strip("\"'") for x in m.group(1).split(",")] if m else []
+        m = re.search(r"^reason:\s*>?\s*\n((?:[ \t]+.*\n?)+)", raw, re.M)
+        d["reason"] = " ".join(l.strip() for l in m.group(1).splitlines()).strip() if m else ""
+    return d
+for f in sorted(glob.glob(os.path.join(env_limit_dir, "*.yaml"))):
+    d = parse_env_limitation(f)
+    sid = d.get("scenario_id")
+    if sid: env_limitations[sid] = d
+
 # ---------------------------------------------------------------- credentials (in-memory only)
 cred_src = winpath(a.credential_source)
 cred_listing = None   # list of usernames, None = source unusable
@@ -267,7 +295,7 @@ else:
     tenants_reason = "no valid PLATFORM_ADMIN token (credential check failed)"
 
 # ---------------------------------------------------------------- per-scenario checks
-CHECKS = ["spec", "local_deps", "feature", "tenant", "realm", "actors"]
+CHECKS = ["spec", "local_deps", "feature", "tenant", "realm", "actors", "env_limitation"]
 rows = []
 def spec_path(s): return os.path.join(REPO, s["pipeline_test"]) if s["pipeline_test"] else None
 
@@ -335,6 +363,21 @@ for s in scenarios:
             c["actors"] = ("UNKNOWN", "cannot map: " + ", ".join(unknown), "")
         else:
             c["actors"] = ("OK", "%d login actor(s) resolved & token valid" % need if need else "no login actors needed", "")
+    # env_limitation: additive, independent of tenant/realm/actors above -- ISS-0895.
+    # Status stays OK/GAP (matching every other check's convention, and the
+    # counts/ready aggregation below, which only knows OK/GAP/UNKNOWN) -- the sidecar's
+    # specific classification (e.g. ENV_NOT_SUPPORTED) is embedded in the reason text,
+    # same as local_deps/feature already embed their own specific codes in reason/owner.
+    lim = env_limitations.get(s["id"])
+    if not lim or a.environment not in (lim.get("applies_to_environments") or []):
+        c["env_limitation"] = ("OK", "no known environment limitation", "")
+    else:
+        c["env_limitation"] = (
+            "GAP",
+            "%s: %s" % (lim.get("classification", "ENV_NOT_SUPPORTED"), lim.get("reason", "")),
+            "environment-structural (permanent; issue_ref=%s) -- no prep remediation; "
+            "re-running preflight will report this same GAP by design" % lim.get("issue_ref", "?"),
+        )
     rows.append((s, c))
 
 # ---------------------------------------------------------------- report

@@ -75,6 +75,14 @@ realms/actors, deployed definitions, and specs needing local Postgres). Prepare 
      gate). Letflow never changes QA infrastructure directly.
    - feature-gap (missing/forward-reference spec, unbuilt feature): not environment; file
      per `ISSUE_QUEUE.md`. The scenario is UNBUILT_FEATURE, not BLOCKED-by-environment.
+   - environment-structural (permanent): a
+     `test/fixtures/uat/scenario-env-limitations/<scenario_id>.yaml` sidecar
+     says this scenario cannot pass on this `--environment` slug for a
+     structural reason (not a seeding/credential gap). No remediation is
+     attempted. Confirm the sidecar's `applies_to_environments` and `review`
+     condition are still accurate; if so, this GAP is expected and reported
+     every run by design — do not loop trying to close it, and do not
+     re-file it as a new issue (cite the sidecar's `issue_ref` instead).
    Re-run the preflight after each remediation round.
 4. Only scenarios still unmet after prep are BLOCKED. Classify each:
    - BLOCKED-by-environment: `ENV_*`, `CREDENTIALS_MISSING`, `PRECONDITION_NOT_MET`,

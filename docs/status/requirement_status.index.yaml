@@ -5021,19 +5021,18 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 11
+    entries: 12
     note: >
-      Bumped to 11 by DOC-UPDATER after appending ISS-0886's follow-up
-      SCOPE-CHANGE done-event (WF03-ISS0886-20260929, 2026-09-29T20:08:00Z
-      -- PR #2007 merged (commit 1c96870e), QA deploy access confirmed
-      genuinely unreachable from this sandbox (ssh to both
-      ubuntu-16gb-nbg1-1 and qa.bizdala.com fail), letflow-queue task 884
-      released as `blocked`). Re-read this index and volume 24
-      immediately before appending and recounted directly rather than
-      trusting the prior note's arithmetic: `grep -c "^  - req:"
-      docs/status/requirement_status.v24.yaml` = 11 on-disk entries (the
-      prior 10 + this done-event), confirming no concurrent append landed
-      since the last confirmed count of 10.
+      Bumped to 12 by DOC-UPDATER after appending ISS-0895's SCOPE-CHANGE
+      done-event (fix/ISS0895-swiftroute-uat-scenario-env-limitation-20260929,
+      2026-09-29T21:35:00Z -- swiftroute tenant-onboarding-happy UAT scenario
+      marked env-scoped/permanently-blocked on QA via a new additive
+      scenario-env-limitations sidecar mechanism). Re-read this index and
+      volume 24 immediately before appending and recounted directly rather
+      than trusting the prior note's arithmetic: `grep -c "^  - req:"
+      docs/status/requirement_status.v24.yaml` = 12 on-disk entries (the
+      prior 11 + this done-event), confirming no concurrent append landed
+      since the last confirmed count of 11.
 
       Bumped to 10 by DOC-UPDATER after appending ISS-0886's SCOPE-CHANGE
       done-event (WF03-ISS0886-20260929, 2026-09-29T19:54:10Z -- platform-

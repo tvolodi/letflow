@@ -449,3 +449,47 @@
       until QA is actually backfilled and the worker/candidate UAT
       scenarios re-verified -- that remains open work for whoever has
       real QA deploy access.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T21:35:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0895
+      (MINOR, swiftroute tenant-onboarding-happy UAT scenario permanently
+      precondition-blocked on QA now that QA has swiftroute registered per
+      T-0150) -- resolved by adding a new, additive
+      test/fixtures/uat/scenario-env-limitations/<scenario_id>.yaml sidecar
+      mechanism (deliberately outside scripts/uat_preflight.sh's scenario-file
+      glob) plus a new independent `env_limitation` preflight check column,
+      rather than re-pointing the scenario at a throwaway slug (rejected: needs
+      a master-realm credential per ISS-0888 and leaves undeletable tenant
+      rows/schemas). docs/agents/workflows/WF-05_uat_run.md Step 0 and
+      .claude/agents/uat-runner.md updated to document the new
+      "environment-structural (permanent)" GAP category; docs/anti-patterns.md
+      gained an entry on the underlying scripts/uat_preflight.sh `tenant` check
+      polarity-assumption bug this fix works around additively without
+      correcting. Scope confirmed to exactly 6 files: scripts/uat_preflight.sh,
+      test/fixtures/uat/scenario-env-limitations/swiftroute-tenant-onboarding-happy.yaml,
+      .claude/agents/uat-runner.md, docs/agents/workflows/WF-05_uat_run.md,
+      docs/anti-patterns.md, lib/letflow/design/iss0895-swiftroute-uat-scenario-slug-conflict.md.
+      test/fixtures/uat/scenarios/swiftroute/tenant-onboarding-happy.yaml itself
+      confirmed byte-for-byte untouched (diff against main empty). Full gate
+      chain: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS (independently
+      verified 3 load-bearing facts) -> ELIXIR-DEV implement (one
+      self-flagged, well-justified deviation from design pseudocode, to avoid
+      a script crash) -> REVIEWER PASS (live execution proof) ->
+      RELEASE-VALIDATOR PASS: independently re-verified scope (exactly the 6
+      files above), re-confirmed the ported scenario file untouched,
+      independently reproduced live execution (`--environment qa` ->
+      env_limitation: GAP/ENV_NOT_SUPPORTED; `--environment local` ->
+      env_limitation: OK), confirmed glob-invisibility via both `mix
+      letflow.check_uat_scenario_schema` (32 files, 0 violations, unchanged
+      count) and a direct pattern trace, and confirmed the anti-patterns.md
+      entry accurate. docs/issues/ISS-0895.yaml set to status: resolved
+      (resolved_in_run: fix/ISS0895-swiftroute-uat-scenario-env-limitation-20260929)
+      in this same append -- this is an ISSUE, not a REQ, so no
+      docs/requirements.yaml entry is touched. This fix means the scenario is
+      now correctly reported as a permanent structural GAP rather than
+      attempted/failed on every future QA UAT preflight run. Merged via PR
+      (see PR body for number/merge commit).

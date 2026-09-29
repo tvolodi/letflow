@@ -464,13 +464,18 @@ reuses that exact, already-existing idiom rather than inventing a second one:
   (`apps/mobile/test/support/fake_secure_storage_platform.dart`, already exists,
   already used by `apps/mobile/test/auth/tenant_token_store_test.dart` and
   `apps/mobile/test/bootstrap/bootstrap_sequence_test.dart` — read in full above). A
-  test does exactly what those existing tests already do:
-  ```
-  final fakePlatform = FakeSecureStoragePlatform();
-  FlutterSecureStoragePlatform.instance = fakePlatform;
-  final tokenStore = const TenantTokenStore(FlutterSecureStorage());
-  final activeRealm = ActiveRealmHolder()..currentRealmUrl = 'https://idp.example/realms/a';
-  ```
+  test sets up the same four-object relationship those existing tests already set up,
+  described here by shape and relationship rather than as runnable lines: a
+  no-argument `FakeSecureStoragePlatform` instance; that instance substituted in as
+  `FlutterSecureStoragePlatform.instance` (the platform plugin's global singleton
+  accessor is repointed at the fake before anything else touches secure storage,
+  exactly as the two existing tests above already do); a real, `const`-constructible
+  `TenantTokenStore`, built from a plain `FlutterSecureStorage()` instance (no separate
+  fake `TenantTokenStore` subtype exists or is introduced — the fakeness lives entirely
+  one layer down, at the platform singleton just swapped); and an `ActiveRealmHolder`
+  whose sole mutable field, `currentRealmUrl`, is set to the test's fixture realm URL
+  (e.g. `'https://idp.example/realms/a'`) — the one field this design's refresh
+  coordinator reads and writes on that holder.
   `tokenStore` here is a **real** `TenantTokenStore` — no new fake class of that type is
   introduced — backed by the in-memory `fakePlatform`, so every `store`/`read`/`delete`
   call `_RefreshCoordinator` makes against it is a real method call on real production

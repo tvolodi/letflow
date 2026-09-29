@@ -8,6 +8,7 @@ import 'package:letflow/api/api_client.dart';
 import 'package:letflow/auth/auth.dart';
 import 'package:letflow/bootstrap/navigation_bootstrap.dart';
 import 'package:letflow/definitions/definitions.dart';
+import 'package:letflow/definitions/pinned_form_cache.dart';
 
 import '../support/fake_app_auth_adapter.dart';
 import '../support/fake_http_gateway.dart' show FakeHttpGateway;
@@ -31,6 +32,8 @@ void main() {
         activeRealm: ActiveRealmHolder(),
         definitionCache: ActiveDefinitionCacheHolder(),
         cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
+        pinnedFormCache: ActivePinnedFormCacheHolder(),
+        pinnedFormCacheOpener: (_) async => InMemoryPinnedFormCacheRepository(),
         appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
       );
 
@@ -51,6 +54,8 @@ void main() {
       final activeRealm = ActiveRealmHolder();
       final definitionCache = ActiveDefinitionCacheHolder();
       final cacheRepo = InMemoryDefinitionCacheRepository();
+      final pinnedFormCache = ActivePinnedFormCacheHolder();
+      final pinnedFormCacheRepo = InMemoryPinnedFormCacheRepository();
 
       // Simulate a prior successful bootstrap having written both the
       // token and the last-active-tenant pointer (design §7.2/§7.3 -- the
@@ -75,6 +80,8 @@ void main() {
         activeRealm: activeRealm,
         definitionCache: definitionCache,
         cacheOpener: (_) async => cacheRepo,
+        pinnedFormCache: pinnedFormCache,
+        pinnedFormCacheOpener: (_) async => pinnedFormCacheRepo,
         appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
       );
 
@@ -85,6 +92,8 @@ void main() {
       expect(activeRealm.currentRealmUrl, _realmA);
       expect(definitionCache.current, same(cacheRepo));
       expect(definitionCache.currentRealmUrl, _realmA);
+      expect(pinnedFormCache.current, same(pinnedFormCacheRepo));
+      expect(pinnedFormCache.currentRealmUrl, _realmA);
       expect(gateway.calls, isEmpty, reason: 'resume reads secure storage only');
     },
   );
@@ -107,6 +116,8 @@ void main() {
         activeRealm: ActiveRealmHolder(),
         definitionCache: ActiveDefinitionCacheHolder(),
         cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
+        pinnedFormCache: ActivePinnedFormCacheHolder(),
+        pinnedFormCacheOpener: (_) async => InMemoryPinnedFormCacheRepository(),
         appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
       );
 
@@ -147,6 +158,8 @@ void main() {
       activeRealm: ActiveRealmHolder(),
       definitionCache: ActiveDefinitionCacheHolder(),
       cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
+      pinnedFormCache: ActivePinnedFormCacheHolder(),
+      pinnedFormCacheOpener: (_) async => InMemoryPinnedFormCacheRepository(),
       appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
     );
     await controller.attemptSessionResume();

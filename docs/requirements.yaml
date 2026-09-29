@@ -31509,7 +31509,7 @@ requirements:
   - id: REQ-424
     title: "MOB-3 (part 2): pinned form version resolution -- a task's {form_id, form_version} renders exactly that version from cache or server, never the active version"
     owner: MOBILE-DEV
-    status: pending
+    status: done
     stage: S9
     impl_order: 861  # letflow-queue task id, GH#1878. Registered 2026-09-27T03:00:02Z by ORCH (WF-01 Step 3).
     description: >

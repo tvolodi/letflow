@@ -142,6 +142,32 @@ removed from the cache; `"DEPRECATED"` items are retained. A `400` response
 to the `since` cursor resets it and performs exactly one full-history
 resync — never a retry loop.
 
+### Pinned-form cache — a second, independent Sembast store
+
+REQ-424 (`MOB-3` part 2) adds a **second, independent** Sembast database
+file per tenant (`pinned_form_cache_<...>.db`, alongside
+`definition_cache_<...>.db`), not a second store inside the existing
+per-tenant definition-cache file. Reason: `SembastDefinitionCacheRepository`
+already owns its `Database` handle privately, and the pinned-form cache's
+key/value shape genuinely differs from the definition cache's —
+`form_version` (`instance_definition_snapshots.definition_ver`) is a
+`String`, not the `int` `DefinitionCacheEntry.version` uses, and its natural
+key is two-part `(formId, formVersion)`, not three-part `(type, id,
+version)`. Sharing a store would mean either widening the definition
+cache's already-shipped `int` version type or forcing a meaningless
+constant `type` component onto every pinned-form key. No new `pubspec.yaml`
+dependency — same `package:sembast`, same tenant-partition-by-`realmUrl`
+pattern (`ActivePinnedFormCacheHolder`, opened/closed at the same four
+points `ActiveDefinitionCacheHolder` is).
+
+`PinnedFormResolver.resolve({taskId, formId, formVersion})` never looks up
+"the latest/active version of `formId`" — a `null` `formVersion` short-
+circuits to `pinned-version-unavailable` before any I/O; a cache hit on the
+exact `(formId, formVersion)` key returns with zero network calls; a cache
+miss issues exactly one `GET /api/v1/tasks/:id` and caches the result under
+that same pinned key. See
+`lib/letflow/design/req424-mobile-pinned-form-version-resolution.md`.
+
 ## Session resume without network
 
 `BootstrapController.attemptSessionResume()` (REQ-423) reads only secure

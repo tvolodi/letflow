@@ -232,3 +232,48 @@
       existing REQ-417..422 pattern). Merged via PR (see the PR body for
       number/merge commit); local main fast-forwarded. letflow-queue
       task 860 released as done.
+
+  - req: REQ-424
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T14:10:00Z"
+    note: >
+      MOB-3 (part 2): pinned form version resolution -- a dedicated
+      Sembast-backed PinnedFormCacheRepository (separate store from
+      REQ-423's DefinitionCacheRepository, since form_version is a
+      String key, not an int) and a PinnedFormResolver that resolves a
+      task's exact {form_id, form_version} from cache or a single GET
+      /api/v1/tasks/:id fetch on a miss, never an active/latest-version
+      lookup; falls back to an explicit pinned-version-unavailable
+      result when offline on a miss or when form_version is null.
+      Wired into navigation_bootstrap.dart's four existing
+      tenant-partition lifecycle points, additive only (branch
+      feature/REQ424-mobile-pinned-form-version-resolution-20260929,
+      commit 6b36c0f5, based on main f713ca0e). Full gate chain:
+      CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS (resolved REQ-423's
+      own OQ-5) -> MOBILE-DEV implement -> SECURITY-REVIEWER PASS
+      (formal review, confirmed additive-only + REQ-423's
+      zero-network-call guarantee preserved) -> REVIEWER PASS (traced
+      core invariant directly) -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR
+      PASS (real mutation proofs, 4 mutants applied+reverted) ->
+      TEST-RUNNER (independent fresh run, 118/118) -> RELEASE-VALIDATOR
+      PASS: scope confirmed to apps/mobile/** only, real `flutter
+      analyze` (0 issues) and `flutter test` (118/118) run
+      independently, its own mutation spot-check (changed the
+      cache-lookup key to a hardcoded value simulating the exact
+      silent-substitution bug this requirement prevents -- 3 tests
+      immediately failed, confirming genuine discrimination -- then
+      reverted and re-confirmed clean), the dedicated-store design
+      decision independently re-verified against real Ecto schema
+      types, navigation_bootstrap.dart's additive-only scope confirmed,
+      no decision-record contradictions. docs/requirements.yaml's
+      REQ-424 status: pending -> done in this same append. README.md's
+      mobile-tier summary paragraph updated to add REQ-424/MOB-3-part-2's
+      pinned-form-resolution summary (matching the existing
+      REQ-417..423 pattern). docs/migration/stage-9-mobile.md checked:
+      its table covers only the three closed backend gaps (REQ-124/
+      125/126), not a REQ-419..424 progress table, so no update needed
+      there (same determination REQ-422/REQ-423's own closures made for
+      this file). Merged via PR (see the PR body for number/merge
+      commit); local main fast-forwarded. letflow-queue task 861
+      released as done.

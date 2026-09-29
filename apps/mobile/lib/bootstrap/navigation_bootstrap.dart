@@ -22,8 +22,14 @@ import '../api/transport_policy.dart';
 import '../auth/auth.dart';
 import '../definitions/definitions.dart'
     show ActiveDefinitionCacheHolder, DefinitionCacheOpener;
+import '../definitions/pinned_form_cache.dart'
+    show ActivePinnedFormCacheHolder, PinnedFormCacheOpener;
+import '../definitions/pinned_form_resolver.dart'
+    show pinnedFormCacheHolderProvider;
 import '../definitions/sembast_cache_repository.dart'
     show openProductionDefinitionCache;
+import '../definitions/sembast_pinned_form_cache_repository.dart'
+    show openProductionPinnedFormCache;
 import '../definitions/tenant_home_screen.dart'
     show definitionCacheHolderProvider;
 import 'bootstrap_models.dart';
@@ -150,6 +156,8 @@ Future<BootstrapResult?> runTenantBootstrap(
   TransportPolicy? transportPolicy,
   ActiveDefinitionCacheHolder? definitionCache,
   DefinitionCacheOpener? cacheOpener,
+  ActivePinnedFormCacheHolder? pinnedFormCache,
+  PinnedFormCacheOpener? pinnedFormCacheOpener,
 }) async {
   final TenantConfig config;
   try {
@@ -220,6 +228,16 @@ Future<BootstrapResult?> runTenantBootstrap(
     );
   }
 
+  // REQ-424 design §6.2 — paired, additive, immediately after the
+  // definition-cache open above: opens this tenant's own pinned-form-cache
+  // partition before any tenant-content call that follows.
+  if (pinnedFormCache != null) {
+    await pinnedFormCache.openFor(
+      config.realmUrl,
+      opener: pinnedFormCacheOpener ?? openProductionPinnedFormCache,
+    );
+  }
+
   try {
     final response = await client.get('/api/v1/me/memberships');
     final status = response.statusCode ?? 0;
@@ -277,6 +295,7 @@ Future<void> logout({
   required TenantTokenStore tokenStore,
   required ActiveRealmHolder activeRealm,
   ActiveDefinitionCacheHolder? definitionCache,
+  ActivePinnedFormCacheHolder? pinnedFormCache,
 }) async {
   final currentRealmUrl = activeRealm.currentRealmUrl;
   if (currentRealmUrl == null) return;
@@ -284,6 +303,9 @@ Future<void> logout({
   activeRealm.currentRealmUrl = null;
   await clearLastActiveTenant(tokenStore);
   await definitionCache?.closeAndClear();
+  // REQ-424 design §6.2 — paired, additive, immediately after the
+  // definition-cache clear above.
+  await pinnedFormCache?.closeAndClear();
 }
 
 /// Switches the active tenant to [enteredSlug] (REQ-422 §6.3, OQ-5).
@@ -315,6 +337,8 @@ Future<BootstrapResult?> switchTenant(
   TransportPolicy? transportPolicy,
   ActiveDefinitionCacheHolder? definitionCache,
   DefinitionCacheOpener? cacheOpener,
+  ActivePinnedFormCacheHolder? pinnedFormCache,
+  PinnedFormCacheOpener? pinnedFormCacheOpener,
 }) async {
   final previousRealmUrl = activeRealm.currentRealmUrl;
   if (previousRealmUrl != null) {
@@ -332,6 +356,9 @@ Future<BootstrapResult?> switchTenant(
       // handle, mirroring the existing token delete. The new tenant's own
       // `openFor` call happens inside `runTenantBootstrap` below.
       await definitionCache?.closeAndClear();
+      // REQ-424 design §6.2 — paired, additive, immediately after the
+      // definition-cache clear above.
+      await pinnedFormCache?.closeAndClear();
     }
   }
   return runTenantBootstrap(
@@ -343,6 +370,8 @@ Future<BootstrapResult?> switchTenant(
     transportPolicy: transportPolicy,
     definitionCache: definitionCache,
     cacheOpener: cacheOpener,
+    pinnedFormCache: pinnedFormCache,
+    pinnedFormCacheOpener: pinnedFormCacheOpener,
   );
 }
 
@@ -357,6 +386,7 @@ final Future<void> Function({
   required TenantTokenStore tokenStore,
   required ActiveRealmHolder activeRealm,
   ActiveDefinitionCacheHolder? definitionCache,
+  ActivePinnedFormCacheHolder? pinnedFormCache,
 })
 _logoutTopLevel = logout;
 
@@ -369,6 +399,8 @@ final Future<BootstrapResult?> Function(
   TransportPolicy? transportPolicy,
   ActiveDefinitionCacheHolder? definitionCache,
   DefinitionCacheOpener? cacheOpener,
+  ActivePinnedFormCacheHolder? pinnedFormCache,
+  PinnedFormCacheOpener? pinnedFormCacheOpener,
 })
 _switchTenantTopLevel = switchTenant;
 
@@ -429,19 +461,26 @@ class BootstrapController extends ChangeNotifier {
     required this.tokenStore,
     required this.activeRealm,
     required this.definitionCache,
+    required this.pinnedFormCache,
     this.appAuthAdapter = const RealAppAuthAdapter(),
     this.cacheOpener,
+    this.pinnedFormCacheOpener,
   });
 
   final HttpGateway client;
   final TenantTokenStore tokenStore;
   final ActiveRealmHolder activeRealm;
   final ActiveDefinitionCacheHolder definitionCache;
+  final ActivePinnedFormCacheHolder pinnedFormCache;
 
   /// Defaults to [openProductionDefinitionCache] when null (tests inject a
   /// fake opener so `flutter test` never touches `path_provider`'s
   /// platform channel).
   final DefinitionCacheOpener? cacheOpener;
+
+  /// Defaults to [openProductionPinnedFormCache] when null — mirrors
+  /// [cacheOpener]'s own testing-seam purpose (REQ-424 design §6.2).
+  final PinnedFormCacheOpener? pinnedFormCacheOpener;
 
   /// Real `flutter_appauth` by default; tests construct their own
   /// [BootstrapController] with a [FakeAppAuthAdapter]-equivalent here so
@@ -464,6 +503,8 @@ class BootstrapController extends ChangeNotifier {
       appAuthAdapter: appAuthAdapter,
       definitionCache: definitionCache,
       cacheOpener: cacheOpener,
+      pinnedFormCache: pinnedFormCache,
+      pinnedFormCacheOpener: pinnedFormCacheOpener,
     );
 
     if (result == null) {
@@ -508,6 +549,8 @@ class BootstrapController extends ChangeNotifier {
       appAuthAdapter: appAuthAdapter,
       definitionCache: definitionCache,
       cacheOpener: cacheOpener,
+      pinnedFormCache: pinnedFormCache,
+      pinnedFormCacheOpener: pinnedFormCacheOpener,
     );
 
     if (result == null) {
@@ -535,6 +578,7 @@ class BootstrapController extends ChangeNotifier {
       tokenStore: tokenStore,
       activeRealm: activeRealm,
       definitionCache: definitionCache,
+      pinnedFormCache: pinnedFormCache,
     );
     _state = BootstrapUiState.unauthenticated;
     notifyListeners();
@@ -572,6 +616,12 @@ class BootstrapController extends ChangeNotifier {
       await definitionCache.openFor(
         pointer.realmUrl,
         opener: cacheOpener ?? openProductionDefinitionCache,
+      );
+      // REQ-424 design §6.2 — paired, additive, immediately after the
+      // definition-cache open above and before the `_state` assignment.
+      await pinnedFormCache.openFor(
+        pointer.realmUrl,
+        opener: pinnedFormCacheOpener ?? openProductionPinnedFormCache,
       );
       // Deliberately `resumedOffline`, never `success` — membership/modules
       // have not been re-verified (design §7.3's own rationale).
@@ -616,6 +666,7 @@ final bootstrapControllerProvider = ChangeNotifierProvider<BootstrapController>(
       tokenStore: ref.watch(tenantTokenStoreProvider),
       activeRealm: ref.watch(activeRealmHolderProvider),
       definitionCache: ref.watch(definitionCacheHolderProvider),
+      pinnedFormCache: ref.watch(pinnedFormCacheHolderProvider),
     );
   },
 );

@@ -70,7 +70,17 @@ cache keyed by `(type, id, version)`, background delta sync against
 cursor, never a client-derived timestamp), archived-status removal,
 and airplane-mode launch straight from cache onto a minimal tenant
 home screen listing the cached definitions — the attachment point for
-the renderers `REQ-426..428` build later. S9's three backend gaps
+the renderers `REQ-426..428` build later. `REQ-424` (MOB-3 part 2)
+added pinned form version resolution: a dedicated Sembast-backed
+`PinnedFormCacheRepository` (a separate store from `REQ-423`'s
+definition cache, since `form_version` is a string key, not an int)
+and a `PinnedFormResolver` that resolves a task's exact
+`{form_id, form_version}` from cache or a single
+`GET /api/v1/tasks/:id` fetch on a miss — never an active/latest-
+version lookup — falling back to an explicit pinned-version-
+unavailable result when offline or when `form_version` is null.
+Wired into `navigation_bootstrap.dart`'s four existing tenant-
+partition lifecycle points, additive only. S9's three backend gaps
 closed earlier (`REQ-124`/`125`/`126`) and
 `REQ-418` added the mobile tier's own PKCE-S256 Keycloak client
 (`letflow-mobile`) plus its `client_id` on

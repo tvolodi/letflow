@@ -9,6 +9,7 @@ import 'package:letflow/api/api_client.dart';
 import 'package:letflow/auth/auth.dart';
 import 'package:letflow/bootstrap/navigation_bootstrap.dart';
 import 'package:letflow/definitions/definitions.dart';
+import 'package:letflow/definitions/pinned_form_cache.dart';
 
 import '../support/fake_app_auth_adapter.dart';
 import '../support/fake_dio_http_client_adapter.dart';
@@ -206,7 +207,9 @@ void main() {
       tokenStore: tokenStore,
       activeRealm: activeRealm,
       definitionCache: ActiveDefinitionCacheHolder(),
+        pinnedFormCache: ActivePinnedFormCacheHolder(),
       cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
+        pinnedFormCacheOpener: (_) async => InMemoryPinnedFormCacheRepository(),
       appAuthAdapter: FakeAppAuthAdapter(
         response: fakeTokenResponse(accessToken: 'token-acme'),
       ),
@@ -221,7 +224,9 @@ void main() {
       tokenStore: tokenStore,
       activeRealm: activeRealm,
       definitionCache: ActiveDefinitionCacheHolder(),
+        pinnedFormCache: ActivePinnedFormCacheHolder(),
       cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
+        pinnedFormCacheOpener: (_) async => InMemoryPinnedFormCacheRepository(),
       appAuthAdapter: FakeAppAuthAdapter(
         response: fakeTokenResponse(accessToken: 'token-beta'),
       ),

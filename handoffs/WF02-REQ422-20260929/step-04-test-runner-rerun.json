@@ -1,0 +1,56 @@
+{
+  "handoff_id": "dde01af5-a5f7-4e7e-99ed-2ead41f1cbfc",
+  "run_id": "WF02-REQ422-20260929",
+  "workflow_id": "WF-02",
+  "step": "04-rerun",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ422-20260929/step-04-test-runner-rerun.json",
+  "created_at": "2026-09-29T10:00:00Z",
+  "started_at": "2026-09-29T09:15:00Z",
+  "completed_at": "2026-09-29T10:00:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-422"],
+    "related_handoff_ids": [
+      "2a1da6b5-aa08-42b3-ac75-47fe8cbf7b61"
+    ],
+    "artifacts_in": [
+      "test/reports/report-20260929-WF02-REQ422-20260929.yaml",
+      "handoffs/WF02-REQ422-20260929/step-04-test-runner.json"
+    ],
+    "owned_modules": ["test/letflow/process_instance_test.exs", "test/support/data_case.ex"]
+  },
+  "task": {
+    "description": "WF-02 Step 4 RERUN: re-run scripts/test_parallel.sh (memory-aware, N lowered per tighter free-memory reading) and re-confirm apps/mobile/ (flutter analyze + flutter test), specifically verify test/docs/requirement_status_invariants_test.exs's A4b case now passes after ORCH's commit b357828a bookkeeping-shape fix, and write a NEW report file without overwriting the prior FAIL report.",
+    "acceptance_criteria": [
+      "Real quoted scripts/test_parallel.sh output at the chosen TEST_PARALLEL_N, with a host-memory reading taken immediately before running",
+      "A4b case in test/docs/requirement_status_invariants_test.exs explicitly confirmed passing",
+      "flutter analyze / flutter test re-run fresh from apps/mobile/, confirmed 86/86 with no regression",
+      "New report file test/reports/report-20260929-WF02-REQ422-20260929-rerun.yaml written, prior report left intact",
+      "Any failure other than the two already-known/fixed ones attributed structurally, not assumed pre-existing",
+      "Honest PASS/FAIL verdict with next_action"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Checked out feature/WF02-REQ422-20260929 (b357828a). Host free memory checked immediately before running: FreePhysicalMemory=2937264 KB (~2.90 GB) of 33389048 KB total -- tighter than the prior attempt's ~4.03-4.08 GB, as ORCH had flagged. Per this run's instructions, TEST_PARALLEL_N was lowered substantially from the prior attempt's 8 to 4 (docker compose services already running -- letflow-postgres-1, letflow-keycloak-1).\n\nscripts/test_parallel.sh at TEST_PARALLEL_N=4 completed on the first attempt with no DBConnection connection-pool-checkout timeouts: all 4 partitions ran to completion (1175/1287/1338/1229 tests respectively, 6 properties total, 0 failures). Combined: 'combined: 5029 tests, 6 properties, 0 failures (5035/5035 passed)'. Real time 25m20.879s. No second attempt or further N reduction was needed.\n\nTargeted re-run of test/docs/requirement_status_invariants_test.exs alone: 'Result: 24 passed' -- confirmed by name/line (test/docs/requirement_status_invariants_test.exs:192, 'A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume') that the specific A4b case that failed in the prior attempt (commit 1a1d62a3) now passes, following ORCH's commit b357828a reshaping the REQ-422 'started' entry in docs/status/requirement_status.v23.yaml to [:req, :event, :agent, :at, :note].\n\napps/mobile/: flutter analyze -> 'No issues found! (ran in 26.0s)'. flutter test -> 86/86 passed ('All tests passed!'), re-run fresh in this step. git log 1a1d62a3..b357828a -- apps/mobile/ returns zero commits, confirming no apps/mobile/ changes occurred since the prior quote -- no regression, as expected.\n\nNo other failures found. Full suite green. New report written without overwriting the prior FAIL report, per instructions.",
+    "artifacts_out": [
+      "test/reports/report-20260929-WF02-REQ422-20260929-rerun.yaml"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ422-20260929",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ422-20260929",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to RELEASE-VALIDATOR"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

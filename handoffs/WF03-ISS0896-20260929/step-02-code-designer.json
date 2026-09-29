@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0896-20260929/step-02-code-designer.json",
   "created_at": "2026-09-29T20:05:51Z",
   "started_at": "2026-09-29T20:05:51Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T00:00:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -38,18 +38,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Wrote lib/letflow/design/iss0896-e2e-master-admin-credentials.md. Design: two new env vars KC_ADMIN_USER/KC_ADMIN_PASSWORD (fallback 'admin'/'admin'), resolved via the existing resolveCredential helper -- no new credential mechanism. client_id 'admin-cli' stays a fixed literal (Keycloak's own built-in master-admin-cli client id, not environment-specific). Consolidation decision: the two byte-for-byte-identical local getMasterAdminToken helpers in attachment-cross-tenant.pipeline.e2e.spec.ts (lines 150-159) and shipment-attach-delivery-note.pipeline.e2e.spec.ts (lines 110-119) are consolidated into one new shared export getMasterAdminToken(request: APIRequestContext): Promise<string> in web/tests/e2e/helpers.ts, since both are already self-contained (only param is `request`) and each file's own comment cites the other as its copy source -- no unrelated call sites are at risk. The 3 inline sites (env04.e2e.spec.ts x2 at lines 578-580 and 642-647; tenant-cache.pipeline.e2e.spec.ts x1 at lines 197-203) are also routed through the same shared helper for consistency, since all 5 sites do the identical operation. All 5 call sites get an explicit named fix in a table (design doc section 6). One open question is explicitly flagged (not silently resolved): env04.e2e.spec.ts call site #1 currently degrades gracefully (returns undefined, no try/catch) but the new shared helper throws on failure -- design recommends wrapping that one call in a local try/catch to preserve existing behavior, but leaves final confirmation to the implementing agent since it requires reading the full consuming function body (out of scope for a no-implementation-code design doc). No implementation code (function bodies) included -- signatures and prose behavior descriptions only.",
+    "artifacts_out": ["lib/letflow/design/iss0896-e2e-master-admin-credentials.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0896-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

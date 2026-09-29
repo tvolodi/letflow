@@ -1,0 +1,58 @@
+{
+  "handoff_id": "0c278810-d404-4680-a270-c0b7a7e60cc5",
+  "run_id": "WF02-REQ425-20260929",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ425-20260929/step-03b-test-design-validator.json",
+  "created_at": "2026-09-29T13:01:51Z",
+  "started_at": "2026-09-29T13:01:51Z",
+  "completed_at": "2026-09-29T13:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-425"],
+    "requirement_text": {
+      "REQ-425": "MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2). Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the renderers' six states classify this requirement's ApiError. SECURITY-REVIEWER gate (refresh-token handling, token clearing).\n\nHardens lib/api/api_client.dart (created by REQ-421) into the single client:\n1. Attach the active tenant's bearer token (REQ-422's iss check).\n2. On 401: exactly one silent refresh via flutter_appauth's token refresh, then exactly one retry of the original request; concurrent 401s share one in-flight refresh. On refresh failure: clear the tenant's tokens (REQ-422 store) and route to login.\n3. Exponential backoff on 5xx for idempotent methods only (GET), bounded attempts; POST is not auto-retried (no duplicate task completion).\n4. Normalise every failure to a sealed ApiError type before it leaves lib/api/: at minimum network-unavailable, unauthorized, forbidden (403), not-found, module-not-available (a 404 on any /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404, not 403, and must not render as a generic not-found), backpressure (429, carrying the Retry-After seconds -- the backend emits 429 from lib/letflow/plugs/admission.ex and lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with RFC 9457 field errors), conflict (409), server (5xx after retries).\n5. A static guard (apps/mobile/test/guards/), the counterpart of the SPA's raw-fetch-outside-client guard in web/tests/guards/: no file outside lib/api/ imports package:dio or package:http or uses dart:io HttpClient; with a self-test."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["d9ffb517-47ec-4d9b-9470-28b4e0d51af1"],
+    "artifacts_in": [
+      "test/specs/REQ-425.md",
+      "apps/mobile/test/api/api_client_hardening_test.dart",
+      "apps/mobile/test/guards/single_api_client_guard_test.dart"
+    ],
+    "owned_modules": ["apps/mobile/lib/api/", "apps/mobile/test/guards/"]
+  },
+  "task": {
+    "description": "WF-02 Step 3b, hard gate on TEST-DESIGNER's coverage. Read test/specs/REQ-425.md and the actual test files independently -- do not trust TEST-DESIGNER's result.summary as a substitute for reading the actual .dart files and the .md spec. Per this session's own ISS-0880 lesson: for each of REQ-425's 7 acceptance criteria, independently RE-DERIVE the clause decomposition yourself (do not just check that TEST-DESIGNER's own decomposition in test/specs/REQ-425.md looks reasonable) and confirm each clause has ≥1 runnable test that would fail if the clause were violated -- AC1, AC2, AC3, AC4, and AC6 each have 2+ clauses per the requirement's own wording. Also verify: no @tag :skip without a passing counterpart, no 'TODO: implement test' left anywhere, test fixtures use per-test unique data (not shared hardcoded IDs), tests are self-sufficient (no inter-test ordering dependency), no hardcoded secrets/connection strings. FAIL immediately on any check failure -- no partial credit.",
+    "acceptance_criteria": [
+      "a test where the fake server returns 401 once then 200 asserts exactly one refresh call and exactly one retry, and that two concurrent requests both receiving 401 trigger one refresh total",
+      "a test where refresh fails asserts the tenant's tokens are deleted from the secure store and the router is at the login route",
+      "a test asserts a GET receiving 503 twice then 200 succeeds with increasing delays between attempts (fake clock), a GET receiving 503 on every attempt stops after the maximum attempt count declared as a named constant in lib/api/ and surfaces ApiError server (the test asserts the exact number of requests sent), and a POST receiving 503 is not retried",
+      "a test per ApiError variant asserts the mapping from status code/exception, including 404 on /api/v1/modules/exam/x -> module-not-available, 404 elsewhere -> not-found, and 429 with 'Retry-After: 7' -> backpressure(7 seconds)",
+      "a test asserts no DioException or SocketException escapes lib/api/ -- the public client API returns or throws only ApiError",
+      "the single-client guard fails its self-test fixture (a file under lib/features/ importing package:dio) and passes on the real tree",
+      "cd apps/mobile && flutter analyze && flutter test pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived the clause decomposition for all 7 ACs from REQ-425's own wording (not from TEST-DESIGNER's spec table) by reading apps/mobile/test/api/api_client_hardening_test.dart and apps/mobile/test/guards/single_api_client_guard_test.dart directly. AC1 (2 clauses: single refresh+retry on one 401; one refresh total across two concurrent 401s) -- both covered (lines 99-145). AC2 (2 clauses: tokens deleted; login-route invoked) -- both asserted in one test (185-205). AC3 (3 clauses: GET 503x2-then-200 with increasing fake-clock delays; GET 503-always stops at the named constant kMaxServerRetryAttempts (confirmed declared as `const int kMaxServerRetryAttempts = 3` at lib/api/api_client.dart:141) and surfaces ServerError with exact request count asserted; POST 503 not retried) -- all 3 covered (409-466). AC4 (per-variant mapping across all 9 sealed ApiError variants declared in lib/api/api_error.dart, plus the 3 named sub-cases: module-404, plain-404, 429/Retry-After:7) -- confirmed all 9 variants have a covering test (direct classifyError branch test plus full-flow tests), all 3 named sub-cases present with exact literal paths/values from the requirement text (469-645). AC5 (no raw DioException/SocketException escapes; only ApiError crosses the boundary) -- both aspects covered, including the discriminating isNot(isA<DioException>()) assertion (648-685). AC6 (2 clauses: guard fires on a lib/features/ fixture importing package:dio; guard passes on the real tree) -- both present (single_api_client_guard_test.dart:97-121), plus 3 further self-tests for package:http, dart:io HttpClient, and the lib/api/ exemption. AC7: re-ran both commands myself rather than trusting the spec's quoted output -- `flutter analyze` -> 'No issues found! (ran in 4.5s)'; `flutter test test/api/api_client_hardening_test.dart test/guards/single_api_client_guard_test.dart` -> 29 tests, 'All tests passed!'; full `flutter test` -> '+115: All tests passed!', matching the spec's claimed count exactly. Additional checks: no @tag/skip markers and no 'TODO: implement test' anywhere in either file (grep confirmed empty); every test calls a fresh `_buildHarness()` (own FakeSecureStoragePlatform, Dio/FakeDioHttpClientAdapter, TenantTokenStore, ActiveRealmHolder instance -- confirmed ActiveRealmHolder is a plain class, not a singleton, at lib/api/api_client.dart:118) so tests are self-sufficient with no inter-test ordering dependency and no shared hardcoded fixture state; token/realm strings used ('initial-access-token' etc.) are fixture literals, not real secrets or connection strings. No gaps found; no rework required.",
+    "artifacts_out": ["handoffs/WF02-REQ425-20260929/step-03b-test-design-validator.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to next WF-02 step (TEST-RUNNER / implementation verification per workflow)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

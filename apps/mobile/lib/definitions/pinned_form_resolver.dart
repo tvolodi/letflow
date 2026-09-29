@@ -8,7 +8,6 @@
 /// §5 for the full contract this file implements.
 library;
 
-import 'package:dio/dio.dart' show Response;
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -49,10 +48,13 @@ enum PinnedFormUnavailableReason {
   /// cannot be looked up or cached.
   versionMissing,
 
-  /// A cache miss and the follow-up `GET /tasks/:id` either threw (network
-  /// unreachable) or returned a non-200 status. Not split further here —
-  /// see design §9 OQ-D for why (no `ApiError` taxonomy exists yet at this
-  /// requirement's build-order position).
+  /// A cache miss and the follow-up `GET /tasks/:id` threw — either a
+  /// network-transport failure or an `ApiError` (REQ-425's taxonomy; see
+  /// `lib/api/api_error.dart`) for a non-2xx response. Not split further
+  /// here — resolved (was design §9 OQ-D, deferred pending REQ-425, which
+  /// has since landed): `ApiClient.get` normalizes every non-2xx outcome to
+  /// a thrown `ApiError` before it reaches this resolver, so both causes
+  /// land in the same `catch` below and are reported identically.
   fetchFailed,
 }
 
@@ -65,8 +67,8 @@ enum PinnedFormUnavailableReason {
 ///    immediately, zero network calls.
 /// 3. Cache miss → exactly one `GET /api/v1/tasks/:id`. Never a "latest
 ///    version"/"active version" lookup.
-/// 4. Fetch fails (thrown exception, non-200) → [PinnedFormUnavailable]
-///    (`fetchFailed`), nothing cached.
+/// 4. Fetch throws (network failure or a thrown `ApiError` for any non-2xx
+///    response) → [PinnedFormUnavailable] (`fetchFailed`), nothing cached.
 /// 5. Fetch succeeds (200) → cache the fetched `form_schema` under the
 ///    exact `(formId, formVersion)` key, return [PinnedFormResolved].
 @immutable
@@ -102,20 +104,14 @@ class PinnedFormResolver {
 
     // Step 3: cache miss — exactly one fetch, of this task's own detail.
     // Never a "latest"/"active version" lookup for formId (AC5).
-    final Response<dynamic> response;
+    final dynamic response;
     try {
       response = await client.get('/api/v1/tasks/$taskId');
     } catch (_) {
-      // AC3: thrown exception (network unreachable) — nothing cached, the
-      // previously-cached different version (if any) is never returned.
-      return const PinnedFormUnavailable(
-        reason: PinnedFormUnavailableReason.fetchFailed,
-      );
-    }
-
-    if (response.statusCode != 200) {
-      // Step 4: non-200 — same reason as the thrown-exception branch (no
-      // typed ApiError taxonomy exists yet, design §9 OQ-D). Nothing cached.
+      // AC3/Step 4: a thrown network failure or a thrown `ApiError` (any
+      // non-2xx response, per REQ-425's `ApiClient.get` contract) both land
+      // here — nothing cached, the previously-cached different version (if
+      // any) is never returned.
       return const PinnedFormUnavailable(
         reason: PinnedFormUnavailableReason.fetchFailed,
       );

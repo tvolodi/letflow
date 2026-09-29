@@ -1,0 +1,57 @@
+{
+  "handoff_id": "4f192c09-efa4-43bf-92f6-ec82f65612ce",
+  "run_id": "WF02-REQ425-20260929",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ425-20260929/step-01-code-designer-rework3.json",
+  "created_at": "2026-09-29T11:49:03Z",
+  "started_at": "2026-09-29T11:49:03Z",
+  "completed_at": "2026-09-29T11:51:54Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-425"],
+    "requirement_text": {
+      "REQ-425": "MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2). Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the renderers' six states classify this requirement's ApiError. SECURITY-REVIEWER gate (refresh-token handling, token clearing).\n\nHardens lib/api/api_client.dart (created by REQ-421) into the single client:\n1. Attach the active tenant's bearer token (REQ-422's iss check).\n2. On 401: exactly one silent refresh via flutter_appauth's token refresh, then exactly one retry of the original request; concurrent 401s share one in-flight refresh. On refresh failure: clear the tenant's tokens (REQ-422 store) and route to login.\n3. Exponential backoff on 5xx for idempotent methods only (GET), bounded attempts; POST is not auto-retried (no duplicate task completion).\n4. Normalise every failure to a sealed ApiError type before it leaves lib/api/: at minimum network-unavailable, unauthorized, forbidden (403), not-found, module-not-available (a 404 on any /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404, not 403, and must not render as a generic not-found), backpressure (429, carrying the Retry-After seconds -- the backend emits 429 from lib/letflow/plugs/admission.ex and lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with RFC 9457 field errors), conflict (409), server (5xx after retries).\n5. A static guard (apps/mobile/test/guards/), the counterpart of the SPA's raw-fetch-outside-client guard in web/tests/guards/: no file outside lib/api/ imports package:dio or package:http or uses dart:io HttpClient; with a self-test."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["e60b25fa-493a-4d45-a7f1-45b57a4e9e1e", "5dfd1929-64c3-49c6-b8a2-1c3f52fb1ea6"],
+    "artifacts_in": [
+      "lib/letflow/design/req425-mobile-api-client-hardening.md",
+      "handoffs/WF02-REQ425-20260929/step-01b-code-design-validator-recheck2.json"
+    ],
+    "owned_modules": ["apps/mobile/lib/api/", "apps/mobile/test/guards/"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 3 of 3 -- this is the last budgeted attempt before ESCALATION per ORCHESTRATOR.md Sec5; a fourth FAIL on this document stops the run entirely rather than dispatching a fourth rework. CODE-DESIGN-VALIDATOR's second re-check (handoffs/WF02-REQ425-20260929/step-01b-code-design-validator-recheck2.json) found the iteration-0 and iteration-1 defects genuinely fixed and stable, but a NEW BLOCKER: Sec 2.6 (lines ~468-473), the section YOU added in rework 2 to fix the forTesting seam defect, itself embeds a literal, directly-executable Dart code block (object construction, a static-field assignment mutating global platform state, a cascade-operator field assignment) -- implementation code, not a signature/type-shape/prose description, violating this design doc's own stated scope and Step 1b check 2e AGAIN. The validator's own root-cause note: this is the SAME CATEGORY of mistake as iteration 0's 'executable test bodies' defect (Sec 4.2, already fixed once), recurring in a different section. Per ORCHESTRATOR.md Sec5's change-approach rule, a recurring root cause on the third attempt means CHANGE APPROACH BEFORE WRITING ANY CODE -- do not just delete/reword the one flagged code fence in Sec 2.6 in isolation.\n\nCHANGE OF APPROACH REQUIRED: before touching Sec 2.6, grep the entire design document yourself for every fenced code block (``` markers) and read each one. For ANY block containing an imperative statement (a variable assignment with `=`, a method call ending in `;`, a cascade `..`, a constructor invocation used as a statement rather than cited as a type) -- rewrite it as prose or a labelled list describing the SHAPE/CONTRACT, never the executable steps. Acceptable form: 'The test constructs a real TenantTokenStore backed by the fake secure-storage platform: TenantTokenStore(FlutterSecureStorage()), with FlutterSecureStoragePlatform.instance swapped to FakeSecureStoragePlatform() before construction.' -- naming the TYPES and the RELATIONSHIP, not writing it as runnable lines. Function/type signatures with @spec-style annotations remain fine (those are the one code-shaped thing this gate explicitly allows) -- the line is: a SIGNATURE (name, parameter types, return type) is fine; a STATEMENT (assignment, call-as-statement, cascade) is not, anywhere in the document, not just Sec 2.6. Do this pass across the WHOLE document, not only the flagged section, since the validator will not accept a section-only patch a third time. State in your own result.summary that you performed this whole-document scan and what you found/changed beyond Sec 2.6, if anything.",
+    "acceptance_criteria": [
+      "a test where the fake server returns 401 once then 200 asserts exactly one refresh call and exactly one retry, and that two concurrent requests both receiving 401 trigger one refresh total",
+      "a test where refresh fails asserts the tenant's tokens are deleted from the secure store and the router is at the login route",
+      "a test asserts a GET receiving 503 twice then 200 succeeds with increasing delays between attempts (fake clock), a GET receiving 503 on every attempt stops after the maximum attempt count declared as a named constant in lib/api/ and surfaces ApiError server (the test asserts the exact number of requests sent), and a POST receiving 503 is not retried",
+      "a test per ApiError variant asserts the mapping from status code/exception, including 404 on /api/v1/modules/exam/x -> module-not-available, 404 elsewhere -> not-found, and 429 with 'Retry-After: 7' -> backpressure(7 seconds)",
+      "a test asserts no DioException or SocketException escapes lib/api/ -- the public client API returns or throws only ApiError",
+      "the single-client guard fails its self-test fixture (a file under lib/features/ importing package:dio) and passes on the real tree",
+      "cd apps/mobile && flutter analyze && flutter test pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Change of approach performed as mandated, not a section-only patch: grepped the ENTIRE design document myself for every ``` fence (24 fences forming 12 fenced blocks total: Sec 1.1 ApiError variants, Sec 1.2 classifyError @spec, Sec 1.3 _isModulePath/_extractModuleId @specs, Sec 1.4 _parseRetryAfter @spec, Sec 1.5 _parseFieldErrors @spec, Sec 2.1 _RefreshCoordinator class, Sec 2.4 LoginRouter typedef, Sec 2.6 the flagged test-seam block, Sec 3.1 kMaxServerRetryAttempts constant, Sec 3.2 backoffDelayFor @spec, Sec 4.1 SingleApiClientViolation/checkSingleApiClientBoundary, Sec 5.1 ApiClient class, Sec 5.2 AppAuthAdapter abstract class) and read each one in full against the literal rule: a SIGNATURE (name/params/return type), a type/class/field declaration, or a bare literal-value constant is fine; an assignment-as-statement, a call-as-statement, or a cascade used as an imperative step is not, anywhere in the document. Found exactly ONE violation beyond what was already flagged: Sec 2.6's block (lines ~468-473) -- 'final fakePlatform = FakeSecureStoragePlatform(); FlutterSecureStoragePlatform.instance = fakePlatform; final tokenStore = const TenantTokenStore(FlutterSecureStorage()); final activeRealm = ActiveRealmHolder()..currentRealmUrl = ...;' -- object construction, a global-state field assignment, and a cascade field mutation, i.e. copy-pasteable executable Dart. Rewrote it as prose naming the four objects (a no-argument FakeSecureStoragePlatform instance; that instance substituted in as FlutterSecureStoragePlatform.instance; a real const-constructible TenantTokenStore built from a plain FlutterSecureStorage(); an ActiveRealmHolder whose sole mutable field currentRealmUrl is set to the fixture realm URL) and their relationship/shape, with no runnable lines, matching Sec 2.2-2.5's existing prose-only mechanism-description style. All 11 other fenced blocks were verified to already contain only signatures, class/field/constructor declarations, or one named const literal (Sec 3.1's kMaxServerRetryAttempts = 3, explicitly permitted by this design's own preamble as a 'literal value') -- no additional violations found. No other section was touched.",
+    "artifacts_out": ["lib/letflow/design/req425-mobile-api-client-hardening.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["21c81e0b"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) for a fresh full pass -- final rework attempt"
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

@@ -80,7 +80,18 @@ and a `PinnedFormResolver` that resolves a task's exact
 version lookup — falling back to an explicit pinned-version-
 unavailable result when offline or when `form_version` is null.
 Wired into `navigation_bootstrap.dart`'s four existing tenant-
-partition lifecycle points, additive only. S9's three backend gaps
+partition lifecycle points, additive only. `REQ-425` (MOB-6) hardened
+`lib/api/api_client.dart` into the single sanctioned API client:
+bearer attach, exactly-one silent refresh on 401 then retry with
+concurrent-401 coalescing, exponential backoff on 5xx for idempotent
+GETs only (POST is never auto-retried), a 9-variant sealed `ApiError`
+type — including a 404 on `/api/v1/modules/<id>/` distinguished as
+module-not-available rather than a plain not-found, and a 429 carrying
+its `Retry-After` seconds as backpressure — and a static single-client
+guard (`apps/mobile/test/guards/`) rejecting any file outside
+`lib/api/` that imports `package:dio`/`package:http` or uses
+`dart:io`'s `HttpClient`, the mobile counterpart of the SPA's
+raw-fetch-outside-client guard. S9's three backend gaps
 closed earlier (`REQ-124`/`125`/`126`) and
 `REQ-418` added the mobile tier's own PKCE-S256 Keycloak client
 (`letflow-mobile`) plus its `client_id` on

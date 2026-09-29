@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:letflow/api/api_client.dart';
 import 'package:letflow/auth/auth.dart';
 
+import '../support/fake_app_auth_adapter.dart';
 import '../support/fake_dio_http_client_adapter.dart';
 import '../support/fake_http_gateway.dart' show tenantConfigJson;
 import '../support/fake_secure_storage_platform.dart';
@@ -18,6 +19,8 @@ void main() {
   late ApiClient client;
   late TenantTokenStore tokenStore;
   late ActiveRealmHolder activeRealm;
+  late FakeAppAuthAdapter appAuthAdapter;
+  late int loginRouteCallCount;
 
   setUp(() {
     FlutterSecureStoragePlatform.instance = FakeSecureStoragePlatform();
@@ -26,29 +29,17 @@ void main() {
       ..httpClientAdapter = fakeAdapter;
     tokenStore = const TenantTokenStore(FlutterSecureStorage());
     activeRealm = ActiveRealmHolder();
-    client = ApiClient.forTesting(dio);
-
-    // Re-apply the same bearer-attach interceptor the production
-    // `ApiClient.create` factory installs, since `withDio` (the test seam)
-    // wraps a caller-built `Dio` verbatim rather than re-adding it. This
-    // mirrors exactly what `ApiClient.create` does internally.
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          if (options.extra['skipAuth'] == true) {
-            handler.next(options);
-            return;
-          }
-          final realmUrl = activeRealm.currentRealmUrl;
-          if (realmUrl != null) {
-            final tokens = await tokenStore.read(realmUrl);
-            if (tokens != null) {
-              options.headers['Authorization'] = 'Bearer ${tokens.accessToken}';
-            }
-          }
-          handler.next(options);
-        },
-      ),
+    appAuthAdapter = FakeAppAuthAdapter();
+    loginRouteCallCount = 0;
+    // `ApiClient.forTesting` auto-attaches the same bearer-attach
+    // interceptor `ApiClient.create` does (REQ-425 design §2.6), so this
+    // test file no longer needs to re-apply its own copy.
+    client = ApiClient.forTesting(
+      dio,
+      tokenStore: tokenStore,
+      activeRealm: activeRealm,
+      appAuthAdapter: appAuthAdapter,
+      routeToLogin: () => loginRouteCallCount += 1,
     );
   });
 

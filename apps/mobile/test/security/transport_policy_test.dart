@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:letflow/api/api_client.dart';
+import 'package:letflow/api/api_error.dart';
 import 'package:letflow/api/transport_policy.dart';
 import 'package:letflow/auth/auth.dart';
 import 'package:letflow/bootstrap/navigation_bootstrap.dart';
@@ -90,11 +91,21 @@ void main() {
       dio.interceptors.add(
         _transportPolicyInterceptorForTest(const ReleaseTransportPolicy()),
       );
-      final client = ApiClient.forTesting(dio);
+      final client = ApiClient.forTesting(
+        dio,
+        tokenStore: const TenantTokenStore(FlutterSecureStorage()),
+        activeRealm: ActiveRealmHolder(),
+        appAuthAdapter: FakeAppAuthAdapter(),
+        routeToLogin: () {},
+      );
 
+      // REQ-425 (MOB-6) AC5: no raw DioException escapes `lib/api/` any
+      // more -- a transport-policy rejection (still a DioException at the
+      // interceptor level) is now normalized to NetworkUnavailableError
+      // before it reaches this caller.
       await expectLater(
         () => client.get('/some/path'),
-        throwsA(isA<DioException>()),
+        throwsA(isA<NetworkUnavailableError>()),
       );
 
       expect(fakeAdapter.requests, isEmpty);
@@ -112,7 +123,13 @@ void main() {
         _transportPolicyInterceptorForTest(const DebugTransportPolicy()),
       );
       fakeAdapter.responses['/some/path'] = (200, {'ok': true});
-      final client = ApiClient.forTesting(dio);
+      final client = ApiClient.forTesting(
+        dio,
+        tokenStore: const TenantTokenStore(FlutterSecureStorage()),
+        activeRealm: ActiveRealmHolder(),
+        appAuthAdapter: FakeAppAuthAdapter(),
+        routeToLogin: () {},
+      );
 
       await client.get('/some/path');
 

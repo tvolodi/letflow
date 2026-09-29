@@ -1,0 +1,53 @@
+{
+  "handoff_id": "c0449c17-d938-438f-857a-d578ad6bc169",
+  "run_id": "WF02-REQ425-20260929",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "MOBILE-DEV",
+  "file": "handoffs/WF02-REQ425-20260929/step-final-git-merge.json",
+  "created_at": "2026-09-29T17:39:16Z",
+  "started_at": "2026-09-29T17:39:16Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-425"],
+    "requirement_text": {
+      "REQ-425": "MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2). Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the renderers' six states classify this requirement's ApiError. SECURITY-REVIEWER gate (refresh-token handling, token clearing).\n\nHardens lib/api/api_client.dart (created by REQ-421) into the single client:\n1. Attach the active tenant's bearer token (REQ-422's iss check).\n2. On 401: exactly one silent refresh via flutter_appauth's token refresh, then exactly one retry of the original request; concurrent 401s share one in-flight refresh. On refresh failure: clear the tenant's tokens (REQ-422 store) and route to login.\n3. Exponential backoff on 5xx for idempotent methods only (GET), bounded attempts; POST is not auto-retried (no duplicate task completion).\n4. Normalise every failure to a sealed ApiError type before it leaves lib/api/: at minimum network-unavailable, unauthorized, forbidden (403), not-found, module-not-available (a 404 on any /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404, not 403, and must not render as a generic not-found), backpressure (429, carrying the Retry-After seconds -- the backend emits 429 from lib/letflow/plugs/admission.ex and lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with RFC 9457 field errors), conflict (409), server (5xx after retries).\n5. A static guard (apps/mobile/test/guards/), the counterpart of the SPA's raw-fetch-outside-client guard in web/tests/guards/: no file outside lib/api/ imports package:dio or package:http or uses dart:io HttpClient; with a self-test."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/agents/protocols/GIT_MERGE.md"],
+    "owned_modules": ["apps/mobile/lib/api/", "apps/mobile/test/guards/", "apps/mobile/lib/definitions/pinned_form_resolver.dart"]
+  },
+  "task": {
+    "description": "Step Final for WF02-REQ425-20260929, per docs/agents/protocols/GIT_MERGE.md's full 10-step procedure. NOTE: this branch was ALREADY rebased onto origin/main at commit 47c0a2af earlier in this run (a real code conflict in apps/mobile/lib/bootstrap/navigation_bootstrap.dart's logout/switchTenant was hand-resolved by combining both sides' independent, compatible cleanup additions -- REQ-423/424's cache-clear calls and REQ-425's activeRealm.clientId clear -- neither side's work was discarded), and force-pushed. Step 4/5's git fetch/rebase in this dispatch should therefore be a NO-OP unless origin/main has advanced again since -- fetch first and check. If origin/main HAS advanced again, resolve any new conflict the same way: read both sides, compose, never blindly pick a side, and report exactly what you found. Stage/commit any remaining uncommitted files first (step 2-3) before the fetch/rebase check.\n\nAfter the PR is created (step 7), the PR body's mix test line must state the REAL counts from this run's own RELEASE-VALIDATOR recheck1 (5048 passed, 0 failed, 27 excluded, serial run under critical memory pressure) plus the mix letflow.check.test transient-flake note (non-blocking, structurally cleared -- apps/mobile/ cannot touch lib/letflow/) -- do not write a bare PASS. SECURITY-REVIEWER line: PASS, 3 review cycles, 2 real cross-tenant races found and closed (cite step-02c-security-reviewer-recheck2.json). RELEASE-VALIDATOR line: PASS (cite step-05-release-validator-recheck1.json).\n\nIMMEDIATELY on PASS (same turn, before considering the run finished): report back to ORCH so ORCH can call release_lock(status: done) against letflow-queue task 862 (GH#1879) -- do not call the queue API yourself, only ORCH does that.",
+    "acceptance_criteria": [
+      "gh pr merge exited 0 (or PARTIAL correctly reported if gh unavailable)",
+      "git branch --show-current is main (or the worktree-variant's detached-HEAD-at-origin/main check)",
+      "git pull --ff-only on main after merge exited 0",
+      "git log --oneline -1 shows the squash-merge commit",
+      "git status shows a clean working tree",
+      "the PR body's mix test line carries real counts and structural attribution, not a bare PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

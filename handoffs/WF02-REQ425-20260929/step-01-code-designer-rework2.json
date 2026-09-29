@@ -1,0 +1,58 @@
+{
+  "handoff_id": "e60b25fa-493a-4d45-a7f1-45b57a4e9e1e",
+  "run_id": "WF02-REQ425-20260929",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ425-20260929/step-01-code-designer-rework2.json",
+  "created_at": "2026-09-29T11:41:43Z",
+  "started_at": "2026-09-29T11:41:43Z",
+  "completed_at": "2026-09-29T12:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-425"],
+    "requirement_text": {
+      "REQ-425": "MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2). Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the renderers' six states classify this requirement's ApiError. SECURITY-REVIEWER gate (refresh-token handling, token clearing).\n\nHardens lib/api/api_client.dart (created by REQ-421) into the single client:\n1. Attach the active tenant's bearer token (REQ-422's iss check).\n2. On 401: exactly one silent refresh via flutter_appauth's token refresh, then exactly one retry of the original request; concurrent 401s share one in-flight refresh. On refresh failure: clear the tenant's tokens (REQ-422 store) and route to login.\n3. Exponential backoff on 5xx for idempotent methods only (GET), bounded attempts; POST is not auto-retried (no duplicate task completion).\n4. Normalise every failure to a sealed ApiError type before it leaves lib/api/: at minimum network-unavailable, unauthorized, forbidden (403), not-found, module-not-available (a 404 on any /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404, not 403, and must not render as a generic not-found), backpressure (429, carrying the Retry-After seconds -- the backend emits 429 from lib/letflow/plugs/admission.ex and lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with RFC 9457 field errors), conflict (409), server (5xx after retries).\n5. A static guard (apps/mobile/test/guards/), the counterpart of the SPA's raw-fetch-outside-client guard in web/tests/guards/: no file outside lib/api/ imports package:dio or package:http or uses dart:io HttpClient; with a self-test."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["0b75b0d5-15cb-48c5-a0b5-262f4a357fe1", "7cbce866-037a-4b64-b358-e74d1c21ab03"],
+    "artifacts_in": [
+      "lib/letflow/design/req425-mobile-api-client-hardening.md",
+      "handoffs/WF02-REQ425-20260929/step-01b-code-design-validator-recheck1.json",
+      "apps/mobile/lib/api/api_client.dart"
+    ],
+    "owned_modules": ["apps/mobile/lib/api/", "apps/mobile/test/guards/"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 2. CODE-DESIGN-VALIDATOR's fresh full re-check (handoffs/WF02-REQ425-20260929/step-01b-code-design-validator-recheck1.json, result.summary and gate_history[1]) found a NEW defect surfaced only by re-checking the whole document (the prior 3 defects from iteration 0 are confirmed fixed and stay fixed): Sec 5.1's ApiClient.forTesting factory gains appAuthAdapter/routeToLogin/delayFn parameters but still has no TenantTokenStore/ActiveRealmHolder (or equivalent) parameter, even though Sec 2.1's _RefreshCoordinator (constructed inside ApiClient, invoked on every 401) needs one to read/store/delete tokens. Confirmed against the real source: apps/mobile/lib/api/api_client.dart:166's factory ApiClient.forTesting(Dio dio) => ApiClient._(dio); and the bearer-interceptor wiring only happens in .create (lines 138-156) -- there is today no seam for injecting a fake token store into a forTesting-built client. AC1 (concurrent 401s -> exactly one refresh call) and AC2 (refresh failure -> tokens deleted from the secure store) both require a test-constructed ApiClient wired to a fake, inspectable token store, and the design as written gives no way to supply or observe one.\n\nFix: add the token-store/active-realm dependency (or equivalent -- your call on the exact shape, consistent with how REQ-422 already structures the real store) as an explicit parameter to ApiClient.forTesting (and to .create, if not already present there), and state the test-inspection seam a test uses to observe post-refresh/post-failure token-store state (e.g. a fake implementing the same interface the real TenantTokenStore does, whose recorded calls/state a test asserts against). Then re-run the full Step 1b gate over the WHOLE document again, not just this one section -- the validator will not accept a patch-only re-read.",
+    "acceptance_criteria": [
+      "a test where the fake server returns 401 once then 200 asserts exactly one refresh call and exactly one retry, and that two concurrent requests both receiving 401 trigger one refresh total",
+      "a test where refresh fails asserts the tenant's tokens are deleted from the secure store and the router is at the login route",
+      "a test asserts a GET receiving 503 twice then 200 succeeds with increasing delays between attempts (fake clock), a GET receiving 503 on every attempt stops after the maximum attempt count declared as a named constant in lib/api/ and surfaces ApiError server (the test asserts the exact number of requests sent), and a POST receiving 503 is not retried",
+      "a test per ApiError variant asserts the mapping from status code/exception, including 404 on /api/v1/modules/exam/x -> module-not-available, 404 elsewhere -> not-found, and 429 with 'Retry-After: 7' -> backpressure(7 seconds)",
+      "a test asserts no DioException or SocketException escapes lib/api/ -- the public client API returns or throws only ApiError",
+      "the single-client guard fails its self-test fixture (a file under lib/features/ importing package:dio) and passes on the real tree",
+      "cd apps/mobile && flutter analyze && flutter test pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fixed the single defect from step-01b-code-design-validator-recheck1.json: ApiClient.forTesting (design Sec 5.1) had no seam for injecting a token store, though _RefreshCoordinator (Sec 2.1) requires one. Read the real apps/mobile/lib/api/api_client.dart (forTesting at line 166, .create at 138-158, ActiveRealmHolder defined at 115-117) and apps/mobile/lib/auth/auth.dart (TenantTokenStore at line 90 -- a concrete, const-constructible class wrapping FlutterSecureStorage, not an interface) before editing, plus apps/mobile/test/support/fake_secure_storage_platform.dart and apps/mobile/test/auth/tenant_token_store_test.dart to find the real existing test-inspection idiom rather than inventing a parallel one. Changes made to lib/letflow/design/req425-mobile-api-client-hardening.md: (1) Sec 5.1's ApiClient.forTesting factory now takes required tokenStore (TenantTokenStore) and activeRealm (ActiveRealmHolder) parameters alongside the existing appAuthAdapter/routeToLogin/delayFn; (2) new Sec 2.6 'Test-inspection seam for _RefreshCoordinator's token-store effects' states the exact seam -- a test swaps FlutterSecureStoragePlatform.instance with the already-existing FakeSecureStoragePlatform, constructs a real const TenantTokenStore(FlutterSecureStorage()) over it (the same idiom tenant_token_store_test.dart and bootstrap_sequence_test.dart already use), pre-seeds tokens via tokenStore.store(...) before constructing the ApiClient, and asserts post-refresh-failure state via tokenStore.read(realmUrl) == null (a real round-trip through TenantTokenStore.delete, not a mock-call assertion); refresh-call-count (AC1) is asserted on FakeAppAuthAdapter's existing call counter, not the token store; (3) Sec 0's current-state bullet on forTesting updated to say this design changes its shape rather than preserving it unchanged; (4) Sec 9's AC1/AC2 resolution-map rows and Sec 7's cross-module dependency table updated to cite Sec 2.6. Grepped the whole file afterward for TBD and forTesting( -- no stray TBD language, exactly the two forTesting references (Sec 0's prose mention and Sec 5.1's signature), both consistent.",
+    "artifacts_out": ["lib/letflow/design/req425-mobile-api-client-hardening.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["bb0bbd4efdb1af57b78295474c72e89e6179ba33"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) for a fresh full pass"
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

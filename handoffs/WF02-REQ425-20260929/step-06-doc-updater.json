@@ -1,0 +1,60 @@
+{
+  "handoff_id": "9babfbe2-911e-43fb-a51e-9de99647b144",
+  "run_id": "WF02-REQ425-20260929",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ425-20260929/step-06-doc-updater.json",
+  "created_at": "2026-09-29T17:35:28Z",
+  "started_at": "2026-09-29T17:35:28Z",
+  "completed_at": "2026-09-29T18:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-425"],
+    "requirement_text": {
+      "REQ-425": "MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2). Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the renderers' six states classify this requirement's ApiError. SECURITY-REVIEWER gate (refresh-token handling, token clearing).\n\nHardens lib/api/api_client.dart (created by REQ-421) into the single client:\n1. Attach the active tenant's bearer token (REQ-422's iss check).\n2. On 401: exactly one silent refresh via flutter_appauth's token refresh, then exactly one retry of the original request; concurrent 401s share one in-flight refresh. On refresh failure: clear the tenant's tokens (REQ-422 store) and route to login.\n3. Exponential backoff on 5xx for idempotent methods only (GET), bounded attempts; POST is not auto-retried (no duplicate task completion).\n4. Normalise every failure to a sealed ApiError type before it leaves lib/api/: at minimum network-unavailable, unauthorized, forbidden (403), not-found, module-not-available (a 404 on any /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404, not 403, and must not render as a generic not-found), backpressure (429, carrying the Retry-After seconds -- the backend emits 429 from lib/letflow/plugs/admission.ex and lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with RFC 9457 field errors), conflict (409), server (5xx after retries).\n5. A static guard (apps/mobile/test/guards/), the counterpart of the SPA's raw-fetch-outside-client guard in web/tests/guards/: no file outside lib/api/ imports package:dio or package:http or uses dart:io HttpClient; with a self-test."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ425-20260929/step-05-release-validator-recheck1.json",
+      "handoffs/WF02-REQ425-20260929/step-02b-integration-fix.json"
+    ],
+    "owned_modules": ["docs/requirements.yaml", "docs/status/requirement_status.v24.yaml", "docs/status/requirement_status.index.yaml", "README.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 6 for REQ-425. 1. Flip docs/requirements.yaml's REQ-425 status: in_progress -> done. 2. Append a 'done' event to docs/status/requirement_status.v24.yaml (the current volume -- re-read it and docs/status/requirement_status.index.yaml immediately before appending, re-check for any concurrent append since this was last confirmed clean at 8 on-disk entries, and bump the index's entries: field to match the true recounted total, per the recount-every-time rule already documented in that index's own recent history). Use a real UTC timestamp from the clock. Summarize in the note: single sanctioned API client hardening (bearer attach, exactly-one 401 refresh-then-retry with concurrent-401 coalescing, GET-only exponential 5xx backoff, 9-variant sealed ApiError, single-client guard); mention the design gate's 3 legitimate rework cycles (TBD language/executable-code/dup-signature -> missing test seam -> recurring executable code) and SECURITY-REVIEWER's 3-cycle gate finding and closing 2 real cross-tenant token races (token-write-time, then retry-dispatch-time); mention the post-rebase integration fix to apps/mobile/lib/definitions/pinned_form_resolver.dart (REQ-424's file, dead-code removal, no behavior change, REVIEWER-cleared) discovered because this run's own new guard applies against the merged tree. 3. Update README.md's mobile-tier summary paragraph to add REQ-425/MOB-6's summary, matching the existing REQ-419..424 pattern (see lines ~55-76 for the established style). 4. Check docs/migration/stage-9-mobile.md: per REQ-420/422/423/424's own prior closures, its table covers only the three now-closed backend gaps (REQ-124/125/126), not a REQ-419..425 progress table -- confirm this is still true and state so explicitly rather than silently skipping; only edit it if that determination has changed. 5. Complete the handoff: artifacts_out listing every file actually touched by path, next_action: 'Route to MOBILE-DEV for Step Final'.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml's REQ-425 entry reads status: done",
+      "a new 'done' event for REQ-425 is appended to the current run-history volume with a real UTC timestamp, and the index's entries: count is recounted and correct",
+      "README.md's mobile-tier summary paragraph includes REQ-425/MOB-6",
+      "artifacts_out names every file actually changed, not a generic 'docs updated' claim"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Flipped docs/requirements.yaml's REQ-425 status: in_progress -> done. Re-read docs/status/requirement_status.v24.yaml and requirement_status.index.yaml immediately before appending, confirmed no concurrent append since the last confirmed 8 on-disk entries (`grep -c \"^  - req:\" docs/status/requirement_status.v24.yaml` = 8 before, = 9 after), and appended a 'done' event for REQ-425 (agent DOC-UPDATER, at 2026-09-29T18:05:00Z) summarizing the single sanctioned API client hardening (bearer attach, exactly-one 401 refresh-then-retry with concurrent-401 coalescing, GET-only exponential 5xx backoff, 9-variant sealed ApiError, single-client guard), the design gate's 3 legitimate rework cycles (TBD language/executable-code/dup-signature -> missing test seam -> recurring executable code), SECURITY-REVIEWER's 3-cycle gate finding and closing 2 real cross-tenant token races (token-write-time, then retry-dispatch-time), and the post-rebase integration fix to apps/mobile/lib/definitions/pinned_form_resolver.dart (REQ-424's file, dead-code removal, no behavior change, REVIEWER-cleared, commit 298e8e84) discovered because this run's own new guard applies against the merged tree. Recounted the index's volume-24 entries: field from 8 to 9 (git diff --numstat confirms 0 deletions in v24.yaml -- append-only preserved); volume 24 is at 370 lines / 22389 bytes, well under the 1200-line/120000-byte roll ceiling, so no roll was needed. Updated README.md's mobile-tier summary paragraph (lines ~82-89) to add REQ-425/MOB-6's summary, matching the established REQ-419..424 style. Checked docs/migration/stage-9-mobile.md: its table (lines 41-46) still covers only the three closed backend gaps (REQ-124/125/126), not a REQ-419..425 progress table -- same determination REQ-420/422/423/424's own closures made; no edit made.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v24.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "README.md",
+      "handoffs/WF02-REQ425-20260929/step-06-doc-updater.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to MOBILE-DEV for Step Final"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0881-20260929/step-02b-code-design-validator.json",
   "created_at": "2026-09-29T01:54:21Z",
   "started_at": "2026-09-29T01:54:21Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T02:18:47Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,19 +36,28 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Independently re-derived verdict on lib/letflow/design/iss0881-sandbox-pool-test-isolation.md; did not accept CODE-DESIGNER's result.summary claim at face value.\n\nCheck 1 (every call site of sandbox_schema_names/0 and drop_sandbox_schemas_created_since!/1 independently enumerated and cross-checked): ran my own `grep -n 'sandbox_schema_names()|drop_sandbox_schemas_created_since!\\('` against test/letflow/sandbox_pool_test.exs (current HEAD, not the design doc's own count) and got: def site (line 620) + 10 baseline captures (798, 856, 967, 1003, 1042, 1091, 1155, 1214, 1295, 1598) + 4 `final = sandbox_schema_names()` reads (844, 1027, 1073, 1125) + 1 inline diff read (1644) + 9 on_exit `drop_sandbox_schemas_created_since!/1` registrations (799, 857, 968, 1004, 1043, 1092, 1156, 1215, 1296) + 1 direct call (1661, the ISS-0292/RT-8 critical-regression test, which uses no on_exit for it). Cross-checked every one of these against the design doc's own per-test sections (RT-1 through RT-9, plus the ISS-0292/RT-8 critical-regression test) and every single line number the design cites (e.g. RT-6's 1125-1127, RT-3's 985/995, the ISS-0292 test's 1643-1648) matches the current file exactly, down to the line number. All 10 baseline captures and all 5 comparison sites (4 `final=` reads + 1 diff read) are addressed; RT-9's baseline/on_exit pair is explicitly and correctly called out as needing no assertion change (it has no final/equality read at all -- confirmed by reading test/letflow/sandbox_pool_test.exs:1294-1343 myself). No call site is missed or double-counted. One incidental discrepancy noted (not a design-doc defect, see issues below): CODE-DESIGNER's OWN step-02 handoff result.summary miscounted the on_exit registrations as 10; the actual count is 9 (plus the one direct, non-on_exit call at 1661) -- the design doc itself makes no such count claim, so this does not affect the design doc's own correctness.\n\nCheck 2 (concrete counter-example, real-leak detection preserved): traced RT-6 itself, the originally diagnosed case. RT-6 starts pool with max_concurrent:1, spawns exactly one claimer (:o), kills the provisioning worker task (line 1106), and expects the pool's compensating DROP for the pre-minted o_schema to run. Counter-example: suppose the compensating DROP silently fails to execute or fails to commit (a genuine regression in SandboxPool's crash-handling path) -- o_schema then still exists in Postgres. Under the design's new assertion (final = sandbox_schema_names(); refute MapSet.member?(final, o_schema) -- line 1127's `assert final == baseline` deleted, lines 1125-1126 unchanged), `final` still includes o_schema (an unscoped platform-wide read, which by construction contains every existing sandbox_% schema including a leaked one), so `refute MapSet.member?(final, o_schema)` fails and the test goes red -- the real leak is still caught. This holds independent of what any other partition's concurrent SandboxPool activity does to the rest of the platform-wide set, which is exactly the scoping the deleted equality line depended on and this one does not. Also verified this per-test: RT-6's pool provisions only o_schema (single spawn_claimer call, confirmed by reading lines 1094-1096), so there is no code path by which this test's own pool could leak an unnamed second schema that only the deleted platform-wide equality could have caught -- the membership check is a complete substitute for this test's own regression coverage, not a weakened one.\n\nCheck 3 (no implementation code bodies): the design doc contains literal test-assertion snippets (e.g. `refute MapSet.member?(final, o_schema)`) but no lib/ function bodies, and adds/changes no function signature (confirmed in its own §3: 'This design adds no new function and changes no existing function's signature or return shape'). Concrete assertion-level snippets are this project's established convention for a test-isolation design doc, not a violation of the 'signatures/shapes only' constraint -- confirmed against the precedent the design doc itself cites, lib/letflow/design/iss0348-backfill-test-isolation.md, which I read directly and found uses the identical shape (literal per-test assertion-diff snippets, no lib/ implementation). The 'no implementation code' constraint binds production-code design docs (function bodies for lib/*.ex); a test-file-fix design doc's deliverable is necessarily the literal assertion text, which the producing handoff's own acceptance criteria explicitly required ('The new comparison is concretely specified, not left as make it more robust').\n\nCheck 4 (no production code touched / open question reasoned, not silently dropped): confirmed lib/letflow/sandbox_pool.ex is not referenced or modified anywhere in the design doc; its 'Scope and constraints' section states this explicitly with ISSUE-FIXER's diagnosis as justification (crash-handling path read in full and refuted as a bug source). The drop_sandbox_schemas_created_since!/1 teardown-time race (a destructive cross-partition DROP, not just a flaky assertion) is flagged under 'Open question', explicitly left unfixed, with three stated reasons (diagnosis/reproduction never targeted it; a wrong scoping fix there fails silently rather than loudly; it deserves its own diagnose-and-reproduce cycle) and an explicit recommendation to file a follow-up issue -- this is a reasoned, explicit scoping decision, not a silent drop, and is a legitimate deferral: it does not undermine ISS-0881's own fix goal (immunity from the assertion race) because it is a structurally distinct, independently-diagnosable risk (a helper's own drop-candidate computation, not any of the 11 assertion sites this design fixes).\n\nVERDICT: PASS. All 5 acceptance criteria independently re-derived and met; no gaps found.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Incidental finding for ORCH to file as a follow-up issue per ISSUE_QUEUE.md (not fixed inline, per this handoff's own task instruction): the design doc's §'Open question' correctly identifies that drop_sandbox_schemas_created_since!/1 (test/letflow/sandbox_pool_test.exs:620-641) computes its own drop-candidate set via the same unscoped MapSet.difference(sandbox_schema_names(), baseline) pattern the now-fixed assertions used, exposing it to the same theoretical race in on_exit teardown -- but there the consequence is a destructive cross-partition DROP SCHEMA against another partition's still-running pool, not merely a flaky assertion. This is explicitly out of scope for ISS-0881 (reasoned deferral, confirmed legitimate under Check 4 above) and needs its own diagnose-and-design cycle per the design doc's own recommendation."
+      },
+      {
+        "severity": "MINOR",
+        "description": "CODE-DESIGNER's own step-02 handoff (handoffs/WF03-ISS0881-20260929/step-02-code-designer.json) result.summary states 'helper def + 10 on_exit registrations + 1 direct call' for drop_sandbox_schemas_created_since!/1; my independent grep count is 9 on_exit registrations (lines 799, 857, 968, 1004, 1043, 1092, 1156, 1215, 1296) plus 1 direct call (1661) = 10 total call sites, not 10 on_exit registrations. This is an off-by-one in the producing handoff's own narrative count, not in the design doc itself (which makes no such count claim and correctly addresses every actual call site, including RT-9's baseline-only pair with no assertion change needed). Does not affect this PASS verdict; noted for completeness."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0881-20260929",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0881-20260929",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to ELIXIR-DEV for implementation (Step 3): apply lib/letflow/design/iss0881-sandbox-pool-test-isolation.md's per-test assertion changes to test/letflow/sandbox_pool_test.exs (RT-1 through RT-9 and the ISS-0292/RT-8 critical-regression test). Separately, ORCH should file a follow-up issue against drop_sandbox_schemas_created_since!/1's own teardown-time unscoped-diff race per this handoff's result.issues (MINOR, not fixed inline)."
   },
   "rework_count": 0,
   "max_rework": 3

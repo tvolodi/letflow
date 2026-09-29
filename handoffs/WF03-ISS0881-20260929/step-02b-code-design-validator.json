@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a1f3c8e2-0001-4a00-9000-000000000004",
+  "run_id": "WF03-ISS0881-20260929",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0881-20260929/step-02b-code-design-validator.json",
+  "created_at": "2026-09-29T01:54:21Z",
+  "started_at": "2026-09-29T01:54:21Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0881-sandbox-pool-test-isolation.md",
+      "handoffs/WF03-ISS0881-20260929/step-02-code-designer.json",
+      "handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json",
+      "test/letflow/sandbox_pool_test.exs"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0881-20260929 (checkout if not already, and pull --ff-only). Hard-gate CODE-DESIGNER's design at lib/letflow/design/iss0881-sandbox-pool-test-isolation.md against handoffs/WF03-ISS0881-20260929/step-02-code-designer.json's own acceptance_criteria (read that handoff's task block in full for the exact list) and against handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json's diagnosis. Independently re-derive your verdict from the design doc itself -- do not accept CODE-DESIGNER's own result.summary claim of completeness at face value (core-directives.md's 'every producing step has a validating step').\n\nSpecifically verify: (1) every call site of sandbox_schema_names/0 and drop_sandbox_schemas_created_since!/1 in test/letflow/sandbox_pool_test.exs is actually addressed by the design, by grepping the file yourself and cross-checking against the design doc's own enumeration -- do not trust the design doc's count without checking; (2) the new comparison genuinely stops depending on platform-wide quiescence while still catching a real leak from the pool under test -- trace through at least one concrete counter-example (a real leak from RT-6's own pool) and confirm the new assertion would still catch it; (3) no implementation code bodies are present (signatures/shapes only); (4) no production code (lib/letflow/sandbox_pool.ex) is touched, and if the design's own open question about drop_sandbox_schemas_created_since!/1's teardown-time race is left out of scope, confirm that this is a reasoned, explicit scoping decision (not silently dropped) and that it's a legitimate deferral rather than leaving a known-related race unaddressed in a way that undermines this fix's own goal.\n\nOn PASS: complete the handoff with next_action 'Route to ELIXIR-DEV for implementation (Step 3)', and separately (in result.issues, at MINOR/informational or as a note in result.summary) confirm whether the drop_sandbox_schemas_created_since!/1 open question should be reported to ORCH as an incidental finding per ISSUE_QUEUE.md (ORCH will file it as a follow-up issue after this run, not fix it inline).\n\nOn FAIL: name every gap by acceptance criterion, per HANDOFF_PROTOCOL.md's validator-fail worked example. Complete the handoff, do not touch the task block, commit to the feature branch and push, run mix letflow.lint_handoffs --dir handoffs/WF03-ISS0881-20260929 before finishing.",
+    "acceptance_criteria": [
+      "Every existing call site of sandbox_schema_names/0 and drop_sandbox_schemas_created_since!/1 independently enumerated by you (not copied from the design doc) and cross-checked",
+      "At least one concrete counter-example traced through to confirm real-leak detection is preserved",
+      "No implementation code bodies present in the design doc",
+      "No production code touched, or an explicit justified reason given if it is",
+      "Verdict is PASS or FAIL with specific named gaps, never a vague impression"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

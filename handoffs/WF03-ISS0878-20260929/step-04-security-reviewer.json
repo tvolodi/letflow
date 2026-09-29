@@ -20,7 +20,13 @@
     "diff_reviewed": "git diff origin/main...feature/WF03-ISS0878-20260929 -- test/ lib/"
   },
   "task": {
-    "description": "Gate ISS-0878's implementation against security-invariants.md INV-1..INV-9 per the tenant-data-path hard-gate rule (change touches idp_realm_id generation for tenant fixtures)."
+    "description": "Gate ISS-0878's implementation against security-invariants.md INV-1..INV-9 per the tenant-data-path hard-gate rule (change touches idp_realm_id generation for tenant fixtures). Verify via the diff directly, not the task description, whether this alters any assertion about tenant isolation or merely swaps the uniqueness-generation mechanism used to build test-fixture data inserted through existing, unchanged insert/changeset code paths.",
+    "acceptance_criteria": [
+      "Diff confirmed to touch only test/ files and a design doc -- no lib/ or priv/repo/migrations/ changes",
+      "INV-1 through INV-9 each assessed explicitly against the diff, not assumed",
+      "No tenant-isolation assertion or expected value changed anywhere in the diff",
+      "No new data-access path, secret material, or outbound request introduced"
+    ]
   },
   "result": {
     "status": "PASS",

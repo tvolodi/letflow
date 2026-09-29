@@ -24,13 +24,17 @@
     ]
   },
   "task": {
-    "description": "WF-03 Step 4 (validation): independently reproduce TEST-DESIGNER's mutant-based fail-then-pass proof for Letflow.TenantSlugFixture.unique_realm/1 (a new function; pre-fix commit history has no prior implementation to diff against, so per WF-03's 'code under test does not exist' rule, accepting TEST-DESIGNER's reported counts would be copying a claim, not validating one)."
+    "description": "WF-03 Step 4 (validation): independently reproduce TEST-DESIGNER's mutant-based fail-then-pass proof for Letflow.TenantSlugFixture.unique_realm/1 (a new function; pre-fix commit history has no prior implementation to diff against, so per WF-03's 'code under test does not exist' rule, accepting TEST-DESIGNER's reported counts would be copying a claim, not validating one). Apply the same mutant independently, in a fresh run, and only accept the coverage as proven if the independent run reproduces the same fail pattern.",
+    "acceptance_criteria": [
+      "Every acceptance criterion in test/specs/ISS-0878.md has runnable, non-skipped coverage",
+      "The mutant is applied and run independently, not copied from TEST-DESIGNER's reported numbers",
+      "The mutant run reproduces the same discriminating fail pattern TEST-DESIGNER reported",
+      "The mutant is reverted and the revert is verified via a clean git status before PASS is granted"
+    ]
   },
   "result": {
     "verdict": "PASS",
-    "artifacts_out": [
-      "handoffs/WF03-ISS0878-20260929/step-06-test-design-validator.json"
-    ],
+    "artifacts_out": [],
     "summary": [
       "Read test/specs/ISS-0878.md, test/support/tenant_slug.ex, test/support/tenant_slug_test.exs, and docs/issues/ISS-0878.yaml directly.",
       "Coverage check: every criterion in the spec's 'Criteria (from the design doc)' section has runnable coverage -- criterion 1 (UUID-based, not counter) by the 'generated suffix matches the Ecto.UUID.generate/0 format' property and the mutant proof below; criterion 2 (default \"realm\" argument preserved) by the 'default prefix (\"realm\") also gets a UUID-format suffix' test; criterion 3 (all 4 call sites delegate) by direct diff-read, consistent with REVIEWER's step-04 sign-off and this project's existing precedent for unique_slug/1; criterion 4 (discriminates correct vs. broken) by the mutant proof, independently reproduced below. No @tag :skip, no 'TODO: implement test', no hardcoded secrets/connection strings. Tests are async: true, pure-function based, no shared mutable state across tests, and each test/property is independently runnable in any order.",
@@ -40,6 +44,5 @@
       "REVERTED via `git checkout -- test/support/tenant_slug.ex`. REVERT VERIFIED: `git status --porcelain test/ lib/` returned empty (no output) -- clean, no leftover mutant, no other changes.",
       "POST-REVERT RE-RUN: `mix test test/support/tenant_slug_test.exs` -> 'Finished in 12.6 seconds (12.6s async, 0.00s sync)' / 'Result: 9 passed (4 properties, 5 tests)' -- matches the baseline exactly, suite is green."
     ]
-  },
-  "next_action": "Route to TEST-RUNNER for full-suite verification"
+  }
 }

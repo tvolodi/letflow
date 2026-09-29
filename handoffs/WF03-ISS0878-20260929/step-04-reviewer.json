@@ -31,8 +31,15 @@
     "owned_modules": []
   },
   "task": {
-    "description": "REVIEWER gate on ISS-0878's unique_realm/1 cross-process fix -- idiom/scope gate per docs/agents/workflows/WF-02_requirement_implementation.md's equivalent WF-03 step.",
-    "verdict": "PASS"
+    "description": "REVIEWER gate on ISS-0878's unique_realm/1 cross-process fix -- idiom/scope gate per docs/agents/workflows/WF-02_requirement_implementation.md's equivalent WF-03 step. Check idiom/style consistency with test/support/tenant_slug.ex's existing unique_slug/1 convention, verify no scope creep beyond the approved design at lib/letflow/design/iss0878-unique-realm-cross-process-fix.md and the ELIXIR-DEV handoff at step-03-elixir-dev.json, confirm no supervision-tree files or decision-record contradictions, and confirm this is test-support-only with zero lib/ or priv/repo/migrations/ changes.",
+    "verdict": "PASS",
+    "acceptance_criteria": [
+      "Fix follows the approved design doc exactly with no scope creep",
+      "New helper matches test/support/tenant_slug.ex's existing style and naming convention",
+      "No lib/ or priv/repo/migrations/ files touched",
+      "No decision-record contradictions introduced",
+      "The 3 explicitly out-of-scope files remain untouched"
+    ]
   },
   "result": {
     "verdict": "PASS",

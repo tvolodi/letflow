@@ -52,6 +52,5 @@
       "Additional check: `touch test/support/tenant_slug_test.exs && mix test test/support/tenant_slug_test.exs --warnings-as-errors` forces a fresh recompile; result still 'Result: 9 passed (4 properties, 5 tests)', and the run aborted on --warnings-as-errors only due to the pre-existing, already-deferred ISS-0044 Group 1 ExUnit.Case.register_test/4 deprecation warning (documented in lib/mix/tasks/letflow.check.test.ex's own moduledoc as a known, permanently-deferred class blocked on a stream_data version bump) -- no new warning, and no dead-default-argument (ISS-0069 class) warning, since this run introduced no new defp with an optional/default argument.",
       "mix letflow.check.test was NOT run for this handoff: per this step's explicit dispatch instructions, that task shells out to scripts/test_parallel.sh (the full suite), which TEST-RUNNER runs next as a dedicated full-suite pass; running it here would duplicate that step and was explicitly out of scope for this MINOR fix's regression-test step. The targeted warnings-as-errors recompile above (previous bullet) covers the ISS-0069 dead-default-argument concern that mix letflow.check.test's substring check exists to catch, scoped to only the file this run touched."
     ]
-  },
-  "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  }
 }

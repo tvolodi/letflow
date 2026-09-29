@@ -4608,10 +4608,23 @@ volumes:
 
   - volume: 23
     path: docs/status/requirement_status.v23.yaml
-    status: current
+    status: closed
     opened: 2026-09-26
-    entries: 39
+    closed: 2026-09-29
+    entries: 40
+    lines: 1214
+    bytes_working_tree: 72718
+    frozen_prefix_lines: 1201
+    frozen_prefix_sha256: "9aa1854f8bc8953f49633b219293c3079d1ac40b3ec43edf50bfba5ca4b1e8ce"
     note: >
+      Closed by ORCH's SCOPE-CHANGE queue-reconciliation append
+      (2026-09-29T05:24:22Z -- letflow-queue task 782/ISS-0782 was found
+      still status: open/locked despite the prior entry's own claim that
+      its release was already confirmed; released for real this time,
+      GET /tasks confirmed). That 40th entry pushed this volume to 1214
+      lines, over the 1200-line roll ceiling -- rolled to volume 24.
+      Prior note preserved below.
+
       Bumped to 39 by ORCH after appending ISS-0782's done-event
       (queue task 782, WF03-ISS0782-20260929, 2026-09-29T04:48:57Z --
       TenantSwitcher.tsx concurrent-switch race fixed via a local re-entrancy
@@ -4998,6 +5011,16 @@ volumes:
       `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 3
       on-disk entries. 111 lines / 6361 bytes, well under the
       1200-line/120000-byte roll ceiling, so no roll triggered.
+
+  - volume: 24
+    path: docs/status/requirement_status.v24.yaml
+    status: current
+    opened: 2026-09-29
+    entries: 0
+    note: >
+      Opened by ORCH's own roll of volume 23 (closed at 40 entries / 1201
+      frozen-prefix lines, over its 1200-line ceiling) as part of the
+      queue task 782/ISS-0782 release reconciliation. No entries yet.
 
   - volume: 22
     path: docs/status/requirement_status.v22.yaml

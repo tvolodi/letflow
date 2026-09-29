@@ -1,0 +1,105 @@
+run_id: WF02-REQ426-20260929
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-29T00:00:00Z
+branch: WF02-REQ426-20260929
+requirement_ids: [REQ-426]
+notes: >
+  Second, authoritative re-run on this branch after MOBILE-DEV's targeted fix
+  (commit b431dc00, "defer list renderer first-load past build phase" --
+  wraps the loadFirstPage kickoff in
+  WidgetsBinding.instance.addPostFrameCallback in
+  apps/mobile/lib/renderers/list/list.dart's didChangeDependencies, mirroring
+  tenant_home_screen.dart's existing pattern; no test files touched, no API
+  signature changes). This run does not trust MOBILE-DEV's self-reported
+  "flutter analyze clean / flutter test All tests passed! +159" sanity check --
+  both commands were re-executed independently below as the real gate.
+
+  Diff scope is unchanged from the prior TEST-RUNNER report on this branch
+  (apps/mobile/lib/api/api_client.dart, apps/mobile/lib/renderers/list/list.dart,
+  apps/mobile/lib/renderers/renderer_state.dart,
+  apps/mobile/lib/renderers/renderer_state_view.dart, apps/mobile/test/renderers/**,
+  apps/mobile/test/support/fake_post_capable_http_gateway.dart,
+  docs/requirements.yaml, lib/letflow/design/req426-mobile-renderer-state-and-list.md,
+  test/specs/REQ-426.md) plus this run's single new commit b431dc00, which touches
+  only apps/mobile/lib/renderers/list/list.dart. Zero lib/letflow/ or
+  priv/repo/migrations/ Elixir application changes, so the backend ExUnit suite
+  was not re-run for this step, consistent with prior mobile-only REQ reports.
+
+host_memory:
+  check_before_run: "FreePhysicalMemory=1,957,584 KB (~1.9 GB) of TotalVisibleMemorySize=33,389,048 KB (~31.8 GB) via Get-CimInstance Win32_OperatingSystem -- below the ~4GB comfortable threshold."
+  decision: >
+    Ran flutter analyze alone first (default concurrency, single process), then
+    flutter test with reduced concurrency (--concurrency=2, down from the flutter
+    default of the host's logical processor count) given the low free-memory
+    reading. No mobile-side test_parallel-equivalent script exists (apps/mobile/
+    has no scripts/ dir). No reap/OOM observed; both commands completed cleanly
+    on the first attempt at these settings.
+
+flutter_analyze:
+  command: "flutter analyze (run from apps/mobile/)"
+  output: |
+    Resolving dependencies...
+    Downloading packages...
+      clock 1.1.2 (1.1.3 available)
+      code_assets 1.2.1 (2.1.0 available)
+      flutter_riverpod 2.6.1 (3.4.3 available)
+      go_router 17.5.0 (18.0.1 available)
+      hooks 2.0.2 (2.2.0 available)
+      matcher 0.12.19 (0.12.20 available)
+      material_color_utilities 0.13.0 (0.13.1 available)
+      meta 1.17.0 (1.19.0 available)
+      objective_c 9.5.0 (9.6.0 available)
+      platform 3.1.6 (3.2.0 available)
+      record_use 0.6.0 (1.1.1 available)
+      riverpod 2.6.1 (3.4.3 available)
+      sembast 3.8.7 (3.8.11 available)
+      stack_trace 1.12.1 (1.12.2 available)
+      synchronized 3.4.0+1 (3.4.2 available)
+      test_api 0.7.10 (0.7.14 available)
+      vector_math 2.2.0 (2.4.3 available)
+    Got dependencies!
+    17 packages have newer versions incompatible with dependency constraints.
+    Try `flutter pub outdated` for more information.
+    Analyzing mobile...
+    No issues found! (ran in 4.3s)
+  status: PASS
+
+flutter_test:
+  command: "flutter test --concurrency=2 (run from apps/mobile/)"
+  status: PASS
+  total_tests: 159
+  passed: 159
+  failed: 0
+  previously_failing_test_now_passing: >
+    test/renderers/renderer_state_wrapper_guard_test.dart -- "AC4: the 'list'
+    renderer's root widget is wrapped by RendererStateView, never a raw
+    FutureBuilder/Consumer bypassing it" -- ran and passed 9 times in this
+    session's output (test framework counters +137 through +145, one run per
+    fixture variant in that file's table), with no assertion failures and no
+    Riverpod "Tried to modify a provider while the widget tree was building"
+    exception anywhere in the output. This is the same test that failed in the
+    prior TEST-RUNNER run on this branch before MOBILE-DEV's fix.
+  regression_check: >
+    Compared against the prior baseline of 158 passing + 1 failing = 159 total.
+    This run: 159 passing, 0 failing, 159 total -- the previously-failing test now
+    passes and no other test in the suite regressed. Final line: "All tests
+    passed!"
+  final_summary_line: "+159: All tests passed!"
+
+overall_result: PASS
+overall_notes: >
+  flutter analyze: PASS, clean, no issues (4.3s).
+  flutter test: PASS, 159/159, 0 failures, including the previously-failing
+  AC4 guard test in renderer_state_wrapper_guard_test.dart, which now passes on
+  every one of its fixture runs with no Riverpod build-phase-mutation exception.
+  No other test regressed.
+
+  REQ-426's AC5 ("cd apps/mobile && flutter analyze && flutter test pass, real
+  output quoted") IS satisfied by this run, independently re-verified by
+  TEST-RUNNER rather than taken on MOBILE-DEV's self-report.
+
+  Recommendation: forward to RELEASE-VALIDATOR for independent re-verification
+  per this project's "every producing step has a validating step" rule --
+  RELEASE-VALIDATOR should re-run the suite itself rather than trust this report
+  alone.

@@ -1,0 +1,19 @@
+id: ISS-0890
+title: "WF-05 full-corpus scenarios not runnable against QA: missing specs, unbuilt features, no HTTP surface, or local-docker-Postgres-only specs"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL-20260929 (filed by ORCH)
+discovered_at: "2026-09-29T19:30:00Z"
+severity: MINOR
+owner: "per-scenario triage (build spec/surface or mark env-scoped)"
+description: "Found by UAT-RUNNER in WF05-FULL-20260929 (PLATFORM report). Four groups, all BLOCKED and not runnable against QA. (1) Missing spec files / UNBUILT_FEATURE: platform-definition-type-error-blocked, platform-instance-pin-survives-catalog-change (specs do not exist, ISS-0527 notes), platform-renderer-permission-denied-surface (renderer-states.pipeline.e2e.spec.ts does not exist), platform-sandbox-cross-tenant-probe (agent-* routes 404; agent-artifact-resubmit-idempotent already closed as ISS-0740 not applicable). (2) No pipeline_test or HTTP surface: platform-frontend-guard-selfcheck, platform-out-of-order-effect-completion, platform-outbox-cap-backpressure, platform-unsafe-migration-rejected. (3) Specs needing local docker compose Postgres via web/tests/e2e/db-exec.ts: platform-partition-retention-drop, platform-tenant-switch-cache-isolation EO-001 (cross-tenant cache isolation not verified). Needed: per scenario, either build the spec/surface, mark it env-scoped (ci-only / local-only) so full-corpus QA runs skip it with a reason rather than BLOCKED, or add an HTTP-backed test seam. Also note the local runs of (3) dirtied tracked file web/tests/e2e/.pipeline-state/tenant-switch-cache-isolation.json. Severity MINOR."
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-NARRATIVE.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-BILIMBAGA.yaml
+affected_files:
+  - test/fixtures/uat/scenarios/platform/
+  - web/tests/e2e/db-exec.ts
+  - web/tests/e2e/.pipeline-state/tenant-switch-cache-isolation.json
+queue_ref: Q-890
+github_ref: GH-1997
+status: open

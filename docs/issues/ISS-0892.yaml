@@ -1,0 +1,24 @@
+id: ISS-0892
+title: "QA UAT fixtures missing: no swiftroute/meridian/vortex realms, tenants, actors or process definitions (11 narrative scenarios BLOCKED)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL-20260929 (filed by ORCH)
+discovered_at: "2026-09-29T19:30:00Z"
+severity: MAJOR
+owner: "ai-dala-infra run; QA seed work"
+description: "Found by UAT-RUNNER in WF05-FULL-20260929 (test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-NARRATIVE.yaml, also PLATFORM platform-migration-partial-failure-resume). QA (qa.bizdala.com) has only tenants bpm-default and bilimbaga (+ a leftover test tenant req384-eo001-b-*). Keycloak realms swiftroute, meridian, vortex do not exist (auth.qa.bizdala.com openid-configuration 404). Definitions proc-swiftroute-shipment-approval, proc-meridian-loan-origination, proc-meridian-regulatory-compliance-review, proc-vortex-* and sys-tenant-onboarding are not deployed. Actors for meridian and vortex do not exist and are not in ai-dala-infra qa-login.sh. Result: all 11 test/fixtures/uat/scenarios/{meridian,swiftroute,vortex} scenarios plus platform-migration-partial-failure-resume are BLOCKED. Needed: provision realms/tenants/actors, seed definitions (scripts/seed_swiftroute_definition.sh exists for SwiftRoute; none for Meridian/Vortex), extend qa-login.sh. Owner: ai-dala-infra run (an infra plan is in progress). Severity MAJOR."
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-NARRATIVE.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-BILIMBAGA.yaml
+affected_files:
+  - test/fixtures/uat/scenarios/meridian/
+  - test/fixtures/uat/scenarios/swiftroute/
+  - test/fixtures/uat/scenarios/vortex/
+  - scripts/seed_swiftroute_definition.sh
+queue_ref: Q-887  # queue allocated issue_ref ISS-0887, which collides with an existing local file (Q-885, GH-1990); local filename shifted to next free number ISS-0892 and GH-1994 title retitled to match
+github_ref: GH-1994
+status: open
+in_flight_note: >
+  DO NOT START (scanners): this work is already in flight by the filing session. An
+  ai-dala-infra provisioning plan is awaiting user approval. Do not lock or begin
+  provisioning QA realms/tenants/actors/definitions from this issue.

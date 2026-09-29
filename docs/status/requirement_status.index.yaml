@@ -5021,8 +5021,18 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 9
+    entries: 10
     note: >
+      Bumped to 10 by DOC-UPDATER after appending ISS-0886's SCOPE-CHANGE
+      done-event (WF03-ISS0886-20260929, 2026-09-29T19:54:10Z -- platform-
+      role backfill for pre-existing tenants code fix merged; QA
+      application still pending, no SSH/deploy access from this sandbox).
+      Re-read this index and volume 24 immediately before appending and
+      recounted directly rather than trusting the prior note's
+      arithmetic: `grep -c "^  - req:" docs/status/requirement_status.v24.yaml`
+      = 10 on-disk entries (the prior 9 + this done-event), confirming no
+      concurrent append landed since the last confirmed count of 9.
+
       Bumped to 9 by DOC-UPDATER after appending REQ-425's done-event
       (WF02-REQ425-20260929, 2026-09-29T18:05:00Z -- MOB-6 single API
       client hardening closed; RELEASE-VALIDATOR's fresh Step 05 recheck

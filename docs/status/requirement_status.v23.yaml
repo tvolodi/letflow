@@ -1022,3 +1022,45 @@
       main's actual code: flutter analyze clean, flutter test 46/46
       (was 44). REQ-421 remains status: done; this is a test-coverage
       addition, not a re-open.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-29T00:42:33Z
+    note: >
+      ISS-0879 (WF03-ISS0879-20260929) closed. Root cause: test/support/tenant_template.ex's
+      throwaway `tenant_template_build_*` Registration rows kept
+      `migrations_applied_at` set (a real, committed write under Sandbox
+      :auto mode) for a nontrivial window between `replay_migrations/2`
+      succeeding and the throwaway row's deletion -- long enough to leak
+      into a concurrent test_parallel.sh partition's
+      `RetentionOperations.retire_oldest_eligible_month/1` platform-wide
+      fanout, causing two happy-path tests in
+      test/letflow/event_store/retention_operations_test.exs to fail
+      intermittently with spurious :invalid_schema_name/:failed outcomes.
+      Same unscoped-global-read mechanism class as ISS-0873, but a
+      distinct call site/mechanism (a test-fixture leak, not a TOCTOU
+      race on two reads within one call) -- not an extension of ISS-0873's
+      transaction-wrap fix. Fixed (commit 9e0fa90d) with a new
+      `clear_migrations_applied_flag!/1` helper in tenant_template.ex
+      that nulls the flag immediately after `replay_migrations/2`
+      succeeds, at both throwaway-row call sites, narrowing (not fully
+      eliminating) the window; plus the two affected tests now scope
+      `result.outcomes` to their own `schema_name` before asserting.
+      Regression coverage (commit 2901c398): a deterministic AST-structural
+      test in test/support/tenant_template_test.exs, since a timing-based
+      alternative was measured and rejected (its fixed-code window
+      ballooned to 9895-14916ms under real full-suite connection-pool
+      contention). Full verification chain, each step an independent
+      re-run rather than trusting the prior report: CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (independently
+      reverted+reproduced fail-then-pass), TEST-RUNNER (two full
+      scripts/test_parallel.sh runs, symptom not observed), RELEASE-VALIDATOR
+      (fresh compile, fresh test runs, a third full-suite run, its own
+      independent mutation-revert check) -- all PASS. Squash-merged
+      cb215ec4 (PR #1960), never a direct push to main. GitHub issue #1952
+      closed with evidence. Queue task 879 released status: done.
+      Incidentally, RELEASE-VALIDATOR found and ORCH filed a new,
+      unrelated flake (ISS-0881, SandboxPoolTest "ISS-0224 regression RT-6
+      (death path c)") during this run's independent re-verification --
+      filed and merged separately (PR #1959), not fixed here.

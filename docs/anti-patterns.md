@@ -3970,3 +3970,31 @@ as thorough about one clause as evidence the other clause was checked
 too — grep for the second clause's own subject (here: the phase/redirect
 mechanism, not the module-table mechanism) across the test files before
 concluding coverage exists.
+
+## An ISSUE_QUEUE-style close-out event used `req: ISS-NNNN` instead of `req: SCOPE-CHANGE`, failing the run-history vocabulary gate (2026-09-29, ORCH, ISS-0879)
+
+While closing out ISS-0879 (a WF-03 issue resolution, not a REQ), ORCH
+appended a run-history entry with `req: ISS-0879` — reading naturally as
+"this event is about ISS-0879," but `test/docs/requirement_status_invariants_test.exs`
+enforces a closed `req:` vocabulary of exactly `REQ-NNN` or `SCOPE-CHANGE`
+(`@legal_reqs`, that test file's own line 33). Every prior issue close-out
+entry in the same volume (ISS-0869, ISS-0876, the ISS-0880 REQ-421-AC3
+gap, etc.) correctly used `req: SCOPE-CHANGE` with the actual `ISS-NNNN`
+identifier only inside the free-text `note:` field — this convention was
+visible in-file the whole time (`docs/agents/protocols/TASK_QUEUE.md`'s
+own "Legacy note" section documents `req: SCOPE-CHANGE` for exactly this
+case) but wasn't checked against before writing the new entry. CI's
+backend gate caught it (`mix letflow.check` failing A4a/A5 in that test
+file) after the entry was already pushed in a PR, requiring a follow-up
+commit.
+
+**Correct approach:** before appending ANY run-history event whose
+subject is not a `REQ-NNN` (an issue close-out, a reconciliation, an
+incidental finding), use `req: SCOPE-CHANGE` — never the issue's own
+`ISS-NNNN` string in the `req:` field. If in doubt, `grep -n "^  - req:"
+docs/status/requirement_status.v<N>.yaml` on the current volume before
+writing a new entry and match the pattern already in use, or read
+`test/docs/requirement_status_invariants_test.exs`'s `@legal_reqs`
+directly — don't infer the schema from what "reads naturally." Running
+`mix test test/docs/requirement_status_invariants_test.exs` locally
+before pushing (24 assertions, ~3s) would have caught this before CI did.

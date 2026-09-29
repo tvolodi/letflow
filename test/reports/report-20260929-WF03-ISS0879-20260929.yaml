@@ -1,0 +1,167 @@
+run_id: WF03-ISS0879-20260929
+agent: TEST-RUNNER
+date: 2026-09-29T00:00:00Z
+branch: feature/WF03-ISS0879-20260929
+head_commit: 2901c398
+issue: ISS-0879
+scope:
+  description: >
+    Fixes a test-isolation flake where test/support/tenant_template.ex's throwaway
+    `tenant_template_build_*` Registration rows leaked into
+    Letflow.EventStore.RetentionOperations.retire_oldest_eligible_month/1's platform-wide
+    fanout under full-parallel-suite contention (scripts/test_parallel.sh), causing two
+    happy-path tests in test/letflow/event_store/retention_operations_test.exs to fail
+    intermittently (spurious :failed entries alongside :succeeded/:skipped). Fix: new
+    `clear_migrations_applied_flag!/1` helper narrows the leak window; the two affected
+    tests now scope their assertions to their own schema; plus a new deterministic
+    AST-structural regression test in test/support/tenant_template_test.exs.
+  files_changed_confirmed_via_git_diff:
+    - lib/letflow/design/iss0879-retention-fanout-fixture-leak.md
+    - test/letflow/event_store/retention_operations_test.exs
+    - test/support/tenant_template.ex
+    - test/support/tenant_template_test.exs
+  diff_command: "git diff --name-only origin/main...HEAD"
+  diff_scope_verdict: >
+    Matches exactly what this issue's fix is expected to touch. No unrelated files in the
+    diff.
+
+steps:
+  - step: "git branch --show-current && git log --oneline -3"
+    result: >
+      feature/WF03-ISS0879-20260929, HEAD 2901c398 test(ISS-0879): add regression test for
+      throwaway-row visibility window fix -- matches task description.
+
+  - step: "docker compose up -d"
+    result: >
+      letflow-2-postgres-1 and letflow-2-keycloak-1 already Running. .env present with
+      LETFLOW_DB_PORT=5472 (this workspace's own port, distinct from sibling checkout's
+      5462) -- used by both compose and Ecto per README.
+
+  - step: "scripts/test_parallel.sh -- RUN 1"
+    result: PASS
+    n_partitions: 16 (nproc-derived)
+    combined_totals: "5029 tests, 6 properties, 0 failures (5035/5035 passed)"
+    per_partition_summary: |
+      partition 1: 404 tests, 0 properties, 0 failures, exit 0
+      partition 2: 300 tests, 0 properties, 0 failures, exit 0
+      partition 3: 374 tests, 0 properties, 0 failures, exit 0
+      partition 4: 241 tests, 0 properties, 0 failures, exit 0
+      partition 5: 298 tests, 0 properties, 0 failures, exit 0
+      partition 6: 309 tests, 0 properties, 0 failures, exit 0
+      partition 7: 411 tests, 0 properties, 0 failures, exit 0
+      partition 8: 383 tests, 0 properties, 0 failures, exit 0
+      partition 9: 203 tests, 4 properties, 0 failures, exit 0
+      partition 10: 380 tests, 0 properties, 0 failures, exit 0
+      partition 11: 288 tests, 0 properties, 0 failures, exit 0
+      partition 12: 386 tests, 0 properties, 0 failures, exit 0
+      partition 13: 270 tests, 1 property, 0 failures, exit 0
+      partition 14: 298 tests, 0 properties, 0 failures, exit 0
+      partition 15: 265 tests, 1 property, 0 failures, exit 0
+      partition 16: 219 tests, 0 properties, 0 failures, exit 0
+    exit_code: 0
+    retention_operations_test_status: >
+      0 failures in the partition that ran this file (confirmed no
+      retention_operations_test.exs failures anywhere in the run).
+
+  - step: "scripts/test_parallel.sh -- RUN 2"
+    result: "FAIL suite-wide (1 failure), but failure is unrelated to ISS-0879"
+    n_partitions: 16 (nproc-derived)
+    combined_totals: "5029 tests, 6 properties, 1 failures (5034/5035 passed)"
+    per_partition_summary: |
+      partition 1: 404 tests, 0 properties, 0 failures, exit 0
+      partition 2: 300 tests, 0 properties, 0 failures, exit 0
+      partition 3: 374 tests, 0 properties, 1 failures, exit 2
+      partition 4: 241 tests, 0 properties, 0 failures, exit 0
+      partition 5: 298 tests, 0 properties, 0 failures, exit 0
+      partition 6: 309 tests, 0 properties, 0 failures, exit 0
+      partition 7: 411 tests, 0 properties, 0 failures, exit 0
+      partition 8: 383 tests, 0 properties, 0 failures, exit 0
+      partition 9: 203 tests, 4 properties, 0 failures, exit 0
+      partition 10: 380 tests, 0 properties, 0 failures, exit 0
+      partition 11: 288 tests, 0 properties, 0 failures, exit 0
+      partition 12: 386 tests, 0 properties, 0 failures, exit 0
+      partition 13: 270 tests, 1 property, 0 failures, exit 0
+      partition 14: 298 tests, 0 properties, 0 failures, exit 0
+      partition 15: 265 tests, 1 property, 0 failures, exit 0
+      partition 16: 219 tests, 0 properties, 0 failures, exit 0
+    exit_code: 1
+    failure_detail:
+      test: >
+        "acceptance criterion 4 — realm-ownership guard rejects mismatch, no JIT under
+        wrong tenant the realm-ownership guard rejects a tenant that does not own the
+        token's claimed realm, called with the exact arguments AuthPipeline itself passes"
+      module: Letflow.Plugs.AuthPipelineTest
+      file: "test/letflow/plugs/auth_pipeline_test.exs:220"
+      raw_output: |
+        ** (Ecto.InvalidChangesetError) could not perform insert because changeset is invalid.
+        Errors
+            %{idp_realm_id: [{"has already been taken",
+               [constraint: :unique, constraint_name: "tenants_idp_realm_id_partial_index"]}]}
+        Applied changes
+            %{status: :active, display_name: "Auth Pipeline Test Tenant",
+              slug: "tenant-0c8d1418-ee16-43bf-bf8a-b7eecbf134c8", idp_realm_id: "owned-by-a-1"}
+        code: _tenant_a = insert_tenant_for_realm!(realm)
+        stacktrace:
+          (ecto 3.14.1) lib/ecto/repo/schema.ex:388: Ecto.Repo.Schema.insert!/4
+          (letflow 0.1.0) test/support/tenant_fixture.ex:256: Letflow.TenantFixture.provisioned_tenant!/1
+          test/letflow/plugs/auth_pipeline_test.exs:76: Letflow.Plugs.AuthPipelineTest.insert_tenant_for_realm!/1
+          test/letflow/plugs/auth_pipeline_test.exs:222: (test)
+      root_cause_identification: >
+        Matches ISS-0878 exactly (already open, filed 2026-09-29 by TEST-RUNNER in a prior
+        run): auth_pipeline_test.exs's unique_realm/1 uses System.unique_integer/1, which
+        is only unique within one BEAM VM process, not across scripts/test_parallel.sh's N
+        separate OS-process partitions -- two partitions independently generating
+        "owned-by-a-1" as their first call collide on the global
+        tenants_idp_realm_id_partial_index. auth_pipeline_test.exs is NOT in this branch's
+        diff (confirmed above); this is a pre-existing, independently-tracked flake, not a
+        regression from ISS-0879's changes.
+      related_issue: ISS-0878
+      related_to_iss0879: false
+
+iss_0879_symptom_check:
+  description: >
+    Original symptom: spurious :invalid_schema_name/:failed entries leaking into the two
+    named happy-path tests in test/letflow/event_store/retention_operations_test.exs
+    (retire_oldest_eligible_month/1 -- "inserts a running row immediately..." and "a
+    schema with no eligible month for the chosen month is recorded skipped, not failed").
+  observed_in_run_1: false
+  observed_in_run_2: false
+  supporting_evidence: >
+    retention_operations_test.exs's tests ran in partition 13 in both runs (270 tests, 1
+    property) with 0 failures in both runs. :invalid_schema_name/"failed" rows do appear
+    in run 2's raw partition logs (partitions 12, 13, 14), but on inspection these are
+    expected outcomes of OTHER, unrelated tests deliberately exercising invalid-schema
+    rollout/retirement paths (platform_migration_rollout_outcomes and
+    event_history_retirement_outcomes tables, not retention_operations_test.exs's own
+    schema-scoped assertions) -- not leakage into the two fixed happy-path tests. Neither
+    run reproduced the original ISS-0879 symptom.
+
+verdict:
+  iss_0879_scope: PASS
+  rationale: >
+    Across two full parallel-suite runs (5035 total properties+tests each), the two
+    previously-flaky retention_operations_test.exs happy-path tests passed cleanly both
+    times, with zero occurrences of the original :invalid_schema_name/:failed leakage
+    symptom. Run 1 was fully green (0 failures suite-wide). Run 2's single failure is in
+    test/letflow/plugs/auth_pipeline_test.exs, a file untouched by this branch's diff,
+    matching the exact mechanism and even the exact test/error already documented in the
+    open, independently-tracked ISS-0878 (System.unique_integer/1 process-local-uniqueness
+    gap under multi-partition contention) -- not attributable to ISS-0879's changes.
+  full_suite_status: >
+    Run 1: 5035/5035 passed, 0 failures. Run 2: 5034/5035 passed, 1 failure (pre-existing,
+    unrelated, tracked as ISS-0878). No new failures introduced by this branch in either
+    run.
+
+commands_run:
+  - "git branch --show-current"
+  - "git log --oneline -3"
+  - "git diff --name-only origin/main...HEAD"
+  - "docker compose up -d"
+  - "bash scripts/test_parallel.sh   # run 1"
+  - "bash scripts/test_parallel.sh   # run 2"
+
+next_step: >
+  Feeds RELEASE-VALIDATOR, who independently re-runs the suite rather than trusting this
+  report. Run 2's preserved partition logs remain at
+  /tmp/letflow_test_parallel.n8lO0Y (ephemeral local temp, not committed) for inspection
+  if needed.

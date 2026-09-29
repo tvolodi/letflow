@@ -2341,3 +2341,5 @@
 2026-09-29T11:31:10Z | DISPATCH | WF02-REQ425-20260929 | step-01b | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
 2026-09-29T11:33:34Z | FAIL | WF02-REQ425-20260929 | step-01b | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- 2 BLOCKERs: (1) Sec 5.2 TBD language on AppAuthAdapter.refresh's flutter_appauth method shape (core AC1/AC2 mechanism), (2) Sec 4.2 contains executable Dart test bodies, not signatures. Minor: duplicate post() declaration Sec 5.1. rework_count 0 -> 1.
 2026-09-29T11:34:00Z | DISPATCH | WF02-REQ425-20260929 | step-01-rework1 | ORCH -> CODE-DESIGNER | PENDING -- rework iteration 1 of 3
+2026-09-29T11:38:00Z | PASS | WF02-REQ425-20260929 | step-01-rework1 | CODE-DESIGNER -> ORCH | PASS -- TBD resolved (flutter_appauth 12.1.0 FlutterAppAuth.token(TokenRequest) verified against pub cache source), Sec 4.2 executable code replaced with prose, duplicate post() resolved (commit 9c01069b).
+2026-09-29T11:38:26Z | DISPATCH | WF02-REQ425-20260929 | step-01b-recheck1 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING -- fresh full re-check

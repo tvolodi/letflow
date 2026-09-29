@@ -46,9 +46,9 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0881-20260929",
-      "commit_sha_list": [],
+      "commit_sha_list": ["d71e4aec"],
       "remote_branch": "origin/feature/WF03-ISS0881-20260929",
-      "push_status": "pending",
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },

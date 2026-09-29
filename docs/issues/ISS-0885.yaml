@@ -1,0 +1,74 @@
+id: ISS-0885
+title: >
+  REQ-421 design doc forward-references key rotation/biometric gating/
+  tamper detection as REQ-422 scope, but REQ-422 has none of it
+discovered_by: CODE-DESIGN-VALIDATOR / REVIEWER (independently, WF02-REQ422-20260929)
+discovered_in_run: WF02-REQ422-20260929
+discovered_at: "2026-09-29T10:03:45Z"
+severity: MINOR
+tags:
+  - mobile
+  - docs
+  - requirements-text
+description: >
+  During WF02-REQ422-20260929, CODE-DESIGN-VALIDATOR (step-01b) and
+  REVIEWER (step-02d) both independently flagged that
+  `lib/letflow/design/req421-mobile-tenant-bootstrap.md` §4.1 (REQ-421's
+  own design doc, NOT `docs/requirements.yaml`'s REQ-421 entry text --
+  that entry contains no mention of key rotation/biometric gating/tamper
+  detection at all, confirmed by grep) forward-references key rotation,
+  biometric gating, and tamper detection by juxtaposing them with the
+  phrase 'REQ-422 "hardens and guards this" same class' -- reading, on a
+  careless pass, as though REQ-422 covers those three items. REQ-422's own
+  requirement text and acceptance_criteria in docs/requirements.yaml
+  contain none of them -- MOB-5 as actually specified and built (PR #1973)
+  is token storage/logging/transport/cleartext/audience-scoping/masking
+  hardening only. REQ-422 is done and merged without those items,
+  correctly, since they were never in its own acceptance criteria.
+affected_files:
+  - lib/letflow/design/req421-mobile-tenant-bootstrap.md
+related:
+  - REQ-421
+  - REQ-422
+severity_rationale: >
+  MINOR -- a documentation-consistency defect that could mislead a future
+  reader (or a weak model) into believing REQ-422 covers scope it never
+  had; did not block REQ-422's own gates (both flagging agents explicitly
+  treated it as non-blocking and recommended a follow-up).
+status: resolved
+resolved_in_run: "ORCH-direct-20260929"
+resolved_at: "2026-09-29T11:00:00Z"
+resolution: >
+  Confirmed `docs/requirements.yaml`'s REQ-421 entry itself never mentioned
+  key rotation/biometric gating/tamper detection (`grep -n "key
+  rotation\|biometric\|tamper" docs/requirements.yaml` returns nothing) --
+  the misleading text lived entirely in the design doc,
+  `lib/letflow/design/req421-mobile-tenant-bootstrap.md` §4.1's "REQ-422
+  seam, explicitly left open, not designed here" bullet. That bullet,
+  while already hedged ("this design does not add... this design does not
+  guess at REQ-422's own shape"), still juxtaposed the three named items
+  directly against the phrase 'REQ-422 "hardens and guards this" same
+  class' -- exactly the ambiguity both gates flagged.
+
+  Rewrote the bullet to remove the juxtaposition and added an explicit
+  post-REQ-422 correction note stating plainly that REQ-422 (now built) did
+  not include key rotation, biometric gating, or tamper detection, that all
+  three remain entirely undesigned and unbuilt anywhere in the mobile tier
+  -- including `docs/mobile/architecture.md` §7 ("Security hardening
+  before corporate-tier deployment"), whose own two listed items
+  (certificate pinning, root/jailbreak detection) do NOT include the three
+  either -- and that any of them, if still wanted, needs its own new
+  requirement with real acceptance criteria rather than being inferred
+  from this note or from REQ-422.
+
+  No change was needed in `docs/requirements.yaml` itself, since it never
+  carried the misleading claim in the first place.
+queue_ref: "Q-881"
+  # letflow-queue task id 881, issue_ref ISS-0881 -- but the local filename
+  # ISS-0881.yaml was already taken by an unrelated issue (SandboxPoolTest
+  # RT-6 flake, itself filed under a diverging queue_ref of its own, Q-880
+  # per that file's own note). This record is filed here as ISS-0885
+  # instead. queue_ref above is authoritative; the filename numbering
+  # diverges, matching this project's established recurring pattern (see
+  # e.g. ISS-0786.yaml's own note, and this same session's ISS-0883.yaml).
+github_ref: "GH-1975"

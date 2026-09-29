@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-02c-security-reviewer.json",
   "created_at": "2026-09-29T12:20:58Z",
   "started_at": "2026-09-29T12:20:58Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T13:05:00Z",
+  "status": "FAILED",
   "priority": "HIGH",
   "context": {
     "stage": "S9",
@@ -42,20 +42,22 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "SECURITY-REVIEWER (self-run, first-hand review of git diff main...HEAD -- apps/mobile/). Per-invariant: INV-1 tenant data isolation -- APPLIES (this diff's token-attach/retry logic is a tenant-data-access path even though it is client-side, not Ecto/migration) -- FAIL, see issue below. INV-2 server-side field authorisation -- NOT-APPLICABLE (no response-shaping/field-selection code touched). INV-3 sandboxing -- NOT-APPLICABLE (no Lua/WASM). INV-4 secrets by reference -- APPLIES -- PASS: grep for hardcoded secret patterns in apps/mobile/lib and apps/mobile/test found none; the new `activeRealm.clientId` is a per-tenant OIDC public client_id sourced from TenantConfig.clientId (server response), the same non-secret value already threaded into the authorize-and-exchange flow at auth.dart:234, never hardcoded; the refresh_token/access_token grant runs through `AppAuthAdapter.refresh` -> `FlutterAppAuth().token()`, entirely outside the app's own `Dio` instance, so it is never seen by `RedactingLogInterceptor` at all; that interceptor (pre-existing from REQ-422, now registered by default via `registerRedactingLog: true`) redacts the `Authorization` header and fully redacts any token-endpoint request/response body, so no bearer/refresh token reaches `debugPrint` through the one logging path this diff touches. INV-5 not-found/forbidden indistinguishability -- NOT-APPLICABLE (client-side, no lookup-by-ID/cross-tenant-404 mechanism here). INV-6 new data-access paths prove their scoping -- APPLIES, discharged by this handoff itself except for the INV-1 finding below. INV-7 SQL interpolation -- NOT-APPLICABLE (no SQL, Dart mobile code). INV-8 unhandled crashes -- APPLIES, PASS: every DioException/transport failure and every non-2xx response is caught and normalised via `classifyError` before leaving `lib/api/` (verified: `_sendWithBackoff`'s `on DioException catch`, `_handleUnauthorized`'s `on DioException catch`, and the terminal `throw const ServerError()` guarding the otherwise-unreachable fall-through); refresh failure is caught with a bare `catch (_)` in `_RefreshCoordinator._doRefresh` and routed to a typed failure path, not left to crash. INV-9 outbound URL validation -- NOT-APPLICABLE (base URL is build-time `LETFLOW_API_BASE_URL`, not tenant-controlled; refresh targets the tenant's own already-validated `realm_url`/issuer, not a new SSRF surface). Disclosed deviations (1) clientId sourcing and (3) Riverpod provider params reviewed and clean (see INV-4 discussion; no provider captures raw tokens, `ApiClient`/`_RefreshCoordinator` hold only `tokenStore`/`activeRealm` references as REQ-421/422 already did). Deviation (2) (`on ForbiddenError` catch in navigation_bootstrap.dart) preserves the prior `status == 403` 'proceed to modules' behaviour exactly -- no misclassification introduced. BLOCKING FINDING (INV-1, tenant-isolation principle applied to this client's request/response tenant binding): `_RefreshCoordinator._doRefresh` (apps/mobile/lib/api/api_client.dart) captures `realmUrl = _activeRealm.currentRealmUrl` once at the start of a refresh, then awaits the network refresh call; if `switchTenant`/`logout` runs concurrently and flips `activeRealm.currentRealmUrl` (and deletes the old realm's tokens) before `_doRefresh` resumes, `_doRefresh` still (a) writes the refreshed tokens back into secure storage under the OLD realm's key via `_tokenStore.store(realmUrl, newTokens)` -- resurrecting a just-deleted/switched-away tenant's valid tokens in the OS-secure store after logout/switch believed them gone -- and (b) `_handleUnauthorized` then retries the ORIGINAL request via `_dio.fetch(retriedOptions)`, which re-runs the bearer interceptor against whatever tenant is active *at retry time*: if that is now a different (new) tenant, the retried request -- which the caller's code still treats as belonging to the original tenant context -- is silently re-authenticated and answered as the NEW tenant, so the original caller can receive and act on another tenant's data believing it is the tenant it originally asked about. No test in apps/mobile/test/api/api_client_hardening_test.dart exercises a tenant switch during an in-flight refresh (grepped: no `switchTenant`/tenant-change scenario in that file), so this gap is untested as well as unhandled. Fix needed before merge: `_handleUnauthorized`/`_doRefresh` must re-check that the realm/clientId is still the one the failing request was issued for before (i) persisting the refreshed tokens and (ii) reissuing the retry with a freshly-read token for that same realm -- abort to a typed error (do not silently re-authenticate as a different tenant) if the active tenant changed mid-refresh, with a regression test covering it.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "BLOCKER (INV-1 principle, client-side tenant binding): _RefreshCoordinator._doRefresh/_handleUnauthorized in apps/mobile/lib/api/api_client.dart do not re-verify the active tenant/clientId is unchanged after the async refresh completes -- a tenant switch or logout racing an in-flight refresh can (a) resurrect the old tenant's refreshed tokens into secure storage after they were deleted by the switch, and (b) cause the retried request (still logically the old tenant's) to be silently re-authenticated and served as the new active tenant, a cross-tenant data-confusion path on the client. Untested (no tenant-switch-during-refresh test exists in apps/mobile/test/api/api_client_hardening_test.dart)."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ425-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to MOBILE-DEV (rework) to add a realm/clientId re-check in _RefreshCoordinator before persisting refreshed tokens and before ApiClient._handleUnauthorized reissues the retry, plus a regression test simulating a tenant switch/logout during an in-flight 401 refresh, then re-dispatch to SECURITY-REVIEWER (step 02c) for re-review."
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

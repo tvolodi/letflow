@@ -1182,3 +1182,33 @@
       rather than leaving the false verdict as the only visible record.
       Merged to main via PR (see commit history); queue task 782 released
       status: done, confirmed via GET /tasks.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-29T05:24:22Z
+    note: >
+      Queue reconciliation, not a code change: task 782 (ISS-0782) was
+      still status: open, locked_by: orch-letflow2 in letflow-queue when
+      this run checked GET /tasks, despite the entry immediately above
+      (WF03-ISS0782-20260929) claiming the release was already confirmed --
+      that claim did not hold; the release call evidently never landed.
+      Verified via GET /tasks first, then POST /tasks/782/release
+      {agent_id: orch-letflow2, status: done} -- got 200, and a follow-up
+      GET /tasks confirmed task 782 no longer open/eligible. GH#1725 was
+      already closed. ISS-0782 itself needed no further work: already
+      fixed and merged (PR #1969, commit 65cf913a on main, full pipeline
+      and CI green).
+# VOLUME 23 — CLOSED 2026-09-29. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-26 through
+# 2026-09-29 (40 entries, 1201 frozen-prefix lines before this closure footer).
+# It is frozen: every line above this comment is preserved byte-for-byte. Closed
+# by ORCH's own SCOPE-CHANGE (queue task 782/ISS-0782 release reconciliation)
+# append, which brought this file to 1201 lines -- over the declared roll_rule
+# ceiling (1200 lines / 120000 bytes). No entry above this footer was moved,
+# edited or deleted.
+#
+# Successor:
+#   docs/status/requirement_status.v24.yaml
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none introduced by this closure.

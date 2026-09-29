@@ -1,0 +1,72 @@
+run_id: WF03-ISS0782-20260929
+agent: TEST-RUNNER
+date: 2026-09-29T00:00:00Z
+branch: feature/WF03-ISS0782-20260929
+head_commit: 705f7ca3
+issue: ISS-0782
+scope:
+  description: >
+    Frontend-only fix for a TenantSwitcher concurrent-switch race (reentrancy guard).
+    Changed web/src/auth/TenantSwitcher.tsx (fix) and extended
+    web/src/auth/__tests__/TenantSwitcher.test.tsx from 6 to 11 tests. Two untracked
+    docs (lib/letflow/design/iss0783-tenantswitcher-reentrancy-guard.md and
+    test/specs/ISS-0783.md) accompany the change but contain no code.
+  files_changed_confirmed_via_git_diff:
+    - web/src/auth/TenantSwitcher.tsx
+    - web/src/auth/__tests__/TenantSwitcher.test.tsx
+  diff_command: "git diff main --stat"
+  diff_scope_verdict: >
+    Exactly the two expected files changed (32 lines in TenantSwitcher.tsx, 174 lines
+    added to its test file). No lib/*.ex or priv/repo/migrations/* files touched --
+    confirmed no Elixir/mix test run was required for this change.
+  git_status_verdict: >
+    git status --short shows exactly the expected set: two modified frontend files plus
+    the two untracked doc files. Nothing unexpected staged or dirty.
+
+steps:
+  - step: "git status --short && git diff main --stat"
+    result: >
+      Matches expected file set exactly; diff confirms frontend-only change (no lib/,
+      no priv/).
+
+  - step: "cd web && npm test  (vitest run --passWithNoTests, excludes tests/e2e and tests/guards)"
+    result: PASS
+    combined_totals: "139 test files passed (139), 953 tests passed (953), 0 failed"
+    duration: "39.63s"
+    tenant_switcher_status: >
+      web/src/auth/__tests__/TenantSwitcher.test.tsx not singled out in output but included
+      in the full run; suite-wide 953/953 pass confirms all 11 TenantSwitcher tests (up
+      from 6) pass along with everything else -- no regressions elsewhere.
+    exit_code: 0
+
+  - step: "cd web && npm run type-check  (tsc -b tsconfig.json)"
+    result: PASS
+    output: "(no errors emitted)"
+    exit_code: 0
+
+  - step: "cd web && npm run lint  (eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0)"
+    result: PASS
+    output: "(no warnings or errors emitted; --max-warnings 0 satisfied)"
+    exit_code: 0
+
+verdict:
+  iss_0782_scope: PASS
+  rationale: >
+    Full frontend suite (139 files / 953 tests) passes cleanly, including the extended
+    TenantSwitcher coverage (6 -> 11 tests) for the concurrent-switch reentrancy guard
+    fix. Type-check and lint are both clean. Diff and git status confirmed scoped to
+    exactly the two expected frontend files; no Elixir/lib or priv/repo/migrations
+    files touched, so mix test / scripts/test_parallel.sh was correctly not required for
+    this change.
+  full_suite_status: "953/953 frontend tests passed, 0 failures. type-check clean. lint clean."
+
+commands_run:
+  - "git status --short"
+  - "git diff main --stat"
+  - "cd web && npm test"
+  - "cd web && npm run type-check"
+  - "cd web && npm run lint"
+
+next_step: >
+  Feeds RELEASE-VALIDATOR, who independently re-verifies rather than trusting this
+  report.

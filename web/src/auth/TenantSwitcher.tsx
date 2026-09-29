@@ -21,18 +21,25 @@ export function TenantSwitcher(): JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [interactionRequiredSlug, setInteractionRequiredSlug] = useState<string | null>(null)
   const [errorSlug, setErrorSlug] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
 
   if (!memberships || memberships.length <= 1) return null
 
   const otherMemberships = memberships.filter((m) => m.tenant_id !== session?.tenant_id)
 
   const onSelect = async (targetSlug: string) => {
+    if (pending) return
+    setPending(true)
     setInteractionRequiredSlug(null)
     setErrorSlug(null)
     setOpen(false)
-    const outcome = await switchTenant(targetSlug)
-    if (outcome === 'interaction_required') setInteractionRequiredSlug(targetSlug)
-    else if (outcome === 'error') setErrorSlug(targetSlug)
+    try {
+      const outcome = await switchTenant(targetSlug)
+      if (outcome === 'interaction_required') setInteractionRequiredSlug(targetSlug)
+      else if (outcome === 'error') setErrorSlug(targetSlug)
+    } finally {
+      setPending(false)
+    }
   }
 
   const onSignInToTenant = async (targetSlug: string) => {
@@ -45,6 +52,7 @@ export function TenantSwitcher(): JSX.Element | null {
       <button
         data-testid="tenant-switcher-trigger"
         onClick={() => setOpen((o) => !o)}
+        disabled={pending}
         style={{
           width: '100%',
           textAlign: 'left',
@@ -54,7 +62,8 @@ export function TenantSwitcher(): JSX.Element | null {
           color: 'var(--color-neutral-300)',
           padding: '.35rem .6rem',
           fontSize: '.75rem',
-          cursor: 'pointer',
+          cursor: pending ? 'default' : 'pointer',
+          opacity: pending ? 0.6 : 1,
         }}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -84,6 +93,7 @@ export function TenantSwitcher(): JSX.Element | null {
               <button
                 data-testid={`tenant-switcher-option-${m.tenant_slug}`}
                 onClick={() => void onSelect(m.tenant_slug)}
+                disabled={pending}
                 style={{
                   width: '100%',
                   textAlign: 'left',
@@ -91,8 +101,9 @@ export function TenantSwitcher(): JSX.Element | null {
                   border: 'none',
                   padding: '.4rem .5rem',
                   fontSize: '.85rem',
-                  cursor: 'pointer',
+                  cursor: pending ? 'default' : 'pointer',
                   color: 'var(--text-primary)',
+                  opacity: pending ? 0.6 : 1,
                 }}
               >
                 {m.display_label ?? m.tenant_display_name}
@@ -121,7 +132,16 @@ export function TenantSwitcher(): JSX.Element | null {
           <button
             data-testid="tenant-switcher-retry"
             onClick={() => void onSelect(errorSlug)}
-            style={{ background: 'none', border: 'none', color: 'var(--interactive-primary)', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+            disabled={pending}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--interactive-primary)',
+              cursor: pending ? 'default' : 'pointer',
+              padding: 0,
+              textDecoration: 'underline',
+              opacity: pending ? 0.6 : 1,
+            }}
           >
             Retry
           </button>

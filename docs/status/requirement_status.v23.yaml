@@ -1142,3 +1142,43 @@
       docs/status/ data change needed in this run -- only this issue record
       and this bookkeeping entry, plus the queue release. Queue task 788
       released status: done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-29T04:48:57Z"
+    note: >
+      ISS-0782 (queue task 782, GH#1725) resolved via WF03-ISS0782-20260929.
+      Real local detail file is docs/issues/ISS-0783.yaml (queue-id/filename
+      divergence, confirmed via queue_ref: "Q-782"/github_ref: "GH-1725").
+      Root cause (ISSUE-FIXER, confirmed against main commit 3fc17582):
+      web/src/auth/TenantSwitcher.tsx had no re-entrancy guard -- trigger,
+      option, and retry buttons stayed clickable through the full
+      `await switchTenant()`, allowing a second concurrent OIDC silent-auth
+      attempt. Independently reconfirmed non-exploitable for tenant isolation
+      (each call closes over its own state; cache removal idempotent;
+      last-resolved-wins) by SECURITY-REVIEWER this run, matching REQ-384's
+      own prior finding. Fix: design doc
+      lib/letflow/design/iss0783-tenantswitcher-reentrancy-guard.md (PASSED
+      CODE-DESIGN-VALIDATOR) -- a local `pending` boolean, entry guard, and
+      try/finally reset disabling trigger/option/retry buttons while a switch
+      is pending; the interaction-required "Sign in to {slug}" button is
+      deliberately left ungated (never calls switchTenant). Implemented by
+      FRONTEND-DEV in web/src/auth/TenantSwitcher.tsx only; PASSED
+      SECURITY-REVIEWER (out of scope for INV-1..INV-8) and REVIEWER (matches
+      design exactly, no scope creep, try/finally correct on all outcome
+      paths). TEST-DESIGNER extended web/src/auth/__tests__/TenantSwitcher.test.tsx
+      6->11 tests and proved fail-then-pass directly: pre-fix (main's file)
+      3/11 failed, post-fix 11/11 passed -- independently reproduced by
+      TEST-DESIGN-VALIDATOR (PASS) with the same counts, twice, no flake.
+      TEST-RUNNER ran the full frontend suite: 953/953 passed, type-check and
+      lint both clean; confirmed no lib/ or priv/ Elixir file touched (test
+      report: test/reports/report-20260929-WF03-ISS0782-20260929.yaml). Spec:
+      test/specs/ISS-0783.md. ISSUE-FIXER set docs/issues/ISS-0783.yaml
+      status: resolved. GitHub issue #1725 was found already CLOSED under a
+      stale, superseded no_defect comment from the earlier (incorrect)
+      WF03-ISS0783-20260923 investigation -- ORCH posted a corrected
+      evidence-bearing comment citing this run and the regression test
+      (https://github.com/tvolodi/letflow/issues/1725#issuecomment-5883842034)
+      rather than leaving the false verdict as the only visible record.
+      Merged to main via PR (see commit history); queue task 782 released
+      status: done, confirmed via GET /tasks.

@@ -60,7 +60,45 @@ queue_ref: "Q-782"
 # Established, recurring queue-id/filename divergence pattern for this
 # project; queue_ref/github_ref below are authoritative for this file.
 github_ref: "GH-1725"
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0782-20260929
+resolved_at: "2026-09-29T04:47:59Z"
+resolution: >
+  Fixed on feature/WF03-ISS0782-20260929, design
+  lib/letflow/design/iss0783-tenantswitcher-reentrancy-guard.md.
+
+  FIX: TenantSwitcher.tsx now owns a local `pending` boolean state (its own
+  in-flight guard, distinct from AuthProvider's switchingToTenantSlug per
+  the suggested_fix's own warning against reusing that flag's
+  deliberately different post-silent_ok lifetime). Set at the start of the
+  onSelect call, reset in a `finally` so it clears on both success and
+  failure/thrown-error paths. While pending, the trigger button, every
+  tenant option, and the retry button are all disabled, preventing a
+  second switchTenant() call from firing before the first resolves.
+
+  TEST-DESIGNER extended TenantSwitcher.test.tsx from 6 to 11 tests,
+  proven fail-then-pass against the pre-fix component (the new tests fail
+  without the `pending` guard and pass with it) -- covering: trigger
+  disabled while a deferred switchTenant mock is pending, options disabled
+  during the same window, a second click while disabled not invoking
+  switchTenant a second time, retry button disabled during a pending
+  retry, and the guard correctly clearing (re-enabling controls) after
+  both a resolved and a rejected switchTenant promise.
+
+  Gated through CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS), FRONTEND-DEV
+  implementation, SECURITY-REVIEWER (PASS, explicitly out of scope --
+  UI-only re-entrancy guard, no tenant-data-path or cache-isolation
+  change), REVIEWER (PASS), TEST-DESIGNER (11 tests, fail-then-pass
+  proven), TEST-DESIGN-VALIDATOR (PASS, independently reproduced the
+  fail-then-pass result), and TEST-RUNNER (full suite 953/953 passed,
+  typecheck/lint clean; report:
+  test/reports/report-20260929-WF03-ISS0782-20260929.yaml). Spec:
+  test/specs/ISS-0783.md.
+
+  Note on this file's queue-id/filename divergence: letflow-queue task 782
+  auto-titled itself "ISS-0782", but this file (ISS-0783.yaml) is the
+  authoritative on-disk record per the NOTE below and github_ref GH-1725 /
+  queue_ref Q-782 -- confirmed correct, not a new error, before closing.
 correction_2026-09-22T21:22:00Z: >
   REOPENED by ORCH. The `no_defect: FABRICATED ISSUE REPORT` verdict below
   was a FALSE NEGATIVE, not a correct diagnosis -- both the alleged defect

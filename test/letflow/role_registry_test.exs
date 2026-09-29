@@ -75,6 +75,21 @@ defmodule Letflow.Identity.RoleRegistryTest do
   rolled-back transaction against a shared one), `tenant_role.name`'s table-wide
   unique index cannot collide across tests even though they now run sequentially
   rather than concurrently.
+
+  ## ISS-0112 batch 10 — reclassified A∩C to A-only on fresh read
+
+  `lib/letflow/design/iss0112-tenant-fixture-migration-plan.md`'s batch table
+  grep-classified this file as category A∩C (`SandboxAutoMode`-shaped teardown
+  AND genuine `Task.async`/`Task.start`). A full read found no real `Task.`
+  spawn anywhere in this file — the only two occurrences of the substring
+  `Task.async` are inside this moduledoc's own prose (above), explaining why
+  this file's tests are deliberately single-process. This mirrors the exact
+  reclassification `test/letflow/identity/group_test.exs`,
+  `tenant_role_test.exs`, and `user_test.exs` underwent in batch 9 (grep hit
+  on a comment mentioning `Task.async`, not a real spawn). Migrated as
+  category A-only: `setup`'s and `provision_second_tenant!/0`'s provisioning
+  halves now call `Letflow.TenantFixture.provisioned_tenant!(teardown: false,
+  ...)`; both pre-existing `on_exit/1` teardown chains are kept unchanged.
   """
 
   use Letflow.DataCase, async: false
@@ -85,6 +100,7 @@ defmodule Letflow.Identity.RoleRegistryTest do
   alias Letflow.Identity.RoleRegistry
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.TenantRole
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
 
@@ -99,15 +115,21 @@ defmodule Letflow.Identity.RoleRegistryTest do
   defp unique_slug, do: Letflow.TenantSlugFixture.unique_slug("req063-rolereg")
 
   setup do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(
-        %{slug: unique_slug(), display_name: "REQ-063 RoleRegistry Test"},
-        :disabled
+    # Provisions via Letflow.TenantFixture (ISS-0112 / GH#366), teardown: false
+    # because this file's own on_exit/1 below force-restores :auto mode before
+    # its DROP SCHEMA/delete_all cleanup (a composition TenantFixture's default
+    # teardown does not perform) -- matching category A's established pattern
+    # (test/letflow/audit_capture_test.exs). The provisioning half (insert
+    # tenant, provision schema, replay, assert-complete) is what the fixture
+    # call replaces; the teardown half below is kept byte-for-byte, only
+    # `tenant.id`/`tenant` references swapped for the fixture's own returned
+    # `tenant_id`/`tenant` keys.
+    %{tenant_id: tenant_id, tenant: tenant, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req063-rolereg",
+        display_name: "REQ-063 RoleRegistry Test",
+        teardown: false
       )
-      |> Repo.insert!()
 
     on_exit(fn ->
       # This callback runs AFTER the test process (and thus the {:shared, self()}
@@ -118,19 +140,14 @@ defmodule Letflow.Identity.RoleRegistryTest do
       # of this exact hazard, confirmed empirically there).
       Letflow.Test.SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
 
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+      case TenantProvisioning.schema_name_for_tenant(tenant_id) do
         {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
         {:error, :invalid_tenant_id} -> :ok
       end
 
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
     end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
     # REQ-063 rework (iteration 2): restore a REAL sandboxed transaction before
     # issuing SET search_path -- :auto mode above checked in (discarded) whatever
@@ -205,30 +222,24 @@ defmodule Letflow.Identity.RoleRegistryTest do
   defp provision_second_tenant! do
     Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(
-        %{slug: unique_slug(), display_name: "ISS-0768 RoleRegistry Test (tenant B)"},
-        :disabled
+    %{tenant_id: tenant_id, tenant: tenant, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req063-rolereg",
+        display_name: "ISS-0768 RoleRegistry Test (tenant B)",
+        teardown: false
       )
-      |> Repo.insert!()
 
     on_exit(fn ->
       Letflow.Test.SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
 
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+      case TenantProvisioning.schema_name_for_tenant(tenant_id) do
         {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
         {:error, :invalid_tenant_id} -> :ok
       end
 
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
     end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
     %{tenant: tenant, schema_name: schema_name}
   end

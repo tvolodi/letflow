@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0881-20260929/step-02-code-designer.json",
   "created_at": "2026-09-29T01:48:11Z",
   "started_at": "2026-09-29T01:48:11Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T01:53:36Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -35,19 +35,19 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss0881-sandbox-pool-test-isolation.md. Grepped test/letflow/sandbox_pool_test.exs for every call site of sandbox_schema_names/0 (10 baseline captures, 4 `final = ...` reads, 1 diff-order read) and drop_sandbox_schemas_created_since!/1 (helper def + 10 on_exit registrations + 1 direct call in the ISS-0292 critical-regression test) and addressed each: RT-1/RT-4/RT-5/RT-6 (the originally diagnosed case) each drop their redundant `assert final == baseline` line and keep the already-race-safe `refute MapSet.member?(final, own_schema)` unchanged; RT-2/RT-7/RT-8 had no schema name captured at all, so the design widens their existing %SandboxClaim{}/w1_result/w_result pattern matches to bind schema_name and replaces the platform-wide equality with per-schema membership refutes; RT-3's mid-test positive-presence check is replaced with a membership check plus a race-free pool-internal `map_size(state.active) == 1` check (reusing RT-1's own existing technique) since a platform snapshot can never race-free prove 'nothing else was created', and its end-of-test check becomes a plain membership refute; the ISS-0292/RT-8 diff-order test gets a filter added before its diff-order equality assertion so it only asserts relative order among its own 3 known schema names, immune to an unrelated concurrent schema changing the diff's size. Decision on item 2: sandbox_schema_names/0 needs NO signature/behavior change -- every fix is a call-site comparison change (delete a redundant equality line, widen an already-present pattern match to bind a name already returned, or filter a diff before comparing) -- documented with reasoning in the design's §2. No new function is added and no existing signature changes (§3). §4 states explicitly, per surviving/added assertion, which real-leak-detection invariant is preserved, and notes the removed equality checks contributed no detection power distinguishable from the specific-name checks given this pool's one-name-per-claim provisioning model. No production code touched: lib/letflow/sandbox_pool.ex is not referenced by any proposed change, matching ISSUE-FIXER's own refutation of a production-code cause. One open question flagged rather than silently resolved: drop_sandbox_schemas_created_since!/1's own unscoped diff computation has the same theoretical race in teardown (a destructive cross-partition DROP rather than a flaky assertion), explicitly left unfixed here with three stated reasons (diagnosis/reproduction never targeted it; a wrong scoping fix there fails silently instead of loudly; it deserves its own diagnose cycle) and a recommendation to file a follow-up issue.",
+    "artifacts_out": ["lib/letflow/design/iss0881-sandbox-pool-test-isolation.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0881-20260929",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0881-20260929",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to validate the design at lib/letflow/design/iss0881-sandbox-pool-test-isolation.md against ISS-0881's acceptance criteria before ELIXIR-DEV implements it."
   },
   "rework_count": 0,
   "max_rework": 3

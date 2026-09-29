@@ -4066,3 +4066,39 @@ separate tool call to still see it. Before filing an issue claiming an env
 var "isn't honored," reproduce with the var and the command in one shell
 invocation first; if that reproduces the expected behavior, the bug is in
 how the override was invoked, not in the code being blamed.
+
+## `scripts/uat_preflight.sh`'s `tenant` check assumes every scenario in a `<company>/` directory wants the same tenant-existence polarity (2026-09-29, ELIXIR-DEV, ISS-0895)
+
+`scripts/uat_preflight.sh`'s per-scenario `tenant` check (around line 298-306)
+only verifies tenant **existence** — `t.lower() in tenants_found` reports
+`OK`. For three of the four scenarios under
+`test/fixtures/uat/scenarios/swiftroute/` that's correct: they need the
+`swiftroute` tenant/realm/actors to already exist. But
+`tenant-onboarding-happy.yaml`'s own precondition #1 requires slug
+`swiftroute` to be **unregistered** — the exact opposite polarity. Because
+the check's heuristic assumes every scenario sharing a `company_id` wants
+existence, it silently reports `tenant: OK` for the onboarding scenario on
+an environment (QA, post ai-dala-infra run T-0150) where `swiftroute` is
+now permanently registered — even though that environment can never
+satisfy this scenario's real precondition again (tenants are
+deactivate-only, `idp_realm_id` is immutable). WF-05 Step 0 preflight would
+never have caught this gap at all; it only surfaced at UAT-RUNNER execution
+time against the scenario's own `custom` precondition check.
+
+ISS-0895's fix (the `env_limitation` preflight check + a
+`test/fixtures/uat/scenario-env-limitations/` sidecar) works around this by
+adding an independent, additive check column that catches this specific
+known case — it does **not** fix the `tenant` check's polarity assumption
+itself. That remains a known, undocumented-until-now gap: a future
+onboarding-shaped scenario sharing a `company_id` directory with
+already-provisioned siblings will hit the same blind spot unless it also
+gets its own `scenario-env-limitations` sidecar.
+
+**Correct alternative:** don't assume every scenario in a `<company>/`
+directory wants the same tenant-existence polarity — an onboarding
+scenario's precondition can be the photographic negative of its siblings'.
+Fixing the `tenant` check itself (e.g. reading each scenario's declared
+precondition polarity rather than assuming existence) is a separate, larger
+preflight-logic change, out of ISS-0895's scope; this entry exists so the
+next scenario author or preflight maintainer doesn't rediscover the gap
+from scratch.

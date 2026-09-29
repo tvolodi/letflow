@@ -159,7 +159,10 @@ handoff's `context` — never assume "whatever instance is reachable":
   this target (e.g. `test/uat-reports/preflight-<date>-<environment>.txt`). Required. Do
   not run a scenario the report lists as GAP; record it BLOCKED with the report's reason.
   If the report is missing, or shows Step 0 was skipped, return the handoff FAILED
-  naming the missing field.
+  naming the missing field. A scenario whose report shows `env_limitation: GAP` must be
+  recorded BLOCKED with the sidecar's `reason` and `issue_ref` verbatim (see
+  `test/fixtures/uat/scenario-env-limitations/`), and must not be executed against that
+  environment — mirrors the rule above for any other GAP column.
 
 Result classification: a scenario that cannot run for an environment reason
 (`ENV_*`, `CREDENTIALS_MISSING`, `PRECONDITION_NOT_MET`, `ENV_NOT_SUPPORTED`) is

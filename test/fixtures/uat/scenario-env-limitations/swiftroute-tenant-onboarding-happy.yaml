@@ -1,0 +1,20 @@
+scenario_id: swiftroute-tenant-onboarding-happy
+applies_to_environments: [qa]
+classification: ENV_NOT_SUPPORTED
+reason: >
+  Precondition #1 requires slug 'swiftroute' to be unregistered. QA has it
+  permanently registered (ai-dala-infra run T-0150) because the sibling
+  scenarios in this directory (shipment-ops-timeout-escalation,
+  shipment-attach-delivery-note, shipment-high-value-happy) and
+  cross-tenant isolation probes require it to already exist. Tenants are
+  deactivate-only and idp_realm_id is immutable -- this precondition can
+  never become true again on qa. Not closeable by WF-05 Step 0
+  remediation (it is not a seeding gap); re-checking will report the same
+  GAP every run by design.
+recorded_by: ORCH
+recorded_at: "2026-09-29"
+issue_ref: ISS-0895
+review: >
+  Revisit only if QA's tenant-lifecycle policy changes (e.g. a
+  slug-release/reset path is added), or if a disposable/ephemeral QA lane
+  becomes available for onboarding-only scenarios.

@@ -30,8 +30,13 @@ environment:
 # versions available, run `flutter pub outdated`.
 #
 # REQ-419 (docs/mobile/architecture.md §2, decisions/0012-mobile-tier-stack.md):
-# no runtime dependency beyond this list. The local cache store (Isar or
-# equivalent) is REQ-423's choice, not added here.
+# no runtime dependency beyond this list plus REQ-423's local cache store.
+#
+# REQ-423 (MOB-3 part 1): local definition cache -- `sembast`, not Isar
+# (`apps/mobile/README.md`'s "Local definition cache" section states the
+# choice and reason in full). `path` and `path_provider` are added solely
+# to resolve the production on-disk store location
+# (`getApplicationSupportDirectory()`); no other new runtime surface.
 dependencies:
   dio: ^5.11.1
   flutter:
@@ -41,6 +46,9 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   go_router: ^17.5.0
   intl: ^0.20.3
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  sembast: ^3.8.5
 
 dev_dependencies:
   flutter_test:

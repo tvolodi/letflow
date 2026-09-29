@@ -17,6 +17,7 @@ import 'package:letflow/api/api_client.dart';
 import 'package:letflow/app.dart';
 import 'package:letflow/auth/auth.dart';
 import 'package:letflow/bootstrap/navigation_bootstrap.dart';
+import 'package:letflow/definitions/definitions.dart';
 
 import '../support/fake_app_auth_adapter.dart';
 
@@ -63,6 +64,8 @@ void main() {
         client: _HangingHttpGateway(),
         tokenStore: const TenantTokenStore(FlutterSecureStorage()),
         activeRealm: ActiveRealmHolder(),
+        definitionCache: ActiveDefinitionCacheHolder(),
+        cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
         appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
       );
       // Default state, per BootstrapController's field initializer, is
@@ -99,6 +102,8 @@ void main() {
         client: _HangingHttpGateway(),
         tokenStore: const TenantTokenStore(FlutterSecureStorage()),
         activeRealm: ActiveRealmHolder(),
+        definitionCache: ActiveDefinitionCacheHolder(),
+        cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
         appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
       );
 

@@ -64,7 +64,14 @@ check ahead of any socket, a static iOS ATS check, tenant-scoped token
 audience, and a masked-reveal-once secrets widget. Certificate pinning
 and root/jailbreak detection remain required-before-corporate-tier and
 are explicitly not implemented in v1 (`docs/mobile/architecture.md`
-§7). S9's three backend gaps closed earlier (`REQ-124`/`125`/`126`) and
+§7). `REQ-423` (MOB-3 part 1) added a per-tenant local definition
+cache keyed by `(type, id, version)`, background delta sync against
+`GET /api/v1/definitions/delta` (persisting the server's opaque
+cursor, never a client-derived timestamp), archived-status removal,
+and airplane-mode launch straight from cache onto a minimal tenant
+home screen listing the cached definitions — the attachment point for
+the renderers `REQ-426..428` build later. S9's three backend gaps
+closed earlier (`REQ-124`/`125`/`126`) and
 `REQ-418` added the mobile tier's own PKCE-S256 Keycloak client
 (`letflow-mobile`) plus its `client_id` on
 `GET /api/mobile/tenant-config` — see

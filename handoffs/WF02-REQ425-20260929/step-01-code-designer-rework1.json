@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-01-code-designer-rework1.json",
   "created_at": "2026-09-29T11:33:34Z",
   "started_at": "2026-09-29T11:33:34Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T11:37:36Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -39,18 +39,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Reworked lib/letflow/design/req425-mobile-api-client-hardening.md against the three defects named in step-01b-code-design-validator.json's result.issues. (1) Sec 5.2: located apps/mobile/pubspec.lock's pinned flutter_appauth entry (12.1.0, both flutter_appauth and flutter_appauth_platform_interface) and read the actual package source under the local pub cache (C:\\Users\\tvolo\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\flutter_appauth-12.1.0\\lib\\src\\flutter_appauth.dart and the platform-interface package's token_request.dart/token_response.dart/grant_type.dart). Confirmed the real, only refresh-capable call is FlutterAppAuth.token(TokenRequest) -> Future<TokenResponse> (non-nullable return; failures throw), and that TokenRequest's grantType is auto-inferred as GrantType.refreshToken when refreshToken is set and authorizationCode is not -- so grantType need not be passed explicitly. Rewrote AppAuthAdapter.refresh's signature and doc comment to state this verified contract (no 'TBD' anywhere in the file -- grepped to confirm), updated the RealAppAuthAdapter delegation description and the §2.2 step-3 cross-reference to match, added a routing note outside the doc comment telling MOBILE-DEV to re-confirm the pinned version is still 12.1.0 before wiring the real call, and closed OQ-2 as resolved (was previously flagged 'the biggest open item'). (2) Sec 4.2: replaced the four executable Dart test bodies (fixture map construction + expect() calls) with a prose table naming, per case, the exact one-entry libFiles fixture and the exact expected checkSingleApiClientBoundary result (length-1 with the matching file/kind, or empty for the negative lib/api/ case) -- grepped the file afterward for 'expect(' and 'test(' and confirmed the only remaining hit is a plain-prose sentence naming the pre-existing §4.3 real-tree test, not an executable body. (3) Sec 5.1: merged the two conflicting 'Future<Response<dynamic>> post(...)' declarations into one signature with one doc comment covering both the no-5xx-auto-retry point and the OQ-7 cross-reference. Did not touch any other section. Verified with git diff --stat (1 file changed, 82 insertions, 68 deletions) and committed as 9c01069b.",
+    "artifacts_out": ["lib/letflow/design/req425-mobile-api-client-hardening.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["9c01069b"],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) for a fresh full pass"
   },
   "rework_count": 1,
   "max_rework": 3

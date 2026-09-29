@@ -91,7 +91,14 @@ its `Retry-After` seconds as backpressure — and a static single-client
 guard (`apps/mobile/test/guards/`) rejecting any file outside
 `lib/api/` that imports `package:dio`/`package:http` or uses
 `dart:io`'s `HttpClient`, the mobile counterpart of the SPA's
-raw-fetch-outside-client guard. S9's three backend gaps
+raw-fetch-outside-client guard. `REQ-426` (MOB-4 part 1) added the
+shared renderer state framework — the six mandatory states (loading,
+fetch-failure, permission-denied, stale-version, validation-error,
+429-backpressure with a live retry-after countdown) every renderer
+under `lib/renderers/` wraps itself in — and the first renderer built
+on it, the list renderer, querying entity records via
+`POST /api/v1/entities/query` with filters and keyset pagination on
+`next_cursor`. S9's three backend gaps
 closed earlier (`REQ-124`/`125`/`126`) and
 `REQ-418` added the mobile tier's own PKCE-S256 Keycloak client
 (`letflow-mobile`) plus its `client_id` on

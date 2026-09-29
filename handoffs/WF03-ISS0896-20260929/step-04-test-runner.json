@@ -1,0 +1,48 @@
+{
+  "handoff_id": "078f8ef3-e9d8-4466-bbcf-91c18c4c2ff0",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0896-20260929/step-04-test-runner.json",
+  "created_at": "2026-09-29T20:26:50Z",
+  "started_at": "2026-09-29T20:26:50Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 4 (test run) for ISS-0896. Host free memory was measured at ~8.98GB immediately before this dispatch -- comfortably above the ~4GB threshold, full parallelism is authorized (re-check yourself immediately before running in case it changed). Run scripts/test_parallel.sh -- the full backend suite, not just anything new (Unblock-Everything). This diff touches only web/tests/ -- it cannot cause a new Elixir backend failure, so any backend failure found is pre-existing; attribute structurally per core-directives.md (failing module not in git diff --name-only main...HEAD), never by count-matching, and file/forward per ISSUE_QUEUE.md rather than fixing here.\n\nAlso run web/'s own full gate set from web/: `npm run type-check && npm run lint && npm test && npm run guards` (this is the same four-gate set FRONTEND-DEV's own procedure runs) -- quote real output. `npm test` should include the new web/tests/unit/e2e-helpers/get-master-admin-token.test.ts. The e2e Playwright specs themselves (web/tests/e2e/**) cannot be run in this environment (no live browser/backend/Keycloak) -- do not claim a live e2e run; state this explicitly.\n\nWrite test/reports/report-<date>-WF03-ISS0896-20260929.yaml with the actual output.",
+    "acceptance_criteria": [
+      "backend scripts/test_parallel.sh run, any failure structurally attributed (this diff cannot cause a new backend failure)",
+      "web/'s type-check, lint, test (including the new unit test), and guards gates all pass, real output quoted",
+      "no claim of a live Playwright/e2e run -- explicitly stated as not possible in this environment"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

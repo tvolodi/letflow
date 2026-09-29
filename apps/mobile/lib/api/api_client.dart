@@ -11,8 +11,11 @@ library;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_appauth/flutter_appauth.dart' show TokenRequest;
 
-import '../auth/auth.dart' show TenantTokenStore, TokenSet, issuerOf;
+import '../auth/auth.dart'
+    show AppAuthAdapter, TenantTokenStore, TokenSet, issuerOf, kOidcRedirectUrl;
+import 'api_error.dart';
 import 'transport_policy.dart';
 
 @immutable
@@ -114,12 +117,140 @@ abstract class HttpGateway {
 /// overwrite it with no rebuild.
 class ActiveRealmHolder {
   String? currentRealmUrl;
+
+  /// The active tenant's OIDC `client_id` (REQ-425 design §5.2) — needed by
+  /// [_RefreshCoordinator] to build a `TokenRequest` for the refresh_token
+  /// grant, alongside [currentRealmUrl]. Not part of REQ-421/422's original
+  /// shape (those only ever needed `currentRealmUrl`); set by whichever code
+  /// sets `currentRealmUrl` from a `TenantConfig` (`lib/bootstrap/
+  /// navigation_bootstrap.dart`'s `runTenantBootstrap`/`switchTenant`).
+  String? clientId;
+}
+
+/// A callback that routes the app to its login/tenant-entry screen
+/// (REQ-425 design §2.4). A plain function type, not a `go_router`-specific
+/// one, so `lib/api/` does not need to import the app's routing package —
+/// the production closure (wherever [ApiClient.create] is constructed) is
+/// responsible for actually navigating.
+typedef LoginRouter = void Function();
+
+/// Total HTTP requests sent (original + retries) for one logical GET call
+/// against a persistent 5xx before giving up and surfacing [ServerError]
+/// (design §3.1). GET-only — POST (and any future PUT/PATCH/DELETE) is never
+/// auto-retried on 5xx (design §3.3).
+const int kMaxServerRetryAttempts = 3;
+
+/// Backoff formula constants (design §3.2): delay before attempt N+1 is
+/// `kBaseServerRetryDelay * 2^(N-1)`, capped at [kMaxServerRetryDelay].
+const Duration kBaseServerRetryDelay = Duration(milliseconds: 200);
+const Duration kMaxServerRetryDelay = Duration(seconds: 5);
+
+/// The delay to await after [attemptNumber] (1-based) has just failed with a
+/// 5xx, before the next attempt. Deterministic and pure so a test can assert
+/// on it directly without a real wall-clock wait.
+Duration backoffDelayFor(int attemptNumber) {
+  final scaled = kBaseServerRetryDelay * (1 << (attemptNumber - 1));
+  return scaled > kMaxServerRetryDelay ? kMaxServerRetryDelay : scaled;
+}
+
+/// Request-`extra` flag marking a request as "already retried once after a
+/// 401" (design §2.2 step 6) — set only on the request re-issued by
+/// [_RefreshCoordinator]'s caller, never on a fresh caller-initiated
+/// request. Its presence is the loop-prevention mechanism: a second 401 on
+/// an already-retried request never triggers a second refresh.
+const String _kRetriedAfter401Flag = '_letflowRetriedAfter401';
+
+/// Mediates "concurrent 401s share one in-flight refresh" (design §2.1).
+/// One instance per [ApiClient] — matches the single-client invariant this
+/// whole requirement hardens.
+class _RefreshCoordinator {
+  _RefreshCoordinator({
+    required TenantTokenStore tokenStore,
+    required ActiveRealmHolder activeRealm,
+    required AppAuthAdapter appAuthAdapter,
+    required LoginRouter routeToLogin,
+  }) : _tokenStore = tokenStore,
+       _activeRealm = activeRealm,
+       _appAuthAdapter = appAuthAdapter,
+       _routeToLogin = routeToLogin;
+
+  final TenantTokenStore _tokenStore;
+  final ActiveRealmHolder _activeRealm;
+  final AppAuthAdapter _appAuthAdapter;
+  final LoginRouter _routeToLogin;
+
+  /// Non-null while a refresh triggered by some 401 is in flight. Every
+  /// caller that observes a 401 while this is non-null awaits THIS Future
+  /// instead of starting a second refresh call.
+  Future<bool>? _inFlightRefresh;
+
+  /// Returns true iff the refresh succeeded (new tokens stored) and the
+  /// caller should retry its original request; false iff refresh failed
+  /// (tokens already cleared and login routing already triggered by the
+  /// time this returns).
+  Future<bool> refreshOnce() {
+    final inFlight = _inFlightRefresh;
+    if (inFlight != null) return inFlight;
+    final future = _doRefresh();
+    _inFlightRefresh = future;
+    return future.whenComplete(() => _inFlightRefresh = null);
+  }
+
+  Future<bool> _doRefresh() async {
+    final realmUrl = _activeRealm.currentRealmUrl;
+    if (realmUrl == null) {
+      await _handleFailure(null);
+      return false;
+    }
+    final tokens = await _tokenStore.read(realmUrl);
+    final refreshToken = tokens?.refreshToken;
+    if (refreshToken == null) {
+      await _handleFailure(realmUrl);
+      return false;
+    }
+    try {
+      final response = await _appAuthAdapter.refresh(
+        TokenRequest(
+          _activeRealm.clientId ?? '',
+          kOidcRedirectUrl,
+          issuer: realmUrl,
+          refreshToken: refreshToken,
+        ),
+      );
+      final accessToken = response.accessToken;
+      if (accessToken == null) {
+        await _handleFailure(realmUrl);
+        return false;
+      }
+      final newTokens = TokenSet(
+        accessToken: accessToken,
+        refreshToken: response.refreshToken ?? refreshToken,
+        idToken: response.idToken,
+        accessTokenExpiration: response.accessTokenExpirationDateTime,
+      );
+      await _tokenStore.store(realmUrl, newTokens);
+      return true;
+    } catch (_) {
+      await _handleFailure(realmUrl);
+      return false;
+    }
+  }
+
+  Future<void> _handleFailure(String? realmUrl) async {
+    if (realmUrl != null) {
+      await _tokenStore.delete(realmUrl);
+    }
+    _activeRealm.currentRealmUrl = null;
+    _routeToLogin();
+  }
 }
 
 class ApiClient implements HttpGateway {
-  ApiClient._(this._dio);
+  ApiClient._(this._dio, this._refreshCoordinator, this._delayFn);
 
   final Dio _dio;
+  final _RefreshCoordinator _refreshCoordinator;
+  final Future<void> Function(Duration) _delayFn;
 
   static const String _apiBaseUrl = String.fromEnvironment(
     'LETFLOW_API_BASE_URL',
@@ -129,17 +260,25 @@ class ApiClient implements HttpGateway {
   /// (design §7.1, AC8). `baseUrl` defaults to the build-time `LETFLOW_API_BASE_URL`
   /// define, read once, here — never re-read anywhere else.
   ///
-  /// `validateStatus` accepts every HTTP status code so callers (§5.2's
-  /// memberships/modules calls, which must distinguish 200/403/other
-  /// without a thrown exception) can read `response.statusCode` directly;
-  /// a thrown [DioException] from this client therefore only ever
-  /// indicates a genuine transport failure (no connectivity, DNS, timeout),
-  /// never a non-2xx HTTP response.
+  /// `validateStatus` accepts every HTTP status code, so a 401/403/404/...
+  /// arrives as a normal `Response` through the interceptor chain — this is
+  /// *why* the refresh/retry/backoff logic below (REQ-425 design §2.5) is
+  /// implemented as method-body logic inspecting `response.statusCode`,
+  /// rather than a Dio `onError` interceptor, which would never fire for
+  /// these statuses under this policy. A thrown [DioException] from this
+  /// client therefore only ever indicates a genuine transport failure (no
+  /// connectivity, DNS, timeout) — every such exception, and every non-2xx
+  /// response, is normalized to an [ApiError] before it leaves this class
+  /// (design §5.1's throwing convention).
   factory ApiClient.create({
     required TenantTokenStore tokenStore,
     required ActiveRealmHolder activeRealm,
+    required AppAuthAdapter appAuthAdapter,
+    required LoginRouter routeToLogin,
     String? baseUrl,
     TransportPolicy? transportPolicy,
+    Future<void> Function(Duration) delayFn = Future.delayed,
+    bool registerRedactingLog = true,
   }) {
     final dio = Dio(
       BaseOptions(baseUrl: baseUrl ?? _apiBaseUrl, validateStatus: (_) => true),
@@ -154,23 +293,58 @@ class ApiClient implements HttpGateway {
       _transportPolicyInterceptor(transportPolicy ?? transportPolicyFor()),
     );
     dio.interceptors.add(_bearerInterceptor(tokenStore, activeRealm));
-    return ApiClient._(dio);
+    if (registerRedactingLog) {
+      dio.interceptors.add(const RedactingLogInterceptor());
+    }
+    final coordinator = _RefreshCoordinator(
+      tokenStore: tokenStore,
+      activeRealm: activeRealm,
+      appAuthAdapter: appAuthAdapter,
+      routeToLogin: routeToLogin,
+    );
+    return ApiClient._(dio, coordinator, delayFn);
   }
 
   /// Test-only seam: wraps a caller-supplied [Dio] (e.g. one configured
   /// with a fake `HttpClientAdapter`) so tests can exercise the real
-  /// [ApiClient] wiring (interceptor, header attach) without constructing a
-  /// second one inside this file — the test builds the [Dio] instance
-  /// itself, outside `apps/mobile/lib`.
+  /// [ApiClient] wiring (interceptor, header attach, refresh/retry/backoff)
+  /// without constructing a second one inside this file — the test builds
+  /// the [Dio] instance itself, outside `apps/mobile/lib`. Auto-attaches the
+  /// same bearer-attach interceptor [ApiClient.create] does (so a retry
+  /// after a successful refresh re-reads the now-fresh token, design §2.6),
+  /// but not the transport-policy interceptor or the redacting logger
+  /// (tests exercise those, if at all, through their own dedicated fixtures).
   @visibleForTesting
-  factory ApiClient.forTesting(Dio dio) => ApiClient._(dio);
+  factory ApiClient.forTesting(
+    Dio dio, {
+    required TenantTokenStore tokenStore,
+    required ActiveRealmHolder activeRealm,
+    required AppAuthAdapter appAuthAdapter,
+    required LoginRouter routeToLogin,
+    Future<void> Function(Duration) delayFn = Future.delayed,
+  }) {
+    dio.interceptors.add(_bearerInterceptor(tokenStore, activeRealm));
+    final coordinator = _RefreshCoordinator(
+      tokenStore: tokenStore,
+      activeRealm: activeRealm,
+      appAuthAdapter: appAuthAdapter,
+      routeToLogin: routeToLogin,
+    );
+    return ApiClient._(dio, coordinator, delayFn);
+  }
 
+  /// Throws [ApiError] (never [DioException]/[SocketException]) on any
+  /// non-2xx outcome, after refresh/retry/backoff handling has already run.
+  /// Returns the response unchanged on 2xx.
   @override
   Future<Response<dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParameters,
   }) {
-    return _dio.get<dynamic>(path, queryParameters: queryParameters);
+    return _sendWithBackoff(
+      () => _dio.get<dynamic>(path, queryParameters: queryParameters),
+      allowServerRetry: true,
+    );
   }
 
   @override
@@ -178,10 +352,145 @@ class ApiClient implements HttpGateway {
     String path, {
     Map<String, dynamic>? queryParameters,
   }) {
-    return _dio.get<dynamic>(
-      path,
-      queryParameters: queryParameters,
-      options: Options(extra: const {'skipAuth': true}),
+    return _sendWithBackoff(
+      () => _dio.get<dynamic>(
+        path,
+        queryParameters: queryParameters,
+        options: Options(extra: const {'skipAuth': true}),
+      ),
+      allowServerRetry: true,
+    );
+  }
+
+  /// No 5xx auto-retry (design §3.3) — a single attempt only, matching the
+  /// "POST is not auto-retried" requirement text (no duplicate task
+  /// completion). Still subject to the 401 refresh/retry flow (design §2)
+  /// like every authenticated call, since that flow is orthogonal to
+  /// retry-on-5xx. Throws [ApiError].
+  Future<Response<dynamic>> post(String path, {Object? data}) {
+    return _sendWithBackoff(
+      () => _dio.post<dynamic>(path, data: data),
+      allowServerRetry: false,
+    );
+  }
+
+  /// Implements design §3's GET-only 5xx backoff and design §2's 401
+  /// refresh-then-retry, for one logical call. [allowServerRetry] is `true`
+  /// only for GET/`getUnauthenticated` (design §3.3).
+  Future<Response<dynamic>> _sendWithBackoff(
+    Future<Response<dynamic>> Function() requestFn, {
+    required bool allowServerRetry,
+  }) async {
+    final maxAttempts = allowServerRetry ? kMaxServerRetryAttempts : 1;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      Response<dynamic> response;
+      try {
+        response = await requestFn();
+      } on DioException catch (e) {
+        throw classifyError(
+          e.requestOptions,
+          statusCode: null,
+          transportException: e,
+        );
+      }
+
+      final status = response.statusCode;
+
+      if (status != null && status >= 200 && status < 300) {
+        return response;
+      }
+
+      // A 401 exits the backoff loop immediately and hands off to the
+      // refresh/retry flow (design §3.3) — the two mechanisms are not
+      // nested; the 401 flow's own retry result (success, terminal
+      // UnauthorizedError, or a 5xx) is the final result of this call, with
+      // no further backoff attempts (design §3.3/OQ-5's chosen behavior).
+      if (status == 401) {
+        return _handleUnauthorized(response);
+      }
+
+      final isServerError = status != null && status >= 500 && status <= 599;
+      if (isServerError && allowServerRetry && attempt < maxAttempts) {
+        await _delayFn(backoffDelayFor(attempt));
+        continue;
+      }
+
+      throw classifyError(
+        response.requestOptions,
+        statusCode: status,
+        retryAfterHeader: response.headers.value('retry-after'),
+        responseBody: response.data,
+      );
+    }
+
+    // Unreachable (the loop above always returns or throws before falling
+    // off its last iteration), but required so every code path returns.
+    throw const ServerError();
+  }
+
+  /// The 401 refresh-then-retry sequence (design §2.2). [response] is the
+  /// 401 response observed on some attempt; on success, this method retries
+  /// that exact request exactly once through the same [_dio] instance (so
+  /// the bearer-attach interceptor re-reads the just-refreshed token).
+  Future<Response<dynamic>> _handleUnauthorized(
+    Response<dynamic> response,
+  ) async {
+    final requestOptions = response.requestOptions;
+
+    // An unauthenticated call (no Authorization header to begin with) has
+    // no token to refresh usefully — skip the whole flow (design §2.2
+    // step 7, mirrors `_bearerInterceptor`'s own `skipAuth` short-circuit).
+    if (requestOptions.extra['skipAuth'] == true) {
+      throw const UnauthorizedError();
+    }
+
+    // A second 401 on a request already retried once after a 401: terminal,
+    // no second refresh, ever (design §2.2 step 6 — the loop-prevention
+    // rule).
+    if (requestOptions.extra[_kRetriedAfter401Flag] == true) {
+      throw const UnauthorizedError();
+    }
+
+    final refreshed = await _refreshCoordinator.refreshOnce();
+    if (!refreshed) {
+      // Tokens already cleared and login routing already triggered by
+      // `_RefreshCoordinator` itself (design §2.2 step 5) — the caller only
+      // needs the typed error.
+      throw const UnauthorizedError();
+    }
+
+    final retriedOptions = requestOptions.copyWith(
+      extra: {...requestOptions.extra, _kRetriedAfter401Flag: true},
+    );
+
+    Response<dynamic> retryResponse;
+    try {
+      retryResponse = await _dio.fetch<dynamic>(retriedOptions);
+    } on DioException catch (e) {
+      throw classifyError(
+        e.requestOptions,
+        statusCode: null,
+        transportException: e,
+      );
+    }
+
+    final retryStatus = retryResponse.statusCode;
+    if (retryStatus != null && retryStatus >= 200 && retryStatus < 300) {
+      return retryResponse;
+    }
+    if (retryStatus == 401) {
+      // Recurses once more, purely to reuse the classification above; the
+      // `_kRetriedAfter401Flag` set on `retriedOptions` guarantees this
+      // second pass takes the terminal branch immediately, with no second
+      // refresh call.
+      return _handleUnauthorized(retryResponse);
+    }
+    throw classifyError(
+      retryResponse.requestOptions,
+      statusCode: retryStatus,
+      retryAfterHeader: retryResponse.headers.value('retry-after'),
+      responseBody: retryResponse.data,
     );
   }
 }

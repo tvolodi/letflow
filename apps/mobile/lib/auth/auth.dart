@@ -212,6 +212,15 @@ abstract class AppAuthAdapter {
   Future<AuthorizationTokenResponse?> authorizeAndExchangeCode(
     AuthorizationTokenRequest request,
   );
+
+  /// Performs an OIDC `refresh_token` grant (REQ-425 design §5.2) by
+  /// delegating to `FlutterAppAuth.token(TokenRequest(...))` — the pinned
+  /// `flutter_appauth 12.1.0`'s only refresh-capable call. Returns the new
+  /// [TokenResponse] on success. Throws on any failure (network,
+  /// `invalid_grant`, expired refresh token, etc.) — the caller
+  /// (`_RefreshCoordinator._doRefresh` in `lib/api/api_client.dart`) treats
+  /// every exception type uniformly as refresh failure.
+  Future<TokenResponse> refresh(TokenRequest request);
 }
 
 /// Production wrapper around the real `flutter_appauth` plugin.
@@ -239,6 +248,11 @@ class RealAppAuthAdapter implements AppAuthAdapter {
     } on FlutterAppAuthUserCancelledException {
       return null;
     }
+  }
+
+  @override
+  Future<TokenResponse> refresh(TokenRequest request) {
+    return const FlutterAppAuth().token(request);
   }
 }
 

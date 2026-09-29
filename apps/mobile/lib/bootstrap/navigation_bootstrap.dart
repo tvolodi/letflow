@@ -18,6 +18,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/api_client.dart';
+import '../api/api_error.dart' show ForbiddenError;
 import '../api/transport_policy.dart';
 import '../auth/auth.dart';
 import '../definitions/definitions.dart'
@@ -208,6 +209,9 @@ Future<BootstrapResult?> runTenantBootstrap(
   // the pointer flips the moment the new tenant's token exists, strictly
   // before that new tenant's own tenant-content requests are issued.
   activeRealm.currentRealmUrl = config.realmUrl;
+  // REQ-425 design §5.2 — the refresh coordinator needs `clientId` alongside
+  // `currentRealmUrl` to build a refresh_token grant's `TokenRequest`.
+  activeRealm.clientId = config.clientId;
 
   // REQ-423 design §7.3 — persisted at the same point the active-realm
   // pointer itself is set, so `attemptSessionResume` can reach this
@@ -251,16 +255,29 @@ Future<BootstrapResult?> runTenantBootstrap(
       if (memberships.isEmpty || memberships.first.tenantSlug != enteredSlug) {
         await tokenStore.delete(config.realmUrl);
         activeRealm.currentRealmUrl = null;
+        activeRealm.clientId = null;
         return const BootstrapFailure(BootstrapFailureReason.tenantNotFound);
       }
-    } else if (status == 403) {
-      // CANDIDATE: membership check not applicable — proceed to modules.
     } else {
+      // Unreachable once `client` is a REQ-425-hardened `ApiClient`: a
+      // non-2xx `get()` now throws `ApiError` (see the `on ForbiddenError`
+      // clause below) rather than returning a non-2xx `Response`. Kept as a
+      // defensive fallback for any `HttpGateway` fake that still returns a
+      // non-2xx `Response` directly (e.g. `FakeHttpGateway` in tests).
       activeRealm.currentRealmUrl = null;
+      activeRealm.clientId = null;
       return const BootstrapFailure(BootstrapFailureReason.networkUnavailable);
     }
+  } on ForbiddenError {
+    // CANDIDATE: membership check not applicable — proceed to modules.
+    // (REQ-425/MOB-6 consequence: the hardened `ApiClient.get` now throws
+    // `ForbiddenError` for a 403 instead of returning a 403 `Response`, so
+    // this case moved from the `status == 403` branch above into its own
+    // catch clause, ahead of the generic `catch (_)` below, to preserve the
+    // original "proceed to modules" behavior.)
   } catch (_) {
     activeRealm.currentRealmUrl = null;
+    activeRealm.clientId = null;
     return const BootstrapFailure(BootstrapFailureReason.networkUnavailable);
   }
 
@@ -269,6 +286,7 @@ Future<BootstrapResult?> runTenantBootstrap(
     final response = await client.get('/api/v1/me/modules');
     if ((response.statusCode ?? 0) != 200) {
       activeRealm.currentRealmUrl = null;
+      activeRealm.clientId = null;
       return const BootstrapFailure(BootstrapFailureReason.networkUnavailable);
     }
     final data = response.data as Map<String, dynamic>;
@@ -277,6 +295,7 @@ Future<BootstrapResult?> runTenantBootstrap(
         .toList();
   } catch (_) {
     activeRealm.currentRealmUrl = null;
+    activeRealm.clientId = null;
     return const BootstrapFailure(BootstrapFailureReason.networkUnavailable);
   }
 
@@ -301,6 +320,7 @@ Future<void> logout({
   if (currentRealmUrl == null) return;
   await tokenStore.delete(currentRealmUrl);
   activeRealm.currentRealmUrl = null;
+  activeRealm.clientId = null;
   await clearLastActiveTenant(tokenStore);
   await definitionCache?.closeAndClear();
   // REQ-424 design §6.2 — paired, additive, immediately after the
@@ -351,6 +371,7 @@ Future<BootstrapResult?> switchTenant(
     if (newRealmUrl != previousRealmUrl) {
       await tokenStore.delete(previousRealmUrl);
       activeRealm.currentRealmUrl = null;
+      activeRealm.clientId = null;
       await clearLastActiveTenant(tokenStore);
       // REQ-423 design §7.2 — closes the *previous* tenant's cache file
       // handle, mirroring the existing token delete. The new tenant's own
@@ -652,14 +673,25 @@ final activeRealmHolderProvider = Provider<ActiveRealmHolder>((ref) {
   return ActiveRealmHolder();
 });
 
-final apiClientProvider = Provider<ApiClient>((ref) {
+final Provider<ApiClient> apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient.create(
     tokenStore: ref.watch(tenantTokenStoreProvider),
     activeRealm: ref.watch(activeRealmHolderProvider),
+    appAuthAdapter: const RealAppAuthAdapter(),
+    // `ref.read` here is deferred until a 401-refresh failure actually
+    // calls this closure — it is never evaluated while `apiClientProvider`
+    // itself is being built, so this does not create a build-time circular
+    // dependency with `bootstrapControllerProvider` (which itself depends
+    // on `apiClientProvider`) even though each provider's *value* depends
+    // on the other's (REQ-425 design §2.4/OQ-3 — resolved this way since
+    // the design left the exact routing mechanism as an implementation
+    // detail of this app's actual router/provider setup).
+    routeToLogin: () => ref.read(bootstrapControllerProvider).resetToEntry(),
   );
 });
 
-final bootstrapControllerProvider = ChangeNotifierProvider<BootstrapController>(
+final ChangeNotifierProvider<BootstrapController> bootstrapControllerProvider =
+    ChangeNotifierProvider<BootstrapController>(
   (ref) {
     return BootstrapController(
       client: ref.watch(apiClientProvider),

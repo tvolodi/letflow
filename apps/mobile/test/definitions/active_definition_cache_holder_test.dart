@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:letflow/definitions/definitions.dart';
 import 'package:letflow/definitions/sembast_cache_repository.dart';
-import 'package:sembast/sembast.dart';
 import 'package:sembast/sembast_io.dart';
 
 const _realmA = 'https://idp.example/realms/acme';

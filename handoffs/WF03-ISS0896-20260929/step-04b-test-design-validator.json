@@ -1,0 +1,52 @@
+{
+  "handoff_id": "243a5154-bb9c-4249-9063-3ad9422c9c4e",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0896-20260929/step-04b-test-design-validator.json",
+  "created_at": "2026-09-29T20:24:10Z",
+  "started_at": "2026-09-29T20:24:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["c44a1cac-a28b-4574-9749-69d3a1e7f538"],
+    "artifacts_in": [
+      "web/tests/unit/e2e-helpers/get-master-admin-token.test.ts",
+      "web/tests/e2e/helpers.ts"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 4b, hard gate on TEST-DESIGNER's coverage for ISS-0896. Read web/tests/unit/e2e-helpers/get-master-admin-token.test.ts and web/tests/e2e/helpers.ts directly. Per docs/agents/workflows/WF-03_issue_resolving.md's mutation-testing rule: 'TEST-DESIGN-VALIDATOR must independently APPLY at least one of the reported mutants and run it -- accepting the reported pass counts is copying a claim, not validating one.' TEST-DESIGNER reported Mutant A (hardcode username/password literals, bypassing resolveCredential) breaks TC-2, and Mutant B (remove the throw-on-non-ok check) breaks TC-3. Apply at least one of these two yourself (use a throwaway git worktree, or apply in place and revert-and-verify per that same section's two licensed techniques), run the test file, and confirm the exact reported test(s) fail and no others. Also independently check: fixtures use unique/isolated data (mocked APIRequestContext, no shared state), no hardcoded secrets in the test file itself, the test is self-sufficient. FAIL immediately on any check failure -- no partial credit.",
+    "acceptance_criteria": [
+      "a real, runnable vitest unit test exists for getMasterAdminToken covering the 4 behaviors listed above",
+      "at least 2 targeted mutants were applied and each one's specific test failure(s) recorded",
+      "every mutation was reverted and the revert verified (git status --porcelain web/ empty, suite re-runs green) before this handoff completes",
+      "the thrown-error-on-failure path is confirmed not to leak the attempted credential value in its message"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

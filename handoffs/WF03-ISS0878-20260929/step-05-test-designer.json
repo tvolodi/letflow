@@ -1,0 +1,56 @@
+{
+  "handoff_id": "efe729c1-276b-43c0-9598-1f7e076e7ae1",
+  "run_id": "WF03-ISS0878-20260929",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0878-20260929/step-05-test-designer.json",
+  "created_at": "2026-09-29T11:30:00Z",
+  "started_at": "2026-09-29T11:00:00Z",
+  "completed_at": "2026-09-29T11:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0878": "See step-01-issue-fixer.json (diagnosis), lib/letflow/design/iss0878-unique-realm-cross-process-fix.md (approved design), step-03-elixir-dev.json (implementation), step-04-security-reviewer.json / step-04-reviewer.json (gates, both PASS) for full history."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0878-20260929/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0878-20260929/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0878-20260929/step-04-security-reviewer.json",
+      "handoffs/WF03-ISS0878-20260929/step-04-reviewer.json"
+    ],
+    "artifacts_in": [
+      "test/support/tenant_slug.ex",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/api/authorization_ac9_test.exs",
+      "test/letflow/oidc/provider_registry_multi_realm_test.exs",
+      "test/letflow/identity_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 4: write a regression test proving Letflow.TenantSlugFixture.unique_realm/1 (new function, added by this branch's fix) is built on Ecto.UUID.generate/0 rather than a process-local counter. The original bug is a cross-process/cross-VM race inherently un-reproducible on demand within one test run, so the test proves the fix's discriminating property (UUID-format suffix) instead, and -- per WF-03's 'pre-fix failure is code-does-not-exist' rule -- a mutation was applied and measured since a bare pre-fix-commit check would only prove the function was new, not that the tests discriminate correct-vs-broken."
+  },
+  "result": {
+    "verdict": "PASS",
+    "artifacts_out": [
+      "test/specs/ISS-0878.md",
+      "test/support/tenant_slug_test.exs"
+    ],
+    "summary": [
+      "Added 3 test cases to the existing Letflow.TenantSlugFixtureTest module (test/support/tenant_slug_test.exs), under a new describe block 'unique_realm/1 uses a UUID suffix, not a process-local counter (ISS-0878)': (1) a StreamData property asserting no duplicates across 1,000 in-process calls (baseline sanity, not alone sufficient); (2) a StreamData property regex-matching the generated suffix against the exact Ecto.UUID.generate/0 format across 30 randomized (prefix, repeat_count) pairs -- the discriminating assertion; (3) a unit test covering the zero-argument default-prefix ('realm') call path.",
+      "Confirmed via direct read of git diff origin/main...feature/WF03-ISS0878-20260929 -- test/ that all 4 call sites (auth_pipeline_test.exs, authorization_ac9_test.exs, provider_registry_multi_realm_test.exs, identity_test.exs) delegate to Letflow.TenantSlugFixture.unique_realm/1 rather than keeping their own counter-based copy -- lightweight confirmation per the design doc's own scoping, not a new test (already checked by REVIEWER in step-04).",
+      "BASELINE (pre-mutant, current correct implementation): `mix test test/support/tenant_slug_test.exs` -> 'Finished in 7.9 seconds (7.9s async, 0.00s sync)' / 'Result: 9 passed (4 properties, 5 tests)'.",
+      "MUTANT APPLIED (WF-03 non-existence-case rule, in-place technique): test/support/tenant_slug.ex's unique_realm/1 body temporarily changed to the pre-fix buggy pattern `\"#{prefix}-#{System.unique_integer([:positive, :monotonic])}\"`.",
+      "MUTANT RESULT: `mix test test/support/tenant_slug_test.exs` -> 'Result: 7/9 passed (3/4 properties, 4/5 tests)' / 'Failed: 1 property, 1 test'. The two failing tests were exactly the two UUID-format-discriminating assertions added by this run: 'default prefix (\"realm\") also gets a UUID-format suffix' (got 'realm-1005', a bare integer suffix) and 'the generated suffix matches the Ecto.UUID.generate/0 format' (got suffix '1028', failing the UUID regex). The two non-format assertions (uniqueness-only, prefix-only) still passed under the mutant, as expected -- confirming the added coverage is sensitive to exactly the UUID-vs-counter trap ISS-0878 fixes, not merely present.",
+      "MUTANT REVERTED: `git checkout -- test/support/tenant_slug.ex`. REVERT VERIFIED: `git status --porcelain test/ lib/` returned only ' M test/support/tenant_slug_test.exs' (this run's own new test file) -- test/support/tenant_slug.ex confirmed back to pristine branch content, nothing under lib/ touched at any point.",
+      "POST-REVERT RE-RUN (green, matches baseline exactly): `mix test test/support/tenant_slug_test.exs` -> 'Finished in 7.5 seconds (7.5s async, 0.00s sync)' / 'Result: 9 passed (4 properties, 5 tests)'.",
+      "Additional check: `touch test/support/tenant_slug_test.exs && mix test test/support/tenant_slug_test.exs --warnings-as-errors` forces a fresh recompile; result still 'Result: 9 passed (4 properties, 5 tests)', and the run aborted on --warnings-as-errors only due to the pre-existing, already-deferred ISS-0044 Group 1 ExUnit.Case.register_test/4 deprecation warning (documented in lib/mix/tasks/letflow.check.test.ex's own moduledoc as a known, permanently-deferred class blocked on a stream_data version bump) -- no new warning, and no dead-default-argument (ISS-0069 class) warning, since this run introduced no new defp with an optional/default argument.",
+      "mix letflow.check.test was NOT run for this handoff: per this step's explicit dispatch instructions, that task shells out to scripts/test_parallel.sh (the full suite), which TEST-RUNNER runs next as a dedicated full-suite pass; running it here would duplicate that step and was explicitly out of scope for this MINOR fix's regression-test step. The targeted warnings-as-errors recompile above (previous bullet) covers the ISS-0069 dead-default-argument concern that mix letflow.check.test's substring check exists to catch, scoped to only the file this run touched."
+    ]
+  }
+}

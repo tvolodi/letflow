@@ -241,6 +241,104 @@ defmodule Letflow.TenantSlugFixtureTest do
     end
   end
 
+  # ISS-0878 regression: unique_realm/1 must be built on Ecto.UUID.generate/0,
+  # not any process-local/VM-local counter, since scripts/test_parallel.sh
+  # shards the suite across independent OS processes (separate BEAM VMs)
+  # against one shared Postgres instance -- see
+  # lib/letflow/design/iss0878-unique-realm-cross-process-fix.md.
+  #
+  # The original bug (a cross-process race between two independently-started
+  # BEAM VMs both making their first `unique_realm(same_prefix)` call in the
+  # same window) is inherently timing-dependent and cannot be reliably
+  # triggered on demand within a single test run -- unlike ISS-0059 above,
+  # which the "spawn independent fresh VMs" technique can reproduce directly
+  # because it only needs ONE fresh VM's first call to observe the counter
+  # restart. A cross-process *collision* additionally needs two VMs' calls to
+  # land in the same narrow window, which is not reliably reproducible on
+  # demand. So this suite instead proves the fix's DISCRIMINATING property:
+  # does the generated string embed a UUID (collision-proof across processes
+  # and VMs by construction, since Ecto.UUID.generate/0's 122 bits of
+  # randomness are not derived from any counter or value that resets), or a
+  # small monotonic integer (guaranteed to eventually repeat across fresh
+  # VMs, exactly as unique_slug/1's own ISS-0059 tests above demonstrate for
+  # the identical underlying mechanism)? A System.unique_integer/1-based
+  # suffix could never satisfy the UUID-format assertion below, so this is
+  # sensitive to exactly the trap ISS-0878 fixes -- see this file's own
+  # mutation-based fail-then-pass proof recorded in
+  # handoffs/WF03-ISS0878-20260929/step-05-test-designer.json (unique_realm/1
+  # is a NEW function; a naive "run against the pre-fix commit" only proves
+  # the function didn't exist yet, which is a step failure per
+  # docs/agents/workflows/WF-03_issue_resolving.md's "When the pre-fix
+  # failure is 'the code under test does not exist'").
+  describe "unique_realm/1 uses a UUID suffix, not a process-local counter (ISS-0878)" do
+    @uuid_regex ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+    # Trivially true for both the old and new implementation (any generator
+    # with enough entropy passes this within a single process) -- included
+    # only as a baseline sanity check, NOT as the discriminating assertion.
+    # A test module calling unique_realm/1 hundreds of times per run (e.g.
+    # provider_registry_multi_realm_test.exs's 12 call sites) needs this
+    # in-process guarantee too, even though it alone doesn't prove the fix.
+    property "no duplicates across a thousand calls in the same process" do
+      check all(
+              prefixes <-
+                StreamData.list_of(
+                  StreamData.string(:alphanumeric, min_length: 1, max_length: 12),
+                  length: 1_000
+                ),
+              max_runs: 1
+            ) do
+        realms = Enum.map(prefixes, &TenantSlugFixture.unique_realm/1)
+
+        assert length(Enum.uniq(realms)) == length(realms)
+      end
+    end
+
+    # The DISCRIMINATING assertion: the suffix after "<prefix>-" must match
+    # the exact format Ecto.UUID.generate/0 produces (8-4-4-4-12 lowercase
+    # hex, hyphenated, 36 characters). This is what actually guarantees
+    # cross-process/cross-VM uniqueness. A System.unique_integer/1-based
+    # suffix (the pre-fix ISS-0878 mechanism, and the pre-fix ISS-0059
+    # mechanism `unique_slug/1` replaced) produces bare decimal digits and
+    # can never match this regex -- see the mutation proof in this run's
+    # handoff for a direct demonstration against unique_realm/1 itself.
+    property "the generated suffix matches the Ecto.UUID.generate/0 format" do
+      check all(
+              prefix <- StreamData.string(:alphanumeric, min_length: 1, max_length: 20),
+              repeat_count <- StreamData.integer(1..25),
+              max_runs: 30
+            ) do
+        realms = for _ <- 1..repeat_count, do: TenantSlugFixture.unique_realm(prefix)
+
+        assert Enum.all?(realms, &String.starts_with?(&1, prefix <> "-"))
+
+        suffixes = Enum.map(realms, &String.replace_prefix(&1, prefix <> "-", ""))
+
+        assert Enum.all?(suffixes, &(&1 =~ @uuid_regex)),
+               "expected every unique_realm/1 suffix to match the Ecto.UUID.generate/0 " <>
+                 "format #{inspect(@uuid_regex)} -- a System.unique_integer/1-based suffix " <>
+                 "(the pre-fix ISS-0878 mechanism) produces bare decimal digits instead and " <>
+                 "would fail this assertion: #{inspect(suffixes)}"
+
+        assert length(Enum.uniq(realms)) == length(realms)
+      end
+    end
+
+    # identity_test.exs calls unique_realm() with no argument at several
+    # sites (design doc: lines 592, 599, 653, 765), so the default argument
+    # path must independently get a UUID-format suffix too, not just the
+    # explicit-prefix path exercised above.
+    test "default prefix (\"realm\") also gets a UUID-format suffix" do
+      realm = TenantSlugFixture.unique_realm()
+
+      assert String.starts_with?(realm, "realm-")
+
+      assert String.replace_prefix(realm, "realm-", "") =~ @uuid_regex,
+             "expected the default-prefix call to also produce a UUID-format suffix, got: " <>
+               realm
+    end
+  end
+
   # ISS-0065: writes `script_body` to a uniquely-named temp `.exs` file and
   # invokes `cmd` with that file's path as a plain argv element instead of
   # `-e <script>`. A bare path has none of the `(`, `)`, `"` characters that

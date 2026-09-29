@@ -27,7 +27,7 @@ defmodule Letflow.Oidc.ProviderRegistryMultiRealmTest do
   `DynamicSupervisor` (part of `Letflow.Application`'s own supervision tree, started
   once at node boot, never torn down between tests -- design doc §4.2's own "no
   teardown" decision) so every realm name used anywhere in this file is generated via
-  `unique_realm/1` (`System.unique_integer/1`-suffixed) specifically so a worker
+  `unique_realm/1` (UUID-suffixed) specifically so a worker
   started by one test's mock server (bound to that test's own ephemeral port and key
   material) can never be found and reused by a later test under the same realm name.
 
@@ -80,7 +80,7 @@ defmodule Letflow.Oidc.ProviderRegistryMultiRealmTest do
     :ok
   end
 
-  defp unique_realm(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+  defp unique_realm(prefix), do: TenantSlugFixture.unique_realm(prefix)
 
   defp insert_tenant!(realm) do
     %Tenant{}

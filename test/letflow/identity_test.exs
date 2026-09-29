@@ -78,7 +78,7 @@ defmodule Letflow.IdentityTest do
   # tenant_id/realm/external_id, per test_developer_guide.md's "no test pollution"
   # principle and this project's established Ecto.UUID.generate()-per-test convention.
   defp unique_realm(prefix \\ "realm") do
-    "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+    Letflow.TenantSlugFixture.unique_realm(prefix)
   end
 
   # REQ-019 fixture helpers.

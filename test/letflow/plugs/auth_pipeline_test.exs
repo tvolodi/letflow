@@ -62,7 +62,7 @@ defmodule Letflow.Plugs.AuthPipelineTest do
   import Plug.Conn
 
   defp unique_realm(prefix) do
-    "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+    Letflow.TenantSlugFixture.unique_realm(prefix)
   end
 
   # Provisioned via Letflow.TenantFixture (ISS-0112 / GH#366) — replaces the former

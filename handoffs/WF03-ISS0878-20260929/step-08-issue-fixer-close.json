@@ -1,0 +1,47 @@
+{
+  "handoff_id": "d4e6f8a0-1b2c-4d3e-9f5a-7c8b0e2d4f6a",
+  "run_id": "WF03-ISS0878-20260929",
+  "workflow_id": "WF-03",
+  "step": "08",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0878-20260929/step-08-issue-fixer-close.json",
+  "created_at": "2026-09-29T07:00:00Z",
+  "started_at": "2026-09-29T06:55:00Z",
+  "completed_at": "2026-09-29T07:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0878": "See step-07-test-runner.json (full-suite PASS) and docs/issues/ISS-0878.yaml for full history."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0878-20260929/step-07-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0878.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 5: close out ISS-0878 following its resolved outcome. Update docs/issues/ISS-0878.yaml to status: resolved with resolved_in_run/resolved_at, close the linked GitHub mirror issue GH-1951 with an evidence-citing comment (never a bare close with no comment and no linked PR), and append a done event to the current run-history volume with a real UTC timestamp and legal req: vocabulary.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0878.yaml carries status: resolved plus resolved_in_run and resolved_at",
+      "GitHub issue GH-1951 closed with a --comment citing the resolving run and the regression test file",
+      "A done event appended to the current run-history volume, matching that volume's existing schema"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "artifacts_out": [],
+    "summary": [
+      "All prior gates passed (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER). Root cause genuinely removed: unique_realm/1's cross-process-unsafe System.unique_integer/1 pattern was replaced with a UUID-based, cross-process-safe generator, proven via a fail-then-pass mutation test at test/support/tenant_slug_test.exs, independently reproduced by TEST-DESIGN-VALIDATOR. Targeted test set and full-suite run (TEST_PARALLEL_N=4) both pass, per step-07's handoff (TEST-RUNNER PASS, commit 5485ad24).",
+      "docs/issues/ISS-0878.yaml updated: status: resolved, resolved_in_run: WF03-ISS0878-20260929, resolved_at: 2026-09-29T07:00:00Z.",
+      "GitHub mirror GH-1951 closed via `gh issue close 1951 --comment \"Fixed in WF03-ISS0878-20260929. See docs/issues/ISS-0878.yaml and the regression test at test/support/tenant_slug_test.exs.\"` -- output: 'Closed issue tvolodi/letflow#1951 (ISS-0878: AuthPipelineTest unique_realm/1 process-local-only counter collides across test_parallel.sh partitions on tenants_idp_realm_id_partial_index)'.",
+      "Run-history event appended to docs/status/requirement_status.v24.yaml (current volume, confirmed via docs/status/requirement_status.index.yaml, still current/not rolled over): {req: SCOPE-CHANGE, event: done, agent: ISSUE-FIXER, at: 2026-09-29T07:00:00Z}, matching this same volume's earlier req: SCOPE-CHANGE / event: started entry for this issue.",
+      "Committed and pushed as commit 3946e46e."
+    ]
+  }
+}

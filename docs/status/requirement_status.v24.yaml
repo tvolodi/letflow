@@ -368,3 +368,49 @@
       needed there (same determination REQ-420/422/423/424's own
       closures made for this file). letflow-queue task 862 (GH#1879)
       released as done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T19:54:10Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0886
+      (MAJOR, pre-existing tenants missing platform-role seeding, 403 for
+      every non-admin OIDC user) -- code fix merged: new
+      Letflow.Identity.RoleBackfill.run/0 and `mix
+      letflow.backfill_platform_roles` (branch
+      fix/ISS0886-role-backfill-preexisting-tenants-20260929, commit
+      ae80b915, based on main a062452f), sweeping every tenant via
+      TenantProvisioning.list_registrations/0 and re-invoking the
+      unmodified, already-idempotent
+      RoleRegistry.seed_default_platform_role_groups/1 per tenant. Scope
+      confirmed to exactly 3 files (lib/letflow/identity/role_backfill.ex,
+      lib/mix/tasks/letflow.backfill_platform_roles.ex,
+      test/letflow/identity/role_backfill_test.exs). Full gate chain:
+      CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS (independently confirmed
+      idempotency) -> ELIXIR-DEV implement (one flagged deviation -- a
+      rescue clause matching TenantProvisioning.replay_all_pending/0's
+      established precedent, since the design's own @spec claim that the
+      seed function never raises was empirically false) ->
+      SECURITY-REVIEWER PASS (confirmed no privilege escalation) ->
+      REVIEWER PASS (side-by-side precedent comparison) ->
+      TEST-DESIGN-VALIDATOR PASS (4 real mutants applied/caught/reverted)
+      -> TEST-RUNNER (independent full suite, 5052/5052) ->
+      RELEASE-VALIDATOR PASS (own mutation spot-check: stubbed the core
+      fix to a no-op, 4/7 tests correctly failed, reverted, confirmed
+      clean; independently re-confirmed tenant-isolation and
+      no-privilege-escalation claims by reading the actual code;
+      decision-record consistency confirmed). docs/issues/ISS-0886.yaml
+      set to status: resolved (resolved_in_run: WF03-ISS0886-20260929) in
+      this same append -- this is an ISSUE, not a REQ, so no
+      docs/requirements.yaml entry is touched. Merged via PR (see PR body
+      for number/merge commit). OPERATIONAL FOLLOW-UP NEEDED: this
+      sandbox has no SSH/deploy access to the real QA host (no
+      `letflow-qa` SSH target configured; confirmed by attempted
+      resolution and connection failure) -- `mix
+      letflow.backfill_platform_roles` has NOT been run against the QA
+      database, so the original UAT failures (403 for worker-user on
+      bpm-default, candidate-user on bilimbaga) remain live in QA despite
+      the code being merged. letflow-queue task 884 released as
+      `blocked`, not `done`, for this reason -- see
+      docs/issues/ISS-0886.yaml's resolution note for the same caveat.

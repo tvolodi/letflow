@@ -5021,8 +5021,21 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 6
+    entries: 7
     note: >
+      Bumped to 7 by ORCH while rebasing PR #1984 (REQ-424) onto
+      origin/main, which had meanwhile landed at 6 (see the entry below
+      this one for that reconciliation's own history). PR #1984's own
+      commit had claimed "bumped to 6" against its own pre-rebase
+      on-disk count of 5 -- correct only in isolation, since it didn't
+      yet know about main's concurrent advance to 6. Recounted directly
+      post-rebase rather than trusting either side's pre-merge
+      arithmetic: `grep -c "^  - req:" docs/status/requirement_status.v24.yaml`
+      = 7 on-disk entries (the prior 6 + REQ-424's done-event
+      (WF02-REQ424-20260929 -- MOB-3 part-2 mobile pinned form version
+      resolution closed; RELEASE-VALIDATOR independently re-verified,
+      including its own mutation spot-check)).
+
       Bumped to 6 by ORCH while resolving PR #1983's merge conflict with
       origin/main's concurrently-landed PR #1982: both sides had
       independently appended one entry to volume 24 and each side's own

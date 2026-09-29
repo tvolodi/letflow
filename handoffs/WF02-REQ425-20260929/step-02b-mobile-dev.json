@@ -9,7 +9,7 @@
   "created_at": "2026-09-29T11:55:15Z",
   "started_at": "2026-09-29T11:55:15Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -46,18 +46,37 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "summary": "Implemented lib/letflow/design/req425-mobile-api-client-hardening.md in full. New apps/mobile/lib/api/api_error.dart carries the sealed ApiError (9 variants) and classifyError's exact status-code/exception mapping (design §1.2, incl. module-path regex, Retry-After parsing, RFC 9457 field-error parsing). apps/mobile/lib/api/api_client.dart gained _RefreshCoordinator (coalesces concurrent 401s into one in-flight flutter_appauth refresh, retries the original request exactly once, clears tokens + routes to login on failure, terminal on a second 401 after a successful refresh), GET-only exponential 5xx backoff (kMaxServerRetryAttempts=3, kBaseServerRetryDelay/kMaxServerRetryDelay, injectable delayFn), a new post() method (never auto-retried on 5xx), and every public method now throws ApiError exclusively. New apps/mobile/test/guards/single_api_client_guard_test.dart enforces the no-raw-HTTP-transport-outside-lib/api/ boundary with a passing self-test and a clean real-tree scan. New apps/mobile/test/api/api_client_hardening_test.dart covers AC1-AC5. flutter_appauth 12.1.0's actual API (FlutterAppAuth.token(TokenRequest)->Future<TokenResponse>, grantType inferred from refreshToken) was re-verified directly against the pinned pub-cache source (design §5.2/OQ-2) -- no drift, implemented as designed.\n\nDeviations/necessary consequential changes beyond owned_modules, disclosed for CODE-DESIGN-VALIDATOR/REVIEWER/SECURITY-REVIEWER attention: (1) ActiveRealmHolder (lib/api/api_client.dart) gained a `clientId` field -- the design's refresh TokenRequest needs a clientId alongside realmUrl (§5.2) but never specifies where it comes from; this is a genuine design gap, not one of OQ-1..OQ-8. Resolved by having lib/bootstrap/navigation_bootstrap.dart set/clear it alongside currentRealmUrl wherever that was already being set/cleared. (2) lib/bootstrap/navigation_bootstrap.dart's apiClientProvider now supplies the new required appAuthAdapter/routeToLogin params; routeToLogin is `() => ref.read(bootstrapControllerProvider).resetToEntry()`, read lazily inside the closure so it is only evaluated on an actual refresh failure, not during apiClientProvider's own build -- this still required giving both apiClientProvider and bootstrapControllerProvider explicit top-level type annotations, since Dart's top-level type inference reports a hard `top_level_cycle` error for two mutually-referencing `final` closures even when each closure's own generic argument is already explicit. (3) Design §5.1 changes ApiClient.get's contract so a non-2xx response is now thrown as ApiError rather than returned as a Response with any status code. This is a real behavior change for lib/bootstrap/navigation_bootstrap.dart's existing `/api/v1/me/memberships` 403-CANDIDATE branch (`else if (status == 403) { // CANDIDATE: proceed to modules }`), which would otherwise silently regress to networkUnavailable once wired to the hardened client (a 403 no longer returns a Response the old status-check can see). No existing test caught this because bootstrap_sequence_test.dart already used the real ApiClient (not FakeHttpGateway) for this exact case, so it would have gone red without a fix. Added an `on ForbiddenError` catch clause ahead of the generic `catch (_)` to preserve the original behavior, and left the old `status == 403` branch as an explicitly-commented dead fallback for any HttpGateway fake that still returns a 403 Response directly. Flagging this interaction since the design itself doesn't call it out. (4) Updated 6 pre-existing test files (api_client_test.dart, audience_scoping_test.dart, bootstrap_sequence_test.dart, tenant_switch_test.dart, token_redaction_test.dart, transport_policy_test.dart) for ApiClient.forTesting's new required parameters, removing now-redundant manually-re-added bearer interceptors since forTesting auto-attaches the production one now that it takes tokenStore/activeRealm; one transport_policy_test.dart assertion changed from `throwsA(isA<DioException>())` to `throwsA(isA<NetworkUnavailableError>())`, which is the AC5 invariant this requirement introduces, not an unrelated change. (5) test/support/fake_app_auth_adapter.dart's new refresh() stub awaits Future.delayed(Duration.zero) before resolving -- without it the concurrent-401-coalescing test (AC1) was flaky/wrong (refreshCallCount 2 instead of 1) because the fake's own refresh resolved faster than the second concurrent request could reach its own 401 detection; this is a test-determinism fix, not a production behavior change. (6) test/support/fake_dio_http_client_adapter.dart gained an additive `headersFor` field to script response headers (Retry-After) -- non-breaking to existing usages.\n\nOpen questions from the design (OQ-1, OQ-3, OQ-4, OQ-5, OQ-6, OQ-7, OQ-8) were resolved exactly as the design's own 'not decided here, implements X' language directs; none required a different implementation choice than what §10 already states. OQ-3 (login-route wiring) resolved concretely as described in (2) above.",
+    "artifacts_out": [
+      "apps/mobile/lib/api/api_error.dart",
+      "apps/mobile/lib/api/api_client.dart",
+      "apps/mobile/lib/api/api.dart",
+      "apps/mobile/lib/auth/auth.dart",
+      "apps/mobile/lib/bootstrap/navigation_bootstrap.dart",
+      "apps/mobile/test/guards/single_api_client_guard_test.dart",
+      "apps/mobile/test/api/api_client_hardening_test.dart",
+      "apps/mobile/test/api/api_client_test.dart",
+      "apps/mobile/test/auth/audience_scoping_test.dart",
+      "apps/mobile/test/bootstrap/bootstrap_sequence_test.dart",
+      "apps/mobile/test/bootstrap/tenant_switch_test.dart",
+      "apps/mobile/test/security/token_redaction_test.dart",
+      "apps/mobile/test/security/transport_policy_test.dart",
+      "apps/mobile/test/support/fake_app_auth_adapter.dart",
+      "apps/mobile/test/support/fake_dio_http_client_adapter.dart"
+    ],
+    "issues": [
+      "Design gap: ActiveRealmHolder.clientId's source was not specified by the design (§5.2 assumes it's available); resolved by threading it through navigation_bootstrap.dart alongside currentRealmUrl -- see result.summary point (1).",
+      "Design gap: ApiClient.get's new throwing contract (§5.1) breaks navigation_bootstrap.dart's 403-CANDIDATE membership-check branch unless compensated; fixed with an `on ForbiddenError` catch -- see result.summary point (3). Recommend REVIEWER/CODE-DESIGNER note this interaction for any future ApiClient consumer."
+    ],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["f75dc33d"],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (2c) -- this touches auth/token refresh/token clearing (MOB-6), in scope per security-reviewer.md's token-handling clause. flutter analyze: No issues found. flutter test: All 112 tests passed (run twice for stability)."
   },
   "rework_count": 0,
   "max_rework": 3

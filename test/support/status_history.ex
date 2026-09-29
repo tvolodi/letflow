@@ -195,40 +195,64 @@ defmodule Letflow.Test.StatusHistory do
 
   Each entry carries `req/event/agent/at` (`nil` when the field is absent), the
   1-based `line` of its `- req:` line, `field_lines` mapping each field name to
-  its own 1-based line, and `fields` — the field names **in the order they
-  appear**, which is what assertion A4's shape limb checks.
+  its own 1-based line, `fields` — the field names **in the order they
+  appear**, which is what assertion A4's shape limb checks — and `indent`, the
+  number of leading spaces on the entry's own `- req:` line (ISS-0883: matching
+  is indentation-tolerant so a malformed append is still counted, and `indent`
+  is what assertion A11 checks against the documented 2-space convention).
   """
-  @spec entries(Path.t()) :: [map()]
+  @spec entries(Path.t()) :: [
+          %{
+            req: String.t() | nil,
+            event: String.t() | nil,
+            agent: String.t() | nil,
+            at: String.t() | nil,
+            line: pos_integer(),
+            fields: [atom()],
+            field_lines: %{atom() => pos_integer()},
+            indent: non_neg_integer()
+          }
+        ]
   def entries(volume_path) do
     volume_path
     |> read_lines()
     |> Enum.with_index(1)
     |> Enum.reduce([], fn {line, no}, acc ->
-      item_match = Regex.run(~r/^  - ([a-z][a-z0-9_]*): ?(.*)$/, line)
-      field_match = Regex.run(~r/^    ([a-z][a-z0-9_]*): ?(.*)$/, line)
+      item_match = Regex.run(~r/^( *)- ([a-z][a-z0-9_]*): ?(.*)$/, line)
+      field_match = Regex.run(~r/^( *)([a-z][a-z0-9_]*): ?(.*)$/, line)
 
       cond do
         item_match ->
-          [_, key, value] = item_match
+          [_, spaces, key, value] = item_match
 
           [
-            %{fields: [key], values: %{key => value}, field_lines: %{key => no}, line: no}
+            %{
+              fields: [key],
+              values: %{key => value},
+              field_lines: %{key => no},
+              line: no,
+              indent: String.length(spaces)
+            }
             | acc
           ]
 
         field_match != nil and acc != [] ->
-          [_, key, value] = field_match
+          [_, spaces, key, value] = field_match
           [current | rest] = acc
 
-          [
-            %{
-              current
-              | fields: current.fields ++ [key],
-                values: Map.put(current.values, key, value),
-                field_lines: Map.put(current.field_lines, key, no)
-            }
-            | rest
-          ]
+          if String.length(spaces) == current.indent + 2 do
+            [
+              %{
+                current
+                | fields: current.fields ++ [key],
+                  values: Map.put(current.values, key, value),
+                  field_lines: Map.put(current.field_lines, key, no)
+              }
+              | rest
+            ]
+          else
+            acc
+          end
 
         true ->
           acc
@@ -244,7 +268,8 @@ defmodule Letflow.Test.StatusHistory do
         at: scalar(raw.values["at"]),
         line: raw.line,
         fields: raw.fields |> Enum.map(&safe_atom/1) |> Enum.reject(&is_nil/1),
-        field_lines: raw.field_lines
+        field_lines: raw.field_lines,
+        indent: raw.indent
       }
     end)
   end

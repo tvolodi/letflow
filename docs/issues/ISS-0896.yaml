@@ -12,4 +12,6 @@ affected_files:
   - web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts
 queue_ref: Q-896
 github_ref: GH-2005
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0896-20260929
+resolved_at: "2026-09-30T02:20:00Z"

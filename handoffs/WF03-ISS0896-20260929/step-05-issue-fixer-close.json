@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0896-20260929/step-05-issue-fixer-close.json",
   "created_at": "2026-09-29T21:12:17Z",
   "started_at": "2026-09-29T21:12:17Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T02:25:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -33,18 +33,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Step 0.5 registry lookup: no prior docs/issues/ entry with matching symptoms (hardcoded Keycloak master admin-cli credentials in e2e specs) was found -- not a recurrence. Step 5 close: verified this run's actual evidence before writing anything -- TEST-RUNNER's report (test/reports/report-20260930-WF03-ISS0896-20260929.yaml) shows verdict PASS with web/'s full required gates green (type-check, lint, npm test 957/957 including the new web/tests/unit/e2e-helpers/get-master-admin-token.test.ts at 4/4, guards 52/52), which is this diff's actual scope (git diff --name-only main...HEAD limited to web/tests/e2e/**, the new e2e-helpers unit test, and a design doc -- no lib/letflow/ application code touched). This supports a genuine `resolved` close per WF-03 Step 5's status vocabulary (root cause -- hardcoded admin/admin master-realm literals -- was removed via env-var-backed resolveCredential, not merely instrumented or a no-defect verdict). Wrote docs/issues/ISS-0896.yaml: status: resolved, resolved_in_run: WF03-ISS0896-20260929, resolved_at: 2026-09-30T02:20:00Z. Closed GitHub issue GH#2005 via `gh issue close 2005 --comment \"Fixed in WF03-ISS0896-20260929. See docs/issues/ISS-0896.yaml and the regression test at web/tests/unit/e2e-helpers/get-master-admin-token.test.ts.\"` -- verified via `gh issue view 2005 --json state,closed` returning {\"closed\":true,\"state\":\"CLOSED\"}. Both halves of Step 5 (local yaml write + GitHub close with resolving-evidence comment) are satisfied.",
+    "artifacts_out": ["docs/issues/ISS-0896.yaml"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0896-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step Final"
   },
   "rework_count": 0,
   "max_rework": 3

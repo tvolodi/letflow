@@ -15,10 +15,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_appauth/flutter_appauth.dart'
     show AuthorizationTokenResponse;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/api_client.dart';
+import '../api/transport_policy.dart';
 import '../auth/auth.dart';
 import 'bootstrap_models.dart';
 import 'error_screens.dart';
@@ -141,12 +141,24 @@ Future<BootstrapResult?> runTenantBootstrap(
   required TenantTokenStore tokenStore,
   required ActiveRealmHolder activeRealm,
   AppAuthAdapter appAuthAdapter = const RealAppAuthAdapter(),
+  TransportPolicy? transportPolicy,
 }) async {
   final TenantConfig config;
   try {
     config = await fetchTenantConfig(enteredSlug, client: client);
   } catch (_) {
     return const BootstrapFailure(BootstrapFailureReason.networkUnavailable);
+  }
+
+  // Transport-policy realm_url check (REQ-422 §4.3, MOB-5, AC5) — the
+  // `fetchTenantConfig` request above already went through `ApiClient`'s
+  // own transport-policy interceptor; this check is additionally required
+  // because `authenticateWithTenant`'s OIDC exchange goes through
+  // `flutter_appauth`'s native AppAuth SDK, outside Dio entirely, and that
+  // interceptor cannot see or block it.
+  final effectivePolicy = transportPolicy ?? transportPolicyFor();
+  if (!effectivePolicy.isUrlAllowed(Uri.parse(config.realmUrl))) {
+    return const BootstrapFailure(BootstrapFailureReason.oidcFailure);
   }
 
   AuthorizationTokenResponse? tokenResponse;
@@ -225,6 +237,98 @@ Future<BootstrapResult?> runTenantBootstrap(
 
   return BootstrapSuccess(installedModules: installedModules);
 }
+
+// ── §6. Audience scoping: logout / tenant switch ───────────────────────────
+//
+// REQ-422 §6.3, MOB-5, AC7 — a tenant switch or logout deletes the previous
+// tenant's tokens explicitly, so no residual token for a tenant the user is
+// no longer authenticated to survives in secure storage.
+
+/// Deletes the active tenant's tokens and clears [activeRealm]. No-op if
+/// nothing is currently active.
+Future<void> logout({
+  required TenantTokenStore tokenStore,
+  required ActiveRealmHolder activeRealm,
+}) async {
+  final currentRealmUrl = activeRealm.currentRealmUrl;
+  if (currentRealmUrl == null) return;
+  await tokenStore.delete(currentRealmUrl);
+  activeRealm.currentRealmUrl = null;
+}
+
+/// Switches the active tenant to [enteredSlug] (REQ-422 §6.3, OQ-5).
+///
+/// Deletes the *previous* tenant's tokens **before** attempting the new
+/// tenant's bootstrap — not after it succeeds — so a token for a tenant the
+/// user is initiating a switch away from never survives an in-progress or
+/// failed switch attempt. If there is no previous tenant at all (first
+/// bootstrap of the app session, not a "switch") or the new tenant resolves
+/// to the *same* `realm_url` as the previous one (re-authenticating the
+/// same tenant), no delete occurs — deleting first would just force a
+/// needless token gap for no isolation benefit.
+///
+/// This is a thin wrapper: the new tenant's own bootstrap sequence (OIDC
+/// exchange, membership/module checks) is still entirely
+/// [runTenantBootstrap]'s — this function only adds the pre-delete step,
+/// which requires resolving the new tenant's `realm_url` via
+/// `fetchTenantConfig` once up front to decide whether a delete is even
+/// applicable (a same-tenant re-auth is not a switch). If that lookup
+/// itself fails, no delete occurs and the failure is surfaced through the
+/// normal `runTenantBootstrap` call below (which repeats the same,
+/// idempotent, unauthenticated request).
+Future<BootstrapResult?> switchTenant(
+  String enteredSlug, {
+  required HttpGateway client,
+  required TenantTokenStore tokenStore,
+  required ActiveRealmHolder activeRealm,
+  AppAuthAdapter appAuthAdapter = const RealAppAuthAdapter(),
+  TransportPolicy? transportPolicy,
+}) async {
+  final previousRealmUrl = activeRealm.currentRealmUrl;
+  if (previousRealmUrl != null) {
+    String? newRealmUrl;
+    try {
+      newRealmUrl = (await fetchTenantConfig(enteredSlug, client: client)).realmUrl;
+    } catch (_) {
+      newRealmUrl = null;
+    }
+    if (newRealmUrl != previousRealmUrl) {
+      await tokenStore.delete(previousRealmUrl);
+      activeRealm.currentRealmUrl = null;
+    }
+  }
+  return runTenantBootstrap(
+    enteredSlug,
+    client: client,
+    tokenStore: tokenStore,
+    activeRealm: activeRealm,
+    appAuthAdapter: appAuthAdapter,
+    transportPolicy: transportPolicy,
+  );
+}
+
+// Tear-offs of the two top-level functions above, captured at top-level
+// scope (not inside `BootstrapController`) so `BootstrapController`'s own
+// identically-named `logout()`/`switchTenant(...)` methods can delegate to
+// them without an unqualified call inside those methods resolving back to
+// `this.logout`/`this.switchTenant` (Dart resolves a bare call to an
+// instance member of the same name before falling back to a top-level
+// declaration, which would otherwise recurse infinitely).
+final Future<void> Function({
+  required TenantTokenStore tokenStore,
+  required ActiveRealmHolder activeRealm,
+})
+_logoutTopLevel = logout;
+
+final Future<BootstrapResult?> Function(
+  String enteredSlug, {
+  required HttpGateway client,
+  required TenantTokenStore tokenStore,
+  required ActiveRealmHolder activeRealm,
+  AppAuthAdapter appAuthAdapter,
+  TransportPolicy? transportPolicy,
+})
+_switchTenantTopLevel = switchTenant;
 
 // ── §5.4. Route table construction ────────────────────────────────────────
 
@@ -330,6 +434,49 @@ class BootstrapController extends ChangeNotifier {
     _state = BootstrapUiState.unauthenticated;
     notifyListeners();
   }
+
+  /// Switches the active tenant to [slug] (REQ-422 §6.3) — mirrors
+  /// [beginBootstrap] but deletes the previous tenant's tokens first via
+  /// the top-level [switchTenant] function (called through the
+  /// [_switchTenantTopLevel] tear-off — see that variable's doc comment
+  /// for why).
+  Future<void> switchTenant(String slug) async {
+    _state = const BootstrapUiState(phase: BootstrapPhase.loading);
+    notifyListeners();
+
+    final result = await _switchTenantTopLevel(
+      slug,
+      client: client,
+      tokenStore: tokenStore,
+      activeRealm: activeRealm,
+      appAuthAdapter: appAuthAdapter,
+    );
+
+    if (result == null) {
+      _state = BootstrapUiState.unauthenticated;
+    } else {
+      _state = switch (result) {
+        BootstrapSuccess(:final installedModules) => BootstrapUiState(
+          phase: BootstrapPhase.success,
+          installedModules: installedModules,
+        ),
+        BootstrapFailure(:final reason) => BootstrapUiState(
+          phase: BootstrapPhase.failure,
+          failureReason: reason,
+        ),
+      };
+    }
+    notifyListeners();
+  }
+
+  /// Logs out the active tenant (REQ-422 §6.3) via the top-level [logout]
+  /// function (through the [_logoutTopLevel] tear-off), then resets to the
+  /// unauthenticated entry state.
+  Future<void> logout() async {
+    await _logoutTopLevel(tokenStore: tokenStore, activeRealm: activeRealm);
+    _state = BootstrapUiState.unauthenticated;
+    notifyListeners();
+  }
 }
 
 // ── Providers ───────────────────────────────────────────────────────────
@@ -341,12 +488,8 @@ class BootstrapController extends ChangeNotifier {
 // it depends on) via `ProviderScope(overrides: [...])` at the test root —
 // the standard Riverpod testing idiom, not a second wiring path.
 
-final flutterSecureStorageProvider = Provider<FlutterSecureStorage>((ref) {
-  return const FlutterSecureStorage();
-});
-
 final tenantTokenStoreProvider = Provider<TenantTokenStore>((ref) {
-  return TenantTokenStore(ref.watch(flutterSecureStorageProvider));
+  return TenantTokenStore.production();
 });
 
 final activeRealmHolderProvider = Provider<ActiveRealmHolder>((ref) {

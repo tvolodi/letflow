@@ -1,0 +1,67 @@
+{
+  "handoff_id": "d4bf3bac-3167-45ea-9e3f-aa7acc4a90e7",
+  "run_id": "WF02-REQ422-20260929",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ422-20260929/step-01-code-designer.json",
+  "created_at": "2026-09-29T02:46:14Z",
+  "started_at": "2026-09-29T02:46:14Z",
+  "completed_at": "2026-09-29T03:40:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-422"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/mobile/README.md",
+      "docs/mobile/architecture.md",
+      "docs/mobile/requirements.md",
+      "docs/mobile/build-order.md",
+      "docs/agents/instructions/security-invariants.md",
+      "apps/mobile/lib/auth/auth.dart",
+      "apps/mobile/lib/api/api_client.dart",
+      "apps/mobile/lib/bootstrap/navigation_bootstrap.dart",
+      "apps/mobile/lib/design_system/design_system.dart",
+      "apps/mobile/android/app/src/main/AndroidManifest.xml",
+      "apps/mobile/android/app/src/debug/AndroidManifest.xml",
+      "apps/mobile/ios/Runner/Info.plist",
+      "lib/letflow/design/req421-mobile-tenant-bootstrap.md"
+    ],
+    "owned_modules": ["apps/mobile/"]
+  },
+  "task": {
+    "description": "Design MOB-5 on-device security hardening (REQ-422, queue task 859) for apps/mobile/ on branch feature/WF02-REQ422-20260929: token-store hardening options, redacting log interceptor, Android manifest/network-security-config (main+debug source sets), api_client.dart/bootstrap transport-policy checks (release vs debug), iOS Info.plist static check, tenant-audience-scoping on switch/logout, masked-text widget state machine, and the docs/mobile/architecture.md corporate-tier hardening section. Signatures/type shapes only, no implementation code.",
+    "acceptance_criteria": [
+      "a guard test asserts the only file under apps/mobile/lib that imports flutter_secure_storage is the lib/auth/ token store, and no file under lib/auth/ or lib/api/ imports shared_preferences or dart:io File APIs -- with a self-test that fails on a violating fixture",
+      "a test issues a request through the API client with a fake access token 'SECRET-TOKEN-SENTINEL' and a fake token-endpoint response containing a refresh token 'SECRET-REFRESH-SENTINEL', captures every log sink the app uses (debugPrint override, dart:developer log, any logger package), and asserts neither sentinel appears",
+      "a guard test parses android/app/src/main/AndroidManifest.xml and the main network-security-config and asserts usesCleartextTraffic='false', base-config cleartextTrafficPermitted='false', and allowBackup='false' (or a data-extraction rule excluding secure-storage); and asserts any domain-config permitting cleartext exists only under src/debug/ and names only 10.0.2.2 and localhost",
+      "`cd apps/mobile && flutter build apk --release` (debug-signed is acceptable) succeeds and `aapt dump xmltree` (or apkanalyzer) of the release APK's manifest shows usesCleartextTraffic false and the release network-security-config contains no cleartext-permitting domain-config, quoted",
+      "a test asserts that with release-mode transport policy the API client rejects an http:// request URL (and bootstrap rejects an http:// realm_url) without opening a connection (the fake HTTP layer records zero calls), that an https:// URL is allowed, and that the debug policy allows http only for localhost and 10.0.2.2",
+      "a guard test parses ios/Runner/Info.plist and asserts NSAllowsArbitraryLoads is absent or false; the report states iOS runtime verification is deferred because the host is Windows",
+      "a test asserts switching from tenant A to tenant B deletes A's tokens from the secure store and that a request for tenant B is never sent with a token whose iss is A's realm",
+      "a widget test asserts the masked-text widget hides its value by default, reveals it once, and cannot be revealed a second time",
+      "docs/mobile/architecture.md contains the corporate-tier hardening section naming certificate pinning and root/jailbreak detection as required-before-corporate-tier and not implemented in v1",
+      "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req422-mobile-security-hardening.md covering all 10 acceptance criteria. Reads and builds on (does not redesign) REQ-419/420/421's existing apps/mobile/lib/auth/auth.dart, lib/api/api_client.dart, lib/bootstrap/navigation_bootstrap.dart -- flags and closes a real existing gap (navigation_bootstrap.dart currently imports flutter_secure_storage directly, which AC1's guard would fail against as-is) via a new TenantTokenStore.production() factory carrying AndroidOptions(encryptedSharedPreferences: true)/IOSOptions(accessibility: first_unlock_this_device). Specifies: a reusable-but-unregistered RedactingLogInterceptor plus a static no-unredacted-logger guard and a black-box sentinel test (AC2); exact AndroidManifest.xml + main/debug network_security_config.xml XML content and a real flutter build apk --release + aapt dump xmltree verification procedure (AC3/AC4); a new lib/api/transport_policy.dart (ReleaseTransportPolicy/DebugTransportPolicy) wired into both the Dio interceptor chain and runTenantBootstrap's realm_url check, so a rejection never opens a socket (AC5); an Info.plist static guard, iOS runtime explicitly deferred (AC6); JWT-payload iss extraction (dart:convert only, no new package), a bearer-interceptor audience check, and new logout()/switchTenant() functions that delete the previous tenant's tokens (AC7); a MaskRevealController state machine (masked->revealed->locked, no way back) plus MaskedRevealText widget (AC8); exact architecture.md section-7 text (AC9). 7 open questions (OQ-1..OQ-7) flagged explicitly rather than silently resolved, covering: whether to register the redacting interceptor now, allowBackup vs data-extraction-rules, reusing oidcFailure vs a fifth bootstrap-failure reason for a rejected realm_url scheme, fail-open-on-undecodable-iss, delete-before-vs-after-new-bootstrap-succeeds ordering, REQ-421's stale forward-reference to key-rotation/biometric-gating (not in REQ-422's actual requirement text), and the dart:io/Android-cleartext-policy interaction (left as an implementation-time empirical task, not guessed at). No implementation code included -- only @spec-style signatures, type/field shapes, and literal XML/JSON/Markdown target-value fragments. No DB/backend change -- apps/mobile/ only.",
+    "artifacts_out": ["lib/letflow/design/req422-mobile-security-hardening.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ422-20260929",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ422-20260929",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

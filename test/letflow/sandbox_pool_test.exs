@@ -843,7 +843,6 @@ defmodule Letflow.SandboxPoolTest do
 
       final = sandbox_schema_names()
       refute MapSet.member?(final, o_schema)
-      assert final == baseline
       assert Process.alive?(pool)
     end
 
@@ -859,7 +858,9 @@ defmodule Letflow.SandboxPoolTest do
       pool = start_pool!(max_concurrent: 1)
 
       o = spawn_claimer(pool, :o, 0)
-      assert_receive {:claimed, :o, {:ok, %SandboxClaim{}}, _t_o}, claim_rendezvous_timeout(0)
+
+      assert_receive {:claimed, :o, {:ok, %SandboxClaim{schema_name: o_schema}}, _t_o},
+                     claim_rendezvous_timeout(0)
 
       # W1 is parked FIRST and confirmed parked, so W2's $gen_call is strictly later in
       # the pool's mailbox and W1 is the queue head that O's release promotes. Polling is
@@ -924,7 +925,7 @@ defmodule Letflow.SandboxPoolTest do
       end
 
       # (b)
-      assert {:ok, %SandboxClaim{}} = w1_result
+      assert {:ok, %SandboxClaim{schema_name: w1_schema}} = w1_result
       assert w2_result == {:error, :sandbox_unavailable}
 
       # (b'), NEW alongside the rendezvous change and strictly a strengthening: W2 really
@@ -957,7 +958,9 @@ defmodule Letflow.SandboxPoolTest do
       send(w1, :release)
       assert_receive {:released, :w1, :ok}, pool_op_rendezvous_timeout()
 
-      assert sandbox_schema_names() == baseline
+      final = sandbox_schema_names()
+      refute MapSet.member?(final, o_schema)
+      refute MapSet.member?(final, w1_schema)
       assert Process.alive?(pool)
     end
 
@@ -982,7 +985,9 @@ defmodule Letflow.SandboxPoolTest do
 
       # NO SCHEMA LEAK: a parked waiter never had one provisioned for it, so the only
       # sandbox schema in existence is still O's.
-      assert sandbox_schema_names() == MapSet.put(baseline, o_schema)
+      assert MapSet.member?(sandbox_schema_names(), o_schema)
+      state = :sys.get_state(pool)
+      assert map_size(state.active) == 1
 
       send(o, :release)
       assert_receive {:released, :o, :ok}, pool_op_rendezvous_timeout()
@@ -992,7 +997,7 @@ defmodule Letflow.SandboxPoolTest do
       assert :ok = SandboxPool.release(id2, pool)
 
       assert Process.alive?(pool)
-      assert sandbox_schema_names() == baseline
+      refute MapSet.member?(sandbox_schema_names(), o_schema)
     end
 
     test "RT-4 (death path b): a caller that dies DURING its provisioning leaks no slot and no schema" do
@@ -1026,7 +1031,6 @@ defmodule Letflow.SandboxPoolTest do
       # NO SCHEMA LEAK.
       final = sandbox_schema_names()
       refute MapSet.member?(final, o_schema)
-      assert final == baseline
 
       # NO SLOT LEAK.
       assert {:ok, %SandboxClaim{sandbox_id: id2}} = SandboxPool.claim(0, pool)
@@ -1072,7 +1076,6 @@ defmodule Letflow.SandboxPoolTest do
       # schema was ever created for it, and none must appear afterwards either.
       final = sandbox_schema_names()
       refute MapSet.member?(final, b_schema)
-      assert final == baseline
 
       # NO SLOT LEAK: both slots are back.
       assert {:ok, %SandboxClaim{sandbox_id: id1}} = SandboxPool.claim(0, pool)
@@ -1124,7 +1127,6 @@ defmodule Letflow.SandboxPoolTest do
       # a worker that died without returning anything is still nameable.
       final = sandbox_schema_names()
       refute MapSet.member?(final, o_schema)
-      assert final == baseline
 
       # THE POOL SURVIVES, and NO SLOT LEAK.
       assert Process.alive?(pool)
@@ -1160,7 +1162,8 @@ defmodule Letflow.SandboxPoolTest do
       # The TEST process owns this claim, so it is also the process that releases it --
       # the same-process contract. It acquires no DBConnection checkout of its own by
       # doing so: claim/2 and release/2 do their DB work in the pool, never in the caller.
-      assert {:ok, %SandboxClaim{sandbox_id: o_id}} = SandboxPool.claim(1_000, pool)
+      assert {:ok, %SandboxClaim{sandbox_id: o_id, schema_name: o_schema}} =
+               SandboxPool.claim(1_000, pool)
 
       w = spawn_claimer(pool, :w, 60_000)
       wait_until_pool_state(pool, "W parked", &(waiter_count(&1) == 1))
@@ -1186,7 +1189,7 @@ defmodule Letflow.SandboxPoolTest do
 
       # (b)
       assert probe_result == {:error, :sandbox_unavailable}
-      assert {:ok, %SandboxClaim{}} = w_result
+      assert {:ok, %SandboxClaim{schema_name: w_schema}} = w_result
 
       # (c) THE LOAD-BEARING FAIL-FIRST. Ratio of two quantities measured inside this same
       # test; no constant. Pre-fix the probe sits in the blocked mailbox for a full
@@ -1201,7 +1204,9 @@ defmodule Letflow.SandboxPoolTest do
       send(w, :release)
       assert_receive {:released, :w, :ok}, pool_op_rendezvous_timeout()
 
-      assert sandbox_schema_names() == baseline
+      final = sandbox_schema_names()
+      refute MapSet.member?(final, o_schema)
+      refute MapSet.member?(final, w_schema)
       assert Process.alive?(pool)
     end
 
@@ -1218,7 +1223,8 @@ defmodule Letflow.SandboxPoolTest do
 
       o1 = spawn_claimer(pool, :o1, 0)
 
-      assert_receive {:claimed, :o1, {:ok, %SandboxClaim{sandbox_id: o1_id}}, _t_o1},
+      assert_receive {:claimed, :o1,
+                      {:ok, %SandboxClaim{sandbox_id: o1_id, schema_name: o1_schema}}, _t_o1},
                      claim_rendezvous_timeout(0)
 
       # A's provisioning owns the single worker for >= 411 ms, which is what makes the
@@ -1261,7 +1267,9 @@ defmodule Letflow.SandboxPoolTest do
       # No reply is sent to the dead release caller.
       refute_received {:released, :o1, _}
 
-      assert_receive {:claimed, :a, {:ok, %SandboxClaim{}}, _t_a}, claim_rendezvous_timeout(0)
+      assert_receive {:claimed, :a, {:ok, %SandboxClaim{schema_name: a_schema}}, _t_a},
+                     claim_rendezvous_timeout(0)
+
       send(a, :release)
       assert_receive {:released, :a, :ok}, pool_op_rendezvous_timeout()
 
@@ -1270,7 +1278,9 @@ defmodule Letflow.SandboxPoolTest do
       assert :queue.is_empty(drained.db_queue)
 
       # NO SCHEMA LEAK: O1's schema was dropped exactly once, A's on release.
-      assert sandbox_schema_names() == baseline
+      final = sandbox_schema_names()
+      refute MapSet.member?(final, o1_schema)
+      refute MapSet.member?(final, a_schema)
 
       # NO SLOT LEAK: both slots are back.
       assert {:ok, %SandboxClaim{sandbox_id: id1}} = SandboxPool.claim(0, pool)
@@ -1340,6 +1350,70 @@ defmodule Letflow.SandboxPoolTest do
 
       assert_receive {:DOWN, ^worker_monitor_ref, :process, ^worker_pid, _reason},
                      pool_op_rendezvous_timeout()
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0881 regression: sandbox_schema_names()-based leak checks must tolerate a
+  # DIFFERENT scripts/test_parallel.sh OS-process partition's own, unrelated SandboxPool
+  # activity landing inside this test's own baseline-to-final window. See
+  # lib/letflow/design/iss0881-sandbox-pool-test-isolation.md and
+  # handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json for the root-cause
+  # diagnosis and test/specs/ISS-0881.md for the acceptance-criteria rationale.
+  #
+  # The real bug only manifests under genuine full-suite, multi-OS-process contention
+  # (ISSUE-FIXER's own 18-iteration reproduction rig did not reliably reproduce it live),
+  # so this test does not try to recreate that contention. Instead it DETERMINISTICALLY
+  # simulates the exact mechanism: it injects an extraneous, unrelated `sandbox_%` schema
+  # into real Postgres, via a raw connection, in the same window a concurrent partition's
+  # own pool would occupy -- between this test's own `baseline` capture and its `final`
+  # read. This reproduces, on demand and in a single process, exactly what an unrelated
+  # concurrent partition's own schema churn would do to a platform-wide snapshot.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0881 regression: scoped leak checks tolerate a concurrent partition's unrelated schema churn" do
+    test "an unrelated sandbox_% schema created during the baseline-to-final window does not fail the scoped no-leak check" do
+      baseline = sandbox_schema_names()
+      on_exit(fn -> drop_sandbox_schemas_created_since!(baseline) end)
+
+      pool = start_pool!(max_concurrent: 1)
+
+      assert {:ok, %SandboxClaim{sandbox_id: sandbox_id, schema_name: o_schema}} =
+               SandboxPool.claim(1_000, pool)
+
+      assert :ok = SandboxPool.release(sandbox_id, pool)
+
+      # The pool's own drop is real and synchronous by the time release/2 returns (see
+      # `describe "release/1,2"` above): O's schema is genuinely gone from Postgres before
+      # the injected noise below, so this test's own leak check is not vacuous.
+      refute schema_exists?(o_schema)
+
+      # DETERMINISTIC INJECTION (ISS-0881's simulated race): mint and create an
+      # extraneous, unrelated `sandbox_%` schema directly via a raw connection, standing
+      # in for a different scripts/test_parallel.sh partition's own SandboxPool activity
+      # landing inside this exact baseline-to-final window. Its own `on_exit` cleans it
+      # up UNCONDITIONALLY -- not inside `drop_sandbox_schemas_created_since!/1`'s best
+      # effort sweep, so a bug in that helper can never leave this noise schema behind.
+      noise_schema = "sandbox_noise_test_#{System.unique_integer([:positive, :monotonic])}"
+      Repo.query!(~s(CREATE SCHEMA "#{noise_schema}"))
+      on_exit(fn -> drop_schema!(noise_schema) end)
+      assert schema_exists?(noise_schema)
+
+      final = sandbox_schema_names()
+
+      # THE ISS-0881 FIX UNDER TEST: a scoped membership check against the one schema this
+      # test's own pool minted, exactly as ISS-0881's fix reframed every call site in this
+      # file (design doc §1, "General rule applied throughout"). This must hold even
+      # though `final` now also contains `noise_schema`, which this test's own pool never
+      # touched -- `final != baseline` here (noise_schema is a genuine, real difference),
+      # so a platform-wide `assert final == baseline` (the pre-ISS-0881-fix shape) is
+      # exactly what this injected noise is built to break; see this test's own fail-first
+      # proof for that mutant in this run's TEST-DESIGNER handoff.
+      refute MapSet.member?(final, o_schema)
+      assert MapSet.member?(final, noise_schema)
+      refute final == baseline
+
+      assert Process.alive?(pool)
     end
   end
 
@@ -1643,7 +1717,7 @@ defmodule Letflow.SandboxPoolTest do
       diff_order =
         sandbox_schema_names()
         |> MapSet.difference(baseline)
-        |> Enum.to_list()
+        |> Enum.filter(&(&1 in [first_schema, middle_schema, third_schema]))
 
       assert diff_order == [first_schema, middle_schema, third_schema]
 

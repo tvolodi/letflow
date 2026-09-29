@@ -1,0 +1,62 @@
+{
+  "handoff_id": "a1f3c8e2-0001-4a00-9000-000000000009",
+  "run_id": "WF03-ISS0881-20260929",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0881-20260929/step-04b-test-design-validator.json",
+  "created_at": "2026-09-29T02:20:00Z",
+  "started_at": "2026-09-29T02:20:00Z",
+  "completed_at": "2026-09-29T02:24:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0881-20260929/step-02-code-designer.json",
+      "handoffs/WF03-ISS0881-20260929/step-03-elixir-dev-implement.json",
+      "handoffs/WF03-ISS0881-20260929/step-04-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/sandbox_pool_test.exs",
+      "lib/letflow/design/iss0881-sandbox-pool-test-isolation.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0881-20260929 (checkout if not already, pull --ff-only from origin). Independently validate TEST-DESIGNER's Step 4 regression test per docs/agents/workflows/WF-03_issue_resolving.md's Step 4 rules and TEST-DESIGN-VALIDATOR's own hard-gate mandate.\n\nRead handoffs/WF03-ISS0881-20260929/step-04-test-designer.json's result.summary in full first -- it claims a fail-then-pass proof: reverting `refute final == baseline` to `assert final == baseline` at test/letflow/sandbox_pool_test.exs (~line 1417) inside the new 'ISS-0881 regression' test (line 1375) makes it FAIL (real quoted output: assertion failure with left MapSet.new([\"sandbox_noise_test_2\"]), right MapSet.new([])), and reverting back makes it PASS (1 passed).\n\n**Do not accept this on the strength of the report alone.** Per WF-03's own rule ('TEST-DESIGN-VALIDATOR must independently APPLY at least one of the reported mutants and run it -- accepting the reported pass counts is copying a claim, not validating one'), you must:\n1. Read the actual new test code as committed (git show 7640aedc -- test/letflow/sandbox_pool_test.exs, or just read the current file).\n2. Apply the SAME mutant yourself (revert the scoped assertion back to the old platform-wide equality form) -- in place is fine given TEST-DESIGNER's own documented finding that the git-worktree technique silently runs stale beams on this checkout (see the new docs/anti-patterns.md entry, commit 86f08ad8) -- run the test, confirm it fails, and quote the real output.\n3. Revert your mutant, verify `git status --porcelain lib/ test/` is EMPTY, re-run the test, confirm it passes, and quote that real output too.\n4. Check the test's on_exit actually drops the injected noise schema unconditionally (read the code -- does it use on_exit correctly, not conditionally skipped on failure?).\n5. Check for the general TEST-DESIGN-VALIDATOR concerns: is this test isolated/self-sufficient (does not depend on other tests' ordering or global state beyond what SandboxPool legitimately manages), does it actually exercise the real fixed code path (not a reimplementation), and does it correspond to a genuine acceptance criterion for this issue (docs/issues/ISS-0881.yaml)?\n\nComplete this handoff: PASS if your own independent mutant application reproduces both halves of the proof, with your own real output quoted (not copied from step-04's summary). FAIL with specific issues if it does not reproduce, or if you find a real coverage/isolation gap. next_action on PASS: 'Route to Step 5 (ISSUE-FIXER closes ISS-0881.yaml)' -- WF-03's own doc does not require a separate full-suite TEST-RUNNER step beyond this validated regression test for an issue-resolution run of this shape, but note explicitly in your summary whether you think a broader `mix test` sanity run is warranted before Step 5, and run one yourself if so (quote the pass count).\n\nCommit your completed handoff (and revert of any mutation) to the branch and push.",
+    "acceptance_criteria": [
+      "The reported mutant was independently re-applied by YOU (not copied from TEST-DESIGNER's report) and the fail-then-pass proof reproduced with your own real command output",
+      "Mutation fully reverted, git status --porcelain lib/ test/ confirmed empty",
+      "on_exit cleanup of the injected noise schema verified by reading the code",
+      "Test isolation and correspondence to ISS-0881's actual acceptance criteria checked",
+      "Handoff completed with a clear PASS/FAIL verdict and next_action"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-validated TEST-DESIGNER's Step 4 regression test at test/letflow/sandbox_pool_test.exs:1375 (commit 7640aedc). Did NOT accept the reported fail-then-pass proof on the strength of the report -- re-applied the same mutant myself, in place (per WF-03's documented fallback: this checkout's git-worktree technique is known to run stale beams, per the docs/anti-patterns.md entry from commit 86f08ad8, so in-place mutation + verified revert is the correct technique here, not a shortcut).\n\nMUTANT APPLIED (mine, not copied): reverted line 1414 from `refute final == baseline` to `assert final == baseline` (the pre-ISS-0881-fix platform-wide equality shape). Ran `mix test test/letflow/sandbox_pool_test.exs:1375` myself. Real quoted output:\n```\n  1) test ISS-0881 regression: scoped leak checks tolerate a concurrent partition's unrelated schema churn an unrelated sandbox_% schema created during the baseline-to-final window does not fail the scoped no-leak check (Letflow.SandboxPoolTest)\n     test/letflow/sandbox_pool_test.exs:1375\n     Assertion with == failed\n     code:  assert final == baseline\n     left:  MapSet.new([\"sandbox_noise_test_2\"])\n     right: MapSet.new([])\n     stacktrace:\n       test/letflow/sandbox_pool_test.exs:1414: (test)\n\nResult: 0/1 passed, 23 excluded\nFailed: 1 test\n```\nThis independently reproduces the exact failure signature TEST-DESIGNER reported (same assertion, same left/right MapSet shapes).\n\nREVERT: restored `refute final == baseline` via direct edit. Ran `git status --porcelain lib/ test/` -- output was EMPTY (confirmed clean, matches committed tree). Re-ran `mix test test/letflow/sandbox_pool_test.exs:1375` myself. Real quoted output:\n```\nFinished in 3.2 seconds (0.00s async, 3.2s sync)\nResult: 1 passed, 23 excluded\n```\nBoth halves of the proof reproduced with my own real output, not copied from step-04's summary. Ran `git status --porcelain lib/ test/` again afterward -- still empty.\n\nON_EXIT CLEANUP: read the test body directly. Two on_exit callbacks are registered, both BEFORE any assertion that could fail, so ExUnit's on_exit stack runs both unconditionally regardless of test outcome: (1) line 1377, `on_exit(fn -> drop_sandbox_schemas_created_since!(baseline) end)` -- the file's existing best-effort sweep for anything the pool itself leaked; (2) line 1399, `on_exit(fn -> drop_schema!(noise_schema) end)` -- registered immediately after `CREATE SCHEMA` and before any assertion, so the injected noise schema is dropped unconditionally, independent of whether the sweep in (1) also happens to catch it (it wouldn't, since noise_schema is outside the pool's own `baseline`-to-pool-activity diff only incidentally -- see design rationale in the test's own comment at line ~1394-1396). Confirmed this is not conditional on test success.\n\nISOLATION / SELF-SUFFICIENCY: the test captures its own `baseline` via `sandbox_schema_names()` at its own start, uses a uniquely-named pool via `start_pool!/1` (never the shared singleton), and the noise schema name is minted with `System.unique_integer/1` -- no dependency on another test having run first, no shared mutable fixture, no reliance on execution order. Module is `async: false` (whole-file convention, documented in the moduledoc, for the pre-existing Sandbox `:auto`-mode reason), so it cannot race a concurrently-running test in this same suite process either. Ran the full file (`mix test test/letflow/sandbox_pool_test.exs`) after reverting the mutant: `Finished in 56.3 seconds ... Result: 24 passed` -- confirms this new test coexists cleanly with the other 23 in the file and introduced no ordering dependency or leak.\n\nCORRESPONDENCE TO ISS-0881: read docs/issues/ISS-0881.yaml. The issue is exactly what this test targets -- a platform-wide/cross-partition-visible assertion (`refute MapSet.member?(final, o_schema)` style checks, and by extension any bare `final == baseline`) failing under contention from schema churn the test's own pool didn't create. The new test's mechanism (inject an unrelated sandbox_% schema during the baseline-to-final window, assert the SCOPED check tolerates it) is a faithful deterministic simulation of the diagnosed race, not a reimplementation of SandboxPool's logic -- it exercises the real `SandboxPool.claim/2` and `release/2` and the real `sandbox_schema_names/0` helper shared by every other leak check in this file.\n\nNo coverage or isolation gaps found. A broader `mix test` full-suite sanity run beyond this file is not warranted before Step 5: ISS-0881's own diagnosis (step-01 handoff) states the defect requires genuine cross-OS-process full-suite contention that a live rig could not reliably reproduce even at 18 iterations, so a single-process full `mix test` run would not exercise the failure mode either way and would only cost time; the full sandbox_pool_test.exs file run (24 passed, quoted above) is the correct-sized sanity check for a change scoped entirely to that one file.",
+    "artifacts_out": [],
+    "issues": [
+      "Non-blocking housekeeping fix: this handoff's own created_at/started_at as dispatched by ORCH read '2026-09-29T07:20:00Z', but the dispatching commit's real git author timestamp is '2026-09-29 07:22:23 +0500' (true UTC ~02:22) -- the '07:20:00Z' value is the committer's local wall-clock time with a 'Z' wrongly appended, not real UTC. Corrected created_at/started_at to '2026-09-29T02:20:00Z' (verified UTC) so this step's own completed_at (real UTC, PowerShell [DateTime]::UtcNow) does not precede it, rather than fabricating a future completed_at to satisfy mix letflow.lint_handoffs's H2 check mechanically. Flagging in case this local-time-labelled-as-UTC pattern recurs elsewhere in ORCH's dispatch step."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0881-20260929",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0881-20260929",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 5 (ISSUE-FIXER closes ISS-0881.yaml)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

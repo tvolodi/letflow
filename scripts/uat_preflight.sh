@@ -1,0 +1,399 @@
+#!/usr/bin/env bash
+# uat_preflight.sh
+#
+# WF-05 Step 0 preflight: READ-ONLY check of a target environment against the
+# PRECONDITIONS manifest derived from the UAT scenario corpus. Prints (1) a manifest
+# summary and (2) a scenario x check gap table (OK / GAP / UNKNOWN, with reason and
+# remediation owner). See docs/agents/workflows/WF-05_uat_run.md "Step 0".
+#
+# Usage:
+#   scripts/uat_preflight.sh --base-url URL --environment SLUG --credential-source PATH \
+#       [--scenarios DIR] [--sha SHA] [--idp-url URL] [--out FILE]
+#
+#   --base-url           instance under test, e.g. https://qa.bizdala.com
+#   --environment        stable slug (qa | local | staging ...), printed in the report
+#   --credential-source  script that lists seeded usernames (no arg) and prints
+#                        "Password: <pw>" for `<username>` (ai-dala-infra/scripts/qa-login.sh)
+#   --scenarios          corpus dir (default test/fixtures/uat/scenarios); _throwaway skipped
+#   --sha                expected deployed build (default: `git rev-parse origin/main`)
+#   --idp-url            Keycloak base (default: derived, https://auth.<host minus first label
+#                        if it is 'qa'... i.e. https://auth.qa.bizdala.com for qa.bizdala.com)
+#   --out FILE           also write a machine-readable JSON summary (never contains secrets)
+#
+# Exit codes: 0 = no GAP (env ready; UNKNOWN entries are listed but not fatal)
+#             1 = at least one GAP  => the run is ENV_NOT_READY, not a UAT result
+#             2 = usage error
+#
+# Everything is read-only: GET requests, plus the OIDC password grant used only to check
+# that a seeded credential is valid. Passwords/tokens are held in process memory, never
+# printed, logged, written to a file, or placed in argv.
+#
+# Dependencies: bash, git, and Python 3 (stdlib only; PyYAML optional -- if absent, a
+# tolerant regex reader is used for the scenario files). Interpreter is auto-detected
+# (`python3` on Windows is often a Store stub that does not run, so `python` is tried too).
+#
+# Actor -> credential heuristic (best effort, documented in WF-05 Step 0):
+#   actor-platform-admin        -> needs a seeded PLATFORM_ADMIN user (qa-login "admin-user")
+#   actor-system-* / actor-any  -> not a login (system/any); not checked
+#   actor-<tenant>-<name>       -> needs a seeded username starting "<name>-" (or == "<name>")
+#                                  able to log in to Keycloak realm <tenant> or bpm-default
+#   anything else               -> UNKNOWN
+set -uo pipefail
+
+PY=""
+for c in python3 python py; do
+  if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(0 if sys.version_info[0]==3 else 1)' >/dev/null 2>&1; then
+    PY="$c"; break
+  fi
+done
+if [[ -z "$PY" ]]; then echo "uat_preflight: no working python3 found" >&2; exit 2; fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export UAT_PF_REPO_ROOT="$REPO_ROOT"
+export UAT_PF_BASH="${BASH:-bash}"   # the bash running us (git-bash), not WSL's System32ash.exe
+export UAT_PF_DEFAULT_SHA="$(git -C "$REPO_ROOT" rev-parse origin/main 2>/dev/null || true)"
+
+exec "$PY" - "$@" <<'PYEOF'
+import sys, os, re, json, glob, subprocess, argparse, urllib.request, urllib.parse, urllib.error
+
+def usage_err(msg):
+    sys.stderr.write("uat_preflight: %s\n" % msg)
+    sys.stderr.write("usage: uat_preflight.sh --base-url URL --environment SLUG --credential-source PATH "
+                     "[--scenarios DIR] [--sha SHA] [--idp-url URL] [--out FILE]\n")
+    sys.exit(2)
+
+class P(argparse.ArgumentParser):
+    def error(self, m): usage_err(m)
+
+ap = P(add_help=False)
+ap.add_argument("--base-url"); ap.add_argument("--environment"); ap.add_argument("--credential-source")
+ap.add_argument("--scenarios"); ap.add_argument("--sha"); ap.add_argument("--idp-url"); ap.add_argument("--out")
+a = ap.parse_args(sys.argv[1:])
+for req in ("base_url", "environment", "credential_source"):
+    if not getattr(a, req): usage_err("missing --" + req.replace("_", "-"))
+
+def winpath(p):
+    """git-bash paths (/c/Users/..) -> C:/Users/.. for native Windows Python."""
+    if p and os.name == "nt":
+        m = re.match(r"^/([a-zA-Z])/(.*)$", p)
+        if m: return "%s:/%s" % (m.group(1).upper(), m.group(2))
+    return p
+
+REPO = winpath(os.environ["UAT_PF_REPO_ROOT"])
+BASH = os.environ.get("UAT_PF_BASH", "bash")
+base = a.base_url.rstrip("/")
+scen_dir = winpath(a.scenarios) if a.scenarios else os.path.join(REPO, "test/fixtures/uat/scenarios")
+exp_sha = a.sha or os.environ.get("UAT_PF_DEFAULT_SHA", "")
+host = urllib.parse.urlparse(base).hostname or ""
+idp = (a.idp_url or ("https://auth." + host)).rstrip("/")
+CLIENT_ID = os.environ.get("BPM_IDP_CLIENT_ID", "letflow-web")
+
+# ---------------------------------------------------------------- http (read-only)
+def http(method, url, headers=None, data=None, timeout=15):
+    req = urllib.request.Request(url, method=method, headers=headers or {}, data=data)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+    except Exception as e:
+        return 0, str(type(e).__name__).encode()
+
+def jload(b):
+    try: return json.loads(b)
+    except Exception: return None
+
+# ---------------------------------------------------------------- scenario manifest
+try:
+    import yaml
+except Exception:
+    yaml = None
+
+def parse_scenario(path):
+    raw = open(path, encoding="utf-8").read()
+    d = {}
+    if yaml:
+        try:
+            docs = [x for x in yaml.safe_load_all(raw) if isinstance(x, dict)]
+            d = docs[0] if docs else {}
+        except Exception:
+            d = {}
+    if not d:  # tolerant fallback
+        for key in ("id", "company_id", "scope", "process_id", "pipeline_test"):
+            m = re.search(r"^%s:\s*(\S+)" % key, raw, re.M)
+            if m: d[key] = m.group(1).strip("\"'")
+        m = re.search(r"^actors:\s*\n((?:[ \t]+.*\n?)+)", raw, re.M)
+        acts = {}
+        if m:
+            for l in m.group(1).splitlines():
+                mm = re.match(r"\s+([\w-]+):\s*(actor-[\w-]+)", l)
+                if mm: acts[mm.group(1)] = mm.group(2)
+        d["actors"] = acts
+    actors = d.get("actors") or {}
+    actor_ids = sorted({v for v in actors.values() if isinstance(v, str) and v.startswith("actor-")}) if isinstance(actors, dict) else []
+    tenant = d.get("company_id") or d.get("scope")
+    if d.get("scope") and d.get("scope") != "platform": tenant = d["scope"]
+    # forward-reference / unbuilt-feature NOTE comments
+    notes = " ".join(re.findall(r"^#\s*NOTE \(ISS-\d+.*(?:\n#.*)*", raw, re.M)).lower()
+    fwd_spec = bool(re.search(r"spec file does not exist|forward-reference|aspirational|never authored", notes))
+    unbuilt = bool(re.search(r"has not built|not built the equivalent", notes))
+    return {
+        "file": os.path.relpath(path, REPO).replace("\\", "/"),
+        "id": str(d.get("id") or os.path.basename(path)),
+        "tenant": str(tenant) if tenant else None,
+        "process_id": d.get("process_id") if d.get("process_id") not in (None, "n/a") else None,
+        "pipeline_test": d.get("pipeline_test"),
+        "actor_ids": actor_ids,
+        "fwd_spec": fwd_spec, "unbuilt": unbuilt,
+    }
+
+files = sorted(f for f in glob.glob(os.path.join(scen_dir, "**", "*.yaml"), recursive=True)
+               if "_throwaway" not in f.replace("\\", "/").split("/"))
+if not files: usage_err("no scenario files under " + scen_dir)
+scenarios = [parse_scenario(f) for f in files]
+
+# ---------------------------------------------------------------- credentials (in-memory only)
+cred_src = winpath(a.credential_source)
+cred_listing = None   # list of usernames, None = source unusable
+cred_err = None
+def run_cred(args, timeout):
+    return subprocess.run([BASH, cred_src] + args, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+
+try:
+    if not os.path.isfile(cred_src): raise RuntimeError("credential source not found: " + cred_src)
+    r = run_cred([], 30)
+    names = []
+    for l in r.stdout.splitlines():
+        m = re.match(r"^\s{2}([a-z0-9][\w-]*)\s", l)
+        if m: names.append(m.group(1))
+    if not names: raise RuntimeError("credential source listed no usernames")
+    cred_listing = names
+except Exception as e:
+    cred_err = str(e)
+
+def fetch_password(user):
+    try:
+        r = run_cred([user], 60)
+        for l in r.stdout.splitlines():
+            if l.startswith("Password:"): return l.split(":", 1)[1].strip()
+    except Exception:
+        pass
+    return None
+
+_pw_cache = {}
+token_status = {}   # user -> (state, realm)   state in OK / BAD_CRED / NO_PASSWORD / NO_REALM
+tokens = {}         # in-memory only
+def try_login(user, realms):
+    if user in token_status: return token_status[user]
+    pw = fetch_password(user)
+    if not pw:
+        token_status[user] = ("NO_PASSWORD", None); return token_status[user]
+    result = ("BAD_CRED", None)
+    for realm in realms:
+        body = urllib.parse.urlencode({"client_id": CLIENT_ID, "username": user, "password": pw,
+                                       "grant_type": "password"}).encode()
+        st, resp = http("POST", "%s/realms/%s/protocol/openid-connect/token" % (idp, realm),
+                        {"Content-Type": "application/x-www-form-urlencoded"}, body)
+        j = jload(resp) if st == 200 else None
+        if j and j.get("access_token"):
+            tokens[user] = (realm, j["access_token"]); result = ("OK", realm); break
+    pw = None
+    token_status[user] = result
+    return result
+
+def realms_for(user, tenants):
+    r = ["bpm-default"]
+    for t in tenants:
+        if t and t != "platform" and t not in r: r.append(t)
+    return r
+
+# ---------------------------------------------------------------- global checks
+g = {}   # name -> (status, reason, owner)
+st, _ = http("GET", base + "/health")
+g["base_url"] = ("OK", "GET /health -> %s" % st, "") if st == 200 else \
+    ("GAP", "GET /health -> %s" % st, "ai-dala-infra")
+
+tenant_slugs_needed = sorted({s["tenant"] for s in scenarios if s["tenant"] and s["tenant"] != "platform"})
+realm_state = {}
+for slug in sorted(set(tenant_slugs_needed) | {"bpm-default"}):
+    st, _ = http("GET", "%s/realms/%s/.well-known/openid-configuration" % (idp, slug))
+    realm_state[slug] = st
+
+# admin token: first seeded PLATFORM_ADMIN-ish user that logs in
+admin_user = next((u for u in (cred_listing or []) if u in ("admin-user",)), None)
+admin_tok = None
+if admin_user:
+    s_, realm_ = try_login(admin_user, ["bpm-default"])
+    if s_ == "OK": admin_tok = tokens[admin_user][1]
+
+def auth(tok): return {"Authorization": "Bearer " + tok, "Accept": "application/json"}
+
+# deployed SHA
+sha_state = ("UNKNOWN", "no version endpoint exposes a build SHA (tried /health, /api/v1/version)", "ai-dala-infra (expose build SHA)")
+cands = [("/health", None)]
+if admin_tok: cands.append(("/api/v1/version", admin_tok))
+for path, tok in cands:
+    st, body = http("GET", base + path, auth(tok) if tok else None)
+    j = jload(body) if st == 200 else None
+    if isinstance(j, dict):
+        v = next((str(j[k]) for k in ("sha", "git_sha", "commit", "build_sha", "revision", "version") if j.get(k)), None)
+        if v:
+            if exp_sha and (v.startswith(exp_sha[:7]) or exp_sha.startswith(v[:7])):
+                sha_state = ("OK", "deployed %s == origin/main %s" % (v[:12], exp_sha[:12]), "")
+            elif exp_sha and re.fullmatch(r"[0-9a-f]{7,40}", v):
+                sha_state = ("GAP", "deployed %s != expected %s" % (v[:12], exp_sha[:12]), "ai-dala-infra (redeploy)")
+            else:
+                sha_state = ("UNKNOWN", "endpoint reports version %s; not comparable to a git SHA" % v[:40], "ai-dala-infra (expose build SHA)")
+            break
+g["deployed_sha"] = sha_state
+
+# tenants
+tenants_found = None
+tenants_reason = ""
+if admin_tok:
+    st, body = http("GET", base + "/api/v1/tenants", auth(admin_tok))
+    j = jload(body) if st == 200 else None
+    items = j if isinstance(j, list) else (j.get("items") or j.get("data") or j.get("tenants") if isinstance(j, dict) else None)
+    if isinstance(items, list):
+        tenants_found = set()
+        for it in items:
+            if isinstance(it, dict):
+                for k in ("slug", "name", "realm", "subdomain"):
+                    if it.get(k): tenants_found.add(str(it[k]).lower())
+    else:
+        tenants_reason = "GET /api/v1/tenants -> %s (unparseable or forbidden)" % st
+else:
+    tenants_reason = "no valid PLATFORM_ADMIN token (credential check failed)"
+
+# ---------------------------------------------------------------- per-scenario checks
+CHECKS = ["spec", "local_deps", "feature", "tenant", "realm", "actors"]
+rows = []
+def spec_path(s): return os.path.join(REPO, s["pipeline_test"]) if s["pipeline_test"] else None
+
+for s in scenarios:
+    c = {}
+    sp = spec_path(s)
+    if not sp:
+        c["spec"] = ("OK", "no pipeline_test declared (API/manual drive)", "")
+    elif not os.path.isfile(sp):
+        c["spec"] = ("GAP", "pipeline_test %s does not exist" % s["pipeline_test"], "feature-gap (author spec)")
+    else:
+        c["spec"] = ("OK", "spec file exists", "")
+    if s["unbuilt"]:
+        c["feature"] = ("GAP", "NOTE (ISS-...) says Letflow has not built the feature this scenario exercises", "feature-gap (UNBUILT_FEATURE)")
+    elif s["fwd_spec"] and not (sp and os.path.isfile(sp)):
+        c["feature"] = ("GAP", "NOTE (ISS-...) marks the pipeline_test as an unresolved forward-reference", "feature-gap (UNBUILT_FEATURE)")
+    elif s["fwd_spec"]:
+        c["feature"] = ("UNKNOWN", "NOTE (ISS-...) calls the spec a forward-reference but the file now exists; NOTE may be stale", "letflow (BA/UAT-RUNNER: refresh NOTE)")
+    else:
+        c["feature"] = ("OK", "no forward-reference NOTE", "")
+    if sp and os.path.isfile(sp):
+        txt = open(sp, encoding="utf-8", errors="replace").read()
+        hit = re.search(r"docker[ -]compose|docker exec|\bpsql\b", txt)
+        c["local_deps"] = ("GAP", "spec uses local-only tooling (`%s`)" % hit.group(0), "letflow (rewrite spec to API/seed; ENV_NOT_SUPPORTED)") if hit \
+            else ("OK", "no local-only tooling found", "")
+    else:
+        c["local_deps"] = ("OK", "n/a (no spec file)", "")
+    t = s["tenant"]
+    if not t or t == "platform":
+        c["tenant"] = ("OK", "platform scope", "")
+    elif tenants_found is None:
+        c["tenant"] = ("UNKNOWN", tenants_reason, "letflow (fix credentials first)")
+    elif t.lower() in tenants_found:
+        c["tenant"] = ("OK", "tenant '%s' present" % t, "")
+    else:
+        c["tenant"] = ("GAP", "tenant '%s' not in GET /api/v1/tenants" % t, "ai-dala-infra (create tenant)")
+    slug = t if t and t != "platform" else "bpm-default"
+    rs = realm_state.get(slug)
+    c["realm"] = ("OK", "realm '%s' reachable" % slug, "") if rs == 200 else \
+        ("GAP", "realm '%s' -> HTTP %s" % (slug, rs), "ai-dala-infra (create realm)")
+    # actors
+    if cred_listing is None:
+        c["actors"] = ("UNKNOWN", "credential source unusable: %s" % cred_err, "ai-dala-infra")
+    else:
+        missing, unknown, bad, need = [], [], [], 0
+        for aid in s["actor_ids"]:
+            if aid.startswith("actor-system-") or aid == "actor-any": continue
+            need += 1
+            if aid == "actor-platform-admin":
+                users = [u for u in cred_listing if u == "admin-user"]
+            else:
+                m = re.match(r"actor-([a-z0-9]+)-([a-z0-9]+)$", aid)
+                if not m: unknown.append(aid); continue
+                nm = m.group(2)
+                users = [u for u in cred_listing if u == nm or u.startswith(nm + "-")]
+            if not users: missing.append(aid); continue
+            state, _r = try_login(users[0], realms_for(users[0], [t]))
+            if state != "OK": bad.append("%s(%s)" % (aid, state))
+        if missing or bad:
+            reason = []
+            if missing: reason.append("no seeded user: " + ", ".join(missing))
+            if bad: reason.append("login failed: " + ", ".join(bad))
+            c["actors"] = ("GAP", "; ".join(reason), "ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)")
+        elif unknown:
+            c["actors"] = ("UNKNOWN", "cannot map: " + ", ".join(unknown), "")
+        else:
+            c["actors"] = ("OK", "%d login actor(s) resolved & token valid" % need if need else "no login actors needed", "")
+    rows.append((s, c))
+
+# ---------------------------------------------------------------- report
+out = []
+P_ = out.append
+P_("UAT PREFLIGHT  environment=%s  base_url=%s  idp=%s" % (a.environment, base, idp))
+P_("expected build (origin/main): %s" % (exp_sha or "unknown"))
+P_("scenarios: %d   corpus: %s" % (len(scenarios), os.path.relpath(scen_dir, REPO).replace("\\", "/")))
+P_("")
+P_("== MANIFEST ==")
+P_("tenants needed        : %s" % (", ".join(tenant_slugs_needed) or "-"))
+P_("keycloak realms needed: %s" % ", ".join(sorted(set(tenant_slugs_needed) | {"bpm-default"})))
+P_("actors (login)        : %s" % ", ".join(sorted({x for s in scenarios for x in s["actor_ids"]
+                                                    if not x.startswith("actor-system-") and x != "actor-any"})))
+P_("process definitions   : %s" % ", ".join(sorted({s["process_id"] for s in scenarios if s["process_id"]})))
+P_("pipeline specs        : %d declared" % sum(1 for s in scenarios if s["pipeline_test"]))
+P_("seeded usernames      : %s" % (", ".join(cred_listing) if cred_listing else "UNAVAILABLE (%s)" % cred_err))
+P_("credential validity   : " + (", ".join("%s=%s" % (u, v[0]) for u, v in sorted(token_status.items())) or "none checked"))
+P_("")
+P_("== GLOBAL CHECKS ==")
+for k, (st_, why, own) in g.items():
+    P_("%-14s %-8s %s%s" % (k, st_, why, "   [owner: %s]" % own if own and st_ != "OK" else ""))
+P_("")
+P_("== GAP TABLE (scenario x check) ==")
+w = max(len(s["id"]) for s, _ in rows)
+P_("%-*s  %s" % (w, "scenario", "  ".join("%-10s" % k for k in CHECKS)))
+for s, c in rows:
+    P_("%-*s  %s" % (w, s["id"], "  ".join("%-10s" % c[k][0] for k in CHECKS)))
+P_("")
+P_("== DETAIL (non-OK) ==")
+counts = {"OK": 0, "GAP": 0, "UNKNOWN": 0}
+bad_scen = set()
+for k, (st_, why, own) in g.items():
+    counts[st_] += 1
+    if st_ != "OK":
+        P_("[%s] GLOBAL/%s: %s  -> owner: %s" % (st_, k, why, own or "-"))
+        if st_ == "GAP": bad_scen.add("*")
+for s, c in rows:
+    for k in CHECKS:
+        st_, why, own = c[k]
+        counts[st_] += 1
+        if st_ != "OK":
+            P_("[%s] %s/%s: %s  -> owner: %s" % (st_, s["id"], k, why, own or "-"))
+            if st_ == "GAP": bad_scen.add(s["id"])
+P_("")
+gap_scen = sorted(x for x in bad_scen if x != "*")
+ready = counts["GAP"] == 0
+P_("== SUMMARY ==")
+P_("checks: OK=%d GAP=%d UNKNOWN=%d" % (counts["OK"], counts["GAP"], counts["UNKNOWN"]))
+P_("scenarios with >=1 GAP: %d of %d" % (len(gap_scen), len(scenarios)))
+P_("RESULT: %s" % ("ENV_READY" if ready else "ENV_NOT_READY"))
+text = "\n".join(out)
+print(text)
+
+if a.out:
+    summ = {"environment": a.environment, "base_url": base, "expected_sha": exp_sha,
+            "result": "ENV_READY" if ready else "ENV_NOT_READY", "counts": counts,
+            "global": {k: {"status": v[0], "reason": v[1], "owner": v[2]} for k, v in g.items()},
+            "scenarios": {s["id"]: {k: {"status": c[k][0], "reason": c[k][1], "owner": c[k][2]} for k in CHECKS} for s, c in rows}}
+    with open(winpath(a.out), "w", encoding="utf-8") as fh: json.dump(summ, fh, indent=2)
+sys.exit(0 if ready else 1)
+PYEOF

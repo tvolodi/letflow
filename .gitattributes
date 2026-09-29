@@ -40,3 +40,6 @@ handoffs/orchestrator.log merge=union
 *.json text eol=lf
 *.html text eol=lf
 *.css text eol=lf
+
+# Shell scripts must stay LF or bash fails on CRLF checkouts (scripts/uat_preflight.sh).
+scripts/*.sh text eol=lf

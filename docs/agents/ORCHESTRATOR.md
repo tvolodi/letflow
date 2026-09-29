@@ -78,7 +78,7 @@ for the recovery-path shape.)
 | WF-02 | Requirement Implementation | Requirement status ready to build (validated, or already well-formed in `docs/requirements.yaml`) | `docs/agents/workflows/WF-02_requirement_implementation.md` |
 | WF-03 | Issue Resolving | A queued `docs/issues/ISS-NNNN.yaml` entry, a bug report, a test regression | `docs/agents/workflows/WF-03_issue_resolving.md` |
 | WF-04 | Full Test Run | Pre-stage-gate or scheduled full-suite validation | `docs/agents/workflows/WF-04_full_test_run.md` |
-| WF-05 | UAT Run | A stage reaches a point where a running instance exists to validate against (S7+) | `docs/agents/workflows/WF-05_uat_run.md` |
+| WF-05 | UAT Run | A stage reaches a point where a running instance exists to validate against (S7+); starts with Step 0 environment preparation (`scripts/uat_preflight.sh`) | `docs/agents/workflows/WF-05_uat_run.md` |
 
 ## 3. Decision tree
 
@@ -108,7 +108,8 @@ INPUT: trigger
 │     └─► Launch WF-04 (Step 00 once, Step Final once; incidental findings forwarded)
 │
 ├─ A running Letflow instance exists and a stage's UAT scenarios are ready?
-│     └─► Launch WF-05 (Steps 1-3 as before; Step 4 is now PRODUCT-OWNER's
+│     └─► Launch WF-05 (Step 0 env preparation first — preflight + seed/ai-dala-infra
+│           remediation; unmet after prep = ENV_NOT_READY, no UAT verdict; then Steps 1-3; Step 4 is now PRODUCT-OWNER's
 │           release-recommendation sign-off — see WF-05_uat_run.md. PRODUCT-OWNER
 │           runs after every BA-<VERTICAL> sign-off for the run has completed,
 │           strictly before RELEASE-VALIDATOR, never in parallel with either —
@@ -311,7 +312,9 @@ Before routing WF-02 implementation handoffs for Stage N+1, ORCH verifies:
    `release_recommendation: APPROVED` for that run — a stage does not advance on
    a `BLOCKED` recommendation, and this check does not apply when no WF-05 run
    was in scope for the stage (pre-S7 stages, or a stage with no UAT scenario
-   corpus yet).
+   corpus yet). A WF-05 run reported `ENV_NOT_READY` (Step 0 skipped, or
+   BLOCKED-by-environment scenarios remain) does not satisfy this check: it is not a
+   UAT result, so ORCH prepares the environment and re-runs.
 5. `REVIEWER` has appended a dated sign-off section to `docs/migration/stage-N-*.md`
    (this predates the fuller pipeline — it's the existing per-stage convention, now
    also gated by RELEASE-VALIDATOR's own independent check rather than being the only

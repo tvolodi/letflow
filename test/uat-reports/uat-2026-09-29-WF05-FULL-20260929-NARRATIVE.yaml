@@ -1,0 +1,58 @@
+run_id: WF05-FULL-20260929-NARRATIVE
+date: "2026-09-29"
+agent: UAT-RUNNER
+slice: "C -- meridian/, swiftroute/, vortex/ narrative corpora (11 scenarios)"
+environment:
+  base_url: https://qa.bizdala.com
+  credential_source: ai-dala-infra/scripts/qa-login.sh
+  environment: qa
+  health: "GET /health -> 200; GET /api/v1/* unauthenticated -> 401 (instance reachable)"
+overall: BLOCKED
+summary: "0 PASS / 0 FAIL / 11 BLOCKED. No scenario could be started: the target instance lacks the tenants, Keycloak realms, process definitions and (for Meridian/Vortex) actor accounts every scenario presupposes. Nothing was executed, so nothing is recorded as PASS."
+observed_facts:
+  - "GET /api/v1/tenants (admin-user token, bpm-default realm) -> only 2 tenants: bpm-default, bilimbaga. No swiftroute, meridian or vortex tenant."
+  - "auth.qa.bizdala.com/realms/{swiftroute,meridian,vortex}/.well-known/openid-configuration -> 404; password grant against realm swiftroute -> 'Realm does not exist'. Only bpm-default (and bilimbaga) realms exist."
+  - "GET /api/tenant-config?realm={swiftroute,meridian,vortex} all return oidc_authority .../realms/bpm-default (no per-company realm resolves)."
+  - "GET /api/v1/definitions (26 rows) -> no proc-swiftroute-shipment-approval, proc-meridian-loan-origination, proc-meridian-regulatory-compliance-review, proc-vortex-* or sys-tenant-onboarding definition; only pl-promo-*/probe-*/digest-probe-*/uat-promo-review-flow fixtures."
+  - "GET /api/v1/identity/users?search=actor-swiftroute-lena -> empty items (actor ids as named in scenarios do not exist). Search for meridian, vortex, tobias -> empty."
+  - "SwiftRoute persona Keycloak users exist in bpm-default under different usernames: lena-dispatcher-user, marco-ops-manager-user, alice-ceo-user (password grant succeeds via qa-login.sh). Part B done: roles role-ceo and role-ops-manager exist; ops-managers group holds marco-ops-manager-user, ceo group holds alice-ceo-user. Lena has no app role (per qa-login.sh). actor-swiftroute-tobias has no account at all."
+  - "actor-platform-admin not present; admin-user (PLATFORM_ADMIN) exists but is not the scenario's actor."
+scenarios:
+  - id: meridian/loan-origination-above-threshold
+    verdict: BLOCKED
+    reason: "CREDENTIALS_MISSING + precondition (process definition proc-meridian-loan-origination, meridian tenant/realm) absent. Actors lars, ben, miriam, thomas, julia, eva, marcus: none exist in qa-login.sh or identity users."
+  - id: meridian/loan-origination-below-threshold
+    verdict: BLOCKED
+    reason: "Same as above; actors sophie, ben, miriam, julia, marcus not resolvable; process definition absent."
+  - id: meridian/regulatory-compliance-review-bafin
+    verdict: BLOCKED
+    reason: "actors claudia, eva not resolvable; proc-meridian-regulatory-compliance-review and meridian tenant absent."
+  - id: swiftroute/shipment-high-value-happy
+    verdict: BLOCKED
+    reason: "Persona credentials resolvable (lena/marco/alice-*-user in bpm-default) but proc-swiftroute-shipment-approval definition and swiftroute tenant/realm are not deployed on QA, so step 1 (create instance) cannot start; scenario precondition process_definition_active is false. Scenario actor ids (actor-swiftroute-*) also differ from the QA usernames."
+  - id: swiftroute/shipment-ops-timeout-escalation
+    verdict: BLOCKED
+    reason: "Same missing definition/tenant; actor-swiftroute-tobias has no account (CREDENTIALS_MISSING)."
+  - id: swiftroute/shipment-attach-delivery-note
+    verdict: BLOCKED
+    reason: "Has pipeline_test (web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts) but the spec provisions a fresh Keycloak realm via master-realm admin credentials (not part of credential_source) and needs the shipment definition; not run to avoid creating realms on shared QA without a provided admin credential. Definition also absent."
+  - id: swiftroute/tenant-onboarding-happy
+    verdict: BLOCKED
+    reason: "pipeline_test onboarding-wizard.pipeline.e2e.spec.ts exists, but needs actor-platform-admin and Keycloak realm-creation saga (BPM_IDP_BASE_URL master access); neither supplied by credential_source. Not run: it would create a real tenant + realm on QA."
+  - id: vortex/entity-list-filter-and-page
+    verdict: BLOCKED
+    reason: "UNBUILT_FEATURE per scenario's NOTE (ISS-0526) marking the pipeline_test an aspirational forward-reference (a spec file of that name does exist in web/ now, but it runs as admin-user rather than actors karl/anna); actors karl/anna unresolvable; vortex tenant absent."
+  - id: vortex/production-order-above-threshold
+    verdict: BLOCKED
+    reason: "actors anna, sabine, stefan not resolvable; proc-vortex-production-order-release and vortex tenant absent."
+  - id: vortex/supplier-quality-deviation-critical
+    verdict: BLOCKED
+    reason: "actors nina, karl, felix not resolvable; proc-vortex-supplier-quality-deviation absent."
+  - id: vortex/supplier-quality-deviation-false-positive
+    verdict: BLOCKED
+    reason: "actors nina, karl not resolvable; definition absent."
+no_side_effects: "Read-only calls only (token grants, GET requests). No instances, tenants, realms or records were created; no cleanup needed. No code changed, nothing committed."
+recommended_actions:
+  - "Provision on QA: swiftroute/meridian/vortex tenants + Keycloak realms (or map their hosts/realms in tenant-config), and seed the company process definitions (scripts/seed_swiftroute_definition.sh exists for SwiftRoute; none for Meridian/Vortex)."
+  - "Add Meridian/Vortex actor accounts to ai-dala-infra qa-login.sh and reconcile scenario actor ids (actor-swiftroute-lena) with QA usernames (lena-dispatcher-user)."
+  - "Supply a Keycloak master-admin credential source if the realm-provisioning pipeline specs are to be run."

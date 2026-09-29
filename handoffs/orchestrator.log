@@ -2345,3 +2345,5 @@
 2026-09-29T11:38:26Z | DISPATCH | WF02-REQ425-20260929 | step-01b-recheck1 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING -- fresh full re-check
 2026-09-29T11:41:00Z | FAIL | WF02-REQ425-20260929 | step-01b-recheck1 | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- new defect found on full re-read (iteration-0 defects confirmed fixed): ApiClient.forTesting has no TenantTokenStore/ActiveRealmHolder seam, blocking AC1/AC2's test constructions. rework_count 1 -> 2.
 2026-09-29T11:41:43Z | DISPATCH | WF02-REQ425-20260929 | step-01-rework2 | ORCH -> CODE-DESIGNER | PENDING -- rework iteration 2 of 3
+2026-09-29T11:45:00Z | PASS | WF02-REQ425-20260929 | step-01-rework2 | CODE-DESIGNER -> ORCH | PASS -- ApiClient.forTesting gains tokenStore/activeRealm params matching .create; new Sec 2.6 states the test-inspection seam via the existing FakeSecureStoragePlatform + real TenantTokenStore round trip (commit bb0bbd4e).
+2026-09-29T11:45:14Z | DISPATCH | WF02-REQ425-20260929 | step-01b-recheck2 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING -- fresh full re-check, rework iteration 2 of 3

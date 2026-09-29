@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-04-test-runner.json",
   "created_at": "2026-09-29T13:04:49Z",
   "started_at": "2026-09-29T13:04:49Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T13:37:47Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -36,18 +36,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Re-checked free memory immediately before running: FreePhysicalMemory=4599152 KB (~4.39GB), matching the handoff's ~4.6GB premise, still borderline. docker compose up -d confirmed letflow-postgres-1 and letflow-keycloak-1 already Running. Ran `TEST_PARALLEL_N=2 scripts/test_parallel.sh` as a blocking foreground call (no Monitor, no cross-turn wait) -- it exceeded the tool's 600s default and was auto-moved to a background task by the harness; polled it synchronously to completion. Result, first attempt, no retries, no reap/OOM: 2 partitions, 5031 tests + 8 properties, 0 failures (5039/5039 passed), exit 0. Free memory sampled mid-run at ~3.47GB (real drain, no kill signal). git diff --name-only main...HEAD confirms this run's diff is scoped to apps/mobile/, docs/requirements.yaml, docs/status/*, lib/letflow/design/req425-*.md, test/specs/REQ-425.md and this run's own handoffs/ -- zero lib/letflow/ or priv/repo/migrations/ changes -- and the backend suite was fully clean, so there is no pre-existing failure to attribute/file/forward per ISSUE_QUEUE.md. From apps/mobile/: `flutter analyze` -> 'No issues found!' (32.3s). `flutter test` -> 'All tests passed!', 115/115, re-run here as this step's own first-hand attestation (not citing TEST-DESIGN-VALIDATOR's prior number) -- covers all 7 acceptance criteria (401 refresh/retry incl. concurrent dedup, refresh-failure token clearing+login routing, GET-only 5xx backoff with bounded attempts, ApiError variant mapping incl. module-not-available/429 Retry-After, no DioException/SocketException escapes lib/api/, single-api-client guard self-test firing on a lib/features/ package:dio fixture and passing on the real tree, flutter analyze+test green). Full output and per-partition/per-test detail written to test/reports/report-20260929-WF02-REQ425-20260929.yaml.",
+    "artifacts_out": ["test/reports/report-20260929-WF02-REQ425-20260929.yaml"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ425-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to RELEASE-VALIDATOR (WF-04 Step 1) -- full backend suite (5039/5039) and apps/mobile/ (flutter analyze clean, 115/115 flutter test) both green, first-hand, this run."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,45 @@
+id: ISS-0887
+title: >
+  PATCH /api/v1/tenant/settings: web client (REQ-383) and its e2e/UAT seed send
+  {settings:{brand_colors}} but the REQ-382 route expects flat {brand_colors};
+  the request returns 200 with settings {} and nothing persists
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-DIAG-QA-20260929 (diagnosing UAT WF05-FULL-20260929 platform-tenant-branding-applied)
+discovered_at: "2026-09-29T18:50:00Z"
+severity: MAJOR
+description: >
+  QA runs origin/main 9c11f2bb, so not a stale deploy. Diagnosed by code read
+  (no live PATCH issued; QA was read-only for this diagnosis).
+  Letflow.Routers.TenantSettings.patch_tenant_settings/3 partitions the raw
+  body's TOP-LEVEL keys against TenantSettings.allowed_keys (app_name logo_url
+  brand_colors locales default_locale). The REQ-382 design and
+  test/letflow/routers/tenant_settings_test.exs use the flat shape
+  {"brand_colors":{"primary":...}}. web/src/api/tenantSettings.ts
+  (patchBrandColorPrimary / TenantSettingsPatchBody, REQ-383) and
+  web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts seedBrandColor
+  send the wrapped shape {"settings":{"brand_colors":{...}}}. The unknown
+  top-level key "settings" is treated as a rejected key: dropped, audited as
+  tenant_settings.reject_unrecognized_keys, and the response is
+  200 {tenant_id, settings:{}} with no persistence. The admin Appearance screen
+  therefore reports success and applies the colour client-side only (EO-001
+  passes) while /api/tenant-config keeps the platform default (EO-003/EO-005
+  fail). Backend tests use flat bodies and frontend tests use wrapped bodies
+  and assert only the 200 / client-side CSS, so the contract mismatch was never
+  exercised end to end.
+affected_files:
+  - web/src/api/tenantSettings.ts
+  - web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts
+  - lib/letflow/routers/tenant_settings.ex
+fix_direction: >
+  Needs a CODE-DESIGNER pass. Adopt the flat contract per the REQ-382 design:
+  fix the client body/type and the e2e seed. Add a contract test (or e2e) that
+  asserts GET /api/tenant-config reflects the saved colour after the GUI save.
+  Consider returning 422 when no recognized key is present rather than a silent
+  200 {}. Fail-first: a test posting the client's real body must fail before
+  the fix.
+related:
+  - REQ-382
+  - REQ-383
+queue_ref: Q-885  # queue allocated issue_ref ISS-0885, which collides with an existing local file (Q-881); local filename shifted to the next free number.
+github_ref: GH-1990
+status: open

@@ -1,0 +1,56 @@
+id: ISS-0886
+title: >
+  Pre-existing tenants (QA bpm-default, bilimbaga) have no TASK_WORKER /
+  PROCESS_* / CANDIDATE role bindings and no backfill path -- every non-admin
+  OIDC user reads roles [] and gets 403 on all routes
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-DIAG-QA-20260929 (diagnosing UAT WF05-FULL-20260929 platform-login-routing-by-role and bilimbaga candidate failures)
+discovered_at: "2026-09-29T18:50:00Z"
+severity: MAJOR
+description: >
+  QA was verified to run origin/main 9c11f2bb (git HEAD of /opt/apps/letflow-qa,
+  container rebuilt 2026-09-29T18:18Z), so these are not stale-deploy artifacts.
+  Reproduced live with real tokens: worker-user (bpm-default) gets 403 on
+  /definitions, /tasks, /me; candidate-user (bilimbaga) gets 403 on /me/modules,
+  /me/memberships, /modules/exam/exams; admin-user works.
+  Root cause: since REQ-378 (2026-09-21) AuthPipeline derives roles from the
+  tenant DB (Identity.list_effective_role_names/2: group_members JOIN tenant_role
+  WHERE kind = platform_role), not from JWT claims. sync_role_claims_from_token/3
+  only writes group_members for claimed role names that already have a
+  tenant_role row. ISS-0778 seeds all six platform roles at tenant onboarding
+  (TenantOnboarding -> RoleRegistry.seed_default_platform_role_groups/1), but
+  tenants created earlier were never backfilled and nothing re-runs the seeding
+  for an existing tenant (mix letflow.seed covers only bpm-default and needs the
+  dev DB). Read-only QA DB check: bpm-default has tenant_role rows only for
+  PLATFORM_ADMIN, role-ops-manager, role-ceo (missing PROCESS_DESIGNER,
+  PROCESS_OPERATOR, TASK_WORKER, AGENT_RUNNER, CANDIDATE); bilimbaga has only
+  PLATFORM_ADMIN (missing CANDIDATE); a newly onboarded tenant has all six.
+  App log repeats "sync_role_claims_from_token/3: zero group_ids resolved for a
+  non-empty claimed-role list" for the candidate user; candidate
+  role_claims_synced_at is NULL, worker/operator have no group_members.
+  worker-user passed on 2026-09-19 only because roles came from the JWT before
+  REQ-378. Related to ISS-0773 (same symptom class for PLATFORM_ADMIN, fixed by
+  manual QA bootstrap) and ISS-0778 (fixed new tenants only).
+  Note: bare GET /api/v1/me is not a route (only /me/memberships, /me/modules);
+  a non-admin 403 there is the fail-closed :Unknown catch-all and is expected
+  (admin gets 404). It is not part of the defect.
+affected_files:
+  - lib/letflow/identity/role_registry.ex
+  - lib/letflow/tenant_onboarding.ex
+  - lib/mix/tasks/letflow.seed.ex
+fix_direction: >
+  Needs a CODE-DESIGNER pass. Provide an idempotent backfill that runs
+  RoleRegistry.seed_default_platform_role_groups/1 for every existing tenant
+  schema (mix task and/or boot-time or admin-callable), then apply it on QA and
+  re-run the worker/candidate UAT scenarios. Regression test: a tenant with only
+  PLATFORM_ADMIN converges to six platform roles, and a TASK_WORKER / CANDIDATE
+  token then resolves non-empty effective roles (fail-first against pre-fix).
+  Consider escalating the "zero group_ids resolved" log to a health signal.
+related:
+  - ISS-0773
+  - ISS-0778
+  - REQ-378
+queue_ref: Q-884  # queue allocated issue_ref ISS-0884, which collides with an existing local file (Q-883); local filename shifted to the next free number, as ISS-0885 did for Q-881.
+github_ref: GH-1989
+duplicates_closed: "Q-886 (blocked) / GH-1991 (closed) were an accidental double registration of this same issue."
+status: open

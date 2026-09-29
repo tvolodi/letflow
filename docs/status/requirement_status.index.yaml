@@ -4664,6 +4664,11 @@ volumes:
       tenant_template_build_* visibility window that leaked into
       RetentionOperations.retire_oldest_eligible_month/1's platform-wide
       fanout; PR #1960, cb215ec4) in the same commit as the append.
+
+      Bumped to 36 by ORCH after appending REQ-422's started-event
+      (WF02-REQ422-20260929, 2026-09-29T02:37:45Z -- MOB-5 on-device
+      security hardening run kickoff). 1067 lines, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
       `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 35
       on-disk entries; 1066 lines, well under the 1200-line/120000-byte
       roll ceiling, so no roll triggered.
@@ -5016,8 +5021,26 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 0
+    entries: 3
     note: >
+      Bumped to 3 by ORCH after appending REQ-422's started-event
+      (WF02-REQ422-20260929, 2026-09-29T02:37:45Z -- MOB-5 on-device
+      security hardening run kickoff), redirected here from volume 23
+      during this run's rebase onto origin/main after finding v23 had
+      concurrently closed (40 entries, frozen) under the queue task
+      782/ISS-0782 reconciliation append -- the original append target
+      no longer accepts new entries per its own closure footer, so the
+      entry lands in the then-current volume instead, per roll_rule.
+      This bump also corrects a bookkeeping defect found in PR #1972
+      (WF03-ISS0878-20260929): that PR appended 2 real entries
+      (SCOPE-CHANGE started/done) to v24.yaml's on-disk content but
+      never bumped this index's `entries:` field, which still read 0
+      immediately before this rebase -- found only because this run's
+      rebase onto origin/main required reconciling both PRs' appends to
+      the same volume in the same pass. `grep -c "^  - req:"
+      docs/status/requirement_status.v24.yaml` = 3 on-disk entries
+      (2 from PR #1972 + this 1).
+
       Opened by ORCH's own roll of volume 23 (closed at 40 entries / 1201
       frozen-prefix lines, over its 1200-line ceiling) as part of the
       queue task 782/ISS-0782 release reconciliation. No entries yet.

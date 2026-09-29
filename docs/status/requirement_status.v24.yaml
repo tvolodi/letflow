@@ -41,43 +41,69 @@
 # keys: `known_anomalies:` (vocabulary) and `known_shape_anomalies:` (field
 # set/order). A roll must never drop the `known_shape_anomalies:` declaration.
 
-- req: SCOPE-CHANGE
-  event: started
-  agent: ISSUE-FIXER
-  at: "2026-09-29T06:04:33Z"
-  note: >
-    WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0878 --
-    Letflow.Plugs.AuthPipelineTest's unique_realm/1 (and the identical
-    definitions in test/letflow/api/authorization_ac9_test.exs and
-    test/letflow/oidc/provider_registry_multi_realm_test.exs) generate
-    idp_realm_id via System.unique_integer/1, which is only unique
-    within one BEAM VM process, so two scripts/test_parallel.sh
-    partitions (separate OS processes) can independently produce the
-    same literal string and collide on the shared Postgres
-    tenants_idp_realm_id_partial_index. Branch
-    feature/WF03-ISS0878-20260929 created off origin/main and pushed.
-    Diagnosis in progress; not a docs/requirements.yaml entry (this is
-    an issue, no requirement status changes).
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ISSUE-FIXER
+    at: "2026-09-29T06:04:33Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0878 --
+      Letflow.Plugs.AuthPipelineTest's unique_realm/1 (and the identical
+      definitions in test/letflow/api/authorization_ac9_test.exs and
+      test/letflow/oidc/provider_registry_multi_realm_test.exs) generate
+      idp_realm_id via System.unique_integer/1, which is only unique
+      within one BEAM VM process, so two scripts/test_parallel.sh
+      partitions (separate OS processes) can independently produce the
+      same literal string and collide on the shared Postgres
+      tenants_idp_realm_id_partial_index. Branch
+      feature/WF03-ISS0878-20260929 created off origin/main and pushed.
+      Diagnosis in progress; not a docs/requirements.yaml entry (this is
+      an issue, no requirement status changes).
 
-- req: SCOPE-CHANGE
-  event: done
-  agent: ISSUE-FIXER
-  at: "2026-09-29T07:00:00Z"
-  note: >
-    WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0878 --
-    root cause resolved: unique_realm/1's cross-process-unsafe
-    System.unique_integer/1 pattern replaced with a UUID-based,
-    genuinely cross-process-safe generator, in
-    test/letflow/plugs/auth_pipeline_test.exs and the identical
-    call sites in test/letflow/api/authorization_ac9_test.exs and
-    test/letflow/oidc/provider_registry_multi_realm_test.exs. Proven
-    via a fail-then-pass mutation test at
-    test/support/tenant_slug_test.exs, independently reproduced by
-    TEST-DESIGN-VALIDATOR; targeted test set and full-suite run both
-    green (TEST-RUNNER PASS, commit 5485ad24). All gates passed:
-    CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
-    TEST-DESIGN-VALIDATOR, TEST-RUNNER. docs/issues/ISS-0878.yaml set to
-    status: resolved (resolved_in_run: WF03-ISS0878-20260929). GitHub
-    mirror GH-1951 closed with resolving-evidence comment. Not a
-    docs/requirements.yaml entry (this is an issue, no requirement
-    status changes).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-09-29T07:00:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0878 --
+      root cause resolved: unique_realm/1's cross-process-unsafe
+      System.unique_integer/1 pattern replaced with a UUID-based,
+      genuinely cross-process-safe generator, in
+      test/letflow/plugs/auth_pipeline_test.exs and the identical
+      call sites in test/letflow/api/authorization_ac9_test.exs and
+      test/letflow/oidc/provider_registry_multi_realm_test.exs. Proven
+      via a fail-then-pass mutation test at
+      test/support/tenant_slug_test.exs, independently reproduced by
+      TEST-DESIGN-VALIDATOR; targeted test set and full-suite run both
+      green (TEST-RUNNER PASS, commit 5485ad24). All gates passed:
+      CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER. docs/issues/ISS-0878.yaml set to
+      status: resolved (resolved_in_run: WF03-ISS0878-20260929). GitHub
+      mirror GH-1951 closed with resolving-evidence comment. Not a
+      docs/requirements.yaml entry (this is an issue, no requirement
+      status changes). NOTE (ORCH, WF02-REQ422-20260929 rebase): this
+      entry and the one above were re-indented from 0-space to this
+      volume's established 2-space `  - req:` list-item convention
+      (matching every prior volume, v20-v23) during conflict resolution
+      -- the original PR (#1972) appended them at column 0, inconsistent
+      with the rest of this file; content is otherwise byte-for-byte
+      unchanged.
+
+  - req: REQ-422
+    event: started
+    agent: ORCH
+    at: 2026-09-29T02:37:45Z
+    note: >
+      MOB-5 on-device security hardening (M3): secure-storage-only tokens,
+      log redaction, Android cleartext/backup lockdown, app-level transport
+      check, iOS ATS static check, tenant-scoped token audience, secret
+      masking widget, and [S] corporate-tier hardening doc note. Started by
+      ORCH (run WF02-REQ422-20260929) after locking letflow-queue task 859
+      (agent_id letflow-orch-req422) and confirming no overlap with the
+      concurrent letflow-2-b6 session (that session's own branches/PRs are
+      on unrelated requirement ids). Branch feature/WF02-REQ422-20260929
+      pushed from origin/main at 3c08187d. Appended here in volume 24
+      rather than volume 23 (this run's original append target) because
+      volume 23 closed and froze (40 entries) under a concurrent
+      queue-reconciliation append discovered only when rebasing this
+      branch onto origin/main -- redirected per the roll_rule rather than
+      appended to a frozen volume.

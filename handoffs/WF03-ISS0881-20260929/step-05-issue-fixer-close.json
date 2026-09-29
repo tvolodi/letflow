@@ -1,0 +1,59 @@
+{
+  "handoff_id": "a1f3c8e2-0001-4a00-9000-00000000000a",
+  "run_id": "WF03-ISS0881-20260929",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0881-20260929/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-29T07:45:00Z",
+  "started_at": "2026-09-29T07:45:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0881-20260929/step-02-code-designer.json",
+      "handoffs/WF03-ISS0881-20260929/step-03-elixir-dev-implement.json",
+      "handoffs/WF03-ISS0881-20260929/step-04-test-designer.json",
+      "handoffs/WF03-ISS0881-20260929/step-04b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0881.yaml",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": ["docs/issues/ISS-0881.yaml"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0881-20260929 (checkout if not already, git pull --ff-only). Perform WF-03 Step 5 (Close the issue) for docs/issues/ISS-0881.yaml, per docs/agents/workflows/WF-03_issue_resolving.md's Step 5 section and docs/agents/protocols/ISSUE_QUEUE.md's 'Issue status vocabulary'.\n\nThis run's outcome so far: ISSUE-FIXER's own Step 1 diagnosis (handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json) identified the root cause -- sandbox_pool_test.exs's leak-check helper compared the FULL platform-wide set of sandbox_% schemas against a baseline snapshot, so an unrelated concurrent scripts/test_parallel.sh partition creating/dropping its OWN sandbox schemas during this test's baseline-to-final window produces a spurious diff, even though this test's own schema lifecycle was entirely correct. CODE-DESIGNER/ELIXIR-DEV scoped the assertion to only the schema(s) this test itself provisioned (Step 2/3, PASSed SECURITY-REVIEWER + REVIEWER). TEST-DESIGNER added a deterministic regression test that injects a real extraneous sandbox_% schema during the window and proves the scoped assertion tolerates it where the old platform-wide assertion would not -- fail-then-pass proof independently reproduced by TEST-DESIGN-VALIDATOR itself (Step 4b, PASS, commit 08fbbd86).\n\nGiven this: the root cause WAS identified and WAS removed (the test's own assertion no longer asserts something that can be legitimately violated by unrelated concurrent activity), with a real regression test proving it, independently validated. This supports status: resolved -- confirm this reading against ISSUE_QUEUE.md's own vocabulary before writing it (do not just take this paragraph's word for it).\n\n1. Update docs/issues/ISS-0881.yaml: status: resolved, resolved_in_run: WF03-ISS0881-20260929, resolved_at: <real UTC timestamp>, and a resolution: field summarizing the root cause and fix (scoped leak-check assertion, regression test at test/letflow/sandbox_pool_test.exs, fail-then-pass proof independently reproduced by TEST-DESIGN-VALIDATOR). Cite the actual file paths and line numbers from the Step 2/3 design+implementation handoffs.\n2. Close the linked GitHub issue: gh issue close 1958 --comment \"Fixed in WF03-ISS0881-20260929. See docs/issues/ISS-0881.yaml and the regression test at test/letflow/sandbox_pool_test.exs (describe block added at ~line 1375).\" -- confirm gh is authenticated/reachable first; if not, state that plainly in result.summary and flag it as needing a follow-up rather than skipping silently.\n3. Complete this handoff: status COMPLETED, result.status PASS, next_action: 'Route to Step Final (git merge)'.\n4. Commit your docs/issues/ISS-0881.yaml edit + completed handoff together, push to the branch.\n\nDo not force 'resolved' if your own reading of the evidence disagrees -- if you find the fix doesn't actually remove the root cause, or the evidence is weaker than described above, use 'instrumented' or 'no_defect' per ISSUE_QUEUE.md's own definitions instead, and say so plainly.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0881.yaml status set to whichever of resolved/instrumented/no_defect the actual evidence supports, with the correct required key pairs for that status",
+      "GitHub issue 1958 closed with a comment citing the resolving evidence (or the gh failure stated plainly if unreachable)",
+      "Handoff completed with PASS and next_action pointing to Step Final",
+      "Commit made and pushed to feature/WF03-ISS0881-20260929"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

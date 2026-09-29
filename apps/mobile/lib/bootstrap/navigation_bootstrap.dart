@@ -20,6 +20,12 @@ import 'package:go_router/go_router.dart';
 import '../api/api_client.dart';
 import '../api/transport_policy.dart';
 import '../auth/auth.dart';
+import '../definitions/definitions.dart'
+    show ActiveDefinitionCacheHolder, DefinitionCacheOpener;
+import '../definitions/sembast_cache_repository.dart'
+    show openProductionDefinitionCache;
+import '../definitions/tenant_home_screen.dart'
+    show definitionCacheHolderProvider;
 import 'bootstrap_models.dart';
 import 'error_screens.dart';
 
@@ -142,6 +148,8 @@ Future<BootstrapResult?> runTenantBootstrap(
   required ActiveRealmHolder activeRealm,
   AppAuthAdapter appAuthAdapter = const RealAppAuthAdapter(),
   TransportPolicy? transportPolicy,
+  ActiveDefinitionCacheHolder? definitionCache,
+  DefinitionCacheOpener? cacheOpener,
 }) async {
   final TenantConfig config;
   try {
@@ -192,6 +200,25 @@ Future<BootstrapResult?> runTenantBootstrap(
   // the pointer flips the moment the new tenant's token exists, strictly
   // before that new tenant's own tenant-content requests are issued.
   activeRealm.currentRealmUrl = config.realmUrl;
+
+  // REQ-423 design §7.3 — persisted at the same point the active-realm
+  // pointer itself is set, so `attemptSessionResume` can reach this
+  // tenant's identity with zero network calls on a later launch.
+  await writeLastActiveTenant(
+    tokenStore,
+    LastActiveTenantPointer(realmUrl: config.realmUrl, slug: enteredSlug),
+  );
+
+  // REQ-423 design §7.2 — opened immediately after the token-store write
+  // and before the memberships/modules calls that follow, so a
+  // definition-cache operation issued from this point on is never
+  // reachable before its tenant's own partition is open.
+  if (definitionCache != null) {
+    await definitionCache.openFor(
+      config.realmUrl,
+      opener: cacheOpener ?? openProductionDefinitionCache,
+    );
+  }
 
   try {
     final response = await client.get('/api/v1/me/memberships');
@@ -249,11 +276,14 @@ Future<BootstrapResult?> runTenantBootstrap(
 Future<void> logout({
   required TenantTokenStore tokenStore,
   required ActiveRealmHolder activeRealm,
+  ActiveDefinitionCacheHolder? definitionCache,
 }) async {
   final currentRealmUrl = activeRealm.currentRealmUrl;
   if (currentRealmUrl == null) return;
   await tokenStore.delete(currentRealmUrl);
   activeRealm.currentRealmUrl = null;
+  await clearLastActiveTenant(tokenStore);
+  await definitionCache?.closeAndClear();
 }
 
 /// Switches the active tenant to [enteredSlug] (REQ-422 §6.3, OQ-5).
@@ -283,6 +313,8 @@ Future<BootstrapResult?> switchTenant(
   required ActiveRealmHolder activeRealm,
   AppAuthAdapter appAuthAdapter = const RealAppAuthAdapter(),
   TransportPolicy? transportPolicy,
+  ActiveDefinitionCacheHolder? definitionCache,
+  DefinitionCacheOpener? cacheOpener,
 }) async {
   final previousRealmUrl = activeRealm.currentRealmUrl;
   if (previousRealmUrl != null) {
@@ -295,6 +327,11 @@ Future<BootstrapResult?> switchTenant(
     if (newRealmUrl != previousRealmUrl) {
       await tokenStore.delete(previousRealmUrl);
       activeRealm.currentRealmUrl = null;
+      await clearLastActiveTenant(tokenStore);
+      // REQ-423 design §7.2 — closes the *previous* tenant's cache file
+      // handle, mirroring the existing token delete. The new tenant's own
+      // `openFor` call happens inside `runTenantBootstrap` below.
+      await definitionCache?.closeAndClear();
     }
   }
   return runTenantBootstrap(
@@ -304,6 +341,8 @@ Future<BootstrapResult?> switchTenant(
     activeRealm: activeRealm,
     appAuthAdapter: appAuthAdapter,
     transportPolicy: transportPolicy,
+    definitionCache: definitionCache,
+    cacheOpener: cacheOpener,
   );
 }
 
@@ -317,6 +356,7 @@ Future<BootstrapResult?> switchTenant(
 final Future<void> Function({
   required TenantTokenStore tokenStore,
   required ActiveRealmHolder activeRealm,
+  ActiveDefinitionCacheHolder? definitionCache,
 })
 _logoutTopLevel = logout;
 
@@ -327,6 +367,8 @@ final Future<BootstrapResult?> Function(
   required ActiveRealmHolder activeRealm,
   AppAuthAdapter appAuthAdapter,
   TransportPolicy? transportPolicy,
+  ActiveDefinitionCacheHolder? definitionCache,
+  DefinitionCacheOpener? cacheOpener,
 })
 _switchTenantTopLevel = switchTenant;
 
@@ -355,7 +397,11 @@ List<RouteBase> buildRouteTable(
 
 // ── Bootstrap UI state + controller ────────────────────────────────────────
 
-enum BootstrapPhase { unauthenticated, loading, success, failure }
+/// REQ-423 design §7.3 — `resumedOffline` is deliberately **not** the same
+/// value as `success`: a resumed-without-verification session has not
+/// re-confirmed membership or re-fetched the installed-module list. Never
+/// silently merged with `success`.
+enum BootstrapPhase { unauthenticated, loading, success, resumedOffline, failure }
 
 @immutable
 class BootstrapUiState {
@@ -382,12 +428,20 @@ class BootstrapController extends ChangeNotifier {
     required this.client,
     required this.tokenStore,
     required this.activeRealm,
+    required this.definitionCache,
     this.appAuthAdapter = const RealAppAuthAdapter(),
+    this.cacheOpener,
   });
 
   final HttpGateway client;
   final TenantTokenStore tokenStore;
   final ActiveRealmHolder activeRealm;
+  final ActiveDefinitionCacheHolder definitionCache;
+
+  /// Defaults to [openProductionDefinitionCache] when null (tests inject a
+  /// fake opener so `flutter test` never touches `path_provider`'s
+  /// platform channel).
+  final DefinitionCacheOpener? cacheOpener;
 
   /// Real `flutter_appauth` by default; tests construct their own
   /// [BootstrapController] with a [FakeAppAuthAdapter]-equivalent here so
@@ -408,6 +462,8 @@ class BootstrapController extends ChangeNotifier {
       tokenStore: tokenStore,
       activeRealm: activeRealm,
       appAuthAdapter: appAuthAdapter,
+      definitionCache: definitionCache,
+      cacheOpener: cacheOpener,
     );
 
     if (result == null) {
@@ -450,6 +506,8 @@ class BootstrapController extends ChangeNotifier {
       tokenStore: tokenStore,
       activeRealm: activeRealm,
       appAuthAdapter: appAuthAdapter,
+      definitionCache: definitionCache,
+      cacheOpener: cacheOpener,
     );
 
     if (result == null) {
@@ -473,9 +531,57 @@ class BootstrapController extends ChangeNotifier {
   /// function (through the [_logoutTopLevel] tear-off), then resets to the
   /// unauthenticated entry state.
   Future<void> logout() async {
-    await _logoutTopLevel(tokenStore: tokenStore, activeRealm: activeRealm);
+    await _logoutTopLevel(
+      tokenStore: tokenStore,
+      activeRealm: activeRealm,
+      definitionCache: definitionCache,
+    );
     _state = BootstrapUiState.unauthenticated;
     notifyListeners();
+  }
+
+  /// Session resume without network (REQ-423 design §7.3) — reads only
+  /// secure storage (no HTTP call), so a previously-authenticated session
+  /// can render content-visible state offline. Called once at app start.
+  ///
+  /// No last-active-tenant pointer, or no tokens found for it (e.g. a
+  /// prior logout raced with an unclean pointer clear): falls back to
+  /// [BootstrapPhase.unauthenticated] — today's exact behaviour, zero
+  /// change for a device that has never bootstrapped. A thrown exception
+  /// from secure storage itself (Keystore/Keychain unavailable — the same
+  /// condition `runTenantBootstrap`'s token-store write already treats as
+  /// non-fatal-to-the-overall-flow, `BootstrapFailureReason
+  /// .secureStorageUnavailable`) falls back the same way: this is a
+  /// best-effort offline-resume attempt, never one that can crash app
+  /// start or block the normal online bootstrap flow that follows.
+  Future<void> attemptSessionResume() async {
+    try {
+      final pointer = await readLastActiveTenant(tokenStore);
+      if (pointer == null) {
+        _state = BootstrapUiState.unauthenticated;
+        notifyListeners();
+        return;
+      }
+      final tokens = await tokenStore.read(pointer.realmUrl);
+      if (tokens == null) {
+        _state = BootstrapUiState.unauthenticated;
+        notifyListeners();
+        return;
+      }
+      activeRealm.currentRealmUrl = pointer.realmUrl;
+      await definitionCache.openFor(
+        pointer.realmUrl,
+        opener: cacheOpener ?? openProductionDefinitionCache,
+      );
+      // Deliberately `resumedOffline`, never `success` — membership/modules
+      // have not been re-verified (design §7.3's own rationale).
+      _state = const BootstrapUiState(phase: BootstrapPhase.resumedOffline);
+      notifyListeners();
+    } catch (_) {
+      activeRealm.currentRealmUrl = null;
+      _state = BootstrapUiState.unauthenticated;
+      notifyListeners();
+    }
   }
 }
 
@@ -509,6 +615,7 @@ final bootstrapControllerProvider = ChangeNotifierProvider<BootstrapController>(
       client: ref.watch(apiClientProvider),
       tokenStore: ref.watch(tenantTokenStoreProvider),
       activeRealm: ref.watch(activeRealmHolderProvider),
+      definitionCache: ref.watch(definitionCacheHolderProvider),
     );
   },
 );

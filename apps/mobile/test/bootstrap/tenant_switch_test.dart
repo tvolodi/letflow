@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:letflow/api/api_client.dart';
 import 'package:letflow/auth/auth.dart';
 import 'package:letflow/bootstrap/navigation_bootstrap.dart';
+import 'package:letflow/definitions/definitions.dart';
 
 import '../support/fake_app_auth_adapter.dart';
 import '../support/fake_dio_http_client_adapter.dart';
@@ -204,6 +205,8 @@ void main() {
       client: client,
       tokenStore: tokenStore,
       activeRealm: activeRealm,
+      definitionCache: ActiveDefinitionCacheHolder(),
+      cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
       appAuthAdapter: FakeAppAuthAdapter(
         response: fakeTokenResponse(accessToken: 'token-acme'),
       ),
@@ -217,6 +220,8 @@ void main() {
       client: client,
       tokenStore: tokenStore,
       activeRealm: activeRealm,
+      definitionCache: ActiveDefinitionCacheHolder(),
+      cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
       appAuthAdapter: FakeAppAuthAdapter(
         response: fakeTokenResponse(accessToken: 'token-beta'),
       ),

@@ -15,6 +15,7 @@ import 'package:letflow/api/api_client.dart';
 import 'package:letflow/app.dart';
 import 'package:letflow/auth/auth.dart';
 import 'package:letflow/bootstrap/navigation_bootstrap.dart';
+import 'package:letflow/definitions/definitions.dart';
 
 import '../support/fake_app_auth_adapter.dart';
 import '../support/fake_http_gateway.dart';
@@ -59,6 +60,8 @@ void main() {
       client: gateway,
       tokenStore: const TenantTokenStore(FlutterSecureStorage()),
       activeRealm: ActiveRealmHolder(),
+      definitionCache: ActiveDefinitionCacheHolder(),
+      cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
       appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
     );
 
@@ -89,6 +92,8 @@ void main() {
       client: gateway,
       tokenStore: const TenantTokenStore(FlutterSecureStorage()),
       activeRealm: ActiveRealmHolder(),
+      definitionCache: ActiveDefinitionCacheHolder(),
+      cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
       appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
     );
 
@@ -123,6 +128,8 @@ void main() {
         client: gateway,
         tokenStore: const TenantTokenStore(FlutterSecureStorage()),
         activeRealm: ActiveRealmHolder(),
+        definitionCache: ActiveDefinitionCacheHolder(),
+        cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
         appAuthAdapter: FakeAppAuthAdapter(
           error: FlutterAppAuthPlatformException(
             code: 'oidc_error',
@@ -158,13 +165,14 @@ void main() {
           clientId: 'client-acme',
         ),
       );
-    final fakeStoragePlatform = FakeSecureStoragePlatform()
-      ..throwOnNextCall = PlatformException(code: 'keystore_error');
+    final fakeStoragePlatform = FakeSecureStoragePlatform();
     FlutterSecureStoragePlatform.instance = fakeStoragePlatform;
     final controller = BootstrapController(
       client: gateway,
       tokenStore: const TenantTokenStore(FlutterSecureStorage()),
       activeRealm: ActiveRealmHolder(),
+      definitionCache: ActiveDefinitionCacheHolder(),
+      cacheOpener: (_) async => InMemoryDefinitionCacheRepository(),
       appAuthAdapter: FakeAppAuthAdapter(response: fakeTokenResponse()),
     );
 
@@ -175,6 +183,17 @@ void main() {
         ],
         child: const LetflowApp(),
       ),
+    );
+
+    // Armed *after* `pumpWidget` (whose `initState` already runs
+    // `attemptSessionResume`'s own one-shot secure-storage read, REQ-423 §7.3
+    // — arming before `pumpWidget` would make that unrelated read consume
+    // this fake's one-shot throw instead of the `tokenStore.store()` call
+    // this test is actually about) so it hits the next real secure-storage
+    // write, which is `tokenStore.store()` inside the bootstrap flow this
+    // test drives via `_enterSlugAndSubmit` below.
+    fakeStoragePlatform.throwOnNextCall = PlatformException(
+      code: 'keystore_error',
     );
 
     await _enterSlugAndSubmit(tester, 'acme');

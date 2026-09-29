@@ -102,10 +102,11 @@ lib/
 ## Local definition cache
 
 **Local definition cache: Sembast, not Isar.**
-`docs/migration/decisions/0012-mobile-tier-stack.md` names "Isar, or
-equivalent" and explicitly allows substituting another store — "Isar's
-maintenance status is a legitimate reason to choose another." REQ-423 chose
-**Sembast** (`package:sembast`) because it is pure Dart — no generated code
+`docs/migration/decisions/0012-mobile-tier-stack.md` names "Isar or
+equivalent" for the local definition cache — the "or equivalent" licenses
+substituting another store; the decision record itself says nothing further
+about *why* a substitution might be warranted. REQ-423 chose **Sembast**
+(`package:sembast`) instead of Isar because it is pure Dart — no generated code
 (`build_runner`), no native binary fetched per platform at build time —
 which is the deciding property in this project's actual build environment:
 this `README.md`'s own network/toolchain notes record that this sandbox has

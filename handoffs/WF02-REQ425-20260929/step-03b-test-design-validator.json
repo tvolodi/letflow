@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-03b-test-design-validator.json",
   "created_at": "2026-09-29T13:01:51Z",
   "started_at": "2026-09-29T13:01:51Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T13:45:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -40,18 +40,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Independently re-derived the clause decomposition for all 7 ACs from REQ-425's own wording (not from TEST-DESIGNER's spec table) by reading apps/mobile/test/api/api_client_hardening_test.dart and apps/mobile/test/guards/single_api_client_guard_test.dart directly. AC1 (2 clauses: single refresh+retry on one 401; one refresh total across two concurrent 401s) -- both covered (lines 99-145). AC2 (2 clauses: tokens deleted; login-route invoked) -- both asserted in one test (185-205). AC3 (3 clauses: GET 503x2-then-200 with increasing fake-clock delays; GET 503-always stops at the named constant kMaxServerRetryAttempts (confirmed declared as `const int kMaxServerRetryAttempts = 3` at lib/api/api_client.dart:141) and surfaces ServerError with exact request count asserted; POST 503 not retried) -- all 3 covered (409-466). AC4 (per-variant mapping across all 9 sealed ApiError variants declared in lib/api/api_error.dart, plus the 3 named sub-cases: module-404, plain-404, 429/Retry-After:7) -- confirmed all 9 variants have a covering test (direct classifyError branch test plus full-flow tests), all 3 named sub-cases present with exact literal paths/values from the requirement text (469-645). AC5 (no raw DioException/SocketException escapes; only ApiError crosses the boundary) -- both aspects covered, including the discriminating isNot(isA<DioException>()) assertion (648-685). AC6 (2 clauses: guard fires on a lib/features/ fixture importing package:dio; guard passes on the real tree) -- both present (single_api_client_guard_test.dart:97-121), plus 3 further self-tests for package:http, dart:io HttpClient, and the lib/api/ exemption. AC7: re-ran both commands myself rather than trusting the spec's quoted output -- `flutter analyze` -> 'No issues found! (ran in 4.5s)'; `flutter test test/api/api_client_hardening_test.dart test/guards/single_api_client_guard_test.dart` -> 29 tests, 'All tests passed!'; full `flutter test` -> '+115: All tests passed!', matching the spec's claimed count exactly. Additional checks: no @tag/skip markers and no 'TODO: implement test' anywhere in either file (grep confirmed empty); every test calls a fresh `_buildHarness()` (own FakeSecureStoragePlatform, Dio/FakeDioHttpClientAdapter, TenantTokenStore, ActiveRealmHolder instance -- confirmed ActiveRealmHolder is a plain class, not a singleton, at lib/api/api_client.dart:118) so tests are self-sufficient with no inter-test ordering dependency and no shared hardcoded fixture state; token/realm strings used ('initial-access-token' etc.) are fixture literals, not real secrets or connection strings. No gaps found; no rework required.",
+    "artifacts_out": ["handoffs/WF02-REQ425-20260929/step-03b-test-design-validator.json"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ425-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Proceed to next WF-02 step (TEST-RUNNER / implementation verification per workflow)."
   },
   "rework_count": 0,
   "max_rework": 3

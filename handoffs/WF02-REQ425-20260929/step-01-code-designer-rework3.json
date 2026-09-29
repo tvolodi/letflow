@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-01-code-designer-rework3.json",
   "created_at": "2026-09-29T11:49:03Z",
   "started_at": "2026-09-29T11:49:03Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T11:51:54Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S9",
@@ -39,18 +39,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Change of approach performed as mandated, not a section-only patch: grepped the ENTIRE design document myself for every ``` fence (24 fences forming 12 fenced blocks total: Sec 1.1 ApiError variants, Sec 1.2 classifyError @spec, Sec 1.3 _isModulePath/_extractModuleId @specs, Sec 1.4 _parseRetryAfter @spec, Sec 1.5 _parseFieldErrors @spec, Sec 2.1 _RefreshCoordinator class, Sec 2.4 LoginRouter typedef, Sec 2.6 the flagged test-seam block, Sec 3.1 kMaxServerRetryAttempts constant, Sec 3.2 backoffDelayFor @spec, Sec 4.1 SingleApiClientViolation/checkSingleApiClientBoundary, Sec 5.1 ApiClient class, Sec 5.2 AppAuthAdapter abstract class) and read each one in full against the literal rule: a SIGNATURE (name/params/return type), a type/class/field declaration, or a bare literal-value constant is fine; an assignment-as-statement, a call-as-statement, or a cascade used as an imperative step is not, anywhere in the document. Found exactly ONE violation beyond what was already flagged: Sec 2.6's block (lines ~468-473) -- 'final fakePlatform = FakeSecureStoragePlatform(); FlutterSecureStoragePlatform.instance = fakePlatform; final tokenStore = const TenantTokenStore(FlutterSecureStorage()); final activeRealm = ActiveRealmHolder()..currentRealmUrl = ...;' -- object construction, a global-state field assignment, and a cascade field mutation, i.e. copy-pasteable executable Dart. Rewrote it as prose naming the four objects (a no-argument FakeSecureStoragePlatform instance; that instance substituted in as FlutterSecureStoragePlatform.instance; a real const-constructible TenantTokenStore built from a plain FlutterSecureStorage(); an ActiveRealmHolder whose sole mutable field currentRealmUrl is set to the fixture realm URL) and their relationship/shape, with no runnable lines, matching Sec 2.2-2.5's existing prose-only mechanism-description style. All 11 other fenced blocks were verified to already contain only signatures, class/field/constructor declarations, or one named const literal (Sec 3.1's kMaxServerRetryAttempts = 3, explicitly permitted by this design's own preamble as a 'literal value') -- no additional violations found. No other section was touched.",
+    "artifacts_out": ["lib/letflow/design/req425-mobile-api-client-hardening.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["21c81e0b"],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) for a fresh full pass -- final rework attempt"
   },
   "rework_count": 3,
   "max_rework": 3

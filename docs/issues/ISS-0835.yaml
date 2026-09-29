@@ -65,7 +65,42 @@ fix_direction: >
   it unless a reason emerges to also exercise unused-vars behavior here.
   Confirm the fix by literally running the corrected probe from `web/` and
   quoting real output before closing this issue.
-status: open
+status: resolved
+resolved_in_run: "ORCH-direct-20260929"
+resolved_at: "2026-09-29T04:20:00Z"
+resolution: >
+  Fixed already, by a different session, as an incidental side effect of
+  commit fb77dcf56 (PR #1932, "docs(ISS-0852): finish found_line corrections
+  and fix REQ-403 test-fixture typo") -- that PR happened to also apply
+  fix_direction's option (a) to REQ-406's AC3 wording
+  (docs/requirements.yaml), changing the probe's import statement from
+  `import x from '@/modules/sample/index'` to a bare side-effect import,
+  `import '@/modules/sample/index'`, with no unused binding for
+  `@typescript-eslint/no-unused-vars` to trip.
+
+  ORCH claimed this queue task (Q-835) fresh, found the wording already
+  matched the target fix on current main, and per this issue's own
+  fix_direction ("confirm the fix by literally running the corrected probe
+  from `web/` and quoting real output before closing this issue") re-ran both
+  sub-probes for real rather than trusting the diff alone:
+
+    $ echo "import '@/modules/sample/index'" | npx eslint --stdin \
+        --stdin-filename src/pages/BoundaryProbe.tsx
+    /home/tvolodi/workspace/letflow-1/web/src/pages/BoundaryProbe.tsx
+      1:1  error  '@/modules/sample/index' import is restricted from being
+      used by a pattern  no-restricted-imports
+    ✖ 1 problem (1 error, 0 warnings)
+    exit code: 1
+
+    $ echo "import '@/modules/sample/index'" | npx eslint --stdin \
+        --stdin-filename src/modules/registry.ts
+    (no output)
+    exit code: 0
+
+  Both sub-probes now behave exactly as AC3 literally claims -- the
+  BoundaryProbe.tsx probe fails on `no-restricted-imports` alone (no
+  unused-vars noise), and the registry.ts probe exits clean. No code change
+  needed from this run; only this issue file's own status/closure.
 queue_ref: "Q-835"
   # registered late by ORCH in ADHOC-20260926-S11-AUDIT; any earlier queue_ref here was derived, not allocated
 github_ref: "GH-1833"

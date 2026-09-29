@@ -1,0 +1,52 @@
+{
+  "handoff_id": "243a5154-bb9c-4249-9063-3ad9422c9c4e",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0896-20260929/step-04b-test-design-validator.json",
+  "created_at": "2026-09-29T20:24:10Z",
+  "started_at": "2026-09-29T20:24:10Z",
+  "completed_at": "2026-09-30T01:26:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["c44a1cac-a28b-4574-9749-69d3a1e7f538"],
+    "artifacts_in": [
+      "web/tests/unit/e2e-helpers/get-master-admin-token.test.ts",
+      "web/tests/e2e/helpers.ts"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 4b, hard gate on TEST-DESIGNER's coverage for ISS-0896. Read web/tests/unit/e2e-helpers/get-master-admin-token.test.ts and web/tests/e2e/helpers.ts directly. Per docs/agents/workflows/WF-03_issue_resolving.md's mutation-testing rule: 'TEST-DESIGN-VALIDATOR must independently APPLY at least one of the reported mutants and run it -- accepting the reported pass counts is copying a claim, not validating one.' TEST-DESIGNER reported Mutant A (hardcode username/password literals, bypassing resolveCredential) breaks TC-2, and Mutant B (remove the throw-on-non-ok check) breaks TC-3. Apply at least one of these two yourself (use a throwaway git worktree, or apply in place and revert-and-verify per that same section's two licensed techniques), run the test file, and confirm the exact reported test(s) fail and no others. Also independently check: fixtures use unique/isolated data (mocked APIRequestContext, no shared state), no hardcoded secrets in the test file itself, the test is self-sufficient. FAIL immediately on any check failure -- no partial credit.",
+    "acceptance_criteria": [
+      "a real, runnable vitest unit test exists for getMasterAdminToken covering the 4 behaviors listed above",
+      "at least 2 targeted mutants were applied and each one's specific test failure(s) recorded",
+      "every mutation was reverted and the revert verified (git status --porcelain web/ empty, suite re-runs green) before this handoff completes",
+      "the thrown-error-on-failure path is confirmed not to leak the attempted credential value in its message"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Baseline: `npx vitest run tests/unit/e2e-helpers/get-master-admin-token.test.ts` — 4/4 pass. Independently applied both reported mutants in place (not just read TEST-DESIGNER's counts): Mutant A (web/tests/e2e/helpers.ts getMasterAdminToken — replaced resolveCredential('KC_ADMIN_USER','admin')/resolveCredential('KC_ADMIN_PASSWORD','admin') with hardcoded literals 'admin'/'admin') -> re-run showed exactly 1 failure, TC-2 ('expected admin to be real-master-admin'), TC-1/TC-3/TC-4 still passed, matching TEST-DESIGNER's report. Reverted (`git checkout -- web/tests/e2e/helpers.ts`), confirmed `git status --porcelain web/` empty and suite green (4/4) before proceeding. Mutant B (removed the `if (!response.ok())` throw block) -> re-run showed exactly 1 failure, TC-3, matching the reported target; failure mode was a downstream TypeError ('Cannot read properties of undefined (reading access_token)') rather than the intended 401 message, which still correctly fails TC-3's `toContain('401')` assertion and confirms the removed guard is load-bearing on that path; TC-1/TC-2/TC-4 still passed. Reverted, re-confirmed `git status --porcelain web/` empty and suite green (4/4). Additional independent checks, all pass: fixtures — fakeRequest() builds a fresh mocked APIRequestContext per call, no shared/module-level state across tests except process.env[KC_ADMIN_USER/PASSWORD] which beforeEach deletes and afterEach restores to the pre-suite original, so tests are order-independent and self-sufficient (each does its own dynamic import and setup, no reliance on another test having run); no hardcoded secrets in the test file — 'admin'/'admin' mirrors the already-documented local-dev fallback in production code, and TC-2/TC-3 use synthetic non-secret marker strings ('real-master-admin', 'leaky-user-marker', etc.); the thrown-error path (helpers.ts line 96, `Keycloak master token request failed: ${response.status()} ${body}`) never interpolates username/password at all, and TC-3 asserts the message excludes the marker values, confirming no credential leak. All 4 acceptance criteria met.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0896-20260929",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ORCH for Step 04b PASS logging and dispatch of next WF-03 step."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

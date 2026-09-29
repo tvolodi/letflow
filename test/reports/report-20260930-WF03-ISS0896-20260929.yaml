@@ -1,0 +1,255 @@
+run_id: WF03-ISS0896-20260929
+agent: TEST-RUNNER
+date: 2026-09-30T02:15:00Z
+branch: feature/WF03-ISS0896-20260929
+head_commit: af1a896b
+issue: ISS-0896
+scope:
+  description: >
+    This diff (per git diff --name-only main...HEAD) touches only
+    web/tests/e2e/** (env04.e2e.spec.ts, helpers.ts, 3 pipeline e2e specs),
+    web/tests/unit/e2e-helpers/get-master-admin-token.test.ts,
+    lib/letflow/design/iss0896-e2e-master-admin-credentials.md (design doc, no
+    executable code), and handoffs/ bookkeeping. No lib/letflow/ application
+    code, no priv/repo/migrations/, no other web/src/ files were changed. It
+    cannot cause a new Elixir backend failure.
+  files_touched_directly:
+    - web/tests/e2e/env04.e2e.spec.ts
+    - web/tests/e2e/helpers.ts
+    - web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts
+    - web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts
+    - web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts
+    - web/tests/unit/e2e-helpers/get-master-admin-token.test.ts
+    - lib/letflow/design/iss0896-e2e-master-admin-credentials.md
+  prior_gates: >
+    CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, and
+    TEST-DESIGN-VALIDATOR all already PASSed this branch's design/
+    implementation/test-design. This run is the independent execution/
+    verification step (WF-02 Step 4 / WF-04 Step 1).
+
+environment:
+  toolchain: "Elixir/Erlang toolchain present, mix deps already resolved -- no deps.get needed"
+  docker: "docker compose up -d -- letflow-postgres-1 and letflow-keycloak-1 (already Running, port 5462)"
+  free_memory_at_dispatch: "~8.98GB reported by ORCH at dispatch"
+  free_memory_verified_by_me: >
+    Re-checked via Get-CimInstance Win32_OperatingSystem immediately before running:
+    FreePhysicalMemory 8838372 KB (~8.43GB) of 33389048 KB total -- comfortably
+    above the ~4GB threshold, full parallelism authorized.
+  host_contention_observed: >
+    A second, unrelated docker-compose stack (letflow-2-postgres-1,
+    letflow-2-keycloak-1) was running concurrently on this host for the
+    entire run, actively writing (docker stats: letflow-2-postgres-1 at
+    10.8GB/14.3GB net I/O, 1.06GB/560GB block I/O). letflow-postgres-1's own
+    Postgres log showed checkpoint syncs taking 254-270 seconds during the
+    run window -- severe disk I/O contention from the sibling stack, not a
+    config or code issue on this branch.
+
+steps:
+  - step: "docker compose up -d"
+    result: "Both containers already Running."
+
+  - step: "bash scripts/test_parallel.sh (N=16, nproc-derived)"
+    result: >
+      FAILED to even launch all partitions -- 2 consecutive attempts each hit
+      one partition's ecto.create/ecto.migrate step timing out with
+      DBConnection.ConnectionError ("connection not available ... dropped from
+      queue after 5980ms") during the capped-at-4-concurrent DB seeding phase,
+      before any test code ran. Root cause: the host-wide Postgres I/O
+      contention described above (checkpoint fsync stalls of 4+ minutes),
+      not this branch's code.
+    attempts: 2
+    attempt_1_failure: "partition 3 create/migrate failed, exit 1, no partitions launched"
+    attempt_2_failure: "partition 9 create/migrate failed, exit 1, no partitions launched"
+
+  - step: "Retried with TEST_PARALLEL_N=8 to reduce concurrent DB/connection pressure"
+    result: "All 8 partition databases created+migrated successfully this time; full run completed."
+    n_partitions: 8
+    combined_totals: "5037 tests, 8 properties, 74 failures (4971/5045 passed)"
+    per_partition_summary: |
+      partition 1: 610 tests, 2 properties, 12 failures, exit 2
+      partition 2: 682 tests, 4 properties, 7 failures, exit 2
+      partition 3: 656 tests, 0 properties, 6 failures, exit 2
+      partition 4: 637 tests, 0 properties, 6 failures, exit 2
+      partition 5: 568 tests, 1 property, 8 failures, exit 2
+      partition 6: 607 tests, 0 properties, 21 failures, exit 2
+      partition 7: 679 tests, 1 property, 9 failures, exit 2
+      partition 8: 598 tests, 0 properties, 5 failures, exit 2
+    exit_code: 1
+    failure_signature_breakdown: >
+      grep -oE '\*\* \([A-Za-z.]+\)' across all 8 partition logs: 169
+      DBConnection.ConnectionError, 22 Postgrex.Error, 15 ExUnit.TimeoutError,
+      10 stop, 8 RuntimeError -- i.e. ~93% of all raised errors are
+      connection/timeout-shaped (pool exhaustion / checkout timeout /
+      DB unreachable mid-query), the exact signature of host-wide Postgres
+      resource starvation, not assertion failures.
+    distinct_failing_files: 27
+    failing_files_list: >
+      test/letflow/api/context_test.exs,
+      test/letflow/definitions/promotion_review_migration_test.exs,
+      test/letflow/definitions/search_test.exs,
+      test/letflow/engine/lua/manifest_executor_audit_test.exs,
+      test/letflow/entities/query_aggregate_test.exs,
+      test/letflow/event_store/migrations_test.exs,
+      test/letflow/event_store/registry_test.exs,
+      test/letflow/identity/tenant_role_test.exs,
+      test/letflow/modules/exam/certificate_test.exs,
+      test/letflow/modules/installs_put_settings_test.exs,
+      test/letflow/ordering_test.exs,
+      test/letflow/platform/migration_rollout_test.exs,
+      test/letflow/plugs/admission_pipeline_test.exs,
+      test/letflow/plugs/auth_pipeline_test.exs,
+      test/letflow/public_read_test.exs,
+      test/letflow/routers/entities_answer_key_field_leak_test.exs,
+      test/letflow/routers/help_test.exs,
+      test/letflow/routers/modules_test.exs,
+      test/letflow/routers/onboarding_test.exs,
+      test/letflow/routers/public_read_test.exs,
+      test/letflow/sandbox_pool_test.exs,
+      test/letflow/service_catalog_test.exs,
+      test/letflow/simulation/req206_swiftroute_test.exs,
+      test/letflow/simulation/runner_template_and_outcomes_test.exs,
+      test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs,
+      test/letflow/tenant_provisioning_event_seed_test.exs,
+      test/mix/tasks/letflow.seed_test.exs
+    structural_attribution: >
+      None of these 27 files appear in `git diff --name-only main...HEAD`
+      (that diff is limited to web/tests/e2e/**,
+      web/tests/unit/e2e-helpers/get-master-admin-token.test.ts, and one
+      design markdown doc). The failures span 27 unrelated modules across
+      routers, plugs, identity, event store, simulation, and platform
+      migration code with no thematic overlap with each other or with this
+      diff -- itself a signature of shared-resource starvation (every test
+      that happened to need a DB connection at the wrong moment failed)
+      rather than a deterministic bug in any one of them.
+
+  - step: >
+      Retry: re-ran all 292 tests contained in the 27 failing files, serially
+      (single mix test invocation, no partitioning, no concurrent Postgres
+      contention from this run's own side) to distinguish genuine flake from
+      regression.
+    command: >
+      mix test test/letflow/api/context_test.exs
+      test/letflow/definitions/promotion_review_migration_test.exs
+      test/letflow/definitions/search_test.exs
+      test/letflow/engine/lua/manifest_executor_audit_test.exs
+      test/letflow/entities/query_aggregate_test.exs
+      test/letflow/event_store/migrations_test.exs
+      test/letflow/event_store/registry_test.exs
+      test/letflow/identity/tenant_role_test.exs
+      test/letflow/modules/exam/certificate_test.exs
+      test/letflow/modules/installs_put_settings_test.exs
+      test/letflow/ordering_test.exs
+      test/letflow/platform/migration_rollout_test.exs
+      test/letflow/plugs/admission_pipeline_test.exs
+      test/letflow/plugs/auth_pipeline_test.exs
+      test/letflow/public_read_test.exs
+      test/letflow/routers/entities_answer_key_field_leak_test.exs
+      test/letflow/routers/help_test.exs
+      test/letflow/routers/modules_test.exs
+      test/letflow/routers/onboarding_test.exs
+      test/letflow/routers/public_read_test.exs
+      test/letflow/sandbox_pool_test.exs
+      test/letflow/service_catalog_test.exs
+      test/letflow/simulation/req206_swiftroute_test.exs
+      test/letflow/simulation/runner_template_and_outcomes_test.exs
+      test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs
+      test/letflow/tenant_provisioning_event_seed_test.exs
+      test/mix/tasks/letflow.seed_test.exs --seed 0
+    result: >
+      Result: 292 passed, 0 failures. One transient Postgrex syntax-error
+      warning (DROP SCHEMA ... "319") logged mid-run from
+      Letflow.SandboxPoolTest's own resilient_drop_schema/1 retry-once path
+      (a schema-name-with-quote fixture case) -- it retried and the test
+      still passed; not a failure. Every one of the 74 previously-failing
+      tests passed cleanly here. Confirms genuine host-contention flake, not
+      a regression, and confirms none of it is attributable to this diff.
+
+  - step: "npm run type-check (web/)"
+    result: "PASS -- tsc -b tsconfig.json, no errors, no output."
+
+  - step: "npm run lint (web/)"
+    result: "PASS -- eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0, no errors, no output."
+
+  - step: "npm test (web/)"
+    result: >
+      PASS -- Test Files 140 passed (140), Tests 957 passed (957), Duration
+      32.94s. Includes tests/unit/e2e-helpers/get-master-admin-token.test.ts
+      (4 tests, all passed) as required.
+
+  - step: "npm run guards (web/)"
+    result: >
+      PASS -- Test Files 4 passed (4), Tests 52 passed (52) across
+      meta-control.spec.ts, source-scan.spec.ts, bundle-scan.spec.ts,
+      role-set.spec.ts. Includes a real `vite build` (2470 modules
+      transformed, built in 7.71s) that bundle-scan.spec.ts scans; build
+      succeeded with only a normal chunk-size-limit advisory warning
+      (non-fatal, pre-existing, unrelated to this diff).
+
+  - step: "Playwright e2e specs (web/tests/e2e/**, including this diff's own 4 changed/added specs)"
+    result: >
+      NOT RUN. This environment has no live browser, no live Letflow backend
+      instance, and no live Keycloak instance for Playwright to drive --
+      only unit/guard tests (vitest) and the backend ExUnit suite are
+      runnable here. Explicitly stating this per dispatch instructions: no
+      live e2e/Playwright run was performed or is claimed. This diff's
+      e2e-helpers unit test (get-master-admin-token.test.ts) is covered
+      above under npm test; the e2e specs themselves need UAT-RUNNER or a
+      real environment to execute.
+
+verdict: PASS
+rationale: >
+  web/'s full required gate set (type-check, lint, unit test including the
+  new get-master-admin-token.test.ts, guards) all pass cleanly with real
+  quoted output -- this is the actual scope of ISS-0896's change. The backend
+  full-suite run surfaced 74 failures, but I did not count-match or wave
+  these away: I structurally attributed them (none of the 27 failing files
+  are in this diff), fingerprinted the error types (93% DBConnection/
+  Postgrex/Timeout-shaped, the resource-contention signature, not assertion
+  failures), found corroborating live evidence (a sibling docker-compose
+  stack contending for the same host's Postgres I/O, with 254-270s
+  checkpoint syncs observed directly in letflow-postgres-1's own log), and
+  then independently verified via a serial, contention-free retry of every
+  one of the 74 failing tests (292 tests total in those 27 files) -- all 292
+  passed with 0 failures. That is conclusive: this is host resource
+  contention, not a regression, and certainly not something this
+  web/tests/-only diff could have caused. No live Playwright/e2e run was
+  performed or claimed -- explicitly out of scope for this environment.
+full_suite_status: >
+  Run 1 (parallel N=16): failed to even launch (partition DB setup timeout,
+  2 attempts). Run 2 (parallel N=8): 4971/5045 passed, 74 failures across 27
+  files, all connection/timeout-shaped, none in this diff. Retry (serial, the
+  292 tests from those 27 files): 292/292 passed, 0 failures.
+  web/ gates: type-check PASS, lint PASS, test 957/957 PASS (140 files,
+  incl. the new get-master-admin-token.test.ts), guards 52/52 PASS (incl. a
+  real vite build).
+  Playwright e2e specs: not run, no live browser/backend/Keycloak in this
+  environment -- stated explicitly, not claimed as run.
+
+commands_run:
+  - "docker compose up -d"
+  - "bash scripts/test_parallel.sh  (N=16, 2 attempts, both failed to launch on partition DB setup)"
+  - "TEST_PARALLEL_N=8 bash scripts/test_parallel.sh"
+  - "mix test <27 previously-failing files> --seed 0"
+  - "npm run type-check"
+  - "npm run lint"
+  - "npm test"
+  - "npm run guards"
+
+issues_filed:
+  - "None filed as a new issue this run -- this is the same generic,
+     already-documented host resource-contention pattern in
+     docs/anti-patterns.md (full-parallel scripts/test_parallel.sh runs
+     under shared-host Postgres I/O pressure), not a newly-discovered,
+     specific, reproducible failure worth a fresh ISSUE_QUEUE.md entry.
+     If RELEASE-VALIDATOR's independent re-run hits the same 27 files (or a
+     different set with the same DBConnection/Postgrex/Timeout signature),
+     that corroborates this finding rather than contradicting it."
+
+next_action: >
+  Feeds Step 5 (ISSUE-FIXER close) on PASS. RELEASE-VALIDATOR should
+  independently re-run the suite per its own procedure rather than trusting
+  this report; full-partition logs for both test_parallel.sh runs are
+  preserved at /tmp/letflow_test_parallel.QyQttQ (N=8 run) and the two failed
+  N=16 launch attempts (/tmp/letflow_test_parallel.8tXhz5,
+  /tmp/letflow_test_parallel.dIKAj7) for inspection if needed (ephemeral
+  local temp, not committed).

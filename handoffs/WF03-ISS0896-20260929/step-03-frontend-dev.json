@@ -1,0 +1,63 @@
+{
+  "handoff_id": "78a80ead-7879-4cc2-9544-d9d23ac10b04",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0896-20260929/step-03-frontend-dev.json",
+  "created_at": "2026-09-29T20:10:33Z",
+  "started_at": "2026-09-29T20:10:33Z",
+  "completed_at": "2026-09-29T20:13:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["6da90e99-4e92-401c-b4f3-7c45cea847dd"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0896-e2e-master-admin-credentials.md",
+      "web/tests/e2e/helpers.ts",
+      "web/tests/e2e/env04.e2e.spec.ts",
+      "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"
+    ],
+    "owned_modules": ["web/tests/e2e/helpers.ts", "web/tests/e2e/env04.e2e.spec.ts", "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts", "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts", "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 for ISS-0896. Implement lib/letflow/design/iss0896-e2e-master-admin-credentials.md's PASSed design in full: (1) add a shared `getMasterAdminToken(request: APIRequestContext): Promise<string>` export to web/tests/e2e/helpers.ts, sourcing KC_ADMIN_USER/KC_ADMIN_PASSWORD via the existing resolveCredential helper with 'admin'/'admin' local-dev fallback, client_id staying the literal 'admin-cli'. (2) Replace attachment-cross-tenant.pipeline.e2e.spec.ts's local getMasterAdminToken (line ~150-159) and shipment-attach-delivery-note.pipeline.e2e.spec.ts's duplicate (line ~110-119) with calls to the new shared helper, removing the now-dead local copies. (3) Replace tenant-cache.pipeline.e2e.spec.ts's inline call site (line ~201) with a call to the shared helper. (4) Replace env04.e2e.spec.ts's two inline call sites (lines 580, 646) with calls to the shared helper -- for site #1 (line 580), the design flags a graceful-degradation-vs-throw discrepancy: that call site currently returns undefined/logs a warning on failure with no try/catch, but the new shared helper throws. Confirm this by reading the full surrounding function, and wrap the new helper call in a local try/catch preserving the existing undefined-return/warning behavior if the function's contract requires it (read the function's own return type and callers before deciding) -- do not let this silently change env04's existing failure-handling behavior.\n\nRun the project's standard TypeScript verification for web/ (type-check, lint -- these are Playwright e2e specs, not part of the jest/vitest unit suite, so `npm test` may not cover them; check web/package.json's scripts for what actually type-checks/lints web/tests/e2e/). These specs cannot be RUN end-to-end in this environment (no live Playwright browser + backend + Keycloak) -- state this explicitly rather than claiming a live run. Self-review: no hardcoded API base URL, no new state-management/build-tool introduced, credential handling matches the existing resolveCredential pattern exactly.",
+    "acceptance_criteria": [
+      "all 5 call sites use the new shared getMasterAdminToken helper reading from KC_ADMIN_USER/KC_ADMIN_PASSWORD via resolveCredential, admin/admin local-dev default",
+      "the two duplicated local helpers are removed, not left dead alongside the new shared one",
+      "env04.e2e.spec.ts site #1's existing failure-handling behavior (graceful undefined-return, not a thrown exception) is preserved",
+      "web/'s type-check and lint gates pass on the changed files, real output quoted",
+      "no claim of a live Playwright/browser/Keycloak run against these specs -- explicitly state that verification is limited to type-check/lint since no live environment exists here"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added shared `getMasterAdminToken(request: APIRequestContext): Promise<string>` export to web/tests/e2e/helpers.ts, sourcing KC_ADMIN_USER/KC_ADMIN_PASSWORD via the existing resolveCredential helper with 'admin'/'admin' local-dev fallback, client_id fixed literal 'admin-cli', throws on non-2xx. Replaced all 5 call sites: attachment-cross-tenant.pipeline.e2e.spec.ts (deleted its local getMasterAdminToken, now imports the shared one, call site at line 457), shipment-attach-delivery-note.pipeline.e2e.spec.ts (deleted its local duplicate, imports shared one, call site at line 311), tenant-cache.pipeline.e2e.spec.ts (inline call in pl.onCleanup replaced with shared helper call inside the existing try/catch), env04.e2e.spec.ts (both inline sites replaced; site #1 in onboardTestTenantFixture wrapped in a new local try/catch that preserves the function's existing graceful degradation -- console.warn + return undefined on failure -- since the shared helper throws instead of returning a failure sentinel like the old inline block did; site #2 in cleanupOnboardedTestTenantFixture left inside its pre-existing outer try/catch, which already swallows a thrown error, so best-effort cleanup semantics are unchanged; also removed the now-dead `keycloakMasterUrl` local, confirmed unused elsewhere in the function). Both duplicated local helpers are fully removed, not left dead. Self-review: no hardcoded API base URL introduced, no new state-management/build tool, credential handling matches the existing resolveCredential pattern exactly (same call shape as UAT_QA_ADMIN_PASSWORD's usage). Verification: `npm run type-check` (tsc -b) -- clean, zero errors. `npm run lint` (eslint --max-warnings 0 --report-unused-disable-directives) -- clean, zero warnings/errors (this also confirms no unused imports were left behind after removing the two local helpers). No live Playwright/browser/Keycloak run was performed or claimed -- this environment has no running Playwright browser, backend, or Keycloak instance; verification is limited to static type-check/lint on the changed files as instructed.",
+    "artifacts_out": [
+      "web/tests/e2e/helpers.ts",
+      "web/tests/e2e/env04.e2e.spec.ts",
+      "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0896-20260929",
+      "commit_sha_list": ["bcb2cac1"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (touches credential handling) then REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

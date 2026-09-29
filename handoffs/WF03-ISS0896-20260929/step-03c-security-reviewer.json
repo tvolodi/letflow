@@ -1,0 +1,54 @@
+{
+  "handoff_id": "d93e7393-d8c2-49eb-864a-66cc6a5b828e",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0896-20260929/step-03c-security-reviewer.json",
+  "created_at": "2026-09-29T20:14:36Z",
+  "started_at": "2026-09-29T20:14:36Z",
+  "completed_at": "2026-09-30T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["78a80ead-7879-4cc2-9544-d9d23ac10b04"],
+    "artifacts_in": [
+      "web/tests/e2e/helpers.ts",
+      "web/tests/e2e/env04.e2e.spec.ts",
+      "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3c for ISS-0896 -- IN SCOPE per security-reviewer.md's credential-handling clause: this diff changes how master-admin credentials are sourced in test code (replacing hardcoded literals with env-var-backed resolution). Read git diff main...HEAD -- web/tests/e2e/ yourself. For each of INV-1..INV-8 in docs/agents/instructions/security-invariants.md, determine APPLIES or NOT-APPLICABLE. Specifically check: (1) INV-4 (secrets by reference) -- the new KC_ADMIN_USER/KC_ADMIN_PASSWORD env vars must not have a real secret value hardcoded anywhere, only the 'admin'/'admin' LOCAL-DEV fallback, which must be clearly scoped to local dev only, never usable as a silent default against a real QA/staging/prod Keycloak; (2) confirm the fallback mechanism (resolveCredential) cannot accidentally leak a QA/prod credential into a log/error message if the env var IS set but the auth call fails; (3) confirm no new credential-carrying value is written to a file, committed, or logged anywhere in this diff. FAIL immediately on any applicable invariant failing.",
+    "acceptance_criteria": [
+      "all 5 call sites use the new shared getMasterAdminToken helper reading from KC_ADMIN_USER/KC_ADMIN_PASSWORD via resolveCredential, admin/admin local-dev default",
+      "the admin/admin fallback is unambiguously scoped to local dev, not usable as a silent default against a real environment",
+      "no credential value is logged, written to a file, or committed anywhere in this diff"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD -- web/tests/e2e/ (commit bcb2cac1) plus lib/letflow/design/iss0896-e2e-master-admin-credentials.md. Scope test: this is a credential-resolution change in test code (INV-4's domain) -- IN SCOPE. INV-1: NOT-APPLICABLE -- no Ecto schema/migration/business-table touched, pure Playwright e2e test-helper code. INV-2: NOT-APPLICABLE -- no API response shaping. INV-3: NOT-APPLICABLE -- no Lua/WASM host-capability change. INV-4 (secrets by reference): APPLIES, PASS -- new KC_ADMIN_USER/KC_ADMIN_PASSWORD resolve via the pre-existing resolveCredential(envVarName, localDevFallback) helper (helpers.ts:34-39), same pattern already used for UAT_QA_ADMIN_PASSWORD; grep -rniE \"(password|secret|client_secret|token)\\s*(=|:)\\s*\\\"[^\\\"]{8,}\\\"\" across all 5 changed files returned zero hits -- the only literal is the pre-existing, unchanged-behavior 'admin'/'admin' local-dev fallback (5 chars, below the heuristic's own 8-char floor), never a real secret. BPM_IDP_BASE_URL defaults to http://localhost:8082 (helpers.ts:12-13, normalizeIdpBaseUrl) and every one of these 5 call sites builds its URL from BPM_IDP_BASE_URL -- the fallback is only ever reachable against a local/docker-compose Keycloak by default, and is not a new risk: it is the exact literal these 5 call sites already hardcoded before this fix, now made env-overridable (a strict security improvement, not a regression) per lib/letflow/design/iss0896-e2e-master-admin-credentials.md Sec.2. Confirmed getMasterAdminToken's error message (helpers.ts:94-97, 'Keycloak master token request failed: ${status} ${body}') and every console.warn call site that surfaces it (env04.e2e.spec.ts:586 logs (err as Error).message only) carry the server's response status/body text (e.g. Keycloak's own error/error_description), never the request username or password -- grepped all console.* call sites in the 3 touched spec files plus helpers.ts and confirmed none interpolates a credential value. No credential is written to a file, committed, or logged anywhere in this diff -- the only persistence is the design doc itself, which states env-var names and the local-dev fallback literal ('admin'), not a real secret value. INV-5: NOT-APPLICABLE -- no lookup-by-ID endpoint. INV-6: satisfied by this handoff itself (explicit per-invariant statement). INV-7: NOT-APPLICABLE -- no SQL. INV-8: NOT-APPLICABLE in the crash-safety sense this invariant targets (no shared-process/tenant-isolation path) -- test-code error handling is otherwise sound: all 5 call sites either wrap getMasterAdminToken in a local try/catch that preserves prior best-effort-degrade semantics (env04.e2e.spec.ts's onboard and cleanup fixtures, tenant-cache's onCleanup) or propagate a thrown Error with no bare unsafe pattern match. All 3 acceptance criteria in this handoff's task confirmed directly against the diff. No BLOCKER found on any applicable invariant.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0896-20260929",
+      "commit_sha_list": ["bcb2cac1"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER for idiom/scope-creep gate per WF-02 Step 2c ordering (SECURITY-REVIEWER before REVIEWER)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

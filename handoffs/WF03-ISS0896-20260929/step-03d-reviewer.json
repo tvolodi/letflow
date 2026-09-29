@@ -1,0 +1,55 @@
+{
+  "handoff_id": "ee54b378-9973-4579-9dd9-fcab7384f64e",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0896-20260929/step-03d-reviewer.json",
+  "created_at": "2026-09-29T20:17:06Z",
+  "started_at": "2026-09-29T20:17:06Z",
+  "completed_at": "2026-09-30T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["78a80ead-7879-4cc2-9544-d9d23ac10b04"],
+    "artifacts_in": [
+      "web/tests/e2e/helpers.ts",
+      "web/tests/e2e/env04.e2e.spec.ts",
+      "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3d for ISS-0896, idiom/scope-creep hard gate. Read git diff main...HEAD -- web/tests/e2e/ yourself. Check per .claude/agents/reviewer.md's four questions -- for TypeScript test code, judge idiomatic-vs-crutch on the helper consolidation (is the new shared getMasterAdminToken a clean fit with the existing resolveCredential/helpers.ts pattern, or does it introduce an inconsistent shape?), scope creep (does the diff touch anything beyond the 5 named call sites and the 2 duplicate-helper removals?), and consistency with any decision records. Specifically judge env04.e2e.spec.ts site #1's new local try/catch wrapper -- FRONTEND-DEV added this specifically to preserve pre-existing graceful-degradation behavior against the new throwing helper; confirm this is a genuine behavior-preservation, not a silently introduced swallow-everything catch that could mask a different real failure. FAIL if a genuine crutch, inconsistency, or scope creep is found; otherwise PASS with any non-blocking notes recorded.",
+    "acceptance_criteria": [
+      "all 5 call sites use the new shared getMasterAdminToken helper reading from KC_ADMIN_USER/KC_ADMIN_PASSWORD via resolveCredential, admin/admin local-dev default",
+      "the two duplicated local helpers are removed, not left dead alongside the new shared one",
+      "env04.e2e.spec.ts site #1's existing failure-handling behavior (graceful undefined-return, not a thrown exception) is preserved",
+      "no scope creep beyond the 5 call sites and the helper consolidation"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD -- web/tests/e2e/ directly. helpers.ts's new getMasterAdminToken mirrors the existing getKeycloakToken shape exactly: same APIRequestContext param, resolveCredential(KC_ADMIN_USER/KC_ADMIN_PASSWORD, 'admin') for creds, throw-with-response-text on !ok(), typed JSON body -- a clean fit with the established pattern, not a divergent shape. Scope check: full diff (excluding handoff/design artifacts) touches exactly helpers.ts (new helper) + the 5 named call sites (env04.e2e.spec.ts x2, and one each in attachment-cross-tenant/shipment-attach-delivery-note/tenant-cache pipeline specs), removing the 2 duplicated local getMasterAdminToken helpers in the pipeline specs -- no other files, no unrelated refactors. env04.e2e.spec.ts site #1 (onboardTestTenantFixture): confirmed the try/catch is genuine behavior preservation -- old code checked !resp.ok() and did console.warn + return undefined; new code wraps only the getMasterAdminToken call in try/catch with the same '[ENV-04C]' warn prefix and same return undefined, and does not extend to wrap any of the subsequent password-reset logic, so it cannot mask a later, different failure. Site #2 (cleanupOnboardedTestTenantFixture) and the tenant-cache spec's cleanup both let the throw propagate into their existing outer best-effort try/catch (equivalent to the prior if(ok()) no-op shape). No crutch, no inconsistency, no scope creep found.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0896-20260929",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Dispatch to TEST-DESIGNER for step 04 (test-design gate is N/A here since this is test code itself -- confirm with ORCH whether TEST-DESIGNER step applies or whether this proceeds directly to TEST-RUNNER)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

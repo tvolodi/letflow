@@ -57,7 +57,7 @@ import {
   jwtSubject,
   shot,
 } from '../pipeline'
-import { assertServiceReadiness, resolveCredential, BPM_IDP_BASE_URL } from '../helpers'
+import { assertServiceReadiness, resolveCredential, BPM_IDP_BASE_URL, getMasterAdminToken } from '../helpers'
 import { bindTenantIdpRealm, runSqlAgainstDevPostgres } from '../db-exec'
 
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
@@ -103,19 +103,6 @@ interface PipelineState {
   taskId: string
 
   originalAttachmentId: string
-}
-
-/** Get a Keycloak master-realm admin token -- same technique the sibling
- *  spec's own cleanup already uses. */
-async function getMasterAdminToken(request: APIRequestContext): Promise<string> {
-  const resp = await request.post(`${BPM_IDP_BASE_URL}/realms/master/protocol/openid-connect/token`, {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    form: { client_id: 'admin-cli', username: 'admin', password: 'admin', grant_type: 'password' },
-  })
-  if (!resp.ok()) {
-    throw new Error(`Keycloak master token request failed: ${resp.status()} ${await resp.text()}`)
-  }
-  return ((await resp.json()) as { access_token: string }).access_token
 }
 
 /** Creates a fresh Keycloak realm for a just-onboarded tenant -- same shape

@@ -5021,8 +5021,17 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 3
+    entries: 4
     note: >
+      Bumped to 4 by DOC-UPDATER after appending REQ-422's done-event
+      (WF02-REQ422-20260929, 2026-09-29T09:05:00Z -- MOB-5 on-device
+      security hardening closed; RELEASE-VALIDATOR independently
+      re-verified all 10 acceptance criteria), redirected here from
+      volume 23 for the same reason as the started-event below.
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 4
+      on-disk entries (2 from PR #1972's ISS-0878 entries + REQ-422
+      started + REQ-422 done).
+
       Bumped to 3 by ORCH after appending REQ-422's started-event
       (WF02-REQ422-20260929, 2026-09-29T02:37:45Z -- MOB-5 on-device
       security hardening run kickoff), redirected here from volume 23

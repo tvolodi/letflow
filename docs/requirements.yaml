@@ -31378,7 +31378,7 @@ requirements:
   - id: REQ-422
     title: "MOB-5: on-device security -- secure-storage-only tokens, no token in any log sink, cleartext forbidden (Android network-security-config, iOS ATS), backup exclusion, tenant-scoped token audience, [S] hardening documented"
     owner: MOBILE-DEV
-    status: in_progress
+    status: done
     stage: S9
     impl_order: 859  # letflow-queue task id, GH#1876. Registered 2026-09-27T03:00:00Z by ORCH (WF-01 Step 3).
     description: >

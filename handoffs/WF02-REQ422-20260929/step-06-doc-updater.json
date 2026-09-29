@@ -1,0 +1,74 @@
+{
+  "handoff_id": "1ad7cb3e-b588-4093-9c3b-9a5158feafab",
+  "run_id": "WF02-REQ422-20260929",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ422-20260929/step-06-doc-updater.json",
+  "created_at": "2026-09-29T07:28:16Z",
+  "started_at": "2026-09-29T07:28:16Z",
+  "completed_at": "2026-09-29T09:10:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-422"],
+    "related_handoff_ids": [
+      "303b7a66-69aa-4e70-a9df-efc0f4ff0457"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ422-20260929/step-05-release-validator.json",
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v23.yaml",
+      "docs/mobile/architecture.md",
+      "README.md"
+    ],
+    "owned_modules": ["docs/requirements.yaml", "docs/status/", "README.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 6: RELEASE-VALIDATOR independently confirmed all 10 acceptance criteria for REQ-422 (MOB-5 on-device security hardening) satisfied (handoffs/WF02-REQ422-20260929/step-05-release-validator.json). Flip docs/requirements.yaml's REQ-422 entry status from in_progress to done. Append a done event to the current run-history volume (re-check docs/status/requirement_status.index.yaml for which volume is status: current, since a concurrent session could have rolled it since Step 00) -- append-only, real UTC timestamp, matching the canonical five-field entry shape (req/event/agent/at/note) exactly; run test/docs/requirement_status_invariants_test.exs before considering this step done. Confirm docs/mobile/architecture.md's corporate-tier hardening section (already added by MOBILE-DEV, commit 34c827bd) is present and complete -- edit only if incomplete. Check whether README.md's Migration status / mobile-tier summary needs updating to reflect MOB-5 being done, per the pattern used for REQ-417..421 closures -- edit only if stale. Record two MINOR non-blocking findings as notes in the run-history entry (ORCH will file these as issues after this run, not this step): (a) REQ-421's own requirement text forward-references key rotation/biometric gating/tamper detection as REQ-422 scope, but REQ-422's actual text/ACs contain none of that -- REQ-421's text needs correcting; (b) mix letflow.check.test does not honor a caller's TEST_PARALLEL_N env override. List every file actually touched in result.artifacts_out.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-422 status flipped in_progress -> done",
+      "one done event appended to the current run-history volume (v23), append-only, correct schema, entries: count in the index updated to match, test/docs/requirement_status_invariants_test.exs passing",
+      "docs/mobile/architecture.md's corporate-tier hardening section confirmed present and complete",
+      "README.md's mobile-tier summary checked for staleness and updated if stale",
+      "the two MINOR findings recorded as notes in the run-history entry",
+      "handoff completed with artifacts_out naming every file actually touched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Checked out feature/WF02-REQ422-20260929 at HEAD=6fd55f64. Re-read docs/status/requirement_status.index.yaml: volume 23 (docs/status/requirement_status.v23.yaml) confirmed still status: current, 36 entries declared at read time (unchanged since Step 00, no concurrent roll). Read requirement_status.v23.yaml in FULL (1082 lines) to confirm the exact five-field entry schema (req/event/agent/at/note) from its own header and from real adjacent entries -- specifically REQ-421's revised entry and the ISS-0879 SCOPE-CHANGE entry immediately above REQ-422's own started-event, per this run's instruction. Flipped docs/requirements.yaml's REQ-422 entry status: in_progress -> done (single-line diff, 1 insertion/1 deletion). Appended one req: REQ-422 / event: done entry to requirement_status.v23.yaml immediately after the started-event, quoting RELEASE-VALIDATOR's own per-AC verdicts, the mutation-revert sanity check on the Android manifest guard, the full-suite/mix letflow.check.test results under critical host memory pressure, the README staleness finding and fix, the stage-9-mobile.md no-update determination, and both MINOR findings named in this run's instructions. `git diff --numstat` on the volume file confirmed 55 insertions / 0 deletions -- pure append, no rewrite. Ran test/docs/requirement_status_invariants_test.exs: it FAILED on the first run (A9: index declared entries: 36, actual on-disk 37) because the append raised the on-disk count without the index's entries: field being bumped -- corrected docs/status/requirement_status.index.yaml's volume-23 entries: field from 36 to 37 with a new note documenting the bump (9 insertions/1 deletion on that file -- the 1 deletion is the mutable entries:-count line being updated in place, not a history rewrite; no history/note text was removed, only the convenience counter). Re-ran the invariants test: 'Result: 24 passed', 0 failures. Confirmed docs/mobile/architecture.md's section 7 ('Security hardening before corporate-tier deployment') is present and complete: states 'Status: documented now, not implemented in v1 (REQ-422)' and names certificate pinning and root/jailbreak detection as required-before-corporate-tier and not implemented in v1 -- no edit needed, matching AC9 verbatim (also independently confirmed by RELEASE-VALIDATOR's own AC9 check in step-05). Checked README.md's mobile-tier summary paragraph (lines 52-65): it was stale, naming only REQ-419/420/421 with no mention of REQ-422/MOB-5 -- updated it to add REQ-422's on-device hardening summary (secure-storage-only tokens, log redaction, Android cleartext/backup lockdown, app-level transport check, iOS ATS static check, tenant-scoped token audience, masked-reveal-once widget) and the certificate-pinning/root-detection corporate-tier caveat with a pointer to architecture.md section 7, matching the update pattern used for REQ-417/419/420/421 closures. Checked docs/migration/stage-9-mobile.md: its only progress table covers the three already-closed backend gaps (REQ-124/125/126), not a REQ-419..422 tracker, so no update needed -- same determination REQ-420's own closure recorded for this file. Both MINOR findings from RELEASE-VALIDATOR's and earlier gates' reports recorded verbatim inside the run-history append's note text, for ORCH to file as separate follow-up issues after this run (not filed as issues by this step itself, per this run's own instruction).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v23.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "README.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "REQ-421's own requirement text in docs/requirements.yaml forward-references \"key rotation/biometric gating/tamper detection\" as REQ-422 scope, but REQ-422's actual text/acceptance_criteria contain none of that -- flagged by CODE-DESIGN-VALIDATOR and REVIEWER during this run. REQ-421's text needs correcting, not REQ-422's. Not fixed in this step; recorded for ORCH to file as a follow-up issue.",
+        "affected_requirement": "REQ-421"
+      },
+      {
+        "severity": "MINOR",
+        "description": "mix letflow.check.test's shelled-out scripts/test_parallel.sh invocation does not honor a caller-set TEST_PARALLEL_N environment override (observed N=16 auto-derived from nproc on both of RELEASE-VALIDATOR's attempts despite an explicit override), which matters for memory-constrained runs. Not fixed in this step; recorded for ORCH to file as a follow-up task-runner issue.",
+        "affected_requirement": "REQ-422"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ422-20260929",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ422-20260929",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to MOBILE-DEV for Step Final"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

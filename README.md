@@ -53,14 +53,21 @@ The same migration brought over the **mobile tier specification**
 (`docs/mobile/`) as stage S9 — a Flutter app that is a generic
 interpreter of server-delivered definitions, on the same principle as
 the SPA. `apps/mobile/` now exists: `REQ-419` (MOB-1) scaffolded it,
-`REQ-420` wired a path-filtered Mobile gate into CI, and `REQ-421`
+`REQ-420` wired a path-filtered Mobile gate into CI, `REQ-421`
 (MOB-2) added tenant bootstrap — slug/deep-link →
 unauthenticated `GET /api/mobile/tenant-config` → OIDC Auth-Code+PKCE
 in the system browser → secure token store → memberships and installed
-modules, with four dedicated error screens. S9's three backend gaps
-closed earlier (`REQ-124`/`125`/`126`) and `REQ-418` added the mobile
-tier's own PKCE-S256 Keycloak client (`letflow-mobile`) plus its
-`client_id` on `GET /api/mobile/tenant-config` — see
+modules, with four dedicated error screens — and `REQ-422` (MOB-5)
+added on-device security hardening: secure-storage-only tokens, log
+redaction, Android cleartext/backup lockdown, an app-level transport
+check ahead of any socket, a static iOS ATS check, tenant-scoped token
+audience, and a masked-reveal-once secrets widget. Certificate pinning
+and root/jailbreak detection remain required-before-corporate-tier and
+are explicitly not implemented in v1 (`docs/mobile/architecture.md`
+§7). S9's three backend gaps closed earlier (`REQ-124`/`125`/`126`) and
+`REQ-418` added the mobile tier's own PKCE-S256 Keycloak client
+(`letflow-mobile`) plus its `client_id` on
+`GET /api/mobile/tenant-config` — see
 [`docs/migration/stage-9-mobile.md`](docs/migration/stage-9-mobile.md)
 for the current gap/progress table.
 

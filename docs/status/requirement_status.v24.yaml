@@ -300,3 +300,71 @@
       REQ-419..422's own Step 00s -- no dedicated handoff file, per this
       run's own check of those four runs' handoffs/ directories, none of
       which carry a step-00 file either).
+
+  - req: REQ-425
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T18:05:00Z"
+    note: >
+      MOB-6: hardened lib/api/api_client.dart into the single sanctioned
+      API client -- bearer attach, exactly-one silent refresh on 401 then
+      retry with concurrent-401 coalescing (all concurrent 401s share one
+      in-flight refresh), exponential backoff on 5xx for idempotent GETs
+      only (POST never auto-retried), a 9-variant sealed ApiError type
+      (network-unavailable, unauthorized, forbidden, not-found,
+      module-not-available distinguishing a 404 on /api/v1/modules/<id>/
+      from a plain 404, backpressure carrying Retry-After seconds,
+      validation with RFC 9457 field errors, conflict, server), and a
+      static single-client guard under apps/mobile/test/guards/ (fails on
+      a synthetic dio/http/dart:io-HttpClient fixture outside lib/api/,
+      passes on the real tree). CODE-DESIGNER's design gate took 3
+      legitimate rework cycles (TBD placeholder language plus executable
+      code plus a duplicate method signature in rework1; a missing test
+      seam in rework2; recurring executable code in rework3) before
+      CODE-DESIGN-VALIDATOR PASSed. SECURITY-REVIEWER's gate took 3
+      cycles and found and closed 2 real cross-tenant token races: a
+      token-write-time race (concurrent refreshes for different tenants
+      could interleave their secure-store writes) and a
+      retry-dispatch-time race (a request queued for retry under tenant
+      A's stale token could dispatch after a tenant switch, using tenant
+      B's now-current token) -- both closed with dedicated regression
+      tests ('cross-tenant refresh race' and 'cross-tenant retry-dispatch
+      race' in api_client_hardening_test.dart), both passing on the final
+      SECURITY-REVIEWER PASS (step-02c-security-reviewer-recheck2.json).
+      Rebasing this branch onto origin/main (which had meanwhile merged
+      REQ-423/REQ-424 from a concurrent session) surfaced a genuine
+      integration gap: REQ-424's apps/mobile/lib/definitions/
+      pinned_form_resolver.dart still imported package:dio and checked
+      response.statusCode != 200 manually, tripping this run's own new
+      single-api-client guard, because ApiClient.get() now throws
+      ApiError on any non-2xx status instead of returning it -- the file's
+      own design comment had named this exact gap as design §9 OQ-D,
+      deliberately deferred pending REQ-425. MOBILE-DEV's integration fix
+      (commit 298e8e84, handoffs/WF02-REQ425-20260929/
+      step-02b-integration-fix.json) removed the now-dead statusCode
+      branch, the Response-typed intermediate variable, and the dio
+      import; both the dead branch and the pre-existing catch(_) already
+      returned the identical PinnedFormUnavailable(fetchFailed) outcome,
+      so this is a no-public-behavior-change cleanup, REVIEWER-cleared
+      (step-02d-integration-fix-review.json) and independently
+      re-confirmed first-hand by RELEASE-VALIDATOR on its fresh recheck
+      (reading api_client.dart's _sendWithBackoff/_handleUnauthorized
+      directly to confirm ApiClient.get() can never return a non-2xx
+      Response, making the removed branch genuinely unreachable).
+      RELEASE-VALIDATOR's fresh Step 05 recheck (superseding the
+      original pre-integration-fix PASS) independently re-verified all 7
+      acceptance criteria against current code/tests, ran the full
+      backend suite serially under critical host memory pressure (5048
+      passed, 27 excluded, 0 failures) plus `mix letflow.check.test`
+      (OK on a clean full-output re-run) and `cd apps/mobile && flutter
+      analyze && flutter test` itself (0 analyze issues; +147 tests, all
+      passing, including the guard's 6 tests and the hardening suite's
+      28). docs/requirements.yaml's REQ-425 status: in_progress -> done
+      in this same append. README.md's mobile-tier summary paragraph
+      updated to add REQ-425/MOB-6's summary (matching the existing
+      REQ-419..424 pattern). docs/migration/stage-9-mobile.md checked:
+      its table still covers only the three closed backend gaps
+      (REQ-124/125/126), not a REQ-419..425 progress table, so no update
+      needed there (same determination REQ-420/422/423/424's own
+      closures made for this file). letflow-queue task 862 (GH#1879)
+      released as done.

@@ -5021,8 +5021,18 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 8
+    entries: 9
     note: >
+      Bumped to 9 by DOC-UPDATER after appending REQ-425's done-event
+      (WF02-REQ425-20260929, 2026-09-29T18:05:00Z -- MOB-6 single API
+      client hardening closed; RELEASE-VALIDATOR's fresh Step 05 recheck
+      independently re-verified all 7 acceptance criteria). Re-read this
+      index and volume 24 immediately before appending and recounted
+      directly rather than trusting the prior note's arithmetic:
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 9
+      on-disk entries (the prior 8 + this done-event), confirming no
+      concurrent append landed since the last confirmed count of 8.
+
       Bumped to 8 by ORCH while rebasing WF02-REQ425-20260929 onto
       origin/main, which had meanwhile landed REQ-423/REQ-424 at 7 (see
       the entry below this one for that reconciliation's own history).

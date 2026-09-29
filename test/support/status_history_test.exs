@@ -88,6 +88,7 @@ defmodule Letflow.Test.StatusHistoryTest do
     zero_indent_line = "  - req: REQ-422" |> String.replace_leading("  ", "")
 
     assert zero_indent_line == "- req: REQ-422"
+
     assert Regex.run(@pre_fix_item_regex, zero_indent_line) == nil,
            "the pre-fix item regex #{inspect(@pre_fix_item_regex)} is hard-anchored to " <>
              "exactly 2 leading spaces; PR #1972's 0-indent line must NOT match it -- " <>
@@ -123,6 +124,7 @@ defmodule Letflow.Test.StatusHistoryTest do
     by_req = Map.new(entries, &{&1.req, &1})
 
     assert by_req["REQ-001"].indent == 2
+
     assert by_req["REQ-422"].indent == 0, """
     REQ-422's `- req:` line in the fixture is written with ZERO leading spaces
     (PR #1972's exact malformed shape). entries/1 must record its true on-disk indent,

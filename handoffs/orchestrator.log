@@ -2343,3 +2343,5 @@
 2026-09-29T11:34:00Z | DISPATCH | WF02-REQ425-20260929 | step-01-rework1 | ORCH -> CODE-DESIGNER | PENDING -- rework iteration 1 of 3
 2026-09-29T11:38:00Z | PASS | WF02-REQ425-20260929 | step-01-rework1 | CODE-DESIGNER -> ORCH | PASS -- TBD resolved (flutter_appauth 12.1.0 FlutterAppAuth.token(TokenRequest) verified against pub cache source), Sec 4.2 executable code replaced with prose, duplicate post() resolved (commit 9c01069b).
 2026-09-29T11:38:26Z | DISPATCH | WF02-REQ425-20260929 | step-01b-recheck1 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING -- fresh full re-check
+2026-09-29T11:41:00Z | FAIL | WF02-REQ425-20260929 | step-01b-recheck1 | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- new defect found on full re-read (iteration-0 defects confirmed fixed): ApiClient.forTesting has no TenantTokenStore/ActiveRealmHolder seam, blocking AC1/AC2's test constructions. rework_count 1 -> 2.
+2026-09-29T11:41:43Z | DISPATCH | WF02-REQ425-20260929 | step-01-rework2 | ORCH -> CODE-DESIGNER | PENDING -- rework iteration 2 of 3

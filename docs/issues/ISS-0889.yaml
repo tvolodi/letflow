@@ -1,0 +1,23 @@
+id: ISS-0889
+title: "WF-05 has no environment-preparation/preflight step: an all-BLOCKED UAT run was reported as a normal result"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL-20260929 (filed by ORCH)
+discovered_at: "2026-09-29T19:30:00Z"
+severity: MAJOR
+owner: "ORCH / WF-05 docs; PR 1993 (branch feature/WF05-step0-env-prep-20260929) implements it"
+description: "Found in WF05-FULL-20260929: 15 of 19 platform scenarios and all 11 narrative scenarios were BLOCKED on missing QA fixtures/credentials, and the run reported them as ordinary results instead of failing fast before dispatch. WF-05 needs a mandatory Step 0 environment preparation with a preflight script that verifies realms, tenants, definitions and credentials for the requested scenarios and aborts when preconditions are unmet. Already being implemented: PR 1993 (branch feature/WF05-step0-env-prep-20260929, docs(WF-05) Step 0 + scripts/uat_preflight.sh). This issue tracks that work; do not duplicate it. Severity MAJOR."
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-NARRATIVE.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-BILIMBAGA.yaml
+affected_files:
+  - docs/agents/workflows/WF-05-uat.md
+  - scripts/uat_preflight.sh
+queue_ref: Q-889
+github_ref: GH-1996
+status: open
+in_flight_note: >
+  DO NOT START (scanners): already in flight. PR 1993 (branch
+  feature/WF05-step0-env-prep-20260929, "docs(WF-05): mandatory Step 0 environment
+  preparation + scripts/uat_preflight.sh") is being prepared by the filing session.
+  Do not lock or reimplement; review/merge that PR instead.

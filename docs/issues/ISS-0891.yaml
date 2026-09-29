@@ -1,0 +1,17 @@
+id: ISS-0891
+title: "Flaky e2e: platform-definition-promotion-rollback start-instance version input empty on first attempt (passed on retry)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL-20260929 (filed by ORCH)
+discovered_at: "2026-09-29T19:30:00Z"
+severity: MINOR
+owner: "FRONTEND-DEV; deflake"
+description: "Found in WF05-FULL-20260929 PLATFORM run: web/tests/e2e/pipelines platform-definition-promotion-rollback spec failed at line 235 on attempt 1 (start-definition-version input was empty instead of 1.0.0 after typing the process key in the Start Instance dialog); retry 1 passed in full. Likely a race between the dialog populating the version field after the key is entered and the assertion/fill. Needs a deterministic wait on the version field being populated (or an explicit fill) plus a repeat-run confirmation (--repeat-each). Severity MINOR."
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-NARRATIVE.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-BILIMBAGA.yaml
+affected_files:
+  - web/tests/e2e/pipelines/
+queue_ref: Q-891
+github_ref: GH-1998
+status: open

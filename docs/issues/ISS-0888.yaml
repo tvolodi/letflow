@@ -1,0 +1,18 @@
+id: ISS-0888
+title: "QA UAT credentials missing: promo proposer accounts, Keycloak master-admin (attachment-cross-tenant isolation unverified on QA), swiftroute persona username mismatch"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL-20260929 (filed by ORCH)
+discovered_at: "2026-09-29T19:30:00Z"
+severity: MAJOR
+owner: "ai-dala-infra run; QA credentials"
+description: "Found by UAT-RUNNER in WF05-FULL-20260929 (PLATFORM and NARRATIVE reports). (1) promo-proposer-uat and uat-promo-conflict-proposer return 401 invalid_grant on QA and are not in ai-dala-infra qa-login.sh; blocks platform-definition-promotion-approved and platform-definition-promotion-conflict-rejected. (2) No Keycloak master-realm admin credential is supplied to UAT runs; blocks platform-attachment-cross-tenant-probe (SECURITY INVARIANT tenant attachment isolation is UNVERIFIED on QA), swiftroute/tenant-onboarding-happy and swiftroute/shipment-attach-delivery-note. (3) Scenario actor ids (actor-swiftroute-lena etc.) differ from QA usernames (lena-dispatcher-user, marco-ops-manager-user, alice-ceo-user); actor-swiftroute-tobias and actor-platform-admin have no account. Needed: provision accounts and a scoped master-admin credential source in qa-login.sh (or a documented alternative), and reconcile scenario persona ids with QA usernames. Owner: ai-dala-infra run. Severity MAJOR."
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-NARRATIVE.yaml
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-BILIMBAGA.yaml
+affected_files:
+  - web/tests/e2e/pipelines/
+  - test/fixtures/uat/scenarios/platform/
+queue_ref: Q-888
+github_ref: GH-1995
+status: open

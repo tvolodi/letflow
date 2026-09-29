@@ -4,7 +4,7 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
   append-only, and schema-conformant.
 
   Specified by `lib/letflow/design/iss-0119-status-file-readability.md` §7
-  (assertions A0–A9) and §7.1 (the fail-first demonstration). No database, no
+  (assertions A0–A11) and §7.1 (the fail-first demonstration). No database, no
   new dependencies; all helpers live in `Letflow.Test.StatusHistory`
   (`test/support/status_history.ex`) and take explicit paths.
 
@@ -760,6 +760,38 @@ defmodule Letflow.Docs.RequirementStatusInvariantsTest do
     been a legitimate roll. That would let a fresh defect in what is really
     still an appendable volume be declared away instead of fixed in the
     working tree.
+    """
+  end
+
+  # ── A11 — every on-disk entry's list item is at the documented 2-space
+  #         indent (ISS-0883 finding) ──────────────────────────────────────
+
+  test "A11: every on-disk entry's list item uses the documented 2-space indent" do
+    index = SH.parse_index(@index_path)
+
+    violations =
+      index.volumes
+      |> Enum.flat_map(fn v ->
+        v.path
+        |> SH.entries()
+        |> Enum.filter(&(&1.indent != 2))
+        |> Enum.map(&{v.path, &1.line, &1.indent, &1.req})
+      end)
+
+    assert violations == [], """
+    A11 — an entry's `- req:` list item is not at the documented 2-space indent.
+
+      (path, line, actual indent in spaces, req) for each violation:
+      #{inspect(violations)}
+
+    The 2-space indent is documented in every volume's own header (ENTRY SCHEMA)
+    and is what HOW-TO-APPEND's append procedure must produce. An entry at the
+    wrong indent is still counted correctly by A9's on-disk total (entries/1 is
+    indentation-tolerant), but it is malformed relative to the documented
+    convention regardless of whether the declared `entries:` count happens to
+    still be correct — fix the indent in the volume file itself; do not fix this
+    by changing the convention or adding an exemption, since this is a
+    mechanical formatting rule, not content that legitimately varies.
     """
   end
 

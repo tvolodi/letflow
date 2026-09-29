@@ -5021,17 +5021,38 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 5
+    entries: 6
     note: >
-      Bumped to 5 by ORCH (recount-every-time rule, ISS-0199-class fix)
-      after DOC-UPDATER appended REQ-423's done-event
-      (WF02-REQ423-20260929 -- MOB-3 part-1 mobile local definition cache
-      + delta sync closed; RELEASE-VALIDATOR independently re-verified
-      all 8 acceptance criteria, including a real Flutter toolchain run:
-      110/110 tests, 0 analyze issues) but never bumped this index's
-      `entries:` field, caught by A9's own CI assertion failing on PR
-      #1982. `grep -c "^  - req:" docs/status/requirement_status.v24.yaml`
-      = 5 on-disk entries (the prior 4 + this REQ-423 done entry).
+      Bumped to 6 by ORCH while resolving PR #1983's merge conflict with
+      origin/main's concurrently-landed PR #1982: both sides had
+      independently appended one entry to volume 24 and each side's own
+      note claimed "bumped to 5" against its own pre-merge on-disk count,
+      which is correct only in isolation -- combined, both entries now
+      coexist on disk and the true count is 6, not 5. Recounted directly
+      rather than trusting either side's arithmetic:
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 6
+      on-disk entries (the prior 4 + DOC-UPDATER's ISS-0884 SCOPE-CHANGE
+      done-event + REQ-423's done-event, in that chronological order by
+      `at:` timestamp).
+
+      Combined note, PR #1983's own half: bumped to 5 by DOC-UPDATER
+      after appending ISS-0884's SCOPE-CHANGE done-event
+      (WF03-ISS0883-20260929, 2026-09-29T13:02:05Z -- fixed
+      test/support/status_history.ex's entries/1 indent-hard-anchored
+      regex, the false-green root cause behind PR #1972's A9 miss; added
+      assertion A11). The branch/commits are labeled "ISS-0883" but
+      RELEASE-VALIDATOR determined (confirmed by ORCH) the actual issue
+      resolved is docs/issues/ISS-0884.yaml -- ISS-0883.yaml on disk is a
+      separate, unrelated, still-open issue, not touched.
+
+      Combined note, PR #1982's own half: bumped to 5 by ORCH
+      (recount-every-time rule, ISS-0199-class fix) after DOC-UPDATER
+      appended REQ-423's done-event (WF02-REQ423-20260929 -- MOB-3
+      part-1 mobile local definition cache + delta sync closed;
+      RELEASE-VALIDATOR independently re-verified all 8 acceptance
+      criteria, including a real Flutter toolchain run: 110/110 tests, 0
+      analyze issues) but never bumped this index's `entries:` field,
+      caught by A9's own CI assertion failing on PR #1982.
 
       Bumped to 4 by DOC-UPDATER after appending REQ-422's done-event
       (WF02-REQ422-20260929, 2026-09-29T09:05:00Z -- MOB-5 on-device

@@ -1,0 +1,169 @@
+run_id: WF03-ISS0883-20260929
+agent: TEST-RUNNER
+date: 2026-09-29T00:00:00Z
+branch: feature/WF03-ISS0883-20260929
+head_commit: 19c21c77
+issue: ISS-0883
+scope:
+  description: >
+    Widens test/support/status_history.ex's entries/1 regex to be indent-tolerant when
+    parsing status-history YAML/markdown-ish log entries, adds assertion A11 (indent
+    consistency) to test/docs/requirement_status_invariants_test.exs, and adds a new
+    fail-first regression test file test/support/status_history_test.exs (5 tests).
+  files_touched_directly:
+    - test/support/status_history.ex
+    - test/support/status_history_test.exs
+    - test/docs/requirement_status_invariants_test.exs
+  prior_gates: >
+    SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR all already PASSed this
+    branch's design/implementation/test-design per the dispatch instructions. This run is
+    the independent execution/verification step (WF-02 Step 4 / WF-04 Step 1).
+
+environment:
+  toolchain: "Elixir 1.20.3 / Erlang-OTP 29 (present, no deps.get needed)"
+  docker: "docker compose up -d -- letflow-2-postgres-1 and letflow-2-keycloak-1 already Running"
+  db_port: "LETFLOW_DB_PORT=5472 from workspace .env (distinct from sibling 'letflow' checkout's 5462)"
+  note: >
+    Host also has a second, unrelated docker-compose stack running concurrently
+    (letflow-postgres-1, letflow-keycloak-1, from the sibling 'letflow' checkout) --
+    consistent with this host's documented pattern of full-suite runs experiencing
+    connection/timeout flakiness under shared resource pressure (docs/anti-patterns.md,
+    "13 orphaned worktree stacks..." entry, ~2026-09-25).
+
+steps:
+  - step: "git fetch origin && git checkout feature/WF03-ISS0883-20260929"
+    result: "Already on branch, tip 19c21c77 -- matches dispatch instructions."
+
+  - step: "docker compose up -d"
+    result: "Both containers already Running/healthy."
+
+  - step: "bash scripts/test_parallel.sh  (full suite, N=16 nproc-derived)"
+    result: "FAIL suite-wide by raw count, but all 6 failures are non-reproducing resource-contention flakes -- see retry below"
+    n_partitions: 16
+    combined_totals: "5037 tests, 8 properties, 6 failures (5039/5045 passed)"
+    per_partition_summary: |
+      partition 1: 405 tests, 0 properties, 0 failures, exit 0
+      partition 2: 300 tests, 0 properties, 0 failures, exit 0
+      partition 3: 375 tests, 0 properties, 0 failures, exit 0
+      partition 4: 241 tests, 0 properties, 1 failures, exit 2
+      partition 5: 298 tests, 0 properties, 0 failures, exit 0
+      partition 6: 309 tests, 0 properties, 1 failures, exit 2
+      partition 7: 414 tests, 0 properties, 0 failures, exit 0
+      partition 8: 379 tests, 0 properties, 0 failures, exit 0
+      partition 9: 205 tests, 2 properties, 0 failures, exit 0
+      partition 10: 382 tests, 4 properties, 0 failures, exit 0
+      partition 11: 281 tests, 0 properties, 0 failures, exit 0
+      partition 12: 396 tests, 0 properties, 4 failures, exit 2
+      partition 13: 270 tests, 1 property, 0 failures, exit 0
+      partition 14: 298 tests, 0 properties, 0 failures, exit 0
+      partition 15: 265 tests, 1 property, 0 failures, exit 0
+      partition 16: 219 tests, 0 properties, 0 failures, exit 0
+    exit_code: 1
+    failures_detail:
+      - test: >
+          "REQ-218 AC3: a capacity rejection for one schema/operation does not block the
+          rest of the same tick an antagonist contending for the sole global unit produces
+          a genuine partial skip" (Letflow.Scheduler.PollerTest)
+        file: "test/letflow/scheduler/poller_test.exs:648"
+        error: "ExUnit.TimeoutError, test timed out after 60000ms, stack bottoms out in Postgrex.Protocol.msg_recv (prim_inet.erl recv0) via test/support/tenant_template.ex:774"
+        partition: 4
+      - test: >
+          "action_taken cannot be caller-supplied (service.go AC-10) recorded action_taken
+          always equals the exam's on_tab_switch config, for every policy value"
+          (Letflow.Modules.Exam.AntiCheatTest)
+        file: "test/letflow/modules/exam/anti_cheat_test.exs:216"
+        error: "ExUnit.TimeoutError, test timed out after 60000ms, stack bottoms out in Postgrex.Protocol.bind_execute (prim_inet.erl send)"
+        partition: 6
+      - test: "ISS-0842 -- stale template detection and rebuild: missing fingerprint comment (no COMMENT set) is treated as stale and triggers rebuild"
+        file: "test/support/tenant_template_test.exs:158"
+        error: "DBConnection.ConnectionError: connection is closed because of an error, disconnect or timeout"
+        partition: 12
+      - test: "ISS-0842 -- stale template detection and rebuild: stale fingerprint comment triggers rebuild and clone succeeds"
+        file: "test/support/tenant_template_test.exs"
+        error: "DBConnection.ConnectionError (same signature as above)"
+        partition: 12
+      - test: "the template itself is faithful to a genuine migration: build template matches an independently migration-built reference schema"
+        file: "test/support/tenant_template_test.exs"
+        error: "DBConnection.ConnectionError (same signature as above)"
+        partition: 12
+      - test: >
+          "ISS-0777 -- identifier-format validation at the router boundary Test A: the
+          issue's own exact repro value (hyphenated entity_type) is rejected with a clean
+          422, not a 500" (Letflow.Routers.PlatformMigrationsTest)
+        file: "test/letflow/routers/platform_migrations_test.exs"
+        error: "DBConnection.ConnectionError (same signature as above)"
+        partition: 12
+    anti_patterns_cross_check: >
+      None of these 4 test names/files appear verbatim in docs/anti-patterns.md as a
+      previously-documented specific flake -- so this is NOT a case of matching a named,
+      pre-registered entry. However every one of the 6 failures carries the exact
+      resource-starvation signature docs/anti-patterns.md documents generically and
+      repeatedly for this host under scripts/test_parallel.sh's N=16 full-parallel load:
+      ExUnit.TimeoutError bottoming out in Postgrex.Protocol.msg_recv/bind_execute, and
+      DBConnection.ConnectionError "connection is closed" (see anti-patterns.md's
+      "13 orphaned worktree stacks" entry -- "ExUnit.TimeoutError, DBConnection.
+      ConnectionError checkout timeouts" -- and the "zombie BEAM VMs exhaust connections"
+      entry). None of the 6 failing tests are in files this diff touches. Corroborating
+      evidence found live during this run: two independent docker-compose stacks
+      (letflow-2's own + a sibling 'letflow' checkout's) are running concurrently on this
+      host right now, competing for the same machine's CPU/Postgres capacity -- exactly
+      the kind of host contention that pattern describes, not a deterministic bug.
+
+  - step: >
+      Retry step per dispatch instruction #3: re-ran the 4 failing files (serially, no
+      partitioning, LETFLOW_SKIP_ECTO_SETUP=1) plus this diff's own two touched test files
+      together, to distinguish genuine flake (passes on retry) from real regression.
+    command: >
+      mix test test/letflow/scheduler/poller_test.exs
+      test/letflow/modules/exam/anti_cheat_test.exs test/support/tenant_template_test.exs
+      test/letflow/routers/platform_migrations_test.exs test/support/status_history_test.exs
+      test/docs/requirement_status_invariants_test.exs --seed 0
+    result: "Result: 86 passed, 0 failures -- all previously-failing tests passed cleanly on retry with no resource contention. Confirms genuine flake, not a regression."
+
+  - step: "Isolated re-run of this diff's own two directly-touched test files (the ones with zero flake tolerance per dispatch instruction #4)"
+    command: "mix test test/support/status_history_test.exs test/docs/requirement_status_invariants_test.exs --seed 0"
+    result: "Result: 30 passed, 0 failures"
+    breakdown:
+      status_history_test_exs: "Result: 5 passed, 0 failures (all 5 tests green)"
+      requirement_status_invariants_test_exs: "Result: 25 passed, 0 failures (includes A9, A10, and the new A11 indent-consistency assertion, all green)"
+
+verdict: PASS
+rationale: >
+  The full-suite run's 6 failures are all connection/timeout-shaped
+  (ExUnit.TimeoutError / DBConnection.ConnectionError), confined to
+  test/letflow/scheduler/poller_test.exs, test/letflow/modules/exam/anti_cheat_test.exs,
+  test/support/tenant_template_test.exs, and test/letflow/routers/platform_migrations_test.exs
+  -- none of which this branch's diff touches -- and all 6 passed cleanly on an immediate
+  serial retry with zero setup changes, which is the signature of transient host/DB
+  connection contention (corroborated by a second, unrelated docker-compose stack
+  observed running concurrently on this host during the run), not a deterministic
+  regression. This matches the general resource-contention flake pattern
+  docs/anti-patterns.md documents for this exact test-runner script under full N=16
+  parallelism, even though these specific test names were not previously named in that
+  file (flaky failures under contention are expected to vary run to run, per that same
+  documented mechanism). This diff's own two directly-touched files --
+  test/support/status_history_test.exs (5 tests) and
+  test/docs/requirement_status_invariants_test.exs (25 assertions, including new A11) --
+  are 100% green with no flake tolerance applied, confirmed via a dedicated isolated run.
+  I did not take TEST-DESIGNER's prior "3 unrelated pre-existing environmental flakes"
+  claim at face value: I independently ran the suite myself, got a different failure set
+  (6 failures, different tests) which is expected given the flakes are contention-driven
+  and non-deterministic, and independently verified via anti-patterns.md cross-check plus
+  a live retry that they are not attributable to this diff.
+full_suite_status: >
+  Run 1 (full parallel, N=16): 5039/5045 passed, 6 failures, all in files untouched by
+  this diff, all connection/timeout-shaped. Retry (serial, same 4 files + the 2 diff-owned
+  files): 86/86 passed, 0 failures. Diff-owned files alone: 30/30 passed, 0 failures.
+
+commands_run:
+  - "git fetch origin && git checkout feature/WF03-ISS0883-20260929"
+  - "docker compose up -d"
+  - "bash scripts/test_parallel.sh"
+  - "mix test test/letflow/scheduler/poller_test.exs test/letflow/modules/exam/anti_cheat_test.exs test/support/tenant_template_test.exs test/letflow/routers/platform_migrations_test.exs test/support/status_history_test.exs test/docs/requirement_status_invariants_test.exs --seed 0"
+  - "mix test test/support/status_history_test.exs test/docs/requirement_status_invariants_test.exs --seed 0"
+
+next_step: >
+  Feeds RELEASE-VALIDATOR, who independently re-runs the suite rather than trusting this
+  report. Full-partition logs from the flaky run are preserved at
+  /tmp/letflow_test_parallel.B3Buwy (ephemeral local temp, not committed) for inspection
+  if needed.

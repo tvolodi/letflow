@@ -1,0 +1,70 @@
+{
+  "handoff_id": "7e4a5c1f-3d92-4e6b-9a10-2f8b6d5c4e91",
+  "run_id": "WF02-REQ422-20260929",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "MOBILE-DEV",
+  "file": "handoffs/WF02-REQ422-20260929/step-final-git-merge.json",
+  "created_at": "2026-09-29T09:34:00Z",
+  "started_at": "2026-09-29T09:34:00Z",
+  "completed_at": "2026-09-29T09:57:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-422"],
+    "related_handoff_ids": [
+      "1ad7cb3e-b588-4093-9c3b-9a5158feafab"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ422-20260929/step-06-doc-updater.json"
+    ],
+    "owned_modules": ["apps/mobile/", "docs/mobile/", "handoffs/"]
+  },
+  "task": {
+    "description": "WF-02 Step Final per docs/agents/protocols/GIT_MERGE.md: rebase feature/WF02-REQ422-20260929 onto origin/main, verify build/tests, push, open PR, wait for CI, merge, and clean up local state.",
+    "acceptance_criteria": [
+      "gh pr merge exited 0",
+      "git branch --show-current is main",
+      "git pull --ff-only on main after merge exited 0",
+      "git log --oneline -1 shows the squash-merge commit",
+      "git status shows a clean working tree"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Started on feature/WF02-REQ422-20260929 (HEAD 35884d54), clean working tree. Fetched origin/main (c7d68c94) and rebased: hit a 2-file conflict (docs/status/requirement_status.index.yaml, docs/status/requirement_status.v23.yaml) because a concurrent session's PR #1969/#1970 closed and froze volume 23 (40 entries) while this branch's own two commits (b357828a started-event, 35884d54 done-event) were still targeting it as the then-current volume. Resolved by keeping main's frozen v23 content byte-for-byte and redirecting both REQ-422 run-history entries into the then-current volume 24 instead (per the roll_rule's own 'a closed volume no longer accepts entries' rule), bumping v24's index entry accordingly. Rebase completed; mix format --check-formatted, mix compile --warnings-as-errors, and a full serial mix test (host memory tight, ~1.8GB free, so no parallel partitions per dispatch guidance) all passed clean: 5039 passed (6 properties, 5033 tests), 0 failed, 27 excluded, 3570.2s. apps/mobile: flutter analyze (no issues) and flutter test (86/86 passed) both re-run since this branch touches apps/mobile/. Pushed with --force-with-lease (rebase rewrote commits, non-fast-forward as expected). Opened PR #1973. Before checks finished, gh pr view showed mergeStateStatus DIRTY/mergeable CONFLICTING -- main had moved again (a second concurrent PR, #1972, WF03-ISS0878-20260929, merged during this run). Re-fetched and rebased a second time: 1 conflicted file (docs/status/requirement_status.v24.yaml) this time, plus a resulting index.yaml conflict on the same volume's entries: count. Composed both sides' real content (this run's REQ-422 started+done entries plus PR #1972's own 2 SCOPE-CHANGE entries for ISS-0878) rather than picking a side, and in doing so found and corrected a real bookkeeping defect in PR #1972 itself: it appended 2 real entries to v24.yaml but left the index's entries: field at 0 (should have been 2), and used a 0-space list-item indent inconsistent with every other volume (v20-v23 all use 2-space '  - req:') -- normalized to the established convention and bumped entries: to the correct on-disk count (4) at each step. Verified the fix with test/docs/requirement_status_invariants_test.exs (24 passed, 0 failures) before re-running the full suite. Re-ran mix format/compile/test (5042 passed, 8 properties/5034 tests, 0 failed, 27 excluded, 3503.7s, host memory still under 4GB so serial again) -- clean. Confirmed no new apps/mobile/ changes came in from main's second batch (PR #1972 was backend/issue-bookkeeping only), so the earlier flutter analyze/test results still hold; not re-run a second time. Pushed again with --force-with-lease. This time origin/main had not moved further; PR #1973 showed mergeable: MERGEABLE, mergeStateStatus: BLOCKED (waiting on required checks). Polled gh pr checks synchronously (no Monitor tool, per this session's own operating guidance) until all four required jobs reported: Detect changed paths (pass), Frontend gate (pass, 9s -- ran because docs/requirements.yaml and status files count as changed-paths triggers), Mobile gate (pass, 4m20s), Backend gate (pass, 8m23s). Merged via gh pr merge --squash --delete-branch: succeeded on the plain attempt (no --admin needed), fast-forwarded local main from 3c08187d to squash-merge commit 9ff7a428, and both the local and remote feature branches were deleted as part of that command's own local side effects (this is the primary checkout, not a worktree). Verified: git branch --show-current = main, git log -1 shows 9ff7a428, git status clean, git ls-remote for the feature branch returns nothing (remote branch gone).",
+    "artifacts_out": [
+      "branch: feature/WF02-REQ422-20260929 (squash-merged into main as 9ff7a428, branch deleted locally and on origin)",
+      "docs/status/requirement_status.index.yaml (conflict-resolved across two rebases)",
+      "docs/status/requirement_status.v23.yaml (conflict-resolved, main's frozen content preserved)",
+      "docs/status/requirement_status.v24.yaml (conflict-resolved, composed both PRs' entries, indentation defect corrected)"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "PR #1972 (WF03-ISS0878-20260929) appended 2 real run-history entries to docs/status/requirement_status.v24.yaml but left the index's volume-24 entries: field at 0, and used a 0-space '- req:' list-item indent inconsistent with every other volume's established 2-space '  - req:' convention (v20 through v23 all use 2-space). Found and corrected during this run's second rebase (entries: bumped to the correct on-disk count at each step; both entries re-indented to match convention, content otherwise byte-for-byte unchanged) because reconciling two concurrent PRs' appends to the same volume in one rebase pass required actually parsing/counting both. Not something this run introduced; recording so ORCH can consider whether the DOC-UPDATER step for future WF-03 runs should re-run the invariants test against the index's own entries: field (not just the volume file's on-disk count) before closing out.",
+        "affected_requirement": "SCOPE-CHANGE (ISS-0878, PR #1972)"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ422-20260929",
+      "commit_sha_list": [],
+      "remote_branch": "deleted (was origin/feature/WF02-REQ422-20260929)",
+      "push_status": "merged",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1973",
+      "pr_create_error": null,
+      "merge_commit_sha": "9ff7a428dc274ef03b8539e3c91f8422d92a862e",
+      "ci_checks": {
+        "detect_changed_paths": "pass",
+        "frontend_gate": "pass",
+        "mobile_gate": "pass",
+        "backend_gate": "pass"
+      }
+    },
+    "next_action": "ORCH marks run COMPLETED and releases owned_modules lock; ORCH should also file the two MINOR non-blocking findings from step-06-doc-updater.json (REQ-421 text correction; mix letflow.check.test TEST_PARALLEL_N override) plus this step's PR #1972 bookkeeping-indent finding as follow-up issues."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

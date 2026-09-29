@@ -4610,8 +4610,17 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 34
+    entries: 35
     note: >
+      Bumped to 35 by ORCH after appending ISS-0879's done-event
+      (WF03-ISS0879-20260929, 2026-09-29T00:42:33Z -- narrowed the
+      tenant_template_build_* visibility window that leaked into
+      RetentionOperations.retire_oldest_eligible_month/1's platform-wide
+      fanout; PR #1960, cb215ec4) in the same commit as the append.
+      `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 35
+      on-disk entries; 1066 lines, well under the 1200-line/120000-byte
+      roll ceiling, so no roll triggered.
+
       Bumped to 34 by ORCH after appending ISS-0880's close-out entry
       (fix/ISS0880-req421-ac3-route-gating, 2026-09-29T02:35:00Z --
       ported the AC3-clause-1 test a concurrent sibling run's stricter

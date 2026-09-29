@@ -1,0 +1,57 @@
+{
+  "handoff_id": "0b75b0d5-15cb-48c5-a0b5-262f4a357fe1",
+  "run_id": "WF02-REQ425-20260929",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ425-20260929/step-01-code-designer-rework1.json",
+  "created_at": "2026-09-29T11:33:34Z",
+  "started_at": "2026-09-29T11:33:34Z",
+  "completed_at": "2026-09-29T11:37:36Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-425"],
+    "requirement_text": {
+      "REQ-425": "MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2). Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the renderers' six states classify this requirement's ApiError. SECURITY-REVIEWER gate (refresh-token handling, token clearing).\n\nHardens lib/api/api_client.dart (created by REQ-421) into the single client:\n1. Attach the active tenant's bearer token (REQ-422's iss check).\n2. On 401: exactly one silent refresh via flutter_appauth's token refresh, then exactly one retry of the original request; concurrent 401s share one in-flight refresh. On refresh failure: clear the tenant's tokens (REQ-422 store) and route to login.\n3. Exponential backoff on 5xx for idempotent methods only (GET), bounded attempts; POST is not auto-retried (no duplicate task completion).\n4. Normalise every failure to a sealed ApiError type before it leaves lib/api/: at minimum network-unavailable, unauthorized, forbidden (403), not-found, module-not-available (a 404 on any /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404, not 403, and must not render as a generic not-found), backpressure (429, carrying the Retry-After seconds -- the backend emits 429 from lib/letflow/plugs/admission.ex and lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with RFC 9457 field errors), conflict (409), server (5xx after retries).\n5. A static guard (apps/mobile/test/guards/), the counterpart of the SPA's raw-fetch-outside-client guard in web/tests/guards/: no file outside lib/api/ imports package:dio or package:http or uses dart:io HttpClient; with a self-test."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["92672ac8-0846-4017-81f1-c991d3f9e586", "debd9fd6-2b9b-4664-92cf-5a808d4cdf79"],
+    "artifacts_in": [
+      "lib/letflow/design/req425-mobile-api-client-hardening.md",
+      "handoffs/WF02-REQ425-20260929/step-01b-code-design-validator.json"
+    ],
+    "owned_modules": ["apps/mobile/lib/api/", "apps/mobile/test/guards/"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1. CODE-DESIGN-VALIDATOR read lib/letflow/design/req425-mobile-api-client-hardening.md directly and FAILed it on two independent hard-gate violations (full verdict and reasoning in handoffs/WF02-REQ425-20260929/step-01b-code-design-validator.json's result.summary -- read it in full, it is not restated a second time here per this run's own no-restatement discipline). In short: (1) Sec 5.2's AppAuthAdapter.refresh doc comment carries the literal word 'TBD' for the exact flutter_appauth ^12.1.0 method/type the refresh call uses -- verify it against the actual pinned package (pubspec.lock / package source under .dart_tool or pub cache) and state the real method/type, or if genuinely unverifiable at design time, restate the contract without the word TBD and add an explicit routing note (not inside the function's own doc comment) flagging the verification for MOBILE-DEV to confirm during implementation; (2) Sec 4.2 contains full executable Dart test function bodies (fixture construction plus expect() assertions) -- replace with spec-only prose describing exactly what fixture input produces what violation-count/shape output, no executable code; (3) minor: Sec 5.1 declares 'Future<Response<dynamic>> post(String path, {Object? data});' twice with conflicting doc comments -- resolve the duplicate. On completion, set status to COMPLETED and fill result as your own first-hand report (do not copy the FAIL verdict's wording as if it were your own attestation) and re-route to CODE-DESIGN-VALIDATOR (Step 1b) for a fresh pass over the whole document, not just the three changed sections.",
+    "acceptance_criteria": [
+      "a test where the fake server returns 401 once then 200 asserts exactly one refresh call and exactly one retry, and that two concurrent requests both receiving 401 trigger one refresh total",
+      "a test where refresh fails asserts the tenant's tokens are deleted from the secure store and the router is at the login route",
+      "a test asserts a GET receiving 503 twice then 200 succeeds with increasing delays between attempts (fake clock), a GET receiving 503 on every attempt stops after the maximum attempt count declared as a named constant in lib/api/ and surfaces ApiError server (the test asserts the exact number of requests sent), and a POST receiving 503 is not retried",
+      "a test per ApiError variant asserts the mapping from status code/exception, including 404 on /api/v1/modules/exam/x -> module-not-available, 404 elsewhere -> not-found, and 429 with 'Retry-After: 7' -> backpressure(7 seconds)",
+      "a test asserts no DioException or SocketException escapes lib/api/ -- the public client API returns or throws only ApiError",
+      "the single-client guard fails its self-test fixture (a file under lib/features/ importing package:dio) and passes on the real tree",
+      "cd apps/mobile && flutter analyze && flutter test pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reworked lib/letflow/design/req425-mobile-api-client-hardening.md against the three defects named in step-01b-code-design-validator.json's result.issues. (1) Sec 5.2: located apps/mobile/pubspec.lock's pinned flutter_appauth entry (12.1.0, both flutter_appauth and flutter_appauth_platform_interface) and read the actual package source under the local pub cache (C:\\Users\\tvolo\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\flutter_appauth-12.1.0\\lib\\src\\flutter_appauth.dart and the platform-interface package's token_request.dart/token_response.dart/grant_type.dart). Confirmed the real, only refresh-capable call is FlutterAppAuth.token(TokenRequest) -> Future<TokenResponse> (non-nullable return; failures throw), and that TokenRequest's grantType is auto-inferred as GrantType.refreshToken when refreshToken is set and authorizationCode is not -- so grantType need not be passed explicitly. Rewrote AppAuthAdapter.refresh's signature and doc comment to state this verified contract (no 'TBD' anywhere in the file -- grepped to confirm), updated the RealAppAuthAdapter delegation description and the §2.2 step-3 cross-reference to match, added a routing note outside the doc comment telling MOBILE-DEV to re-confirm the pinned version is still 12.1.0 before wiring the real call, and closed OQ-2 as resolved (was previously flagged 'the biggest open item'). (2) Sec 4.2: replaced the four executable Dart test bodies (fixture map construction + expect() calls) with a prose table naming, per case, the exact one-entry libFiles fixture and the exact expected checkSingleApiClientBoundary result (length-1 with the matching file/kind, or empty for the negative lib/api/ case) -- grepped the file afterward for 'expect(' and 'test(' and confirmed the only remaining hit is a plain-prose sentence naming the pre-existing §4.3 real-tree test, not an executable body. (3) Sec 5.1: merged the two conflicting 'Future<Response<dynamic>> post(...)' declarations into one signature with one doc comment covering both the no-5xx-auto-retry point and the OQ-7 cross-reference. Did not touch any other section. Verified with git diff --stat (1 file changed, 82 insertions, 68 deletions) and committed as 9c01069b.",
+    "artifacts_out": ["lib/letflow/design/req425-mobile-api-client-hardening.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["9c01069b"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) for a fresh full pass"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

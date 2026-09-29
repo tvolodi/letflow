@@ -32,24 +32,12 @@ void main() {
       ..httpClientAdapter = fakeAdapter;
     tokenStore = const TenantTokenStore(FlutterSecureStorage());
     activeRealm = ActiveRealmHolder();
-    client = ApiClient.forTesting(dio);
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          if (options.extra['skipAuth'] == true) {
-            handler.next(options);
-            return;
-          }
-          final realmUrl = activeRealm.currentRealmUrl;
-          if (realmUrl != null) {
-            final tokens = await tokenStore.read(realmUrl);
-            if (tokens != null) {
-              options.headers['Authorization'] = 'Bearer ${tokens.accessToken}';
-            }
-          }
-          handler.next(options);
-        },
-      ),
+    client = ApiClient.forTesting(
+      dio,
+      tokenStore: tokenStore,
+      activeRealm: activeRealm,
+      appAuthAdapter: FakeAppAuthAdapter(),
+      routeToLogin: () {},
     );
 
     fakeAdapter.handler = (options) {

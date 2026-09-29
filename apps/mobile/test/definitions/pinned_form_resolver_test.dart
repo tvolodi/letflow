@@ -6,6 +6,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:letflow/api/api_client.dart';
+import 'package:letflow/api/api_error.dart';
 import 'package:letflow/definitions/pinned_form_cache.dart';
 import 'package:letflow/definitions/pinned_form_resolver.dart';
 
@@ -201,10 +202,11 @@ void main() {
       },
     );
 
-    test('a non-200 response (e.g. 404) is also pinned-version-unavailable,'
+    test('a thrown ApiError (e.g. NotFoundError, REQ-425\'s ApiClient.get'
+        ' contract for a non-2xx response) is also pinned-version-unavailable,'
         ' nothing cached', () async {
       final repo = InMemoryPinnedFormCacheRepository();
-      final gateway = _FakeGateway(response: _taskDetailResponse(status: 404));
+      final gateway = _FakeGateway(errorToThrow: const NotFoundError());
       final resolver = PinnedFormResolver(repository: repo, client: gateway);
 
       final result = await resolver.resolve(

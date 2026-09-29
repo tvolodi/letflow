@@ -1,0 +1,147 @@
+run_id: WF02-REQ425-20260929
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-29T13:36:49Z
+branch: feature/WF02-REQ425-20260929
+requirement_ids: [REQ-425]
+notes: >
+  Diff (git diff --name-only main...HEAD) is limited to apps/mobile/lib/api/,
+  apps/mobile/lib/auth/auth.dart, apps/mobile/lib/bootstrap/navigation_bootstrap.dart,
+  apps/mobile/test/**, docs/requirements.yaml, docs/status/requirement_status.index.yaml,
+  docs/status/requirement_status.v24.yaml, lib/letflow/design/req425-mobile-api-client-
+  hardening.md, test/specs/REQ-425.md and this run's own handoffs/*. Zero lib/letflow/
+  or priv/repo/migrations/ Elixir application changes -- consistent with the handoff's
+  own statement that apps/mobile/ changes cannot cause a backend/lib/letflow/ test
+  failure. git status at session start showed a clean working tree (only this step's own
+  handoff-file edit, status PENDING -> IN_PROGRESS).
+
+host_memory:
+  check_1_before_run: "FreePhysicalMemory=4599152 KB (~4.39 GB) of TotalVisibleMemorySize=33389048 KB, via Get-CimInstance Win32_OperatingSystem -- matches the ~4.6GB figure the handoff was dispatched with, still in the borderline/tight band"
+  check_2_during_run: "FreePhysicalMemory=3637572 KB (~3.47 GB) sampled partway through the backend run -- real drain observed, but no OOM-kill/reap signal (both partitions completed with clean Result: lines and exit 0)"
+  decision: "Followed the handoff's mandated TEST_PARALLEL_N=2 as-is (host is still borderline, matching the premise). Not reaped even once, so no fallback to serial mix test and no second-strike stop condition triggered."
+
+backend_exunit:
+  command: "TEST_PARALLEL_N=2 scripts/test_parallel.sh"
+  partitions:
+    count: 2
+    source: "env override (TEST_PARALLEL_N=2, per handoff mandate)"
+  test_pool_size: 41
+  result: "PASS -- both partitions completed cleanly, first attempt, no retries needed"
+  per_partition_summary:
+    - "partition 1: 2515 tests, 8 properties, 0 failures, exit 0"
+    - "partition 2: 2516 tests, 0 properties, 0 failures, exit 0"
+  combined_result: "5031 tests, 8 properties, 0 failures (5039/5039 passed)"
+  failures: []
+  pre_existing_failures_found: none
+  full_output: |
+    test_parallel: N=2 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: WARN psql not found -- skipping host Postgres ceiling verification (ISS-0287 §4.2); TEST_MAX_CONNECTIONS/TEST_SUPERUSER_RESERVED assumptions unverified against the live server
+    test_parallel: TEST_POOL_SIZE=41 (computed: N=2, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5, per_partition_headroom=0)
+    test_parallel: seeding 2 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.d35wpY
+    test_parallel: seeding+migrating 2 partition databases (capped at 4 concurrent)
+    test_parallel: all 2 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp154906 (shared by all 2 partitions)
+    partition 1: 2515 tests, 8 properties, 0 failures, exit 0
+    partition 2: 2516 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 5031 tests, 8 properties, 0 failures (5039/5039 passed)
+    [exited with code 0]
+
+flutter_analyze:
+  command: "flutter analyze (run from apps/mobile/)"
+  output: |
+    Resolving dependencies...
+    Downloading packages...
+      clock 1.1.2 (1.1.3 available)
+      code_assets 1.2.1 (2.1.0 available)
+      flutter_riverpod 2.6.1 (3.4.3 available)
+      go_router 17.5.0 (18.0.1 available)
+      hooks 2.0.2 (2.2.0 available)
+      matcher 0.12.19 (0.12.20 available)
+      material_color_utilities 0.13.0 (0.13.1 available)
+      meta 1.17.0 (1.19.0 available)
+      objective_c 9.5.0 (9.6.0 available)
+      platform 3.1.6 (3.2.0 available)
+      record_use 0.6.0 (1.1.1 available)
+      riverpod 2.6.1 (3.4.3 available)
+      stack_trace 1.12.1 (1.12.2 available)
+      test_api 0.7.10 (0.7.14 available)
+      vector_math 2.2.0 (2.4.3 available)
+    Got dependencies!
+    15 packages have newer versions incompatible with dependency constraints.
+    Analyzing mobile...
+    No issues found! (ran in 32.3s)
+  status: PASS
+
+flutter_test:
+  command: "flutter test (run from apps/mobile/)"
+  status: PASS
+  total_tests: 115
+  output_summary: |
+    00:00 +0..2:   android/android_manifest_test.dart -- deep-link host pattern, App Link /
+                   universal-link verification DEFERRED-with-reason cases
+    00:00 +3..13:  api/api_client_hardening_test.dart -- AC1 401 refresh-then-retry (single
+                   refresh, single retry, concurrent-401 dedup, terminal second-401, skip on
+                   unauthenticated calls); AC2 refresh-failure token clearing + login routing
+                   (with and without a stored refresh token); cross-tenant refresh-race and
+                   retry-dispatch-race cases (SECURITY-REVIEWER BLOCKER reworks 1 and 2); AC3
+                   5xx backoff for GET only (increasing delays, kMaxServerRetryAttempts cap)
+    00:00 +14..30: api/api_client_test.dart -- unauthenticated tenant-config request carries
+                   no Authorization header; authenticated get() attaches bearer token; no
+                   active realm -> no header, no throw; exactly one Dio(...) construction
+                   site in lib/api/api_client.dart (repeated across fixtures)
+    00:00 +17,19,21,22: api_client_hardening_test.dart AC4 ApiError variant mapping -- 404
+                   elsewhere -> NotFoundError, 429 w/ Retry-After: 7 -> BackpressureError(7),
+                   429 malformed Retry-After -> defaults to 1s
+    00:00 +31..46: auth/audience_scoping_test.dart, auth/authenticate_with_tenant_test.dart,
+                   auth/tenant_token_store_test.dart -- JWT iss decode/precedence/fallback,
+                   cross-tenant audience-scoped bearer attach/skip, issuer/clientId/PKCE
+                   sourcing, allowInsecureConnections scoping, cancellation vs. genuine OIDC
+                   failure, per-realmUrl token isolation, PlatformException propagation
+    00:01 +47..73: bootstrap/bootstrap_sequence_test.dart, parse_tenant_slug_test.dart,
+                   route_gating_test.dart, route_table_test.dart -- two-tenant token
+                   isolation, membership mismatch, 403 CANDIDATE proceeds, cancellation,
+                   slug-extraction cases, unauthenticated route gating, module-absent
+                   not-found routing
+    00:02..03 +74..96: design_system/masked_reveal_text_test.dart, guards/
+                   module_boundary_guard_test.dart, guards/single_api_client_guard_test.dart,
+                   guards/tenant_identifier_guard_test.dart, guards/
+                   token_storage_boundary_guard_test.dart -- real-tree zero-violation checks
+                   plus each guard's self-test fixtures (incl. the single-api-client guard's
+                   fixture importing package:dio/package:http/dart:io HttpClient outside
+                   lib/api/, and the sanctioned-directory exemption)
+    00:03..05 +97..114: security/token_redaction_test.dart, security/transport_policy_test.dart,
+                   widgets/error_screens_test.dart -- no unredacted logger/no forbidden
+                   logging package, RedactingLogInterceptor header/body redaction, no
+                   DioException/SocketException escaping (mapped to error screens by key:
+                   TenantNotFound, NetworkUnavailable, OidcFailure, SecureStorageUnavailable),
+                   release/debug transport-policy table + http rejection under release policy
+    00:05 +115: All tests passed!
+  acceptance_criteria_coverage:
+    - "AC1 (401-once-then-200: exactly one refresh+retry; concurrent 401s share one refresh): api_client_hardening_test.dart #3-6 -- PASS"
+    - "AC2 (refresh-failure clears tokens, routes to login): api_client_hardening_test.dart #7-8 -- PASS"
+    - "AC3 (5xx backoff GET-only, increasing delays, bounded attempts, POST not retried): api_client_hardening_test.dart #12-13 -- PASS"
+    - "AC4 (ApiError variant mapping incl. module-not-available vs not-found, 429+Retry-After): api_client_hardening_test.dart #17,19,21-22 -- PASS"
+    - "AC5 (no DioException/SocketException escapes lib/api/): security/transport_policy_test.dart, widgets/error_screens_test.dart -- PASS"
+    - "AC6 (single-client guard self-test fixture under lib/features/ importing package:dio fails; real tree passes): guards/single_api_client_guard_test.dart #84-88 -- PASS"
+    - "AC7 (flutter analyze && flutter test pass; SECURITY-REVIEWER signs off before merge): flutter_analyze PASS, flutter_test 115/115 PASS this run -- SECURITY-REVIEWER sign-off is step-02c/02c-recheck1/recheck2 in handoffs/WF02-REQ425-20260929/, not this step's own attestation"
+
+overall_result: PASS
+overall_notes: >
+  Both halves of this run are fully green, first-hand, this session: the full backend
+  ExUnit suite (TEST_PARALLEL_N=2 per the handoff's memory-safety mandate) ran
+  5039/5039 passing with zero failures across 2 partitions, no retries, no
+  reap/OOM signal despite free memory dropping to ~3.47GB mid-run. apps/mobile/'s
+  own flutter analyze is clean (no issues found) and flutter test passes 115/115,
+  re-run here as this step's own first-hand attestation rather than citing
+  TEST-DESIGN-VALIDATOR's prior 115/115 figure.
+
+  No pre-existing backend failure was found to file/forward per ISSUE_QUEUE.md --
+  the backend suite was fully clean, so there is nothing to attribute or route.
+
+  Recommendation: route to RELEASE-VALIDATOR (WF-04 Step 1) for independent
+  re-verification, including confirming SECURITY-REVIEWER's sign-off
+  (handoffs/WF02-REQ425-20260929/step-02c-security-reviewer*.json) covers the
+  final rework state before merge.

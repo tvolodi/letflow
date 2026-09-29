@@ -1,0 +1,85 @@
+{
+  "handoff_id": "5dfd1929-64c3-49c6-b8a2-1c3f52fb1ea6",
+  "run_id": "WF02-REQ425-20260929",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ425-20260929/step-01b-code-design-validator-recheck2.json",
+  "created_at": "2026-09-29T11:45:14Z",
+  "started_at": "2026-09-29T11:45:14Z",
+  "completed_at": "2026-09-29T11:47:50Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-425"],
+    "requirement_text": {
+      "REQ-425": "MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2). Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the renderers' six states classify this requirement's ApiError. SECURITY-REVIEWER gate (refresh-token handling, token clearing).\n\nHardens lib/api/api_client.dart (created by REQ-421) into the single client:\n1. Attach the active tenant's bearer token (REQ-422's iss check).\n2. On 401: exactly one silent refresh via flutter_appauth's token refresh, then exactly one retry of the original request; concurrent 401s share one in-flight refresh. On refresh failure: clear the tenant's tokens (REQ-422 store) and route to login.\n3. Exponential backoff on 5xx for idempotent methods only (GET), bounded attempts; POST is not auto-retried (no duplicate task completion).\n4. Normalise every failure to a sealed ApiError type before it leaves lib/api/: at minimum network-unavailable, unauthorized, forbidden (403), not-found, module-not-available (a 404 on any /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404, not 403, and must not render as a generic not-found), backpressure (429, carrying the Retry-After seconds -- the backend emits 429 from lib/letflow/plugs/admission.ex and lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with RFC 9457 field errors), conflict (409), server (5xx after retries).\n5. A static guard (apps/mobile/test/guards/), the counterpart of the SPA's raw-fetch-outside-client guard in web/tests/guards/: no file outside lib/api/ imports package:dio or package:http or uses dart:io HttpClient; with a self-test."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["e60b25fa-493a-4d45-a7f1-45b57a4e9e1e", "7cbce866-037a-4b64-b358-e74d1c21ab03"],
+    "artifacts_in": [
+      "lib/letflow/design/req425-mobile-api-client-hardening.md",
+      "handoffs/WF02-REQ425-20260929/step-01-code-designer-rework2.json",
+      "apps/mobile/lib/api/api_client.dart",
+      "apps/mobile/lib/auth/auth.dart"
+    ],
+    "owned_modules": ["apps/mobile/lib/api/", "apps/mobile/test/guards/"]
+  },
+  "task": {
+    "description": "Fresh full re-check of lib/letflow/design/req425-mobile-api-client-hardening.md after rework iteration 2 (handoffs/WF02-REQ425-20260929/step-01-code-designer-rework2.json describes the fix: ApiClient.forTesting now takes required tokenStore/activeRealm parameters matching .create, and a new Sec 2.6 states the test-inspection seam -- swapping FlutterSecureStoragePlatform.instance with the existing FakeSecureStoragePlatform, wrapped in a real TenantTokenStore, asserting post-refresh-failure state via a real round trip through production delete rather than a mock-call count). This is rework iteration 2 of 3 -- per ORCHESTRATOR.md Sec5's change-approach rule, if this fails for a genuinely NEW reason (not a repeat of either iteration-0 or iteration-1's defects), that is still a normal third dispatch; if it fails for the SAME root cause as either prior FAIL, say so explicitly, since the next rework dispatch would then have to change strategy entirely rather than patch again. Run the complete Step 1b procedure over the WHOLE document again, not just Sec 2.6/5.1. FAIL immediately on any check failure, no partial credit.",
+    "acceptance_criteria": [
+      "a test where the fake server returns 401 once then 200 asserts exactly one refresh call and exactly one retry, and that two concurrent requests both receiving 401 trigger one refresh total",
+      "a test where refresh fails asserts the tenant's tokens are deleted from the secure store and the router is at the login route",
+      "a test asserts a GET receiving 503 twice then 200 succeeds with increasing delays between attempts (fake clock), a GET receiving 503 on every attempt stops after the maximum attempt count declared as a named constant in lib/api/ and surfaces ApiError server (the test asserts the exact number of requests sent), and a POST receiving 503 is not retried",
+      "a test per ApiError variant asserts the mapping from status code/exception, including 404 on /api/v1/modules/exam/x -> module-not-available, 404 elsewhere -> not-found, and 429 with 'Retry-After: 7' -> backpressure(7 seconds)",
+      "a test asserts no DioException or SocketException escapes lib/api/ -- the public client API returns or throws only ApiError",
+      "the single-client guard fails its self-test fixture (a file under lib/features/ importing package:dio) and passes on the real tree",
+      "cd apps/mobile && flutter analyze && flutter test pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Read lib/letflow/design/req425-mobile-api-client-hardening.md in full and independently re-ran the complete Step 1b procedure over the whole document, not just Sec 2.6/5.1. Both prior FAILs (iteration-0's TBD language / executable-Dart-test-bodies / duplicate 'post' declaration, and iteration-1's missing ApiClient.forTesting token-store seam) are confirmed fixed: forTesting now takes required tokenStore/activeRealm matching .create (Sec 5.1), and the new Sec 2.6 states the test-inspection seam in full prose/spec form, correctly resolving AC1 (refresh-call-count observed via FakeAppAuthAdapter, concurrency dedup via _RefreshCoordinator's cached-Future pattern Sec 2.1/2.3) and AC2 (post-refresh-failure token deletion observed via a real round-trip through TenantTokenStore.read backed by FakeSecureStoragePlatform, Sec 2.6) -- these are genuine, testable mechanisms, not restated claims. However, on the full re-check, Sec 2.6 (lines 468-473) itself contains a new violation of Step 1b check 2e: a literal, directly-executable Dart code block -- 'final fakePlatform = FakeSecureStoragePlatform(); FlutterSecureStoragePlatform.instance = fakePlatform; final tokenStore = const TenantTokenStore(FlutterSecureStorage()); final activeRealm = ActiveRealmHolder()..currentRealmUrl = ...;' -- four lines of real object construction, a global-state mutation (assigning FlutterSecureStoragePlatform.instance), and a cascade-operator field assignment. This is not a signature, not a type/field shape, and not a literal-value declaration (the three categories this design's own preamble states are the only permitted code content); it is copy-pasteable test setup code, i.e. implementation code, and this gate fails on sight per WF-02 Step 1b check 2e regardless of its short length or its correct intent. All other checks pass: every one of the 7 acceptance criteria maps to a concrete, fully-specified design element (Sec 9's resolution table verified against Sec 1-6 directly, not taken on trust); no TBD/deferral language anywhere (grepped -i for TBD/to be implemented/to be determined/placeholder -- zero matches); error handling is a Dart 3 sealed class with 9 exhaustively-checkable variants (Sec 1.1); cross-module dependencies are listed in full (Sec 7); open questions (OQ-1..OQ-8) are explicitly flagged rather than silently resolved, which Step 1's own acceptance criteria permit. FAIL is solely on Sec 2.6's code block.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "BLOCKER", "description": "Sec 2.6 (lines 468-473) embeds a literal executable Dart code block (object construction, a static-field assignment mutating global platform state, and a cascade-operator field assignment) rather than confining content to signatures/type shapes/prose, violating WF-02 Step 1b check 2e ('no implementation code present ... signatures and type shapes only, not bodies') and this design's own stated preamble scope ('@spec-style signatures, type/field shapes, enum/class shapes, and literal values ... only'). Fix: replace the code block with prose description of the same construction steps (name the three objects, what each is constructed from, and the one field mutated), the same way Sec 2.2-2.5 describe mechanism in prose without a runnable snippet.", "affected_requirement": "REQ-425"}
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER (rework iteration 3 of 3, max_rework budget). ROOT-CAUSE NOTE FOR ORCH per ORCHESTRATOR.md Sec5: this FAIL's mechanism -- embedding literal, directly-executable Dart statements in the design doc instead of confining content to signatures/type shapes/prose -- is the SAME ROOT-CAUSE CATEGORY as iteration 0's FAIL ('Sec 4.2 contains full executable Dart test function bodies'), recurring in a newly-added section (Sec 2.6) introduced specifically to fix iteration 1's unrelated defect (the missing forTesting seam). It is NOT a repeat of iteration 1's own root cause (that is confirmed fixed). Since this is the second time this specific category of mistake has been found across three iterations, the next dispatch should change strategy rather than patch Sec 2.6 alone in isolation: instruct CODE-DESIGNER explicitly, as a standing constraint for the rest of this design's life, that ANY code fence in this document must contain only a signature, a type/class/field declaration, or a bare literal-value constant -- never a sequence of imperative statements (assignment, mutation, method invocation with side effects) -- and have CODE-DESIGNER re-scan the ENTIRE document once more against that literal rule before resubmitting, not just Sec 2.6."
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-29T11:33:34Z",
+      "status": "FAIL",
+      "summary": "TBD language on AppAuthAdapter.refresh (Sec 5.2, core AC1/AC2 mechanism), executable Dart test bodies in Sec 4.2, duplicate 'post' declaration in Sec 5.1.",
+      "issues": [
+        "TBD language on AppAuthAdapter.refresh (Sec 5.2)",
+        "Sec 4.2 contains full executable Dart test function bodies",
+        "Sec 5.1 declares 'post' twice with conflicting doc comments"
+      ],
+      "next_action": "Route back to CODE-DESIGNER for rework: strip TBD language from Sec 5.2, remove/replace Sec 4.2's executable test bodies with spec-only prose, resolve the duplicate 'post' declaration in Sec 5.1."
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-29T11:41:00Z",
+      "status": "FAIL",
+      "summary": "New defect surfaced on full re-read (iteration-0 defects confirmed fixed): ApiClient.forTesting has no TenantTokenStore/ActiveRealmHolder seam, blocking AC1/AC2's test constructions.",
+      "issues": [
+        "ApiClient.forTesting lacks a token-store/active-realm injection seam required by _RefreshCoordinator for AC1/AC2 testability"
+      ],
+      "next_action": "Route back to CODE-DESIGNER for rework iteration 2: add tokenStore/activeRealm (or equivalent) to ApiClient.forTesting's signature and state the test-inspection seam for post-refresh/post-failure token-store state."
+    }
+  ]
+}

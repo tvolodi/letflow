@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:letflow/api/api_client.dart';
 import 'package:letflow/auth/auth.dart';
 
+import '../support/fake_app_auth_adapter.dart';
 import '../support/fake_dio_http_client_adapter.dart';
 import '../support/fake_secure_storage_platform.dart';
 
@@ -107,10 +108,13 @@ void main() {
       // instead, replicating ApiClient.create's interceptor chain.
       final dio = Dio(BaseOptions(validateStatus: (_) => true))
         ..httpClientAdapter = fakeAdapter;
-      dio.interceptors.add(
-        _bearerInterceptorForTest(tokenStore, activeRealm),
+      final testClient = ApiClient.forTesting(
+        dio,
+        tokenStore: tokenStore,
+        activeRealm: activeRealm,
+        appAuthAdapter: FakeAppAuthAdapter(),
+        routeToLogin: () {},
       );
-      final testClient = ApiClient.forTesting(dio);
       fakeAdapter.responses['/api/v1/me/modules'] = (
         200,
         {'installed_modules': []},
@@ -136,10 +140,13 @@ void main() {
 
       final dio = Dio(BaseOptions(validateStatus: (_) => true))
         ..httpClientAdapter = fakeAdapter;
-      dio.interceptors.add(
-        _bearerInterceptorForTest(tokenStore, activeRealm),
+      final testClient = ApiClient.forTesting(
+        dio,
+        tokenStore: tokenStore,
+        activeRealm: activeRealm,
+        appAuthAdapter: FakeAppAuthAdapter(),
+        routeToLogin: () {},
       );
-      final testClient = ApiClient.forTesting(dio);
       fakeAdapter.responses['/api/v1/me/modules'] = (
         200,
         {'installed_modules': []},
@@ -166,10 +173,13 @@ void main() {
 
       final dio = Dio(BaseOptions(validateStatus: (_) => true))
         ..httpClientAdapter = fakeAdapter;
-      dio.interceptors.add(
-        _bearerInterceptorForTest(tokenStore, activeRealm),
+      final testClient = ApiClient.forTesting(
+        dio,
+        tokenStore: tokenStore,
+        activeRealm: activeRealm,
+        appAuthAdapter: FakeAppAuthAdapter(),
+        routeToLogin: () {},
       );
-      final testClient = ApiClient.forTesting(dio);
       fakeAdapter.responses['/api/v1/me/modules'] = (
         200,
         {'installed_modules': []},
@@ -185,32 +195,3 @@ void main() {
   });
 }
 
-/// Mirrors `_bearerInterceptor` + `_tokenMatchesActiveRealm` (private to
-/// `lib/api/api_client.dart`) exactly, since this test file cannot import
-/// them directly — exercised via the public `issuerOf` this file also
-/// tests directly above, so the two are proven consistent with each other.
-Interceptor _bearerInterceptorForTest(
-  TenantTokenStore tokenStore,
-  ActiveRealmHolder activeRealm,
-) {
-  return InterceptorsWrapper(
-    onRequest: (options, handler) async {
-      if (options.extra['skipAuth'] == true) {
-        handler.next(options);
-        return;
-      }
-      final realmUrl = activeRealm.currentRealmUrl;
-      if (realmUrl != null) {
-        final tokens = await tokenStore.read(realmUrl);
-        if (tokens != null) {
-          final iss = issuerOf(tokens);
-          final matches = iss == null || iss == realmUrl;
-          if (matches) {
-            options.headers['Authorization'] = 'Bearer ${tokens.accessToken}';
-          }
-        }
-      }
-      handler.next(options);
-    },
-  );
-}

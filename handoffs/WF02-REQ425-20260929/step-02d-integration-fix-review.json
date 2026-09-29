@@ -1,0 +1,54 @@
+{
+  "handoff_id": "f284780a-bb9e-4cf3-87f7-be1bb5609522",
+  "run_id": "WF02-REQ425-20260929",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ425-20260929/step-02d-integration-fix-review.json",
+  "created_at": "2026-09-29T15:20:13Z",
+  "started_at": "2026-09-29T15:20:13Z",
+  "completed_at": "2026-09-29T15:22:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-425"],
+    "requirement_text": {
+      "REQ-425": "MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2). Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the renderers' six states classify this requirement's ApiError. SECURITY-REVIEWER gate (refresh-token handling, token clearing).\n\nHardens lib/api/api_client.dart (created by REQ-421) into the single client:\n1. Attach the active tenant's bearer token (REQ-422's iss check).\n2. On 401: exactly one silent refresh via flutter_appauth's token refresh, then exactly one retry of the original request; concurrent 401s share one in-flight refresh. On refresh failure: clear the tenant's tokens (REQ-422 store) and route to login.\n3. Exponential backoff on 5xx for idempotent methods only (GET), bounded attempts; POST is not auto-retried (no duplicate task completion).\n4. Normalise every failure to a sealed ApiError type before it leaves lib/api/: at minimum network-unavailable, unauthorized, forbidden (403), not-found, module-not-available (a 404 on any /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404, not 403, and must not render as a generic not-found), backpressure (429, carrying the Retry-After seconds -- the backend emits 429 from lib/letflow/plugs/admission.ex and lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with RFC 9457 field errors), conflict (409), server (5xx after retries).\n5. A static guard (apps/mobile/test/guards/), the counterpart of the SPA's raw-fetch-outside-client guard in web/tests/guards/: no file outside lib/api/ imports package:dio or package:http or uses dart:io HttpClient; with a self-test."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["2dd82450-7a57-41cb-a1b5-a2cbbb99a5ca"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ425-20260929/step-02b-integration-fix.json",
+      "apps/mobile/lib/definitions/pinned_form_resolver.dart",
+      "apps/mobile/test/definitions/pinned_form_resolver_test.dart"
+    ],
+    "owned_modules": ["apps/mobile/lib/definitions/pinned_form_resolver.dart"]
+  },
+  "task": {
+    "description": "Scoped re-check of the integration-gap fix in apps/mobile/lib/definitions/pinned_form_resolver.dart (git diff main...HEAD -- apps/mobile/lib/definitions/ apps/mobile/test/definitions/). This is a small, targeted change: removed a dead `if (response.statusCode != 200)` branch and its dio.Response import (unreachable given ApiClient.get()'s new REQ-425 throwing contract), and updated the file's own test (AC3's 404 case) to exercise the real post-REQ-425 catch(_) path via a thrown NotFoundError instead of a raw 404 Response fixture, asserting the identical outcome. Confirm: (1) this is genuinely a no-behavior-change cleanup, not a silent behavior alteration -- read the diff and confirm every prior public outcome (PinnedFormResolved/PinnedFormUnavailable for each input class) is unchanged; (2) no scope creep -- this run's own lock only covers this one file plus the api_client changes, nothing else in lib/definitions/ was touched beyond what's needed; (3) the updated test genuinely exercises the real code path (not a rubber-stamped assertion). FAIL if a genuine behavior change or scope creep is found; otherwise PASS.",
+    "acceptance_criteria": [
+      "pinned_form_resolver.dart's PUBLIC behavior (PinnedFormResolved/PinnedFormUnavailable outcomes for cache-hit, cache-miss-fetch-success, cache-miss-fetch-exception, and null-form-version inputs) is unchanged from before this fix -- this is a dead-code removal, not a behavior change",
+      "the single-client guard fails its self-test fixture (a file under lib/features/ importing package:dio) and passes on the real tree",
+      "cd apps/mobile && flutter analyze && flutter test pass, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed commit 298e8e84 (git show 298e8e84 -- apps/mobile/lib/definitions/pinned_form_resolver.dart apps/mobile/test/definitions/pinned_form_resolver_test.dart) against ApiClient.get's real contract in apps/mobile/lib/api/api_client.dart (_sendWithBackoff, lines ~465-511): the loop only ever `return response` when statusCode is 2xx (401 routes through _handleUnauthorized, which itself only returns on success or throws); every other status, and every DioException, ends in `throw classifyError(...)`. So `ApiClient.get()` can never return a Response with a non-2xx statusCode -- the removed `if (response.statusCode != 200)` branch was genuinely unreachable, confirming this is dead-code removal, not a behavior change. (1) No-behavior-change: PinnedFormResolved/PinnedFormUnavailable outcomes for all four input classes (cache-hit, cache-miss-fetch-success incl. null form_schema, cache-miss-fetch-exception, null-form-version) are unchanged -- both the old dead branch and the surviving catch(_) returned the identical PinnedFormUnavailable(fetchFailed), and the dio.Response import/local var removal is a pure type-narrowing cleanup with no logic change. (2) No scope creep: diff touches only pinned_form_resolver.dart (removed dio import, Response<dynamic> local -> dynamic, dead branch, doc-comment updates) and its own test file; nothing else in lib/definitions/ or beyond was touched. (3) Updated test genuinely exercises the real path: the AC3 404 case now does `_FakeGateway(errorToThrow: const NotFoundError())` and the resolver's own catch(_) block catches it via the same code path as the network-exception test, asserting the identical PinnedFormUnavailable(fetchFailed) outcome -- not a rubber-stamp, it reflects ApiClient's real throwing contract. Verified independently: cd apps/mobile && flutter analyze lib/definitions/pinned_form_resolver.dart test/definitions/pinned_form_resolver_test.dart -> 'No issues found!'; flutter test test/definitions/pinned_form_resolver_test.dart -> all 6 tests pass ('All tests passed!').",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "TEST-DESIGNER may proceed (WF-02 step 2d gate cleared)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

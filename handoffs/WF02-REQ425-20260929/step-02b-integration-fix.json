@@ -1,0 +1,58 @@
+{
+  "handoff_id": "2dd82450-7a57-41cb-a1b5-a2cbbb99a5ca",
+  "run_id": "WF02-REQ425-20260929",
+  "workflow_id": "WF-02",
+  "step": "02b-mobile",
+  "from_agent": "ORCH",
+  "to_agent": "MOBILE-DEV",
+  "file": "handoffs/WF02-REQ425-20260929/step-02b-integration-fix.json",
+  "created_at": "2026-09-29T15:15:40Z",
+  "started_at": "2026-09-29T15:15:40Z",
+  "completed_at": "2026-09-29T15:19:22Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-425"],
+    "requirement_text": {
+      "REQ-425": "MOB-6 in docs/mobile/requirements.md (build-order M6; depends on M2). Built BEFORE MOB-4 (REQ-426..428) -- see the S9 header: the renderers' six states classify this requirement's ApiError. SECURITY-REVIEWER gate (refresh-token handling, token clearing).\n\nHardens lib/api/api_client.dart (created by REQ-421) into the single client:\n1. Attach the active tenant's bearer token (REQ-422's iss check).\n2. On 401: exactly one silent refresh via flutter_appauth's token refresh, then exactly one retry of the original request; concurrent 401s share one in-flight refresh. On refresh failure: clear the tenant's tokens (REQ-422 store) and route to login.\n3. Exponential backoff on 5xx for idempotent methods only (GET), bounded attempts; POST is not auto-retried (no duplicate task completion).\n4. Normalise every failure to a sealed ApiError type before it leaves lib/api/: at minimum network-unavailable, unauthorized, forbidden (403), not-found, module-not-available (a 404 on any /api/v1/modules/<id>/ path -- architecture.md §6: absence is 404, not 403, and must not render as a generic not-found), backpressure (429, carrying the Retry-After seconds -- the backend emits 429 from lib/letflow/plugs/admission.ex and lib/letflow/plugs/public_read_rate_limit.ex), validation (422 with RFC 9457 field errors), conflict (409), server (5xx after retries).\n5. A static guard (apps/mobile/test/guards/), the counterpart of the SPA's raw-fetch-outside-client guard in web/tests/guards/: no file outside lib/api/ imports package:dio or package:http or uses dart:io HttpClient; with a self-test."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "apps/mobile/lib/definitions/pinned_form_resolver.dart",
+      "apps/mobile/test/guards/single_api_client_guard_test.dart",
+      "apps/mobile/lib/api/api_client.dart",
+      "apps/mobile/lib/api/api_error.dart"
+    ],
+    "owned_modules": ["apps/mobile/lib/api/", "apps/mobile/test/guards/", "apps/mobile/lib/definitions/pinned_form_resolver.dart"]
+  },
+  "task": {
+    "description": "INTEGRATION FIX, surfaced by rebasing this branch onto origin/main (which had meanwhile merged REQ-423/424 from a concurrent session). REQ-424's apps/mobile/lib/definitions/pinned_form_resolver.dart imports `package:dio/dio.dart' show Response` and manually checks `response.statusCode != 200` after calling `client.get(...)` -- but this run's own ApiClient.get() now throws ApiError on any non-2xx status instead of returning it (REQ-425's own change). That means: (a) the `if (response.statusCode != 200)` branch is now dead/unreachable code -- a non-200 response never reaches it, ApiClient.get() throws first, landing in the existing `catch (_)` block instead; (b) the file's own design comment (line ~54) explicitly names this exact gap as 'design §9 OQ-D', deliberately deferred because REQ-424 was built before REQ-425's ApiError taxonomy existed; (c) the dio.Response import this dead code requires trips this run's own new single-api-client guard (apps/mobile/test/guards/single_api_client_guard_test.dart), failing REQ-425's own AC6 on the real, merged tree.\n\nFix (mechanical, no behavior change -- both the dead branch and the existing catch(_) already return the identical PinnedFormUnavailable(reason: fetchFailed) outcome): remove the `final Response<dynamic> response;` declaration, the `if (response.statusCode != 200) {...}` dead branch, and the now-unnecessary `import 'package:dio/dio.dart' show Response;`. Change the fetch line to `final response = await client.get('/api/v1/tasks/$taskId');` (implicit type, no dio import needed) inside the existing try block, and use `response.data` directly in the success path exactly as today. Update the enum doc comment on `PinnedFormUnavailableReason.fetchFailed` and the file's own header comment if they still reference 'no ApiError taxonomy exists yet' as a live open question -- it is now resolved by REQ-425, not an open question.\n\nVerify: `cd apps/mobile && flutter analyze && flutter test` passes, quoting real output, with the single-api-client guard's 'real lib/ tree has zero single-api-client-boundary violations' test specifically passing. Check whether any existing test for pinned_form_resolver.dart directly references the old dio.Response-typed intermediate variable or the dead 200-check branch (if so, it may need a small update, but the resolver's PUBLIC behavior must not change -- same PinnedFormResolved/PinnedFormUnavailable outcomes for the same inputs).",
+    "acceptance_criteria": [
+      "the single-client guard fails its self-test fixture (a file under lib/features/ importing package:dio) and passes on the real tree",
+      "cd apps/mobile && flutter analyze && flutter test pass, real output quoted",
+      "pinned_form_resolver.dart's PUBLIC behavior (PinnedFormResolved/PinnedFormUnavailable outcomes for cache-hit, cache-miss-fetch-success, cache-miss-fetch-exception, and null-form-version inputs) is unchanged from before this fix -- this is a dead-code removal, not a behavior change"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Removed the dead `if (response.statusCode != 200)` branch, its `final Response<dynamic> response;` declaration, and the `import 'package:dio/dio.dart' show Response;` from apps/mobile/lib/definitions/pinned_form_resolver.dart. The fetch line is now `final dynamic response = await client.get(...)` inside the existing try block (an explicit `dynamic` type, not fully implicit, was needed to satisfy the `prefer_typing_uninitialized_variables` lint that `flutter analyze` raised on a bare `final response;`); `response.data` is used unchanged in the success path. Updated the `PinnedFormUnavailableReason.fetchFailed` doc comment and the step-4 contract comment to say the OQ-D gap is resolved by REQ-425 (both a network-transport failure and a thrown `ApiError` for any non-2xx response now land in the same `catch`), rather than describing it as still open. Also updated test/definitions/pinned_form_resolver_test.dart's AC3 404 case: it previously fed the fake gateway a raw 404 `Response` object to exercise the now-removed statusCode check; changed it to `errorToThrow: const NotFoundError()` (added `import 'package:letflow/api/api_error.dart'`) so it exercises the same `catch (_)` path the real ApiClient.get() takes post-REQ-425, with the same asserted PinnedFormUnavailable(fetchFailed) outcome. No other test referenced the removed variable/branch.\n\nVerification (real output):\n`flutter analyze` -> \"No issues found! (ran in 4.4s)\".\n`flutter test` -> \"+147: ... All tests passed!\", including test/guards/single_api_client_guard_test.dart's \"real lib/ tree has zero single-api-client-boundary violations\" (line 114 of the run) and all 6 pinned_form_resolver_test.dart cases (AC1-AC4, including the updated AC3 404/ApiError case) passing unchanged in their asserted outcomes.",
+    "artifacts_out": [
+      "apps/mobile/lib/definitions/pinned_form_resolver.dart",
+      "apps/mobile/test/definitions/pinned_form_resolver_test.dart"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["298e8e84"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER for a quick re-check"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -79,6 +79,38 @@ fix_direction: >
 affected_files:
   - test/letflow/sandbox_pool_test.exs
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0881-20260929
+resolved_at: "2026-09-29T07:50:00Z"
+resolution: >
+  Root cause (ISSUE-FIXER Step 1, handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json):
+  test/letflow/sandbox_pool_test.exs's `sandbox_schema_names/0` (lines 571-582) reads the
+  FULL platform-wide set of `sandbox_%` schemas from `information_schema.schemata`, with no
+  scoping to this test's own pool instance. Under `scripts/test_parallel.sh`'s full-contention
+  run, unrelated partitions legitimately creating/dropping their OWN sandbox schemas during a
+  test's baseline-to-final window could flip a platform-wide `assert final == baseline`
+  (originally line 1127) even though the test's own pool behaved correctly throughout -- a
+  test-isolation defect, not a production defect (lib/letflow/sandbox_pool.ex was never
+  implicated).
+
+  Fix (CODE-DESIGNER design at lib/letflow/design/iss0881-sandbox-pool-test-isolation.md,
+  PASSed by CODE-DESIGN-VALIDATOR; implemented by ELIXIR-DEV, commit range on this branch,
+  test/letflow/sandbox_pool_test.exs): every platform-wide equality assertion at RT-1
+  through RT-8 (and the ISS-0292/RT-8 diff-order test) was replaced with scoped
+  membership/diff checks tied to each test's own minted schema name(s) -- no
+  `sandbox_schema_names/0` signature change was needed; every fix is a call-site comparison
+  change (deleted redundant equality lines, widened pattern matches to bind names already
+  returned, or filtered a diff before comparing). SECURITY-REVIEWER and REVIEWER both PASSed
+  (test-file-only change, no tenant-data path).
+
+  Regression test (TEST-DESIGNER, test/letflow/sandbox_pool_test.exs:1374, describe
+  "ISS-0881 regression: scoped leak checks tolerate a concurrent partition's unrelated
+  schema churn") injects a real extraneous `sandbox_%` schema during the baseline-to-final
+  window and proves the new scoped assertion tolerates it. Fail-then-pass proof independently
+  reproduced by TEST-DESIGN-VALIDATOR itself (handoffs/WF03-ISS0881-20260929/step-04b-test-design-validator.json,
+  PASS): reverting the scoped check back to the old platform-wide `assert final == baseline`
+  form fails with `left: MapSet.new(["sandbox_noise_test_2"]), right: MapSet.new([])`;
+  reverting the mutant back passes (`1 passed`), mutation fully reverted and verified
+  (`git status --porcelain lib/ test/` empty). Full file re-run: `24 passed`.
 queue_ref: Q-880
 github_ref: GH-1958

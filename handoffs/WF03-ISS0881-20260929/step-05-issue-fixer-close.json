@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0881-20260929/step-05-issue-fixer-close.json",
   "created_at": "2026-09-29T07:45:00Z",
   "started_at": "2026-09-29T07:45:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T07:52:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,19 +40,19 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Confirmed status vocabulary against docs/agents/protocols/ISSUE_QUEUE.md before writing anything: `resolved` requires a root cause actually removed plus a regression test proving it. That bar is met here -- ISSUE-FIXER's own Step 1 diagnosis (handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json) identified the root cause as sandbox_pool_test.exs's `sandbox_schema_names/0` (lines 571-582) doing an unscoped, platform-wide read of every sandbox_% schema, with no filter tying it to the test's own pool instance -- so unrelated concurrent partitions (scripts/test_parallel.sh) creating/dropping their own sandbox schemas during a test's baseline-to-final window could flip a platform-wide equality assertion even though the test's own pool behaved correctly. CODE-DESIGNER's design (lib/letflow/design/iss0881-sandbox-pool-test-isolation.md, PASSed by CODE-DESIGN-VALIDATOR) and ELIXIR-DEV's implementation (step-03 handoff, PASS: mix compile --warnings-as-errors clean, mix test test/letflow/sandbox_pool_test.exs 23 passed) replaced every platform-wide equality check at RT-1..RT-8 and the ISS-0292/RT-8 diff-order test with scoped membership/diff checks tied to each test's own minted schema name(s) -- no production code (lib/letflow/sandbox_pool.ex) touched, and SECURITY-REVIEWER/REVIEWER both PASSed. TEST-DESIGNER's regression test (test/letflow/sandbox_pool_test.exs:1374) injects a real extraneous sandbox_% schema during the baseline-to-final window; TEST-DESIGN-VALIDATOR independently re-applied the mutant itself (not copied from the report) and reproduced both halves with its own quoted output: mutated (old platform-wide `assert final == baseline`) -> fails with `left: MapSet.new([\"sandbox_noise_test_2\"]), right: MapSet.new([])`; reverted -> `1 passed`, `git status --porcelain lib/ test/` empty, full file re-run 24 passed. This satisfies `resolved`'s bar (root cause removed + independently-reproduced fail-then-pass regression proof) -- not `instrumented` (a real fix was shipped, not just diagnostic capability) and not `no_defect` (a real, confirmed root cause existed and was removed). Wrote docs/issues/ISS-0881.yaml: status: resolved, resolved_in_run: WF03-ISS0881-20260929, resolved_at: 2026-09-29T07:50:00Z, and a resolution: field citing the exact file paths/line numbers from the Step 1/2/3/4b handoffs. Verified gh authentication (`gh auth status` -> logged in as tvolodi) and that GitHub issue 1958 was open (`gh issue view 1958` -> state OPEN) before closing. Closed it: `gh issue close 1958 --comment \"Fixed in WF03-ISS0881-20260929. See docs/issues/ISS-0881.yaml and the regression test at test/letflow/sandbox_pool_test.exs (describe block at line 1374, ...). Fail-then-pass proof independently reproduced by TEST-DESIGN-VALIDATOR.\"` -> real output: `Closed issue tvolodi/letflow#1958 (ISS-0880: SandboxPoolTest ISS-0224-regression RT-6 (death path c) fails intermittently under full parallel suite)`. Comment text matches the `resolved` branch of WF-03 Step 5's required comment wording (cites run-id, the issue yaml, and the regression test path).",
+    "artifacts_out": ["docs/issues/ISS-0881.yaml"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0881-20260929",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0881-20260929",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step Final (git merge)"
   },
   "rework_count": 0,
   "max_rework": 3

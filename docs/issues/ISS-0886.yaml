@@ -54,3 +54,7 @@ queue_ref: Q-884  # queue allocated issue_ref ISS-0884, which collides with an e
 github_ref: GH-1989
 duplicates_closed: "Q-886 (blocked) / GH-1991 (closed) were an accidental double registration of this same issue."
 status: open
+note_2026_09_29: >
+  ai-dala-infra T-0150: tenants swiftroute/meridian/vortex were created post-ISS-0778 and should have
+  all roles bound; bpm-default and bilimbaga still need the backfill before non-admin UAT scenarios
+  can pass there.

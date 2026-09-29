@@ -1,0 +1,12 @@
+id: ISS-0894
+title: "scripts/uat_preflight.sh actor matching is a name heuristic; support realm-qualified actor-<realm>-<name> accounts via ai-dala-infra qa-uat-env.sh and check app-side roles/definitions"
+discovered_by: ORCH
+discovered_in_run: ai-dala-infra 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), filed by ORCH
+discovered_at: "2026-09-29T19:45:00Z"
+severity: MINOR
+description: "scripts/uat_preflight.sh (ISS-0889 output) maps scenario actor ids to seeded usernames by name heuristic (actor-<tenant>-<name> -> username starting '<name>-'). New QA accounts are named exactly actor-<realm>-<name> (Keycloak username == scenario actor id inside the company realm; platform admin = admin-user) with realm-qualified secrets KC_SEED_<REALM>__<USER>_PASSWORD served by ai-dala-infra scripts/qa-uat-env.sh (eval \"$(bash scripts/qa-uat-env.sh company <slug>)\" -> UAT_QA_ACTOR_<SLUG>_<NAME>_PASSWORD). Update preflight to (a) accept that credential source and exact-name matching, (b) beyond token validity, check app-side state: the actor's app roles are bound (GET /api/v1/me, /tasks/inbox not 403; see ISS-0886) and required process definitions resolve by key (see the null-key issue and the meridian/vortex definitions issue) so GAPs are reported precisely instead of UNKNOWN. Related: ISS-0889, ISS-0888. Provenance: ai-dala-infra run 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), step-04 P5/D2/D6/R9 and step-06. Filed by ORCH. QA now has realms+tenants swiftroute/meridian/vortex and 22 actor accounts (realm-qualified secrets via ai-dala-infra scripts/qa-uat-env.sh)."
+affected_files:
+  - scripts/uat_preflight.sh
+queue_ref: Q-894
+github_ref: GH-2003
+status: open

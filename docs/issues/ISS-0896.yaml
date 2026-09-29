@@ -1,0 +1,15 @@
+id: ISS-0896
+title: "E2E specs hard-code Keycloak master admin-cli + admin/admin: cannot run against QA (master admin is qa-admin with a generated password)"
+discovered_by: ORCH
+discovered_in_run: ai-dala-infra 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), filed by ORCH
+discovered_at: "2026-09-29T19:45:00Z"
+severity: MAJOR
+description: "web/tests/e2e/env04.e2e.spec.ts, pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts, pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts and pipelines/tenant-cache.pipeline.e2e.spec.ts hard-code the Keycloak master realm with admin-cli and admin/admin to create realms/users. On QA the master admin is qa-admin with a generated password; infra cannot and must not make admin/admin work on an internet-facing Keycloak. Change the specs to read master credentials from env (e.g. KC_ADMIN_USER/KC_ADMIN_PASSWORD, defaulting to admin/admin only for the local dev stack) and/or use the pre-provisioned realms swiftroute/meridian/vortex and their actor accounts instead of creating realms; optionally a least-privilege create-realm service-account client (ai-dala-infra P6b, currently not created). Docker-SQL-only specs (runSqlAgainstDevPostgres) are covered separately by ISS-0890. Related: ISS-0888, ISS-0890. Provenance: ai-dala-infra run 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), step-04 P5/D2/D6/R9 and step-06. Filed by ORCH. QA now has realms+tenants swiftroute/meridian/vortex and 22 actor accounts (realm-qualified secrets via ai-dala-infra scripts/qa-uat-env.sh)."
+affected_files:
+  - web/tests/e2e/env04.e2e.spec.ts
+  - web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts
+queue_ref: Q-896
+github_ref: GH-2005
+status: open

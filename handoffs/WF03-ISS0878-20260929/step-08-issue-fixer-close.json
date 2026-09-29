@@ -1,0 +1,32 @@
+{
+  "step": "08-issue-fixer-close",
+  "agent": "ISSUE-FIXER",
+  "issue": "ISS-0878",
+  "branch": "feature/WF03-ISS0878-20260929",
+  "timestamp": "2026-09-29T07:00:00Z",
+  "result": "PASS",
+  "outcome_status": "resolved",
+  "summary": "All prior gates passed (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER). Root cause genuinely removed: unique_realm/1's cross-process-unsafe System.unique_integer/1 pattern was replaced with a UUID-based, cross-process-safe generator, proven via a fail-then-pass mutation test at test/support/tenant_slug_test.exs, independently reproduced by TEST-DESIGN-VALIDATOR. Targeted test set and full-suite run (TEST_PARALLEL_N=4) both pass, per step-07's handoff (TEST-RUNNER PASS, commit 5485ad24). docs/issues/ISS-0878.yaml updated to status: resolved with resolved_in_run: WF03-ISS0878-20260929 and resolved_at: 2026-09-29T07:00:00Z. GitHub mirror GH-1951 closed via `gh issue close 1951 --comment \"Fixed in WF03-ISS0878-20260929. See docs/issues/ISS-0878.yaml and the regression test at test/support/tenant_slug_test.exs.\"` (confirmed closed). Run-history event appended to docs/status/requirement_status.v24.yaml (current volume, confirmed via docs/status/requirement_status.index.yaml, still current/not rolled over) as a req: SCOPE-CHANGE / event: done entry, matching this same volume's earlier req: SCOPE-CHANGE / event: started entry for this issue. Committed and pushed as commit 3946e46e.",
+  "yaml_update": {
+    "file": "docs/issues/ISS-0878.yaml",
+    "status": "resolved",
+    "resolved_in_run": "WF03-ISS0878-20260929",
+    "resolved_at": "2026-09-29T07:00:00Z"
+  },
+  "github_close": {
+    "command": "gh issue close 1951 --comment \"Fixed in WF03-ISS0878-20260929. See docs/issues/ISS-0878.yaml and the regression test at test/support/tenant_slug_test.exs.\"",
+    "output": "Closed issue tvolodi/letflow#1951 (ISS-0878: AuthPipelineTest unique_realm/1 process-local-only counter collides across test_parallel.sh partitions on tenants_idp_realm_id_partial_index)"
+  },
+  "run_history": {
+    "file": "docs/status/requirement_status.v24.yaml",
+    "volume_confirmed_current": true,
+    "entry": {
+      "req": "SCOPE-CHANGE",
+      "event": "done",
+      "agent": "ISSUE-FIXER",
+      "at": "2026-09-29T07:00:00Z"
+    }
+  },
+  "commit_sha": "3946e46e",
+  "next_action": "Route to Step Final (git merge)"
+}

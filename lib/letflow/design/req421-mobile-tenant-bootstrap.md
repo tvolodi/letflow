@@ -416,12 +416,24 @@ class TokenSet {
   in this design that needs to read/write tokens goes through an instance of
   this class (typically obtained via a Riverpod provider,
   `tenantTokenStoreProvider`, constructed once at app startup).
-- **REQ-422 seam, explicitly left open, not designed here:** this design does
-  not add key-rotation, biometric-gate, or tamper-detection logic to
-  `TenantTokenStore` — REQ-422 "hardens and guards this" same class. The
-  three public methods above (`store`/`read`/`delete`) are the seam REQ-422
-  wraps or extends; this design does not guess at REQ-422's own shape beyond
-  stating that seam exists.
+- **REQ-422 seam, explicitly left open, not designed here:** this design
+  does not add key-rotation, biometric-gate, or tamper-detection logic to
+  `TenantTokenStore`. The three public methods above (`store`/`read`/
+  `delete`) are the seam REQ-422 "hardens and guards this" (REQ-421's own
+  requirements.yaml text) wraps or extends; this design does not guess at
+  REQ-422's own shape beyond stating that seam exists.
+  **Correction (ISS-0881, post-REQ-422):** REQ-422 (now built, PR #1973)
+  hardened token storage/logging/transport/cleartext/audience-scoping/
+  masking only — its actual requirement text and acceptance criteria never
+  included key rotation, biometric gating, or tamper detection. Those three
+  items remain entirely undesigned and unbuilt anywhere in the mobile tier
+  — including `docs/mobile/architecture.md` §7 ("Security hardening before
+  corporate-tier deployment"), which records only certificate pinning and
+  root/jailbreak detection as required-before-corporate-tier-and-not-in-v1;
+  key rotation, biometric gating, and tamper detection are not listed there
+  either. If any of the three is still wanted, it needs its own new
+  requirement with real acceptance criteria — do not infer coverage from
+  this note or from REQ-422.
 - **Secure-storage failure:** `store`/`read`/`delete` each let a
   `PlatformException` from `flutter_secure_storage` (e.g. Keystore/Keychain
   unavailable) propagate rather than swallow it — the caller (§5, §6.5) is

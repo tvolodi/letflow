@@ -14,4 +14,25 @@ affected_files:
   - web/tests/e2e/pipelines/
 queue_ref: Q-891
 github_ref: GH-1998
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0891-start-instance-version-race-20260929
+resolved_at: "2026-09-29T23:40:00Z"
+resolution: >
+  Not a test-only flake as originally framed: root cause was a genuine
+  app-side race in web/src/pages/instances/InstanceBoardPage.tsx. The Start
+  Instance dialog's version-display field updated via a fast `useState` as
+  soon as the process key was entered, while the value actually submitted
+  on "Start" was still derived from the slower `useSearchParams`-derived
+  definitionId -- on a fast first attempt those two update paths could
+  resolve in the wrong order, submitting against a stale/empty
+  definitionId even though the UI showed the correct version. Fixed by
+  adding a dedicated `startDefinitionId` state, set synchronously
+  everywhere the old code relied on the URL-derived value, so the
+  version shown and the definitionId submitted are always the same
+  value at the same time (PR #2017, branch
+  fix/ISS-0891-start-instance-version-race, commit d2bb3817).
+  RELEASE-VALIDATOR's mutation-revert-and-refail proof confirmed the fix
+  is genuinely load-bearing, not incidental: reverting it reintroduced
+  4/16 failures on a live backend repeat-run, and restoring it returned
+  to 16/16 across two independent repeat-run passes. REVIEWER and
+  RELEASE-VALIDATOR both PASSed.

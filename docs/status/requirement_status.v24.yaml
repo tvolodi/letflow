@@ -673,3 +673,35 @@
       iss0897-meridian-vortex-definition-seeding), squash-merged to main
       (see PR for merge commit SHA). letflow-queue task 892 (queue_ref
       Q-892) to be released as done in the same run.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T23:41:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0891
+      (MINOR, flaky e2e -- start-instance version input empty on first
+      attempt in platform-definition-promotion-rollback, passed on retry)
+      -- root cause turned out to be a genuine app-side race, not a
+      test-only flake as originally framed:
+      web/src/pages/instances/InstanceBoardPage.tsx's version-display
+      field updated via a fast `useState` while the value actually
+      submitted on "Start" was still derived from the slower
+      `useSearchParams`-derived definitionId, so a fast first attempt
+      could submit against a stale/empty definitionId even though the UI
+      already showed the correct version. Fixed by adding a dedicated
+      `startDefinitionId` state, set synchronously everywhere the old code
+      relied on the URL-derived value, so the displayed version and the
+      submitted definitionId are always in sync (commit d2bb3817, branch
+      fix/ISS-0891-start-instance-version-race). REVIEWER PASS.
+      RELEASE-VALIDATOR PASS with a real mutation-revert-and-refail proof
+      that the fix is genuinely load-bearing: reverting it reintroduced
+      4/16 failures on a live-backend repeat-run; restoring it returned to
+      16/16, confirmed twice across two independent repeat-run passes.
+      docs/issues/ISS-0891.yaml set to status: resolved (resolved_in_run:
+      fix/ISS-0891-start-instance-version-race-20260929) in this same
+      append -- this is an ISSUE, not a REQ, so no docs/requirements.yaml
+      entry is touched. Merged via PR #2017 (branch
+      fix/ISS-0891-start-instance-version-race), squash-merged to main
+      (see PR for merge commit SHA). letflow-queue task 891 (queue_ref
+      Q-891) released as done.

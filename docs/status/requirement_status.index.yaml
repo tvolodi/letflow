@@ -5021,54 +5021,71 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 14
+    entries: 15
     note: >
+      MERGE RECONCILIATION by ORCH (ISS-0893's fix branch into main): this
+      volume's note history diverged again across two lines of work that
+      both believed they were bumping to 14 -- ISS-0893's own branch bumped
+      13->14 locally (its own SCOPE-CHANGE append), while main had already
+      independently reconciled a separate five-way divergence and landed at
+      14 (REQ-426 + ISS-0886 x2 + ISS-0895 + ISS-0894). After merging both
+      branches, the on-disk file has all appends from both; recounted
+      directly rather than trusting either side's pre-merge arithmetic:
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 15
+      on-disk entries. 626 lines / 37691 bytes (working-tree), well under
+      the 1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Bumped to 14 by DOC-UPDATER after appending ISS-0893's SCOPE-CHANGE
       done-event (fix/ISS-0893-swiftroute-definition-key-mismatch-20260929,
       2026-09-29T21:40:12Z -- swiftroute "Shipment Approval" definition
       process_id resolution via a new additive
       test/fixtures/uat/process-definition-aliases/ sidecar, Option 2 of
       lib/letflow/design/iss0893-swiftroute-definition-key-mismatch.md;
-      CODE-DESIGN-VALIDATOR, REVIEWER, RELEASE-VALIDATOR all PASSed). Read
-      this index and volume 24 in full immediately before appending and
-      recounted directly rather than trusting the prior note's arithmetic:
-      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 14
-      on-disk entries (the prior 13 + this done-event); `git diff --numstat`
-      confirmed 0 deletions. 584 lines / 35224 bytes, well under the
+      CODE-DESIGN-VALIDATOR, REVIEWER, RELEASE-VALIDATOR all PASSed), as
+      computed on ISS-0893's own branch before it saw main's concurrent
+      reconciliation above.
+
+      MERGE RECONCILIATION by ORCH (Step Final, WF02-REQ426-20260929 into
+      main): this volume's entry count and note history diverged across two
+      branches that both started from "prior 9" (REQ-425's close) without
+      seeing each other's concurrent append -- WF02-REQ426-20260929 bumped
+      9->10 locally, while main independently bumped 9->10->12->13 via three
+      unrelated WF-03 closes. After merging both branches' commits, the
+      on-disk file has all five appends; recounted directly rather than
+      trusting either branch's pre-merge arithmetic: `grep -c "^  - req:"
+      docs/status/requirement_status.v24.yaml` = 14 on-disk entries. 585
+      lines / 35777 bytes (working-tree CRLF), well under the
       1200-line/120000-byte roll ceiling, so no roll triggered.
 
-      Bumped to 13 by DOC-UPDATER after appending ISS-0894's SCOPE-CHANGE
+      Bumped to 10 by DOC-UPDATER after appending REQ-426's done-event
+      (WF02-REQ426-20260929, 2026-09-29T18:58:39Z -- MOB-4 part 1
+      renderer state framework + list renderer closed; RELEASE-VALIDATOR:
+      DONE, no gaps).
+
+      Bumped to 11 by DOC-UPDATER after appending ISS-0886's first
+      SCOPE-CHANGE done-event (WF03-ISS0886-20260929, 2026-09-29T19:54:10Z --
+      platform-role backfill for pre-existing tenants code fix merged; QA
+      application still pending, no SSH/deploy access from this sandbox).
+
+      Bumped to 12 by DOC-UPDATER after appending ISS-0886's follow-up
+      SCOPE-CHANGE done-event (2026-09-29T20:08:00Z -- PR #2007 merged,
+      QA deploy access confirmed unreachable from this sandbox, resolution
+      note updated with detail via the issue file's mutable resolution
+      field).
+
+      Bumped to 13 by DOC-UPDATER after appending ISS-0895's SCOPE-CHANGE
+      done-event (fix/ISS0895-swiftroute-uat-scenario-env-limitation-20260929,
+      2026-09-29T21:35:00Z -- swiftroute tenant-onboarding-happy UAT scenario
+      marked env-scoped/permanently-blocked on QA via a new additive
+      scenario-env-limitations sidecar mechanism).
+
+      Bumped to 14 by DOC-UPDATER after appending ISS-0894's SCOPE-CHANGE
       done-event (fix/ISS0894-uat-preflight-actor-realm-check-20260929,
       2026-09-29T22:40:00Z -- uat_preflight.sh exact-name actor matching plus
       new app_roles/definitions app-side checks; REVIEWER caught and
       ELIXIR-DEV fixed a real missing-/api/v1-prefix dead-code bug;
       RELEASE-VALIDATOR PASS with its own live stub-server verification of
-      both branches). Re-read this index and volume 24 immediately before
-      appending and recounted directly rather than trusting the prior note's
-      arithmetic: `grep -c "^  - req:" docs/status/requirement_status.v24.yaml`
-      = 13 on-disk entries (the prior 12 + this done-event), confirming no
-      concurrent append landed since the last confirmed count of 12.
-
-      Bumped to 12 by DOC-UPDATER after appending ISS-0895's SCOPE-CHANGE
-      done-event (fix/ISS0895-swiftroute-uat-scenario-env-limitation-20260929,
-      2026-09-29T21:35:00Z -- swiftroute tenant-onboarding-happy UAT scenario
-      marked env-scoped/permanently-blocked on QA via a new additive
-      scenario-env-limitations sidecar mechanism). Re-read this index and
-      volume 24 immediately before appending and recounted directly rather
-      than trusting the prior note's arithmetic: `grep -c "^  - req:"
-      docs/status/requirement_status.v24.yaml` = 12 on-disk entries (the
-      prior 11 + this done-event), confirming no concurrent append landed
-      since the last confirmed count of 11.
-
-      Bumped to 10 by DOC-UPDATER after appending ISS-0886's SCOPE-CHANGE
-      done-event (WF03-ISS0886-20260929, 2026-09-29T19:54:10Z -- platform-
-      role backfill for pre-existing tenants code fix merged; QA
-      application still pending, no SSH/deploy access from this sandbox).
-      Re-read this index and volume 24 immediately before appending and
-      recounted directly rather than trusting the prior note's
-      arithmetic: `grep -c "^  - req:" docs/status/requirement_status.v24.yaml`
-      = 10 on-disk entries (the prior 9 + this done-event), confirming no
-      concurrent append landed since the last confirmed count of 9.
+      both branches).
 
       Bumped to 9 by DOC-UPDATER after appending REQ-425's done-event
       (WF02-REQ425-20260929, 2026-09-29T18:05:00Z -- MOB-6 single API

@@ -369,6 +369,48 @@
       closures made for this file). letflow-queue task 862 (GH#1879)
       released as done.
 
+  - req: REQ-426
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T18:58:39Z"
+    note: >
+      MOB-4 (part 1): the shared renderer state framework for all six
+      mandatory states (loading, fetch-failure, permission-denied,
+      stale-version, validation-error, 429-backpressure with a live
+      retry-after countdown that retries exactly once at zero) and the
+      first renderer built on it, the list renderer over entity
+      records -- GET /api/v1/entities/definitions/active/:name for the
+      definition, POST /api/v1/entities/query for records, with
+      filters and keyset pagination on next_cursor. Branch
+      WF02-REQ426-20260929. Full gate chain: CODE-DESIGNER ->
+      CODE-DESIGN-VALIDATOR PASS -> MOBILE-DEV implement (commit
+      844112c9) -> SECURITY-REVIEWER full-gate PASS -> REVIEWER PASS ->
+      TEST-DESIGNER (commit 43abb0cc) -> TEST-DESIGN-VALIDATOR (one
+      rework round on AC4's guard, reworked at commit 998832e5, then
+      PASS) -> TEST-RUNNER (found and got fixed one real regression --
+      the list renderer's first-load fetch was firing during the
+      widget-build phase; deferred past it, commit b431dc00 -- then
+      159/159 passing) -> RELEASE-VALIDATOR: DONE, independently
+      re-verified all 5 acceptance criteria against actual code/tests,
+      no gaps found. Design doc:
+      lib/letflow/design/req426-mobile-renderer-state-and-list.md.
+      docs/requirements.yaml's REQ-426 status: in_progress -> done in
+      this same append. README.md's mobile-tier summary paragraph
+      updated to add REQ-426/MOB-4-part-1's renderer-state-framework
+      and list-renderer summary (matching the existing REQ-419..425
+      pattern). docs/mobile/requirements.md's MOB-4 section and
+      docs/mobile/architecture.md §5 (six-state mechanism, referenced
+      from MOB-4) both checked: both already describe the six-state
+      mechanism and its rationale accurately for what this requirement
+      delivered, with no staleness introduced by this implementation,
+      so no edit needed there (same determination this volume's prior
+      closures made for docs/migration/stage-9-mobile.md, whose gap/
+      progress table also still covers only the three closed backend
+      gaps, not a REQ-419..426 table -- checked again here, still no
+      update needed). Not yet released: letflow-queue task 863
+      (GH#1880) -- that release_lock is ORCH's job after Step Final's
+      merge, not this step's.
+
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER

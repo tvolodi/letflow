@@ -60,6 +60,7 @@ defmodule Letflow.EngineConcurrencyTest do
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity.Tenant
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
   alias Letflow.Test.SandboxAutoMode
@@ -67,22 +68,20 @@ defmodule Letflow.EngineConcurrencyTest do
   @instance_count 100
 
   # ---------------------------------------------------------------------------------
-  # Fixtures / helpers -- copied (same signatures/bodies) from
-  # engine_complete_task_test.exs per design §3.2, this file provisions its own
-  # tenant schema independently.
+  # Fixtures / helpers -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366),
+  # teardown: false + this file's own on_exit/1 pair (category A∩C, batch 10):
+  # `SandboxAutoMode.exit_auto_mode!/1` is registered FIRST (so LIFO makes it run
+  # LAST) because this file's tests deliberately keep Sandbox :auto mode alive
+  # across real Task.async calls that run AFTER provisioned_tenant/0 returns (see
+  # design note below) -- that composition rules out `SandboxAutoMode.provision!/2`
+  # (which restores to :manual immediately, before this function even returns),
+  # so this keeps the file's own pre-existing enter/exit_auto_mode!/1 pairing
+  # untouched, only swapping the provisioning half (insert tenant, provision
+  # schema, replay, assert-complete) for one `TenantFixture.provisioned_tenant!/1`
+  # call, matching category A's established pattern
+  # (test/letflow/audit_capture_test.exs) composed with genuine Task.async
+  # (category C) exactly as batch 9's `repository_test.exs`-adjacent files did.
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req055"),
-        display_name: "REQ-055 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
 
   defp drop_schema!(schema_name) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
@@ -91,7 +90,12 @@ defmodule Letflow.EngineConcurrencyTest do
   defp provisioned_tenant do
     SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
 
-    tenant = insert_tenant!()
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req055",
+        display_name: "REQ-055 Test Tenant",
+        teardown: false
+      )
 
     # Registered FIRST so it runs LAST (ExUnit runs on_exit/1 callbacks in
     # LIFO order): the cleanup on_exit/1 below still needs :auto mode active
@@ -104,19 +108,14 @@ defmodule Letflow.EngineConcurrencyTest do
     on_exit(fn -> SandboxAutoMode.exit_auto_mode!(Letflow.Repo) end)
 
     on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+      case TenantProvisioning.schema_name_for_tenant(tenant_id) do
         {:ok, schema_name} -> drop_schema!(schema_name)
         {:error, :invalid_tenant_id} -> :ok
       end
 
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
     end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
     # TASK_COMPLETED is now auto-seeded by replay_migrations/2's default manifest
     # (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257) -- this fixture used to
@@ -125,7 +124,7 @@ defmodule Letflow.EngineConcurrencyTest do
     # own seed and hard-fails). Removed rather than reconciled: every payload this
     # file writes goes through the real Engine.complete_task/3 writer provisioning's
     # stricter schema was written to validate.
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   defp unique_name(prefix \\ "req055-def") do

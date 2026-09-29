@@ -24,7 +24,47 @@ queue_ref: Q-180
 github_ref: GH-366
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (180) and its mirrored GitHub issue (#366) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0112-batch10-20260928
+resolved_at: 2026-09-29T01:40:34Z
+resolution: >
+  All 10 planned batches (per lib/letflow/design/iss0112-tenant-fixture-migration-plan.md)
+  landed, migrating 63 of 63 in-scope test files from their inline copy-pasted
+  provisioned_tenant/on_exit teardown block onto a single
+  Letflow.TenantFixture.provisioned_tenant!/1 call each -- the mechanical
+  consolidation this issue was filed to drive, closing the "any fixture change
+  needs N identical edits" defect for good. 2 files were deliberately excluded
+  throughout and remain hand-rolled: tenant_provisioning_test.exs (the module
+  directly under test for TenantProvisioning itself, already mixing
+  provisioned_tenant!/1 calls with its own deliberately hand-rolled sandbox-mode
+  tests) and tenant_onboarding_test.exs (two describe blocks deliberately
+  decompose provision/replay into separate, individually-asserted steps to
+  inject a broken-migration failure or exercise an alternate call sequence --
+  an atomic fixture call would eliminate the behavior under test). Batch 4 was
+  split into 4a/4b when 4 of its 7 files needed a fixture-capability extension
+  first (Letflow.TenantFixture.provisioned_tenant!/1 gaining an idp_realm_id
+  opt, landed via commit cd2cfd41/PR #1933) to thread a specific OIDC realm ID
+  through; the 3 ready files shipped as 4a rather than waiting on that
+  extension's own review. Batches were sequenced hardest-last (plain/default
+  files first, then category A/B/A∩B, then the two Task.async/Task.start-heavy
+  C batches, then the most complex A∩C intersection as the final Batch 10) so
+  early batches established reusable precedent (applied_versions_in/1,
+  template: :replay for files exercising the real replay path, teardown: false
+  composition for pre-existing on_exit chains) before the riskiest files were
+  touched. Across all 10 batches: zero lib/ or priv/repo/migrations/ changes
+  (test-only diff throughout); every batch independently RELEASE-VALIDATOR-
+  PASSed with fresh isolated compiles, per-file before/after pass-count
+  matching, and full-suite scripts/test_parallel.sh runs clean or with only
+  already-tracked unrelated flakes. Batch 10 (final): 3 category-A∩C files
+  (engine_concurrency_test.exs, repository_test.exs, role_registry_test.exs),
+  merged via PR #<PR_NUMBER> (branch
+  fix/ISS0112-batch10-tenant-fixture-migration-20260928, squash-merge commit
+  <MERGE_COMMIT>, based on main acdf5d57); RELEASE-VALIDATOR fully PASSed with
+  a closure sweep additionally confirming, via the design doc's own
+  fingerprint grep re-run across test/, that no in-scope file remains
+  unmigrated. Full multi-week narrative preserved in this file's own
+  `progress_2026_09_28` note above. Effort span: 2026-08-21 (ISSUE-FIXER
+  triage during WF03-ISS0109-20260821) through 2026-09-29 (this closure).
 
 carried_findings:
   - from_run: WF03-ISS0109-20260821
@@ -608,3 +648,101 @@ progress_2026_09_28: >
   scope. Status left `open`: ISS-0112 is not resolved until Batch 10 lands.
   Queue task 180 (Q-180) NOT released by this run -- it stays
   locked/in-progress with ORCH for the final batch.
+
+  Batch 10 of 10 (FINAL) merged: the 3 category-A∩C files --
+  test/letflow/engine_concurrency_test.exs, test/letflow/repository_test.exs,
+  test/letflow/role_registry_test.exs -- migrated onto
+  Letflow.TenantFixture.provisioned_tenant!/1 with teardown: false, combining
+  category A's SandboxAutoMode-shaped teardown (each file's own pre-existing
+  on_exit/1 chain left byte-for-byte unchanged) with category C's
+  Task.async/Task.start handling. engine_concurrency_test.exs's tricky
+  enter_auto_mode!/exit_auto_mode! pairing (needed because :auto mode must
+  stay live across Task.async calls that run after the fixture returns) was
+  preserved in position/timing exactly as the prior inline fixture had it.
+  role_registry_test.exs was reclassified from A∩C to A-only on a fresh read:
+  its only two "Task.async" occurrences are inside its own moduledoc prose
+  explaining why the file is deliberately single-process -- the same
+  reclassification batch 9 already made for three identity test files.
+  repository_test.exs and engine_concurrency_test.exs both have genuine
+  Task.async usage and keep their category-C handling. Zero lib/ or
+  priv/repo/migrations/ changes.
+
+  RELEASE-VALIDATOR fully PASSed: scope confirmed to exactly these 3 test
+  files, zero lib/ changes; engine_concurrency_test.exs's tricky enter/
+  exit_auto_mode composition independently re-traced and confirmed safe;
+  role_registry_test.exs's reclassification confirmed via direct grep;
+  format/compile clean; multiple seeded runs clean (before/after pass counts
+  matched exactly: repository_test.exs 27/27, role_registry_test.exs 25/25,
+  engine_concurrency_test.exs 3/3); full-suite TEST_PARALLEL_N=4
+  scripts/test_parallel.sh 5034/5034 clean; `mix letflow.check.test` clean.
+  Additionally ran a closure sweep confirming all 63 files in ISS-0112's
+  original scope are now migrated: spot-checked 3 previously-unexamined files
+  from earlier batches, all still correctly using the fixture on current
+  main; re-ran the design doc's own fingerprint grep
+  (`provision_tenant_schema` + `replay_migrations` + `Sandbox.mode`) across
+  test/ and found only the 2 already-documented, deliberately-excluded files
+  remaining: tenant_provisioning_test.exs (the module directly under test for
+  TenantProvisioning itself, not a fixture consumer -- it already mixes
+  TenantFixture.provisioned_tenant!/1 calls with its own deliberately
+  hand-rolled Sandbox.mode tests per its own file-level comment) and
+  tenant_onboarding_test.exs (matches the fixture's raw fingerprint but its
+  "AC9: recover_provisioning/1 (ISS-0230)" and "ISS-0778 T3" describe blocks
+  each deliberately decompose provision/replay into separate,
+  individually-asserted steps -- injecting a broken-migration failure
+  mid-sequence in one block, exercising TenantOnboarding.provision_and_migrate/1
+  directly in the other -- so an atomic provisioned_tenant!/1 call would
+  eliminate the very behavior under test; per
+  lib/letflow/design/iss0112-tenant-fixture-migration-plan.md's OQ-2/§0).
+
+  Merged via PR #<PR_NUMBER> (branch
+  fix/ISS0112-batch10-tenant-fixture-migration-20260928, squash-merge commit
+  <MERGE_COMMIT>, based on main commit acdf5d57).
+
+  With Batch 10 landed, all 10 batches are complete: 8 + 8 + 8 + 7 + 7 + 4 +
+  3 + 7 + 8 + 3 = 63 of the plan's 63 files-in-scope total now migrated onto
+  Letflow.TenantFixture.provisioned_tenant!/1. 2 files were deliberately
+  excluded throughout (tenant_provisioning_test.exs,
+  tenant_onboarding_test.exs -- see above and the plan's own section 1/3 for
+  the exclusion rationale).
+
+  Summary of the overall multi-week effort (2026-08-21 triage through
+  2026-09-28/29 close-out, 10 PR-sized batches): ISS-0112 was filed by
+  ISSUE-FIXER during WF03-ISS0109-20260821 after finding the
+  provisioned_tenant/0 + on_exit teardown fixture copy-pasted verbatim
+  across 41 test files, making any change to tenant-fixture provisioning or
+  teardown a 41-file mechanical edit. The shared helper
+  (Letflow.TenantFixture, test/support/tenant_fixture.ex) was built by the
+  ISS-0109 fix; this issue covered migrating every remaining copy-paste call
+  site onto it. A first attempt (run WF03-ISS0112-20260821) deliberately made
+  no code changes after concluding, via ISS-0113's own blanket-fix failure
+  (12/125 tests broken across 6 modules via three sandbox-mode hazard
+  classes, fully reverted), that migrating without a per-caller
+  sandbox-restore mechanism would risk repeating that failure across up to
+  13 files; that run instead triaged the true remaining scope (13 files at
+  the time, since grown to the plan's full 63-file scope once
+  lib/letflow/design/iss0112-tenant-fixture-migration-plan.md categorized
+  every call site into categories A (SandboxAutoMode-shaped teardown), B
+  (EventTypes.seed! follow-up), C (Task.async/Task.start), D (plain default)
+  and their intersections). Batch 4 needed a fixture-capability extension
+  (Letflow.TenantFixture.provisioned_tenant!/1 gaining an idp_realm_id opt,
+  landed via cd2cfd41/PR #1933) to unblock 4 of its 7 files (OIDC-realm test
+  files needing a specific idp_realm_id threaded through), which split
+  Batch 4 into 4a (3 ready files) and 4b (4 files gated on the opt landing)
+  rather than blocking the ready files on the opt's own review. Categories
+  were deliberately sequenced hardest-last (plain/default batches first,
+  A/B/A∩B next, the two Task.async/Task.start-heavy C batches after that,
+  the most complex A∩C intersection last as Batch 10) so early batches
+  established reusable precedent (the applied_versions_in/1 helper,
+  template: :replay for files exercising the real replay path, teardown:
+  false composition for pre-existing on_exit chains) before the riskiest
+  files were touched. Across all 10 batches: zero lib/ or
+  priv/repo/migrations/ changes (test-only diff throughout, so
+  SECURITY-REVIEWER was not invoked per the plan's section 5); every batch
+  independently RELEASE-VALIDATOR-PASSed with fresh isolated compiles,
+  per-file before/after pass-count matching, and full-suite
+  scripts/test_parallel.sh runs (5027-5034/matching-total clean or with only
+  already-tracked unrelated flakes); 63 of 63 in-scope files migrated onto
+  Letflow.TenantFixture.provisioned_tenant!/1; 2 files deliberately excluded
+  (tenant_provisioning_test.exs, tenant_onboarding_test.exs) as not being
+  fixture consumers. Status now flipped to `resolved` below -- see
+  `resolution:` for the terminal summary.

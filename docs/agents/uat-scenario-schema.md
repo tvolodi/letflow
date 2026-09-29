@@ -255,7 +255,10 @@ classification-rule note above.
 `scripts/uat_preflight.sh` (WF-05 Step 0) builds its PRECONDITIONS manifest from:
 `company_id`/`scope` (tenant + Keycloak realm; `platform` = the default realm),
 `process_id` (deployed definition), `actors:` (login actors; `actor-system-*` and
-`actor-any` are not logins; `actor-<tenant>-<name>` maps to a seeded username `<name>-*`;
-`actor-platform-admin` to the PLATFORM_ADMIN user), and `pipeline_test:` (must exist,
-must not carry an unresolved `NOTE (ISS-05xx)` forward-reference, must not use
-`docker compose`/`psql`). The mapping is best-effort; unmappable actors report UNKNOWN.
+`actor-any` are not logins; `actor-<tenant>-<name>` is matched against a seeded username
+first by exact name (`actor-<tenant>-<name>` itself, the `ai-dala-infra` realm-qualified
+convention) and, failing that, by the older `<name>-*` prefix heuristic; `actor-platform-admin`
+to the PLATFORM_ADMIN user), and `pipeline_test:` (must exist, must not carry an unresolved
+`NOTE (ISS-05xx)` forward-reference, must not use `docker compose`/`psql`). The mapping is
+best-effort; unmappable actors report UNKNOWN. A `proc-*` process_id is additionally checked
+against `GET /definitions/active/:name` — see ISS-0894.

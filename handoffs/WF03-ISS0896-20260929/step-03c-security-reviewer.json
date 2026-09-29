@@ -1,0 +1,54 @@
+{
+  "handoff_id": "d93e7393-d8c2-49eb-864a-66cc6a5b828e",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0896-20260929/step-03c-security-reviewer.json",
+  "created_at": "2026-09-29T20:14:36Z",
+  "started_at": "2026-09-29T20:14:36Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["78a80ead-7879-4cc2-9544-d9d23ac10b04"],
+    "artifacts_in": [
+      "web/tests/e2e/helpers.ts",
+      "web/tests/e2e/env04.e2e.spec.ts",
+      "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3c for ISS-0896 -- IN SCOPE per security-reviewer.md's credential-handling clause: this diff changes how master-admin credentials are sourced in test code (replacing hardcoded literals with env-var-backed resolution). Read git diff main...HEAD -- web/tests/e2e/ yourself. For each of INV-1..INV-8 in docs/agents/instructions/security-invariants.md, determine APPLIES or NOT-APPLICABLE. Specifically check: (1) INV-4 (secrets by reference) -- the new KC_ADMIN_USER/KC_ADMIN_PASSWORD env vars must not have a real secret value hardcoded anywhere, only the 'admin'/'admin' LOCAL-DEV fallback, which must be clearly scoped to local dev only, never usable as a silent default against a real QA/staging/prod Keycloak; (2) confirm the fallback mechanism (resolveCredential) cannot accidentally leak a QA/prod credential into a log/error message if the env var IS set but the auth call fails; (3) confirm no new credential-carrying value is written to a file, committed, or logged anywhere in this diff. FAIL immediately on any applicable invariant failing.",
+    "acceptance_criteria": [
+      "all 5 call sites use the new shared getMasterAdminToken helper reading from KC_ADMIN_USER/KC_ADMIN_PASSWORD via resolveCredential, admin/admin local-dev default",
+      "the admin/admin fallback is unambiguously scoped to local dev, not usable as a silent default against a real environment",
+      "no credential value is logged, written to a file, or committed anywhere in this diff"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

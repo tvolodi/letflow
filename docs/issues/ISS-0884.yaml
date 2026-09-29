@@ -1,0 +1,53 @@
+id: ISS-0884
+title: >
+  requirement_status.index.yaml volume-24 entries count and list-item
+  indent defect from a concurrently-landed PR
+discovered_by: MOBILE-DEV
+discovered_in_run: WF02-REQ422-20260929
+discovered_at: "2026-09-29T09:45:00Z"
+tags:
+  - status-bookkeeping
+  - run-history
+  - concurrent-session
+severity: MINOR
+description: >
+  During WF02-REQ422-20260929's Step Final (git merge), a second rebase was
+  needed because PR #1972 (WF03-ISS0878-20260929's RUN_DONE close-out) had
+  concurrently appended two entries directly to
+  docs/status/requirement_status.v24.yaml. While composing both sides of
+  that rebase, MOBILE-DEV (acting as this run's Step-Final agent) found and
+  fixed two real defects in PR #1972's own bookkeeping:
+
+  1. docs/status/requirement_status.index.yaml's volume-24 `entries:` count
+     was left at 0 despite v24.yaml actually holding 2 real on-disk entries
+     by that point.
+  2. v24.yaml's list-item indentation for those two entries used 0-space
+     indent, inconsistent with every other volume's established 2-space
+     convention (per the file's own header/HOW-TO-APPEND section).
+
+  Both were corrected inline as part of REQ-422's own Step Final commit
+  (see handoffs/WF02-REQ422-20260929/step-final-git-merge.json) rather than
+  as a separate fix, since they were encountered mid-rebase-composition,
+  not discovered as a standalone investigation.
+severity_rationale: >
+  MINOR -- cosmetic/count-tracking defect in append-only bookkeeping, with
+  no correctness impact on the actual run-history record's content (the
+  two real entries were present and readable; only the index's summary
+  count and indent style were wrong). Already corrected on `main` as a
+  side effect of REQ-422's own Step Final commit.
+fix_direction: >
+  Not yet root-caused -- filing so the underlying cause (whatever
+  DOC-UPDATER/ORCH append path produced PR #1972's inconsistent entries:
+  count and 0-space indent) gets a look, in case the same append path
+  reproduces the same defect on a future run. Candidate area: whichever
+  append helper/step wrote v24.yaml's opening entries for
+  WF03-ISS0878-20260929 -- confirm it updates
+  requirement_status.index.yaml's entries: count in the same commit as the
+  volume append, and that it uses the same 2-space list-item indent as
+  every prior volume.
+affected_files:
+  - docs/status/requirement_status.index.yaml
+  - docs/status/requirement_status.v24.yaml
+status: open
+queue_ref: Q-883
+github_ref: GH-1977

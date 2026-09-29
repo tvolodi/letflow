@@ -541,3 +541,44 @@
       append -- this is an ISSUE, not a REQ, so no docs/requirements.yaml
       entry is touched. Merged via PR (see PR body for number/merge
       commit).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T21:40:12Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0893
+      (MAJOR, seeded swiftroute "Shipment Approval" v1.0 definition has no
+      key/process_key/process_id, so the swiftroute scenario corpus's
+      proc-swiftroute-shipment-approval process_id could not resolve --
+      KEY_MISMATCH) -- resolved fixture/tooling-side (Option 2 of
+      lib/letflow/design/iss0893-swiftroute-definition-key-mismatch.md), not
+      by adding an app-side key/slug column: process_definitions has no
+      key/slug column, and Letflow.Definitions.get_active_by_name/2 (GET
+      /definitions/active/:name) already resolves by the free-text `name`
+      field, which is the deployed definition's real identifier ("Shipment
+      Approval"). New additive sidecar
+      test/fixtures/uat/process-definition-aliases/proc-swiftroute-shipment-approval.yaml
+      maps the corpus's synthetic process_id to that real definition name,
+      deliberately outside both `mix letflow.check_uat_scenario_schema`'s and
+      scripts/uat_preflight.sh's own scenario-file globs, so the three
+      affected ported/byte-identical scenario files
+      (shipment-ops-timeout-escalation.yaml, shipment-high-value-happy.yaml,
+      shipment-attach-delivery-note.yaml) remain untouched. scripts/
+      uat_preflight.sh's `definitions` check (added by ISS-0894) now consults
+      this alias sidecar to resolve a proc-* scenario's process_id to the
+      real name before calling GET /definitions/active/:name.
+      scripts/seed_swiftroute_definition.sh now echoes the resolved
+      name/key explicitly after seeding, so a future mismatch is visible at
+      seed time rather than only at preflight time. docs/agents/
+      uat-scenario-schema.md's scenario-reading paragraph updated to
+      document the alias-sidecar mechanism. Full gate chain:
+      CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV implement ->
+      REVIEWER PASS -> RELEASE-VALIDATOR PASS. docs/issues/ISS-0893.yaml set
+      to status: resolved (resolved_in_run:
+      fix/ISS-0893-swiftroute-definition-key-mismatch-20260929) in this same
+      append -- this is an ISSUE, not a REQ, so no docs/requirements.yaml
+      entry is touched. Merged via PR #2011 (branch
+      fix/ISS-0893-swiftroute-definition-key-mismatch), squash-merged to
+      main (see PR for merge commit SHA). letflow-queue task Q-893
+      released as done.

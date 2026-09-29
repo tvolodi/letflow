@@ -5021,8 +5021,22 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 13
+    entries: 14
     note: >
+      Bumped to 14 by DOC-UPDATER after appending ISS-0893's SCOPE-CHANGE
+      done-event (fix/ISS-0893-swiftroute-definition-key-mismatch-20260929,
+      2026-09-29T21:40:12Z -- swiftroute "Shipment Approval" definition
+      process_id resolution via a new additive
+      test/fixtures/uat/process-definition-aliases/ sidecar, Option 2 of
+      lib/letflow/design/iss0893-swiftroute-definition-key-mismatch.md;
+      CODE-DESIGN-VALIDATOR, REVIEWER, RELEASE-VALIDATOR all PASSed). Read
+      this index and volume 24 in full immediately before appending and
+      recounted directly rather than trusting the prior note's arithmetic:
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 14
+      on-disk entries (the prior 13 + this done-event); `git diff --numstat`
+      confirmed 0 deletions. 584 lines / 35224 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Bumped to 13 by DOC-UPDATER after appending ISS-0894's SCOPE-CHANGE
       done-event (fix/ISS0894-uat-preflight-actor-realm-check-20260929,
       2026-09-29T22:40:00Z -- uat_preflight.sh exact-name actor matching plus

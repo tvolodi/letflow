@@ -1119,3 +1119,26 @@
       only this issue record and this bookkeeping entry. GitHub issue #1862
       closed with a comment citing ISS-0833 and the real test output. Queue
       task 852 released status: done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-29T04:24:46Z"
+    note: >
+      ISS-0789 (queue task 788, GH#1767) closed out in
+      docs/issues/ISS-0789.yaml -- not a new defect, already fixed and merged
+      on main before this run claimed the queue task. Fix: commit ebf3c31e
+      (PR #1769, 2026-09-24) changed attachment_links_test.exs's
+      flip_last_char/1 to flip a character 8 positions from the end of the
+      base64 signature instead of the last character, guaranteeing the flip
+      lands in a fully-significant sextet rather than a padding-bit boundary
+      (old position: 323/5000 no-op flips in simulation; new position:
+      0/5000). GH-1767 was already closed at fix time; the release_lock step
+      was skipped afterward (same pattern as ISS-0881/ISS-0852 -- see
+      docs/anti-patterns.md), leaving queue task 788 open and re-eligible for
+      five days. ORCH independently re-verified rather than trusting the
+      merged PR alone: `mix test test/letflow/repository/attachment_links_test.exs`
+      run 5 times with distinct --seed values (1-5), real output "12 passed"
+      / 0 failures on every run, no flake observed. No lib/, test/, or
+      docs/status/ data change needed in this run -- only this issue record
+      and this bookkeeping entry, plus the queue release. Queue task 788
+      released status: done.

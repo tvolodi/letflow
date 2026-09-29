@@ -51,4 +51,20 @@ queue_ref: "Q-788"
 # missing-clauses issue. Established, recurring queue-id/filename divergence
 # pattern for this project; queue_ref/github_ref below are authoritative.
 github_ref: "GH-1767"
-status: open
+status: resolved
+resolution: >
+  Already fixed and merged on main before this close-out run picked up queue
+  task 788 -- commit ebf3c31e (PR #1769, 2026-09-24), which flips a character
+  8 positions from the end of the base64 signature (a fully-significant
+  sextet for any signature length this test produces) instead of the last
+  character, guaranteed to change the decoded byte value. The fix's own
+  commit message cites a 5,000-trial simulation showing 0/5000 no-op flips at
+  the new position, vs 323/5000 at the old one. GH-1767 was already closed at
+  fix time; the queue lock/release step was the piece left undone (same
+  release-skipped-after-close pattern as ISS-0881/ISS-0852, see
+  docs/anti-patterns.md), leaving task 788 open and re-eligible. This
+  close-out run independently re-verified: `mix test
+  test/letflow/repository/attachment_links_test.exs` run 5 times with
+  distinct --seed values (1-5), 12/12 tests passed clean on every run, no
+  flake observed. No code change needed in this run -- release-only.
+

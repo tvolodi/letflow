@@ -1,0 +1,52 @@
+{
+  "handoff_id": "c44a1cac-a28b-4574-9749-69d3a1e7f538",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0896-20260929/step-04-test-designer.json",
+  "created_at": "2026-09-29T20:19:05Z",
+  "started_at": "2026-09-29T20:19:05Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "web/tests/e2e/helpers.ts",
+      "web/tests/unit"
+    ],
+    "owned_modules": ["web/tests/unit/"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 for ISS-0896. The fixed code (5 e2e Playwright specs) cannot be run live in this environment (no browser/backend/Keycloak) -- but the NEW shared helper this fix introduces, getMasterAdminToken(request: APIRequestContext) in web/tests/e2e/helpers.ts, has genuinely unit-testable logic: it must call resolveCredential for username/password (env var if set, 'admin'/'admin' fallback if not), POST a fixed client_id: 'admin-cli' form body to the master token endpoint via the injected request object, and throw on a non-2xx response. Write a real vitest unit test at web/tests/unit/e2e-helpers/get-master-admin-token.test.ts (new directory, or reuse an existing web/tests/unit subdirectory if one already tests web/tests/e2e/helpers.ts -- check first) that mocks APIRequestContext.post (a fake object with a post method returning a controllable {ok, status, json} shape, no real network) and asserts: (1) with KC_ADMIN_USER/KC_ADMIN_PASSWORD unset, the POST body's username/password are 'admin'/'admin'; (2) with both env vars set, the POST body's username/password match the env values, not the fallback; (3) on a non-ok response, the function throws (and the thrown error does not itself leak the attempted username/password in its message, matching SECURITY-REVIEWER's own PASS finding); (4) on an ok response, the function returns the access_token from the JSON body.\n\nBecause getMasterAdminToken is a NEW function (no pre-fix version existed to run the test against -- WF-03's own 'pre-fix failure is non-existence' rule applies), the fail-then-pass proof must come from MUTATION rather than a literal pre-fix/post-fix run: apply at least 2 targeted mutants to the shipped helper (e.g. mutant A: hardcode username/password back to literal 'admin'/'admin' ignoring resolveCredential entirely -- must fail test (2); mutant B: remove the throw-on-non-ok check -- must fail test (3)), run the test suite against each mutant, record which specific tests fail for each, then revert every mutation and verify `git status --porcelain web/` is empty and the suite re-runs green. State this all explicitly in result.summary per WF-03's mutation-testing procedure (see docs/agents/workflows/WF-03_issue_resolving.md's 'When the pre-fix failure is code under test does not exist' section -- artifacts_in intentionally does not repeat it here, read it there). Use a throwaway git worktree for applying mutants if you can, to avoid mutating the working checkout at all; otherwise revert in place and verify.",
+    "acceptance_criteria": [
+      "a real, runnable vitest unit test exists for getMasterAdminToken covering the 4 behaviors listed above",
+      "at least 2 targeted mutants were applied and each one's specific test failure(s) recorded",
+      "every mutation was reverted and the revert verified (git status --porcelain web/ empty, suite re-runs green) before this handoff completes",
+      "the thrown-error-on-failure path is confirmed not to leak the attempted credential value in its message"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

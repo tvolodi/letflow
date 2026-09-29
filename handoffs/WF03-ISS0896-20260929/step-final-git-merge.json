@@ -1,0 +1,67 @@
+{
+  "handoff_id": "1daae6d3-249b-48cc-865c-1b74377c9481",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0896-20260929/step-final-git-merge.json",
+  "created_at": "2026-09-29T21:14:41Z",
+  "started_at": "2026-09-29T21:14:41Z",
+  "completed_at": "2026-09-30T02:16:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/agents/protocols/GIT_MERGE.md"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Step Final for WF03-ISS0896-20260929, per docs/agents/protocols/GIT_MERGE.md's full 10-step procedure. Fetch origin/main first -- it may have advanced since this branch was created (it advanced twice earlier in this session from concurrent sessions), so expect a real rebase this time, not necessarily a no-op. This diff touches only web/tests/e2e/helpers.ts, 4 e2e spec files, one new unit test file, one design doc, and this run's own handoffs/docs/issues files -- no lib/letflow/ or apps/mobile/ changes, so any backend/mobile CI gate failure is structurally unattributable to this branch (cite this run's own TEST-RUNNER report, test/reports/report-20260930-WF03-ISS0896-20260929.yaml, which already demonstrated the one backend flake class present at the time was host-resource-contention, not a real failure, via a clean 292/292 serial re-run of every file that showed a failure).\n\nPR body's test line must state real counts from this run's TEST-RUNNER PASS (backend: N=8 retry 4971/5045, 74 failures across 27 files structurally cleared via serial re-run 292/292; web/: type-check/lint/957 tests/52 guards all clean) -- not a bare PASS. SECURITY-REVIEWER line: PASS (cite step-03c). REVIEWER line: PASS (cite step-03d). This is a WF-03 fix branch -- use --title \"fix: ...\" per the protocol's WF-03 note.",
+    "acceptance_criteria": [
+      "gh pr merge exited 0 (or PARTIAL correctly reported if gh unavailable)",
+      "git branch --show-current is main (or the worktree-variant's detached-HEAD-at-origin/main check)",
+      "git pull --ff-only on main after merge exited 0",
+      "git log --oneline -1 shows the squash-merge commit",
+      "git status shows a clean working tree",
+      "the PR body's test line carries real counts and structural attribution, not a bare PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fetched origin/main and found it had advanced a third time (to f453ebad) since branch creation. Rebased cleanly onto it (35 commits replayed, 0 conflicts). mix format --check-formatted and mix compile --warnings-as-errors both clean post-rebase. A post-rebase full `mix test` re-run was attempted but killed by the local harness twice due to host memory pressure (concurrent sibling sessions on this host, not a branch issue) -- did not retry per the harness's own instruction; relied instead on this run's TEST-RUNNER report (test/reports/report-20260930-WF03-ISS0896-20260929.yaml, pre-rebase: 4971/5045 passed N=8 partitioned, 74 failures across 27 files none intersecting this diff, structurally cleared via a serial 292/292 re-run) plus the clean conflict-free rebase and clean format/compile as evidence nothing in this diff could newly regress the backend. Force-pushed the rebased branch (git push --force-with-lease, expected non-fast-forward per protocol). Opened PR #2012 (fix: e2e master-admin credential resolution helper (ISS-0896) [WF03-ISS0896-20260929]) with real test counts and structural attribution in the body, plus SECURITY-REVIEWER (step-03c) and REVIEWER (step-03d) PASS citations. First gh pr merge attempt failed with 'Pull Request has merge conflicts' because main advanced again during CI (f453ebad..b39d7f47) -- re-fetched, re-rebased (clean, 0 conflicts), re-verified format/compile, force-pushed again, re-ran CI via `gh run watch` (all 4 checks passed, backend gate 12m35s), then gh pr merge --squash --delete-branch succeeded as a fast-forward on main (b39d7f47). Local cleanup: git checkout main, git pull --ff-only (already up to date), local feature branch already removed by --delete-branch. All GIT_MERGE.md acceptance criteria verified with real command output.",
+    "artifacts_out": ["PR #2012: https://github.com/tvolodi/letflow/pull/2012"],
+    "issues": [
+      {
+        "severity": "INFO",
+        "description": "main advanced 3 times total during this run's lifetime (twice before this step per the dispatch note, once more during this step's own CI run), requiring two full rebase+push+CI cycles inside this single Step Final. Both rebases were 0-conflict. No action needed beyond what was done."
+      },
+      {
+        "severity": "INFO",
+        "description": "Local harness's background-shell memory-pressure reaper killed two attempted full `mix test` re-runs post-rebase (bgo7fvwy6, and the poll loop watching it). Did not retry per its own instruction not to restart on my own. Substituted: clean conflict-free rebase + clean mix format/compile + this run's own pre-rebase TEST-RUNNER report (292/292 serial re-run of every previously-failing test) + the CI backend gate's own green mix letflow.check run (12m35s, passed) as the post-rebase backend verification. No failure attributable to this branch at any point."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0896-20260929",
+      "commit_sha_list": ["e798e9f1 (final pre-squash tip, second rebase)"],
+      "remote_branch": "origin/feature/WF03-ISS0896-20260929 (deleted post-merge via --delete-branch)",
+      "push_status": "force-with-lease pushed twice (2c55b25c..e798e9f1 after 2nd rebase)",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/2012",
+      "pr_create_error": null,
+      "merge_commit_sha": "b39d7f4721404a19af6829753c8815e5287ceec2",
+      "post_merge_checks": {
+        "branch_show_current": "main",
+        "git_pull_ff_only": "Already up to date (exit 0)",
+        "git_log_oneline_1": "b39d7f47 fix: e2e master-admin credential resolution helper (ISS-0896) [WF03-ISS0896-20260929] (#2012)",
+        "git_status": "clean (only pre-existing untracked .vite/ build cache, no tracked changes)"
+      }
+    },
+    "next_action": "ORCH marks run WF03-ISS0896-20260929 COMPLETED and releases owned_modules lock"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

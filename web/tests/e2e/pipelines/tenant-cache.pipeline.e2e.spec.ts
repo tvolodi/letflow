@@ -124,7 +124,7 @@ import {
   resolveTenantContext,
   shot,
 } from '../pipeline'
-import { assertServiceReadiness, resolveCredential, BPM_IDP_BASE_URL } from '../helpers'
+import { assertServiceReadiness, resolveCredential, BPM_IDP_BASE_URL, getMasterAdminToken } from '../helpers'
 import {
   runSqlAgainstDevPostgres,
   insertTenantMembershipSql,
@@ -194,19 +194,10 @@ test.describe('Pipeline: tenant-switch-cache-isolation (PW-15)', () => {
       }
       if (s.tenantBSlug) {
         try {
-          const masterTokenResp = await request.post(
-            `${BPM_IDP_BASE_URL}/realms/master/protocol/openid-connect/token`,
-            {
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              form: { client_id: 'admin-cli', username: 'admin', password: 'admin', grant_type: 'password' },
-            },
-          )
-          if (masterTokenResp.ok()) {
-            const masterToken = ((await masterTokenResp.json()) as { access_token: string }).access_token
-            await request.delete(`${BPM_IDP_BASE_URL}/admin/realms/${s.tenantBSlug}`, {
-              headers: { Authorization: `Bearer ${masterToken}` },
-            })
-          }
+          const masterToken = await getMasterAdminToken(request)
+          await request.delete(`${BPM_IDP_BASE_URL}/admin/realms/${s.tenantBSlug}`, {
+            headers: { Authorization: `Bearer ${masterToken}` },
+          })
         } catch { /* best-effort cleanup only */ }
       }
     })

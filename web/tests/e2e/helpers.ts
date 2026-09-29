@@ -67,6 +67,39 @@ export async function getKeycloakToken(
   return body.access_token
 }
 
+/**
+ * Obtain a JWT access token from Keycloak's MASTER realm via the built-in
+ * admin-cli client (password grant). Distinct from `getKeycloakToken`, which
+ * authenticates against the `bpm-default`/tenant realm as an application user.
+ *
+ * Username/password resolve via `resolveCredential`:
+ *   - `KC_ADMIN_USER`     (fallback: 'admin')
+ *   - `KC_ADMIN_PASSWORD` (fallback: 'admin')
+ *
+ * Throws (does not return a boolean/undefined) when the token request does
+ * not return 2xx.
+ */
+export async function getMasterAdminToken(request: APIRequestContext): Promise<string> {
+  const masterTokenUrl = `${BPM_IDP_BASE_URL}/realms/master/protocol/openid-connect/token`
+  const response = await request.post(masterTokenUrl, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    form: {
+      client_id: 'admin-cli',
+      username: resolveCredential('KC_ADMIN_USER', 'admin'),
+      password: resolveCredential('KC_ADMIN_PASSWORD', 'admin'),
+      grant_type: 'password',
+    },
+  })
+
+  if (!response.ok()) {
+    const body = await response.text()
+    throw new Error(`Keycloak master token request failed: ${response.status()} ${body}`)
+  }
+
+  const body = await response.json() as { access_token: string }
+  return body.access_token
+}
+
 /** Decode a JWT payload without verification. */
 function decodeJwtPayload(token: string): { sub: string; roles?: string[]; preferred_username?: string; name?: string; email?: string } {
   return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf-8'))

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0896-20260929/step-03-frontend-dev.json",
   "created_at": "2026-09-29T20:10:33Z",
   "started_at": "2026-09-29T20:10:33Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T20:13:48Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -39,18 +39,24 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Added shared `getMasterAdminToken(request: APIRequestContext): Promise<string>` export to web/tests/e2e/helpers.ts, sourcing KC_ADMIN_USER/KC_ADMIN_PASSWORD via the existing resolveCredential helper with 'admin'/'admin' local-dev fallback, client_id fixed literal 'admin-cli', throws on non-2xx. Replaced all 5 call sites: attachment-cross-tenant.pipeline.e2e.spec.ts (deleted its local getMasterAdminToken, now imports the shared one, call site at line 457), shipment-attach-delivery-note.pipeline.e2e.spec.ts (deleted its local duplicate, imports shared one, call site at line 311), tenant-cache.pipeline.e2e.spec.ts (inline call in pl.onCleanup replaced with shared helper call inside the existing try/catch), env04.e2e.spec.ts (both inline sites replaced; site #1 in onboardTestTenantFixture wrapped in a new local try/catch that preserves the function's existing graceful degradation -- console.warn + return undefined on failure -- since the shared helper throws instead of returning a failure sentinel like the old inline block did; site #2 in cleanupOnboardedTestTenantFixture left inside its pre-existing outer try/catch, which already swallows a thrown error, so best-effort cleanup semantics are unchanged; also removed the now-dead `keycloakMasterUrl` local, confirmed unused elsewhere in the function). Both duplicated local helpers are fully removed, not left dead. Self-review: no hardcoded API base URL introduced, no new state-management/build tool, credential handling matches the existing resolveCredential pattern exactly (same call shape as UAT_QA_ADMIN_PASSWORD's usage). Verification: `npm run type-check` (tsc -b) -- clean, zero errors. `npm run lint` (eslint --max-warnings 0 --report-unused-disable-directives) -- clean, zero warnings/errors (this also confirms no unused imports were left behind after removing the two local helpers). No live Playwright/browser/Keycloak run was performed or claimed -- this environment has no running Playwright browser, backend, or Keycloak instance; verification is limited to static type-check/lint on the changed files as instructed.",
+    "artifacts_out": [
+      "web/tests/e2e/helpers.ts",
+      "web/tests/e2e/env04.e2e.spec.ts",
+      "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0896-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (touches credential handling) then REVIEWER"
   },
   "rework_count": 0,
   "max_rework": 3

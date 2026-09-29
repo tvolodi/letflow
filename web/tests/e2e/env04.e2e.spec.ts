@@ -30,7 +30,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import * as fs from 'fs'
 import * as path from 'path'
 import { randomUUID } from 'crypto'
-import { getKeycloakToken, loginWithToken, assertServiceReadiness, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
+import { getKeycloakToken, loginWithToken, assertServiceReadiness, getMasterAdminToken, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -468,7 +468,6 @@ async function onboardTestTenantFixture(
   const testDisplayName = `ENV-04C Test ${uid}`
   const testAdminUsername = `env04c-admin-${uid}`
   const testAdminPassword = `TestPass1!${uid}`
-  const keycloakMasterUrl = `${BPM_IDP_BASE_URL}/realms/master/protocol/openid-connect/token`
 
   // ── Step 1: Onboard the production tenant ────────────────────────────────────
 
@@ -574,16 +573,19 @@ async function onboardTestTenantFixture(
 
   // ── Step 5: Reset test admin user password via Keycloak admin API ─────────────
 
-  // Get Keycloak master admin token (credentials from docker-compose.yml)
-  const masterTokenResp = await request.post(keycloakMasterUrl, {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    form: { client_id: 'admin-cli', username: 'admin', password: 'admin', grant_type: 'password' },
-  })
-  if (!masterTokenResp.ok()) {
-    console.warn(`[ENV-04C] Keycloak master token failed: ${masterTokenResp.status()}`)
+  // Get Keycloak master admin token (credentials from docker-compose.yml, or
+  // KC_ADMIN_USER/KC_ADMIN_PASSWORD -- see getMasterAdminToken in helpers.ts).
+  // getMasterAdminToken throws on failure; this function's contract degrades
+  // gracefully (logs + returns undefined) on every other failure branch above,
+  // so preserve that shape here with a local try/catch rather than letting the
+  // throw propagate.
+  let masterToken: string
+  try {
+    masterToken = await getMasterAdminToken(request)
+  } catch (err) {
+    console.warn(`[ENV-04C] Keycloak master token failed: ${(err as Error).message}`)
     return undefined
   }
-  const masterToken = ((await masterTokenResp.json()) as { access_token: string }).access_token
 
   // reset-password for the test admin user
   const resetResp = await request.put(
@@ -639,20 +641,11 @@ async function cleanupOnboardedTestTenantFixture(
 ): Promise<void> {
   if (!fixture) return
   try {
-    const masterTokenResp = await request.post(
-      `${BPM_IDP_BASE_URL}/realms/master/protocol/openid-connect/token`,
-      {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        form: { client_id: 'admin-cli', username: 'admin', password: 'admin', grant_type: 'password' },
-      },
-    )
-    if (masterTokenResp.ok()) {
-      const masterToken = ((await masterTokenResp.json()) as { access_token: string }).access_token
-      // Delete the test tenant's Keycloak realm (best-effort; production realm has no delete in BPM API)
-      await request.delete(`${BPM_IDP_BASE_URL}/admin/realms/${fixture.keycloakRealmId}`, {
-        headers: { Authorization: `Bearer ${masterToken}` },
-      })
-    }
+    const masterToken = await getMasterAdminToken(request)
+    // Delete the test tenant's Keycloak realm (best-effort; production realm has no delete in BPM API)
+    await request.delete(`${BPM_IDP_BASE_URL}/admin/realms/${fixture.keycloakRealmId}`, {
+      headers: { Authorization: `Bearer ${masterToken}` },
+    })
   } catch {
     // Best-effort cleanup; don't fail the suite.
   }

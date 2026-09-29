@@ -1354,6 +1354,70 @@ defmodule Letflow.SandboxPoolTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0881 regression: sandbox_schema_names()-based leak checks must tolerate a
+  # DIFFERENT scripts/test_parallel.sh OS-process partition's own, unrelated SandboxPool
+  # activity landing inside this test's own baseline-to-final window. See
+  # lib/letflow/design/iss0881-sandbox-pool-test-isolation.md and
+  # handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json for the root-cause
+  # diagnosis and test/specs/ISS-0881.md for the acceptance-criteria rationale.
+  #
+  # The real bug only manifests under genuine full-suite, multi-OS-process contention
+  # (ISSUE-FIXER's own 18-iteration reproduction rig did not reliably reproduce it live),
+  # so this test does not try to recreate that contention. Instead it DETERMINISTICALLY
+  # simulates the exact mechanism: it injects an extraneous, unrelated `sandbox_%` schema
+  # into real Postgres, via a raw connection, in the same window a concurrent partition's
+  # own pool would occupy -- between this test's own `baseline` capture and its `final`
+  # read. This reproduces, on demand and in a single process, exactly what an unrelated
+  # concurrent partition's own schema churn would do to a platform-wide snapshot.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0881 regression: scoped leak checks tolerate a concurrent partition's unrelated schema churn" do
+    test "an unrelated sandbox_% schema created during the baseline-to-final window does not fail the scoped no-leak check" do
+      baseline = sandbox_schema_names()
+      on_exit(fn -> drop_sandbox_schemas_created_since!(baseline) end)
+
+      pool = start_pool!(max_concurrent: 1)
+
+      assert {:ok, %SandboxClaim{sandbox_id: sandbox_id, schema_name: o_schema}} =
+               SandboxPool.claim(1_000, pool)
+
+      assert :ok = SandboxPool.release(sandbox_id, pool)
+
+      # The pool's own drop is real and synchronous by the time release/2 returns (see
+      # `describe "release/1,2"` above): O's schema is genuinely gone from Postgres before
+      # the injected noise below, so this test's own leak check is not vacuous.
+      refute schema_exists?(o_schema)
+
+      # DETERMINISTIC INJECTION (ISS-0881's simulated race): mint and create an
+      # extraneous, unrelated `sandbox_%` schema directly via a raw connection, standing
+      # in for a different scripts/test_parallel.sh partition's own SandboxPool activity
+      # landing inside this exact baseline-to-final window. Its own `on_exit` cleans it
+      # up UNCONDITIONALLY -- not inside `drop_sandbox_schemas_created_since!/1`'s best
+      # effort sweep, so a bug in that helper can never leave this noise schema behind.
+      noise_schema = "sandbox_noise_test_#{System.unique_integer([:positive, :monotonic])}"
+      Repo.query!(~s(CREATE SCHEMA "#{noise_schema}"))
+      on_exit(fn -> drop_schema!(noise_schema) end)
+      assert schema_exists?(noise_schema)
+
+      final = sandbox_schema_names()
+
+      # THE ISS-0881 FIX UNDER TEST: a scoped membership check against the one schema this
+      # test's own pool minted, exactly as ISS-0881's fix reframed every call site in this
+      # file (design doc §1, "General rule applied throughout"). This must hold even
+      # though `final` now also contains `noise_schema`, which this test's own pool never
+      # touched -- `final != baseline` here (noise_schema is a genuine, real difference),
+      # so a platform-wide `assert final == baseline` (the pre-ISS-0881-fix shape) is
+      # exactly what this injected noise is built to break; see this test's own fail-first
+      # proof for that mutant in this run's TEST-DESIGNER handoff.
+      refute MapSet.member?(final, o_schema)
+      assert MapSet.member?(final, noise_schema)
+      refute final == baseline
+
+      assert Process.alive?(pool)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # ISS-0226 regression: an unrecognized run_op/1 return (a fifth shape complete_op/3
   # was never written to accept) must not crash the pool via a FunctionClauseError
   # inside handle_info/2. Direct state injection via :sys.replace_state/2 -- the write

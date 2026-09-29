@@ -5021,8 +5021,20 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 9
+    entries: 10
     note: >
+      Bumped to 10 by DOC-UPDATER after appending REQ-426's done-event
+      (WF02-REQ426-20260929, 2026-09-29T18:58:39Z -- MOB-4 part 1
+      renderer state framework + list renderer closed; RELEASE-VALIDATOR:
+      DONE, no gaps). Re-read this index and volume 24 immediately before
+      appending and recounted directly rather than trusting the prior
+      note's arithmetic: `grep -c "^  - req:"
+      docs/status/requirement_status.v24.yaml` = 10 on-disk entries (the
+      prior 9 + this done-event), confirming no concurrent append landed
+      since the last confirmed count of 9. 412 lines / 24898 bytes,
+      well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered.
+
       Bumped to 9 by DOC-UPDATER after appending REQ-425's done-event
       (WF02-REQ425-20260929, 2026-09-29T18:05:00Z -- MOB-6 single API
       client hardening closed; RELEASE-VALIDATOR's fresh Step 05 recheck

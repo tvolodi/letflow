@@ -493,3 +493,51 @@
       now correctly reported as a permanent structural GAP rather than
       attempted/failed on every future QA UAT preflight run. Merged via PR
       (see PR body for number/merge commit).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T22:40:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0894
+      (MINOR, scripts/uat_preflight.sh actor matching was a name heuristic;
+      needed to support realm-qualified actor-<realm>-<name> accounts from
+      ai-dala-infra qa-uat-env.sh and check app-side roles/definitions, not
+      just token validity) -- resolved: actors check now tries an exact
+      scenario-actor-id match first (e.g. actor-swiftroute-lena), falling
+      back to the existing <name>-prefix heuristic for environments that
+      haven't adopted the exact-name convention. parse_scenario now returns
+      actor_labels so two new checks can run: app_roles (GET
+      /api/v1/tasks/inbox, or /api/v1/me/modules for candidate-labeled
+      actors -- 403 is a GAP pointing at ISS-0886) and definitions (for
+      proc-* scenarios, GET /api/v1/definitions/active/<process_id> -- 404
+      is a GAP pointing at ISS-0893/ISS-0897, 403/no-token is UNKNOWN,
+      fail-safe). CHECKS gains app_roles/definitions purely additively.
+      docs/agents/uat-scenario-schema.md's scenario-reading paragraph
+      updated to match. Does not vendor ai-dala-infra's qa-uat-env.sh or
+      touch the --credential-source protocol boundary (Decision 4). REVIEWER
+      caught a real bug on the first implementation (commit a98f7297): the
+      app_roles check built its request without the /api/v1 prefix
+      (base + "/me/modules" / base + "/tasks/inbox"), but Letflow.Router
+      only forwards /api/v1/... to Letflow.Plugs.ApiPipeline, so the bare
+      paths always 404'd through the catch-all and the 403 -> GAP branch was
+      dead code, only ever reporting UNKNOWN. ELIXIR-DEV fixed it in commit
+      bfb965ad (GET /api/v1/tasks/inbox and /api/v1/me/modules, matching
+      every other call in the file), also correcting the design doc's
+      Decision 1 mount-relative-shorthand text that likely caused the bug.
+      Full gate chain: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS (all
+      load-bearing endpoint claims verified) -> ELIXIR-DEV implement ->
+      REVIEWER FAIL (found the missing /api/v1 prefix dead-code bug) ->
+      ELIXIR-DEV fix -> REVIEWER PASS on re-check (independent router-trace
+      verification) -> RELEASE-VALIDATOR PASS, with its own live stub-server
+      run (throwaway local IDP+app stub, 127.0.0.1:8765) independently
+      confirming both the app_roles OK and GAP branches now work correctly,
+      i.e. the original bug is genuinely resolved. `mix
+      letflow.check_uat_scenario_schema` and `mix compile
+      --warnings-as-errors` both confirmed clean (no Elixir application code
+      touched, script + docs only). docs/issues/ISS-0894.yaml set to status:
+      resolved (resolved_in_run:
+      fix/ISS0894-uat-preflight-actor-realm-check-20260929) in this same
+      append -- this is an ISSUE, not a REQ, so no docs/requirements.yaml
+      entry is touched. Merged via PR (see PR body for number/merge
+      commit).

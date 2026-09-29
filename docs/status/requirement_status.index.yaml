@@ -5021,8 +5021,20 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 12
+    entries: 13
     note: >
+      Bumped to 13 by DOC-UPDATER after appending ISS-0894's SCOPE-CHANGE
+      done-event (fix/ISS0894-uat-preflight-actor-realm-check-20260929,
+      2026-09-29T22:40:00Z -- uat_preflight.sh exact-name actor matching plus
+      new app_roles/definitions app-side checks; REVIEWER caught and
+      ELIXIR-DEV fixed a real missing-/api/v1-prefix dead-code bug;
+      RELEASE-VALIDATOR PASS with its own live stub-server verification of
+      both branches). Re-read this index and volume 24 immediately before
+      appending and recounted directly rather than trusting the prior note's
+      arithmetic: `grep -c "^  - req:" docs/status/requirement_status.v24.yaml`
+      = 13 on-disk entries (the prior 12 + this done-event), confirming no
+      concurrent append landed since the last confirmed count of 12.
+
       Bumped to 12 by DOC-UPDATER after appending ISS-0895's SCOPE-CHANGE
       done-event (fix/ISS0895-swiftroute-uat-scenario-env-limitation-20260929,
       2026-09-29T21:35:00Z -- swiftroute tenant-onboarding-happy UAT scenario

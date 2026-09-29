@@ -1023,12 +1023,12 @@
       (was 44). REQ-421 remains status: done; this is a test-coverage
       addition, not a re-open.
 
-  - req: ISS-0879
+  - req: SCOPE-CHANGE
     event: done
     agent: ORCH
     at: 2026-09-29T00:42:33Z
     note: >
-      WF03-ISS0879-20260929 closed. Root cause: test/support/tenant_template.ex's
+      ISS-0879 (WF03-ISS0879-20260929) closed. Root cause: test/support/tenant_template.ex's
       throwaway `tenant_template_build_*` Registration rows kept
       `migrations_applied_at` set (a real, committed write under Sandbox
       :auto mode) for a nontrivial window between `replay_migrations/2`

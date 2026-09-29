@@ -35,9 +35,19 @@
 # Actor -> credential heuristic (best effort, documented in WF-05 Step 0):
 #   actor-platform-admin        -> needs a seeded PLATFORM_ADMIN user (qa-login "admin-user")
 #   actor-system-* / actor-any  -> not a login (system/any); not checked
-#   actor-<tenant>-<name>       -> needs a seeded username starting "<name>-" (or == "<name>")
-#                                  able to log in to Keycloak realm <tenant> or bpm-default
+#   actor-<tenant>-<name>       -> exact match first: a seeded username equal to the full
+#                                  actor id (e.g. "actor-swiftroute-lena") is tried before
+#                                  falling back to the older heuristic (a seeded username
+#                                  starting "<name>-", or == "<name>"); either way it must be
+#                                  able to log in to Keycloak realm <tenant> or bpm-default.
+#                                  See ISS-0894.
 #   anything else               -> UNKNOWN
+#
+# Beyond token validity, two further per-scenario checks (ISS-0894) use the token(s)
+# obtained above: `app_roles` (GET /tasks/inbox, or /me/modules for candidate-labeled
+# actors -- 403 there is a role-binding gap, see ISS-0886) and `definitions` (GET
+# /api/v1/definitions/active/<process_id> for proc-* process ids -- 404 there is a
+# definition-resolution gap, see ISS-0893/ISS-0897).
 set -uo pipefail
 
 PY=""
@@ -132,6 +142,11 @@ def parse_scenario(path):
         d["actors"] = acts
     actors = d.get("actors") or {}
     actor_ids = sorted({v for v in actors.values() if isinstance(v, str) and v.startswith("actor-")}) if isinstance(actors, dict) else []
+    actor_labels = {}  # aid -> [label, ...]
+    if isinstance(actors, dict):
+        for label, aid in actors.items():
+            if isinstance(aid, str) and aid.startswith("actor-"):
+                actor_labels.setdefault(aid, []).append(label)
     tenant = d.get("company_id") or d.get("scope")
     if d.get("scope") and d.get("scope") != "platform": tenant = d["scope"]
     # forward-reference / unbuilt-feature NOTE comments
@@ -145,6 +160,7 @@ def parse_scenario(path):
         "process_id": d.get("process_id") if d.get("process_id") not in (None, "n/a") else None,
         "pipeline_test": d.get("pipeline_test"),
         "actor_ids": actor_ids,
+        "actor_labels": actor_labels,
         "fwd_spec": fwd_spec, "unbuilt": unbuilt,
     }
 
@@ -295,7 +311,7 @@ else:
     tenants_reason = "no valid PLATFORM_ADMIN token (credential check failed)"
 
 # ---------------------------------------------------------------- per-scenario checks
-CHECKS = ["spec", "local_deps", "feature", "tenant", "realm", "actors", "env_limitation"]
+CHECKS = ["spec", "local_deps", "feature", "tenant", "realm", "actors", "app_roles", "definitions", "env_limitation"]
 rows = []
 def spec_path(s): return os.path.join(REPO, s["pipeline_test"]) if s["pipeline_test"] else None
 
@@ -337,6 +353,7 @@ for s in scenarios:
     c["realm"] = ("OK", "realm '%s' reachable" % slug, "") if rs == 200 else \
         ("GAP", "realm '%s' -> HTTP %s" % (slug, rs), "ai-dala-infra (create realm)")
     # actors
+    scenario_ok_tokens = []  # (aid, [label, ...], access_token) -- ISS-0894 Decision 1
     if cred_listing is None:
         c["actors"] = ("UNKNOWN", "credential source unusable: %s" % cred_err, "ai-dala-infra")
     else:
@@ -347,13 +364,19 @@ for s in scenarios:
             if aid == "actor-platform-admin":
                 users = [u for u in cred_listing if u == "admin-user"]
             else:
-                m = re.match(r"actor-([a-z0-9]+)-([a-z0-9]+)$", aid)
-                if not m: unknown.append(aid); continue
-                nm = m.group(2)
-                users = [u for u in cred_listing if u == nm or u.startswith(nm + "-")]
+                # exact-name match first (ai-dala-infra T-0150 realm-qualified accounts,
+                # ISS-0894 Decision 2), old prefix heuristic kept as fallback.
+                if aid in cred_listing:
+                    users = [aid]
+                else:
+                    m = re.match(r"actor-([a-z0-9]+)-([a-z0-9]+)$", aid)
+                    if not m: unknown.append(aid); continue
+                    nm = m.group(2)
+                    users = [u for u in cred_listing if u == nm or u.startswith(nm + "-")]
             if not users: missing.append(aid); continue
             state, _r = try_login(users[0], realms_for(users[0], [t]))
             if state != "OK": bad.append("%s(%s)" % (aid, state))
+            else: scenario_ok_tokens.append((aid, s["actor_labels"].get(aid, []), tokens[users[0]][1]))
         if missing or bad:
             reason = []
             if missing: reason.append("no seeded user: " + ", ".join(missing))
@@ -363,6 +386,46 @@ for s in scenarios:
             c["actors"] = ("UNKNOWN", "cannot map: " + ", ".join(unknown), "")
         else:
             c["actors"] = ("OK", "%d login actor(s) resolved & token valid" % need if need else "no login actors needed", "")
+    # app_roles: beyond token validity, check the app-side role binding actually
+    # grants a route (ISS-0886-class gap) -- ISS-0894 Decision 1/"app_roles endpoint choice".
+    if not scenario_ok_tokens:
+        c["app_roles"] = ("UNKNOWN", "no authenticated actor token available for this tenant to check app-side role binding", "")
+    else:
+        ok, gap, unk = [], [], []
+        for aid, labels, tok in scenario_ok_tokens:
+            is_candidate = any("candidate" in (lbl or "").lower() for lbl in labels)
+            path = "/api/v1/me/modules" if is_candidate else "/api/v1/tasks/inbox"
+            st_, _ = http("GET", base + path, auth(tok))
+            if st_ == 200: ok.append("%s(%s)" % (aid, path))
+            elif st_ == 403: gap.append("%s(%s@%s)" % (aid, st_, path))
+            else: unk.append("%s(%s@%s)" % (aid, st_, path))
+        if gap:
+            c["app_roles"] = ("GAP", "role not bound: " + ", ".join(gap),
+                               "letflow (ISS-0886 role backfill; run mix letflow.backfill_platform_roles)")
+        elif unk:
+            c["app_roles"] = ("UNKNOWN", "unexpected result: " + ", ".join(unk), "")
+        else:
+            c["app_roles"] = ("OK", "%d actor(s) app-role bound" % len(ok), "")
+    # definitions: process_id resolution -- ISS-0894 Decision 3.
+    pid = s["process_id"]
+    if not pid or pid == "n/a" or not pid.startswith("proc-"):
+        c["definitions"] = ("OK", "no proc-* process_id declared (n/a, or a sys-* platform mechanism label, not a deployable definition)", "")
+    elif not scenario_ok_tokens:
+        c["definitions"] = ("UNKNOWN", "no authenticated actor token available for this tenant to check definition resolution", "")
+    else:
+        tok = scenario_ok_tokens[0][2]
+        st_, _ = http("GET", base + "/api/v1/definitions/active/" + urllib.parse.quote(pid, safe=""), auth(tok))
+        if st_ == 200:
+            c["definitions"] = ("OK", "GET /definitions/active/%s -> 200" % pid, "")
+        elif st_ == 404:
+            c["definitions"] = ("GAP",
+                "process definition '%s' does not resolve via GET /definitions/active/:name "
+                "(see ISS-0893 null-key / ISS-0897 meridian-vortex definitions not yet seeded)" % pid,
+                "letflow (ISS-0893 key resolution) / ai-dala-infra (ISS-0897 seed meridian/vortex definitions)")
+        elif st_ == 403:
+            c["definitions"] = ("UNKNOWN", "actor token lacks DefinitionsRead; cannot check definition resolution", "")
+        else:
+            c["definitions"] = ("UNKNOWN", "GET /definitions/active/%s -> %s" % (pid, st_), "")
     # env_limitation: additive, independent of tenant/realm/actors above -- ISS-0895.
     # Status stays OK/GAP (matching every other check's convention, and the
     # counts/ready aggregation below, which only knows OK/GAP/UNKNOWN) -- the sidecar's

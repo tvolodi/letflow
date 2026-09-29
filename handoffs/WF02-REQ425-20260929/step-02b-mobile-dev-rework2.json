@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-02b-mobile-dev-rework2.json",
   "created_at": "2026-09-29T12:42:58Z",
   "started_at": "2026-09-29T12:42:58Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T13:45:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S9",
@@ -41,18 +41,21 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Closed the retry-dispatch-time cross-tenant race SECURITY-REVIEWER's recheck1 flagged (issues[0] of step-02c-security-reviewer-recheck1.json), one step later than rework 1's fix. Root cause: _handleUnauthorized's pre-fetch check (issuedForRealm != _activeRealm.currentRealmUrl) ran synchronously right before `await _dio.fetch(retriedOptions)`, but dio 5.11.1 schedules the retry's interceptor chain via a real event-loop turn -- _bearerInterceptor did its own fresh, unguarded read of activeRealm.currentRealmUrl at that later point and never consulted the issuedForRealm tag, so a tenant switch/logout landing in that window could dispatch the retry carrying the new tenant's bearer token.\n\nFix (option (a) from the handoff): _bearerInterceptor (apps/mobile/lib/api/api_client.dart) now detects, via `options.extra.containsKey(_kIssuedForRealmKey)`, whether a request passing through it is a retry re-dispatch (the tag is only ever set by this same interceptor's first, non-retry pass). On a retry, it re-verifies the tag against `activeRealm.currentRealmUrl` read fresh, right there, immediately before deciding whether to attach any token, and calls `handler.reject` with a new `_CrossTenantRetryAbortedException` sentinel on mismatch -- the request never reaches the transport layer. `_handleUnauthorized`'s catch around `_dio.fetch` now recognizes that sentinel and throws `UnauthorizedError` directly (rather than falling through to `classifyError`'s generic null-status-code -> NetworkUnavailableError path). The realm value used for the token-store read and header attach is the single `realmUrl` local captured once per pass -- never re-read from `activeRealm` after the intervening `await tokenStore.read` -- so that await's own suspension cannot let a different tenant's token slip in even after the check passes.\n\nAdded a regression test ('cross-tenant retry-dispatch race (rework 2)' group in apps/mobile/test/api/api_client_hardening_test.dart) that lands the tenant switch/logout in the exact window this defect lived in: a custom interceptor is registered on the test's Dio instance BEFORE ApiClient.forTesting adds its own bearer interceptor (interceptors run in registration order), so it always runs first. It flips the active tenant the second time it sees a given request path -- i.e. on the retry, never the original 401'd request -- which lands squarely after _handleUnauthorized's pre-fetch check has already passed (synchronous, no await before `_dio.fetch`) but strictly before the bearer interceptor's own re-read. This is deliberately not appAuthAdapter.duringRefresh, which only covers the earlier, already-fixed in-flight-refresh window (rework 1's regression tests, still present and still passing). The new test asserts: refreshCallCount == 1 (refresh itself succeeded, unlike rework 1's tests), fakeAdapter.requests has length 1 (the retry never reaches the transport layer at all), the new tenant acquires no tokens, and loginRouteCallCount stays 0 (aborting a stale retry is not the new tenant's auth failure).\n\nRe-ran the full suite (not just the new test) per the handoff's instruction to re-verify the whole diff: `cd apps/mobile && flutter analyze` -> 'No issues found! (ran in 14.3s)'. `flutter test` -> 'All 115 tests passed!', including both rework-1 cross-tenant-refresh-race tests, all AC1-AC5 tests, and the new rework-2 regression test (test 31 of 115 in the run).",
+    "artifacts_out": [
+      "apps/mobile/lib/api/api_client.dart",
+      "apps/mobile/test/api/api_client_hardening_test.dart"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "branch_name": "feature/WF02-REQ425-20260929",
+      "commit_sha_list": ["1ab4af283c25b45fb96b20500e56133efc9c8281"],
+      "remote_branch": "origin/feature/WF02-REQ425-20260929",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (2c) for a fresh full re-review"
   },
   "rework_count": 2,
   "max_rework": 3

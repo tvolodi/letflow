@@ -6,6 +6,8 @@
 /// full design this file implements.
 library;
 
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -424,11 +426,22 @@ class _ListRendererRootState extends ConsumerState<_ListRendererRoot> {
     super.didChangeDependencies();
     if (_startedLoad) return;
     _startedLoad = true;
-    final controller = ref.read(listRendererControllerProvider(widget.entityType));
-    // Fire-and-forget — `loadFirstPage` itself sets `RendererLoading`
-    // synchronously before its first `await`, so the very first `build`
-    // below already observes that state.
-    controller.loadFirstPage(filters: const [], sort: const []);
+    // Deferred to the post-frame callback, mirroring
+    // `_TenantHomeScreenState.didChangeDependencies`'s identical pattern
+    // (`tenant_home_screen.dart`) — `loadFirstPage` calls `notifyListeners()`
+    // synchronously before its first `await`, and `didChangeDependencies`
+    // fires during the build phase, so calling it here directly trips
+    // Riverpod's "Tried to modify a provider while the widget tree was
+    // building" guard. The very first `build` below still observes
+    // `RendererLoading` because that build runs before this post-frame
+    // callback does.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final controller = ref.read(
+        listRendererControllerProvider(widget.entityType),
+      );
+      unawaited(controller.loadFirstPage(filters: const [], sort: const []));
+    });
   }
 
   @override

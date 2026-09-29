@@ -46,7 +46,7 @@ defmodule Letflow.Api.AuthorizationAc9Test do
     :ok
   end
 
-  defp unique_realm(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+  defp unique_realm(prefix), do: Letflow.TenantSlugFixture.unique_realm(prefix)
 
   # Provisioned via Letflow.TenantFixture (ISS-0112 / GH#366) — replaces the former
   # hand-rolled Sandbox :auto mode + Tenant.create_changeset/3 +

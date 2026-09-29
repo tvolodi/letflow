@@ -15,10 +15,20 @@ defmodule Letflow.TenantSlugFixture do
   `Ecto.UUID.generate/0` is not derived from any in-process counter or
   wall-clock value that resets, so a slug built from it is collision-proof
   across VM restarts as well as within a single run.
+
+  Also fixes ISS-0878: `unique_realm/1` below applies the identical fix to
+  `tenants.idp_realm_id`, the same failure class but surfacing under
+  `scripts/test_parallel.sh`'s multi-OS-process sharding instead of across
+  separate `mix test` runs.
   """
 
   @spec unique_slug(prefix :: String.t()) :: String.t()
   def unique_slug(prefix) when is_binary(prefix) do
     "#{prefix}-#{Ecto.UUID.generate()}"
+  end
+
+  @spec unique_realm(prefix :: String.t()) :: String.t()
+  def unique_realm(prefix \\ "realm") when is_binary(prefix) do
+    "#{prefix}-" <> Ecto.UUID.generate()
   end
 end

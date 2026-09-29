@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-01b-code-design-validator-recheck2.json",
   "created_at": "2026-09-29T11:45:14Z",
   "started_at": "2026-09-29T11:45:14Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T11:47:50Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -40,19 +40,21 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Read lib/letflow/design/req425-mobile-api-client-hardening.md in full and independently re-ran the complete Step 1b procedure over the whole document, not just Sec 2.6/5.1. Both prior FAILs (iteration-0's TBD language / executable-Dart-test-bodies / duplicate 'post' declaration, and iteration-1's missing ApiClient.forTesting token-store seam) are confirmed fixed: forTesting now takes required tokenStore/activeRealm matching .create (Sec 5.1), and the new Sec 2.6 states the test-inspection seam in full prose/spec form, correctly resolving AC1 (refresh-call-count observed via FakeAppAuthAdapter, concurrency dedup via _RefreshCoordinator's cached-Future pattern Sec 2.1/2.3) and AC2 (post-refresh-failure token deletion observed via a real round-trip through TenantTokenStore.read backed by FakeSecureStoragePlatform, Sec 2.6) -- these are genuine, testable mechanisms, not restated claims. However, on the full re-check, Sec 2.6 (lines 468-473) itself contains a new violation of Step 1b check 2e: a literal, directly-executable Dart code block -- 'final fakePlatform = FakeSecureStoragePlatform(); FlutterSecureStoragePlatform.instance = fakePlatform; final tokenStore = const TenantTokenStore(FlutterSecureStorage()); final activeRealm = ActiveRealmHolder()..currentRealmUrl = ...;' -- four lines of real object construction, a global-state mutation (assigning FlutterSecureStoragePlatform.instance), and a cascade-operator field assignment. This is not a signature, not a type/field shape, and not a literal-value declaration (the three categories this design's own preamble states are the only permitted code content); it is copy-pasteable test setup code, i.e. implementation code, and this gate fails on sight per WF-02 Step 1b check 2e regardless of its short length or its correct intent. All other checks pass: every one of the 7 acceptance criteria maps to a concrete, fully-specified design element (Sec 9's resolution table verified against Sec 1-6 directly, not taken on trust); no TBD/deferral language anywhere (grepped -i for TBD/to be implemented/to be determined/placeholder -- zero matches); error handling is a Dart 3 sealed class with 9 exhaustively-checkable variants (Sec 1.1); cross-module dependencies are listed in full (Sec 7); open questions (OQ-1..OQ-8) are explicitly flagged rather than silently resolved, which Step 1's own acceptance criteria permit. FAIL is solely on Sec 2.6's code block.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {"severity": "BLOCKER", "description": "Sec 2.6 (lines 468-473) embeds a literal executable Dart code block (object construction, a static-field assignment mutating global platform state, and a cascade-operator field assignment) rather than confining content to signatures/type shapes/prose, violating WF-02 Step 1b check 2e ('no implementation code present ... signatures and type shapes only, not bodies') and this design's own stated preamble scope ('@spec-style signatures, type/field shapes, enum/class shapes, and literal values ... only'). Fix: replace the code block with prose description of the same construction steps (name the three objects, what each is constructed from, and the one field mutated), the same way Sec 2.2-2.5 describe mechanism in prose without a runnable snippet.", "affected_requirement": "REQ-425"}
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ425-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Rework CODE-DESIGNER (rework iteration 3 of 3, max_rework budget). ROOT-CAUSE NOTE FOR ORCH per ORCHESTRATOR.md Sec5: this FAIL's mechanism -- embedding literal, directly-executable Dart statements in the design doc instead of confining content to signatures/type shapes/prose -- is the SAME ROOT-CAUSE CATEGORY as iteration 0's FAIL ('Sec 4.2 contains full executable Dart test function bodies'), recurring in a newly-added section (Sec 2.6) introduced specifically to fix iteration 1's unrelated defect (the missing forTesting seam). It is NOT a repeat of iteration 1's own root cause (that is confirmed fixed). Since this is the second time this specific category of mistake has been found across three iterations, the next dispatch should change strategy rather than patch Sec 2.6 alone in isolation: instruct CODE-DESIGNER explicitly, as a standing constraint for the rest of this design's life, that ANY code fence in this document must contain only a signature, a type/class/field declaration, or a bare literal-value constant -- never a sequence of imperative statements (assignment, mutation, method invocation with side effects) -- and have CODE-DESIGNER re-scan the ENTIRE document once more against that literal rule before resubmitting, not just Sec 2.6."
   },
   "rework_count": 2,
   "max_rework": 3,

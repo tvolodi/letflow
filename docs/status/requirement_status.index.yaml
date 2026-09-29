@@ -4610,8 +4610,19 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 37
+    entries: 38
     note: >
+      Bumped to 38 by ORCH after appending ISS-0789's done-event
+      (queue task 788, 2026-09-29T04:24:46Z -- closed as already fixed and
+      merged by PR #1769 (commit ebf3c31e); release_lock had been skipped
+      after the fix merged, leaving queue task 788 open for five days. Fix
+      independently re-verified: mix test
+      test/letflow/repository/attachment_links_test.exs, 5 seeded runs,
+      "12 passed" / 0 failures each time) in the same commit as the append.
+      `grep -c "^  - req:" docs/status/requirement_status.v23.yaml` = 38
+      on-disk entries; 1144 lines / 68480 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Bumped to 37 by ORCH after appending ISS-0852's done-event
       (WF03-ISS0852-20260929, 2026-09-29T04:22:00Z -- closed as resolved by
       ISS-0833's already-merged fix; no code/data change needed) in the same

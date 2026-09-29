@@ -305,6 +305,107 @@ void main() {
     },
   );
 
+  group(
+    'cross-tenant retry-dispatch race (rework 2 -- SECURITY-REVIEWER'
+    ' BLOCKER, post-refresh-success window)',
+    () {
+      test(
+        'a tenant switch landing after refreshOnce() succeeds but before the'
+        " retry's own bearer-interceptor pass runs aborts the retry -- it is"
+        " never dispatched at all, let alone carrying the new tenant's token",
+        () async {
+          FlutterSecureStoragePlatform.instance = FakeSecureStoragePlatform();
+          final fakeAdapter = FakeDioHttpClientAdapter();
+          final dio = Dio(BaseOptions(validateStatus: (_) => true))
+            ..httpClientAdapter = fakeAdapter;
+          final tokenStore = const TenantTokenStore(FlutterSecureStorage());
+          final activeRealm = ActiveRealmHolder()
+            ..currentRealmUrl = _realmUrl
+            ..clientId = 'acme-client';
+          final appAuthAdapter = FakeAppAuthAdapter();
+          var loginRouteCallCount = 0;
+
+          await tokenStore.store(
+            _realmUrl,
+            const TokenSet(
+              accessToken: 'initial-access-token',
+              refreshToken: 'initial-refresh-token',
+              idToken: null,
+              accessTokenExpiration: null,
+            ),
+          );
+
+          // Registered BEFORE `ApiClient.forTesting` adds its own
+          // bearer-attach interceptor below -- Dio runs `onRequest`
+          // interceptors in registration order, so this one always sees a
+          // request FIRST, for every pass through the chain including the
+          // retry's. It flips the active tenant the SECOND time it sees a
+          // given path -- i.e. on the retry, never on the original,
+          // 401'd request -- which lands the switch exactly in the window
+          // this regression targets: strictly after
+          // `_handleUnauthorized`'s own pre-fetch realm check has already
+          // passed (that check runs synchronously, with
+          // `_dio.fetch(retriedOptions)` called immediately after it, no
+          // `await` in between) but strictly before the bearer interceptor
+          // -- registered after this one, so it runs later in the same
+          // chain pass -- does its own fresh read of
+          // `activeRealm.currentRealmUrl`. This is deliberately NOT
+          // `appAuthAdapter.duringRefresh`: that hook only fires while
+          // `_doRefresh`'s own network `await` is still suspended, which is
+          // the earlier window rework 1 already closed (and which the
+          // existing "cross-tenant refresh race" group above already
+          // covers) -- this test's window opens only once `refreshOnce()`
+          // has already resolved successfully.
+          final seenCount = <String, int>{};
+          dio.interceptors.add(
+            InterceptorsWrapper(
+              onRequest: (options, handler) {
+                final count = (seenCount[options.path] ?? 0) + 1;
+                seenCount[options.path] = count;
+                if (count == 2) {
+                  activeRealm.currentRealmUrl = _otherRealmUrl;
+                  activeRealm.clientId = 'other-tenant-client';
+                }
+                handler.next(options);
+              },
+            ),
+          );
+
+          final client = ApiClient.forTesting(
+            dio,
+            tokenStore: tokenStore,
+            activeRealm: activeRealm,
+            appAuthAdapter: appAuthAdapter,
+            routeToLogin: () => loginRouteCallCount += 1,
+          );
+
+          fakeAdapter.handler = (options) => (401, {'error': 'expired'});
+
+          await expectLater(
+            client.get('/api/v1/me/modules'),
+            throwsA(isA<UnauthorizedError>()),
+          );
+
+          // The refresh itself succeeded (unlike the rework-1 tests above) --
+          // this race is entirely at retry-dispatch time, one step later.
+          expect(appAuthAdapter.refreshCallCount, 1);
+          // The retry is intercepted and rejected by the bearer
+          // interceptor's own re-check BEFORE it ever reaches the transport
+          // layer -- only the original (401'd) request ever reaches the
+          // fake adapter.
+          expect(fakeAdapter.requests, hasLength(1));
+          // The new tenant acquires no tokens as a side effect of the old
+          // tenant's refresh/retry.
+          expect(await tokenStore.read(_otherRealmUrl), isNull);
+          // Aborting a stale retry is not a fresh auth failure for the NEW
+          // tenant -- it must not clear the new tenant's session or
+          // re-route it to login (whatever triggered the switch owns that).
+          expect(loginRouteCallCount, 0);
+        },
+      );
+    },
+  );
+
   group('5xx backoff for GET only (AC3)', () {
     test(
       'a GET receiving 503 twice then 200 succeeds, with increasing delays'

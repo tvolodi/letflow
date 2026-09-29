@@ -167,7 +167,36 @@ const String _kRetriedAfter401Flag = '_letflowRetriedAfter401';
 /// the one it was issued for — this tag is the source of truth the retry
 /// path re-checks against, independent of whatever tenant happens to be
 /// active by the time the refresh resolves.
+///
+/// **rework 2:** this tag is also [_bearerInterceptor]'s OWN re-check at the
+/// moment it actually attaches a token to a *retried* request (see that
+/// interceptor's `onRequest`, below) — not just `_handleUnauthorized`'s
+/// pre-fetch check. dio 5.11.1 schedules a `fetch()` call's interceptor
+/// chain via a real event-loop turn (`Future(() => ...)`, `dio_mixin.dart`
+/// `initState`/`fetch` internals, verified against the pinned
+/// `pubspec.lock` version's pub-cache source), so a tenant switch/logout can
+/// land strictly between `_handleUnauthorized`'s check and the interceptor's
+/// own header-attach step. Trusting only the earlier check left that later
+/// window open; the interceptor must re-verify itself, at the point it
+/// actually decides whether to attach a token at all.
 const String _kIssuedForRealmKey = '_letflowIssuedForRealm';
+
+/// Marks a [DioException] thrown by [_bearerInterceptor]'s reject path when
+/// it detects, at token-attach time, that a retried request's tagged realm
+/// no longer matches the currently active tenant. Distinct from a generic
+/// transport failure so [ApiClient._handleUnauthorized] can classify it as
+/// [UnauthorizedError] rather than [NetworkUnavailableError] (`classifyError`
+/// would otherwise see a `null` status code and misclassify this as a
+/// connectivity problem).
+class _CrossTenantRetryAbortedException implements Exception {
+  const _CrossTenantRetryAbortedException();
+
+  @override
+  String toString() =>
+      '_CrossTenantRetryAbortedException(retry dispatched under a realm '
+      "different from the one it was issued for -- aborted before a token "
+      'was attached)';
+}
 
 /// Outcome of one [_RefreshCoordinator._doRefresh] attempt. Distinct from a
 /// plain `bool` so the caller ([ApiClient._handleUnauthorized]) can tell
@@ -545,6 +574,15 @@ class ApiClient implements HttpGateway {
     try {
       retryResponse = await _dio.fetch<dynamic>(retriedOptions);
     } on DioException catch (e) {
+      // `_bearerInterceptor` rejects with this sentinel when ITS OWN
+      // token-attach-time re-check (the fix for the retry-dispatch race,
+      // rework 2) finds the retry's tagged realm no longer matches the
+      // active tenant -- report it as the typed auth failure it is, not
+      // fall through to `classifyError`'s generic null-status-code ->
+      // network-unavailable path.
+      if (e.error is _CrossTenantRetryAbortedException) {
+        throw const UnauthorizedError();
+      }
       throw classifyError(
         e.requestOptions,
         statusCode: null,
@@ -603,6 +641,24 @@ Interceptor _transportPolicyInterceptor(TransportPolicy policy) {
 /// except the audience check added by REQ-422 §6.2 below. Refresh-on-401,
 /// retry, and typed `ApiError` normalization are REQ-425's (MOB-6) scope,
 /// not this one's.
+///
+/// **rework 2 (retry-dispatch race, `_kIssuedForRealmKey`'s doc comment):**
+/// on a request already carrying an `_kIssuedForRealmKey` tag -- i.e. a
+/// retry re-dispatched by `_handleUnauthorized` after a 401 refresh, never a
+/// fresh caller-initiated request -- this interceptor re-verifies that tag
+/// against the realm active RIGHT NOW, at the point it is about to decide
+/// whether to attach a token, and rejects outright on any mismatch. This is
+/// deliberately a SEPARATE, later check from `_handleUnauthorized`'s own
+/// pre-fetch one: dio 5.11.1 schedules `fetch()`'s interceptor chain via a
+/// real event-loop turn, so a tenant switch/logout can land strictly
+/// between that pre-fetch check and this interceptor running -- trusting
+/// only the earlier check left exactly that window open (a retry issued for
+/// tenant A could be dispatched carrying tenant B's freshly-active bearer
+/// token). The realm value used for the token-store read and the header
+/// attach below is the SAME local `realmUrl` captured before this check --
+/// never re-read from `activeRealm` after the `await tokenStore.read` below
+/// -- so nothing (including that await's own suspension) can substitute a
+/// different tenant's token once this check has passed.
 Interceptor _bearerInterceptor(
   TenantTokenStore tokenStore,
   ActiveRealmHolder activeRealm,
@@ -614,10 +670,27 @@ Interceptor _bearerInterceptor(
         return;
       }
       final realmUrl = activeRealm.currentRealmUrl;
-      // Tags this request with the tenant it is being issued for (rework of
-      // REQ-425 §2) -- `_handleUnauthorized` reads this back to re-verify the
-      // tenant hasn't changed before reissuing a retry after a 401 refresh.
-      options.extra[_kIssuedForRealmKey] = realmUrl;
+      final isRetryDispatch = options.extra.containsKey(_kIssuedForRealmKey);
+      if (isRetryDispatch) {
+        final issuedForRealm = options.extra[_kIssuedForRealmKey] as String?;
+        if (issuedForRealm != realmUrl) {
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              error: const _CrossTenantRetryAbortedException(),
+              type: DioExceptionType.cancel,
+            ),
+          );
+          return;
+        }
+      } else {
+        // First (non-retry) pass for this request -- tag it with the tenant
+        // it is being issued for now. `_handleUnauthorized` reads this back
+        // for its own pre-fetch check, and this interceptor reads it back
+        // again (the branch above) the next time this same request -- now a
+        // retry -- passes through here.
+        options.extra[_kIssuedForRealmKey] = realmUrl;
+      }
       if (realmUrl != null) {
         final tokens = await tokenStore.read(realmUrl);
         if (tokens != null && _tokenMatchesActiveRealm(tokens, realmUrl)) {

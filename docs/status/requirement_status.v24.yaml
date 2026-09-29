@@ -58,3 +58,26 @@
     feature/WF03-ISS0878-20260929 created off origin/main and pushed.
     Diagnosis in progress; not a docs/requirements.yaml entry (this is
     an issue, no requirement status changes).
+
+- req: SCOPE-CHANGE
+  event: done
+  agent: ISSUE-FIXER
+  at: "2026-09-29T07:00:00Z"
+  note: >
+    WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0878 --
+    root cause resolved: unique_realm/1's cross-process-unsafe
+    System.unique_integer/1 pattern replaced with a UUID-based,
+    genuinely cross-process-safe generator, in
+    test/letflow/plugs/auth_pipeline_test.exs and the identical
+    call sites in test/letflow/api/authorization_ac9_test.exs and
+    test/letflow/oidc/provider_registry_multi_realm_test.exs. Proven
+    via a fail-then-pass mutation test at
+    test/support/tenant_slug_test.exs, independently reproduced by
+    TEST-DESIGN-VALIDATOR; targeted test set and full-suite run both
+    green (TEST-RUNNER PASS, commit 5485ad24). All gates passed:
+    CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+    TEST-DESIGN-VALIDATOR, TEST-RUNNER. docs/issues/ISS-0878.yaml set to
+    status: resolved (resolved_in_run: WF03-ISS0878-20260929). GitHub
+    mirror GH-1951 closed with resolving-evidence comment. Not a
+    docs/requirements.yaml entry (this is an issue, no requirement
+    status changes).

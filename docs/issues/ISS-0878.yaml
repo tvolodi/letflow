@@ -99,6 +99,8 @@ affected_files:
   - test/letflow/api/authorization_ac9_test.exs
   - test/letflow/oidc/provider_registry_multi_realm_test.exs
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0878-20260929
+resolved_at: "2026-09-29T07:00:00Z"
 queue_ref: Q-878
 github_ref: GH-1951

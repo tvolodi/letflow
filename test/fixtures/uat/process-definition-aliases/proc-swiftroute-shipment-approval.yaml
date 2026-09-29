@@ -1,0 +1,22 @@
+process_id: proc-swiftroute-shipment-approval
+definition_name: "Shipment Approval"
+company_id: swiftroute
+seed_script: scripts/seed_swiftroute_definition.sh
+fixture: test/fixtures/qa/swiftroute_process_definition.json
+issue_ref: ISS-0893
+recorded_by: CODE-DESIGNER
+recorded_at: "2026-09-29"
+reason: >
+  process_definitions has no key/slug column -- Letflow.Definitions
+  .get_active_by_name/2 and GET /definitions/active/:name resolve by the
+  free-text `name` field, which is this deployed definition's actual
+  identifier ("Shipment Approval"). The UAT scenario corpus's proc-*
+  process_id convention (test/fixtures/uat/scenarios/swiftroute/
+  shipment-ops-timeout-escalation.yaml,
+  shipment-high-value-happy.yaml, shipment-attach-delivery-note.yaml,
+  all ported/byte-identical) has no counterpart in the app's data model.
+  This sidecar maps the synthetic corpus process_id to the real
+  definition name so uat_preflight.sh (and any future UAT-RUNNER
+  definition-resolution step) can resolve it without editing a ported
+  scenario body or adding an app-side slug column. See
+  lib/letflow/design/iss0893-swiftroute-definition-key-mismatch.md.

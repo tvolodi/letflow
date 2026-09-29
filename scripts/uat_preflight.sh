@@ -47,7 +47,9 @@
 # obtained above: `app_roles` (GET /tasks/inbox, or /me/modules for candidate-labeled
 # actors -- 403 there is a role-binding gap, see ISS-0886) and `definitions` (GET
 # /api/v1/definitions/active/<process_id> for proc-* process ids -- 404 there is a
-# definition-resolution gap, see ISS-0893/ISS-0897).
+# definition-resolution gap, see ISS-0893/ISS-0897). When a
+# test/fixtures/uat/process-definition-aliases/<process_id>.yaml sidecar exists, its
+# definition_name is resolved instead of the raw process_id -- see ISS-0893.
 set -uo pipefail
 
 PY=""
@@ -196,6 +198,31 @@ for f in sorted(glob.glob(os.path.join(env_limit_dir, "*.yaml"))):
     d = parse_env_limitation(f)
     sid = d.get("scenario_id")
     if sid: env_limitations[sid] = d
+
+# ------------------------------------------------------- process-definition-alias sidecars
+# test/fixtures/uat/process-definition-aliases/<process_id>.yaml -- NOT scenario files,
+# deliberately outside scen_dir's glob. Maps a scenario corpus's synthetic proc-* process_id
+# to the deployed definition's real `name` field (process_definitions has no key/slug
+# column -- see ISS-0893).
+pd_alias_dir = os.path.join(REPO, "test/fixtures/uat/process-definition-aliases")
+pd_aliases = {}  # process_id -> definition_name
+def parse_pd_alias(path):
+    raw = open(path, encoding="utf-8").read()
+    d = {}
+    if yaml:
+        try:
+            d = yaml.safe_load(raw) or {}
+        except Exception:
+            d = {}
+    if not d:  # tolerant fallback
+        for key in ("process_id", "definition_name", "company_id", "issue_ref", "recorded_by", "recorded_at"):
+            m = re.search(r"^%s:\s*(.+)$" % key, raw, re.M)
+            if m: d[key] = m.group(1).strip().strip("\"'")
+    return d
+for f in sorted(glob.glob(os.path.join(pd_alias_dir, "*.yaml"))):
+    d = parse_pd_alias(f)
+    pid_ = d.get("process_id")
+    if pid_ and d.get("definition_name"): pd_aliases[pid_] = d["definition_name"]
 
 # ---------------------------------------------------------------- credentials (in-memory only)
 cred_src = winpath(a.credential_source)
@@ -414,18 +441,27 @@ for s in scenarios:
         c["definitions"] = ("UNKNOWN", "no authenticated actor token available for this tenant to check definition resolution", "")
     else:
         tok = scenario_ok_tokens[0][2]
-        st_, _ = http("GET", base + "/api/v1/definitions/active/" + urllib.parse.quote(pid, safe=""), auth(tok))
+        resolved_name = pd_aliases.get(pid, pid)
+        st_, _ = http("GET", base + "/api/v1/definitions/active/" + urllib.parse.quote(resolved_name, safe=""), auth(tok))
         if st_ == 200:
-            c["definitions"] = ("OK", "GET /definitions/active/%s -> 200" % pid, "")
+            if resolved_name != pid:
+                c["definitions"] = ("OK", "GET /definitions/active/%s -> 200 (process_id '%s' resolved via alias)" % (resolved_name, pid), "")
+            else:
+                c["definitions"] = ("OK", "GET /definitions/active/%s -> 200" % resolved_name, "")
         elif st_ == 404:
-            c["definitions"] = ("GAP",
-                "process definition '%s' does not resolve via GET /definitions/active/:name "
-                "(see ISS-0893 null-key / ISS-0897 meridian-vortex definitions not yet seeded)" % pid,
-                "letflow (ISS-0893 key resolution) / ai-dala-infra (ISS-0897 seed meridian/vortex definitions)")
+            if resolved_name != pid:
+                c["definitions"] = ("GAP",
+                    "process definition '%s' (alias for process_id '%s') does not resolve via GET /definitions/active/:name (see ISS-0893)" % (resolved_name, pid),
+                    "letflow (ISS-0893 key resolution) / ai-dala-infra (ISS-0897 seed meridian/vortex definitions)")
+            else:
+                c["definitions"] = ("GAP",
+                    "process definition '%s' does not resolve via GET /definitions/active/:name "
+                    "(see ISS-0893 null-key / ISS-0897 meridian-vortex definitions not yet seeded)" % pid,
+                    "letflow (ISS-0893 key resolution) / ai-dala-infra (ISS-0897 seed meridian/vortex definitions)")
         elif st_ == 403:
             c["definitions"] = ("UNKNOWN", "actor token lacks DefinitionsRead; cannot check definition resolution", "")
         else:
-            c["definitions"] = ("UNKNOWN", "GET /definitions/active/%s -> %s" % (pid, st_), "")
+            c["definitions"] = ("UNKNOWN", "GET /definitions/active/%s -> %s" % (resolved_name, st_), "")
     # env_limitation: additive, independent of tenant/realm/actors above -- ISS-0895.
     # Status stays OK/GAP (matching every other check's convention, and the
     # counts/ready aggregation below, which only knows OK/GAP/UNKNOWN) -- the sidecar's

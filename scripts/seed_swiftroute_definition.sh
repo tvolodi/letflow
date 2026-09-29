@@ -69,6 +69,7 @@ if [[ -n "${EXISTING_ID}" ]]; then
   echo "  Status        : $(echo "${EXISTING}" | jq -r '.items[0].status')"
   echo ""
   echo "Browse at: ${QA_URL}/api/v1/definitions/${EXISTING_ID}"
+  echo "  Scenario process_id : proc-swiftroute-shipment-approval (see test/fixtures/uat/process-definition-aliases/proc-swiftroute-shipment-approval.yaml)"
   exit 0
 fi
 
@@ -117,6 +118,7 @@ echo "  Name            : $(echo "${ACTIVATE_RESPONSE}" | jq -r '.name')"
 echo "  Version         : $(echo "${ACTIVATE_RESPONSE}" | jq -r '.version')"
 echo "  Status          : $(echo "${ACTIVATE_RESPONSE}" | jq -r '.status')"
 echo "  Browse at       : ${QA_URL}/api/v1/definitions/${DEFINITION_ID}"
+echo "  Scenario process_id : proc-swiftroute-shipment-approval (see test/fixtures/uat/process-definition-aliases/proc-swiftroute-shipment-approval.yaml)"
 echo ""
 echo "--- AC1 verification ---"
 echo "Run: curl -sf -H \"Authorization: Bearer \$QA_AUTH_TOKEN\" \"${API}/definitions?name=Shipment+Approval&status=active\" | jq ."

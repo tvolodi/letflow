@@ -261,4 +261,6 @@ convention) and, failing that, by the older `<name>-*` prefix heuristic; `actor-
 to the PLATFORM_ADMIN user), and `pipeline_test:` (must exist, must not carry an unresolved
 `NOTE (ISS-05xx)` forward-reference, must not use `docker compose`/`psql`). The mapping is
 best-effort; unmappable actors report UNKNOWN. A `proc-*` process_id is additionally checked
-against `GET /definitions/active/:name` — see ISS-0894.
+against `GET /definitions/active/:name` — see ISS-0894. When a
+`test/fixtures/uat/process-definition-aliases/<process_id>.yaml` sidecar exists, its
+`definition_name` is resolved instead of the raw `process_id` — see ISS-0893.

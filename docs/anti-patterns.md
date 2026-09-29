@@ -4029,3 +4029,40 @@ real re-run showing green, exactly as this run did. If a shared build path
 is used for a worktree despite this, sanity-check it first with an
 impossible assertion (or an intentional compile error) and confirm the
 run actually fails/errors before trusting any real mutant result from it.
+
+## A `TEST_PARALLEL_N` override "wasn't honored" because it was exported in a separate tool call from the one that ran `mix letflow.check.test` (2026-09-29, ORCH, ISS-0882)
+
+ISS-0882 was filed reporting that `mix letflow.check.test` ignores a
+caller-exported `TEST_PARALLEL_N` override and always derives N from
+`nproc` instead — observed during WF02-REQ422-20260929's RELEASE-VALIDATOR
+step under critically tight host memory, where the unexpectedly-large N
+drove free memory down to ~307MB before the runaway `erl` processes had to
+be killed. ORCH claimed this issue expecting a real code defect and instead
+found, on inspection, that both `scripts/test_parallel.sh` (the `if [ -n
+"${TEST_PARALLEL_N:-}" ] ...` check) and `lib/mix/tasks/letflow.check.test.ex`
+(`stream_and_capture/3`'s `Port.open/2` call, which per ISS-0699's own
+design-doc comment only ADDS/overrides named vars on top of the inherited
+environment, never replacing it wholesale) already correctly honor the
+override — confirmed with a live, unmutated repro: `TEST_PARALLEL_N=2
+timeout 20 mix letflow.check.test 2>&1 | grep -m1 "test_parallel: N="`
+printed `test_parallel: N=2 (source: env override)`, not N=nproc.
+
+The real mechanism: this agent harness's Bash tool documents "the working
+directory persists between commands, but shell state does not" — an
+`export FOO=bar` in one Bash tool call is gone by the next, separate call.
+Reproduced directly: `export TEST_PARALLEL_N=2` in one call, then
+`echo "$TEST_PARALLEL_N"` in the very next call printed empty. The
+RELEASE-VALIDATOR step that filed ISS-0882 almost certainly ran the export
+and the `mix letflow.check.test` invocation as two separate tool calls,
+so the mix task legitimately saw no override and fell back to nproc — not
+a bug in the task, the script, or `Port.open`'s env forwarding.
+
+**Correct approach:** always set a one-shot env override and the command
+that needs it in the SAME shell invocation — either inline
+(`TEST_PARALLEL_N=2 mix letflow.check.test`) or `export`-and-run joined
+with `&&`/`;` in one tool call (`export TEST_PARALLEL_N=2 && mix
+letflow.check.test`) — never `export` in isolation and rely on a later,
+separate tool call to still see it. Before filing an issue claiming an env
+var "isn't honored," reproduce with the var and the command in one shell
+invocation first; if that reproduces the expected behavior, the bug is in
+how the override was invoked, not in the code being blamed.

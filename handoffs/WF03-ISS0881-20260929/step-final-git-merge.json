@@ -1,0 +1,62 @@
+{
+  "handoff_id": "a1f3c8e2-0001-4a00-9000-00000000000b",
+  "run_id": "WF03-ISS0881-20260929",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0881-20260929/step-final-git-merge.json",
+  "created_at": "2026-09-29T08:00:00Z",
+  "started_at": "2026-09-29T08:00:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0881-20260929/step-00-git-setup.json",
+      "handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0881-20260929/step-02-code-designer.json",
+      "handoffs/WF03-ISS0881-20260929/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0881-20260929/step-03-elixir-dev-implement.json",
+      "handoffs/WF03-ISS0881-20260929/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0881-20260929/step-03c-reviewer.json",
+      "handoffs/WF03-ISS0881-20260929/step-04-test-designer.json",
+      "handoffs/WF03-ISS0881-20260929/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0881-20260929/step-05-issue-fixer-close.json"
+    ],
+    "artifacts_in": [],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs", "docs/issues/ISS-0881.yaml"]
+  },
+  "task": {
+    "description": "Perform WF-03 Step Final (git merge) for run WF03-ISS0881-20260929 on branch feature/WF03-ISS0881-20260929, per docs/agents/protocols/GIT_MERGE.md's full procedure (steps 1-10). All upstream gates have PASSed: Step 00 (git setup), Step 0.5+1 (ISSUE-FIXER diagnosis), Step 02/02b (CODE-DESIGNER design + validator), Step 03/03b/03c (ELIXIR-DEV implementation + SECURITY-REVIEWER + REVIEWER), Step 04/04b (TEST-DESIGNER regression test + TEST-DESIGN-VALIDATOR independent fail-then-pass re-verification, commit 08fbbd86), Step 05 (ISSUE-FIXER closed docs/issues/ISS-0881.yaml as resolved and closed GitHub issue #1958).\n\nFollow GIT_MERGE.md exactly: rebase onto origin/main, verify mix format/compile/test post-rebase (attribute any failures structurally per core-directives.md -- this suite has known pre-existing flakes, do not block on anything not attributable to this branch's diff), push, open the PR (title prefix 'fix:', per WF-03 branch convention), wait for the real GitHub Actions backend+frontend CI checks to report (poll patiently, CI can take 10-15+ minutes), then merge per the three-path procedure (plain merge; if rejected for pending/stale checks retry; if rejected for a FAILURE with structural attribution already established use --admin and record it explicitly; never override an unattributed failure). Complete local cleanup (checkout main, pull, delete branch) per step 9, or the worktree variant if this checkout is a secondary worktree.\n\nUse the actual sandbox_pool_test.exs fix summary from handoffs/WF03-ISS0881-20260929/step-03-elixir-dev-implement.json's result for the PR body's Summary section, and cite the real mix test pass/fail counts and attribution route from your own step-5d run in the PR body's Validation section (not a bare PASS).\n\nComplete this handoff: PASS with git_evidence (PR url, merge commit sha, push_status), next_action: 'ORCH marks run COMPLETED, releases queue lock, and appends run-history'.",
+    "acceptance_criteria": [
+      "Branch rebased onto current origin/main, format/compile/test verified post-rebase with structural attribution for any pre-existing failures",
+      "PR opened with title prefix 'fix:', body containing real validation counts and attribution route (not a bare PASS)",
+      "Real CI (backend + frontend jobs) waited for and its actual conclusion recorded",
+      "PR merged via the correct one of GIT_MERGE.md's three paths, recorded in git_evidence",
+      "Local cleanup completed: back on main (or detached at origin/main if a worktree), branch deleted, clean working tree",
+      "Handoff completed with PASS and the real merge commit sha"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

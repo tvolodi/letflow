@@ -62,6 +62,19 @@ export default function InstanceBoardPage() {
   const [showStart, setShowStart] = useState(false)
   const [startDefinitionName, setStartDefinitionName] = useState(definitionName)
   const [startDefinitionVersion, setStartDefinitionVersion] = useState('')
+  // ISS-0891: the dialog's own submit target. Deliberately NOT derived from
+  // `definitionId` (the page-level list filter, sourced from the URL via
+  // `useSearchParams`) — `setSearchParams` commits through react-router's
+  // navigation, which can land a render *after* the plain `useState` update
+  // to `startDefinitionVersion` from the same keystroke handler. That gap
+  // let the version field visibly show the right value while `definitionId`
+  // (what `submitStartInstance` actually validates/sends) still lagged, so
+  // "Start" intermittently hit the "Select a valid active definition name."
+  // validation branch even though the version was already populated —
+  // reproduced under concurrent load (`--repeat-each` with multiple
+  // workers) and confirmed absent once submission reads this local id
+  // instead. See docs/issues/ISS-0891.yaml.
+  const [startDefinitionId, setStartDefinitionId] = useState<string | undefined>(undefined)
   const [startCorrelationKey, setStartCorrelationKey] = useState('')
   const [startVariablesJson, setStartVariablesJson] = useState('{\n  \n}')
   const [startError, setStartError] = useState<string | null>(null)
@@ -91,10 +104,12 @@ export default function InstanceBoardPage() {
   useEffect(() => {
     if (definitionId) {
       setStartDefinitionVersion(activeDefinitionByName?.version ?? '')
+      setStartDefinitionId(activeDefinitionByName?.id ?? definitionId)
       return
     }
     setStartDefinitionVersion('')
-  }, [definitionId, activeDefinitionByName?.version])
+    setStartDefinitionId(undefined)
+  }, [definitionId, activeDefinitionByName?.id, activeDefinitionByName?.version])
 
   const onStatusToggle = (status: InstanceStatus) => {
     const next = new Set(statusFilters)
@@ -150,6 +165,7 @@ export default function InstanceBoardPage() {
     deferClickState(() => {
       setStartDefinitionName(definitionName)
       setStartDefinitionVersion(activeDefinitionByName?.version ?? '')
+      setStartDefinitionId(activeDefinitionByName?.id ?? definitionId)
       setStartCorrelationKey('')
       setStartVariablesJson('{\n  \n}')
       setStartError(null)
@@ -168,13 +184,18 @@ export default function InstanceBoardPage() {
     const activeList = definitionTypeahead?.items ?? []
     const exact = activeList.find((item) => item.name === value)
     if (exact) {
+      // Set the dialog's own submit target synchronously, in the same
+      // render as the version text — see ISS-0891 above `startDefinitionId`
+      // for why this must NOT go through `setSearchParams`/`definitionId`.
+      setStartDefinitionVersion(exact.version)
+      setStartDefinitionId(exact.id)
       const updated = new URLSearchParams(searchParams)
       updated.set('definitionName', exact.name)
       updated.set('definitionId', exact.id)
       setSearchParams(updated)
-      setStartDefinitionVersion(exact.version)
     } else {
       setStartDefinitionVersion('')
+      setStartDefinitionId(undefined)
     }
   }
 
@@ -184,7 +205,7 @@ export default function InstanceBoardPage() {
       setStartValidationError(null)
     })
 
-    if (!definitionId) {
+    if (!startDefinitionId) {
       deferClickState(() => setStartValidationError('Select a valid active definition name.'))
       return
     }
@@ -204,7 +225,7 @@ export default function InstanceBoardPage() {
 
     try {
       const created = await startInstance.mutateAsync({
-        definition_id: definitionId,
+        definition_id: startDefinitionId,
         correlation_key: startCorrelationKey.trim() || undefined,
         initial_variables: parsedVariables,
       })

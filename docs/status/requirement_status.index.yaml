@@ -4610,8 +4610,16 @@ volumes:
     path: docs/status/requirement_status.v23.yaml
     status: current
     opened: 2026-09-26
-    entries: 35
+    entries: 36
     note: >
+      Bumped to 36 by ORCH after appending ISS-0881's done-event
+      (WF03-ISS0881-20260929, 2026-09-29T03:59:23Z -- SandboxPoolTest
+      concurrent-teardown isolation gap; PR #1963, 54f7a221) in the same
+      commit as the append. `grep -c "^  - req:"
+      docs/status/requirement_status.v23.yaml` = 36 on-disk entries; 1094
+      lines, well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered.
+
       Bumped to 35 by ORCH after appending ISS-0879's done-event
       (WF03-ISS0879-20260929, 2026-09-29T00:42:33Z -- narrowed the
       tenant_template_build_* visibility window that leaked into

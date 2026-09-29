@@ -1064,3 +1064,31 @@
       unrelated flake (ISS-0881, SandboxPoolTest "ISS-0224 regression RT-6
       (death path c)") during this run's independent re-verification --
       filed and merged separately (PR #1959), not fixed here.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-29T03:59:23Z"
+    note: >
+      ISS-0881 (queue task 880, GH#1958) resolved and closed in
+      docs/issues/ISS-0881.yaml. Found incidentally by RELEASE-VALIDATOR
+      during ISS-0879's independent re-verification: SandboxPoolTest's
+      "ISS-0224 regression RT-6 (death path c)" and related cases had a
+      concurrent-teardown test-isolation gap, distinct from ISS-0879/
+      ISS-0873's mechanism. Full WF-03 pipeline: ISSUE-FIXER diagnosis →
+      CODE-DESIGNER design (lib/letflow/design/iss0881-sandbox-pool-test-isolation.md)
+      → CODE-DESIGN-VALIDATOR PASS → ELIXIR-DEV implementation → SECURITY-REVIEWER/
+      REVIEWER PASS → TEST-DESIGNER/TEST-DESIGN-VALIDATOR PASS → ISSUE-FIXER
+      close (Step 5). Verified: mix compile clean, mix test
+      test/letflow/sandbox_pool_test.exs 24/24 passed.
+      This pipeline's Step Final git-merge handoff (ELIXIR-DEV subagent)
+      stalled for over an hour with no repo state change and no reply to
+      a status check; ORCH (coordinating session) independently verified
+      the already-completed work (rebased onto latest main, recompiled,
+      re-ran the target test file) rather than trusting the stalled
+      agent's unconfirmed claim, then pushed/opened/merged PR #1963 itself
+      per the humanless-pipeline pre-authorization -- same pattern as the
+      ISS-0876 stall (docs/anti-patterns.md), logged again here since it
+      recurred with a different agent. CI: Backend/Frontend/Mobile gates
+      all passed. Squash-merged 54f7a221, never a direct push to main.
+      GitHub issue #1958 closed. Queue task 880 released status: done.

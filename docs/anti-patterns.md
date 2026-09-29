@@ -3998,3 +3998,34 @@ writing a new entry and match the pattern already in use, or read
 directly — don't infer the schema from what "reads naturally." Running
 `mix test test/docs/requirement_status_invariants_test.exs` locally
 before pushing (24 assertions, ~3s) would have caught this before CI did.
+
+## A throwaway `git worktree` sharing `MIX_BUILD_PATH`/`MIX_DEPS_PATH` with the main checkout silently ran STALE compiled code, not the worktree's edited source (2026-09-29, ORCH, ISS-0881)
+
+While producing WF-03's required fail-then-pass mutant proof for ISS-0881 (a
+SandboxPoolTest flake fix), ORCH followed the PREFERRED technique in
+`docs/agents/workflows/WF-03_issue_resolving.md` ("apply mutants in a
+throwaway `git worktree` of the branch, so the working checkout is never
+mutated at all"): `git worktree add --detach ../letflow2-iss0881-worktree
+HEAD`, then pointed `MIX_DEPS_PATH`/`MIX_BUILD_PATH` at the main checkout's
+`deps`/`_build` to avoid a slow `mix deps.get`/full recompile in the new
+worktree. Editing the worktree's test file to insert the mutant assertion
+and running `mix test` there reported the test **passing** — even after the
+mutant was strengthened to a deliberately impossible assertion
+(`assert final == :deliberate_syntax_probe_xyz`), which still "passed."
+The shared `_build` directory held a compiled `.beam` for that module from
+the main checkout's own unmutated run, and Mix's incremental compiler did
+not recompile it against the worktree's edited source — the worktree's
+`mix test` invocation silently exercised the OLD code the whole time, which
+would have produced a false, undetected PASS on the fail-first proof had the
+impossible-assertion sanity check not been run first.
+
+**Correct approach:** either give a throwaway worktree its own independent
+`_build`/`deps` (accepting the slower first compile), or skip the worktree
+technique entirely and use WF-03's own documented FALLBACK — mutate in
+place in the main checkout, then revert via direct edit (not
+`git checkout --`, which also works but a direct re-edit is equally valid)
+and verify the revert with `git status --porcelain lib/ test/` empty plus a
+real re-run showing green, exactly as this run did. If a shared build path
+is used for a worktree despite this, sanity-check it first with an
+impossible assertion (or an intentional compile error) and confirm the
+run actually fails/errors before trusting any real mutant result from it.

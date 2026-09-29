@@ -87,6 +87,57 @@ affected_files:
   - test/letflow/event_store/retention_operations_test.exs
   - lib/letflow/event_store/retention_operations.ex
 
-status: open
+status: resolved
 queue_ref: Q-879
 github_ref: GH-1952
+resolved_in_run: WF03-ISS0879-20260929
+resolved_at: "2026-09-29T00:21:26Z"
+resolution: >
+  Fixed on branch feature/WF03-ISS0879-20260929 (commits 9e0fa90d,
+  2901c398), extending ISS-0873's fix to the same unscoped-global-read
+  mechanism as it manifests in `retire_oldest_eligible_month/1`'s own
+  fanout rather than `retention_summary/0`.
+
+  Root cause (confirmed via isolated reproduction, not just code
+  inspection): test/support/tenant_template.ex's throwaway
+  `tenant_template_build_*` fixture rows -- used internally by the shared
+  tenant-template test-support helper to stand up a build-time
+  Registration row -- were a real, committed write that kept
+  `migrations_applied_at` set for longer than needed. Under
+  `scripts/test_parallel.sh` full contention, this widened window let
+  those throwaway rows leak into `provisioned_tenant_schemas/0`'s
+  platform-wide, unscoped read (the exact mechanism ISS-0873 diagnosed
+  for `retention_summary/0`, here reached via
+  `retire_oldest_eligible_month/1`'s own fanout instead), producing
+  extra `:failed`/`invalid_schema_name` entries in two happy-path tests
+  in test/letflow/event_store/retention_operations_test.exs (lines 303
+  and 339) that never created those schemas themselves.
+
+  Fix (commit 9e0fa90d): added `clear_migrations_applied_flag!/1` to
+  test/support/tenant_template.ex, called as soon as the throwaway build
+  row's purpose is served, narrowing the window during which
+  `migrations_applied_at` is set and therefore visible to a concurrent
+  partition's `provisioned_tenant_schemas/0` read. The two affected
+  tests' assertions were also scoped to their own fixtures'
+  schema/status pairs rather than asserting on the full unscoped result
+  set, so a genuine platform-wide read no longer requires the test to
+  assume no other partition is live.
+
+  Regression coverage (commit 2901c398): a new deterministic,
+  non-flaky AST-structural test in test/support/tenant_template_test.exs
+  (describe block "ISS-0879 regression -- throwaway build row's
+  visibility window") asserts `clear_migrations_applied_flag!/1` is
+  actually invoked in the right place in the helper's own source, so the
+  fix can't silently regress without a local, deterministic (no
+  full-suite-contention dependency) test catching it.
+
+  Verification chain, each an independent re-run rather than trusting
+  the prior step's report: CODE-DESIGN-VALIDATOR passed the design;
+  SECURITY-REVIEWER and REVIEWER both passed the implementation;
+  TEST-DESIGN-VALIDATOR independently reverted commit 9e0fa90d,
+  reproduced the original fail, then restored it and reproduced the
+  pass; TEST-RUNNER ran two full `scripts/test_parallel.sh` runs and did
+  not observe the symptom in either; RELEASE-VALIDATOR did its own
+  independent re-verification on top of all of that -- a fresh isolated
+  compile, its own fresh test runs, a third full-suite run, and its own
+  separate mutation-revert check -- before signing off PASS.

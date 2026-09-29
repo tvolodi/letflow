@@ -329,7 +329,9 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
         assert result.retirement.status == "completed"
         assert %NaiveDateTime{} = result.retirement.completed_at
 
-        assert [outcome] = result.outcomes
+        own_outcomes = Enum.filter(result.outcomes, &(&1.schema_name == schema_name))
+
+        assert [outcome] = own_outcomes
         assert outcome.status == :succeeded
         assert outcome.retired_partition == events_partition_name(year, month)
         assert is_integer(outcome.protected_rows_relocated)
@@ -355,7 +357,14 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
         result = wait_until_status(retirement.id, ["completed", "failed"])
         assert result.retirement.status == "completed"
 
-        statuses = Enum.map(result.outcomes, & &1.status) |> Enum.sort()
+        own_schemas = [eligible_schema, bare_schema]
+
+        statuses =
+          result.outcomes
+          |> Enum.filter(&(&1.schema_name in own_schemas))
+          |> Enum.map(& &1.status)
+          |> Enum.sort()
+
         assert :succeeded in statuses
         assert :skipped in statuses
         refute :failed in statuses

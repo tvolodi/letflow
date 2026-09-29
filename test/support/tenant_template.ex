@@ -424,6 +424,7 @@ defmodule Letflow.Test.TenantTemplate do
     # that function's own comment for the full symptom/fix history. Step 2.
     case TenantProvisioning.replay_migrations(throwaway_tenant_id) do
       {:ok, _applied_versions} ->
+        clear_migrations_applied_flag!(throwaway_tenant_id)
         :ok
 
       {:error, reason} ->
@@ -513,6 +514,22 @@ defmodule Letflow.Test.TenantTemplate do
   defp delete_throwaway_tenant_and_registration!(tenant_id) do
     Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
     Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
+  end
+
+  # ISS-0879 design §2.2: mirror image of
+  # Letflow.TenantProvisioning's private mark_migrations_applied/1
+  # (tenant_provisioning.ex:797-802) -- nulls the throwaway row's
+  # migrations_applied_at instead of stamping it, immediately after
+  # replay_migrations/2 returns success and before any other work runs in
+  # that branch. Narrows (does not fully close, §2.3) the window during
+  # which provisioned_tenant_schemas/0's platform-wide,
+  # `where: not is_nil(r.migrations_applied_at)` fanout query could observe
+  # this throwaway row as a real, provisioned tenant schema.
+  defp clear_migrations_applied_flag!(tenant_id) do
+    from(r in Registration, where: r.tenant_id == ^tenant_id)
+    |> Repo.update_all(set: [migrations_applied_at: nil])
+
+    :ok
   end
 
   # design §2.3 step 3: assert the STAGING schema's own table set and
@@ -647,6 +664,7 @@ defmodule Letflow.Test.TenantTemplate do
     try do
       case TenantProvisioning.replay_migrations(reference_tenant_id) do
         {:ok, _applied_versions} ->
+          clear_migrations_applied_flag!(reference_tenant_id)
           :ok
 
         {:error, reason} ->

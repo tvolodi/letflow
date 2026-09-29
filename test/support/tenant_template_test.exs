@@ -393,6 +393,115 @@ defmodule Letflow.Test.TenantTemplateTest do
     end
   end
 
+  describe "ISS-0879 regression — throwaway build row's visibility window" do
+    # Regression test for ISS-0879 (design
+    # lib/letflow/design/iss0879-retention-fanout-fixture-leak.md). The bug:
+    # do_build_template!/1's throwaway `tenant_template_build_<hex>`
+    # Registration row goes through the REAL TenantProvisioning.replay_migrations/2,
+    # whose own committed side effect (mark_migrations_applied/1) stamps
+    # migrations_applied_at with a real, committed, cross-process-visible
+    # timestamp -- satisfying RetentionOperations.provisioned_tenant_schemas/0's
+    # platform-wide `where: not is_nil(r.migrations_applied_at)` predicate for
+    # as long as that row survives (previously: the whole duration of
+    # template_self_check!/1, ended only by delete_throwaway_tenant_and_registration!/1).
+    # The fix (already implemented, commit 9e0fa90d, NOT modified by this
+    # test): a new private clear_migrations_applied_flag!/1 nulls
+    # migrations_applied_at immediately after replay_migrations/2 returns
+    # {:ok, _}, at both throwaway-row call sites -- narrowing (per the design's
+    # own §2.3, explicitly NOT fully closing) the window.
+    #
+    # THREE APPROACHES WERE TRIED AND REJECTED BEFORE THIS ONE, IN ORDER,
+    # EACH FOR A CONCRETE, MEASURED REASON (kept here, not deleted, because
+    # the reasoning is load-bearing for why this file's own regression test
+    # takes the shape it does):
+    #
+    # 1. Direct unit test of clear_migrations_applied_flag!/1 itself. Rejected:
+    #    it is a brand-new PRIVATE function (`defp`) of this module, not
+    #    exported at the BEAM level -- calling it from this external test
+    #    module raises UndefinedFunctionError. There is no existing seam this
+    #    module exposes for reaching private helpers (checked: the only
+    #    precedent, assert_template_parity_against_independent_reference!/1,
+    #    is public specifically because ITS OWN design intended it to be
+    #    tested directly -- clear_migrations_applied_flag!/1 was not given
+    #    the same treatment, and this test must not modify the already-
+    #    implemented fix to add one).
+    # 2/3. Force a real rebuild (via the same fingerprint-corruption
+    #    technique the "ISS-0842" describe block above already uses) and
+    #    busy-poll `tenant_schemas` from a separate connection for the
+    #    throwaway row's `migrations_applied_at`, asserting either "never
+    #    observed" or "observed for at most N ms". Both rejected after
+    #    actually measuring, not assumed:
+    #    - post-fix, the window is NOT zero-width even in principle: the two
+    #      `maybe_seed_platform_event_types/2`/`maybe_seed_entity_event_types/2`
+    #      calls run INSIDE `replay_migrations/2`, AFTER `mark_migrations_applied/1`
+    #      commits and BEFORE `replay_migrations/2` returns -- i.e. still
+    #      inside the stamped window even post-fix, by design (§2.3's own
+    #      "not eliminated"). Measured directly at ~40-50ms per rebuild. So
+    #      "never observed" is not a valid post-fix expectation.
+    #    - a duration-bound variant (amplifying the discriminator via a
+    #      temporary `LETFLOW_TEMPLATE_REFCHECK=1`, which makes the pre-fix
+    #      window include a second full 53-migration replay) DID discriminate
+    #      cleanly in an isolated single-file run (fixed: ~91-93ms; a
+    #      temporary local revert of both call sites: ~2.7-2.8s) -- but
+    #      failed when actually run as part of the full
+    #      `mix letflow.check.test` suite: under real connection-pool
+    #      contention from concurrently-running tests, the FIXED code's own
+    #      measured window ballooned to 9895-14916ms, blowing through any
+    #      sane fixed bound. This is exactly the documented cost-placement
+    #      hazard `template_self_check!/1`'s own comment already warns about
+    #      for `LETFLOW_TEMPLATE_REFCHECK` under load, and it is also exactly
+    #      what this project's own core directives forbid ("don't depend on
+    #      wall-clock time") -- a timing-based assertion is fundamentally
+    #      the wrong tool here, not merely hard to calibrate.
+    #
+    # WHAT THIS TEST DOES INSTEAD: a deterministic, load-independent
+    # STRUCTURAL check on `test/support/tenant_template.ex`'s own AST,
+    # verifying the exact code shape the fix's design (§2.2) specifies at
+    # both throwaway-row call sites: `clear_migrations_applied_flag!(...)` is
+    # the FIRST expression evaluated in the `{:ok, _applied_versions} ->`
+    # branch of the `case TenantProvisioning.replay_migrations(...) do`
+    # clause, i.e. it runs before any other work (before
+    # `template_self_check!/1` at call site 1, before `assert_clone_parity!/2`
+    # at call site 2) -- which is precisely the property §2.3's window-
+    # narrowing argument depends on. This has zero timing dependence and is
+    # not "testing the declaration" in the disfavored, no-real-logic sense
+    # (`docs/anti-patterns.md`'s mix.exs-alias example): it exercises
+    # `Code.string_to_quoted!/1` against the file's REAL, currently-compiled
+    # source and pattern-matches the REAL parsed AST of the two `case`
+    # clauses that make up the fix -- not the mere presence of a string, and
+    # it demonstrably discriminates fixed from reverted code (see the FAIL
+    # evidence in this run's own handoff report: reverting the two call
+    # sites, exactly as ELIXIR-DEV's commit added them, makes this test fail
+    # with a clear "clear_migrations_applied_flag! is not the first
+    # expression" message; restoring them makes it pass).
+    test "clear_migrations_applied_flag!/1 is the first expression after both throwaway-row replay_migrations/2 successes" do
+      source = File.read!(Path.join(__DIR__, "tenant_template.ex"))
+      {:ok, ast} = Code.string_to_quoted(source, columns: true)
+
+      replay_migrations_ok_branches = find_replay_migrations_ok_branches(ast)
+
+      assert length(replay_migrations_ok_branches) == 2,
+             "ISS-0879 regression helper: expected exactly 2 " <>
+               "`case TenantProvisioning.replay_migrations(...) do {:ok, _} -> ...` " <>
+               "clauses in test/support/tenant_template.ex (one in do_build_template!/1, " <>
+               "one in assert_template_parity_against_independent_reference!/1) -- found " <>
+               "#{length(replay_migrations_ok_branches)}. This helper itself may need " <>
+               "updating if the surrounding code was intentionally restructured."
+
+      Enum.each(replay_migrations_ok_branches, fn first_expr ->
+        assert first_expr_calls_clear_migrations_applied_flag?(first_expr),
+               "ISS-0879 regression: a `{:ok, _applied_versions} ->` branch of a " <>
+                 "`TenantProvisioning.replay_migrations/2` case in test/support/tenant_template.ex " <>
+                 "does not call clear_migrations_applied_flag!(...) as its first expression " <>
+                 "(found first expression: #{Macro.to_string(first_expr)}). This is the exact " <>
+                 "regression ISS-0879 fixed: the throwaway row's migrations_applied_at stays " <>
+                 "set for the whole duration of whatever runs next (template_self_check!/1 or " <>
+                 "assert_clone_parity!/2), visible to RetentionOperations.provisioned_tenant_schemas/0's " <>
+                 "platform-wide fanout."
+      end)
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Helpers -- deliberately independent of Letflow.TenantFixture/
   # Letflow.Test.TenantTemplate's own private machinery: this test proves the
@@ -487,6 +596,63 @@ defmodule Letflow.Test.TenantTemplateTest do
     |> List.last()
     |> String.trim("\"")
   end
+
+  # ISS-0879 regression helpers -----------------------------------------------
+  #
+  # Walks the parsed AST of test/support/tenant_template.ex looking for every
+  # `case TenantProvisioning.replay_migrations(...) do ... {:ok, _} -> <body> ... end`
+  # clause, and returns the FIRST expression of each such `{:ok, _} -> <body>`
+  # branch (a `{:ok, _applied_versions} ->` two-element `{args, body}` tuple
+  # per Elixir's own `case/2` AST shape, `body` itself either a single
+  # expression or a `{:__block__, _, [expr | _]}` for a multi-statement
+  # branch -- both are handled below).
+
+  defp find_replay_migrations_ok_branches(ast) do
+    {_ast, acc} =
+      Macro.prewalk(ast, [], fn
+        {:case, _meta,
+         [
+           {{:., _, [{:__aliases__, _, [:TenantProvisioning]}, :replay_migrations]}, _, _args},
+           [do: clauses]
+         ]} =
+            node,
+        acc ->
+          first_exprs =
+            clauses
+            |> Enum.filter(fn {:->, _, [[pattern], _body]} ->
+              ok_applied_versions_pattern?(pattern)
+            end)
+            |> Enum.map(fn {:->, _, [_pattern, body]} -> first_expression_of(body) end)
+
+          {node, acc ++ first_exprs}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    acc
+  end
+
+  # Matches the `{:ok, _applied_versions}` pattern (a 2-tuple whose first
+  # element is the literal atom :ok) -- deliberately not matching on the
+  # second element's own name, since that is a pattern-variable choice, not
+  # part of the shape this test cares about.
+  defp ok_applied_versions_pattern?({:{}, _, [:ok, _]}), do: true
+  defp ok_applied_versions_pattern?({:ok, _}), do: true
+  defp ok_applied_versions_pattern?(_), do: false
+
+  defp first_expression_of({:__block__, _, [first | _rest]}), do: first
+  defp first_expression_of(single_expr), do: single_expr
+
+  # True when `expr` is a call to `clear_migrations_applied_flag!(...)`
+  # (with any single argument -- the throwaway tenant_id, which differs by
+  # call site).
+  defp first_expr_calls_clear_migrations_applied_flag?(
+         {:clear_migrations_applied_flag!, _meta, [_arg]}
+       ),
+       do: true
+
+  defp first_expr_calls_clear_migrations_applied_flag?(_other), do: false
 
   defp a_trigger_in(schema_name) do
     %{rows: rows} =

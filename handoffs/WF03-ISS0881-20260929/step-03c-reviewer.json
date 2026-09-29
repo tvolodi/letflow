@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0881-20260929/step-03c-reviewer.json",
   "created_at": "2026-09-29T02:05:32Z",
   "started_at": "2026-09-29T02:05:32Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T02:06:24Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -35,19 +35,19 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Independently re-derived from `git diff main...HEAD` (not from ELIXIR-DEV's summary). Confirmed via `git diff main...HEAD --name-only` restricted to `lib/`, `priv/`, `config/` that the only lib-side file touched is the new design doc `lib/letflow/design/iss0881-sandbox-pool-test-isolation.md` -- `lib/letflow/sandbox_pool.ex` is untouched, and no other test file besides `test/letflow/sandbox_pool_test.exs` is modified. No scope creep.\n\nCall-site-by-call-site check of the full content diff against the design doc's section 1: RT-1 (line 846's bare `assert final == baseline` deleted, `refute MapSet.member?` kept) -- matches. RT-2 (widened `%SandboxClaim{schema_name: o_schema}` and `%SandboxClaim{schema_name: w1_schema}` pattern matches; platform-wide equality replaced by two `refute MapSet.member?` checks) -- matches exactly, including the design's explicit omission of a third check for W2 (never provisions). RT-3 (mid-test equality replaced with `assert MapSet.member?(...)` + `assert map_size(state.active) == 1`; post-release equality replaced with a single `refute MapSet.member?`) -- matches. RT-4, RT-5, RT-6 (each: delete the bare `assert final == baseline` line only, existing `refute MapSet.member?` line untouched) -- matches in all three, byte-for-byte per the design's line-by-line instruction. RT-7 (widened `o_schema`/`w_schema` bindings; equality replaced with two refutes) -- matches. RT-8 (widened `o1_schema`/`a_schema` bindings; equality replaced with two refutes) -- matches, including the design's own reflow of the `assert_receive` pattern across two lines. RT-9 -- confirmed no hunk touches it, per design's 'no assertion change needed'. ISS-0292/RT-8 diff-order test -- `Enum.to_list()` replaced with `Enum.filter(&(&1 in [first_schema, middle_schema, third_schema]))` immediately before the existing exact-order equality assertion, exactly as specified. No unexplained deviation found anywhere in the diff.\n\nIdiom/dead-code check: every newly-bound variable (`o_schema`, `w1_schema`, `w_schema`, `o1_schema`, `a_schema`) is consumed by the very next assertion in its test -- no unused bindings. Style (line-wrapping of widened pattern matches, blank-line placement) is consistent with the surrounding file and with how other call sites in the same file already bind `schema_name` (e.g. pre-existing lines 805/974/1013/1057/1101). No behaviours, macros, or generic plumbing introduced -- this is strictly narrower/more-specific assertion logic, the opposite of scope creep. No decision-record conflict: the design doc explicitly follows the precedent set by `lib/letflow/design/iss0348-backfill-test-isolation.md` for the same unscoped-platform-snapshot problem shape, and nothing here touches `Letflow.SandboxPool`, `Letflow.Engine`, or `Letflow.InstanceSupervisor`, so REQ-045/0011/0012 are not implicated.\n\nRan both required checks myself: `mix format --check-formatted` exits 0 (no output, file already formatted). `mix compile --warnings-as-errors` exits 0 (no output, no warnings). No `docs/anti-patterns.md` entries match this area (grepped for sandbox_pool/schema_name/test isolation, one file-level hit only, no relevant existing entries to check against).\n\nType-safety note (non-blocking, not filed as an issue): `sandbox_schema_names/0` returns a bare `MapSet.t(String.t())` with no type distinguishing 'this pool's own schema name' from 'some other partition's schema name' -- the whole class of bug ISS-0881 patches around. This is pre-existing test-harness shape, not something this diff introduces or that a struct/Ecto.Enum change could reasonably eliminate (the names are inherently platform-wide by the query's own documented contract), so I am not filing a docs/issues/ type-safety ticket for it -- flagging here only as the 'worth watching' observation the role calls for, since the design doc's own 'Open question' section on `drop_sandbox_schemas_created_since!/1`'s cross-partition drop risk is the more concrete, already-flagged follow-up (recommended there as a separate issue for ELIXIR-DEV/TEST-DESIGNER to pick up, not something this review needs to re-flag as new).\n\nVerdict: PASS. Diff conforms to the approved, validated design at every call site enumerated, no scope creep, idiomatic ExUnit style consistent with the rest of the file, both required commands green.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0881-20260929",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0881-20260929",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGNER (Step 4) to design/write the regression-proof-under-contention test coverage."
   },
   "rework_count": 0,
   "max_rework": 3

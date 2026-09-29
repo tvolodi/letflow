@@ -394,7 +394,7 @@ for s in scenarios:
         ok, gap, unk = [], [], []
         for aid, labels, tok in scenario_ok_tokens:
             is_candidate = any("candidate" in (lbl or "").lower() for lbl in labels)
-            path = "/me/modules" if is_candidate else "/tasks/inbox"
+            path = "/api/v1/me/modules" if is_candidate else "/api/v1/tasks/inbox"
             st_, _ = http("GET", base + path, auth(tok))
             if st_ == 200: ok.append("%s(%s)" % (aid, path))
             elif st_ == 403: gap.append("%s(%s@%s)" % (aid, st_, path))

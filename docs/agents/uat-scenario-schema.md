@@ -249,3 +249,13 @@ summary: the corpus is non-empty; each file parses as YAML; `id`/`title`/
 branch exists, last in the list. The task never checks the *semantic*
 correctness of a `scope` classification or a `fact` choice — see the
 classification-rule note above.
+
+## How the preflight reads a scenario
+
+`scripts/uat_preflight.sh` (WF-05 Step 0) builds its PRECONDITIONS manifest from:
+`company_id`/`scope` (tenant + Keycloak realm; `platform` = the default realm),
+`process_id` (deployed definition), `actors:` (login actors; `actor-system-*` and
+`actor-any` are not logins; `actor-<tenant>-<name>` maps to a seeded username `<name>-*`;
+`actor-platform-admin` to the PLATFORM_ADMIN user), and `pipeline_test:` (must exist,
+must not carry an unresolved `NOTE (ISS-05xx)` forward-reference, must not use
+`docker compose`/`psql`). The mapping is best-effort; unmappable actors report UNKNOWN.

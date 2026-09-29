@@ -1,0 +1,226 @@
+run_id: WF05-FULL-20260929-PLATFORM
+date: "2026-09-29"
+agent: UAT-RUNNER
+scope: >
+  Slice A of WF05-FULL-20260929: all 19 scenarios in
+  test/fixtures/uat/scenarios/platform/*.yaml, against live QA. (The dispatch
+  said "18"; the directory holds 19 files. All 19 are covered.)
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+  idp_base_url: "https://auth.qa.bizdala.com"
+
+credential_acquisition: >
+  admin-user (PLATFORM_ADMIN) and worker-user (TASK_WORKER) passwords fetched via
+  qa-login.sh (ssh to ubuntu-16gb-nbg1-1) and held in-process only; never written
+  here. Both confirmed valid by direct Keycloak password grant (JWT realm_access
+  roles PLATFORM_ADMIN / TASK_WORKER respectively). Accounts referenced by the
+  promotion specs (promo-proposer-uat, uat-promo-conflict-proposer) are NOT in
+  qa-login.sh's user set; see the two promotion scenarios below.
+
+method: >
+  Each scenario with an existing pipeline_test was driven with `npx playwright test
+  <spec> --reporter=list` from web/ (E2E_BASE_URL=BPM_TEST_URL=https://qa.bizdala.com,
+  BPM_IDP_BASE_URL=https://auth.qa.bizdala.com). Failures were independently
+  re-checked with direct curl calls against the QA API. No mocks, no interception.
+
+summary:
+  total: 19
+  pass: 2          # template-update-conflict-resolution, definition-promotion-rollback (flaky, passed on retry)
+  fail: 2          # platform-login-routing-by-role, tenant-branding-applied
+  blocked: 15
+  result_overall: FAIL
+
+scenarios:
+
+  - id: platform-login-routing-by-role
+    verdict: FAIL
+    branches_run: [PLATFORM_ADMIN (PASS), TASK_WORKER (FAIL), unauthenticated/else (PASS)]
+    evidence: >
+      2 passed / 1 failed. Branch role=TASK_WORKER (worker-user): the app landed on "/"
+      with "My Tasks" nav but rendered heading "Unknown workspace", banner "Tenant name
+      could not be loaded. Contact your administrator." and "You do not have access to
+      this area. Contact your tenant administrator."; getByTestId('tile-definitions')
+      never appeared (spec line 132). Independent API check with worker-user's bearer
+      token: GET /api/v1/definitions, /instances, /tasks, /tenants, /me all return
+      HTTP 403 "insufficient permissions"; the same calls with admin-user return 200.
+      The previous run (WF05-HEALTHCHECK-PLATFORM-20260919) had this branch passing.
+    severity: MAJOR
+    suggested_action: route_to_wf03
+    note: >
+      Root cause not diagnosed (out of scope). Candidate: worker-user's tenant
+      membership/role binding on QA changed or was lost since 2026-09-19, or an RBAC
+      regression for TASK_WORKER.
+
+  - id: platform-tenant-branding-applied
+    verdict: FAIL
+    evidence: >
+      EO-001/AC1 PASS (live swatch and --color-brand-600 update without reload).
+      EO-003/AC2 FAIL and EO-005 FAIL: after the spec's seed PATCH /api/v1/tenant/settings
+      {"settings":{"brand_colors":{"primary":"#1864ab"}}} (HTTP 200), the page read
+      --color-brand-600 = #228be6 (platform default) instead of #1864ab. Independent
+      confirmation: the same PATCH by admin-user returns 200 with body
+      {"settings":{},"tenant_id":"fa2c7dbb-..."} (brand_colors dropped, not persisted);
+      GET /api/v1/tenant/settings returns 404; GET /api/tenant-config?host=qa.bizdala.com
+      still returns primary #228be6. So the colour applied in EO-001 is not persisted.
+    severity: MAJOR
+    suggested_action: route_to_wf03
+
+  - id: platform-template-update-conflict-resolution
+    verdict: PASS
+    evidence: "1 passed (6.3s): own adaptations survive a pack update; unresolved conflicts block apply; resolutions not re-flagged, all asserted in-spec against QA."
+
+  - id: platform-definition-promotion-rollback
+    verdict: PASS
+    note: FLAKY
+    evidence: >
+      Attempt 1 failed at spec line 235 (start-definition-version input was "" instead of
+      "1.0.0" after typing the process key in the Start Instance dialog); retry #1 passed
+      in full (10.7s). Reported as pass-with-flake; a second independent run is advisable.
+      (CI env var was set in this shell, so retries=1 was active.)
+
+  - id: platform-definition-promotion-approved
+    verdict: BLOCKED
+    reason: CREDENTIALS_MISSING
+    evidence: >
+      Spec needs a second PLATFORM_ADMIN (self_approval_forbidden) in bpm-default:
+      promo-proposer-uat. Token request returned 401 invalid_grant "Invalid user
+      credentials" (spec run and direct curl). The account is not in qa-login.sh and its
+      password is not retrievable (per test/uat-reports/gui-review-2026-09-20-*.md).
+
+  - id: platform-definition-promotion-conflict-rejected
+    verdict: BLOCKED
+    reason: CREDENTIALS_MISSING
+    evidence: >
+      Same as above for uat-promo-conflict-proposer: 401 invalid_grant on token request;
+      not in qa-login.sh.
+
+  - id: platform-migration-partial-failure-resume
+    verdict: BLOCKED
+    reason: PRECONDITION_NOT_MET
+    evidence: >
+      Spec threw "Tenant not found: swiftroute" (spec line 125). GET /api/v1/tenants on QA
+      lists 3 tenants: bpm-default, bilimbaga, req384-eo001-b-740d4d13. No swiftroute
+      tenant exists, so the scenario's "three companies, one arranged to fail" precondition
+      cannot be met. (Backend REQ-374 rollouts router exists at
+      /api/v1/platform-migrations/rollouts; not exercised without the tenants.)
+
+  - id: platform-partition-retention-drop
+    verdict: BLOCKED
+    reason: ENV_NOT_SUPPORTED
+    evidence: >
+      Spec backdates partitions with `docker compose exec postgres psql` (web/tests/e2e/db-exec.ts),
+      i.e. direct local Postgres access; there is no HTTP surface for this against QA.
+      The command failed in this environment. Not a defect in the target.
+
+  - id: platform-tenant-switch-cache-isolation
+    verdict: BLOCKED
+    reason: ENV_NOT_SUPPORTED
+    evidence: >
+      3 tests: EO-001 blocked at step 03 (needs docker-compose psql INSERT into
+      tenant_memberships, no HTTP write path; it hit a local dev DB, which lacks the
+      table); EO-002 (sign-out clears bpm_realm_slug residue) PASS; EO-003 (task shows
+      the form version it was created against) PASS. Cross-tenant cache isolation
+      (EO-001) itself was NOT verified.
+
+  - id: platform-attachment-cross-tenant-probe
+    verdict: BLOCKED
+    reason: CREDENTIALS_MISSING
+    security_note: >
+      Isolation-invariant scenario; NOT verified, not a failure observed. Step 01 needs a
+      Keycloak master-realm admin token (admin/admin docker default) to onboard two
+      throwaway realms; QA returned 401 invalid_grant. Cross-tenant attachment isolation
+      on QA remains unverified by UAT and needs a properly provisioned run.
+
+  - id: platform-definition-type-error-blocked
+    verdict: BLOCKED
+    reason: UNBUILT_FEATURE
+    evidence: "pipeline_test web/tests/e2e/pipelines/platform-definition-type-error-blocked.pipeline.e2e.spec.ts does not exist; scenario carries NOTE (ISS-0527)."
+
+  - id: platform-instance-pin-survives-catalog-change
+    verdict: BLOCKED
+    reason: UNBUILT_FEATURE
+    evidence: "pipeline_test web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts does not exist; NOTE (ISS-0527)."
+
+  - id: platform-renderer-permission-denied-surface
+    verdict: BLOCKED
+    reason: UNBUILT_FEATURE
+    evidence: >
+      pipeline_test web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts does not
+      exist; NOTE (ISS-0527). Actors are also SwiftRoute personas (alice, marco), whose
+      three-layer credential setup is not in place on QA (no swiftroute tenant).
+
+  - id: platform-sandbox-cross-tenant-probe
+    verdict: BLOCKED
+    reason: UNBUILT_FEATURE
+    security_note: "Isolation scenario; feature absent, so nothing to observe. Not a security failure."
+    evidence: >
+      Scenario header states the runtime-agent subsystem is not built in Letflow.
+      Probing QA: GET /api/v1/agent-requests, agent-responses, agent-events,
+      agent/sandboxes, agent-sandboxes all return 404 with admin-user.
+
+  - id: platform-agent-artifact-resubmit-idempotent
+    verdict: BLOCKED
+    reason: UNBUILT_FEATURE
+    evidence: "Closed as ISS-0740 (closed_not_applicable): R-Co subsystem never adopted; agent-* routes 404 on QA."
+
+  - id: platform-frontend-guard-selfcheck
+    verdict: BLOCKED
+    reason: NOT_EXERCISABLE_AGAINST_INSTANCE
+    evidence: >
+      All 6 steps are via: system build-gate actions (lint/guard self-tests, rebuild of the
+      shipped package). They are CI/build-time checks with no pipeline_test and no
+      instance-facing surface; not executable against qa.bizdala.com.
+
+  - id: platform-out-of-order-effect-completion
+    verdict: BLOCKED
+    reason: NOT_EXERCISABLE_AGAINST_INSTANCE
+    evidence: >
+      All steps are system-actor internals (effects worker / apply worker / scheduler
+      recording and applying answers); no pipeline_test and no HTTP surface to inject
+      out-of-order effect answers on QA.
+
+  - id: platform-outbox-cap-backpressure
+    verdict: BLOCKED
+    reason: NOT_EXERCISABLE_AGAINST_INSTANCE
+    evidence: >
+      Requires filling a tenant's outbox to its cap on a shared QA instance and a
+      drainer actor; no pipeline_test, no supported HTTP surface, and doing so would
+      degrade the shared instance. Not attempted.
+
+  - id: platform-unsafe-migration-rejected
+    verdict: BLOCKED
+    reason: NOT_EXERCISABLE_AGAINST_INSTANCE
+    evidence: >
+      The DDL-safety checker for submitted change sets has no HTTP surface
+      (/api/v1/platform-migrations/rollouts only takes a column promotion spec). Steps 5
+      would also apply a platform-wide migration to real QA tenants. Also QA has 3
+      tenants incl. a leftover test tenant, so the precondition is dubious. Not attempted.
+
+state_changes_on_qa: >
+  Spec-driven fixtures (definitions/instances/tasks from the rollback and template specs)
+  remain on QA, as those specs' own cleanup accepts. One manual PATCH to
+  /api/v1/tenant/settings (brand primary #1864ab) was sent; it returned 200 and persisted
+  nothing (settings {}). No tenant, realm or user was created.
+
+local_side_effects: >
+  Two specs shelled to a local docker-compose Postgres (failed: relation missing / command
+  failed). The tracked file web/tests/e2e/.pipeline-state/tenant-switch-cache-isolation.json
+  was restored via git checkout and the untracked tenant-switch-cache-isolation-eo001.json
+  removed. Screenshots and test-results are under gitignored web/ paths. Nothing committed.
+
+new_findings:
+  - title: TASK_WORKER (worker-user) receives 403 on all tenant APIs and sees "Unknown workspace" on QA
+    severity: MAJOR
+    scenario: platform-login-routing-by-role
+  - title: PATCH /api/v1/tenant/settings accepts brand_colors with 200 but persists {} (branding not saved) on QA
+    severity: MAJOR
+    scenario: platform-tenant-branding-applied
+  - title: definition-promotion-rollback spec flaky (start-definition-version input empty on first attempt)
+    severity: MINOR
+    scenario: platform-definition-promotion-rollback
+  - title: QA fixture gaps block 4 platform scenarios (promo proposers, Keycloak master admin, swiftroute tenant, local-DB-only specs)
+    severity: MAJOR
+    suggested_action: route to infra/ORCH

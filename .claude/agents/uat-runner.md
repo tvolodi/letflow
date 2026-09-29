@@ -155,6 +155,19 @@ handoff's `context` — never assume "whatever instance is reachable":
   guess — return the handoff FAILED naming the missing field, same as `base_url`/
   `credential_source` below.
 
+- `preflight_report`: path to the WF-05 Step 0 output of `scripts/uat_preflight.sh` for
+  this target (e.g. `test/uat-reports/preflight-<date>-<environment>.txt`). Required. Do
+  not run a scenario the report lists as GAP; record it BLOCKED with the report's reason.
+  If the report is missing, or shows Step 0 was skipped, return the handoff FAILED
+  naming the missing field.
+
+Result classification: a scenario that cannot run for an environment reason
+(`ENV_*`, `CREDENTIALS_MISSING`, `PRECONDITION_NOT_MET`, `ENV_NOT_SUPPORTED`) is
+BLOCKED-by-environment; `UNBUILT_FEATURE` is a real product gap and is not. If any
+scenario is BLOCKED-by-environment, set `result_overall: ENV_NOT_READY` — never report a
+run with BLOCKED-by-environment scenarios (least of all an all-BLOCKED run) as a plain
+FAIL or PASS.
+
 If a dispatch is missing any required field above, do not guess a target — return the
 handoff FAILED, naming the missing field, per this project's "no speculation" core
 directive.

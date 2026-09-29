@@ -164,3 +164,34 @@
       done in this same append. Appended here in volume 24 rather than
       volume 23 (this run's original append target) for the same reason
       as the started-event above.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T13:02:05Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), run
+      WF03-ISS0883-20260929 -- test/support/status_history.ex's entries/1
+      regex was hard-anchored to exactly 2-space indent, causing a
+      false-green on assertion A9 when a malformed 0-indent append (PR
+      #1972) coincidentally produced a matching wrong `entries:` count.
+      Fixed: regex widened to capture/track indent, plus new assertion A11
+      independently catching any non-2-space entry (commit cad6fcf2), with
+      a fail-first regression test (commit 19c21c77). Full pipeline
+      (ISSUE-FIXER, CODE-DESIGNER, CODE-DESIGN-VALIDATOR, ELIXIR-DEV,
+      SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR,
+      TEST-RUNNER, RELEASE-VALIDATOR) PASSed on branch
+      feature/WF03-ISS0883-20260929. LABELING CORRECTION (RELEASE-VALIDATOR
+      finding, confirmed by ORCH): despite the branch and both commit
+      messages above being labeled "ISS-0883", the actual issue this fixes
+      is docs/issues/ISS-0884.yaml (queue_ref: Q-883, github_ref: GH-1977),
+      set to status: resolved in this same commit -- docs/issues/ISS-0883.yaml
+      on disk is a separate, unrelated, still-open issue (queue_ref: Q-882,
+      github_ref: GH-1976, about mix letflow.check.test not honoring
+      TEST_PARALLEL_N) and was NOT touched. The locked queue task id for
+      this run (883) maps by github_issue_number (1977) to ISS-0884, not to
+      the file literally named ISS-0883.yaml -- a queue-task-id-vs-filename
+      numbering desync per docs/agents/protocols/TASK_QUEUE.md's explicit
+      warning against deriving a set_lock target from a filename. Not a
+      docs/requirements.yaml entry (this is an issue, no requirement status
+      changes).

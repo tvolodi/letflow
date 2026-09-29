@@ -364,6 +364,7 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
           |> Enum.filter(&(&1.schema_name in own_schemas))
           |> Enum.map(& &1.status)
           |> Enum.sort()
+
         assert :succeeded in statuses
         assert :skipped in statuses
         refute :failed in statuses

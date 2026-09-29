@@ -610,12 +610,18 @@ defmodule Letflow.Test.TenantTemplateTest do
   defp find_replay_migrations_ok_branches(ast) do
     {_ast, acc} =
       Macro.prewalk(ast, [], fn
-        {:case, _meta, [{{:., _, [{:__aliases__, _, [:TenantProvisioning]}, :replay_migrations]}, _, _args}, [do: clauses]]} =
+        {:case, _meta,
+         [
+           {{:., _, [{:__aliases__, _, [:TenantProvisioning]}, :replay_migrations]}, _, _args},
+           [do: clauses]
+         ]} =
             node,
         acc ->
           first_exprs =
             clauses
-            |> Enum.filter(fn {:->, _, [[pattern], _body]} -> ok_applied_versions_pattern?(pattern) end)
+            |> Enum.filter(fn {:->, _, [[pattern], _body]} ->
+              ok_applied_versions_pattern?(pattern)
+            end)
             |> Enum.map(fn {:->, _, [_pattern, body]} -> first_expression_of(body) end)
 
           {node, acc ++ first_exprs}

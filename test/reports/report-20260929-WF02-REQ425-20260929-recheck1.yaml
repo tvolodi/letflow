@@ -1,0 +1,69 @@
+run_id: WF02-REQ425-20260929
+report_id: report-20260929-WF02-REQ425-20260929-recheck1
+agent: TEST-RUNNER
+date: 2026-09-29
+requirement_ids:
+  - REQ-425
+reason_for_recheck: >
+  Original Step 4 PASS (test/reports/report-20260929-WF02-REQ425-20260929.yaml)
+  predates this run's post-rebase integration fix (commit 298e8e8448d1cb3e3dce13a3cce21513d3a0ecbc,
+  "fix(WF02-REQ425): remove dead statusCode branch in pinned_form_resolver") to
+  apps/mobile/lib/definitions/pinned_form_resolver.dart. Re-verified against the
+  current tree per handoff handoffs/WF02-REQ425-20260929/step-04-test-runner-recheck1.json.
+environment:
+  host_free_memory_at_dispatch: "~1.56GB (per handoff)"
+  host_free_memory_measured_before_run: "1,352,144 KB (~1.32GB) via Get-CimInstance Win32_OperatingSystem"
+  note: >
+    Memory was tighter than at dispatch time. Per explicit handoff instruction,
+    scripts/test_parallel.sh was NOT used (even at reduced parallelism); ran
+    serial `mix test` directly instead. Serial run completed cleanly with no
+    OOM/reap.
+elixir_suite:
+  command: "mix test"
+  mode: serial (not scripts/test_parallel.sh, per handoff instruction)
+  docker: "letflow-postgres-1 and letflow-keycloak-1 already running; docker compose up -d confirmed both Running"
+  duration_seconds: 2695.6
+  result_line: "Result: 5048 passed (8 properties, 5040 tests), 27 excluded"
+  failures: 0
+  exit_code: 0
+  outcome: PASS
+mobile_suite:
+  location: apps/mobile
+  commands:
+    - "flutter analyze"
+    - "flutter test"
+  analyze_result: "No issues found! (ran in 27.5s)"
+  test_result_line: "All tests passed!"
+  tests_run: 147
+  failures: 0
+  outcome: PASS
+  note: >
+    Includes apps/mobile/test/definitions/pinned_form_resolver_test.dart, the
+    test file covering the integration fix in pinned_form_resolver.dart, which
+    passed (AC1-AC4 cases all green).
+acceptance_criteria_check:
+  - criterion: "401-once-then-200 exactly one refresh/retry; two concurrent 401s share one refresh"
+    status: covered_and_passing
+    evidence: "test/api/api_client_hardening_test.dart: '401 refresh-then-retry (AC1)' cases, all passed"
+  - criterion: "refresh failure clears tenant tokens and routes to login"
+    status: covered_and_passing
+    evidence: "test/api/api_client_hardening_test.dart: 'refresh failure (AC2)' cases, all passed"
+  - criterion: "5xx backoff on GET only, bounded attempts, named constant; POST not retried"
+    status: covered_and_passing
+    evidence: "test/api/api_client_hardening_test.dart: '5xx backoff for GET only (AC3)' cases, all passed (kMaxServerRetryAttempts referenced by name)"
+  - criterion: "ApiError variant mapping per status code, including module-not-available vs not-found, and Retry-After parsing"
+    status: covered_and_passing
+    evidence: "test/api/api_client_hardening_test.dart: 'ApiError variant mapping (AC4)' cases, all passed"
+  - criterion: "no DioException/SocketException escapes lib/api/"
+    status: covered_and_passing
+    evidence: "test/api/api_client_hardening_test.dart: 'no raw transport exception escapes lib/api/ (AC5)' cases, all passed"
+  - criterion: "single-client guard self-test fails on a lib/features/ fixture importing package:dio, passes on real tree"
+    status: covered_and_passing
+    evidence: "test/guards/single_api_client_guard_test.dart, all 5 cases passed"
+  - criterion: "flutter analyze && flutter test pass with real output quoted; SECURITY-REVIEWER signs off before merge"
+    status: tests_pass_security_signoff_out_of_scope_for_test_runner
+    evidence: "See mobile_suite above. SECURITY-REVIEWER sign-off is a separate gate not owned by TEST-RUNNER (prior handoffs show REVIEWER PASS already logged on the integration fix, commit 7a410285)."
+overall_outcome: PASS
+notes:
+  - "This is a re-check report only; it does not overwrite test/reports/report-20260929-WF02-REQ425-20260929.yaml."
+  - "No test code or application code was modified during this run."

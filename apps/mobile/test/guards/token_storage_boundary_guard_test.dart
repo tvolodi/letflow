@@ -129,6 +129,33 @@ void main() {
     expect(violations.single.file, 'lib/api/leaky.dart');
   });
 
+  test('self-test: checker fires on a fixture importing shared_preferences'
+      ' under lib/auth/', () {
+    final violations = checkTokenStorageBoundary(
+      libFiles: {
+        'lib/auth/leaky_prefs.dart':
+            "import 'package:shared_preferences/shared_preferences.dart';\n",
+      },
+    );
+
+    expect(violations, hasLength(1));
+    expect(violations.single.file, 'lib/auth/leaky_prefs.dart');
+    expect(violations.single.kind, contains('shared_preferences'));
+  });
+
+  test('self-test: a shared_preferences import OUTSIDE lib/auth/ or'
+      ' lib/api/ fires zero violations (boundary is scoped, not global)',
+      () {
+    final violations = checkTokenStorageBoundary(
+      libFiles: {
+        'lib/renderers/form/prefs.dart':
+            "import 'package:shared_preferences/shared_preferences.dart';\n",
+      },
+    );
+
+    expect(violations, isEmpty);
+  });
+
   test('self-test: the sanctioned file itself fires zero violations', () {
     final violations = checkTokenStorageBoundary(
       libFiles: {

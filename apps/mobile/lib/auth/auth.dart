@@ -83,10 +83,43 @@ class TokenSet {
 /// when two different unresolvable slugs both fall back to the same
 /// default realm (REQ-124's anti-enumeration behavior).
 ///
-/// REQ-422 hardens/guards this same class (key rotation, biometric gate,
-/// tamper detection) — not designed or implemented here.
+/// Key rotation, biometric gating, and tamper detection are **not** part of
+/// REQ-422's requirement text (BUILDS items 1–7) and are not implemented
+/// here — see REQ-422 design §"OQ-6" if a later requirement expects them
+/// under this label.
 class TenantTokenStore {
   const TenantTokenStore(this._storage);
+
+  /// Hardened production constructor (REQ-422 §1.2, MOB-5, BUILDS item 1) —
+  /// the only call site that should ever construct a [TenantTokenStore] in
+  /// production code. Wraps a single [FlutterSecureStorage] instance whose
+  /// `aOptions`/`iOptions` defaults apply to every `read`/`write`/`delete`
+  /// made through it:
+  ///
+  /// - iOS: `KeychainAccessibility.first_unlock_this_device` — unlocks only
+  ///   after the device's first unlock post-boot, and is never included in
+  ///   an iCloud Keychain backup/sync (no `synchronizable` flag is set;
+  ///   the plugin's iCloud-sync option defaults to unset/`false`).
+  ///
+  /// **Package-version note (mirrors [RealAppAuthAdapter]'s own):** the
+  /// design (§1.2) specifies `AndroidOptions(encryptedSharedPreferences:
+  /// true)`. The pinned `flutter_secure_storage: ^11.2.0` (`pubspec.yaml`)
+  /// removed that named parameter — `AndroidOptions`'s **default**
+  /// constructor (used here, unadorned) is v11's own strong-security
+  /// baseline: AES/GCM/NoPadding data encryption with an Android-Keystore
+  /// RSA-OAEP-wrapped key, i.e. the modern superset of what
+  /// `encryptedSharedPreferences: true` requested in the pre-v11 API. No
+  /// parameter is needed to opt into it; passing the plain `AndroidOptions()`
+  /// default *is* the hardened choice under this pinned version.
+  factory TenantTokenStore.production() {
+    const storage = FlutterSecureStorage(
+      aOptions: AndroidOptions(),
+      iOptions: IOSOptions(
+        accessibility: KeychainAccessibility.first_unlock_this_device,
+      ),
+    );
+    return const TenantTokenStore(storage);
+  }
 
   final FlutterSecureStorage _storage;
 
@@ -191,4 +224,38 @@ Future<AuthorizationTokenResponse?> authenticateWithTenant(
     allowInsecureConnections: allowInsecureConnections,
   );
   return appAuthAdapter.authorizeAndExchangeCode(request);
+}
+
+// ── Audience scoping (REQ-422 §6, MOB-5, AC7) ──────────────────────────────
+//
+// A pure, `dart:convert`-only JWT-payload decode — no signature
+// verification (the server already verified the token; this is a
+// same-device "does this token belong to the tenant I'm about to call"
+// sanity check, not a trust boundary), and no new pubspec dependency.
+
+/// Decodes the middle (payload) segment of [jwt] and returns it as a JSON
+/// map, or `null` on any failure (malformed/opaque token, wrong segment
+/// count, invalid base64url, invalid JSON) — never throws.
+Map<String, dynamic>? decodeJwtPayload(String jwt) {
+  final segments = jwt.split('.');
+  if (segments.length != 3) return null;
+  try {
+    final normalized = base64Url.normalize(segments[1]);
+    final decodedBytes = base64Url.decode(normalized);
+    final decodedString = utf8.decode(decodedBytes);
+    final decoded = jsonDecode(decodedString);
+    if (decoded is! Map<String, dynamic>) return null;
+    return decoded;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Returns the `iss` claim of [tokens]' ID token, falling back to its
+/// access token if no ID token was stored — `null` if neither decodes to a
+/// string `iss` claim (REQ-422 §6.1).
+String? issuerOf(TokenSet tokens) {
+  final payload = decodeJwtPayload(tokens.idToken ?? tokens.accessToken);
+  final iss = payload?['iss'];
+  return iss is String ? iss : null;
 }

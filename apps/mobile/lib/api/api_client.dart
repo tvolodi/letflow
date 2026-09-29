@@ -12,7 +12,8 @@ library;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import '../auth/auth.dart' show TenantTokenStore;
+import '../auth/auth.dart' show TenantTokenStore, TokenSet, issuerOf;
+import 'transport_policy.dart';
 
 @immutable
 class TenantBranding {
@@ -138,9 +139,19 @@ class ApiClient implements HttpGateway {
     required TenantTokenStore tokenStore,
     required ActiveRealmHolder activeRealm,
     String? baseUrl,
+    TransportPolicy? transportPolicy,
   }) {
     final dio = Dio(
       BaseOptions(baseUrl: baseUrl ?? _apiBaseUrl, validateStatus: (_) => true),
+    );
+    // Transport-policy rejection (REQ-422 §4.2, MOB-5, AC5) — added
+    // *before* the bearer-attach interceptor so a rejected request never
+    // reaches it (immaterial to correctness, keeps the reject path
+    // cheapest) and, more importantly, so `handler.reject` runs strictly
+    // before `HttpClientAdapter.fetch` — no socket is ever opened for a
+    // disallowed URL.
+    dio.interceptors.add(
+      _transportPolicyInterceptor(transportPolicy ?? transportPolicyFor()),
     );
     dio.interceptors.add(_bearerInterceptor(tokenStore, activeRealm));
     return ApiClient._(dio);
@@ -175,9 +186,37 @@ class ApiClient implements HttpGateway {
   }
 }
 
-/// Bearer-attach interceptor (design §7.2) — attaches nothing beyond that.
-/// Refresh-on-401, retry, and typed `ApiError` normalization are REQ-425's
-/// (MOB-6) scope, not this one's.
+/// Transport-policy enforcement interceptor (REQ-422 §4.2, MOB-5, AC5) —
+/// rejects any request whose absolute URL [policy] disallows, strictly
+/// before Dio's `HttpClientAdapter.fetch` runs (`handler.reject` never
+/// calls `handler.next`, so the fake HTTP layer records zero calls for a
+/// rejected URL in tests).
+Interceptor _transportPolicyInterceptor(TransportPolicy policy) {
+  return InterceptorsWrapper(
+    onRequest: (options, handler) {
+      final uri = options.uri;
+      if (!policy.isUrlAllowed(uri)) {
+        handler.reject(
+          DioException(
+            requestOptions: options,
+            error: TransportPolicyRejectedException(
+              uri,
+              isRelease: policy is ReleaseTransportPolicy,
+            ),
+            type: DioExceptionType.unknown,
+          ),
+        );
+        return;
+      }
+      handler.next(options);
+    },
+  );
+}
+
+/// Bearer-attach interceptor (design §7.2) — attaches nothing beyond that,
+/// except the audience check added by REQ-422 §6.2 below. Refresh-on-401,
+/// retry, and typed `ApiError` normalization are REQ-425's (MOB-6) scope,
+/// not this one's.
 Interceptor _bearerInterceptor(
   TenantTokenStore tokenStore,
   ActiveRealmHolder activeRealm,
@@ -191,13 +230,110 @@ Interceptor _bearerInterceptor(
       final realmUrl = activeRealm.currentRealmUrl;
       if (realmUrl != null) {
         final tokens = await tokenStore.read(realmUrl);
-        if (tokens != null) {
+        if (tokens != null && _tokenMatchesActiveRealm(tokens, realmUrl)) {
           options.headers['Authorization'] = 'Bearer ${tokens.accessToken}';
         }
       }
       handler.next(options);
     },
   );
+}
+
+/// Audience-scoping check (REQ-422 §6.2, MOB-5, AC7) — defense-in-depth on
+/// top of [TenantTokenStore]'s per-`realm_url` storage keying (the primary
+/// isolation mechanism, REQ-421 §4.1). Returns `true` (attach the token)
+/// iff [tokens]' `iss` claim equals [activeRealmUrl] exactly, **or** the
+/// `iss` claim cannot be determined at all (fails open only when
+/// undeterminable — never on a determinable mismatch, per design §6.2's
+/// OQ-4).
+bool _tokenMatchesActiveRealm(TokenSet tokens, String activeRealmUrl) {
+  final iss = issuerOf(tokens);
+  return iss == null || iss == activeRealmUrl;
+}
+
+/// Redacts secret-bearing request/response surfaces before handing them to
+/// [logSink] (REQ-422 §2, MOB-5, AC2). **Not registered** by REQ-422 — see
+/// `lib/letflow/design/req422-mobile-security-hardening.md` §2.1/OQ-1: no
+/// unredacted `LogInterceptor`/third-party logger is registered anywhere in
+/// this app today (the "absent" branch already satisfies AC2), so this
+/// class exists as reusable infrastructure for REQ-425 (MOB-6) to adopt
+/// when it has an actual need to log Dio traffic.
+/// `debugPrint` (`package:flutter/foundation.dart`) is a mutable top-level
+/// variable, not a compile-time constant, so it cannot be used directly as
+/// a `const` constructor's default parameter value — this thin top-level
+/// forwarding function is, and is [RedactingLogInterceptor]'s actual
+/// default.
+void _defaultLogSink(String message) => debugPrint(message);
+
+@immutable
+class RedactingLogInterceptor extends Interceptor {
+  const RedactingLogInterceptor({this.logSink = _defaultLogSink});
+
+  /// Injectable for tests. Defaults to `debugPrint` via [_defaultLogSink].
+  final void Function(String) logSink;
+
+  /// Token/refresh-token-endpoint paths whose request/response bodies are
+  /// always fully redacted, regardless of shape — a refresh token or
+  /// access token can appear in either the request
+  /// (`grant_type=refresh_token&refresh_token=...`) or the response body.
+  static const List<String> _tokenEndpointSuffixes = [
+    '/protocol/openid-connect/token',
+    '/oauth2/token',
+  ];
+
+  static const String _redacted = '[REDACTED]';
+
+  bool _isTokenEndpoint(String path) {
+    final lower = path.toLowerCase();
+    return _tokenEndpointSuffixes.any((s) => lower.endsWith(s.toLowerCase()));
+  }
+
+  Map<String, dynamic> _redactHeaders(Map<String, dynamic> headers) {
+    final redacted = <String, dynamic>{};
+    for (final entry in headers.entries) {
+      redacted[entry.key] = entry.key.toLowerCase() == 'authorization'
+          ? _redacted
+          : entry.value;
+    }
+    return redacted;
+  }
+
+  @override
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) {
+    final headers = _redactHeaders(options.headers);
+    final body = _isTokenEndpoint(options.path) ? _redacted : options.data;
+    logSink('--> ${options.method} ${options.path} headers=$headers body=$body');
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) {
+    final headers = _redactHeaders(
+      response.headers.map.map((k, v) => MapEntry(k, v.join(','))),
+    );
+    final body = _isTokenEndpoint(response.requestOptions.path)
+        ? _redacted
+        : response.data;
+    logSink(
+      '<-- ${response.statusCode} ${response.requestOptions.path}'
+      ' headers=$headers body=$body',
+    );
+    handler.next(response);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    final path = err.requestOptions.path;
+    final body = _isTokenEndpoint(path) ? _redacted : err.message;
+    logSink('<-x $path error=$body');
+    handler.next(err);
+  }
 }
 
 /// Fetches the unauthenticated `tenant-config` for [slug] (design §2.2).

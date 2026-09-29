@@ -1,0 +1,61 @@
+{
+  "handoff_id": "fe9a593c-fb20-4441-8a58-af5a91a2c491",
+  "run_id": "WF02-REQ422-20260929",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ422-20260929/step-03-test-designer.json",
+  "created_at": "2026-09-29T03:27:49Z",
+  "started_at": "2026-09-29T03:27:49Z",
+  "completed_at": "2026-09-29T03:27:49Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-422"],
+    "related_handoff_ids": [
+      "b1a4f0d2-6e9c-4c7a-8f5b-2d0e9a3c7b41"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req422-mobile-security-hardening.md",
+      "handoffs/WF02-REQ422-20260929/step-02b-mobile-dev.json",
+      "handoffs/WF02-REQ422-20260929/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ422-20260929/step-02d-reviewer.json"
+    ],
+    "owned_modules": ["apps/mobile/test/", "test/specs/REQ-422.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 3: TEST-DESIGNER independently verifies MOBILE-DEV's Step 2b-mobile Dart test coverage against every REQ-422 (MOB-5) acceptance criterion, decomposing each multi-clause AC into individual clauses per this same session's ISS-0880 lesson (REQ-421 AC3 clause-1 gap), and writes test/specs/REQ-422.md documenting requirement text/test cases/why each exists. Supplements with additional Dart test code where a real gap is found rather than rubber-stamping existing tests as sufficient.",
+    "acceptance_criteria": [
+      "Every clause of AC1-AC9 (as decomposed in the dispatch) is mapped to a specific test file:test name, or a real gap is closed with new test code",
+      "AC4 and AC9's command-execution/docs-content evidence is independently re-read and confirmed to support both/all of its sub-clauses, not just one",
+      "AC10 is confirmed to have no regression since MOBILE-DEV's quoted flutter analyze/test output",
+      "test/specs/REQ-422.md contains a clause-by-clause coverage table",
+      "mix letflow.check.test or, for this Dart-only requirement, flutter analyze && flutter test are run and real output is quoted",
+      "Handoff completed, linted, committed, pushed, next_action routes to TEST-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read every one of MOBILE-DEV's 8 test files (apps/mobile/test/{guards,security,auth,bootstrap,design_system}/) plus the guard's target source files (lib/auth/auth.dart, lib/api/api_client.dart, lib/api/transport_policy.dart, lib/bootstrap/navigation_bootstrap.dart, lib/design_system/masked_text.dart, android/app/src/{main,debug}/..., ios/Runner/Info.plist, docs/mobile/architecture.md, pubspec.yaml) directly rather than trusting MOBILE-DEV's handoff summary alone. Decomposed AC1-AC9 into the clauses listed in this step's dispatch and mapped each to a specific test:testname in test/specs/REQ-422.md's coverage table.\n\nONE REAL GAP FOUND AND CLOSED (AC1/clause 1b): apps/mobile/test/guards/token_storage_boundary_guard_test.dart had self-tests proving the checker's flutter_secure_storage-import branch and dart:io-File(...) branch each fire on a violating fixture, but NO self-test for the shared_preferences-import branch -- the real-tree assertion passes only because shared_preferences isn't a pubspec dependency at all (confirmed absent), which proves nothing about whether that specific regex/scoping logic in the checker itself works. Added two tests: 'self-test: checker fires on a fixture importing shared_preferences under lib/auth/' (proves the detection fires) and 'self-test: a shared_preferences import OUTSIDE lib/auth/ or lib/api/ fires zero violations (boundary is scoped, not global)' (proves the scoping is to lib/auth/+lib/api/, not global -- otherwise 'no file under lib/auth/ or lib/api/' would be indistinguishable from a checker that just flags shared_preferences everywhere).\n\nAll other clauses (AC1 1a/1c/1d; AC2 2a/2b/2c; AC3 3a-3e; AC5 5a-5f; AC6 6a/6b; AC7 7a/7b; AC8 8a/8b/8c) already had a test whose failure would be caused specifically by that clause's violation -- verified by reading each assertion, not by test/testWidgets name matching alone. AC8/clause 8c (flagged in the dispatch as 'most likely to be missing') is in fact well covered: the widget test explicitly attempts a second reveal via a direct controller.reveal() call (bypassing the UI in case the icon becomes absent once locked) and asserts the phase stays locked and the real value stays hidden, plus a separate controller-only test asserting reveal()/hide() are no-ops (don't notify listeners) once locked.\n\nAC4 (command-execution): re-read handoffs/WF02-REQ422-20260929/step-02b-mobile-dev.json's quoted aapt dump output directly -- confirmed it supports BOTH clauses (usesCleartextTraffic=0x0 in the manifest, AND the resolved network-security-config resource (res/8G.xml) shows only a base-config with cleartextTrafficPermitted=0x0 and NO domain-config element at all in the release artifact). Not re-executed (no Android build toolchain invoked this step); the existing quote already independently supports both clauses so no re-run was needed.\n\nAC7: audience_scoping_test.dart and transport_policy_test.dart both exercise the bearer-interceptor/transport-policy-interceptor logic via a reimplementation helper (_bearerInterceptorForTest/_transportPolicyInterceptorForTest) because the real interceptors are private closures inside api_client.dart that cannot be imported into a test file. This is flagged in test/specs/REQ-422.md as an observation, not reworked: the underlying decision logic (issuerOf, TransportPolicy.isUrlAllowed) that determines pass/fail IS the real production code under test, and this is a pre-existing accepted pattern in this codebase (same shape in REQ-421's own tests), not a new gap introduced by REQ-422.\n\nAC9: confirmed by direct read of docs/mobile/architecture.md §7 -- contains 'Security hardening before corporate-tier deployment', 'Status: documented now, not implemented in v1 (REQ-422)', names certificate pinning and root/jailbreak detection, both framed as required-before-corporate-tier / not-v1. Guarded against future accidental deletion by test/docs/dated_notes_test.dart.\n\nAC10: git diff 34c827bd..HEAD --stat -- apps/mobile was empty before this step's own edit (only gate-decision commits occurred, no code changes), confirming no regression could have occurred between MOBILE-DEV's quoted analyze/test run and this step. After this step's two added tests: flutter analyze -> 'No issues found! (ran in 12.5s)'. flutter test -> full suite run, '+86: ... All tests passed!' (86, up from the previously-quoted 84 -- the delta is exactly this step's two added self-tests, confirmed by reading the test-name list in the run output).\n\nNo implementation changes were needed -- the one gap found was test-only (a missing self-test for an already-correct checker branch), closed directly per this role's mandate to attempt writing the test first.",
+    "artifacts_out": [
+      "test/specs/REQ-422.md",
+      "apps/mobile/test/guards/token_storage_boundary_guard_test.dart"
+    ],
+    "issues": [
+      {"severity": "INFO", "description": "audience_scoping_test.dart and transport_policy_test.dart exercise the real bearer-interceptor/transport-policy-interceptor decision logic (issuerOf, TransportPolicy.isUrlAllowed) but reconstruct the interceptor wiring itself via a test-local helper, since the real interceptor closures are private to lib/api/api_client.dart and cannot be imported directly. Accepted pre-existing pattern (also used in REQ-421's tests); flagged for TEST-DESIGN-VALIDATOR's awareness, not a blocking gap.", "affected_requirement": "REQ-422"}
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ422-20260929",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ422-20260929",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

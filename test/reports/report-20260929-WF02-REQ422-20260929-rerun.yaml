@@ -1,0 +1,141 @@
+run_id: WF02-REQ422-20260929
+step: "04-rerun"
+agent: TEST-RUNNER
+date: 2026-09-29T09:55:00Z
+branch: feature/WF02-REQ422-20260929
+requirement_ids: [REQ-422]
+notes: >
+  Rerun of Step 4 requested after ORCH's bookkeeping-shape fix (commit b357828a) to
+  the REQ-422 "started" entry in docs/status/requirement_status.v23.yaml (now shaped
+  [:req, :event, :agent, :at, :note]), and after the prior attempt's two-strikes stop
+  on DBConnection connection-pool-checkout timeouts under tight host memory
+  (test/reports/report-20260929-WF02-REQ422-20260929.yaml, commit 1a1d62a3). This
+  report is written in addition to that one, not in place of it, per this run's
+  instructions.
+
+host_memory:
+  check_before_run: "FreePhysicalMemory=2937264 KB (~2.90 GB) of TotalVisibleMemorySize=33389048 KB, via Get-CimInstance Win32_OperatingSystem -- tighter than the prior attempt's ~4.03-4.08 GB, as ORCH had flagged moments before this run"
+  logical_processors: 16
+  decision: >
+    Per this run's instructions, memory now under ~4GB and tighter than last time,
+    so TEST_PARALLEL_N was set substantially lower than the prior attempt's N=8:
+    chose N=4 (a quarter of 16 logical processors) rather than repeating N=8 a
+    third time against the same underlying contention.
+
+backend_exunit:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  partitions:
+    count: 4
+    source: "env override (TEST_PARALLEL_N=4)"
+  test_pool_size: 20
+  attempt_1:
+    result: "COMPLETE -- all 4 partitions ran to completion, no connection-pool-checkout timeouts this time"
+    duration: "25m20.879s (real)"
+    per_partition_summary:
+      - "partition 1: 1175 tests, 5 properties, 0 failures, exit 0"
+      - "partition 2: 1287 tests, 0 properties, 0 failures, exit 0"
+      - "partition 3: 1338 tests, 1 property, 0 failures, exit 0"
+      - "partition 4: 1229 tests, 0 properties, 0 failures, exit 0"
+    combined_result: "combined: 5029 tests, 6 properties, 0 failures (5035/5035 passed)"
+    raw_output: |
+      test_parallel: N=4 (source: env override)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: WARN psql not found -- skipping host Postgres ceiling verification (ISS-0287 §4.2); TEST_MAX_CONNECTIONS/TEST_SUPERUSER_RESERVED assumptions unverified against the live server
+      test_parallel: TEST_POOL_SIZE=20 (computed: N=4, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5, per_partition_headroom=0)
+      test_parallel: seeding 4 per-partition build paths from _build/test (sequential)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.OoTM83
+      test_parallel: seeding+migrating 4 partition databases (capped at 4 concurrent)
+      test_parallel: all 4 partition databases created+migrated
+      test_parallel: TEST_PARALLEL_GROUP=tp133598 (shared by all 4 partitions)
+      partition 1: 1175 tests, 5 properties, 0 failures, exit 0
+      partition 2: 1287 tests, 0 properties, 0 failures, exit 0
+      partition 3: 1338 tests, 1 property, 0 failures, exit 0
+      partition 4: 1229 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 5029 tests, 6 properties, 0 failures (5035/5035 passed)
+      real	25m20.879s
+      user	0m3.880s
+      sys	0m9.959s
+      [exited with code 0]
+  no_second_attempt_needed: true
+  invariants_test_targeted_rerun:
+    command: "mix test test/docs/requirement_status_invariants_test.exs"
+    result: "Result: 24 passed, Finished in 5.7 seconds (5.7s async, 0.00s sync)"
+    a4b_case: >
+      test/docs/requirement_status_invariants_test.exs:192, "A4b: the on-disk
+      shape-violation set equals known_shape_anomalies:, and every record cites a
+      closed, pinned volume" -- PASSES. Confirmed the case exists at that exact
+      line and name (grep-verified) and is included in the 24/24 passing set; it
+      is no longer failing now that ORCH's commit b357828a reshaped the REQ-422
+      "started" entry in docs/status/requirement_status.v23.yaml to
+      [:req, :event, :agent, :at, :note].
+  failures: []
+
+flutter_analyze:
+  command: "flutter analyze (run from apps/mobile/)"
+  output: |
+    Resolving dependencies...
+    Downloading packages...
+      clock 1.1.2 (1.1.3 available)
+      code_assets 1.2.1 (2.1.0 available)
+      flutter_riverpod 2.6.1 (3.4.3 available)
+      go_router 17.5.0 (18.0.1 available)
+      hooks 2.0.2 (2.2.0 available)
+      matcher 0.12.19 (0.12.20 available)
+      material_color_utilities 0.13.0 (0.13.1 available)
+      meta 1.17.0 (1.19.0 available)
+      objective_c 9.5.0 (9.6.0 available)
+      platform 3.1.6 (3.2.0 available)
+      record_use 0.6.0 (1.1.1 available)
+      riverpod 2.6.1 (3.4.3 available)
+      stack_trace 1.12.1 (1.12.2 available)
+      test_api 0.7.10 (0.7.14 available)
+      vector_math 2.2.0 (2.4.3 available)
+    Got dependencies!
+    15 packages have newer versions incompatible with dependency constraints.
+    Analyzing mobile...
+    No issues found! (ran in 26.0s)
+  status: PASS
+
+flutter_test:
+  command: "flutter test (run from apps/mobile/)"
+  output: |
+    00:03 +47..53: masked_reveal_text_test.dart -- masked-by-default/reveal/hide/no-repeat-reveal cases
+    00:03 +54: masked_reveal_text_test.dart -- MaskRevealController wrong-phase no-op cases
+    00:03..04 +55..67: ios_ats_guard_test.dart, module_boundary_guard_test.dart, tenant_identifier_guard_test.dart, token_storage_boundary_guard_test.dart -- real-tree + self-test guard cases
+    00:04..06 +68..80: token_redaction_test.dart, transport_policy_test.dart -- real-tree + self-test redaction/transport-policy cases
+    00:06..07 +81..85: error_screens_test.dart -- TenantNotFoundScreen, NetworkUnavailableScreen, OidcFailureScreen, SecureStorageUnavailableScreen
+    00:07 +86: All tests passed!
+  status: PASS
+  total_tests: 86
+  regression_check: >
+    git log 1a1d62a3..b357828a -- apps/mobile/ returns zero commits: no apps/mobile/
+    files changed since the prior test-runner attempt's quote. 86/86 confirmed with
+    no regression, as expected.
+
+overall_result: PASS
+overall_notes: >
+  Both of the prior run's blocking reasons are now resolved:
+
+  1. docs/status/requirement_status.v23.yaml's REQ-422 "started" entry (ORCH's
+     commit b357828a) now matches the required [:req, :event, :agent, :at, :note]
+     shape. test/docs/requirement_status_invariants_test.exs's A4b case, previously
+     failing on this exact defect, now passes (verified both as part of the full
+     5029-test/0-failure combined run and via a targeted re-run of just that file:
+     24/24 passed).
+
+  2. Host memory was even tighter this time (~2.90 GB free vs. the prior attempt's
+     ~4.03-4.08 GB), so TEST_PARALLEL_N was lowered substantially (8 -> 4) per this
+     run's instructions rather than repeating N=8 a third time. All 4 partitions
+     completed cleanly on the first attempt -- no DBConnection connection-pool-
+     checkout timeouts this run, no partial/incomplete partition. Combined:
+     5029 tests, 6 properties, 0 failures (5035/5035 passed). No second attempt
+     or further N reduction was needed.
+
+  apps/mobile/ (REQ-422/MOB-5): flutter analyze -> "No issues found!"; flutter test
+  -> 86/86 passed, re-run fresh in this step. Confirmed via git log that no
+  apps/mobile/ files changed since the prior attempt's quote, so this is a
+  no-regression re-confirmation, not a new result.
+
+  No other failures encountered. Full suite is green. Recommend routing to
+  RELEASE-VALIDATOR.

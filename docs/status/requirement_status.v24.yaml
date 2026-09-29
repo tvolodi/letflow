@@ -41,43 +41,126 @@
 # keys: `known_anomalies:` (vocabulary) and `known_shape_anomalies:` (field
 # set/order). A roll must never drop the `known_shape_anomalies:` declaration.
 
-- req: SCOPE-CHANGE
-  event: started
-  agent: ISSUE-FIXER
-  at: "2026-09-29T06:04:33Z"
-  note: >
-    WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0878 --
-    Letflow.Plugs.AuthPipelineTest's unique_realm/1 (and the identical
-    definitions in test/letflow/api/authorization_ac9_test.exs and
-    test/letflow/oidc/provider_registry_multi_realm_test.exs) generate
-    idp_realm_id via System.unique_integer/1, which is only unique
-    within one BEAM VM process, so two scripts/test_parallel.sh
-    partitions (separate OS processes) can independently produce the
-    same literal string and collide on the shared Postgres
-    tenants_idp_realm_id_partial_index. Branch
-    feature/WF03-ISS0878-20260929 created off origin/main and pushed.
-    Diagnosis in progress; not a docs/requirements.yaml entry (this is
-    an issue, no requirement status changes).
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ISSUE-FIXER
+    at: "2026-09-29T06:04:33Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0878 --
+      Letflow.Plugs.AuthPipelineTest's unique_realm/1 (and the identical
+      definitions in test/letflow/api/authorization_ac9_test.exs and
+      test/letflow/oidc/provider_registry_multi_realm_test.exs) generate
+      idp_realm_id via System.unique_integer/1, which is only unique
+      within one BEAM VM process, so two scripts/test_parallel.sh
+      partitions (separate OS processes) can independently produce the
+      same literal string and collide on the shared Postgres
+      tenants_idp_realm_id_partial_index. Branch
+      feature/WF03-ISS0878-20260929 created off origin/main and pushed.
+      Diagnosis in progress; not a docs/requirements.yaml entry (this is
+      an issue, no requirement status changes).
 
-- req: SCOPE-CHANGE
-  event: done
-  agent: ISSUE-FIXER
-  at: "2026-09-29T07:00:00Z"
-  note: >
-    WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0878 --
-    root cause resolved: unique_realm/1's cross-process-unsafe
-    System.unique_integer/1 pattern replaced with a UUID-based,
-    genuinely cross-process-safe generator, in
-    test/letflow/plugs/auth_pipeline_test.exs and the identical
-    call sites in test/letflow/api/authorization_ac9_test.exs and
-    test/letflow/oidc/provider_registry_multi_realm_test.exs. Proven
-    via a fail-then-pass mutation test at
-    test/support/tenant_slug_test.exs, independently reproduced by
-    TEST-DESIGN-VALIDATOR; targeted test set and full-suite run both
-    green (TEST-RUNNER PASS, commit 5485ad24). All gates passed:
-    CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
-    TEST-DESIGN-VALIDATOR, TEST-RUNNER. docs/issues/ISS-0878.yaml set to
-    status: resolved (resolved_in_run: WF03-ISS0878-20260929). GitHub
-    mirror GH-1951 closed with resolving-evidence comment. Not a
-    docs/requirements.yaml entry (this is an issue, no requirement
-    status changes).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-09-29T07:00:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0878 --
+      root cause resolved: unique_realm/1's cross-process-unsafe
+      System.unique_integer/1 pattern replaced with a UUID-based,
+      genuinely cross-process-safe generator, in
+      test/letflow/plugs/auth_pipeline_test.exs and the identical
+      call sites in test/letflow/api/authorization_ac9_test.exs and
+      test/letflow/oidc/provider_registry_multi_realm_test.exs. Proven
+      via a fail-then-pass mutation test at
+      test/support/tenant_slug_test.exs, independently reproduced by
+      TEST-DESIGN-VALIDATOR; targeted test set and full-suite run both
+      green (TEST-RUNNER PASS, commit 5485ad24). All gates passed:
+      CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER. docs/issues/ISS-0878.yaml set to
+      status: resolved (resolved_in_run: WF03-ISS0878-20260929). GitHub
+      mirror GH-1951 closed with resolving-evidence comment. Not a
+      docs/requirements.yaml entry (this is an issue, no requirement
+      status changes). NOTE (ORCH, WF02-REQ422-20260929 rebase): this
+      entry and the one above were re-indented from 0-space to this
+      volume's established 2-space `  - req:` list-item convention
+      (matching every prior volume, v20-v23) during conflict resolution
+      -- the original PR (#1972) appended them at column 0, inconsistent
+      with the rest of this file; content is otherwise byte-for-byte
+      unchanged.
+
+  - req: REQ-422
+    event: started
+    agent: ORCH
+    at: 2026-09-29T02:37:45Z
+    note: >
+      MOB-5 on-device security hardening (M3): secure-storage-only tokens,
+      log redaction, Android cleartext/backup lockdown, app-level transport
+      check, iOS ATS static check, tenant-scoped token audience, secret
+      masking widget, and [S] corporate-tier hardening doc note. Started by
+      ORCH (run WF02-REQ422-20260929) after locking letflow-queue task 859
+      (agent_id letflow-orch-req422) and confirming no overlap with the
+      concurrent letflow-2-b6 session (that session's own branches/PRs are
+      on unrelated requirement ids). Branch feature/WF02-REQ422-20260929
+      pushed from origin/main at 3c08187d. Appended here in volume 24
+      rather than volume 23 (this run's original append target) because
+      volume 23 closed and froze (40 entries) under a concurrent
+      queue-reconciliation append discovered only when rebasing this
+      branch onto origin/main -- redirected per the roll_rule rather than
+      appended to a frozen volume.
+
+  - req: REQ-422
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-29T09:05:00Z
+    note: >
+      WF02-REQ422-20260929 closed. RELEASE-VALIDATOR (Step 5) independently
+      re-verified all 10 acceptance criteria against actual code/tests, not
+      prior steps' summaries (handoffs/WF02-REQ422-20260929/step-05-release-
+      validator.json): secure-storage-only token boundary guard, no-token-
+      in-any-log-sink sentinel test, Android manifest/network-security-
+      config guard (mutation-tested live: flipping usesCleartextTraffic to
+      "true" made the guard fail, reverted clean, guard passed again),
+      release APK aapt evidence (usesCleartextTraffic=0x0, allowBackup=0x0,
+      no domain-config in the release network-security-config), release/
+      debug transport policy test (zero-socket-call rejection of http://
+      URLs and realm_urls in release mode), iOS Info.plist ATS static guard
+      (runtime ATS explicitly deferred, no iOS build host), tenant-switch/
+      audience scoping (tenant A's tokens deleted, never sent for tenant
+      B), masked-reveal-once widget test, docs/mobile/architecture.md's
+      section 7 "Security hardening before corporate-tier deployment"
+      (confirmed present and complete -- certificate pinning and root/
+      jailbreak detection named as required-before-corporate-tier and not
+      implemented in v1, matching AC9 verbatim), and `flutter analyze`/
+      `flutter test` (86/86 passing) plus SECURITY-REVIEWER's real PASS
+      sign-off (commit 381b2632, step-02c handoff, full INV-1..INV-8
+      table). RELEASE-VALIDATOR also independently re-ran the full backend
+      suite serially under critical host memory pressure (5038 passed, 6
+      properties/5032 tests, 27 excluded, 0 failures, 3599.5s) and `mix
+      letflow.check.test` (OK, including the isolated :lua_wallclock_race
+      sub-check), after killing a runaway 16-partition auto-derived run
+      that drove free memory to ~307MB. docs/mobile/architecture.md's
+      section 7 confirmed already complete, no further edit needed.
+      README.md's mobile-tier summary paragraph was stale (only mentioned
+      REQ-419/420/421) -- updated in this append to add REQ-422/MOB-5's
+      on-device hardening summary and the certificate-pinning/root-
+      detection corporate-tier caveat, matching the existing pattern used
+      for REQ-417..421 closures. docs/migration/stage-9-mobile.md checked:
+      its table covers only the three now-closed backend gaps (REQ-124/
+      125/126), not a REQ-419..422 progress table, so no update needed
+      there (same determination REQ-420's own closure made for this file).
+      Two MINOR non-blocking findings from this run, for ORCH to file as
+      follow-up issues (not fixed here): (a) CODE-DESIGN-VALIDATOR and
+      REVIEWER both flagged that REQ-421's own requirement text in
+      docs/requirements.yaml forward-references "key rotation/biometric
+      gating/tamper detection" as REQ-422 scope, but REQ-422's actual
+      text/acceptance_criteria contain none of that -- REQ-421's text
+      needs correcting, not REQ-422's. (b) RELEASE-VALIDATOR found `mix
+      letflow.check.test`'s shelled-out scripts/test_parallel.sh
+      invocation does not honor a caller-set TEST_PARALLEL_N environment
+      override (observed N=16 from nproc on both attempts despite
+      `export TEST_PARALLEL_N=2` before the second invocation), which
+      matters for memory-constrained runs -- worth a task-runner follow-up
+      fix. Flipping docs/requirements.yaml's REQ-422 status: in_progress ->
+      done in this same append. Appended here in volume 24 rather than
+      volume 23 (this run's original append target) for the same reason
+      as the started-event above.

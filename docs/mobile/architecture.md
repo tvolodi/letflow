@@ -194,3 +194,29 @@ Enforcement mechanism: a linting step (exact tool TBD at implementation time,
 matching the Dart/Flutter ecosystem) enforcing the same structural rule as the
 SPA's ESLint `no-restricted-imports` check (0039 D3). It must fail the build,
 not produce a warning.
+
+## 7. Security hardening before corporate-tier deployment
+
+**Status: documented now, not implemented in v1 (REQ-422).**
+
+Two hardening measures are **required before any corporate-tier deployment**
+of the mobile tier, and are **not implemented in v1**:
+
+- **Certificate pinning.** v1 trusts the platform's system certificate store
+  (`android/app/src/main/res/xml/network_security_config.xml`'s
+  `<certificates src="system">`, `docs/mobile/architecture.md` — this
+  section). A corporate-tier deployment, where the client may run on a
+  managed device inside a network with a corporate TLS-inspecting proxy or
+  where the threat model includes a compromised system trust store, needs
+  pinning the platform's own certificate/public key so a MITM proxy with an
+  installed root CA cannot intercept API traffic.
+- **Root/jailbreak detection.** v1 performs no device-integrity check. A
+  corporate-tier deployment needs a check (e.g. `flutter_jailbreak_detection`
+  or an equivalent) gating access to tenant-scoped data on an
+  un-rooted/un-jailbroken device, since OS-secure storage's guarantees
+  (Keystore/Keychain hardware-backing) are weakened or bypassable on a rooted
+  device.
+
+Both are `[S]`-priority per `docs/mobile/requirements.md` MOB-5 — required
+before corporate-tier, not before v1. Tracked here so the gap is a recorded
+decision, not a silent omission discovered later.

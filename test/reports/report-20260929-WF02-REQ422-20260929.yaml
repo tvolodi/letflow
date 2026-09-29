@@ -1,0 +1,207 @@
+run_id: WF02-REQ422-20260929
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-29T09:10:00Z
+branch: feature/WF02-REQ422-20260929
+requirement_ids: [REQ-422]
+notes: >
+  Diff (git diff --name-only main...HEAD) is limited to apps/mobile/ (Dart/Flutter),
+  docs/mobile/architecture.md, lib/letflow/design/req422-mobile-security-hardening.md,
+  test/specs/REQ-422.md, and handoffs/WF02-REQ422-20260929/* -- zero lib/letflow/ or
+  priv/repo/migrations/ Elixir application changes. Working tree also carries
+  uncommitted edits to docs/requirements.yaml, docs/status/requirement_status.index.yaml
+  and docs/status/requirement_status.v23.yaml (per git status at session start) --
+  these are in-scope for this run's own bookkeeping and are discussed under
+  backend_exunit.failures below, since one of them causes a real test failure.
+
+host_memory:
+  check_1_before_run: "FreePhysicalMemory=4228328 KB (~4.03 GB) of TotalVisibleMemorySize=33389048 KB, via Get-CimInstance Win32_OperatingSystem -- at/below the ~4GB tight threshold"
+  check_2_during_run: "FreePhysicalMemory=4279244 KB (~4.08 GB) -- essentially unchanged, i.e. no acute memory drain observed during the run"
+  logical_processors: 16
+  decision: "Tight-memory branch of the procedure taken: TEST_PARALLEL_N set to 8 (half of 16 cores) instead of full nproc-derived parallelism"
+
+backend_exunit:
+  command: "TEST_PARALLEL_N=8 scripts/test_parallel.sh"
+  partitions:
+    count: 8
+    source: "env override (TEST_PARALLEL_N=8, chosen as half of 16 logical processors per the tight-memory branch of this run's instructions)"
+  test_pool_size: 10
+
+  attempt_1:
+    result: "FAILED before any partition launched"
+    detail: >
+      test_parallel: ERROR partition 3 ecto.create/ecto.migrate failed with exit 1 --
+      no partition launched. create-3.log:
+      ** (DBConnection.ConnectionError) [Elixir.Letflow.Repo] connection not available
+      and request was dropped from queue after 5966ms ... (Ecto.Migrator.with_repo/3
+      via Mix.Tasks.Ecto.Migrate.run/2). This occurred during the
+      "seeding+migrating 8 partition databases (capped at 4 concurrent)" phase --
+      a connection-pool contention failure, not an OS-level OOM-kill signal, but
+      consistent with the tight free-memory condition flagged for this run.
+    action_taken: "Retried per this run's memory-aware procedure."
+
+  attempt_2:
+    result: "PARTIAL -- 7 of 8 partitions completed; partition 6 crashed during setup"
+    combined_result: "4422 tests, 6 properties, 1 failures (4427/4428 passed) across the 7 completed partitions; partition 6 contributed 0 tests"
+    per_partition_summary:
+      - "partition 1: 607 tests, 4 properties, 1 failures, exit 2"
+      - "partition 2: 680 tests, 0 properties, 0 failures, exit 0"
+      - "partition 3: 662 tests, 0 properties, 0 failures, exit 0"
+      - "partition 4: 627 tests, 0 properties, 0 failures, exit 0"
+      - "partition 5: 568 tests, 1 property, 0 failures, exit 0"
+      - "partition 6: 0 tests, 0 properties, 0 failures, exit 1 -- WARNING partition 6 has no Result: line in its log (compile/config/crash abort)"
+      - "partition 7: 676 tests, 1 property, 0 failures, exit 0"
+      - "partition 8: 602 tests, 0 properties, 0 failures, exit 0"
+    partition_6_detail: >
+      partition-6.log shows the crash occurred at 08:35:53, ~15s into that
+      partition's own test_helper.exs setup (Letflow.Test.TenantTemplate.ensure_template!/0,
+      compiling the tenant migration module via Code.require_file/2):
+      ** (DBConnection.ConnectionError) Postgrex.Protocol ... disconnected: client
+      #PID<0.94.0> (:erlang) timed out because it queued and checked out the
+      connection for longer than 15000ms ... followed by a second
+      DBConnection.ConnectionError on the cleanup pg_advisory_unlock call
+      ("connection is closed because of an error, disconnect or timeout"). No
+      tests in partition 6 ever ran -- it never reached ExUnit's Result:/Failed:
+      lines. This is the same connection-pool-contention class as attempt_1's
+      partition-3 failure (both are DBConnection connection-checkout timeouts
+      during setup under 8-way concurrent load), not a classic OOM-kill (no
+      OOM signal available on this Windows host distinct from the Linux
+      dmesg-style measurement the instructions describe), but structurally
+      consistent with the same tight-free-memory / resource-contention
+      condition this run was warned about.
+    decision: >
+      Per this run's explicit instruction ("If a test run gets killed/reaped for
+      memory reasons: retry ONCE ... If it gets reaped a SECOND time, STOP and
+      report back to ORCH rather than retrying a third time blindly"): this is
+      the SECOND resource-contention failure event in this run (attempt_1's
+      partition-3 create/migrate failure, then attempt_2's partition-6 setup
+      crash). STOPPING here rather than attempting a third TEST_PARALLEL_N=8 (or
+      lower) run. Partition 6's ~600-700 tests (comparable to sibling partitions'
+      counts) were never executed this run -- combined coverage below is
+      therefore INCOMPLETE, not just "1 failure out of 4428": an unknown number
+      of additional tests simply did not run.
+
+  failures:
+    - test: "A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume (Letflow.Docs.RequirementStatusInvariantsTest)"
+      location: test/docs/requirement_status_invariants_test.exs:192
+      partition: 1
+      output: |
+        on disk but not declared (3) -- NEW DRIFT:
+            path=docs/status/requirement_status.v23.yaml  entry_line=1068  req="REQ-422"  kind="missing_field"  field="agent"
+            path=docs/status/requirement_status.v23.yaml  entry_line=1068  req="REQ-422"  kind="misnamed_field"  field="note"  found_as="run"  found_line=1071
+            path=docs/status/requirement_status.v23.yaml  entry_line=1068  req="REQ-422"  kind="extra_field"  field="summary"  found_line=1072
+      attribution: "REAL, ATTRIBUTABLE TO THIS RUN'S OWN WORKING TREE -- not pre-existing, not apps/mobile/'s diff"
+      attribution_evidence: >
+        Structural check: docs/status/requirement_status.v23.yaml IS a locally
+        modified file this session (git status at session start: "M
+        docs/status/requirement_status.v23.yaml"), and it is NOT part of a prior
+        committed diff -- it is an uncommitted working-tree edit added during this
+        run's own Step 00 (the entry's own text: "Started by ORCH after locking
+        letflow-queue task 859 ... Branch feature/WF02-REQ422-20260929 pushed from
+        origin/main at 3c08187d"). Read directly (lines 1068-1077): the appended
+        REQ-422 "started" event has fields [req, event, at, run, summary] -- the
+        schema test/docs/requirement_status_invariants_test.exs enforces requires
+        exactly [:req, :event, :agent, :at, :note] in that order. This entry is
+        missing "agent" entirely and has "run"/"summary" where "note" is expected
+        -- a genuine shape defect in this run's own bookkeeping edit, not a
+        pre-existing flake and not caused by apps/mobile/ or
+        docs/mobile/architecture.md (MOBILE-DEV's own diff scope). Per
+        core-directives.md's rule 4 ("A failing file that IS in the diff gets extra
+        scrutiny, and is cleared only by a causal argument about mechanism") --
+        this file IS effectively in this run's changeset and the causal mechanism
+        (missing/misnamed/extra fields at the exact flagged entry_line) is
+        directly demonstrated above, not inferred.
+      blocking: true
+      needs_filing: false
+      routed_to: >
+        ORCH (owner of docs/status/requirement_status.v23.yaml bookkeeping edits
+        per WF-02 Step 00/Step 6) -- the REQ-422 "started" entry at line 1068 needs
+        its fields corrected to the [:req, :event, :agent, :at, :note] shape
+        (add an "agent" field, rename "run"->the schema's expected field or fold
+        it into "note", and either fold "summary" into "note" or drop it) before
+        this branch is committed/merged. Not fixed here: TEST-RUNNER does not own
+        docs/status/*.
+
+flutter_analyze:
+  command: "flutter analyze (run from apps/mobile/)"
+  output: |
+    Resolving dependencies...
+    Downloading packages...
+      clock 1.1.2 (1.1.3 available)
+      code_assets 1.2.1 (2.1.0 available)
+      flutter_riverpod 2.6.1 (3.4.3 available)
+      go_router 17.5.0 (18.0.1 available)
+      hooks 2.0.2 (2.2.0 available)
+      matcher 0.12.19 (0.12.20 available)
+      material_color_utilities 0.13.0 (0.13.1 available)
+      meta 1.17.0 (1.19.0 available)
+      objective_c 9.5.0 (9.6.0 available)
+      platform 3.1.6 (3.2.0 available)
+      record_use 0.6.0 (1.1.1 available)
+      riverpod 2.6.1 (3.4.3 available)
+      stack_trace 1.12.1 (1.12.2 available)
+      test_api 0.7.10 (0.7.14 available)
+      vector_math 2.2.0 (2.4.3 available)
+    Got dependencies!
+    15 packages have newer versions incompatible with dependency constraints.
+    Analyzing mobile...
+    No issues found! (ran in 15.3s)
+  status: PASS
+
+flutter_test:
+  command: "flutter test (run from apps/mobile/)"
+  output: |
+    00:00 +7: audience_scoping_test.dart -- JWT decode/issuerOf round-trip, precedence, fallback, malformed-token safety
+    00:00 +8..11: audience_scoping_test.dart -- bearer-interceptor audience check (cross-tenant rejected, matching-realm attached, opaque-token fails open)
+    00:01 +12..18: authenticate_with_tenant_test.dart -- issuer/clientId/redirectUrl/PKCE sourcing, allowInsecureConnections scoping, clientId never a literal, cancellation vs. genuine OIDC failure
+    00:01 +19..22: tenant_token_store_test.dart -- per-realmUrl isolation, null-for-unknown-realm, PlatformException propagation
+    00:02 +23..26: bootstrap_sequence_test.dart -- two-tenant token isolation, membership mismatch, 403 CANDIDATE proceeds, cancellation
+    00:02 +27..34: parse_tenant_slug_test.dart -- 8 slug-extraction cases
+    00:02..04 +35..49: route_gating_test.dart / route_table_test.dart -- gating + not-found-screen navigation cases
+    00:04..06 +50..67: masked_reveal_text_test.dart, ios_ats_guard_test.dart, module_boundary_guard_test.dart, tenant_identifier_guard_test.dart, token_storage_boundary_guard_test.dart -- real-tree + self-test guard cases
+    00:06..07 +68..80: token_redaction_test.dart, transport_policy_test.dart -- real-tree + self-test redaction/transport-policy cases
+    00:07..10 +81..85: error_screens_test.dart -- TenantNotFoundScreen, NetworkUnavailableScreen, OidcFailureScreen, SecureStorageUnavailableScreen
+    00:10 +86: All tests passed!
+  status: PASS
+  total_tests: 86
+
+overall_result: FAIL
+overall_notes: >
+  apps/mobile/ (REQ-422/MOB-5) is itself fully green: flutter analyze reports no
+  issues, and all 86 flutter test cases pass, run for real from apps/mobile/ in this
+  session (re-run here rather than citing the earlier steps' 86/86 quote, per this
+  step's own instructions).
+
+  The backend ExUnit run is FAIL for two independent reasons, neither one apps/mobile/'s
+  fault:
+
+  1. A real, attributable test failure: test/docs/requirement_status_invariants_test.exs's
+     A4b case fails because the REQ-422 "started" entry ORCH appended to
+     docs/status/requirement_status.v23.yaml (line 1068, uncommitted working-tree edit
+     made during this run's own Step 00) does not match the required
+     [:req, :event, :agent, :at, :note] entry shape -- missing "agent", "run" where
+     "note" is expected, and an extra "summary" field. This blocks a clean run and must
+     be corrected in that bookkeeping entry before merge; it is not implementation code
+     and not MOBILE-DEV's diff, so it is not fixed here.
+
+  2. Incomplete coverage: two resource-contention failures occurred under this run's
+     already-tight free memory (~4.03-4.08 GB of 33 GB total, at the "tight" threshold
+     given in this run's own instructions) even after halving TEST_PARALLEL_N to 8:
+     first a create/migrate-phase DBConnection.ConnectionError (partition 3, attempt 1,
+     no partition ever launched), then a setup-phase DBConnection.ConnectionError during
+     tenant-template migration-module compilation (partition 6, attempt 2, connection
+     checkout timed out after 15000ms, zero tests executed in that partition). Per this
+     run's explicit instruction to stop after a second such event rather than retry a
+     third time blindly, this run STOPS here and reports back instead of attempting
+     TEST_PARALLEL_N=4 or serial mix test on its own initiative. Partition 6's tests
+     (comparable in size to sibling partitions -- roughly 600-700 tests) were never
+     executed, so the "4427/4428 passed" figure above is a partial-coverage result, not
+     a complete combined total for this run.
+
+  Recommendation: (a) route the docs/status/requirement_status.v23.yaml shape defect
+  back to ORCH/DOC-UPDATER for a field-name/shape correction on the REQ-422 entry;
+  (b) re-run the full ExUnit suite (ideally when host memory is less contended, or with
+  TEST_PARALLEL_N lowered further, e.g. 4) to obtain complete coverage including
+  partition 6's tests, before routing to RELEASE-VALIDATOR. Do not treat this report's
+  "1 failure" figure as the complete picture -- unattributed/unexecuted coverage is the
+  second, equally load-bearing reason for this FAIL verdict.

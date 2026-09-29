@@ -1,0 +1,58 @@
+{
+  "handoff_id": "7b6e0e3a-9d2a-4b7a-9d6b-2a1e6f8c4c31",
+  "run_id": "WF02-REQ422-20260929",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ422-20260929/step-01b-code-design-validator.json",
+  "created_at": "2026-09-29T00:00:00Z",
+  "started_at": "2026-09-29T00:00:00Z",
+  "completed_at": "2026-09-29T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-422"],
+    "related_handoff_ids": ["d4bf3bac-3167-45ea-9e3f-aa7acc4a90e7"],
+    "artifacts_in": [
+      "lib/letflow/design/req422-mobile-security-hardening.md",
+      "handoffs/WF02-REQ422-20260929/step-01-code-designer.json"
+    ],
+    "owned_modules": ["apps/mobile/"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b design gate on CODE-DESIGNER's REQ-422 (MOB-5 on-device security hardening) design artefact. Read lib/letflow/design/req422-mobile-security-hardening.md directly. For each of the 10 acceptance criteria, verify (a) a corresponding design element with no TBD/deferral language, (b) function signatures fully specified (name, inputs, outputs, error cases), (c) error handling shape stated, (d) cross-module dependencies listed, (e) no implementation code present (signatures/type shapes only). FAIL immediately on any single failed check. Also specifically assess whether the navigation_bootstrap.dart flutter_secure_storage second-import-site gap is actually closed by the design's TenantTokenStore.production() fix, and weigh in on OQ-1 (register RedactingLogInterceptor now?) and OQ-6 (REQ-421's stale key-rotation/biometric/tamper forward-reference) as to whether either blocks sign-off.",
+    "acceptance_criteria": [
+      "a guard test asserts the only file under apps/mobile/lib that imports flutter_secure_storage is the lib/auth/ token store, and no file under lib/auth/ or lib/api/ imports shared_preferences or dart:io File APIs -- with a self-test that fails on a violating fixture",
+      "a test issues a request through the API client with a fake access token 'SECRET-TOKEN-SENTINEL' and a fake token-endpoint response containing a refresh token 'SECRET-REFRESH-SENTINEL', captures every log sink the app uses (debugPrint override, dart:developer log, any logger package), and asserts neither sentinel appears",
+      "a guard test parses android/app/src/main/AndroidManifest.xml and the main network-security-config and asserts usesCleartextTraffic='false', base-config cleartextTrafficPermitted='false', and allowBackup='false' (or a data-extraction rule excluding secure-storage); and asserts any domain-config permitting cleartext exists only under src/debug/ and names only 10.0.2.2 and localhost",
+      "`cd apps/mobile && flutter build apk --release` (debug-signed is acceptable) succeeds and `aapt dump xmltree` (or apkanalyzer) of the release APK's manifest shows usesCleartextTraffic false and the release network-security-config contains no cleartext-permitting domain-config, quoted",
+      "a test asserts that with release-mode transport policy the API client rejects an http:// request URL (and bootstrap rejects an http:// realm_url) without opening a connection (the fake HTTP layer records zero calls), that an https:// URL is allowed, and that the debug policy allows http only for localhost and 10.0.2.2",
+      "a guard test parses ios/Runner/Info.plist and asserts NSAllowsArbitraryLoads is absent or false; the report states iOS runtime verification is deferred because the host is Windows",
+      "a test asserts switching from tenant A to tenant B deletes A's tokens from the secure store and that a request for tenant B is never sent with a token whose iss is A's realm",
+      "a widget test asserts the masked-text widget hides its value by default, reveals it once, and cannot be revealed a second time",
+      "docs/mobile/architecture.md contains the corporate-tier hardening section naming certificate pinning and root/jailbreak detection as required-before-corporate-tier and not implemented in v1",
+      "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted, and SECURITY-REVIEWER signs off before merge"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req422-mobile-security-hardening.md directly (not CODE-DESIGNER's handoff summary). All 10 acceptance criteria map to concrete design elements, each with a fully specified signature, stated error/failure shape, and no TBD/deferral language: AC1 -> checkTokenStorageBoundary(Map<String,String>)->List<TokenStorageBoundaryViolation> S1.3, closing the pre-existing navigation_bootstrap.dart second-import-site gap via TenantTokenStore.production() + provider rewire (S1.1-1.2, verified below). AC2 -> checkNoUnredactedLogInterceptor S2.2 + RedactingLogInterceptor class shape S2.3 + the sentinel black-box test shape S2.4. AC3 -> checkAndroidManifestSecurity S3.4 over literal manifest/network-security-config XML fragments S3.1-3.3. AC4 -> the exact build+aapt command sequence S3.5 (explicitly a procedure, not a Dart test, matching AC4's own literal ask). AC5 -> TransportPolicy/ReleaseTransportPolicy/DebugTransportPolicy/TransportPolicyRejectedException S4.1, the reject-before-fetch interceptor S4.2, and the bootstrap realm_url check S4.3, with checkTransportPolicyDecisions S4.5 as the table-driven test shape. AC6 -> checkInfoPlistAts S5.2, iOS-deferred-on-Windows stated explicitly. AC7 -> decodeJwtPayload/issuerOf/_tokenMatchesActiveRealm S6.1-6.2 (null-safe, never-throws error shape stated) plus logout/switchTenant S6.3 (explicit pre-delete-of-previous-tenant ordering, OQ-5). AC8 -> MaskRevealController's 3-phase state machine (masked->revealed->locked, no back-transition, reveal()/hide() no-op semantics stated) + MaskedRevealText widget S7. AC9 -> verbatim architecture.md S7 addition text S8. AC10 -> resolved by the standard Step 2b-mobile gate procedure plus this design's own SECURITY-REVIEWER-required header; not itself a design element and none is owed. Cross-module dependencies are listed in full in S10 (flutter_secure_storage, flutter_appauth, dio, flutter_riverpod, dart:convert, plus every touched/new apps/mobile/lib file and docs/mobile/architecture.md), and invariants are restated in S11. No .dart implementation bodies are present as DESIGN OUTPUT: every new class/function in S1.2, S2.3, S4.1-4.2, S6.1-6.3, S7.1-7.2 is signature/field/type-shape only (method bodies end in ';' or are described in prose, never with executable statements). The one Dart code block containing a real function body (S1.1's 4-line navigation_bootstrap.dart excerpt) is explicitly labelled 'current state, read before design, not guessed' -- it is forensic evidence of the existing gap being closed, not new implementation the design is proposing; considered against check (e) and cleared on that basis, not overlooked. Specifically verified: S1.1-1.2's fix actually closes the AC1 'only file' gap -- navigation_bootstrap.dart's flutterSecureStorageProvider and its flutter_secure_storage import are deleted outright and tenantTokenStoreProvider is rewired to call TenantTokenStore.production() (a factory living inside lib/auth/auth.dart, the sanctioned file), so after MOBILE-DEV implements this design, lib/auth/auth.dart is the only file under lib/ importing flutter_secure_storage -- no residual violation. OQ-1 (register RedactingLogInterceptor now vs. leave for MOB-6/REQ-425) does not block sign-off: AC2's own text is disjunctive ('absent or replaced by a redacting one') and the design keeps the already-true 'absent' branch while shipping the redactor as available-but-unregistered infrastructure -- either choice satisfies AC2 as written, so this is a legitimate open implementation choice, not a gap. OQ-6 (REQ-421's forward-reference to key rotation/biometric gating/tamper detection under the REQ-422 label) does not block sign-off either: REQ-422's actual requirement_text/acceptance_criteria (both quoted directly in this handoff and cross-checked against context.requirement_text on the Step 01 handoff) contain no such items, so nothing REQ-422 is being gated on is left undesigned -- the design correctly identifies REQ-421 S4.1's own text as the stale artefact, flags it explicitly per the 'open questions listed, not silently resolved' rule, rather than silently absorbing undesigned scope or silently dropping the discrepancy. Recommend ORCH have this stale REQ-421 forward-reference filed as its own follow-up issue (docs-consistency, not a code defect) so it does not resurface as a false expectation on a future mobile requirement -- reported below as MINOR, not a gate failure.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "MINOR", "description": "OQ-6: docs/mobile/architecture.md / lib/letflow/design/req421-mobile-tenant-bootstrap.md Sec4.1 forward-references key rotation, biometric gating, and tamper detection as things 'REQ-422 hardens/guards.' REQ-422's actual requirement text and acceptance criteria contain none of these -- REQ-422's design correctly did not design them and flagged the discrepancy (OQ-6) rather than silently absorbing or silently dropping it. Recommend ORCH register a follow-up issue to correct REQ-421's stale forward-reference (or file a new requirement for key rotation/biometric gating/tamper detection if still wanted) so a future reader of REQ-421 doesn't expect coverage that was never in REQ-422's scope. Not a design gap in REQ-422 itself -- does not block this gate.", "affected_requirement": "REQ-422"}
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ422-20260929",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ422-20260929",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to MOBILE-DEV (2b-mobile)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

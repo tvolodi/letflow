@@ -195,3 +195,40 @@
       warning against deriving a set_lock target from a filename. Not a
       docs/requirements.yaml entry (this is an issue, no requirement status
       changes).
+
+  - req: REQ-423
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-29T13:20:00Z"
+    note: >
+      MOB-3 (part 1): local definition cache keyed by (type, id,
+      version), background delta sync against GET
+      /api/v1/definitions/delta (persisting the server's opaque cursor
+      verbatim, never client-clock-derived), archived-item removal, 400
+      -> full-resync (not a retry loop), per-tenant cache isolation, and
+      an airplane-mode-launch tenant home screen (branch
+      feature/REQ423-mobile-definition-cache-sync-20260929, commit
+      97219205, based on main e686339e). Full gate chain: CODE-DESIGNER
+      -> CODE-DESIGN-VALIDATOR PASS -> MOBILE-DEV implement (also fixed
+      a genuine pre-existing go_router rebuild race bug found along the
+      way) -> SECURITY-REVIEWER PASS -> REVIEWER PASS (required fixing a
+      fabricated decision-0012 quotation, fixed) -> TEST-DESIGNER
+      (closed a flagged real-Sembast lifecycle coverage gap) ->
+      TEST-DESIGN-VALIDATOR PASS (mutation-proof trace analysis) ->
+      TEST-RUNNER (real flutter toolchain, 110/110 passing, found+fixed
+      one minor unnecessary_import lint) -> RELEASE-VALIDATOR PASS,
+      independently re-running `flutter analyze` (0 issues) and `flutter
+      test` (110/110) itself against a Flutter 3.41.7/Dart 3.11.5
+      toolchain, and independently re-deriving all 8 acceptance criteria
+      against actual code/tests rather than trusting prior steps'
+      summaries, plus decision-record consistency (0012
+      mobile-tier-stack: Sembast chosen over Isar, reason recorded in
+      apps/mobile/README.md) and security scope re-confirmed unchanged
+      since SECURITY-REVIEWER's pass. No write/outbox queue introduced
+      (`git grep -n -i queue -- apps/mobile/lib` clean per AC).
+      docs/requirements.yaml's REQ-423 status: pending -> done in this
+      same append. README.md's mobile-tier summary paragraph updated to
+      add REQ-423/MOB-3-part-1's cache/sync summary (matching the
+      existing REQ-417..422 pattern). Merged via PR (see the PR body for
+      number/merge commit); local main fast-forwarded. letflow-queue
+      task 860 released as done.

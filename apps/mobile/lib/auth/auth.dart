@@ -147,6 +147,64 @@ class TenantTokenStore {
   }
 }
 
+// ── §7.3 Last-active-tenant pointer (REQ-423 design §7.3) ──────────────────
+//
+// Persisted alongside tokens, in the same `TenantTokenStore`-backed
+// `FlutterSecureStorage` instance, under a second fixed key — not a new
+// storage class, no new dependency. This is what lets
+// `BootstrapController.attemptSessionResume()` reach a previously-
+// authenticated tenant's identity with zero network calls.
+
+const String _lastActiveTenantKey = 'letflow.last_active_tenant';
+
+@immutable
+class LastActiveTenantPointer {
+  const LastActiveTenantPointer({required this.realmUrl, required this.slug});
+
+  final String realmUrl;
+  final String slug;
+
+  Map<String, dynamic> toJson() => {'realm_url': realmUrl, 'slug': slug};
+
+  factory LastActiveTenantPointer.fromJson(Map<String, dynamic> json) {
+    return LastActiveTenantPointer(
+      realmUrl: json['realm_url'] as String,
+      slug: json['slug'] as String,
+    );
+  }
+}
+
+/// Writes [pointer] via [tokenStore]'s own storage instance (same-library
+/// access to its private `_storage` field — see [TenantTokenStore]).
+Future<void> writeLastActiveTenant(
+  TenantTokenStore tokenStore,
+  LastActiveTenantPointer pointer,
+) {
+  return tokenStore._storage.write(
+    key: _lastActiveTenantKey,
+    value: jsonEncode(pointer.toJson()),
+  );
+}
+
+/// Reads the last-active-tenant pointer, or `null` if none has ever been
+/// written (or it has been cleared).
+Future<LastActiveTenantPointer?> readLastActiveTenant(
+  TenantTokenStore tokenStore,
+) async {
+  final raw = await tokenStore._storage.read(key: _lastActiveTenantKey);
+  if (raw == null) return null;
+  return LastActiveTenantPointer.fromJson(
+    jsonDecode(raw) as Map<String, dynamic>,
+  );
+}
+
+/// Clears the last-active-tenant pointer — called from the same two places
+/// `ActiveDefinitionCacheHolder.closeAndClear()` is: `switchTenant`'s
+/// pre-delete branch and `logout`.
+Future<void> clearLastActiveTenant(TenantTokenStore tokenStore) {
+  return tokenStore._storage.delete(key: _lastActiveTenantKey);
+}
+
 /// Fake-adapter seam for `flutter_appauth` (REQ-421 design §3.2) — the
 /// widget/unit tests plug a fake implementation in here instead of driving
 /// a real Custom Tab / native AppAuth SDK.

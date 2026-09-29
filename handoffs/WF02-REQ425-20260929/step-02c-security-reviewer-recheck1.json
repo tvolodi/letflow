@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-02c-security-reviewer-recheck1.json",
   "created_at": "2026-09-29T12:33:47Z",
   "started_at": "2026-09-29T12:33:47Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T13:10:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S9",
@@ -41,19 +41,21 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "INV-1 BLOCKER (new instance, not the same defect as gate_history iteration 0): the rework correctly closes the race inside _RefreshCoordinator._doRefresh (realm/clientId re-checked synchronously, with no intervening await, immediately after the refresh network call resolves and before any token write -- both new regression tests confirm zero retry requests are sent when the switch/logout happens during the refresh itself). But an equivalent, still-open race exists one step later, at retry dispatch: _handleUnauthorized's pre-retry check at api_client.dart:536 (`issuedForRealm != _activeRealm.currentRealmUrl`) runs synchronously and then calls `await _dio.fetch(retriedOptions)` with no await between the check and the fetch call -- but _dio.fetch()'s OWN internal implementation (dio 5.11.1, apps/mobile/pubspec.lock pinned version, lib/src/dio_mixin.dart:529, verified by reading the actual package source in the pub cache) builds its interceptor chain starting from `Future<dynamic> future = Future<dynamic>(() => InterceptorState(requestOptions));` -- the `Future()` constructor is documented to run its computation via Timer.run, a real event-loop turn, not a synchronous continuation and not even just a microtask. The bearer interceptor (_bearerInterceptor, api_client.dart:616) that actually attaches the retry's Authorization header only runs after this scheduled turn, and it does a FRESH, unguarded read of `activeRealm.currentRealmUrl` at that later point -- it does not consult or trust the `issuedForRealm` tag or the check _handleUnauthorized already performed. If a tenant switch/logout lands in this real, non-zero window (between _handleUnauthorized's check and the interceptor's own read), the retried request -- built from the original request issued for tenant A -- is dispatched carrying tenant B's bearer token (attached fresh by the interceptor reading the post-switch activeRealm), i.e. exactly 'serving the retried request under the new tenant's identity', which is the literal wording of this handoff's own acceptance criterion 8 and the same defect class as gate_history iteration 0, only relocated from the token-write step to the retry-dispatch step. No test in apps/mobile/test/api/api_client_hardening_test.dart exercises this window -- both new regression tests (lines 239 and 279) trigger the tenant switch/logout via `appAuthAdapter.duringRefresh`, i.e. while _doRefresh's own network await is still pending, which is caught by the earlier (correctly fixed) check at api_client.dart:254 before refreshOnce() ever returns success, so outcome never reaches _handleUnauthorized's line-536 branch in either test. The gap between the line-536 check succeeding and the bearer interceptor's fresh re-read during the scheduled retry dispatch is untested and unclosed.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "INV-1 BLOCKER: apps/mobile/lib/api/api_client.dart _handleUnauthorized (line ~536) checks issuedForRealm against the current active realm before calling `_dio.fetch(retriedOptions)`, but dio 5.11.1's fetch() schedules its interceptor chain via `Future(() => ...)` (a real event-loop turn, confirmed by reading dio_mixin.dart:529 in the pinned pubspec.lock version), and the bearer interceptor that attaches the retry's Authorization header (_bearerInterceptor, line ~616) does an independent, unguarded fresh read of activeRealm.currentRealmUrl at that later point instead of trusting the pre-fetch check or the issuedForRealm tag. A tenant switch/logout landing in this window causes the retry -- built from a request issued for tenant A -- to be sent carrying tenant B's bearer token, i.e. served under the new tenant's identity. Route back to MOBILE-DEV: either re-verify the realm again inside the bearer interceptor against the request's own _kIssuedForRealmKey tag (rejecting/clearing the header if it no longer matches the currently active realm) before attaching any token to a retry, or re-check immediately before the retry response is accepted (post-fetch) and discard/abort on mismatch rather than only pre-fetch. Add a regression test that triggers the tenant switch/logout AFTER refreshOnce() resolves successfully but before the retry's interceptor chain runs (e.g. via a hook on the fake Dio adapter's send path, not appAuthAdapter.duringRefresh, since that only covers the earlier window) and asserts the retry is never sent with the new tenant's token."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ425-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to MOBILE-DEV for rework 2: close the retry-dispatch-time realm race in _handleUnauthorized/_bearerInterceptor per issues[0], with a regression test covering the post-refresh-success, pre-retry-dispatch window specifically (distinct from the already-covered during-refresh window)."
   },
   "rework_count": 1,
   "max_rework": 3,

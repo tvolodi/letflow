@@ -355,11 +355,13 @@ which must re-read the now-refreshed token):
    - Inside `_doRefresh()`: reads the current `TokenSet` for
      `activeRealm.currentRealmUrl` from `tokenStore` (if no realm/tokens are present at
      all, treat as refresh failure immediately — go to step 5). Calls
-     `appAuthAdapter`'s token-refresh method (exact method/type — **OQ-2**, see §2.6)
-     with the stored `refreshToken`. On success: builds a new `TokenSet` from the
-     response, `await tokenStore.store(realmUrl, newTokens)`, returns `true`. On any
-     failure (thrown exception from the adapter, or a response carrying no usable
-     access token): proceeds to step 5 and returns `false`.
+     `appAuthAdapter.refresh(TokenRequest(...))` (§5.2 — delegates to
+     `FlutterAppAuth.token`, verified against the pinned `flutter_appauth` `12.1.0`
+     source) with the stored `refreshToken`. On success: builds a new `TokenSet` from
+     the returned `TokenResponse`, `await tokenStore.store(realmUrl, newTokens)`,
+     returns `true`. On any failure (thrown exception from the adapter, or a
+     `TokenResponse` carrying no usable `accessToken`): proceeds to step 5 and returns
+     `false`.
 4. **On refresh success (`true`):** the original request is retried **exactly once** —
    re-issued through the same `_dio` instance (so the bearer-attach interceptor
    re-reads the just-stored, now-fresh token). This retried request's response is
@@ -579,30 +581,23 @@ class SingleApiClientViolation {
   reported separately, matching `checkTokenStorageBoundary`'s existing per-condition
   violation-emission style.
 
-### 4.2 Self-test fixture
-
-```
-test('self-test: checker fires on a fixture under lib/features/ importing package:dio', () {
-  final violations = checkSingleApiClientBoundary(
-    libFiles: {
-      'lib/features/exam/leaky_client.dart':
-          "import 'package:dio/dio.dart';\n",
-    },
-  );
-  expect(violations, hasLength(1));
-  expect(violations.single.file, 'lib/features/exam/leaky_client.dart');
-});
-```
+### 4.2 Self-test fixture (spec, not executable — four cases)
 
 Modeled directly on `token_storage_boundary_guard_test.dart`'s own self-test shape
 (lines 109–120 of that file) — same fixture-map argument, same single-violation
-assertion style. Two further self-tests, for parity with the guard's other two
-patterns: a `package:http` import under `lib/features/` fires; an `HttpClient(`
-construction alongside a `dart:io` import under `lib/renderers/` fires. A fourth
-self-test asserts the **negative** case: a fixture under `lib/api/leaky.dart`
-importing `package:dio` fires **zero** violations (the sanctioned directory), mirroring
-`token_storage_boundary_guard_test.dart`'s own "the sanctioned file itself fires zero
-violations" self-test (lines 159–169).
+assertion style. Each case below feeds `checkSingleApiClientBoundary` one single-entry
+`libFiles` map and asserts the described result; no case combines fixtures.
+
+| Case | `libFiles` fixture entry (`{path: content}`) | Expected `checkSingleApiClientBoundary` result |
+|---|---|---|
+| 1 — `package:dio` outside `lib/api/` | `'lib/features/exam/leaky_client.dart'` → content is a single `import 'package:dio/dio.dart';` line | Exactly one violation; its `file` equals `'lib/features/exam/leaky_client.dart'`, its `kind` identifies the `package:dio`-import pattern (§4.1 pattern 1) |
+| 2 — `package:http` outside `lib/api/` | `'lib/features/exam/leaky_http.dart'` → content is a single `import 'package:http/http.dart';` line | Exactly one violation; `file` equals that path, `kind` identifies pattern 2 |
+| 3 — `dart:io` `HttpClient(` outside `lib/api/` | `'lib/renderers/leaky_renderer.dart'` → content is `import 'dart:io';\n` followed by a line constructing `HttpClient()` | Exactly one violation; `file` equals that path, `kind` identifies pattern 3 |
+| 4 — negative: `package:dio` inside the sanctioned directory | `'lib/api/leaky.dart'` → content is a single `import 'package:dio/dio.dart';` line | Zero violations (the `lib/api/` prefix exemption applies) — mirrors `token_storage_boundary_guard_test.dart`'s own "the sanctioned file itself fires zero violations" self-test (lines 159–169) |
+
+Each of cases 1–3 asserts the returned list has length exactly 1 and that the single
+element's `file` field matches the fixture's path exactly; case 4 asserts the returned
+list is empty. No case's fixture map contains more than the one entry named above.
 
 ### 4.3 Real-tree test
 
@@ -654,18 +649,17 @@ class ApiClient implements HttpGateway {
     Map<String, dynamic>? queryParameters,
   });
 
-  /// NEW. No 5xx auto-retry (§3.3). Still subject to the 401 refresh/retry
-  /// flow (§2) like every authenticated call. Throws [ApiError].
-  Future<Response<dynamic>> post(String path, {Object? data});
-
-  /// NEW, same shape as [post]. Not required by any BUILDS item's literal
-  /// text but named here since HttpGateway currently has zero write methods
-  /// and MOB-4's task/list renderers (a later requirement) will need one —
-  /// OQ-7: should PUT/PATCH/DELETE be added now (symmetrical scaffolding)
-  /// or left to whichever later requirement first needs them? Not decided
-  /// here; only `post` is added since REQ-425's own acceptance criteria
-  /// explicitly test a POST's non-retry behavior (criterion 3), which
-  /// requires `post` to exist to be tested at all.
+  /// NEW. No 5xx auto-retry (§3.3) -- a single attempt only, matching the
+  /// "POST is not auto-retried" requirement text. Still subject to the 401
+  /// refresh/retry flow (§2) like every authenticated call, since that flow
+  /// is orthogonal to retry-on-5xx (a 401 is not a 5xx). Throws [ApiError].
+  /// Not required by any BUILDS item's literal text as a name, but added
+  /// here since `HttpGateway` currently has zero write methods and this
+  /// requirement's own acceptance criteria (criterion 3's POST-not-retried
+  /// case) need a write method to exist to be tested at all -- see OQ-7 for
+  /// whether PUT/PATCH/DELETE should be added now too (not decided here;
+  /// only `post` is added, since it is the only one a stated acceptance
+  /// criterion requires).
   Future<Response<dynamic>> post(String path, {Object? data});
 }
 ```
@@ -692,32 +686,63 @@ class ApiClient implements HttpGateway {
 
 ### 5.2 Refresh coordinator — `AppAuthAdapter` extension
 
+Verified against the actual pinned package (not inferred): `flutter_appauth` `12.1.0`
+(`apps/mobile/pubspec.lock`), whose sole refresh-capable call is
+`FlutterAppAuth.token(TokenRequest request) -> Future<TokenResponse>`
+(`flutter_appauth-12.1.0/lib/src/flutter_appauth.dart`). `TokenRequest` (package
+`flutter_appauth_platform_interface` `12.1.0`, `lib/src/token_request.dart`) takes
+`refreshToken` and an optional `grantType` — when `grantType` is omitted and
+`refreshToken` is set (and `authorizationCode` is not), the platform interface itself
+infers `GrantType.refreshToken` (`'refresh_token'`, `lib/src/grant_type.dart`,
+`method_channel_mappers.dart:_inferGrantType`), so passing `grantType` explicitly is
+optional, not required, for a refresh call. `TokenResponse`
+(`lib/src/token_response.dart`) carries `accessToken`, `refreshToken`,
+`accessTokenExpirationDateTime`, `idToken`, `tokenType`, `scopes` — all nullable fields
+on a non-nullable `TokenResponse` return value (the method throws, it does not return
+`null`, on failure).
+
 ```
 abstract class AppAuthAdapter {
   Future<AuthorizationTokenResponse?> authorizeAndExchangeCode(
     AuthorizationTokenRequest request,
   );
 
-  /// NEW. Performs an OIDC refresh_token grant. Returns the new
-  /// AuthorizationTokenResponse (or its token-refresh-response equivalent
-  /// -- see OQ-2, exact flutter_appauth type/method TBD) on success. Throws
-  /// on any failure (network, invalid_grant, expired refresh token, etc.)
-  /// -- the caller (_RefreshCoordinator._doRefresh) catches every exception
-  /// type uniformly and treats it as refresh failure, since this design
-  /// does not need to distinguish *why* a refresh failed (network vs.
-  /// revoked token both lead to the same "clear tokens, route to login"
-  /// outcome).
-  Future<AuthorizationTokenResponse?> refresh(TokenRequest request);
+  /// NEW. Performs an OIDC refresh_token grant by delegating to
+  /// `FlutterAppAuth.token(TokenRequest(...))` (flutter_appauth 12.1.0's
+  /// only refresh-capable call — verified against the pinned package
+  /// source, not the authorization-code method above). Returns the new
+  /// TokenResponse on success. Throws on any failure (network,
+  /// invalid_grant, expired refresh token, etc.) -- the caller
+  /// (_RefreshCoordinator._doRefresh) catches every exception type
+  /// uniformly and treats it as refresh failure, since this design does
+  /// not need to distinguish *why* a refresh failed (network vs. revoked
+  /// token both lead to the same "clear tokens, route to login" outcome).
+  Future<TokenResponse> refresh(TokenRequest request);
 }
 ```
 
 `RealAppAuthAdapter` (in `lib/auth/auth.dart`, unchanged file ownership — this
 interface lives alongside the existing `AppAuthAdapter`/`authorizeAndExchangeCode`, not
-duplicated in `lib/api/`) gains the corresponding `refresh` implementation, delegating
-to `flutter_appauth`'s real refresh call. A test-only `FakeAppAuthAdapter`
+duplicated in `lib/api/`) gains the corresponding `refresh` implementation:
+`FlutterAppAuth().token(request)`, `request` built by `_RefreshCoordinator._doRefresh`
+as `TokenRequest(clientId, redirectUrl, issuer: ..., refreshToken: storedRefreshToken)`
+(the same `clientId`/`redirectUrl`/`issuer` values `authorizeAndExchangeCode` already
+uses for this realm, per REQ-421 §3.1 — `grantType` left unset so the platform
+interface infers `refresh_token` from `refreshToken` being present, per the verified
+inference rule above). A test-only `FakeAppAuthAdapter`
 (`apps/mobile/test/support/fake_app_auth_adapter.dart`, already exists per REQ-422 §2.4's
 reference to it) gains a controllable `refresh` stub for the new tests this
 requirement needs (§2.3's concurrency test, the refresh-failure test).
+
+**Routing note for MOBILE-DEV (not part of `refresh`'s own contract above):** this
+design verified `FlutterAppAuth.token`/`TokenRequest`/`TokenResponse`'s shapes directly
+against `flutter_appauth-12.1.0` and `flutter_appauth_platform_interface-12.1.0`'s
+source under the local pub cache as of this design's writing. Confirm at
+implementation time that `apps/mobile/pubspec.lock` still pins `12.1.0` for both
+packages (an intervening `flutter pub upgrade` could move the lockfile) before wiring
+`RealAppAuthAdapter.refresh` — if the pinned version has changed, re-verify this
+section's method/type names against the new version's source rather than assuming they
+still hold.
 
 ### 5.3 `ApiError` / mapping functions
 
@@ -815,24 +840,13 @@ are all pure-Dart/`dio`-only constructs.
   into `ServerError` as a catch-all. Is that acceptable, or does it deserve its own
   `ApiError` variant (e.g. `BadRequestError`)? Not decided here — no BUILDS/AC text
   names 400 explicitly.
-- **OQ-2 (§5.2, the biggest open item).** The exact `flutter_appauth` (pinned
-  `^12.1.0`, per `lib/auth/auth.dart`'s existing package-version notes) API shape for
-  a **refresh** call is not established anywhere in the existing codebase — REQ-421/422
-  only ever call `authorizeAndExchangeCode` (the initial code exchange), never a
-  refresh grant. This design states the *coordinator's* contract
-  (`AppAuthAdapter.refresh(TokenRequest) -> Future<AuthorizationTokenResponse?>`) but
-  does **not** assert that `flutter_appauth: ^12.1.0` actually exposes a method with
-  that exact name/signature — MOBILE-DEV must check the pinned package's real API
-  (likely `FlutterAppAuth().token(TokenRequest(...))` with `grantType:
-  'refresh_token'`, per that package's general shape in other versions, but this is
-  not verified against the actual pinned version here, per this design's "don't invent
-  a fictitious method name" instruction) and adjust `RealAppAuthAdapter.refresh`'s
-  exact call accordingly; the `_RefreshCoordinator`/`AppAuthAdapter` interface shapes
-  in §2.1/§5.2 are stable regardless of that adjustment (they only depend on "some
-  method takes stored refresh-token material and returns new token material or
-  throws"), so this is an implementation-detail gap, not a design-shape gap — but
-  it is exactly the kind of unstated assumption this design must flag rather than
-  guess at.
+- **OQ-2 (§5.2) — resolved.** `flutter_appauth`'s refresh call was verified directly
+  against the pinned `12.1.0` package source (both `flutter_appauth` and
+  `flutter_appauth_platform_interface`): `FlutterAppAuth.token(TokenRequest(...)) ->
+  Future<TokenResponse>`, with `grantType` inferable from `refreshToken` alone. No
+  open design question remains here; see §5.2's routing note for the one residual
+  implementation-time check (confirm the lockfile still pins `12.1.0` before wiring
+  `RealAppAuthAdapter.refresh`, and re-verify against source if it has moved).
 - **OQ-3 (§2.4).** The exact login/tenant-entry route name/path for `LoginRouter`'s
   production closure is not specified — depends on the app's actual `go_router`
   configuration, which this design did not need to read in full to specify the

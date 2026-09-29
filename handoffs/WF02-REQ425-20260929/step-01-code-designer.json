@@ -9,7 +9,7 @@
   "created_at": "2026-09-29T11:22:30Z",
   "started_at": "2026-09-29T11:22:30Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -46,18 +46,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Wrote lib/letflow/design/req425-mobile-api-client-hardening.md hardening apps/mobile/lib/api/api_client.dart per MOB-6. Covers: (1) sealed ApiError type with 9 variants (network-unavailable, unauthorized, forbidden, not-found, module-not-available(moduleId), backpressure(retryAfterSeconds), validation(fieldErrors), conflict, server) and the exact classifyError mapping rule including the /api/v1/modules/<id>/ regex (^/api/v1/modules/([^/]+)/) distinguishing module-404 from plain-404; (2) the 401 refresh-then-retry state machine via a _RefreshCoordinator holding a single in-flight Future (coalesces concurrent 401s), exact sequence attempt->401->refresh-or-join->retry-once, and an explicit terminal rule for a second 401 on the retried request itself (an extra.'_letflowRetriedAfter401' flag prevents a second refresh attempt -- surfaces UnauthorizedError and stops, no loop); (3) GET-only exponential backoff via named kMaxServerRetryAttempts=3 constant, formula kBaseServerRetryDelay*2^(attempt-1) capped at kMaxServerRetryDelay, with an injectable delayFn for fake-clock testing, and the exact POST non-retry rule; (4) the single-client guard design (checkSingleApiClientBoundary) modeled on token_storage_boundary_guard_test.dart's shape, flagging package:dio/package:http imports and dart:io HttpClient(...) construction outside lib/api/, with a self-test fixture under lib/features/; (5) full @spec-style signatures for ApiClient's new/changed methods, AppAuthAdapter.refresh, and every classifyError helper; (6) an acceptance-criteria resolution map covering all 7 criteria; (7) 8 open questions (OQ-1..OQ-8), most notably OQ-2 -- flutter_appauth ^12.1.0's actual refresh-token-grant method/type is not established anywhere in the existing codebase (only authorizeAndExchangeCode exists today) and is explicitly left for MOBILE-DEV to verify against the real package API rather than guessed at. No implementation code included -- signatures and type/field shapes only.",
+    "artifacts_out": ["lib/letflow/design/req425-mobile-api-client-hardening.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ425-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
   },
   "rework_count": 0,
   "max_rework": 3

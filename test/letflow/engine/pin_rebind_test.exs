@@ -33,57 +33,23 @@ defmodule Letflow.Engine.PinRebindTest do
   alias Letflow.Engine.PinResolver.Lookup
   alias Letflow.Engine.Reconstruction
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # ---------------------------------------------------------------------------------
-  # Fixtures / helpers
+  # Fixtures / helpers -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366).
+  # INSTANCE_PINS_REBOUND, INSTANCE_CANCELLED, and EXECUTION_ERROR are all
+  # auto-seeded by TenantProvisioning.replay_migrations/2's default manifest
+  # (REQ-045 §9 OQ-3a, extended by ISS-0072/GH#257), each with a schema matching its
+  # real writer (Letflow.Engine.PinRebind.rebind_pins/3 for INSTANCE_PINS_REBOUND,
+  # whose prior_version/new_version fields provisioning seeds as strings --
+  # ISS-0074), so this fixture just relies on the seed directly.
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req060"),
-        display_name: "REQ-060 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
 
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    # INSTANCE_PINS_REBOUND, INSTANCE_CANCELLED, and EXECUTION_ERROR are all
-    # auto-seeded by replay_migrations/2's default manifest (REQ-045 §9 OQ-3a,
-    # extended by ISS-0072/GH#257), each with a schema matching its real writer
-    # (Letflow.Engine.PinRebind.rebind_pins/3 for INSTANCE_PINS_REBOUND, whose
-    # prior_version/new_version fields provisioning now seeds as strings --
-    # ISS-0074), so this fixture just relies on the seed directly.
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req060",
+      display_name: "REQ-060 Test Tenant"
+    )
   end
 
   defp unique_name(prefix \\ "req060-def") do

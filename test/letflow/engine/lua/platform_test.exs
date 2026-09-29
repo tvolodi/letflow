@@ -21,16 +21,12 @@ defmodule Letflow.Engine.Lua.PlatformTest do
 
   use Letflow.DataCase, async: false
 
-  import Ecto.Query, only: [from: 2]
-
   alias Letflow.Engine.Lua.Capabilities
   alias Letflow.Engine.Lua.Platform
   alias Letflow.Engine.Lua.Sandbox
   alias Letflow.Engine.VariableMerge
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   defmodule FixedTimeSource do
     @moduledoc false
@@ -385,48 +381,15 @@ defmodule Letflow.Engine.Lua.PlatformTest do
   # =====================================================================================
 
   # ---------------------------------------------------------------------------------
-  # Fixtures -- mirrors test/letflow/event_store_test.exs's provisioned_tenant/1 and
-  # seed_projection!/4 exactly (same real-Postgres-tenant-schema idiom), trimmed to what
-  # this file's REQ-159 tests need.
+  # Fixtures -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366), trimmed to
+  # what this file's REQ-159 tests need.
   # ---------------------------------------------------------------------------------
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req159"),
-        display_name: "REQ-159 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req159",
+      display_name: "REQ-159 Test Tenant"
+    )
   end
 
   defp seed_projection!(schema_name, instance_id, attrs \\ %{}) do

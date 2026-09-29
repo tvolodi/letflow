@@ -1,0 +1,84 @@
+id: ISS-0881
+title: >
+  SandboxPoolTest "ISS-0224 regression RT-6 (death path c)" fails
+  intermittently under full parallel suite
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF03-ISS0879-20260929
+discovered_at: "2026-09-29T00:17:20Z"
+tags:
+  - backend
+  - test-flake
+  - shared-db-isolation
+  - sandbox-pool
+severity: MINOR
+description: >
+  Found incidentally during RELEASE-VALIDATOR's independent re-verification
+  of WF03-ISS0879-20260929's fix. Two of three full parallel-suite runs this
+  session hit it (an initial `mix letflow.check.test` run and a separate
+  `scripts/test_parallel.sh` run, both isolated to a single partition, both
+  with the identical `373/374 passed` signature -- consistent, recurring,
+  not a one-off).
+
+  Failing test: test/letflow/sandbox_pool_test.exs:1087 ("provisioning does
+  not block the pool's mailbox (ISS-0224 regression) RT-6 (death path c)"),
+  assertion at line 1126: `refute MapSet.member?(final, o_schema)` fails
+  under full-parallel-suite contention.
+
+  `git diff --name-only origin/main...HEAD` for branch
+  feature/WF03-ISS0879-20260929 confirmed test/letflow/sandbox_pool_test.exs
+  and its production dependencies are NOT in that branch's diff -- this is
+  pre-existing, not a regression introduced by ISS-0879's fix.
+
+  Not yet tracked as its own open issue as far as RELEASE-VALIDATOR found in
+  docs/issues/ (searched for "sandbox_pool", "ISS-0224 regression",
+  "death path c" -- no match against an open record; ISS-0224 itself is a
+  different, already-resolved issue this test's own name references as its
+  original regression target).
+
+filename_numbering_anomaly: >
+  This record is filed as ISS-0881 rather than ISS-0880 despite being
+  registered via letflow-queue as task id 880 (queue_ref: Q-880,
+  github_issue_number 1958) -- letflow-queue's own /tasks response
+  confirmed this task genuinely was freshly created at registration time
+  (2026-09-29T00:17:20Z, status: open, previously nonexistent), NOT a
+  duplicate or a stale read. However, docs/issues/ISS-0880.yaml already
+  exists on main (merged via PR #1955, commit df437035, status: resolved)
+  for a COMPLETELY UNRELATED issue (a REQ-421/MOB-2 AC3 test-coverage gap)
+  and its own queue_ref field also reads "Q-880" -- i.e. two distinct,
+  unrelated issue records both claim queue task id 880. Per
+  docs/agents/protocols/TASK_QUEUE.md's own documented history ("the id
+  equality this bullet used to assert is SUPERSEDED... 27 contradict it"),
+  filename-to-queue-id equality was never a reliable invariant in this
+  project, so this is treated as a known-tolerated anomaly rather than a
+  blocking one -- ORCH picked the next unused ISS-NNNN filename (ISS-0881)
+  instead of overwriting the existing, already-closed ISS-0880.yaml record.
+  Root cause of the underlying id collision (why two unrelated
+  register_task calls both produced/recorded queue task id 880) is NOT
+  investigated here -- flagged for a future session or for
+  letflow-queue's own maintainers to look into if it recurs.
+
+severity_rationale: >
+  MINOR -- only reproduces under full parallel-suite contention (2 of 3
+  runs this session), same general shape as ISS-0873/ISS-0878/ISS-0879's
+  own contention-class flakes, no evidence yet of a production correctness
+  defect versus a test-isolation artifact.
+
+fix_direction: >
+  NOT INVESTIGATED -- RELEASE-VALIDATOR's own scope stops at independent
+  verification of a different issue's fix; this was an incidental finding,
+  not root-caused. Needs ISSUE-FIXER to diagnose with isolated reproduction
+  or high-confidence code inspection (per ISS-0873's own precedent, which
+  reached a resolution without ever live-reproducing in that session).
+  Likely candidate mechanism, unconfirmed: another instance of the same
+  shared-Postgres-instance / cross-partition contention class as
+  ISS-0873/ISS-0878/ISS-0879 (an assertion on platform-wide or
+  cross-partition-visible state, or an `o_schema` naming collision across
+  concurrently-running partitions) -- not proven identical without
+  investigation.
+
+affected_files:
+  - test/letflow/sandbox_pool_test.exs
+
+status: open
+queue_ref: Q-880
+github_ref: GH-1958

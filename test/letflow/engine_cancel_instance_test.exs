@@ -33,59 +33,21 @@ defmodule Letflow.EngineCancelInstanceTest do
   alias Letflow.EventStore
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # ---------------------------------------------------------------------------------
-  # Fixtures / helpers
+  # Fixtures / helpers -- provisions via Letflow.TenantFixture (ISS-0112 / GH#366).
+  # TASK_COMPLETED and INSTANCE_CANCELLED are auto-seeded by
+  # TenantProvisioning.replay_migrations/2's default manifest (REQ-045 §9 OQ-3a,
+  # extended by ISS-0072/GH#257) -- this fixture relies on that seed rather than
+  # registering either type itself.
   # ---------------------------------------------------------------------------------
-
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req052"),
-        display_name: "REQ-052 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
 
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    # TASK_COMPLETED and INSTANCE_CANCELLED are now auto-seeded by
-    # replay_migrations/2's default manifest (REQ-045 §9 OQ-3a, extended by
-    # ISS-0072/GH#257) -- this fixture used to self-register both again against a
-    # permissive `%{"type" => "object"}` schema (ISS-0073/GH#267: that duplicate
-    # registration now collides with provisioning's own seed and hard-fails).
-    # Removed rather than reconciled: every payload this file writes goes through
-    # the real Engine.complete_task/3 / Engine.cancel_instance/3 writers
-    # provisioning's stricter schemas were written to validate.
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    TenantFixture.provisioned_tenant!(
+      slug_prefix: "req052",
+      display_name: "REQ-052 Test Tenant"
+    )
   end
 
   defp unique_name(prefix \\ "req052-def") do

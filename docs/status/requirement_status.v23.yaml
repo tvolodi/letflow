@@ -1002,3 +1002,23 @@
       own text (SEQUENCE step 2's OIDC hand-off is to the system browser,
       not an in-app credential form). Flipping docs/requirements.yaml's
       REQ-421 status: in_progress -> done in this same append.
+
+  - req: REQ-421
+    event: revised
+    agent: ORCH
+    at: 2026-09-29T02:35:00Z
+    note: >
+      ISS-0880 filed and resolved: PR #1954 (REQ-421/MOB-2, already merged
+      and done) shipped with a step-03b TEST-DESIGN-VALIDATOR PASS that
+      only tested AC3's second clause (absent-module -> no route). AC3's
+      first clause (no tenant-content route reachable before
+      /me/memberships and /me/modules both resolve) had zero coverage --
+      a concurrent sibling WF-02 run of the same requirement, running
+      independently while #1954 landed, caught this with a stricter
+      TEST-DESIGN-VALIDATOR pass and produced the missing test. Ported
+      apps/mobile/test/bootstrap/route_gating_test.dart onto main via
+      fix/ISS0880-req421-ac3-route-gating (no production code change --
+      app.dart's redirect logic was and is correct). Re-verified against
+      main's actual code: flutter analyze clean, flutter test 46/46
+      (was 44). REQ-421 remains status: done; this is a test-coverage
+      addition, not a re-open.

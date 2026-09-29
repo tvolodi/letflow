@@ -66,53 +66,45 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
   alias Letflow.EventStore.InstanceSequence
   alias Letflow.EventStore.PartitionMaintenance
   alias Letflow.EventStore.RetentionPolicy
-  alias Letflow.Identity.Tenant
-  alias Letflow.TenantProvisioning
-  alias Letflow.TenantProvisioning.Registration
+  alias Letflow.TenantFixture
 
   # ===========================================================================
   # Tenant / schema fixtures — mirrors event_store_test.exs's own
   # provisioned_tenant/1 exactly (see that file's moduledoc for the full
   # ExUnit-ordering proof this relies on); duplicated here per DIRECTIVE T-4.
+  #
+  # ISS-0112/GH#366 (batch 9): provisions via Letflow.TenantFixture instead of
+  # the previous inline insert-tenant!/provision_tenant_schema/
+  # replay_migrations sequence. This file never switches Sandbox mode back to
+  # :manual (confirmed by reading every test body), so no `teardown: false`
+  # composition is needed -- TenantFixture's own default on_exit teardown is
+  # the only teardown this needs. Safe under this file's own Task.async/
+  # Task.start concurrent-write and crash-recovery tests per
+  # `TenantFixture.provisioned_tenant!/1`'s own moduledoc ("async: true
+  # callers" section): its `Sandbox.mode(:auto)` line is the only
+  # mode-changing call it makes and it is never restored, so every spawned
+  # Task gets its own real, independent Postgres connection automatically.
   # ===========================================================================
 
-  defp insert_tenant! do
-    %Tenant{}
-    |> Tenant.create_changeset(
-      %{
-        slug: Letflow.TenantSlugFixture.unique_slug("req376"),
-        display_name: "REQ-376 Test Tenant"
-      },
-      :disabled
-    )
-    |> Repo.insert!()
-  end
-
-  defp drop_schema!(schema_name) do
-    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-  end
-
   defp provisioned_tenant(_context \\ %{}) do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    # template: :replay (NOT the fixture's own :clone default) is required —
+    # every test in this file DETACHes/ATTACHes real partitions of "events"/
+    # "events_archive", which only exist under a genuine, freshly-migrated
+    # schema. `Letflow.Test.TenantTemplate`'s clone path deliberately leaves
+    # those two tables plain/unpartitioned in the cloned schema (see
+    # `Letflow.TenantFixture.expected_tenant_tables/0`'s neighboring
+    # `req376_partition_management_table?/1` doc comment for why), so
+    # `template: :clone` here would make every partition-DDL test in this
+    # file fail against a table that was never partitioned in the first
+    # place.
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(
+        slug_prefix: "req376",
+        display_name: "REQ-376 Test Tenant",
+        template: :replay
+      )
 
-    tenant = insert_tenant!()
-
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
-
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
-    end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
   # No default argument: every call site below passes its own prefix

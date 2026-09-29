@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0896-20260929/step-02b-code-design-validator.json",
   "created_at": "2026-09-29T20:08:48Z",
   "started_at": "2026-09-29T20:08:48Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T20:10:09Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -38,18 +38,20 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Design doc verified directly. (1) All 5 call sites have an explicit, named fix in the §6 table (env04.e2e.spec.ts lines 578-580 and 642-647, attachment-cross-tenant.pipeline.e2e.spec.ts lines 150-159, shipment-attach-delivery-note.pipeline.e2e.spec.ts lines 110-119, tenant-cache.pipeline.e2e.spec.ts lines 197-203). (2) Consolidation of the two duplicated getMasterAdminToken helpers into one shared helpers.ts export is justified in §3 with concrete reasoning (byte-identical bodies, self-contained signature/no file-local state, no new dependency direction), not just asserted. (3) Read web/tests/e2e/helpers.ts directly and confirmed resolveCredential(envVarName, localDevFallback) exists at lines 34-39 exactly as cited; the design's new KC_ADMIN_USER/KC_ADMIN_PASSWORD vars route through this existing helper (§2) matching the established tenant-realm call-site pattern (e.g. UAT_QA_ADMIN_PASSWORD at helpers.ts:45) -- no new credential-resolution mechanism invented. (4) No implementation code present -- §5.1 is a signature plus JSDoc only, §5.2 is a prose behavior description; no function bodies appear anywhere in the doc. (5) The env04 site #1 graceful-degradation-vs-throw discrepancy is explicitly flagged in §7 as an open question for the implementing agent, with a stated recommendation but no silent resolution.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0896-e2e-master-admin-credentials.md"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0896-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to next WF-03 step (implementation) per ORCHESTRATOR.md routing."
   },
   "rework_count": 0,
   "max_rework": 3

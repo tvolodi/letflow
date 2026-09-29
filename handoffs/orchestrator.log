@@ -2404,3 +2404,5 @@
 2026-09-29T20:05:51Z | DISPATCH | WF03-ISS0896-20260929 | step-02 | ORCH -> CODE-DESIGNER | PENDING
 2026-09-29T20:08:20Z | PASS | WF03-ISS0896-20260929 | step-02 | CODE-DESIGNER -> ORCH | PASS -- lib/letflow/design/iss0896-e2e-master-admin-credentials.md. New env vars KC_ADMIN_USER/KC_ADMIN_PASSWORD via existing resolveCredential helper, admin/admin fallback. 2 duplicated getMasterAdminToken helpers consolidated into one shared export; all 5 call sites (including 3 inline ones) routed through it. One flagged-not-silently-resolved item: env04 site #1's graceful-degradation behavior vs. the new helper's throw-on-failure, left for implementer to confirm.
 2026-09-29T20:08:48Z | DISPATCH | WF03-ISS0896-20260929 | step-02b | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-29T20:10:00Z | PASS | WF03-ISS0896-20260929 | step-02b | CODE-DESIGN-VALIDATOR -> ORCH | PASS -- all 5 checks cleared, resolveCredential reuse independently confirmed against helpers.ts source.
+2026-09-29T20:10:33Z | DISPATCH | WF03-ISS0896-20260929 | step-03 | ORCH -> FRONTEND-DEV | PENDING

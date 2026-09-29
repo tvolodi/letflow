@@ -109,6 +109,20 @@ abstract class HttpGateway {
   });
 }
 
+/// Extends [HttpGateway] with the one `POST` call REQ-426's list renderer
+/// needs (`POST /api/v1/entities/query`). Kept as a separate interface,
+/// never added directly to [HttpGateway], because `implements` requires a
+/// class to re-implement every member an interface declares -- even one
+/// given a default body upstream -- so adding a bare `post` method to
+/// [HttpGateway] itself would have broken every existing `implements
+/// HttpGateway` test double in `test/`, none of which have ever needed to
+/// script a POST call. A caller that needs to POST (only the list renderer,
+/// so far) depends on this narrower interface instead of the concrete
+/// [ApiClient] class.
+abstract class PostCapableHttpGateway implements HttpGateway {
+  Future<Response<dynamic>> post(String path, {Object? data});
+}
+
 /// Holds the `realm_url` of whichever tenant's bootstrap most recently
 /// completed successfully — the bearer-attach interceptor's source of
 /// truth for "the currently active tenant" (REQ-421 design §5.3/§7.2). A
@@ -319,7 +333,7 @@ class _RefreshCoordinator {
   }
 }
 
-class ApiClient implements HttpGateway {
+class ApiClient implements PostCapableHttpGateway {
   ApiClient._(
     this._dio,
     this._refreshCoordinator,
@@ -452,6 +466,7 @@ class ApiClient implements HttpGateway {
   /// completion). Still subject to the 401 refresh/retry flow (design §2)
   /// like every authenticated call, since that flow is orthogonal to
   /// retry-on-5xx. Throws [ApiError].
+  @override
   Future<Response<dynamic>> post(String path, {Object? data}) {
     return _sendWithBackoff(
       () => _dio.post<dynamic>(path, data: data),

@@ -1092,3 +1092,30 @@
       recurred with a different agent. CI: Backend/Frontend/Mobile gates
       all passed. Squash-merged 54f7a221, never a direct push to main.
       GitHub issue #1958 closed. Queue task 880 released status: done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-29T04:22:00Z"
+    note: >
+      ISS-0852 (queue task 852, GH#1862) resolved and closed in
+      docs/issues/ISS-0852.yaml -- not a new defect needing its own fix, but
+      the same "9 unparseable ISO-8601 timestamps in the status-history
+      corpus" finding ISS-0833 already root-caused and fixed. ISS-0852 was
+      discovered 2026-09-26T14:00:00Z by RELEASE-VALIDATOR during ISS-0848's
+      verification, one day BEFORE ISS-0833's fix (commits
+      5e499fd1/241ad2f9/c0ba2039, merged 2026-09-27) landed on main, and was
+      never reconciled against main afterward -- a stale-finding-vs-merged-
+      fix gap, not a release_lock skip this time.
+      ISSUE-FIXER (WF03-ISS0852-20260929) ran Step 0.5 (registry lookup,
+      found ISS-0833 as an exact prior match) and Step 1 (diagnosis) on
+      branch fix/WF03-ISS0852-20260929; ORCH independently re-ran
+      `mix test test/docs/requirement_status_invariants_test.exs` a second
+      time and confirms the same real output: "24 passed", 0 failures. All 9
+      timestamps (REQ-405, REQ-409..REQ-416) are frozen/closed-volume history
+      in v22, already declared via ISS-0833's known_unparseable_at:
+      mechanism in requirement_status.index.yaml -- none are in the current
+      open volume. No lib/, test/, or docs/status/ data change was needed;
+      only this issue record and this bookkeeping entry. GitHub issue #1862
+      closed with a comment citing ISS-0833 and the real test output. Queue
+      task 852 released status: done.

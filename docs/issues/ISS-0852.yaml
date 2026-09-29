@@ -42,6 +42,50 @@ fix_direction: >
      since the append-only rule only protects already-committed/closed
      history, not the volume still being written to).
   3. Confirm A4b passes afterward, real output quoted.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0852-20260929
+resolved_at: "2026-09-29T04:20:00Z"
+resolution: >
+  Diagnosed by ISSUE-FIXER (WF03-ISS0852-20260929), independently re-verified
+  by ORCH: this is not a new/separate defect needing its own fix -- it is the
+  same "9 unparseable ISO-8601 timestamps" finding ISS-0833 already root-caused
+  and fixed. ISS-0852 was discovered 2026-09-26T14:00:00Z, one day BEFORE
+  ISS-0833's fix (commits 5e499fd1/241ad2f9/c0ba2039, merged 2026-09-27) landed
+  on main, and was never reconciled against main afterward.
+
+  Step 0.5 registry lookup: docs/issues/ISS-0833.yaml (status: resolved) is an
+  exact prior match, not a similar-symptom neighbor. Its fix added a
+  `known_unparseable_at:` key to docs/status/requirement_status.index.yaml (a
+  per-entry exemption mechanism for a misnamed `at:` field whose finding is
+  still traceable to a parseable sibling value) and declared exactly 9
+  exemptions: REQ-405 (1 entry, two shape anomalies) and REQ-409..REQ-416 (8
+  entries) -- all in the closed, digest-pinned requirement_status.v22.yaml.
+
+  Step 1 reproduction (real output, this run, on fix/WF03-ISS0852-20260929 ==
+  current main at 3a0005fc):
+
+    $ mix test test/docs/requirement_status_invariants_test.exs
+    ........................
+    Finished in 5.8 seconds (5.8s async, 0.00s sync)
+    Result: 24 passed
+
+  0 failures. A4b (line 192) and all 5 known_unparseable_at sub-tests pass
+  individually under --trace. Cross-checked requirement_status.index.yaml
+  directly: known_unparseable_at: (line ~6004) already carries all 9
+  declarations (REQ-405, REQ-409..REQ-416), all citing volume 22 (status:
+  closed). The current open volume (v23) has zero shape-anomaly citations and
+  A4b's clean pass confirms no unparseable timestamps exist there either.
+
+  Classification: all 9 timestamps are frozen/closed-volume history (category
+  a in this issue's own fix_direction), already declared via the
+  known_unparseable_at:/known_shape_anomalies: mechanism ISS-0833 built. None
+  are in category (b) (a new entry in the still-open volume). No code, test,
+  or docs/status/ data change is needed in this run -- ISS-0833's merged fix
+  already satisfies all three of this issue's own acceptance criteria. ISS-
+  0833's declared-anomaly mechanism is directly reusable as built; it needs no
+  extension for this case.
+
+  No lib/, test/, or docs/status/ file is touched by this resolution -- only
+  this issue record and run-history bookkeeping.
 queue_ref: "Q-852"
 github_ref: "GH-1862"

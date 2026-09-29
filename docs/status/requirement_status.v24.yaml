@@ -277,3 +277,26 @@
       this file). Merged via PR (see the PR body for number/merge
       commit); local main fast-forwarded. letflow-queue task 861
       released as done.
+
+  - req: REQ-425
+    event: started
+    agent: ORCH
+    at: 2026-09-29T11:21:12Z
+    note: >
+      MOB-6 (M6, depends on M2/REQ-422 which is done): hardening
+      lib/api/api_client.dart into the single sanctioned API client --
+      bearer attach, exactly-one silent refresh on 401 then retry
+      (concurrent 401s share one in-flight refresh), exponential backoff
+      on 5xx for idempotent GETs only, a sealed ApiError type (incl.
+      429 retry-after and the /api/v1/modules/<id>/ 404 -> module-
+      not-available distinction), and a static single-client guard
+      under apps/mobile/test/guards/. Locked via letflow-queue task 862
+      (GH#1879, set_lock, not get_next_task -- REQ-423/queue task 860
+      is a live concurrent claim by session "ai-dala-orch" and was left
+      alone per this dispatch's own instruction). Branch
+      feature/WF02-REQ425-20260929 created off origin/main and pushed.
+      Started by WF02-REQ425-20260929's Step 00 (git setup, executed
+      directly by ORCH as a purely mechanical step, same precedent as
+      REQ-419..422's own Step 00s -- no dedicated handoff file, per this
+      run's own check of those four runs' handoffs/ directories, none of
+      which carry a step-00 file either).

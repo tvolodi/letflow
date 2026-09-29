@@ -31549,7 +31549,7 @@ requirements:
   - id: REQ-425
     title: "MOB-6: single API client -- bearer attach, exactly-one silent refresh on 401 then retry, exponential backoff on 5xx, typed ApiError (incl. 429 retry-after and module-404), static single-client guard"
     owner: MOBILE-DEV
-    status: pending
+    status: in_progress
     stage: S9
     impl_order: 862  # letflow-queue task id, GH#1879. Registered 2026-09-27T03:00:03Z by ORCH (WF-01 Step 3).
     description: >

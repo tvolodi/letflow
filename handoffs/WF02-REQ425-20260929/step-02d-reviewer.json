@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ425-20260929/step-02d-reviewer.json",
   "created_at": "2026-09-29T12:54:26Z",
   "started_at": "2026-09-29T12:54:26Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-29T13:35:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -41,18 +41,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "First-hand read of git diff main...HEAD -- apps/mobile/ (api_client.dart, api_error.dart, auth.dart, navigation_bootstrap.dart, api.dart, single_api_client_guard_test.dart, api_client_hardening_test.dart, plus fakes). Judged against the four REVIEWER questions and the three specific calls in this handoff's task.\n\n(1) _RefreshCoordinator/_bearerInterceptor coherence after 2 security reworks: PASS, not a patch-on-patch mess. The mechanism has exactly three re-check points, each with a distinct, non-overlapping reason documented at its definition: _doRefresh's pre-persist re-check (rework 1, token-write-time), _handleUnauthorized's pre-fetch re-check (original design), and _bearerInterceptor's own token-attach-time re-check (rework 2, retry-dispatch-time -- closes the real dio 5.11.1 event-loop-turn window the other two cannot see). These are not three redundant patches over the same hole; each closes a genuinely different window in the same async sequence, and the doc comments on _kIssuedForRealmKey and _RefreshOutcome.aborted explain why the aborted/failed distinction exists (a switch-away is not this tenant's failure to report). The design stayed a single coordinator + single interceptor pair throughout -- no new class or abstraction layer was added to paper over the races; each rework tightened an existing check site. This is what correct iteration under a security gate should look like, not scope/structure decay. One maintainability note (non-blocking): the three re-check sites' invariant (\"only ever trust a realm value captured before the point in question, never re-read after\") is now load-bearing across three separate functions with no single named helper or assertion tying them together -- worth a comment audit or a small shared helper if a fourth window is ever found, but not a defect today; the existing regression tests (rework 1 and rework 2 groups in api_client_hardening_test.dart) pin the current behavior.\n\n(2) MOBILE-DEV's 3 disclosed deviations, judged for idiom/scope (security already cleared): (a) ActiveRealmHolder.clientId -- in scope; the refresh_token grant genuinely needs it alongside currentRealmUrl, and it is lifecycle-matched to currentRealmUrl everywhere (bootstrap, switchTenant, logout all null both together) -- no partial-state risk introduced. (b) navigation_bootstrap.dart's new `on ForbiddenError` catch -- in scope and in fact required, not incidental: REQ-425 changes ApiClient.get's contract from 'returns a Response for any status' to 'throws ApiError for non-2xx', which necessarily invalidates the old `else if (status == 403)` branch on a Response that a hardened get() no longer returns for a 403. Not fixing this would have silently broken the existing 'membership check not applicable, proceed to modules' behavior. The old status==403 branch is correctly kept as a defensive fallback for fakes, with a comment explaining why it's now believed unreachable against the real client. (c) Riverpod provider explicit type annotations (`Provider<ApiClient>`, `ChangeNotifierProvider<BootstrapController>`) -- trivial, no behavior change, not scope creep. None of the three should have been routed elsewhere; all three are direct, unavoidable consequences of this requirement's own contract change to ApiClient.get/post.\n\n(3) General scope creep: none found. RedactingLogInterceptor is REQ-422 infrastructure explicitly left unregistered by that requirement for REQ-425 to adopt -- adopting it here (registered in ApiClient.create, not forTesting) is using existing infrastructure for its intended purpose, not building ahead of need. classifyError's catch-all (unmapped status -> ServerError) is honestly flagged in its own comment as OQ-1 for REVIEWER rather than silently decided -- accepted as reasonable pending a real unmapped-status case; not a defect.\n\nIdiomatic vs. crutch: sound. The refresh/retry logic is deliberately implemented as method-body logic (_sendWithBackoff/_handleUnauthorized) rather than a Dio onError interceptor, with the reasoning given inline (validateStatus accepts everything, so onError would never fire) -- this is the correct call for Dio's request model, not a hand-rolled substitute for something the framework already does. Async coordination (Dart's equivalent of supervision/isolation here) is sound: _RefreshCoordinator's single nullable in-flight Future is the idiomatic Dart coalescing pattern (no locks/mutexes needed in a single-isolate event loop), and every one of the three race-window fixes is backed by a named regression test group, not just a comment claiming correctness.\n\nType-safety: ApiError is a Dart 3 sealed class (exhaustiveness-checked), which is exactly the right tool here and already used -- no gap to file. classifyError's OQ-1 catch-all is a judgment call already surfaced, not a hidden gap.\n\ndocs/anti-patterns.md: no Dart/Flutter/mobile entries exist yet to check against; nothing in this diff suggests a new entry is warranted.\n\nVerdict: PASS. No crutch, no structural unsoundness, no scope creep. Non-blocking note recorded above (three-site re-check invariant could use a shared helper/assertion if touched again).",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ425-20260929",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGNER (Step 2e) -- idiom/scope gate closed, REQ-425 has security PASS and reviewer PASS."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,57 @@
+{
+  "handoff_id": "a1f3c8e2-0001-4a00-9000-000000000002",
+  "run_id": "WF03-ISS0881-20260929",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0881-20260929/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-29T01:20:00Z",
+  "started_at": "2026-09-29T01:20:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0881.yaml",
+      "docs/issues/ISS-0873.yaml",
+      "docs/issues/ISS-0878.yaml",
+      "docs/issues/ISS-0879.yaml",
+      "test/letflow/sandbox_pool_test.exs",
+      "lib/letflow/sandbox_pool.ex"
+    ],
+    "owned_modules": ["test/letflow/sandbox_pool_test.exs", "lib/letflow/sandbox_pool.ex"]
+  },
+  "task": {
+    "description": "You are on branch feature/WF03-ISS0881-20260929 (already checked out by the prior step; run `git branch --show-current` to confirm, and `git checkout feature/WF03-ISS0881-20260929` if not). Perform WF-03 Steps 0.5 (registry lookup) and 1 (diagnose) for docs/issues/ISS-0881.yaml in a single handoff, per docs/agents/workflows/WF-03_issue_resolving.md.\n\nStep 0.5: read docs/issues/ISS-0873.yaml, ISS-0878.yaml, ISS-0879.yaml (all cited as precedent in ISS-0881.yaml's fix_direction field) in full. State in your result.summary whether ISS-0881's failure is the SAME root-cause mechanism as any of them (all three share a family resemblance -- platform-wide/unscoped reads racing a concurrent writer under scripts/test_parallel.sh contention -- but each has a distinct specific mechanism: ISS-0873 was a two-call bit-identical assertion racing a concurrent RetentionPolicy/Registration write; ISS-0879 was a throwaway test-support fixture row's visibility window leaking into an unscoped read; ISS-0878 was a process-local-only unique_integer collision across separate OS processes). Do not assume identity with any of them -- confirm or refute via your own investigation below.\n\nStep 1: REPRODUCE the failure directly -- do not diagnose from ISS-0881.yaml's prose alone. Suggested approaches, in order of preference: (a) run the single failing test file repeatedly under real contention via `scripts/test_parallel.sh` (check its usage/flags first) or by running `mix test test/letflow/sandbox_pool_test.exs` concurrently alongside a separate full-suite background load (e.g. a second `mix test` process against the same Postgres instance) to recreate cross-partition contention against a single target test; (b) if true live reproduction proves impractical within reasonable time, high-confidence code-level analysis is acceptable PROVIDED you show your reasoning against the actual code paths involved (this is ISS-0873's own precedent, cited in ISS-0881.yaml's fix_direction, which reached resolution without live reproduction in that session -- but note ISS-0879's OWN resolution DID achieve isolated reproduction, so prefer that bar if you can reach it).\n\nOne lead worth checking, found during ORCH's own pre-dispatch read of the test file (verify or refute it yourself -- do not take it on faith, per HANDOFF_PROTOCOL.md's 'a handoff's factual premises are checkable, and may be wrong' -- this is ORCH's own claim in this dispatch, so it is exactly such a premise): `sandbox_schema_names/0` (test/letflow/sandbox_pool_test.exs:571-582) queries `information_schema.schemata` for ALL schemas platform-wide matching `sandbox\\_%`, unscoped to this test's own run -- the same class of unscoped global read ISS-0873/ISS-0879 diagnosed elsewhere. The failing assertion `refute MapSet.member?(final, o_schema)` (line 1126) checks a SPECIFIC schema name (`o_schema`, minted via `Ecto.UUID.generate()`-derived construction, lib/letflow/sandbox_pool.ex:930-933 -- effectively collision-proof across partitions), not the whole set, so a same-name collision from another partition is implausible; investigate instead whether `wait_until_schema_dropped(o_schema)` (called at line 1121, immediately before the failing assertion) can report success while a SUBSEQUENT `sandbox_schema_names()` call still observes the schema -- e.g. a connection-level snapshot/isolation effect (a connection checked out via `query_without_holding`/`retry_query_once` holding a transaction snapshot opened before the DROP SCHEMA committed), a retry-masking effect in `retry_query_once/1` hiding an actual failed drop, or a genuinely different mechanism you find in the actual code. Read `wait_until_schema_dropped/1`, `query_without_holding/1`, and `retry_query_once/1`'s definitions in full before concluding.\n\nDo NOT implement a fix. Write the diagnosis into result.summary: root cause (not just symptom), the exact mechanism, affected files, and what a fix needs to change. Complete the handoff with next_action: 'Route to CODE-DESIGNER for fix design' (or, if your investigation finds no real defect / cannot be reproduced or root-caused with reasonable confidence after genuine effort, state that plainly and recommend the no_defect path instead -- do not force a fix design on a diagnosis you don't actually have).",
+    "acceptance_criteria": [
+      "Step 0.5: ISS-0873/0878/0879 read in full and each's relationship (or lack thereof) to ISS-0881's mechanism stated explicitly, with reasoning",
+      "Step 1: a real reproduction attempt was made and its actual outcome (succeeded / did not reproduce after N attempts) is reported with real command output, not assumed",
+      "A specific root-cause mechanism is named (function, race window, why the existing test's own defenses don't catch it) OR the investigation reaches a reasoned no-defect/inconclusive verdict with evidence, not a guess",
+      "No fix code written in this step",
+      "Handoff completed with a clear next_action for ORCH"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

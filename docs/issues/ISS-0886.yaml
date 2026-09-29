@@ -53,4 +53,53 @@ related:
 queue_ref: Q-884  # queue allocated issue_ref ISS-0884, which collides with an existing local file (Q-883); local filename shifted to the next free number, as ISS-0885 did for Q-881.
 github_ref: GH-1989
 duplicates_closed: "Q-886 (blocked) / GH-1991 (closed) were an accidental double registration of this same issue."
-status: open
+note_2026_09_29: >
+  ai-dala-infra T-0150: tenants swiftroute/meridian/vortex were created post-ISS-0778 and should have
+  all roles bound; bpm-default and bilimbaga still need the backfill before non-admin UAT scenarios
+  can pass there.
+status: resolved
+resolved_in_run: WF03-ISS0886-20260929
+resolved_at: "2026-09-29T19:30:00Z"
+resolution: >
+  Code fix merged: new Letflow.Identity.RoleBackfill.run/0 and `mix
+  letflow.backfill_platform_roles` (lib/letflow/identity/role_backfill.ex,
+  lib/mix/tasks/letflow.backfill_platform_roles.ex), which sweeps every
+  tenant via TenantProvisioning.list_registrations/0 and re-invokes the
+  unmodified, already-idempotent RoleRegistry.seed_default_platform_role_groups/1
+  per tenant -- closing the gap where a tenant provisioned before ISS-0778
+  never got its six platform-role bindings seeded. A flagged deviation from
+  the design (seed_default_platform_role_groups/1 raises Postgrex.Error,
+  not a returned {:error, _} tuple, when a tenant's schema has vanished
+  mid-sweep) was handled with the same try/rescue pattern already used by
+  TenantProvisioning.replay_all_pending/0, converting the exception into
+  the documented {:error, {:backfill_failed, tenant_id, reason}} shape.
+  Full gate history: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS
+  (independently confirmed idempotency) -> ELIXIR-DEV implement (deviation
+  flagged and precedent-matched) -> SECURITY-REVIEWER PASS (confirmed no
+  privilege escalation) -> REVIEWER PASS (side-by-side precedent
+  comparison) -> TEST-DESIGN-VALIDATOR PASS (4 real mutants
+  applied/caught/reverted) -> TEST-RUNNER (independent full suite,
+  5052/5052) -> RELEASE-VALIDATOR PASS (own mutation spot-check: stubbed
+  the core fix to a no-op, 4/7 tests correctly failed, reverted, confirmed
+  clean; independently re-confirmed tenant-isolation and
+  no-privilege-escalation claims by reading the actual code; scope
+  confirmed to exactly 3 files; decision-record consistency confirmed).
+  Merged via PR #2007 (squash-merged, merge commit 1c96870e, CI green:
+  Backend/Frontend/Mobile gates all pass).
+  IMPORTANT -- this closes the CODE gap only. The QA database itself
+  (bpm-default, bilimbaga) still has NOT been backfilled as of this
+  resolution -- the original UAT failures (403 for every non-admin OIDC
+  user on pre-existing tenants) remain live in QA until `mix
+  letflow.backfill_platform_roles` is actually run against the real QA
+  database and the worker/candidate UAT scenarios are re-verified.
+  CONFIRMED NOT DONE from this environment: this sandbox has no QA
+  deploy access -- `ssh ubuntu-16gb-nbg1-1` fails hostname resolution,
+  and `ssh qa.bizdala.com` connects but is refused with "Permission
+  denied (publickey)"; no `ai-dala-infra` sibling checkout is present in
+  this workspace to run `ai-dala-infra/scripts/qa-login.sh` either. QA
+  application is a follow-up action item for whoever has real QA deploy
+  access (SSH to ubuntu-16gb-nbg1-1 / `/opt/apps/letflow-qa`) -- run `mix
+  letflow.backfill_platform_roles` there, then re-run the
+  worker-user/bpm-default and candidate-user/bilimbaga UAT scenarios from
+  WF05-FULL-20260929 to confirm the 403s are gone. letflow-queue task 884
+  released as `blocked` (not `done`) for this same reason.

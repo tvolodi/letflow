@@ -1,0 +1,104 @@
+UAT PREFLIGHT  environment=qa  base_url=https://qa.bizdala.com  idp=https://auth.qa.bizdala.com
+expected build (origin/main): 9c11f2bbf405a4268028c6383ab552cd3c86b20b
+scenarios: 31   corpus: test/fixtures/uat/scenarios
+
+== MANIFEST ==
+tenants needed        : bilimbaga, meridian, swiftroute, vortex
+keycloak realms needed: bilimbaga, bpm-default, meridian, swiftroute, vortex
+actors (login)        : actor-bilimbaga-candidate, actor-meridian-ben, actor-meridian-claudia, actor-meridian-eva, actor-meridian-julia, actor-meridian-lars, actor-meridian-marcus, actor-meridian-miriam, actor-meridian-sophie, actor-meridian-thomas, actor-platform-admin, actor-swiftroute-alice, actor-swiftroute-lena, actor-swiftroute-marco, actor-swiftroute-tobias, actor-vortex-anna, actor-vortex-felix, actor-vortex-karl, actor-vortex-nina, actor-vortex-sabine, actor-vortex-stefan
+process definitions   : proc-meridian-loan-origination, proc-meridian-regulatory-compliance-review, proc-swiftroute-shipment-approval, proc-vortex-production-order-release, proc-vortex-quality-deviation, proc-vortex-supplier-quality-deviation, sys-agent-artifact-lifecycle, sys-agent-sandbox-ownership, sys-definition-promotion, sys-definition-semantic-validation, sys-effect-reentry-ordering, sys-event-log-partitioning, sys-file-attachment-lifecycle, sys-frontend-guards, sys-instance-version-pinning, sys-outbox-backpressure, sys-platform-ddl-safety, sys-renderer-state-contract, sys-shared-ui-component-layer, sys-tenant-migration-fanout, sys-tenant-onboarding, sys-tenant-scoped-client-cache
+pipeline specs        : 17 declared
+seeded usernames      : admin-user, alice-ceo-user, bilimbaga-admin-user, candidate-user, designer-user, lena-dispatcher-user, marco-ops-manager-user, operator-user, worker-user
+credential validity   : admin-user=OK, alice-ceo-user=OK, candidate-user=OK, lena-dispatcher-user=OK, marco-ops-manager-user=OK
+
+== GLOBAL CHECKS ==
+base_url       OK       GET /health -> 200
+deployed_sha   UNKNOWN  no version endpoint exposes a build SHA (tried /health, /api/v1/version)   [owner: ai-dala-infra (expose build SHA)]
+
+== GAP TABLE (scenario x check) ==
+scenario                                          spec        local_deps  feature     tenant      realm       actors    
+bilimbaga-candidate-timed-exam-autograde          OK          OK          OK          OK          OK          OK        
+meridian-loan-origination-above-threshold         OK          OK          OK          GAP         GAP         GAP       
+meridian-loan-origination-below-threshold         OK          OK          OK          GAP         GAP         GAP       
+meridian-regulatory-compliance-review-bafin       OK          OK          OK          GAP         GAP         GAP       
+platform-agent-artifact-resubmit-idempotent       OK          OK          GAP         OK          OK          OK        
+platform-attachment-cross-tenant-probe            OK          GAP         OK          OK          OK          GAP       
+platform-definition-promotion-approved            OK          OK          OK          OK          OK          OK        
+platform-definition-promotion-conflict-rejected   OK          OK          OK          OK          OK          OK        
+platform-definition-promotion-rollback            OK          OK          OK          OK          OK          OK        
+platform-definition-type-error-blocked            GAP         OK          GAP         OK          OK          OK        
+platform-frontend-guard-selfcheck                 OK          OK          OK          OK          OK          OK        
+platform-instance-pin-survives-catalog-change     GAP         OK          GAP         OK          OK          OK        
+platform-migration-partial-failure-resume         OK          GAP         UNKNOWN     OK          OK          OK        
+platform-out-of-order-effect-completion           OK          OK          OK          OK          OK          OK        
+platform-outbox-cap-backpressure                  OK          OK          OK          OK          OK          OK        
+platform-partition-retention-drop                 OK          OK          UNKNOWN     OK          OK          OK        
+platform-login-routing-by-role                    OK          OK          OK          OK          OK          OK        
+platform-renderer-permission-denied-surface       GAP         OK          GAP         OK          OK          OK        
+platform-sandbox-cross-tenant-probe               OK          OK          GAP         OK          OK          OK        
+platform-template-update-conflict-resolution      OK          OK          OK          OK          OK          OK        
+platform-tenant-branding-applied                  OK          OK          OK          OK          OK          OK        
+platform-tenant-switch-cache-isolation            OK          OK          UNKNOWN     OK          OK          GAP       
+platform-unsafe-migration-rejected                OK          OK          OK          OK          OK          OK        
+swiftroute-shipment-attach-delivery-note          OK          OK          OK          GAP         GAP         OK        
+swiftroute-shipment-high-value-happy              OK          OK          OK          GAP         GAP         OK        
+swiftroute-shipment-ops-timeout-escalation        OK          OK          OK          GAP         GAP         GAP       
+swiftroute-tenant-onboarding-happy                OK          OK          OK          GAP         GAP         OK        
+vortex-entity-list-filter-and-page                OK          OK          UNKNOWN     GAP         GAP         GAP       
+vortex-production-order-above-threshold           OK          OK          OK          GAP         GAP         GAP       
+vortex-supplier-quality-deviation-critical        OK          OK          OK          GAP         GAP         GAP       
+vortex-supplier-quality-deviation-false-positive  OK          OK          OK          GAP         GAP         GAP       
+
+== DETAIL (non-OK) ==
+[UNKNOWN] GLOBAL/deployed_sha: no version endpoint exposes a build SHA (tried /health, /api/v1/version)  -> owner: ai-dala-infra (expose build SHA)
+[GAP] meridian-loan-origination-above-threshold/tenant: tenant 'meridian' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] meridian-loan-origination-above-threshold/realm: realm 'meridian' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] meridian-loan-origination-above-threshold/actors: no seeded user: actor-meridian-ben, actor-meridian-eva, actor-meridian-julia, actor-meridian-lars, actor-meridian-marcus, actor-meridian-miriam, actor-meridian-thomas  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[GAP] meridian-loan-origination-below-threshold/tenant: tenant 'meridian' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] meridian-loan-origination-below-threshold/realm: realm 'meridian' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] meridian-loan-origination-below-threshold/actors: no seeded user: actor-meridian-ben, actor-meridian-julia, actor-meridian-marcus, actor-meridian-miriam, actor-meridian-sophie  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[GAP] meridian-regulatory-compliance-review-bafin/tenant: tenant 'meridian' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] meridian-regulatory-compliance-review-bafin/realm: realm 'meridian' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] meridian-regulatory-compliance-review-bafin/actors: no seeded user: actor-meridian-claudia, actor-meridian-eva  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[GAP] platform-agent-artifact-resubmit-idempotent/feature: NOTE (ISS-...) says Letflow has not built the feature this scenario exercises  -> owner: feature-gap (UNBUILT_FEATURE)
+[GAP] platform-attachment-cross-tenant-probe/local_deps: spec uses local-only tooling (`docker-compose`)  -> owner: letflow (rewrite spec to API/seed; ENV_NOT_SUPPORTED)
+[GAP] platform-attachment-cross-tenant-probe/actors: no seeded user: actor-vortex-karl  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[GAP] platform-definition-type-error-blocked/spec: pipeline_test web/tests/e2e/pipelines/platform-definition-type-error-blocked.pipeline.e2e.spec.ts does not exist  -> owner: feature-gap (author spec)
+[GAP] platform-definition-type-error-blocked/feature: NOTE (ISS-...) marks the pipeline_test as an unresolved forward-reference  -> owner: feature-gap (UNBUILT_FEATURE)
+[GAP] platform-instance-pin-survives-catalog-change/spec: pipeline_test web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts does not exist  -> owner: feature-gap (author spec)
+[GAP] platform-instance-pin-survives-catalog-change/feature: NOTE (ISS-...) marks the pipeline_test as an unresolved forward-reference  -> owner: feature-gap (UNBUILT_FEATURE)
+[GAP] platform-migration-partial-failure-resume/local_deps: spec uses local-only tooling (`docker compose`)  -> owner: letflow (rewrite spec to API/seed; ENV_NOT_SUPPORTED)
+[UNKNOWN] platform-migration-partial-failure-resume/feature: NOTE (ISS-...) calls the spec a forward-reference but the file now exists; NOTE may be stale  -> owner: letflow (BA/UAT-RUNNER: refresh NOTE)
+[UNKNOWN] platform-partition-retention-drop/feature: NOTE (ISS-...) calls the spec a forward-reference but the file now exists; NOTE may be stale  -> owner: letflow (BA/UAT-RUNNER: refresh NOTE)
+[GAP] platform-renderer-permission-denied-surface/spec: pipeline_test web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts does not exist  -> owner: feature-gap (author spec)
+[GAP] platform-renderer-permission-denied-surface/feature: NOTE (ISS-...) marks the pipeline_test as an unresolved forward-reference  -> owner: feature-gap (UNBUILT_FEATURE)
+[GAP] platform-sandbox-cross-tenant-probe/feature: NOTE (ISS-...) says Letflow has not built the feature this scenario exercises  -> owner: feature-gap (UNBUILT_FEATURE)
+[UNKNOWN] platform-tenant-switch-cache-isolation/feature: NOTE (ISS-...) calls the spec a forward-reference but the file now exists; NOTE may be stale  -> owner: letflow (BA/UAT-RUNNER: refresh NOTE)
+[GAP] platform-tenant-switch-cache-isolation/actors: no seeded user: actor-vortex-karl  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[GAP] swiftroute-shipment-attach-delivery-note/tenant: tenant 'swiftroute' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] swiftroute-shipment-attach-delivery-note/realm: realm 'swiftroute' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] swiftroute-shipment-high-value-happy/tenant: tenant 'swiftroute' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] swiftroute-shipment-high-value-happy/realm: realm 'swiftroute' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] swiftroute-shipment-ops-timeout-escalation/tenant: tenant 'swiftroute' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] swiftroute-shipment-ops-timeout-escalation/realm: realm 'swiftroute' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] swiftroute-shipment-ops-timeout-escalation/actors: no seeded user: actor-swiftroute-tobias  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[GAP] swiftroute-tenant-onboarding-happy/tenant: tenant 'swiftroute' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] swiftroute-tenant-onboarding-happy/realm: realm 'swiftroute' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[UNKNOWN] vortex-entity-list-filter-and-page/feature: NOTE (ISS-...) calls the spec a forward-reference but the file now exists; NOTE may be stale  -> owner: letflow (BA/UAT-RUNNER: refresh NOTE)
+[GAP] vortex-entity-list-filter-and-page/tenant: tenant 'vortex' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] vortex-entity-list-filter-and-page/realm: realm 'vortex' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] vortex-entity-list-filter-and-page/actors: no seeded user: actor-vortex-anna, actor-vortex-karl  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[GAP] vortex-production-order-above-threshold/tenant: tenant 'vortex' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] vortex-production-order-above-threshold/realm: realm 'vortex' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] vortex-production-order-above-threshold/actors: no seeded user: actor-vortex-anna, actor-vortex-sabine, actor-vortex-stefan  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[GAP] vortex-supplier-quality-deviation-critical/tenant: tenant 'vortex' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] vortex-supplier-quality-deviation-critical/realm: realm 'vortex' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] vortex-supplier-quality-deviation-critical/actors: no seeded user: actor-vortex-felix, actor-vortex-karl, actor-vortex-nina  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[GAP] vortex-supplier-quality-deviation-false-positive/tenant: tenant 'vortex' not in GET /api/v1/tenants  -> owner: ai-dala-infra (create tenant)
+[GAP] vortex-supplier-quality-deviation-false-positive/realm: realm 'vortex' -> HTTP 404  -> owner: ai-dala-infra (create realm)
+[GAP] vortex-supplier-quality-deviation-false-positive/actors: no seeded user: actor-vortex-karl, actor-vortex-nina  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+
+== SUMMARY ==
+checks: OK=141 GAP=42 UNKNOWN=5
+scenarios with >=1 GAP: 19 of 31
+RESULT: ENV_NOT_READY

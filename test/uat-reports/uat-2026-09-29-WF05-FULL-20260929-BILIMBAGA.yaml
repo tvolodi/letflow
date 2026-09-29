@@ -1,0 +1,46 @@
+run_id: WF05-FULL-20260929-BILIMBAGA
+date: "2026-09-29"
+agent: UAT-RUNNER
+slice: B (bilimbaga)
+environment:
+  base_url: https://qa.bizdala.com/?realm=bilimbaga
+  environment: qa
+  credential_source: ai-dala-infra/scripts/qa-login.sh candidate-user (fetched over ssh; password not recorded here)
+  readiness: "GET https://qa.bizdala.com/health -> 200 {status: ok}"
+realm_param_still_needed:
+  answer: true
+  evidence:
+    - "GET /api/tenant-config?host=qa.bizdala.com -> oidc_authority .../realms/bpm-default (ISS-0727 still unfixed)"
+    - "GET /api/tenant-config?host=qa.bizdala.com&realm=bilimbaga -> oidc_authority .../realms/bilimbaga"
+overall: FAIL
+scenarios:
+  - id: bilimbaga-candidate-timed-exam-autograde
+    file: test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    verdict: FAIL
+    driver: "npx playwright test web/tests/e2e/pipelines/bilimbaga-candidate-timed-exam.pipeline.e2e.spec.ts (run from web/, retries=0)"
+    run_env_vars: "E2E_BASE_URL/BPM_TEST_URL=https://qa.bizdala.com, BPM_IDP_BASE_URL=https://auth.qa.bizdala.com, UAT_QA_CANDIDATE_PASSWORD from credential_source"
+    notes: >
+      First attempt without BPM_IDP_BASE_URL failed in beforeAll (ECONNRESET against the
+      localhost:8082 default); that was a run-configuration error, not a product finding, and
+      was corrected before the recorded run.
+    steps:
+      step_1: "FAIL - candidate token minted from bilimbaga realm and injected; navigateSpa('/exam') rendered 'Page not found - The page you requested does not exist or requires a module that is not installed.' (sidebar 'UNKNOWN WORKSPACE'); getByTestId('exam-list-page') never visible in 15s"
+      step_2: "NOT REACHED"
+      step_3: "NOT REACHED"
+    expected_outcomes:
+      EO-001: {verdict: BLOCKED, reason: "step 2 not reached; countdown never observed"}
+      EO-002: {verdict: FAIL, severity: BLOCKER, reason: "candidate cannot reach exam list, so no result screen"}
+      EO-003: {verdict: BLOCKED, reason: "no session was created; nothing to compare with a correct grading"}
+    root_cause_evidence:
+      - "ModuleGuard (web/src/components/routing/ModuleGuard.tsx) renders NotFoundPage when useInstalledModules() lacks the exam module; the hook calls GET /api/v1/me/modules"
+      - "With a real candidate-user bilimbaga token on QA: GET /api/v1/me/modules -> 403 insufficient permissions; GET /api/v1/me/memberships -> 403; GET /api/v1/modules/exam/exams -> 403"
+      - "Token roles shown in UI: offline_access, CANDIDATE, uma_authorization, default-roles-bilimbaga"
+      - "So the CANDIDATE role cannot read /me/modules on the deployed QA build, and the guard treats the error as 'not installed'. Deployed QA build may differ from main; not verified."
+    evidence_files:
+      - web/test-results/pipelines-bilimbaga-candid-95ebc--and-sees-an-accurate-score-chromium/test-failed-1.png
+      - web/test-results/pipelines-bilimbaga-candid-95ebc--and-sees-an-accurate-score-chromium/error-context.md
+      - web/test-results/pipelines-bilimbaga-candid-95ebc--and-sees-an-accurate-score-chromium/video.webm
+    suggested_action: route_to_wf03
+    on_fail_severity: BLOCKER
+    cleanup: "No exam session was started, so nothing to cancel."
+corpus_note: "Only one scenario file exists under test/fixtures/uat/scenarios/bilimbaga/ (the dispatch expected possibly more)."

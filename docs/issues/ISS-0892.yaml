@@ -22,3 +22,10 @@ in_flight_note: >
   DO NOT START (scanners): this work is already in flight by the filing session. An
   ai-dala-infra provisioning plan is awaiting user approval. Do not lock or begin
   provisioning QA realms/tenants/actors/definitions from this issue.
+progress_2026_09_29: >
+  Resolved in part by ai-dala-infra T-0150 (run 2026-09-29-provision-letflow-qa-uat-corpus-001):
+  Keycloak realms swiftroute/meridian/vortex, 22 actor accounts (actor-<realm>-<name>, realm-qualified
+  secrets via ai-dala-infra scripts/qa-uat-env.sh) and letflow tenants swiftroute/meridian/vortex now
+  exist on QA; swiftroute "Shipment Approval" v1.0 is seeded. STILL OPEN: meridian/vortex process
+  definitions and seed scripts (ISS-0897); swiftroute definition key null (ISS-0893); onboarding
+  scenario precondition conflict (ISS-0895); preflight support (ISS-0894). Keep open until those close.

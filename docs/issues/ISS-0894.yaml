@@ -1,0 +1,56 @@
+id: ISS-0894
+title: "scripts/uat_preflight.sh actor matching is a name heuristic; support realm-qualified actor-<realm>-<name> accounts via ai-dala-infra qa-uat-env.sh and check app-side roles/definitions"
+discovered_by: ORCH
+discovered_in_run: ai-dala-infra 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), filed by ORCH
+discovered_at: "2026-09-29T19:45:00Z"
+severity: MINOR
+description: "scripts/uat_preflight.sh (ISS-0889 output) maps scenario actor ids to seeded usernames by name heuristic (actor-<tenant>-<name> -> username starting '<name>-'). New QA accounts are named exactly actor-<realm>-<name> (Keycloak username == scenario actor id inside the company realm; platform admin = admin-user) with realm-qualified secrets KC_SEED_<REALM>__<USER>_PASSWORD served by ai-dala-infra scripts/qa-uat-env.sh (eval \"$(bash scripts/qa-uat-env.sh company <slug>)\" -> UAT_QA_ACTOR_<SLUG>_<NAME>_PASSWORD). Update preflight to (a) accept that credential source and exact-name matching, (b) beyond token validity, check app-side state: the actor's app roles are bound (GET /api/v1/me, /tasks/inbox not 403; see ISS-0886) and required process definitions resolve by key (see the null-key issue and the meridian/vortex definitions issue) so GAPs are reported precisely instead of UNKNOWN. Related: ISS-0889, ISS-0888. Provenance: ai-dala-infra run 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), step-04 P5/D2/D6/R9 and step-06. Filed by ORCH. QA now has realms+tenants swiftroute/meridian/vortex and 22 actor accounts (realm-qualified secrets via ai-dala-infra scripts/qa-uat-env.sh)."
+affected_files:
+  - scripts/uat_preflight.sh
+queue_ref: Q-894
+github_ref: GH-2003
+status: resolved
+resolved_in_run: fix/ISS0894-uat-preflight-actor-realm-check-20260929
+resolved_at: "2026-09-29T22:40:00Z"
+resolution: >
+  scripts/uat_preflight.sh's actors check now tries an exact scenario-actor-id
+  match against the credential listing first (ai-dala-infra T-0150
+  realm-qualified accounts, e.g. actor-swiftroute-lena), falling back to the
+  existing <name>-prefix heuristic for environments that haven't adopted the
+  exact-name convention (e.g. local dev seeding). parse_scenario now also
+  returns actor_labels (aid -> [label, ...]) so two new app-side checks can
+  run: app_roles (for each actor that logged in OK, GET /api/v1/tasks/inbox,
+  or /api/v1/me/modules for candidate-labeled actors -- 403 is reported as a
+  GAP pointing at ISS-0886/mix letflow.backfill_platform_roles) and
+  definitions (for proc-* process_id scenarios, GET
+  /api/v1/definitions/active/<process_id> using an already-authenticated
+  token -- 404 is a GAP pointing at ISS-0893/ISS-0897, 403 or no available
+  token is UNKNOWN, fails safe rather than claiming proof of absence). CHECKS
+  gains app_roles/definitions purely additively (every consumer iterates
+  CHECKS generically, per CODE-DESIGN-VALIDATOR sign-off).
+  docs/agents/uat-scenario-schema.md's "how preflight reads a scenario"
+  paragraph updated to match. Does not vendor ai-dala-infra's qa-uat-env.sh or
+  touch the --credential-source protocol boundary (Decision 4).
+
+  REVIEWER caught a real bug on the first implementation (commit a98f7297):
+  the app_roles check built its request as base + "/me/modules" / base +
+  "/tasks/inbox" without the /api/v1 prefix, but Letflow.Router only forwards
+  /api/v1/... to Letflow.Plugs.ApiPipeline -- a bare /tasks/inbox or
+  /me/modules falls through to the router's catch-all and always 404s, so the
+  403 -> GAP branch was dead code and could only ever report UNKNOWN.
+  ELIXIR-DEV fixed it in commit bfb965ad (GET /api/v1/tasks/inbox and
+  /api/v1/me/modules, matching every other call in the file), also correcting
+  the design doc's Decision 1 text which used the mount-relative shorthand
+  that likely caused the bug.
+
+  Full gate history: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS (all
+  load-bearing endpoint claims verified) -> ELIXIR-DEV implement ->
+  REVIEWER FAIL (found the missing /api/v1 prefix dead-code bug) ->
+  ELIXIR-DEV fix -> REVIEWER PASS on re-check (independent router-trace
+  verification) -> RELEASE-VALIDATOR PASS, with its own live stub-server run
+  (throwaway local IDP+app stub at 127.0.0.1:8765) independently confirming
+  both the app_roles OK and GAP branches now work correctly, i.e. that the
+  original bug is genuinely resolved and not just re-labeled. `mix
+  letflow.check_uat_scenario_schema` and `mix compile --warnings-as-errors`
+  both confirmed clean (no Elixir application code touched, script + docs
+  only).

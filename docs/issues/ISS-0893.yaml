@@ -1,0 +1,14 @@
+id: ISS-0893
+title: "Seeded swiftroute Shipment Approval v1.0 definition has null key/process_key/process_id: scenario key proc-swiftroute-shipment-approval does not resolve (KEY_MISMATCH)"
+discovered_by: ORCH
+discovered_in_run: ai-dala-infra 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), filed by ORCH
+discovered_at: "2026-09-29T19:45:00Z"
+severity: MAJOR
+description: "On QA, definition 'Shipment Approval' v1.0 (id 498deba9-3036-4287-80d4-ba37679d2662), deployed by scripts/seed_swiftroute_definition.sh from test/fixtures/qa/swiftroute_process_definition.json, returns key, process_key and process_id all null from GET /api/v1/definitions?name=Shipment+Approval&status=active. The swiftroute scenario preconditions reference proc-swiftroute-shipment-approval, so lookup fails (KEY_MISMATCH). Diagnose whether the definition API/schema has a key field the seed payload fails to set, or the scenarios should reference the display name/id; fix the fixture, script, or scenarios so the key resolves, and make the seed script print/verify the key. Provenance: ai-dala-infra run 2026-09-29-provision-letflow-qa-uat-corpus-001 (T-0150), step-04 P5/D2/D6/R9 and step-06. Filed by ORCH. QA now has realms+tenants swiftroute/meridian/vortex and 22 actor accounts (realm-qualified secrets via ai-dala-infra scripts/qa-uat-env.sh)."
+affected_files:
+  - scripts/seed_swiftroute_definition.sh
+  - test/fixtures/qa/swiftroute_process_definition.json
+  - test/fixtures/uat/scenarios/swiftroute/
+queue_ref: Q-893
+github_ref: GH-2002
+status: open

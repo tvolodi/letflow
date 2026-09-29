@@ -122,6 +122,15 @@ uncovered criterion under `criteria_coverage.uncovered` — this is a MAJOR
 finding even when every scenario that did run passed, per R-Co's own precedent
 (an uncovered MUST is a coverage gap regardless of whether anything failed).
 
+A scenario BLOCKED-by-environment (`ENV_*`, `CREDENTIALS_MISSING`,
+`PRECONDITION_NOT_MET`, `ENV_NOT_SUPPORTED`) is **not coverage**: it exercised nothing.
+List its criteria under `criteria_coverage.uncovered`. If the UAT report's
+`result_overall` is `ENV_NOT_READY` (WF-05 Step 0 skipped, or environment-blocked
+scenarios remain), the run is **not evaluable**: never write `APPROVED`; write
+`release_recommendation: BLOCKED` with reason "run not evaluable (ENV_NOT_READY)" and
+`suggested_action: route_to_uat_runner` once ORCH has re-prepared the environment.
+`UNBUILT_FEATURE` is a product gap and is judged on its merits.
+
 ### 4. Arbitration between disagreeing BA personas
 
 If two `BA-<VERTICAL>` sign-offs disagree about the same **platform-level**

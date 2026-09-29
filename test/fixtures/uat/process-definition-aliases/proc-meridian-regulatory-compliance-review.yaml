@@ -1,0 +1,21 @@
+process_id: proc-meridian-regulatory-compliance-review
+definition_name: "Regulatory Compliance Review"
+company_id: meridian
+seed_script: scripts/seed_meridian_definition.sh
+fixture: test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+issue_ref: ISS-0897
+recorded_by: CODE-DESIGNER
+recorded_at: "2026-09-29"
+reason: >
+  process_definitions has no key/slug column -- Letflow.Definitions
+  .get_active_by_name/2 and GET /definitions/active/:name resolve by the
+  free-text `name` field, which is this deployed definition's actual
+  identifier ("Regulatory Compliance Review"). The UAT scenario corpus's
+  proc-* process_id convention (test/fixtures/uat/scenarios/meridian/
+  regulatory-compliance-review-bafin.yaml, ported/byte-identical) has no
+  counterpart in the app's data model. This sidecar maps the synthetic
+  corpus process_id to the real definition name so uat_preflight.sh (and
+  any future UAT-RUNNER definition-resolution step) can resolve it
+  without editing a ported scenario body or adding an app-side slug
+  column. See
+  lib/letflow/design/iss0897-meridian-vortex-definition-seeding.md.

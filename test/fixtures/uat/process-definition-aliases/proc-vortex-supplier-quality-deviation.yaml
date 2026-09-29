@@ -1,0 +1,22 @@
+process_id: proc-vortex-supplier-quality-deviation
+definition_name: "Supplier Quality Deviation"
+company_id: vortex
+seed_script: scripts/seed_vortex_definition.sh
+fixture: test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+issue_ref: ISS-0897
+recorded_by: CODE-DESIGNER
+recorded_at: "2026-09-29"
+reason: >
+  process_definitions has no key/slug column -- Letflow.Definitions
+  .get_active_by_name/2 and GET /definitions/active/:name resolve by the
+  free-text `name` field, which is this deployed definition's actual
+  identifier ("Supplier Quality Deviation"). The UAT scenario corpus's
+  proc-* process_id convention (test/fixtures/uat/scenarios/vortex/
+  supplier-quality-deviation-critical.yaml,
+  supplier-quality-deviation-false-positive.yaml, both
+  ported/byte-identical) has no counterpart in the app's data model.
+  This sidecar maps the synthetic corpus process_id to the real
+  definition name so uat_preflight.sh (and any future UAT-RUNNER
+  definition-resolution step) can resolve it without editing a ported
+  scenario body or adding an app-side slug column. See
+  lib/letflow/design/iss0897-meridian-vortex-definition-seeding.md.

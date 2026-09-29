@@ -5021,8 +5021,18 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 4
+    entries: 5
     note: >
+      Bumped to 5 by ORCH (recount-every-time rule, ISS-0199-class fix)
+      after DOC-UPDATER appended REQ-423's done-event
+      (WF02-REQ423-20260929 -- MOB-3 part-1 mobile local definition cache
+      + delta sync closed; RELEASE-VALIDATOR independently re-verified
+      all 8 acceptance criteria, including a real Flutter toolchain run:
+      110/110 tests, 0 analyze issues) but never bumped this index's
+      `entries:` field, caught by A9's own CI assertion failing on PR
+      #1982. `grep -c "^  - req:" docs/status/requirement_status.v24.yaml`
+      = 5 on-disk entries (the prior 4 + this REQ-423 done entry).
+
       Bumped to 4 by DOC-UPDATER after appending REQ-422's done-event
       (WF02-REQ422-20260929, 2026-09-29T09:05:00Z -- MOB-5 on-device
       security hardening closed; RELEASE-VALIDATOR independently

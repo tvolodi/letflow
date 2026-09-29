@@ -1,0 +1,55 @@
+{
+  "handoff_id": "37164e73-77aa-4191-9aab-fe415bae086b",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0896-20260929/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-29T20:03:10Z",
+  "started_at": "2026-09-29T20:03:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0896.yaml",
+      "web/tests/e2e/env04.e2e.spec.ts",
+      "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"
+    ],
+    "owned_modules": ["web/tests/e2e/env04.e2e.spec.ts", "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts", "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts", "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0896, combined into this one dispatch since both are your own role's sequential work. Step 0.5: grep docs/issues/*.yaml for a status: resolved entry with matching symptoms (hardcoded Keycloak credentials in web/tests/e2e specs) -- report whether a prior match exists (none is expected; this is the first hardening of these particular specs). Step 1: this is a description-only issue (no failing test to run -- these e2e specs require a live Playwright browser + backend + Keycloak to execute at all, and this run has no such live QA/staging environment). Read docs/issues/ISS-0896.yaml's full description, then read all 5 occurrences directly (grep 'admin-cli' across the 4 named files -- env04.e2e.spec.ts has 2, the other 3 have 1 each) to confirm the exact code shape and whether all 5 are structurally identical or differ in a way that matters for the fix design (e.g. different surrounding context, different variable names for the master URL, whether keycloakMasterUrl/BPM_IDP_BASE_URL is already parameterized elsewhere in each file). Also check whether web/ already has an established env-var-reading convention for test config (grep web/tests/e2e/ and web/playwright.config.ts or similar for existing process.env.* usage patterns) so the fix's approach is consistent with what's already there rather than inventing a new one. Write the diagnosis into result.summary: root cause (a hardcoded literal credential pair used to authenticate against Keycloak's master realm in test code, with no environment-variable override), affected files (exact line numbers), and what a fix needs to change (introduce env-var-sourced master credentials with an admin/admin default for local dev, applied consistently across all 5 occurrences). Do NOT implement the fix.",
+    "acceptance_criteria": [
+      "root cause is stated precisely (hardcoded literal, not merely 'wrong credentials')",
+      "all 5 occurrences across the 4 files are enumerated with exact line numbers",
+      "any existing env-var-reading convention in web/tests/e2e/ is identified and cited, or its absence stated explicitly",
+      "next_action names CODE-DESIGNER as the next step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

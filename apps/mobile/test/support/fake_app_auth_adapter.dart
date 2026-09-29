@@ -40,10 +40,21 @@ class FakeAppAuthAdapter implements AppAuthAdapter {
   TokenRequest? lastRefreshRequest;
   int refreshCallCount = 0;
 
+  /// Test hook (rework of REQ-425 §2, cross-tenant refresh race regression
+  /// test): invoked synchronously right as `refresh` is called, BEFORE the
+  /// simulated network delay below -- i.e. "while the refresh call is in
+  /// flight" from the coordinator's point of view. A test sets this to
+  /// mutate an [ActiveRealmHolder] (switchTenant/logout) partway through a
+  /// refresh, to assert `_RefreshCoordinator` re-checks the active tenant
+  /// after this `await` resumes rather than blindly persisting/retrying
+  /// under the realm captured before it.
+  void Function()? duringRefresh;
+
   @override
   Future<TokenResponse> refresh(TokenRequest request) async {
     refreshCallCount += 1;
     lastRefreshRequest = request;
+    duringRefresh?.call();
     // A real refresh_token grant is a genuine network round-trip -- it never
     // resolves on the very next microtask. Scheduling on the timer queue
     // here (even a nominal zero-duration one) lets every other

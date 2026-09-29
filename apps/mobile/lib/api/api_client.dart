@@ -160,6 +160,24 @@ Duration backoffDelayFor(int attemptNumber) {
 /// an already-retried request never triggers a second refresh.
 const String _kRetriedAfter401Flag = '_letflowRetriedAfter401';
 
+/// Request-`extra` key recording which tenant's `realm_url` was active when
+/// [_bearerInterceptor] sent this request (rework of REQ-425 §2, cross-tenant
+/// refresh race fix). A 401's refresh/retry flow must never silently
+/// re-authenticate and re-serve a request under a *different* tenant than
+/// the one it was issued for — this tag is the source of truth the retry
+/// path re-checks against, independent of whatever tenant happens to be
+/// active by the time the refresh resolves.
+const String _kIssuedForRealmKey = '_letflowIssuedForRealm';
+
+/// Outcome of one [_RefreshCoordinator._doRefresh] attempt. Distinct from a
+/// plain `bool` so the caller ([ApiClient._handleUnauthorized]) can tell
+/// "refresh genuinely failed, tokens cleared, routed to login" apart from
+/// "refresh was abandoned mid-flight because the active tenant changed" —
+/// the latter must never be treated as, or reported like, the former: it is
+/// not this tenant's failure to report, and it must not retry as whatever
+/// tenant is active now.
+enum _RefreshOutcome { success, failed, aborted }
+
 /// Mediates "concurrent 401s share one in-flight refresh" (design §2.1).
 /// One instance per [ApiClient] — matches the single-client invariant this
 /// whole requirement hardens.
@@ -182,13 +200,19 @@ class _RefreshCoordinator {
   /// Non-null while a refresh triggered by some 401 is in flight. Every
   /// caller that observes a 401 while this is non-null awaits THIS Future
   /// instead of starting a second refresh call.
-  Future<bool>? _inFlightRefresh;
+  Future<_RefreshOutcome>? _inFlightRefresh;
 
-  /// Returns true iff the refresh succeeded (new tokens stored) and the
-  /// caller should retry its original request; false iff refresh failed
-  /// (tokens already cleared and login routing already triggered by the
-  /// time this returns).
-  Future<bool> refreshOnce() {
+  /// Returns [_RefreshOutcome.success] iff the refresh succeeded (new tokens
+  /// stored under the SAME realm that was active when the refresh started)
+  /// and the caller should retry its original request; [_RefreshOutcome.failed]
+  /// iff refresh genuinely failed (tokens already cleared and login routing
+  /// already triggered by the time this returns); [_RefreshOutcome.aborted]
+  /// iff the active tenant changed (switchTenant/logout) while the refresh's
+  /// network call was in flight, in which case NEITHER the old tenant's
+  /// tokens were touched (no resurrection of a just-deleted/switched-away
+  /// tenant's credentials) NOR is there anything to route to login for —
+  /// whatever changed the active tenant already handled that.
+  Future<_RefreshOutcome> refreshOnce() {
     final inFlight = _inFlightRefresh;
     if (inFlight != null) return inFlight;
     final future = _doRefresh();
@@ -196,31 +220,45 @@ class _RefreshCoordinator {
     return future.whenComplete(() => _inFlightRefresh = null);
   }
 
-  Future<bool> _doRefresh() async {
+  Future<_RefreshOutcome> _doRefresh() async {
     final realmUrl = _activeRealm.currentRealmUrl;
     if (realmUrl == null) {
-      await _handleFailure(null);
-      return false;
+      // No active tenant even before the network call started -- a
+      // concurrent logout/switch already got here first and already handled
+      // its own token clearing/login routing. Nothing for this refresh to
+      // do or fail; routing to login again would be a spurious second call.
+      return _RefreshOutcome.aborted;
     }
+    final clientId = _activeRealm.clientId;
     final tokens = await _tokenStore.read(realmUrl);
     final refreshToken = tokens?.refreshToken;
     if (refreshToken == null) {
       await _handleFailure(realmUrl);
-      return false;
+      return _RefreshOutcome.failed;
     }
     try {
       final response = await _appAuthAdapter.refresh(
         TokenRequest(
-          _activeRealm.clientId ?? '',
+          clientId ?? '',
           kOidcRedirectUrl,
           issuer: realmUrl,
           refreshToken: refreshToken,
         ),
       );
+      // Re-check BEFORE persisting anything: did switchTenant/logout flip the
+      // active tenant while this `await` was suspended on the network call?
+      // If so, `realmUrl` may already have had its tokens deleted by that
+      // switch/logout -- writing the just-refreshed tokens back under it now
+      // would resurrect a tenant the app believes it has left. Discard the
+      // refreshed tokens silently instead of storing them anywhere.
+      if (_activeRealm.currentRealmUrl != realmUrl ||
+          _activeRealm.clientId != clientId) {
+        return _RefreshOutcome.aborted;
+      }
       final accessToken = response.accessToken;
       if (accessToken == null) {
         await _handleFailure(realmUrl);
-        return false;
+        return _RefreshOutcome.failed;
       }
       final newTokens = TokenSet(
         accessToken: accessToken,
@@ -229,10 +267,17 @@ class _RefreshCoordinator {
         accessTokenExpiration: response.accessTokenExpirationDateTime,
       );
       await _tokenStore.store(realmUrl, newTokens);
-      return true;
+      return _RefreshOutcome.success;
     } catch (_) {
+      // A tenant switch/logout that raced this failing refresh already
+      // cleared/replaced whatever `realmUrl` pointed to -- do not clear the
+      // NEW active tenant's tokens or re-route it to login under the guise
+      // of handling the OLD tenant's refresh failure.
+      if (_activeRealm.currentRealmUrl != realmUrl) {
+        return _RefreshOutcome.aborted;
+      }
       await _handleFailure(realmUrl);
-      return false;
+      return _RefreshOutcome.failed;
     }
   }
 
@@ -246,11 +291,22 @@ class _RefreshCoordinator {
 }
 
 class ApiClient implements HttpGateway {
-  ApiClient._(this._dio, this._refreshCoordinator, this._delayFn);
+  ApiClient._(
+    this._dio,
+    this._refreshCoordinator,
+    this._delayFn,
+    this._activeRealm,
+  );
 
   final Dio _dio;
   final _RefreshCoordinator _refreshCoordinator;
   final Future<void> Function(Duration) _delayFn;
+
+  /// Read (never written) by [_handleUnauthorized] to re-verify, after a
+  /// refresh completes, that the active tenant is still the one the failing
+  /// request was issued for (rework of REQ-425 §2, cross-tenant refresh
+  /// race fix).
+  final ActiveRealmHolder _activeRealm;
 
   static const String _apiBaseUrl = String.fromEnvironment(
     'LETFLOW_API_BASE_URL',
@@ -302,7 +358,7 @@ class ApiClient implements HttpGateway {
       appAuthAdapter: appAuthAdapter,
       routeToLogin: routeToLogin,
     );
-    return ApiClient._(dio, coordinator, delayFn);
+    return ApiClient._(dio, coordinator, delayFn, activeRealm);
   }
 
   /// Test-only seam: wraps a caller-supplied [Dio] (e.g. one configured
@@ -330,7 +386,7 @@ class ApiClient implements HttpGateway {
       appAuthAdapter: appAuthAdapter,
       routeToLogin: routeToLogin,
     );
-    return ApiClient._(dio, coordinator, delayFn);
+    return ApiClient._(dio, coordinator, delayFn, activeRealm);
   }
 
   /// Throws [ApiError] (never [DioException]/[SocketException]) on any
@@ -452,11 +508,32 @@ class ApiClient implements HttpGateway {
       throw const UnauthorizedError();
     }
 
-    final refreshed = await _refreshCoordinator.refreshOnce();
-    if (!refreshed) {
-      // Tokens already cleared and login routing already triggered by
-      // `_RefreshCoordinator` itself (design §2.2 step 5) — the caller only
-      // needs the typed error.
+    // The tenant this request was issued for (tagged by `_bearerInterceptor`
+    // at send time), captured BEFORE awaiting the refresh below — this is
+    // what the post-refresh re-check compares against, never whatever tenant
+    // happens to be active once the refresh (a real network round-trip)
+    // resolves.
+    final issuedForRealm = requestOptions.extra[_kIssuedForRealmKey] as String?;
+
+    final outcome = await _refreshCoordinator.refreshOnce();
+    if (outcome != _RefreshOutcome.success) {
+      // Either refresh genuinely failed (tokens already cleared and login
+      // routing already triggered by `_RefreshCoordinator` itself, design
+      // §2.2 step 5) or it was aborted because the active tenant changed
+      // mid-refresh (rework of REQ-425 §2) — either way, the caller only
+      // ever gets the typed error, never a silent retry under some other
+      // tenant's identity.
+      throw const UnauthorizedError();
+    }
+
+    // Re-check BEFORE reissuing the retry: even though the coordinator's
+    // refresh succeeded, it may have succeeded for a tenant OTHER than the
+    // one this specific request was issued for (e.g. this request's 401 was
+    // for tenant A, but by the time it called `refreshOnce()` a switch to
+    // tenant B was already in flight and its refresh is what completed) --
+    // never silently re-authenticate and re-serve this request as a
+    // different tenant than the caller expects.
+    if (issuedForRealm != null && issuedForRealm != _activeRealm.currentRealmUrl) {
       throw const UnauthorizedError();
     }
 
@@ -537,6 +614,10 @@ Interceptor _bearerInterceptor(
         return;
       }
       final realmUrl = activeRealm.currentRealmUrl;
+      // Tags this request with the tenant it is being issued for (rework of
+      // REQ-425 §2) -- `_handleUnauthorized` reads this back to re-verify the
+      // tenant hasn't changed before reissuing a retry after a 401 refresh.
+      options.extra[_kIssuedForRealmKey] = realmUrl;
       if (realmUrl != null) {
         final tokens = await tokenStore.read(realmUrl);
         if (tokens != null && _tokenMatchesActiveRealm(tokens, realmUrl)) {

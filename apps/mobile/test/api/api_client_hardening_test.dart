@@ -4,6 +4,7 @@
 // classifyError -> ApiError mapping (including the module-404 vs.
 // plain-404 distinction and Retry-After parsing), and "no raw
 // DioException/SocketException escapes lib/api/".
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -18,6 +19,7 @@ import '../support/fake_dio_http_client_adapter.dart';
 import '../support/fake_secure_storage_platform.dart';
 
 const _realmUrl = 'https://idp.example/realms/acme';
+const _otherRealmUrl = 'https://idp.example/realms/other-tenant';
 
 class _Harness {
   _Harness({
@@ -229,6 +231,79 @@ void main() {
       },
     );
   });
+
+  group(
+    'cross-tenant refresh race (rework 1 -- SECURITY-REVIEWER BLOCKER)',
+    () {
+      test(
+        'a tenant switch racing an in-flight 401 refresh aborts the retry'
+        ' instead of resurrecting the old tenant\'s tokens or serving the'
+        ' retry as the new tenant',
+        () async {
+          final h = await _buildHarness();
+          h.fakeAdapter.handler = (options) => (401, {'error': 'expired'});
+          h.appAuthAdapter.duringRefresh = () {
+            // Simulates `switchTenant` flipping the active tenant while the
+            // refresh's network call ("await Future.delayed" in the fake) is
+            // still suspended -- exactly the race SECURITY-REVIEWER flagged.
+            h.activeRealm.currentRealmUrl = _otherRealmUrl;
+            h.activeRealm.clientId = 'other-tenant-client';
+          };
+
+          await expectLater(
+            h.client.get('/api/v1/me/modules'),
+            throwsA(isA<UnauthorizedError>()),
+          );
+
+          // The refresh's own (soon-to-be-discarded) result must never be
+          // written back under the OLD tenant's key -- its tokens are
+          // exactly what were seeded, untouched.
+          final oldTenantTokens = await h.tokenStore.read(_realmUrl);
+          expect(oldTenantTokens?.accessToken, 'initial-access-token');
+          expect(oldTenantTokens?.refreshToken, 'initial-refresh-token');
+          // Nor does the new tenant acquire any tokens as a side effect of
+          // the old tenant's refresh.
+          expect(await h.tokenStore.read(_otherRealmUrl), isNull);
+          // Exactly one refresh call, and the retry is never sent -- the
+          // original request must not be silently re-authenticated and
+          // re-served under the new tenant's identity.
+          expect(h.appAuthAdapter.refreshCallCount, 1);
+          expect(h.fakeAdapter.requests, hasLength(1));
+          // Aborting mid-race is not the same as a genuine refresh failure --
+          // it must not additionally clear the new tenant's session or route
+          // to login (whatever triggered the switch owns that decision).
+          expect(h.loginRouteCallCountGetter(), 0);
+        },
+      );
+
+      test(
+        'a logout racing an in-flight 401 refresh does not resurrect the'
+        ' just-deleted tenant\'s tokens',
+        () async {
+          final h = await _buildHarness();
+          h.fakeAdapter.handler = (options) => (401, {'error': 'expired'});
+          h.appAuthAdapter.duringRefresh = () {
+            // Simulates `logout` clearing the active tenant and deleting its
+            // tokens while the refresh's network call is still suspended.
+            h.activeRealm.currentRealmUrl = null;
+            h.activeRealm.clientId = null;
+            unawaited(h.tokenStore.delete(_realmUrl));
+          };
+
+          await expectLater(
+            h.client.get('/api/v1/me/modules'),
+            throwsA(isA<UnauthorizedError>()),
+          );
+
+          // Still deleted -- the in-flight refresh must not write the
+          // logged-out tenant's tokens back into secure storage.
+          expect(await h.tokenStore.read(_realmUrl), isNull);
+          expect(h.appAuthAdapter.refreshCallCount, 1);
+          expect(h.fakeAdapter.requests, hasLength(1));
+        },
+      );
+    },
+  );
 
   group('5xx backoff for GET only (AC3)', () {
     test(

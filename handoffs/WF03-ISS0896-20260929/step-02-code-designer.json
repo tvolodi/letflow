@@ -1,0 +1,56 @@
+{
+  "handoff_id": "6da90e99-4e92-401c-b4f3-7c45cea847dd",
+  "run_id": "WF03-ISS0896-20260929",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0896-20260929/step-02-code-designer.json",
+  "created_at": "2026-09-29T20:05:51Z",
+  "started_at": "2026-09-29T20:05:51Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["37164e73-77aa-4191-9aab-fe415bae086b"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0896-20260929/step-01-issue-fixer-diagnose.json",
+      "web/tests/e2e/helpers.ts",
+      "web/tests/e2e/env04.e2e.spec.ts",
+      "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts"
+    ],
+    "owned_modules": ["web/tests/e2e/env04.e2e.spec.ts", "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts", "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts", "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts", "web/tests/e2e/helpers.ts"]
+  },
+  "task": {
+    "description": "WF-03 Step 2 for ISS-0896. Design the fix -- ISSUE-FIXER's diagnosis (handoffs/WF03-ISS0896-20260929/step-01-issue-fixer-diagnose.json) found 5 hardcoded admin-cli/admin/admin call sites across 4 files, and an existing resolveCredential(envVarName, localDevFallback) helper in web/tests/e2e/helpers.ts already used for tenant-realm credentials in these same 4 files but never applied to the master-realm literals.\n\nDesign: (1) two new env-var names for the Keycloak master admin (e.g. KC_ADMIN_USER/KC_ADMIN_PASSWORD), each read via the existing resolveCredential helper with 'admin'/'admin' as the local-dev fallback -- do not invent a second credential-resolution mechanism when one already exists and is already the established pattern in these exact files. (2) State exactly which of the 5 call sites should be deduplicated: attachment-cross-tenant.pipeline.e2e.spec.ts's getMasterAdminToken and shipment-attach-delivery-note.pipeline.e2e.spec.ts's copy-pasted duplicate of the same helper -- decide whether to consolidate into one shared helper in web/tests/e2e/helpers.ts (preferred, reduces duplication) or leave both as-is and just fix their credential source (acceptable if consolidation risks touching unrelated call sites) -- state your reasoning either way, this is exactly the kind of judgement call a design should make explicitly rather than leave for the implementer to guess. (3) The two inline call sites (env04.e2e.spec.ts x2, tenant-cache.pipeline.e2e.spec.ts x1) -- state whether these should also be routed through the same shared helper (if consolidating) or just get their literal values replaced with the resolveCredential calls in place. (4) Write this as a design artefact at lib/letflow/design/iss0896-e2e-master-admin-credentials.md (TypeScript signatures/type shapes only, no full function bodies, following the same design-doc discipline as a WF-02 CODE-DESIGNER step even though this is TypeScript test code, not Elixir) -- if a full helper-function signature change is involved, state it precisely (parameter names/types, return type).",
+    "acceptance_criteria": [
+      "every one of the 5 call sites has an explicit, named fix in the design",
+      "the design states and justifies whether the two duplicated getMasterAdminToken-shaped helpers are consolidated or independently fixed",
+      "no new credential-resolution mechanism invented -- reuses the existing resolveCredential helper",
+      "no implementation code (full function bodies) in the design doc -- signatures/shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

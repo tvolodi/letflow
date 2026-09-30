@@ -52,3 +52,48 @@
       platform-instance-pin-survives-catalog-change pipeline e2e spec. Step 00
       git setup PASS, branch feature/WF02-REQ432-20260930 pushed. Flipped
       pending -> in_progress.
+
+  - req: REQ-432
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-30T20:52:22Z
+    note: >
+      WF-02 run WF02-REQ432-20260930, Step 6 (DOC-UPDATER). Flipped in_progress
+      -> done after RELEASE-VALIDATOR PASS (conditional, see caveat). SHIPPED
+      (frontend-only, web/): publish and retire client calls plus
+      PLATFORM_ADMIN-gated publish/retire controls on ServicesPage; rebind
+      client + hook + dialog on REQ-399's InstancePinsPanel with a required
+      reason and an Idempotency-Key; an INSTANCE_PINS_REBOUND history row
+      showing operator name, prior version, new version and reason via a bounded
+      (200-event) event_id join on the timeline feed; deferClickState on the new
+      handlers after a live-exposed ISS-0662-class freeze; and the live-green
+      pipeline spec platform-instance-pin-survives-catalog-
+      change.pipeline.e2e.spec.ts. No backend file changed (the only lib/ diff
+      is the design doc lib/letflow/design/req432-rebind-pins-publish-retire-
+      ui.md). TEST EVIDENCE (handoffs/WF02-REQ432-20260930/step-05-release-
+      validator.json, re-derived by RELEASE-VALIDATOR itself): full backend
+      suite 5071 tests, 8 properties, 0 failures at TEST_PARALLEL_N=6, and mix
+      letflow.check.test OK; web type-check and lint clean, npm test 150 files /
+      995 tests passed, guards 4 files / 52 tests passed; pipeline spec run live
+      1 passed (8.7s), step 3 outcome B (TEST-RUNNER 2 of 2 runs, 10.8s and
+      10.3s). The 8 REQ-432 unit files re-measured by DOC-UPDATER: 8 files / 36
+      tests passed. CAVEAT REQUIRED BY THE RELEASE-VALIDATOR RULING: the
+      acceptance criterion 'retiring a version does not error or block the
+      already-running case's own pin display or its in-flight step' is met for
+      the PIN-DISPLAY half (mutation-verified unit test and live) but the 'in-
+      flight step completes without error' half is NOT demonstrated on success.
+      Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2 is an
+      unconditional {:error, :not_registered}; the live outcome is POST
+      /tasks/:id/complete HTTP 500 + EXECUTION_ERROR n3
+      service_task_url_rendered_empty, independent of retirement, and REQ-432's
+      own fence (AC8 and OUT OF SCOPE) forbids fixing it. The pipeline spec
+      passes by accepting that tightly-pinned outcome B, and has no paired
+      control run without retirement. AC7 is therefore NOT fully met. FORWARDED
+      ISSUES: ISS-0917 (catalog_lookup_stub backend gap, Q-907, GH-2057),
+      ISS-0918 (history actor_id / service record fields / stale moduledoc),
+      ISS-0919 (ServicesPage undeferred click handlers), ISS-0920 (test_parallel
+      at N=nproc aborts), ISS-0921 (host flakiness). Also corrected two stale-
+      text MINORs in test/specs/REQ-432.md (test count 39 -> 36; AC1 'NOT run
+      green' -> ran live and green). README.md checked: no documented behavior
+      altered. REQ-432's acceptance criteria name no docs/migration stage or
+      decision file.

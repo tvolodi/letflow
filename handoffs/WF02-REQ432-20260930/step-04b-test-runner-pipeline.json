@@ -7,9 +7,9 @@
   "to_agent": "TEST-RUNNER",
   "file": "handoffs/WF02-REQ432-20260930/step-04b-test-runner-pipeline.json",
   "created_at": "2026-09-30T18:16:46Z",
-  "started_at": "2026-09-30T18:16:46Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T18:16:49Z",
+  "completed_at": "2026-09-30T18:18:30Z",
+  "status": "FAILED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -47,19 +47,33 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "FAIL",
+    "summary": "Keycloak reachability cleared: curl 127.0.0.1/[::1]/localhost:8094 all 200, node fetch localhost:8094 bpm-default openid-configuration 200. Live pipeline spec run (backend from this checkout, Postgres 5482): run 1 failed at step 'pre' with 500 because letflow_dev had the bpm-default tenant row but no tenant schema (42P01 tenant_...users); applied the README-documented 'LETFLOW_DEV_DB_CONFIRMED=1 mix letflow.seed' (OK, schema migrated), run 2: 'pre' passed, FAILED at step '01: start cases A and C, A lists the pinned version': 'instance start failed: 422 ... field is required initial_variables' (spec startCase at spec:135/212 posts {definition_id} only). Spec defect, route to FRONTEND-DEV; steps 01 onward (incl. selector assumptions 02/07, M5) remain unproven live. Trace/screenshot: web/test-results/pipelines-platform-instanc-fd25e--recorded-with-who-what-why-chromium-retry1/. Test data left in this checkout's dev DB: public.service_catalog pl_pin_e3217b22 and pl_pin_17abc8a5 (ACTIVE), 2 active definitions pl-pin-survives-e3217b22 / -17abc8a5, 0 instances, plus the tenant schema created by mix letflow.seed. Backend stopped; no erl/beam/node/chrome processes and no listeners on 4000/4173. Report key pipeline_rerun appended.",
+    "artifacts_out": [
+      "test/reports/report-20260930-WF02-REQ432-20260930.yaml",
+      "handoffs/WF02-REQ432-20260930/step-04b-test-runner-pipeline.json"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "Pipeline spec defect: startCase() in web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts (line ~135, called ~212) POSTs /api/v1/instances with {definition_id} only; route returns 422 requiring initial_variables. Fix in spec (owner FRONTEND-DEV). Later steps unproven live.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Fresh letflow_dev needed 'mix letflow.seed' (tenant schema absent) before any tenant-scoped route worked; step-02b's earlier migrate did not provision it. Environment note for UAT-RUNNER/preflight.",
+        "affected_requirement": null
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
       "commit_sha_list": [],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH: route to FRONTEND-DEV to add initial_variables to startCase in the pipeline spec, then re-run TEST-RUNNER step 04b (dev DB is now seeded; leftover pl_pin_* rows are harmless)."
   },
   "rework_count": 0,
   "max_rework": 3

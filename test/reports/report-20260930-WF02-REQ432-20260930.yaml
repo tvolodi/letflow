@@ -83,3 +83,55 @@ cleanup:
   backend_stopped: true
   leftover_erl_exe: "3 hung partition processes from attempt_1 (--partitions 16) found and stopped"
   verified: "no erl/beam/node/chrome processes, no listeners on 4000/4173 after cleanup"
+
+pipeline_rerun:
+  handoff: handoffs/WF02-REQ432-20260930/step-04b-test-runner-pipeline.json
+  date_utc: 2026-09-30T18:17Z
+  overall: FAIL   # host blocker cleared; spec reaches the API and fails at step 01 on a spec defect (route to FRONTEND-DEV)
+  keycloak_reachability:
+    curl_127.0.0.1_8094_master_openid_configuration: "200"
+    curl_[::1]_8094_master_openid_configuration: "200"
+    curl_localhost_8094_master_openid_configuration: "200"
+    node_fetch_localhost_8094_bpm-default_openid_configuration: "200"
+  command: >
+    backend: LETFLOW_SECRETS_MASTER_KEY from ./.env, LETFLOW_DEV_DB_CONFIRMED=1 MIX_ENV=dev mix run --no-halt (child of one
+    synchronous script, Postgres letflow-4-postgres-1 port 5482); then cd web && BPM_TEST_URL=http://127.0.0.1:4000
+    BPM_IDP_BASE_URL=http://localhost:8094 VITE_API_BASE_URL=http://127.0.0.1:4000 npx playwright test
+    --config=playwright.config.ts tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts
+  run_1:
+    output: |
+      1 failed ... step "pre: register service v1 and activate definition"
+      Error: service register failed: 500   (pipeline.ts:327 gate, spec:168)
+    cause: >
+      Environmental, dev DB state: letflow_dev had the bpm-default tenants row but NO tenant_6d6e47822bda4f869d173272f12a8176
+      schema. Backend log: Postgrex 42P01 relation "tenant_...users" does not exist on every tenant-scoped route.
+      README documents `LETFLOW_DEV_DB_CONFIRMED=1 mix letflow.seed` as the required once-per-fresh-letflow_dev step.
+  seed_step: >
+    LETFLOW_DEV_DB_CONFIRMED=1 MIX_ENV=dev mix letflow.seed -> "OK -- bpm-default tenant already present,
+    re-provisioned/re-verified (id 6d6e4782-...), schema tenant_6d6e47822bda4f869d173272f12a8176 migrated and role-seeded."
+  run_2:
+    output: |
+      Running 1 test using 1 worker
+      x 1 [chromium] > ...platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts:114:3 > ... (1.5s)
+      x 2 [chromium] > ... (retry #1) (806ms)
+      failing step: "01: start cases A and C, A lists the pinned version"
+      Error: instance start failed: 422 {"status":422,"type":".../unprocessable-entity","title":"Unprocessable Entity",
+        "errors":[{"message":"field is required","constraint":"required","field":"initial_variables","received":null}],
+        "detail":"validation failed"}
+      at startCase (spec:135) called from spec:212
+      1 failed
+      PLAYWRIGHT_EXIT=1
+    artifacts: web/test-results/pipelines-platform-instanc-fd25e--recorded-with-who-what-why-chromium-retry1/{test-failed-1.png,video.webm,trace.zip,error-context.md}
+  finding: >
+    Spec defect (owner FRONTEND-DEV): startCase() POSTs /api/v1/instances with body {definition_id} only; the real route
+    requires initial_variables (422). Fix is in the spec (send initial_variables: {} or as the sibling specs do). Step "pre"
+    passed, so service register and definition create/activate work live. Steps 01 onward (A/C start, publish, retire,
+    rebind, history row; selector assumptions in steps 02/07) remain UNPROVEN live. Backend gap M5 not yet reached.
+  test_data_left_in_dev_db_letflow_4_postgres_5482:
+    - "public.service_catalog: pl_pin_e3217b22 (ACTIVE), pl_pin_17abc8a5 (ACTIVE)   # one per run (retry)"
+    - "tenant_6d6e...process_definitions: pl-pin-survives-e3217b22, pl-pin-survives-17abc8a5 (both active)"
+    - "process_instances/instance_projections: 0 rows; service_catalog_versions: 0 rows"
+    - "tenant schema tenant_6d6e47822bda4f869d173272f12a8176 created by mix letflow.seed (documented setup step)"
+  cleanup:
+    backend_stopped: true
+    verified: "tasklist shows no erl/beam/node/chrome; no listeners on 4000/4173"

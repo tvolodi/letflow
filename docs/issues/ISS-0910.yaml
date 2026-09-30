@@ -26,4 +26,6 @@ affected_files:
   - lib/mix/tasks/ (backfill_platform_roles)
 queue_ref: Q-899  # queue allocated issue_ref ISS-0899, which collides with an existing local file; local filename kept as ISS-0910 and GH-2033 retitled to match
 github_ref: GH-2033
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0910-20260930
+resolved_at: "2026-09-30T09:23:04Z"

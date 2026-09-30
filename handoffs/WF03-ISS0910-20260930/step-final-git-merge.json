@@ -1,0 +1,51 @@
+{
+  "handoff_id": "ff7c50e4-d4b5-436b-b866-40b025784dce",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0910-20260930/step-final-git-merge.json",
+  "created_at": "2026-09-30T09:23:42Z",
+  "started_at": "2026-09-30T09:23:42Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/agents/protocols/GIT_MERGE.md"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Step Final for WF03-ISS0910-20260930, per docs/agents/protocols/GIT_MERGE.md's full 10-step procedure. Fetch origin/main first -- it has been advancing frequently this session from concurrent sessions, so expect a real rebase, not necessarily a no-op. This diff touches only lib/letflow/identity/role_backfill.ex, lib/mix/tasks/letflow.backfill_platform_roles.ex, test/letflow/identity/role_backfill_test.exs, lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md, docs/issues/ISS-0910.yaml, and this run's own handoffs/ -- no other files, so any CI failure outside these is structurally unattributable to this branch (cite this run's own TEST-RUNNER report, test/reports/report-20260930-WF03-ISS0910-20260930.yaml, which already demonstrated the only failures present are 2 pre-existing, unrelated CheckDeferralStalenessTest failures on REQ-431/432).\n\nPR body's test line must state real counts from this run's TEST-RUNNER PASS (5060/5062 passed, 2 pre-existing unrelated failures structurally cleared) -- not a bare PASS. SECURITY-REVIEWER line: PASS (cite step-03c). REVIEWER line: PASS (cite step-03d). This is a WF-03 fix branch -- use --title \"fix: ...\" per the protocol's WF-03 note.",
+    "acceptance_criteria": [
+      "gh pr merge exited 0 (or PARTIAL correctly reported if gh unavailable)",
+      "git branch --show-current is main (or the worktree-variant's detached-HEAD-at-origin/main check)",
+      "git pull --ff-only on main after merge exited 0",
+      "git log --oneline -1 shows the squash-merge commit",
+      "git status shows a clean working tree",
+      "the PR body's test line carries real counts and structural attribution, not a bare PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

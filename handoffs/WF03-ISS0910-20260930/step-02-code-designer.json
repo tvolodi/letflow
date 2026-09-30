@@ -1,0 +1,54 @@
+{
+  "handoff_id": "16876a17-0e6f-4fcf-b645-f2aa01e9b914",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0910-20260930/step-02-code-designer.json",
+  "created_at": "2026-09-30T07:50:10Z",
+  "started_at": "2026-09-30T07:50:10Z",
+  "completed_at": "2026-09-30T08:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["a61c6060-c985-4819-9e6e-da6abf8eda6e"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0910-20260930/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/identity/role_backfill.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/role_registry.ex"
+    ],
+    "owned_modules": ["lib/letflow/identity/role_backfill.ex", "lib/mix/tasks/letflow.backfill_platform_roles.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 2 for ISS-0910. Design the fix per ISSUE-FIXER's recommendation (handoffs/WF03-ISS0910-20260930/step-01-issue-fixer-diagnose.json): RoleBackfill.run/0 (lib/letflow/identity/role_backfill.ex) already computes and returns {:ok, %{seeded: [tenant_id], unchanged: [tenant_id]}} -- the seeded list is exactly the set of tenants genuinely affected by this run (held fewer than all six roles before it). Design a fix that, for every tenant in the seeded list, resets role_claims_synced_at to nil for every user with a membership in that tenant, forcing sync_role_claims_from_token/3 to re-run on their next login/token verification (both existing gated call sites in lib/letflow/identity.ex, unchanged).\n\nSpecify: (1) the exact query/changeset shape for the reset (which table, which join to scope 'users with a membership in tenant X', a bulk Repo.update_all-shaped operation vs. a per-user changeset loop -- state which and why given this may touch many rows); (2) where in RoleBackfill.run/0's control flow this reset happens (after the seeded list is finalized, or per-tenant during the reduce) and whether it should be in the SAME transaction as the tenant_role/group seeding or a separate one (idempotency and partial-failure implications either way); (3) confirm idempotency explicitly -- running the backfill twice must not error and must not need to reset an already-nil marker a second time in a way that matters; (4) whether this needs a new Ecto migration (unlikely, role_claims_synced_at already exists) -- confirm by checking the users schema; (5) logging/telemetry for how many users' markers were reset, matching the existing style of RoleBackfill's own return-value reporting. Write lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md -- @spec-style signatures and type shapes only, no full function bodies.",
+    "acceptance_criteria": [
+      "the fix resets role_claims_synced_at to nil for users with a membership in each tenant in RoleBackfill.run/0's own :seeded list, not :unchanged tenants",
+      "the reset reuses sync_role_claims_from_token/3's existing gated call sites (no new sync-triggering code path invented)",
+      "the fix is idempotent -- running the backfill twice does not error and does not incorrectly re-affect already-corrected users",
+      "no implementation code in the design doc -- signatures/shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written: lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md. Key decisions: (1) Query shape -- no join needed: users is a per-tenant-schema table (Decision 0006 D1/D2, no tenant_id column), so 'users with a membership in tenant X' is exactly every row of that tenant's own users table; bulk Repo.update_all(User, [set: [role_claims_synced_at: nil]], prefix: schema_name) (no WHERE needed for correctness), matching this codebase's existing bulk-marker-reset precedent (promotion.ex:474, definitions.ex:2660/2666) rather than a per-user changeset loop. (2) Placement: inside process_registration/2's {:ok, _tenant_roles} branch, gated on the same held_platform_role_names_before < 6 classification classify/3 already uses (only :seeded tenants, never :unchanged) -- not a separate post-reduce pass. Transaction: a SEPARATE transaction from seed_default_platform_role_groups/1's own internal one, never merged -- reasoning and the resulting partial-failure gap documented as OQ-1 (a reset failure after successful seeding leaves that tenant reclassified :unchanged on retry, so the reset never retries; accepted as an out-of-scope rare-case gap, operator-visible via the existing halt shape). (3) Idempotency confirmed explicitly: NULL-to-NULL is a no-op at the SQL level, and gating on :seeded classification means a second run/0 call never re-touches a tenant whose roles are already fully seeded, so a user's freshly-synced marker from a legitimate login is never clobbered by a later backfill run. (4) No migration -- role_claims_synced_at already exists and is nullable (lib/letflow/identity/user.ex:45), confirmed by reading the schema directly. (5) Logging: extends run/0's existing return-value-based reporting style (no new Logger calls) with a new role_claims_markers_reset: non_neg_integer() counter alongside seeded/unchanged, summed across affected tenants; the CLI wrapper (lib/mix/tasks/letflow.backfill_platform_roles.ex, an owned module) must surface it. No changes to lib/letflow/identity.ex or role_registry.ex -- sync_role_claims_from_token/3 and its two call sites are reused unmodified, satisfying the no-new-sync-path acceptance criterion. Two explicit open questions left for ELIXIR-DEV/REVIEWER: OQ-1 (retry gap above) and OQ-2 (optional is_nil filter as a pure write-volume optimization, not required for correctness). No implementation code in the doc -- @spec signatures and type shapes only.",
+    "artifacts_out": ["lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0910-20260930",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

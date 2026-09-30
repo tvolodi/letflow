@@ -1,0 +1,53 @@
+{
+  "handoff_id": "c9997af9-53c6-4d74-aed3-e12505e2db3f",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0910-20260930/step-04-test-runner.json",
+  "created_at": "2026-09-30T08:58:03Z",
+  "started_at": "2026-09-30T08:58:03Z",
+  "completed_at": "2026-09-30T14:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 4 (test run) for ISS-0910. Host free memory measured ~6.23GB immediately before this dispatch -- above the ~4GB minimum but not comfortably so; use TEST_PARALLEL_N=4 (this host's own documented default per docs/anti-patterns.md, not full nproc-derived parallelism). Re-check free memory yourself immediately before running. Run scripts/test_parallel.sh for the full backend suite. TEST-DESIGNER's own full mix letflow.check.test run already found the only 2 failures present are pre-existing and unrelated (Mix.Tasks.Letflow.CheckDeferralStalenessTest flagging stale REQ-431/432 deferrals, nothing to do with RoleBackfill) -- re-confirm this structurally yourself (git diff --name-only main...HEAD shows this branch touches only lib/letflow/identity/role_backfill.ex, lib/mix/tasks/letflow.backfill_platform_roles.ex, test/letflow/identity/role_backfill_test.exs, and design/handoff docs -- cannot cause a deferral-staleness check failure) rather than accepting the prior report's attribution on its own say-so. Write test/reports/report-<date>-WF03-ISS0910-20260930.yaml with the actual output.",
+    "acceptance_criteria": [
+      "a test proves a :seeded tenant's users have role_claims_synced_at reset to nil",
+      "a test proves an :unchanged tenant's users are NOT touched",
+      "a test proves idempotency across two successive run/0 calls",
+      "a test proves the returned role_claims_markers_reset count is accurate, not approximate",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "TEST_PARALLEL_N=4 bash scripts/test_parallel.sh: 5054 tests, 8 properties, 2 failures (5060/5062 passed). Both failures are Mix.Tasks.Letflow.CheckDeferralStalenessTest (pre-existing stale REQ-431/REQ-432 deferrals) -- structurally re-confirmed unrelated via git diff --name-only main...HEAD (this branch touches only role_backfill.ex, letflow.backfill_platform_roles.ex, role_backfill_test.exs, design doc, handoffs/ bookkeeping; no requirements.yaml, no deferral-staleness test file). role_backfill_test.exs: 11/11 passed (full run and isolated re-run). mix compile --warnings-as-errors: PASS. mix format --check-formatted: initially FAILED on role_backfill_test.exs (one unformatted multi-line pipe), fixed with `mix format` on that owned file, re-verified PASS and re-ran the test file (11/11 passed, unchanged). All 6 acceptance criteria met. Full report: test/reports/report-20260930-WF03-ISS0910-20260930.yaml.",
+    "artifacts_out": [
+      "test/reports/report-20260930-WF03-ISS0910-20260930.yaml"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0910-20260930",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Step 5: ISSUE-FIXER close on PASS."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

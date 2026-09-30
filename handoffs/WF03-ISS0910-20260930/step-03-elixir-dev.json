@@ -1,0 +1,60 @@
+{
+  "handoff_id": "c9f3412e-b201-4bcc-8c9a-9ad178bea187",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0910-20260930/step-03-elixir-dev.json",
+  "created_at": "2026-09-30T07:55:29Z",
+  "started_at": "2026-09-30T07:55:29Z",
+  "completed_at": "2026-09-30T12:58:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["16876a17-0e6f-4fcf-b645-f2aa01e9b914"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md",
+      "lib/letflow/identity/role_backfill.ex",
+      "lib/mix/tasks/letflow.backfill_platform_roles.ex"
+    ],
+    "owned_modules": ["lib/letflow/identity/role_backfill.ex", "lib/mix/tasks/letflow.backfill_platform_roles.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 for ISS-0910. Implement lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md's PASSed design in full: for every tenant in RoleBackfill.run/0's own :seeded list, bulk-reset role_claims_synced_at to nil for that tenant's users via Repo.update_all(User, [set: [role_claims_synced_at: nil]], prefix: schema_name), in a separate transaction from the tenant_role/group seeding (per the design's OQ-1, this gap is accepted, not something to silently fix beyond the design's own scope). Extend run/0's return value with a role_claims_markers_reset counter, and update the mix task CLI wrapper (lib/mix/tasks/letflow.backfill_platform_roles.ex) to surface it.\n\nRun: `mix compile --warnings-as-errors`, `mix format --check-formatted`, and the existing role_backfill test suite (find it -- likely test/letflow/identity/role_backfill_test.exs) plus a Docker-provisioned or local-toolchain DB migration check if needed. Self-review per your role's checklist: no string interpolation of tenant/user input into raw SQL, no unresolved {:ok, _} = match on an external-I/O-reachable path, new function has a @doc, any changed function signature's call sites still compile.",
+    "acceptance_criteria": [
+      "the fix resets role_claims_synced_at to nil for users with a membership in each tenant in RoleBackfill.run/0's own :seeded list, not :unchanged tenants",
+      "the reset reuses sync_role_claims_from_token/3's existing gated call sites (no new sync-triggering code path invented)",
+      "the fix is idempotent -- running the backfill twice does not error and does not incorrectly re-affect already-corrected users",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented the PASSed ISS-0910 design in lib/letflow/identity/role_backfill.ex: classify/3 now calls a new private reset_role_claims_sync_markers/1 (Repo.update_all(User, [set: [role_claims_synced_at: nil]], prefix: schema_name)) for every genuinely :seeded tenant only, in a separate transaction from seed_default_platform_role_groups/1's own -- gate stays visible at the process_registration/2 call site per design §2 shape (a). run/0's return value gains role_claims_markers_reset (sum of per-tenant reset counts, only accumulated for :seeded tenants). lib/mix/tasks/letflow.backfill_platform_roles.ex updated to surface the new count in its summary line. No migration needed (role_claims_synced_at already exists, already nullable). No changes to identity.ex/user.ex/role_registry.ex -- reset reuses no new sync-triggering path, only clears the existing marker sync_role_claims_from_token/3's call sites already gate on. Verified commands: `mix compile --warnings-as-errors` exits 0 (clean compile, no warnings). `mix format --check-formatted` exits 0 (no output, all formatted). `mix test test/letflow/identity/role_backfill_test.exs` -- 7 passed, 0 failed (pre-existing suite; these tests assert on {seeded:, unchanged:} keys only via partial map patterns so the added role_claims_markers_reset key does not break them -- they do not yet assert on the new marker-reset behavior itself, which is TEST-DESIGNER's next-step scope, not this handoff's). Self-review: no string interpolation of tenant/user input into raw SQL anywhere (bulk update uses Ecto's parameterized update_all, tenant scoping via prefix: schema_name which is already-trusted Registration data, never raw external input); no unresolved {:ok, _} = match introduced (reset_role_claims_sync_markers/1 pattern-matches the {count, nil} update_all always returns for a set-only, no-select update -- not external I/O, purely local Postgres round trip already covered by the existing rescue in process_registration/2's try block... note: the {reset_count, nil} match is NOT inside the rescue's protected region since it's called from classify/3, a separate function from process_registration/2's try -- flagging this for REVIEWER: a raised Postgrex error from reset_role_claims_sync_markers/1 itself would NOT be caught by process_registration/2's rescue clause since classify/3 is called outside that try/rescue scope in the {:ok, _tenant_roules} branch which is itself inside the try block, so it IS covered -- confirmed by re-reading the code, classify/3 call site is inside the same defp process_registration/2 function body governed by its rescue); new function reset_role_claims_sync_markers/1 has a full @doc-equivalent comment plus @spec (module uses moduledoc-style inline comments rather than @doc on private functions throughout this file already, consistent with classify/3 and held_platform_role_names/1's existing style -- matched that convention rather than adding @doc to a private function, which this file has never done); run/0 and process_registration/2 signatures changed (accumulator map gained a key) -- call site in lib/mix/tasks/letflow.backfill_platform_roles.ex updated and confirmed compiling; test/letflow/identity/role_backfill_test.exs call sites confirmed still passing since they pattern-match the map partially. No changes to Letflow.Identity, Letflow.Identity.User, or Letflow.Identity.RoleRegistry.",
+    "artifacts_out": [
+      "lib/letflow/identity/role_backfill.ex",
+      "lib/mix/tasks/letflow.backfill_platform_roles.ex"
+    ],
+    "issues": [
+      "Verified (not a new issue, restating design's own accepted gap for downstream visibility): OQ-1 from the design doc still applies -- if reset_role_claims_sync_markers/1's Repo.update_all fails after seed_default_platform_role_groups/1 already committed for that tenant, a retried run/0 reclassifies that tenant :unchanged and never retries the reset. Accepted scope limitation per the design, not something this implementation silently papers over.",
+      "This handoff's own task description asked for 'a Docker-provisioned or local-toolchain DB migration check if needed' -- no migration was needed (role_claims_synced_at already exists per design §4), so this was a no-op; the real DB-backed role_backfill_test.exs suite ran successfully against the local toolchain's Postgres instead, which exercises the same DB path."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0910-20260930",
+      "commit_sha_list": ["23b5eeebcc809fa79a289f99bdac0f675686cbfa"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER then REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,41 @@
+{
+  "handoff_id": "83a5bce7-bd91-4e7b-9055-95ba7d09e18b",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0930-20261001/step-02b-r1-code-design-validator.json",
+  "created_at": "2026-09-30T22:37:22Z",
+  "started_at": "2026-09-30T22:37:22Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0930-seed-service-task-endpoints.md",
+      "handoffs/WF03-ISS0930-20261001/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0930-20261001/step-02-r1-code-designer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2b re-gate after rework 1. Re-validate lib/letflow/design/iss0930-seed-service-task-endpoints.md. Your earlier FAIL is in handoffs/WF03-ISS0930-20261001/step-02b-code-design-validator.json (4 issues); the rework is handoffs/WF03-ISS0930-20261001/step-02-r1-code-designer.json. Independently verify each of the 4 issues is resolved AND that the fixes are themselves correct (e.g. that sort -V based version_is_older is portable to Git Bash/Linux and handles 1.0 < 1.1 < 1.10, that the test's String.to_existing_atom on method is safe, that the sample value does not trip the URL validator), and re-check no new gaps/implementation code were introduced. Modify nothing but this handoff. Work only in context.worktree. Set IN_PROGRESS at claim, then COMPLETED/FAILED with result.status PASS/FAIL; next_action 'Route to ELIXIR-DEV' on PASS.",
+    "acceptance_criteria": [
+      "All 4 prior issues verified resolved",
+      "Fixes themselves verified correct",
+      "No implementation code",
+      "Verdict with evidence"
+    ]
+  },
+  "result": null
+}

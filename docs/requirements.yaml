@@ -31931,7 +31931,7 @@ requirements:
   - id: REQ-432
     title: "Rebind-pins and publish/retire operator UI, wired to REQ-399's case-detail provenance screen, plus the platform-instance-pin-survives-catalog-change e2e spec (frontend)"
     owner: FRONTEND-DEV
-    status: pending
+    status: in_progress
     stage: S6
     description: >
       Follow-on to REQ-373 (service_catalog version/status lifecycle + real

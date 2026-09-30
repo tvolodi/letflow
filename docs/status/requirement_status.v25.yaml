@@ -40,3 +40,15 @@
 # A closed volume may carry known-anomaly declarations in the index under two
 # keys: `known_anomalies:` (vocabulary) and `known_shape_anomalies:` (field
 # set/order). A roll must never drop the `known_shape_anomalies:` declaration.
+
+  - req: REQ-432
+    event: started
+    agent: ORCH
+    at: 2026-09-30T16:48:21Z
+    note: >
+      WF-02 run WF02-REQ432-20260930 (queue task 906, GH#2044, lock held by
+      tvolodi-orch). Frontend-only (owner FRONTEND-DEV): rebind-pins and
+      publish/retire operator UI on REQ-399's provenance screen plus the
+      platform-instance-pin-survives-catalog-change pipeline e2e spec. Step 00
+      git setup PASS, branch feature/WF02-REQ432-20260930 pushed. Flipped
+      pending -> in_progress.

@@ -31,6 +31,21 @@
  * row when superseding. Calling retire AFTER publish would retire the NEW
  * version, so this spec retires first, then publishes.
  *
+ * ## Authoring-time status (read this first)
+ *
+ * This spec was written and compiled (`npx playwright test --list`) but has NOT
+ * been run against a live backend: Keycloak on localhost:8094 was unreachable
+ * on the authoring host (wslrelay shadowing), so no step has executed green.
+ * Selector assumptions that are UNPROVEN live:
+ *   - step 02: `/admin/services` lists the freshly registered service row
+ *     without the search filter (a `filterServices` fallback exists), and the
+ *     retired row is still returned by the list route so the RETIRED status
+ *     cell can be read.
+ *   - step 07: `worker-user` may open `/admin/services` and the case detail
+ *     page and sees the heading / Dependency Versions panel (used as positive
+ *     anchors before the absence counts); if the route redirects or the page
+ *     forbids the worker, the anchor fails loudly rather than passing vacuously.
+ *
  * Chain: pre (service v1 + definition) -> 01 start A and C, read A's pins
  * -> 02 retire + publish (GUI) -> 03 complete C's n2 task, service step
  * evidence -> 04 start B, compare pins -> 05 rebind A (GUI)
@@ -362,14 +377,16 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
       await loginWithToken(page, workerToken)
 
       await navigateSpa(page, '/admin/services')
-      await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(2_000)
-      expect(await page.locator('[data-testid^="service-publish-btn-"]').count()).toBe(0)
-      expect(await page.locator('[data-testid^="service-retire-btn-"]').count()).toBe(0)
+      // Positive anchor first: the page must actually have rendered for the
+      // absence assertions below to mean anything.
+      await expect(page.getByRole('heading', { name: 'Services' })).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('[data-testid^="service-publish-btn-"]')).toHaveCount(0)
+      await expect(page.locator('[data-testid^="service-retire-btn-"]')).toHaveCount(0)
 
       await navigateSpa(page, `/instances/${s.caseAId}`)
-      await page.waitForTimeout(3_000)
-      expect(await page.locator('[data-testid^="pin-rebind-btn-"]').count()).toBe(0)
+      // Positive anchor: the provenance panel (REQ-399) renders for the worker too.
+      await expect(page.getByTestId('instance-pins-panel')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('[data-testid^="pin-rebind-btn-"]')).toHaveCount(0)
     })
 
     await pl.runCleanup()

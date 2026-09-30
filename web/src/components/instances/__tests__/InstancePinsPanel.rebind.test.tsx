@@ -15,11 +15,24 @@ expect.extend(jestDomMatchers)
 
 const getPins = vi.fn()
 const rebindPins = vi.fn()
+const listAllServices = vi.fn()
+const retireService = vi.fn()
 
 vi.mock('@/api/instances', () => ({
   instancesApi: {
     getPins: (...args: unknown[]) => getPins(...args),
     rebindPins: (...args: unknown[]) => rebindPins(...args),
+  },
+}))
+
+// Independent API module: the services catalog. The pins panel and the
+// services page share NO mock state, only the QueryClient, exactly like prod.
+vi.mock('@/api/services', () => ({
+  servicesApi: {
+    listAll: (...a: unknown[]) => listAllServices(...a),
+    listForTenant: vi.fn(),
+    publishVersion: vi.fn(),
+    retire: (...a: unknown[]) => retireService(...a),
   },
 }))
 
@@ -40,6 +53,7 @@ vi.mock('@/auth/AuthContext', async (importOriginal) => {
 })
 
 import { InstancePinsPanel } from '@/components/instances/InstancePinsPanel'
+import ServicesPage from '@/pages/admin/services/ServicesPage'
 
 afterEach(() => {
   cleanup()
@@ -219,13 +233,50 @@ describe('REQ-432 EO-001/EO-002/EO-004 — per-instance pin display', () => {
     })
   })
 
-  it('a running case keeps showing its old version after the service was retired (independent queries, EO-004)', async () => {
-    // The services page retire/publish never touches pins data: the pins
-    // endpoint for the running case still answers with the old version.
+  it('retiring a service from the Services page leaves the running case pins panel, old version and Rebind action intact (EO-004, UI half)', async () => {
+    // Scope, stated honestly: this proves the UI half of EO-004 only -- the
+    // retire flow must not disturb, refetch-into-error, or hide the running
+    // case's pin display. "The in-flight step completes" is a backend/pipeline
+    // matter (pipeline step 03, and backend gap M5) and is NOT proven here.
+    const svcRow = (status: string) => ({
+      service_id: 'svc-a', endpoint_url: 'https://example.invalid/a', request_schema: '{}',
+      response_schema: '{}', required_auth: 'NONE', timeout_ms: 5000, max_retries: 0, scope: 'global',
+      owner_tenant_id: null, created_at: 'x', updated_at: 'x', version: '1', version_id: 'v1',
+      status, published_at: 'x', retired_at: null,
+    })
+    listAllServices
+      .mockResolvedValueOnce({ items: [svcRow('ACTIVE')], next_cursor: null })
+      .mockResolvedValue({ items: [svcRow('RETIRED')], next_cursor: null })
+    retireService.mockResolvedValue(svcRow('RETIRED'))
     getPins.mockResolvedValue({ instance_id: 'inst-1', pins: [pin({ version: '1' })] })
-    renderPanel()
-    await screen.findByTestId('data-table')
-    expect(screen.getByTestId('instance-pins-panel').textContent).toMatch(/Service1/)
-    expect(getPins).toHaveBeenCalledWith('inst-1')
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <ServicesPage />
+        <InstancePinsPanel instanceId="inst-1" canRebind instanceActive />
+      </QueryClientProvider>,
+    )
+    const user = userEvent.setup()
+
+    const panel = await screen.findByTestId('instance-pins-panel')
+    await screen.findByTestId(BTN)
+    expect(panel.textContent).toMatch(/svc-a.*1/)
+    expect(getPins).toHaveBeenCalledTimes(1)
+
+    await user.click(await screen.findByTestId('service-retire-btn-svc-a'))
+    await user.click(screen.getByTestId('service-retire-confirm'))
+
+    await waitFor(() => expect(retireService).toHaveBeenCalledWith('svc-a'))
+    await waitFor(() => expect(screen.getByTestId('service-status-svc-a')).toHaveTextContent('RETIRED'))
+
+    // The retire must not have invalidated/refetched the running case's pins,
+    // and the panel must still show the old version, the Rebind action, and
+    // no error surface.
+    expect(getPins).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('instance-pins-panel').textContent).toMatch(/svc-a.*1/)
+    expect(screen.getByTestId(BTN)).toBeInTheDocument()
+    expect(screen.queryByText('Retry')).not.toBeInTheDocument()
+    expect(screen.queryByText('Something went wrong loading this content.')).not.toBeInTheDocument()
   })
 })

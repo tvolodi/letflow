@@ -81,6 +81,17 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[`/instances/${INSTANCE_ID}`]}>
+        <Routes><Route path="/instances/:id" element={<InstanceDetailPage />} /></Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
 describe('InstanceDetailPage — rebound actor names on the History tab', () => {
   it('requests the timeline with page_size 200 and joins the rebound entry name by event_id only', async () => {
     timeline.mockResolvedValue({
@@ -91,14 +102,7 @@ describe('InstanceDetailPage — rebound actor names on the History tab', () => 
       count: 2,
       next_cursor: null,
     })
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={[`/instances/${INSTANCE_ID}`]}>
-          <Routes><Route path="/instances/:id" element={<InstanceDetailPage />} /></Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
+    renderPage()
 
     const row = await screen.findByTestId('event-row-ev-rebound')
     await waitFor(() => expect(within(row).getByTestId('pins-rebound-actor')).toHaveTextContent('Admin User'))
@@ -108,5 +112,16 @@ describe('InstanceDetailPage — rebound actor names on the History tab', () => 
     // non-rebind events are not joined
     expect(screen.getByTestId('event-actor-ev-task')).toHaveTextContent('system')
     expect(screen.queryByText('Someone Else')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the payload actor UUID prefix (never "system") when the timeline feed lacks the event (200-event join bound)', async () => {
+    timeline.mockResolvedValue({ items: [], count: 0, next_cursor: null })
+    renderPage()
+
+    const row = await screen.findByTestId('event-row-ev-rebound')
+    await waitFor(() => expect(timeline).toHaveBeenCalled())
+    expect(within(row).getByTestId('event-actor-ev-rebound')).toHaveTextContent('abcdef12')
+    expect(within(row).getByTestId('event-actor-ev-rebound')).not.toHaveTextContent('system')
+    expect(within(row).getByTestId('pins-rebound-actor')).toHaveTextContent('abcdef12-0000-0000-0000-000000000000')
   })
 })

@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGNER",
   "file": "handoffs/WF02-REQ432-20260930/step-01-code-designer.json",
   "created_at": "2026-09-30T16:49:15Z",
-  "started_at": "2026-09-30T16:49:15Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T16:49:24Z",
+  "completed_at": "2026-09-30T16:52:26Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -62,19 +62,28 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "COMPLETED",
+    "summary": "Wrote lib/letflow/design/req432-rebind-pins-publish-retire-ui.md. AC map in §0: publish/retire client+UI -> §2,§3; rebind client+dialog+cache invalidation -> §4,§5; INSTANCE_PINS_REBOUND question answered with file evidence -> §6 (generic rendering is NOT sufficient: timeline shows only 'Instance pins rebound by <name>' with no versions/reason, metadata is not payload; history hides payload in collapsed raw JSON; dedicated PinsReboundSummary in EventHistoryPanel designed); pipeline spec + EO-001..005 mapping + yaml NOTE removal per precedent -> §7; unit/component tests -> §8; contract mismatches -> §9; open questions -> §10.",
+    "artifacts_out": [
+      "lib/letflow/design/req432-rebind-pins-publish-retire-ui.md"
+    ],
+    "issues": [
+      "M1 backend: history_item_map/1 (lib/letflow/routers/instances.ex:903-910) omits actor_id, so History tab shows 'system' for every event; web EventRecord declares actor_id. Route to backend.",
+      "M2 backend: service_record_json/1 emits no max_retries/retry_policy while web ServiceRecord.max_retries and ServicesPage Retries column expect it (pre-existing).",
+      "M3 doc: instances.ex moduledoc says rebind-pins not permission-gated; route declares :InstancesCancel.",
+      "M4 scenario: retire/1 retires only the single current row (no version arg); retire AFTER publish would retire the new version, so spec must retire first then publish. Scenario step 2 order is not achievable as written."
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "commit_sha_list": [
+        "f2cbe7bc8821e18da338db28bd4a6e2ed3f4f8ca"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ432-20260930",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "CODE-DESIGN-VALIDATOR review of the design file."
   },
   "rework_count": 0,
   "max_rework": 3

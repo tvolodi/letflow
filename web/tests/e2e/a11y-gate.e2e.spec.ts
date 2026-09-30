@@ -21,9 +21,16 @@ import {
 } from '../a11y/a11yGate'
 import { getKeycloakToken, loginWithToken } from './helpers'
 
-const SURFACES: Array<{ name: string; path: string }> = [
+const API_PREFIX = '/api/v1'
+
+// `instance-detail` has no static route — /instances/:id needs a real,
+// running instance to render meaningfully (definition graph, active-node
+// highlighting, pending tasks). Its path is resolved at test time by
+// `seedRunningInstance` rather than hardcoded here.
+const SURFACES: Array<{ name: string; path: string | null }> = [
   { name: 'task-inbox', path: '/tasks/inbox' },
   { name: 'instance-list', path: '/instances/board' },
+  { name: 'instance-detail', path: null },
   { name: 'definition-list', path: '/definitions' },
   { name: 'process-designer', path: '/definitions' /* editor opens on click */ },
   { name: 'login', path: '/' },
@@ -32,6 +39,99 @@ const SURFACES: Array<{ name: string; path: string }> = [
 async function loginAsWorker(page: Page, request: APIRequestContext): Promise<void> {
   const token = await getKeycloakToken(request, 'worker-user', 'worker-pass')
   await loginWithToken(page, token)
+}
+
+/**
+ * Seed a real process instance via the API (a minimal start -> end
+ * definition, activated, then instantiated) and return its id so the
+ * a11y gate can navigate to a real `/instances/:id` detail page rather
+ * than a synthetic route.
+ *
+ * Deliberately START/END only, no HUMAN_TASK node: a HUMAN_TASK's
+ * `attributes` (wire type `string | null`, see `web/src/types/api.ts`)
+ * crashes `Letflow.Definitions.Graph.check_human_task_escalation/1` with
+ * a `BadMapError` server-side (that check calls `Map.get/3` on
+ * `node.attributes` without the `is_map` guard every other per-node-type
+ * check in that module uses) — reproduced independently of this spec via
+ * `f3-instance-monitoring.e2e.spec.ts`'s identical HUMAN_TASK payload, so
+ * it is a pre-existing backend defect, not something introduced or fixed
+ * here. Reported for ELIXIR-DEV/ISSUE-FIXER follow-up; out of scope for
+ * this fix, which only needs a real running instance to navigate to.
+ *
+ * Uses admin-user (not worker-user) since definition create/activate is
+ * an admin-role action; the worker session used for the actual page visit
+ * is unaffected — this only seeds data via the API.
+ */
+async function seedRunningInstance(request: APIRequestContext): Promise<string> {
+  const adminToken = await getKeycloakToken(request)
+  const unique = `a11y-gate-e2e-${Date.now()}`
+
+  const createResponse = await request.post(`${API_PREFIX}/definitions`, {
+    headers: {
+      Authorization: `Bearer ${adminToken}`,
+      'Content-Type': 'application/json',
+    },
+    data: {
+      name: `A11y Gate Instance Detail ${unique}`,
+      version: '1.0.0',
+      description: 'Auto-created by the a11y-gate E2E to seed a real instance-detail surface',
+      stage: null,
+      graph: {
+        nodes: [
+          { id: 'start', node_type: 'START', label: 'Start', attributes: null },
+          { id: 'end', node_type: 'END', label: 'End', attributes: null },
+        ],
+        edges: [
+          { id: 'e1', source: 'start', target: 'end', condition: null, is_default: false },
+        ],
+      },
+    },
+  })
+  if (!createResponse.ok()) {
+    const body = await createResponse.text()
+    throw new Error(`a11y-gate: POST /definitions failed while seeding instance-detail surface (${createResponse.status()}): ${body}`)
+  }
+  const created = await createResponse.json() as { id: string }
+
+  const activateResponse = await request.post(`${API_PREFIX}/definitions/${created.id}/activate`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  })
+  if (!activateResponse.ok()) {
+    const body = await activateResponse.text()
+    throw new Error(`a11y-gate: POST /definitions/${created.id}/activate failed while seeding instance-detail surface (${activateResponse.status()}): ${body}`)
+  }
+
+  const startResponse = await request.post(`${API_PREFIX}/instances`, {
+    headers: {
+      Authorization: `Bearer ${adminToken}`,
+      'Content-Type': 'application/json',
+    },
+    data: {
+      definition_id: created.id,
+      correlation_key: unique,
+      initial_variables: { source: 'a11y-gate-e2e' },
+    },
+  })
+  if (!startResponse.ok()) {
+    const body = await startResponse.text()
+    throw new Error(`a11y-gate: POST /instances failed while seeding instance-detail surface (${startResponse.status()}): ${body}`)
+  }
+  const started = await startResponse.json() as { instance_id: string }
+  return started.instance_id
+}
+
+/**
+ * Resolve a surface's real navigation path. `instance-detail` seeds a
+ * fresh running instance via the API and returns `/instances/<id>`;
+ * every other surface's path is already static.
+ */
+async function resolveSurfacePath(
+  surface: { name: string; path: string | null },
+  request: APIRequestContext,
+): Promise<string> {
+  if (surface.path !== null) return surface.path
+  const instanceId = await seedRunningInstance(request)
+  return `/instances/${instanceId}`
 }
 
 /**
@@ -90,7 +190,8 @@ test.describe('GRD-UI-06 — a11y gate (no mocks)', () => {
         await page.goto('/')
       } else {
         await loginAsWorker(page, request)
-        await page.goto(surface.path)
+        const targetPath = await resolveSurfacePath(surface, request)
+        await page.goto(targetPath)
       }
       const runAxe = await loadAxe()
       if (!runAxe) {

@@ -1,0 +1,64 @@
+id: ISS-0904
+title: "Letflow.Definitions.Graph.check_human_task_escalation/1 crashes (BadMapError) on any HUMAN_TASK node whose attributes is the wire-contract string form"
+discovered_by: FRONTEND-DEV
+discovered_in_run: "ISS-0900 scenario 1 fix (a11y-gate instance-detail surface), WF-02 Step 2b"
+discovered_at: "2026-09-30T02:30:00Z"
+severity: MAJOR
+owner: "ISSUE-FIXER (diagnosis) then ELIXIR-DEV"
+description: >
+  While seeding a real running instance for the a11y-gate E2E's new
+  `instance-detail` surface (ISS-0900 scenario 1), POST /api/v1/definitions
+  crashed with a 500 for any graph containing a HUMAN_TASK node built the
+  same way every existing e2e spec builds one — e.g.
+  `{ id: 'task-1', node_type: 'HUMAN_TASK', label: 'Review',
+  attributes: '{"role":"OPS_REVIEWER"}' }` (attributes as a JSON-encoded
+  *string*, matching the app's own wire type `attributes: string | null` in
+  `web/src/types/api.ts`).
+
+  Reproduced independently via `web/tests/e2e/f3-instance-monitoring.e2e.spec.ts`
+  (IN-UI-04), which uses an identical HUMAN_TASK payload and fails the same
+  way -- this is not something the a11y-gate fix introduced.
+
+  Root cause (from the running backend's own log,
+  `Letflow.TenantProvisioning` app log, 2026-09-29T23:33/23:34 and
+  2026-09-30T02:24 entries):
+
+  ```
+  ** (BadMapError) expected a map, got: "{\"role\":\"OPS_REVIEWER\"}"
+      (elixir) lib/map.ex:596: Map.get("{\"role\":\"OPS_REVIEWER\"}", "escalation_timer_duration", nil)
+      (letflow) lib/letflow/definitions/graph.ex:910: anonymous fn/1 in Letflow.Definitions.Graph.check_human_task_escalation/1
+      ...
+      (letflow) lib/letflow/definitions.ex:558: Letflow.Definitions.create/2
+  ```
+
+  `check_human_task_escalation/1` (REQ-396, CHK-21) does
+  `attrs = node.attributes || %{}` then `Map.get(attrs, "escalation_timer_duration")`
+  directly, with no `is_map(attrs)` guard. Every *other* per-node-type
+  check in the same module (`check_human_task_role/1`,
+  `check_service_task_endpoint/1`, `invalid_timeout?/1`,
+  `invalid_duration?/1`, etc. -- see `blank_or_missing_string?/2`'s
+  `is_map(attributes)` clause with a `_, do: true` fallback) treats a
+  non-map `attributes` as "attribute absent" and returns a validation
+  violation instead of crashing. CHK-21 is the one check that skipped this
+  convention, so any HUMAN_TASK node whose attributes hasn't already been
+  decoded into a map before reaching `validate_node_attributes/1` takes the
+  whole request down with an unhandled 500 instead of either succeeding or
+  returning a normal 4xx validation error.
+
+  Impact: blocks creating (or promoting/updating, wherever the same
+  validate_node_attributes/1 path runs) any definition with a HUMAN_TASK
+  node via the currently-used JSON-string attributes wire shape -- i.e. the
+  shape every existing e2e spec and the real canvas editor
+  (`web/src/utils/canvas/flowToGraph.ts`) already uses. Worked around for
+  the a11y-gate instance-detail surface fix by seeding a START/END-only
+  definition (no HUMAN_TASK node) instead; that workaround is not a fix and
+  does not cover the real gap for any code path that needs a HUMAN_TASK
+  node.
+affected_files:
+  - lib/letflow/definitions/graph.ex
+  - lib/letflow/definitions.ex
+source_reports: []
+queue_ref: null
+github_ref: null
+status: open
+parent_issue: null

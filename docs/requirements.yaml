@@ -31789,3 +31789,214 @@ requirements:
       - "docs/migration/stage-9-mobile.md lists each of the three phase gates with the test file(s) that demonstrate it and every deferred item with its reason"
       - "`cd apps/mobile && flutter analyze && flutter test && flutter build apk --debug` all pass, real output quoted"
     depends_on: [REQ-428, REQ-429]
+
+  # ---------------------------------------------------------------
+  # ISS-0898 -- frontend follow-ons for REQ-372/REQ-373, filed the same
+  # way REQ-374->375 and REQ-376->377 pair a backend requirement with its
+  # frontend counterpart. Both UAT scenarios
+  # (platform-definition-type-error-blocked,
+  # platform-instance-pin-survives-catalog-change) are BLOCKED because
+  # their frontend half was never scoped when the backend shipped.
+  # ---------------------------------------------------------------
+
+  - id: REQ-431
+    title: "Canvas/problem-list presentation of REQ-372's semantic decision-rule violations, plus a release-submission re-check surface (frontend)"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    description: >
+      Follow-on to REQ-372 (semantic decision-rule validation: field-existence +
+      type-compatibility checking over EXCLUSIVE_GATEWAY edge conditions), status:
+      done on the backend since WF02-REQ372-20260921. Filed from ISS-0898, split
+      from ISS-0890's WF05-FULL-20260929 PLATFORM UAT report: the
+      platform-definition-type-error-blocked scenario
+      (test/fixtures/uat/scenarios/platform/definition-type-error-blocked.yaml) is
+      BLOCKED because no frontend requirement was ever filed to present the errors
+      REQ-372's backend already produces, unlike the REQ-288->REQ-291 precedent
+      REQ-372's own SCOPE FENCE explicitly named ("does not build the frontend
+      presentation... that is explicitly a follow-on FRONTEND-DEV requirement once
+      this lands, filed the same way REQ-291 followed REQ-288").
+
+      WHAT EXISTS TODAY, verified 2026-09-30 by direct source read:
+      `Letflow.Definitions.SemanticValidation.validate/2`
+      (lib/letflow/definitions/semantic_validation.ex, design doc
+      lib/letflow/design/req372-semantic-decision-rule-validation.md) is wired into
+      two backend call sites: `Letflow.Definitions.validate_definition_graph/2`
+      (the read-only `POST /api/v1/definitions/:id/validate` endpoint, extended
+      with this pass's own violations as a 4th concatenated list) and
+      `Letflow.Definitions.activate/2` (the release/promotion submission gate,
+      `run_semantic_validation/2` helper, whose enlarged return union now
+      includes `{:error, {:semantic_validation_failed, [Graph.Violation.t()]}}`
+      and `{:error, {:semantic_validation_precondition_failed, term()}}`, both
+      pass-through-mapped by `interpret_activate_result/1`). Both violation codes
+      are real, closed-union `Graph.Violation.code()` atoms:
+      `:undeclared_variable_reference` (message includes the edge id, source node
+      id, the exact typed variable name verbatim, an optional "; nearest declared
+      field: '<name>'" suggestion clause computed by real Levenshtein distance,
+      and "; rule as authored: \"<condition>\"") and
+      `:incompatible_comparison_operand_types` (message includes edge id, source
+      node id, both operand representations and their resolved type families, the
+      CEL-spelled operator, and the authored rule text) -- see
+      lib/letflow/design/req372-semantic-decision-rule-validation.md §2.2/§2.3 for
+      the exact message-format grammar. `Graph.Violation` is `defstruct [:code,
+      :message]` -- there is no separate `nodeId`/`edgeId` struct field; the edge
+      id and node id are folded into the `message` string, so the frontend must
+      parse or otherwise derive per-node/per-edge attachment from the message
+      text (or route the violation to a general problem-list item with no canvas
+      anchor if a clean edge/node association cannot be derived without
+      overreaching into fragile string-parsing -- ELIXIR-DEV's call to make, not
+      fixed here).
+
+      web/src/pages/definitions/DefinitionEditorPage.tsx's existing validation
+      pipeline (read in full 2026-09-30) is client-side only: it locally computes
+      structural warnings (missing START/END, unnamed nodes,
+      EXCLUSIVE_GATEWAY edge-count) and SPC-02 SUB_PROCESS interface errors
+      (`collectSubProcessInterfaceErrors`), assembles them into
+      `ValidationError[]` (`{nodeId?, edgeId?, message, severity}`, the shape
+      `web/src/components/canvas/ValidationSummaryBar.tsx` already renders
+      generically), and feeds `ValidationSummaryBar`. It never calls the backend
+      `POST /api/v1/definitions/:id/validate` endpoint at all --
+      `web/src/api/definitions.ts` has no `validate` client function today (only
+      `activate`, which posts to `/api/v1/definitions/:id/activate` and returns
+      `ProcessDefinition` with no violation-shape handling). No canvas node ever
+      renders a marker sourced from a server-side semantic violation, and no
+      screen shows the "release submission re-checks every rule fresh" behavior
+      EO-005 requires.
+
+      THIS REQUIREMENT BUILDS: (1) a typed `validate` client function in
+      web/src/api/definitions.ts calling `POST /api/v1/definitions/:id/validate`
+      and a hook wrapping it, following this codebase's existing
+      api-client/hook pairing convention; (2) wiring this call into
+      DefinitionEditorPage.tsx's existing validation pipeline (on save, matching
+      the scenario's step 1/step 3 "the author saves the draft" trigger) so the
+      backend's `:undeclared_variable_reference` and
+      `:incompatible_comparison_operand_types` violations are mapped into
+      `ValidationError[]` entries alongside the existing client-side ones (parse
+      the edge id out of the message per §2.2/§2.3's stated grammar, or attach
+      no nodeId/edgeId if that parsing is judged too fragile -- ELIXIR-DEV/
+      FRONTEND-DEV's call, not fixed here, but the message text itself must
+      always render verbatim so EO-003's "shows the typed field name and names
+      the nearest existing field" and EO-001's "rule as authored" requirements
+      are met regardless of anchoring); (3) a release-submission screen/flow (the
+      existing "submit for release"/activate action) that surfaces
+      `activate/2`'s new `{:semantic_validation_failed, violations}` error shape
+      as a distinct "problems found on submission" result, separate from a
+      generic save-time validation display, so EO-005's "the platform checks
+      every rule again... rather than relying on the earlier clean result" is
+      visibly true to the author, not merely true on the backend.
+
+      OUT OF SCOPE: any change to `Letflow.Definitions.SemanticValidation`,
+      `Graph.Violation`, or either backend call site (this is a pure frontend
+      consumption of already-shipped data); a HUMAN_TASK routing-by-field
+      validation UI (REQ-372's own AC7 explicitly scoped that mechanism out of
+      existence entirely -- there is nothing for this requirement to present for
+      it); a "did you mean" auto-fix action that rewrites the condition for the
+      author (the suggestion is display-only, matching EO-003's own wording,
+      "suggests," not "auto-corrects").
+    acceptance_criteria:
+      - "web/tests/e2e/pipelines/platform-definition-type-error-blocked.pipeline.e2e.spec.ts is authored against this real screen and passes, per this scenario's own pipeline_test annotation (test/fixtures/uat/scenarios/platform/definition-type-error-blocked.yaml)"
+      - "saving a draft whose EXCLUSIVE_GATEWAY condition references an undeclared variable name renders a problem naming the exact typed variable string and, when a nearest declared field exists, a suggested field name, sourced from the real POST /api/v1/definitions/:id/validate response body (not a client-side heuristic), proven by a test that stubs a :undeclared_variable_reference violation in that response and asserts the rendered text includes both the typed name and the suggestion"
+      - "saving a draft with two independent broken rules (one field-existence violation, one type-compatibility violation) renders both problems together after a single save, matching EO-001, proven by a test stubbing both violation codes in one validate response"
+      - "a draft holding either violation cannot be released/activated: the release-submission action is blocked or the definition remains in draft status, matching EO-002, proven by a test"
+      - "submitting a corrected draft for release triggers a fresh re-check distinct from the last save-time validation result: a test stubs a clean save-time validate response followed by an activate call that returns {:error, {:semantic_validation_failed, [...]}} and asserts the release-submission screen shows the fresh (failing) result, not the stale clean one, matching EO-005"
+      - "once both violations are corrected, saving renders no remaining problems on the canvas or in the problem list, matching EO-004, proven by a test"
+      - "git diff shows no file under lib/letflow/definitions/, lib/letflow/definitions.ex, or lib/letflow/definitions/semantic_validation.ex modified by this requirement"
+      - "the frontend test suite passes, with real output quoted"
+    depends_on: [REQ-372]
+    # impl_order: UNREGISTERED -- filed directly by REQ-ANALYST as ISS-0898's
+    # split, not yet claimed via a WF-01 Step 3 letflow-queue registration pass.
+
+  - id: REQ-432
+    title: "Rebind-pins and publish/retire operator UI, wired to REQ-399's case-detail provenance screen, plus the platform-instance-pin-survives-catalog-change e2e spec (frontend)"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S6
+    description: >
+      Follow-on to REQ-373 (service_catalog version/status lifecycle + real
+      PinResolver.Lookup, status: done on the backend) and to REQ-399
+      (case-detail dependency-version/provenance screen, status: done -- REQ-399
+      already built the GET /api/v1/instances/{id}/pins route,
+      web/src/hooks/useInstancePins.ts, and
+      web/src/components/instances/InstancePinsPanel.tsx, wired into
+      InstanceDetailPage.tsx). Filed from ISS-0898, split from ISS-0890's
+      WF05-FULL-20260929 PLATFORM UAT report: the
+      platform-instance-pin-survives-catalog-change scenario
+      (test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml)
+      is BLOCKED not because the read-only provenance screen is missing (REQ-399
+      built that) but because two operator ACTIONS the scenario's own steps
+      exercise have no UI anywhere, and REQ-399's own SCOPE explicitly excluded
+      one of them: "any UI affordance to CHANGE a pin from this screen... is a
+      separate requirement if one is ever filed."
+
+      WHAT EXISTS TODAY, verified 2026-09-30 by direct source read:
+      - `POST /api/v1/admin/services/:service_id/versions` (publish) and
+        `POST /api/v1/admin/services/:service_id/retire` (retire) are real,
+        shipped REQ-373 routes (lib/letflow/routers/admin_services.ex,
+        design doc lib/letflow/design/req373-service-catalog-version-lifecycle.md
+        §7), gated by the existing :AdminServicesManage permission. Grepping
+        web/src/api/services.ts and web/src/pages/admin/services/ServicesPage.tsx
+        for "publish"/"retire"/"version" returns zero hits beyond the existing
+        `ServiceRecord` type -- neither route has any frontend client function or
+        UI control. An operator today cannot publish a new service-connection
+        version or retire an old one from the GUI at all, which is exactly the
+        scenario's own step 2 action.
+      - `POST /instances/:id/rebind-pins` is a real, shipped REQ-078/PIN-05 route
+        (lib/letflow/routers/instances.ex, `Letflow.Engine.PinRebind.rebind_pins/3`,
+        200 response `{instance_id, changes, rebound_at}`, each change item
+        carrying `ref`/`prior_version`/`new_version` per the
+        `INSTANCE_PINS_REBOUND` event it appends). Grepping web/src for "rebind"
+        returns zero hits beyond REQ-399's own read-only provenance panel and its
+        test -- there is no rebind client function, no rebind action/button/dialog
+        anywhere in web/src. An operator today cannot deliberately move a running
+        case onto a different pinned version from the GUI at all, which is
+        exactly the scenario's own step 5 action (with a caller-supplied reason
+        -- `rebind_attrs()` requires `:idempotency_key`, per
+        lib/letflow/routers/instances.ex's own design notes, and the scenario's
+        step 5 input is `reason: \"External system retires the old endpoint at
+        month end.\"`).
+      - Case history rendering: grepped web/src for any existing generic
+        event-timeline renderer capable of showing an `INSTANCE_PINS_REBOUND`
+        entry with actor/prior_version/new_version/reason (EO-005's own evidence
+        requirement, "the case history shows the change with the operator's
+        name, the previous and new version, and the reason given") -- confirm at
+        implementation time whether InstanceDetailPage.tsx's existing
+        history/timeline section already renders arbitrary event types generically
+        (in which case this requirement only needs the rebind action itself to
+        produce the right event, already true by construction since
+        `rebind_pins/3` already appends the real event) or needs a
+        dedicated case for this event type -- do not assume either way without
+        checking.
+
+      THIS REQUIREMENT BUILDS: (1) a typed `publish`/`retire` client pair in
+      web/src/api/services.ts and UI controls on
+      web/src/pages/admin/services/ServicesPage.tsx (a "publish new version"
+      action taking the publish_attrs() fields plus a version string, and a
+      "retire" action) for a PLATFORM_ADMIN-equivalent operator; (2) a typed
+      `rebind` client function (POST /instances/:id/rebind-pins) and a rebind
+      action/dialog on REQ-399's InstancePinsPanel.tsx (or InstanceDetailPage.tsx)
+      requiring the caller to supply a reason string, wired to the real endpoint;
+      (3) confirm, and if needed extend, the case history/timeline rendering so
+      an `INSTANCE_PINS_REBOUND` entry's actor, prior_version, new_version and
+      reason are all visible per EO-005; (4) the named pipeline_test spec.
+
+      OUT OF SCOPE: any change to `Letflow.ServiceCatalog`, `PinResolver`,
+      `PinRebind`, or any of REQ-373/REQ-399's already-shipped routes (pure
+      frontend consumption/action wiring against already-shipped endpoints);
+      re-scoping or modifying REQ-399's read-only provenance display beyond what
+      is needed to add the rebind action to the same screen; PLC-01/module_ref
+      catalog versioning (still the identical, already-named SCOPE GAP
+      pin_resolver.ex's own moduledoc states, unscoped to any stage, restated by
+      both REQ-373 and REQ-399).
+    acceptance_criteria:
+      - "web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts is authored against these real screens and passes, per this scenario's own pipeline_test annotation (test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml)"
+      - "a PLATFORM_ADMIN-equivalent operator can publish a new version of an existing service_catalog entry from the GUI, calling the real POST /api/v1/admin/services/:service_id/versions endpoint (no mock), proven by a test"
+      - "the same operator can retire a service_catalog entry's current version from the GUI, calling the real POST /api/v1/admin/services/:service_id/retire endpoint (no mock), proven by a test"
+      - "from a running case's detail screen, an operator can trigger a pin rebind supplying a required reason string, calling the real POST /api/v1/instances/:id/rebind-pins endpoint (no mock), proven by a test"
+      - "after a rebind, the case detail/history view shows the change's actor, previous version, new version and reason, matching EO-005's evidence requirement, proven by a test"
+      - "a case started before a catalog publish and one started after both render their correct, distinct pinned versions in REQ-399's provenance panel, matching EO-001/EO-002, proven by a test (may reuse/extend REQ-399's existing InstancePinsPanel test fixtures)"
+      - "retiring a version does not error or block the already-running case's own pin display or its in-flight step, matching EO-004, proven by a test"
+      - "git diff shows no file under lib/letflow/service_catalog.ex, lib/letflow/service_catalog/, lib/letflow/engine/pin_resolver.ex, or lib/letflow/engine/pin_rebind.ex modified by this requirement"
+      - "the frontend test suite passes, with real output quoted"
+    depends_on: [REQ-373, REQ-399]
+    # impl_order: UNREGISTERED -- filed directly by REQ-ANALYST as ISS-0898's
+    # split, not yet claimed via a WF-01 Step 3 letflow-queue registration pass.

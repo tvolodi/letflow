@@ -87,8 +87,8 @@
         "ae293b4eaee9971075fc78c7f09cf6d7fcb9e362",
         "dbad5879307efb630fa68ebeab4e866c1c74aff6"
       ],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ432-20260930",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },

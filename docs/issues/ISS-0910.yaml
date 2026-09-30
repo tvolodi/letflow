@@ -24,6 +24,6 @@ affected_files:
   - lib/letflow/identity.ex
   - lib/letflow/identity/role_registry.ex
   - lib/mix/tasks/ (backfill_platform_roles)
-queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
-github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+queue_ref: Q-899  # queue allocated issue_ref ISS-0899, which collides with an existing local file; local filename kept as ISS-0910 and GH-2033 retitled to match
+github_ref: GH-2033
 status: open

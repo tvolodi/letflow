@@ -21,6 +21,6 @@ source_reports:
 affected_files:
   - lib/letflow/plugs/admission.ex (or equivalent)
   - QA runtime configuration (per-tenant admission limit)
-queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
-github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+queue_ref: Q-898  # queue allocated issue_ref ISS-0898, which collides with an existing local file; local filename kept as ISS-0908 and GH-2032 retitled to match
+github_ref: GH-2032
 status: open

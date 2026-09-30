@@ -1,0 +1,16 @@
+id: ISS-0936
+title: "uat_preflight.sh qa-uat-env protocol expects 'Token: <jwt>' but qa-uat-env.sh token prints a bare JWT (every actor login reports NO_PASSWORD)"
+discovered_by: UAT-RUNNER
+discovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MINOR
+description: >
+  Fix fetch_credential in scripts/uat_preflight.sh to accept a bare JWT line (keep the 'Token:' form).
+  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.
+source_reports:
+  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml
+related:
+  - ISS-0912
+queue_ref: Q-919  # queue issue_ref ISS-0919 collides with an existing local file; local filename ISS-0936
+github_ref: GH-2070
+status: open

@@ -1,0 +1,16 @@
+id: ISS-0930
+title: "D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task"
+discovered_by: UAT-RUNNER
+discovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)
+discovered_at: "2026-10-01T00:00:00Z"
+severity: BLOCKER
+description: >
+  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.
+  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.
+source_reports:
+  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml
+related:
+  - ISS-0912
+queue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930
+github_ref: GH-2064
+status: open

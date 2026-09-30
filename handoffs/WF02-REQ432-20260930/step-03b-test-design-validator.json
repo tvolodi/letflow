@@ -7,9 +7,9 @@
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ432-20260930/step-03b-test-design-validator.json",
   "created_at": "2026-09-30T17:29:34Z",
-  "started_at": "2026-09-30T17:29:34Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T17:29:36Z",
+  "completed_at": "2026-09-30T17:31:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -45,10 +45,28 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "PASS (with AC1 and live halves of AC6/AC7 honestly open). Read test/specs/REQ-432.md, the REQ-432 entry in docs/requirements.yaml (lines 31931-32022), the 02b handoff, and all 8 vitest files plus the pipeline spec and the panel/history sources. Per-AC: AC1 pipeline spec exists, compiles and lists (npx playwright test --list: Total 1 test), NOT run green (Keycloak :8094 shadowed by wslrelay) - spec states this truthfully; not claimable PASS until a live run. AC2 services.versions.test.ts + ServicesPage.versions.test.tsx (URL/verb/body, exact publish body, refetch, 409, admin gating). AC3 retire URL/no body, confirm, 409, disabled on RETIRED. AC4 instances.rebind.test.ts (URL, body, Idempotency-Key header), useRebindPins.test.tsx, InstancePinsPanel.rebind.test.tsx (gating x3, empty/whitespace reason, unchanged version, exact body, key reuse/reopen, status table). AC5 EventHistoryPanel.rebound, PinsReboundSummary, InstanceDetailPage.actorNames (join by event_id, page_size 200, UUID fallback). AC6 per-instance panel test (mock keyed on instance id; a mock ignoring id would fail) - UI half only. AC7 cross-module EO-004 test, UI half only. AC8 by command: git diff --name-only main...HEAD | grep lib/letflow/(service_catalog|engine/pin_resolver|engine/pin_rebind) printed nothing (exit 1). AC9 is a command criterion (not re-run in full by me; I ran the 8 REQ-432 files: 8 files / 36 tests passed). Checks: no .skip/.fixme/.todo/.only/TODO in spec or tests (grep); fixtures per-test (vi.clearAllMocks + cleanup afterEach, fresh QueryClient per render, roles reset; pipeline uses randomUUID per run); no cross-test ordering dependence; resolveCredential('UAT_QA_ADMIN_PASSWORD','admin-pass') fallback is the existing convention (tests/e2e/helpers.ts:45 and 3+ other specs) - note only. Mutants (independent, each reverted by git checkout, git status --porcelain lib/ test/ web/ empty afterwards and the 8 files re-ran green 36/36): M-a ServicesPage retireMutation onSuccess -> invalidateQueries(): InstancePinsPanel.rebind.test.tsx 1 failed | 13 passed ('expected spy to be called 1 times, but got 2 times'). M-b EventHistoryPanel reboundActorCell returns 'system' when name undefined: actorNames + EventHistoryPanel.rebound 2 failed | 3 passed (both UUID-fallback tests). M-c drop the trimmed-reason guard (true &&): 'blocks submit on empty reason' 1 failed | 13 passed (toBeDisabled). M-d regenerate idempotency key per submit: 'retry reuses the key' 1 failed | 13 passed. Honesty statement judged accurate on which ACs rest only on the unrun pipeline spec (AC1; live halves of AC6/AC7) and on M5 making the in-flight success half unverifiable; no AC is claimed proven by a test that cannot fail (all four mutants killed).",
+    "artifacts_out": [
+      "handoffs/WF02-REQ432-20260930/step-03b-test-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "AC1 and the live halves of AC6/AC7 remain unproven (pipeline spec never run green); RELEASE-VALIDATOR/UAT-RUNNER must run it on a host where Keycloak localhost:8094 is reachable before REQ-432 can be marked done. Correctly disclosed in the spec.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "test/specs/REQ-432.md says 39 new unit/component tests; the 8 listed files contain 36 tests (2+1+7+2+14+5+3+2). Count discrepancy only, coverage unaffected.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "The EO-004 UI-half test proves 'retire does not refetch the running case pins and the panel stays intact' via a getPins call-count; it is a proxy for non-disruption, which the spec states is UI half only. Acceptable.",
+        "affected_requirement": "REQ-432"
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
       "commit_sha_list": [],
@@ -57,7 +75,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH: proceed past Step 3b. Carry AC1 + live AC6/AC7 + M5 as open items to the test-runner/release-validator/UAT steps."
   },
   "rework_count": 0,
   "max_rework": 3

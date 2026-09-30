@@ -1,0 +1,51 @@
+{
+  "handoff_id": "13ad566e-e07f-49b7-9b81-7fec53f62c8d",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0910-20260930/step-03c-security-reviewer.json",
+  "created_at": "2026-09-30T07:59:17Z",
+  "started_at": "2026-09-30T07:59:17Z",
+  "completed_at": "2026-09-30T08:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["c9f3412e-b201-4bcc-8c9a-9ad178bea187"],
+    "artifacts_in": [
+      "lib/letflow/identity/role_backfill.ex",
+      "lib/mix/tasks/letflow.backfill_platform_roles.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3c for ISS-0910 -- IN SCOPE per security-reviewer.md (a bulk write to the users table, a tenant-data path). Read git diff main...HEAD -- lib/letflow/identity/role_backfill.ex lib/mix/tasks/letflow.backfill_platform_roles.ex yourself. Run the full INV-1..INV-8 procedure. Pay particular attention to: (1) INV-1 tenant isolation -- confirm the Repo.update_all call is genuinely scoped to one tenant's schema at a time (prefix: schema_name) and cannot cross-affect another tenant's users table; (2) INV-7 no string interpolation of tenant/user input into raw SQL -- confirm schema_name is never interpolated as a raw string into a query rather than passed as Ecto's prefix option; (3) confirm this bulk reset cannot be triggered by anything other than the existing, already-reviewed mix task/RoleBackfill.run/0 entry point (no new HTTP-reachable trigger). FAIL immediately on any applicable invariant failing.",
+    "acceptance_criteria": [
+      "the fix resets role_claims_synced_at to nil for users with a membership in each tenant in RoleBackfill.run/0's own :seeded list, not :unchanged tenants",
+      "the reset reuses sync_role_claims_from_token/3's existing gated call sites (no new sync-triggering code path invented)",
+      "the fix is idempotent -- running the backfill twice does not error and does not incorrectly re-affect already-corrected users"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS -- INV-1..INV-8 assessed against git diff main...HEAD -- lib/letflow/identity/role_backfill.ex lib/mix/tasks/letflow.backfill_platform_roles.ex. Scope test: applies (bulk Repo.update_all write to the tenant-scoped `users` table). Per-invariant verdicts: INV-1 (tenant data isolation) -- APPLIES, PASS. `reset_role_claims_sync_markers/1` calls `Repo.update_all(User, [set: [role_claims_synced_at: nil]], prefix: schema_name)`; `schema_name` comes only from `TenantProvisioning.list_registrations()`'s own `Registration.schema_name` field per tenant, passed through `process_registration/2` -> `classify/4` -> `reset_role_claims_sync_markers/1` with no other origin. `Letflow.Identity.User` (lib/letflow/identity/user.ex) has no `tenant_id` column by design (Decision 0006 D1/D2 -- the per-tenant Postgres schema is the sole scoping mechanism for this table), so an unqualified `update_all` with no `where` is correct, not a missing filter: the `prefix` option is the entire scope, and one call only ever touches the single schema named by that tenant's own registration record. No caller-supplied prefix; no cross-tenant reach possible. (a)/(b) of INV-1's verify procedure confirmed; (c) not applicable (no tenant_id column on this table post-0006). INV-2 (server-side field authorisation) -- NOT-APPLICABLE, no API response shaping in this diff. INV-3 (sandboxing) -- NOT-APPLICABLE, no Lua/WASM code. INV-4 (secrets by reference) -- APPLIES (grep run repo-wide per procedure), PASS: no secret material read, logged, or threaded through either changed file. INV-5 (404/403 indistinguishability) -- NOT-APPLICABLE, no lookup-by-ID endpoint added. INV-6 (new paths prove scoping) -- APPLIES, PASS: this handoff is that proof. INV-7 (no SQL string interpolation) -- APPLIES, PASS: `schema_name` is passed only as Ecto's `prefix:` keyword option to `Repo.update_all/3`, never interpolated into a raw SQL string; `grep -rn \"Repo.query\"` on both changed files returns no hits -- no raw-SQL escape hatch used at all. INV-8 (no unhandled crashes) -- APPLIES, PASS: `Repo.update_all/3` returns `{count, nil}` unconditionally on success and doesn't raise on zero matched rows; the existing `rescue` in `process_registration/2` already wraps this call along with the rest of the per-tenant work, converting any exception to `{:halt, {:error, {:backfill_failed, tenant_id, {:unexpected_exception, exception}}}}` rather than crashing a shared process. Trigger-surface check (task item 3): `grep -rn \"RoleBackfill.run\"` across lib/ finds exactly one caller, `lib/mix/tasks/letflow.backfill_platform_roles.ex:42` (an operator-invoked mix task), plus test-suite references -- no router, plug, or controller calls it; no new HTTP-reachable trigger introduced. Acceptance-criteria note (informational, not an invariant): the diff does not touch `sync_role_claims_from_token/3` or its call sites at all, so AC2 (no new sync-triggering path invented) holds by construction.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0910-20260930",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (idiom/OTP/scope-creep gate) per WF-02 Step 2c ordering."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

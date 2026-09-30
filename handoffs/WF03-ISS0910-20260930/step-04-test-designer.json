@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b41cc438-2ec7-4b17-8024-7c430dc25ef8",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0910-20260930/step-04-test-designer.json",
+  "created_at": "2026-09-30T08:02:53Z",
+  "started_at": "2026-09-30T08:02:53Z",
+  "completed_at": "2026-09-30T08:53:32Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/identity/role_backfill.ex",
+      "test/letflow/identity/role_backfill_test.exs"
+    ],
+    "owned_modules": ["test/letflow/identity/role_backfill_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 for ISS-0910. Write regression tests proving reset_role_claims_sync_markers/1's behavior in test/letflow/identity/role_backfill_test.exs (existing file, 7 tests already there per Step 3's report). Required test cases: (1) a user in a tenant that RoleBackfill.run/0 classifies :seeded, with role_claims_synced_at previously set (non-nil), has it reset to nil after run/0; (2) a user in a tenant classified :unchanged keeps their existing role_claims_synced_at value untouched; (3) running run/0 TWICE against the same seeded tenant is idempotent -- the second run classifies that tenant :unchanged (already fully seeded) and does not re-touch already-nil or already-re-synced markers; (4) the returned role_claims_markers_reset count matches the actual number of users whose marker was reset (not a hardcoded/approximate count).\n\nThis reset behavior is NEW (no pre-fix version existed -- WF-03's own 'pre-fix failure is non-existence' rule applies, see docs/agents/workflows/WF-03_issue_resolving.md). Prove discriminating power via mutation: apply at least 2 targeted mutants to the shipped reset_role_claims_sync_markers/1 or its call site (e.g. mutant A: call the reset unconditionally regardless of :seeded/:unchanged classification -- must fail test (2); mutant B: remove the prefix: schema_name option from the update_all call, defaulting to the public/global schema -- must fail test (1) or (2) depending on test DB setup, or cause an error test (4) catches via a wrong count) -- run the tests against each mutant, record which specific test(s) fail, then revert every mutation and verify (git status --porcelain lib/ test/ empty, suite re-runs green). Use a throwaway git worktree if practical.",
+    "acceptance_criteria": [
+      "a test proves a :seeded tenant's users have role_claims_synced_at reset to nil",
+      "a test proves an :unchanged tenant's users are NOT touched",
+      "a test proves idempotency across two successive run/0 calls",
+      "a test proves the returned role_claims_markers_reset count is accurate, not approximate",
+      "at least 2 targeted mutants applied and reverted, with each one's specific test failure(s) recorded and the revert verified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added 4 tests to test/letflow/identity/role_backfill_test.exs (now 11 total) proving reset_role_claims_sync_markers/1's behavior per each required case: AC1 'a user with a previously-set marker has it reset to nil after run/0' (seeded tenant), AC2 'a user's existing non-nil marker survives run/0 unchanged when the tenant is already fully seeded' (unchanged tenant), AC3 'the second run classifies the now-fully-seeded tenant :unchanged and does not re-touch a marker re-synced after the first run' (idempotency across two run/0 calls, including re-syncing the marker between the two calls to prove a legitimate post-backfill re-sync is never clobbered), AC4 'the returned count equals the exact number of users whose marker was reset, across seeded and unchanged tenants' (3 stamped + 1 already-nil user on a seeded tenant, 1 untouched user on an unchanged tenant -- asserts role_claims_markers_reset == 4 exactly, and independently confirms the unchanged tenant's user keeps its marker so the count isn't a coincidental sum). Verified individually: `mix test test/letflow/identity/role_backfill_test.exs` -> 'Result: 11 passed'. Verified via forced-recompile with --warnings-as-errors (MIX_ENV=test mix do compile --warnings-as-errors + test --warnings-as-errors test/letflow/identity/role_backfill_test.exs, after `touch`ing the file to force recompilation) -> 'Result: 11 passed', 0 warnings -- rules out the ISS-0069 dead-default-argument class specifically (this file's new helpers, stamp_role_claims_synced_at!/3 and reload_user!/2, take no default arguments, so there is no dead-default risk, but the forced recompile confirms no other warning class either). Ran the full `mix letflow.check.test` gate twice: first at default (nproc-derived) parallelism, which crashed 11/16 partitions from host resource exhaustion (unrelated pre-existing host constraint, docs/anti-patterns.md 'always set TEST_PARALLEL_N=4 here', ISS-0219/ISS-0882) -- re-ran with `TEST_PARALLEL_N=4 mix letflow.check.test`, which completed cleanly: 'Result: 1313/1315 passed, 5 excluded' / 'Failed: 2 tests', both pre-existing and unrelated to this file or lib/letflow/identity/role_backfill.ex (Mix.Tasks.Letflow.CheckDeferralStalenessTest's T-LIVE-DEFERRED-COUNT/T-LIVE-GREEN, a docs/requirements.yaml deferral-staleness check flagging REQ-431/REQ-432 -- confirmed via `git log` that this test file predates this branch and the failure has nothing to do with RoleBackfill). Grepped the full check.test log for 'RoleBackfillTest': all 12 occurrences are teardown log lines, zero failure entries -- this file contributed 0 failures to that run. This is new behavior (no pre-fix version existed), so per WF-03's 'pre-fix failure is non-existence' rule, discriminating power was proven via 2 targeted mutants against lib/letflow/identity/role_backfill.ex, applied and reverted IN-PLACE (not a worktree -- docs/anti-patterns.md documents a worktree with a shared _build path silently running stale .beam files, so in-place + git checkout -- + verified re-run is the safer documented fallback): MUTANT A (classify/3's :unchanged clause calls reset_role_claims_sync_markers/1 unconditionally) -> 'Result: 8/11 passed' / 'Failed: 3 tests' -- exactly AC2, AC3, AC4 failed (AC1 still passed, as expected since the seeded path is unaffected). MUTANT B (reset_role_claims_sync_markers/1's Repo.update_all drops `prefix: schema_name`, defaulting to the public schema) -> 'Result: 4/11 passed' / 'Failed: 7 tests' -- AC1, AC3, AC4 failed (each via the module's own try/rescue converting the resulting Postgrex undefined_table error into {:error, {:backfill_failed, ...}}, caught by the {:ok, ...} pattern-match assertions), plus collateral failures on every other pre-existing :seeded-path test (AC2/idempotent/multi-tenant/post-backfill), which is expected since every :seeded tenant now hits the broken update_all. Both mutants reverted via `git checkout -- lib/letflow/identity/role_backfill.ex`; each revert verified by `git status --porcelain lib/ test/` showing only the test file modified (lib/ empty) plus a fresh `mix test test/letflow/identity/role_backfill_test.exs` re-run -> 'Result: 11 passed' both times.",
+    "artifacts_out": ["test/letflow/identity/role_backfill_test.exs"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0910-20260930",
+      "commit_sha_list": ["e9c9e3be"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

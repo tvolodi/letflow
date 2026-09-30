@@ -1,0 +1,55 @@
+{
+  "handoff_id": "ac07f5bf-1601-4dc7-a7c6-1012e5ae7efe",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0910-20260930/step-02b-code-design-validator.json",
+  "created_at": "2026-09-30T07:53:27Z",
+  "started_at": "2026-09-30T07:53:27Z",
+  "completed_at": "2026-09-30T08:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["16876a17-0e6f-4fcf-b645-f2aa01e9b914"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md",
+      "lib/letflow/identity/role_backfill.ex",
+      "lib/letflow/identity/user.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 2, hard gate on CODE-DESIGNER's design. Read lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md directly. Verify: (1) the 'users is a per-tenant-schema table, no join needed' claim by reading lib/letflow/identity/user.ex and confirming the schema/prefix mechanism yourself, not accepting the design's assertion; (2) the Repo.update_all bulk-reset precedent citations (promotion.ex:474, definitions.ex:2660/2666) are real -- open those files and confirm the pattern actually matches; (3) role_claims_synced_at is genuinely nullable with no migration needed -- confirm against user.ex's schema definition; (4) the idempotency argument (NULL->NULL no-op, :seeded-only gating) is sound; (5) OQ-1 (separate-transaction retry gap) is honestly flagged, not silently glossed as solved; (6) no implementation code present -- signatures/shapes only. FAIL immediately on any check failure.",
+    "acceptance_criteria": [
+      "the fix resets role_claims_synced_at to nil for users with a membership in each tenant in RoleBackfill.run/0's own :seeded list, not :unchanged tenants",
+      "the reset reuses sync_role_claims_from_token/3's existing gated call sites (no new sync-triggering code path invented)",
+      "the fix is idempotent -- running the backfill twice does not error and does not incorrectly re-affect already-corrected users",
+      "no implementation code in the design doc -- signatures/shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All six checks pass against first-hand verification. (1) user.ex confirmed: no tenant_id column, schema has role_claims_synced_at:utc_datetime_usec at line 45; per-tenant-schema scoping via Decision 0006 D1/D2 verified in the schema moduledoc itself -- design's 'no join needed' claim holds. (2) Precedent citations verified exact: promotion.ex:474 (deprecate_previous_active/2, Repo.update_all([set: [status: :deprecated]], prefix: target_prefix)), definitions.ex:1700/2660/2666 (all Repo.update_all([set: ...], prefix: prefix) shape) -- line numbers and pattern both match exactly. (3) role_claims_synced_at confirmed nullable (no validate_required/not-null constraint in schema or any changeset) and already exists -- no migration needed, claim correct. (4) Idempotency argument sound: NULL->NULL is a no-op at SQL level, and gating the reset on the same classify/3 <6-roles predicate RoleBackfill.run/0 already computes means a second run reclassifies previously-:seeded tenants as :unchanged and skips the reset, so already-resynced users' fresh non-nil markers are never disturbed. (5) OQ-1 (separate-transaction retry gap: if update_all fails after seed_default_platform_role_groups/1 already committed, a retry reclassifies the tenant :unchanged and never retries the reset) is explicitly named as a known accepted gap in both S2 and S8, not glossed over. (6) No implementation code anywhere in the doc -- all 6 fenced blocks contain only @spec/type signatures and one query-shape comment (Repo.update_all/3 call written as illustrative shape, not inside a def body). Also independently confirmed: identity.ex's two gated call sites (lines 1714, 1827, design cited ~1713/~1826) both check is_nil(existing.role_claims_synced_at) before calling sync_role_claims_from_token/3 -- matches AC2's 'reuses existing gated call sites, no new sync-triggering path' exactly, and design explicitly states no changes to identity.ex/user.ex/role_registry.ex.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0910-20260930/step-02b-code-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0910-20260930",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 03 (ELIXIR-DEV) per WF-03."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

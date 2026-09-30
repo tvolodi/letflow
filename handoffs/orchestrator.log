@@ -2507,3 +2507,5 @@
 2026-09-30T18:44:17Z | DISPATCH | WF02-REQ432-20260930 | step-03b-regate1 | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
 2026-09-30T18:46:31Z | PASS | WF02-REQ432-20260930 | step-03b-regate1 | TEST-DESIGN-VALIDATOR -> ORCH | PASS -- fresh full pass; step 03 verified strict by code reading; 4 unit mutants independently killed and reverted; 2 MINOR spec-text items (39 vs 36 test count; AC1 section stale 'NOT run green') routed to DOC-UPDATER (Step 6).
 2026-09-30T18:46:33Z | DISPATCH | WF02-REQ432-20260930 | step-04-rerun1 | ORCH -> TEST-RUNNER | PENDING
+2026-09-30T18:57:36Z | PASS | WF02-REQ432-20260930 | step-04-rerun1 | TEST-RUNNER -> ORCH | PASS -- no Elixir-side change since measured full suite (5079/5079, 0 failed, N=6); web type-check/lint clean, npm test 150 files/995 passed, guards 52 passed; pipeline spec live twice: 1 passed (10.8s), 1 passed (10.3s), step 3 outcome B both times; no orphan processes. (Note: handoff result.status written as 'COMPLETED' rather than 'PASS'; summary attests PASS; lint OK -- recorded, not rewritten.)
+2026-09-30T18:57:38Z | DISPATCH | WF02-REQ432-20260930 | step-05 | ORCH -> RELEASE-VALIDATOR | PENDING

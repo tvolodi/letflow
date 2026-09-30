@@ -939,3 +939,40 @@
       docs/requirements.yaml entry is touched. Merged via PR #2028 (see PR
       for merge commit SHA). letflow-queue task 885 (queue_ref Q-885,
       github_ref GH-1990) to be released as done in this same run.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T08:28:14Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0913
+      (MINOR, definitions router's render_activate/2 had no clause for
+      {:error, {:semantic_validation_failed, violations}} or {:error,
+      {:semantic_validation_precondition_failed, reason}}, falling through
+      to the catch-all bare 500 with no violation payload, blocking
+      REQ-431's AC5) -- resolved: two new render_activate/2 clauses in
+      lib/letflow/routers/definitions.ex mirroring the existing
+      render_validation/2 pattern, turning both real semantic-validation
+      failure shapes into a proper 422-with-violations instead of a
+      contentless 500. Full gate chain: SECURITY-REVIEWER PASSed (INV-2,
+      INV-8 -- no cross-tenant leakage in the violations payload, no new
+      unauthenticated surface); REVIEWER PASSed, independently reproducing
+      the fix's necessity via a revert-and-check (bare 500 without the two
+      clauses, 422-with-violations with them); RELEASE-VALIDATOR PASSed,
+      independently constructing a fresh, different test case from
+      REVIEWER's own and confirming both new clauses return 422 with real,
+      non-empty violations content. FILENAME-COLLISION NOTE: this fix was
+      implemented and gated under the ISS-0912 label/branch before a
+      concurrent session's PR #2040 silently overwrote the uncommitted
+      docs/issues/ISS-0912.yaml with a DIFFERENT issue (QA meridian/vortex
+      seed-script operational step, queue task Q-904, github_ref GH-2039).
+      The original router-fix issue was re-filed at docs/issues/ISS-0913.yaml
+      with the same content and is the file closed in this append (status:
+      resolved, resolved_in_run: fix/iss-0912-activate-semantic-validation-500)
+      -- docs/issues/ISS-0912.yaml on disk is confirmed the separate,
+      unrelated, still-open issue and was NOT touched. This is an ISSUE, not
+      a REQ, so no docs/requirements.yaml entry is touched. Merged via PR
+      #2042 (branch fix/iss-0912-activate-semantic-validation-500; see PR
+      for merge commit SHA). No letflow-queue task to release (queue_ref:
+      null -- discovered directly by CODE-DESIGN-VALIDATOR mid-task, filed
+      by ORCH, not a queue-originated task).

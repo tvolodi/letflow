@@ -5021,8 +5021,29 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 23
+    entries: 24
     note: >
+      Bumped to 24 by DOC-UPDATER after appending ISS-0913's SCOPE-CHANGE
+      done-event (fix/iss-0912-activate-semantic-validation-500, PR #2042,
+      2026-09-30T08:28:14Z -- two new render_activate/2 clauses in
+      lib/letflow/routers/definitions.ex mirroring render_validation/2,
+      turning semantic-validation-failure/precondition-failure error shapes
+      into a proper 422-with-violations instead of a bare, contentless 500;
+      SECURITY-REVIEWER, REVIEWER, and RELEASE-VALIDATOR all PASSed, the
+      latter two independently reproducing/constructing fresh test cases).
+      FILENAME-COLLISION NOTE carried into the run-history entry itself: the
+      original issue (discovered under label ISS-0912) was re-filed at
+      docs/issues/ISS-0913.yaml after a concurrent session's PR #2040
+      overwrote the uncommitted ISS-0912.yaml with a different, unrelated
+      issue -- this closure touches ONLY docs/issues/ISS-0913.yaml.
+      Fetched/pulled origin/main immediately before this append and
+      recounted directly rather than trusting the prior note's arithmetic:
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 24
+      on-disk entries (the prior 23 + this done-event). `git diff
+      --numstat` on this file for this append showed 0 deletions. 978
+      lines / 59475 bytes (working-tree), well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Bumped to 23 by DOC-UPDATER after appending ISS-0887's SCOPE-CHANGE
       done-event (fix/ISS-0887-tenant-settings-contract-mismatch, PR #2028,
       2026-09-30T06:30:00Z -- flattened web/src/api/tenantSettings.ts's

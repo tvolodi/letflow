@@ -1056,4 +1056,84 @@ defmodule Letflow.Routers.DefinitionsWriteTest do
       assert unchanged.graph == human_task_graph_map("Review")
     end
   end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0912 -- render_activate/2 had no clause for
+  # {:error, {:semantic_validation_failed, violations}}, so a real REQ-372
+  # semantic-validation failure reaching POST /:id/activate fell through to
+  # render_activate/2's catch-all and came back as a bare 500 with no
+  # violation payload. Fixed by adding a clause mirroring render_validation/2
+  # (~L370-381) exactly. This test proves the HTTP-level regression: a real
+  # activate call against a real, seeded type mismatch now returns 422 with
+  # the actual violations array, not a 500.
+  #
+  # Pre-fix verification (this project's "confirm it would have failed"
+  # discipline): with the two new render_activate/2 clauses in
+  # lib/letflow/routers/definitions.ex removed (`git stash` back to the
+  # pre-fix tree), this same test fails --
+  #   1) conn.status == 500 (not 422), and
+  #   2) resp["detail"] == "an unexpected error occurred" (Error.internal/0's
+  #      fixed string, from Response.internal_error/1's catch-all path) with
+  #      no "errors" key at all -- confirmed by re-running this exact test
+  #      against the pre-fix router and observing exactly that failure, then
+  #      restoring the fix.
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "ISS-0912 -- POST /:id/activate surfaces semantic validation failures as 422, not 500" do
+    # Structurally/attribute/edge-condition-valid (passes REQ-028/REQ-029's
+    # earlier checks) -- its EXCLUSIVE_GATEWAY edge condition compares a
+    # declared "amount" field against a numeric literal. Mirrors
+    # test/letflow/definitions/semantic_validation_activation_test.exs's own
+    # graph_referencing_amount/0 fixture exactly.
+    defp amount_comparison_graph do
+      %{
+        "nodes" => [
+          %{"id" => "start", "node_type" => "START"},
+          %{"id" => "gw", "node_type" => "EXCLUSIVE_GATEWAY"},
+          %{"id" => "a", "node_type" => "END"},
+          %{"id" => "b", "node_type" => "END"}
+        ],
+        "edges" => [
+          %{"id" => "e1", "source" => "start", "target" => "gw"},
+          %{"id" => "e2", "source" => "gw", "target" => "a", "condition" => "amount > 100"},
+          %{"id" => "e3", "source" => "gw", "target" => "b", "is_default" => true}
+        ]
+      }
+    end
+
+    test "a real semantic-validation type mismatch (REQ-372) returns 422 with the real violations array" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0912-svfail")
+      definition = create_definition!(tenant.schema_name, %{graph: amount_comparison_graph()})
+
+      # "amount" declared :string -- "amount > 100" (a numeric literal
+      # comparison) is now a numeric-vs-string incompatible comparison, a
+      # genuine SemanticValidation.validate/2 violation, not a stub/mock.
+      assert {:ok, 1} =
+               Definitions.register_variable_schemas(
+                 definition.id,
+                 [%{variable_key: "amount", json_schema: %{"type" => "string"}}],
+                 prefix: tenant.schema_name
+               )
+
+      conn =
+        build_conn("POST", "/#{definition.id}/activate", tenant, %{roles: [@writer_role]})
+        |> dispatch()
+
+      assert conn.status == 422
+      resp = Jason.decode!(conn.resp_body)
+
+      refute resp["detail"] == "an unexpected error occurred"
+      assert [_ | _] = resp["errors"]
+
+      assert Enum.any?(resp["errors"], fn err ->
+               err["code"] == "incompatible_comparison_operand_types" and
+                 err["message"] =~ "(numeric)" and err["message"] =~ "(string)"
+             end)
+
+      # The definition must still be DRAFT -- activate/2 rejected it, it
+      # never transitioned.
+      assert {:ok, reread} = Definitions.get_by_id(definition.id, prefix: tenant.schema_name)
+      assert reread.status == :draft
+    end
+  end
 end

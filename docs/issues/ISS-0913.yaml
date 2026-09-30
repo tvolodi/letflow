@@ -1,0 +1,73 @@
+id: ISS-0913
+title: "definitions router's render_activate/2 has no clause for semantic_validation_failed/precondition_failed; falls through to a bare 500 with no violation payload"
+discovered_by: CODE-DESIGN-VALIDATOR
+discovered_in_run: REQ-431 design validation, filed by ORCH
+discovered_at: "2026-09-30T07:26:00Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  Found while validating REQ-431's design (canvas/problem-list presentation of
+  REQ-372's semantic decision-rule violations). `render_activate/2`
+  (lib/letflow/routers/definitions.ex, clause list ~lines 949-978) has clauses for
+  {:ok, ...}, {:error, :not_found}, {:error, :not_draft}, {:error,
+  :graph_structure_invalid}, {:error, {:service_scope_violation, ...}}, then a
+  catch-all `defp render_activate(conn, {:error, _common_error}), do:
+  Response.internal_error(conn)` (line 978). There is NO clause matching
+  {:error, {:semantic_validation_failed, violations}} or {:error,
+  {:semantic_validation_precondition_failed, reason}} -- both real error shapes
+  produced by run_semantic_validation/2 and interpret_activate_result/1
+  (lib/letflow/definitions.ex ~2354-2473) and confirmed to reach the router
+  unhandled. Both fall through to the catch-all, which returns a bare 500 via
+  Response.internal_error/1 -> Error.internal/0 (lib/letflow/api/error.ex
+  ~315-332) with a FIXED detail string and zero violation content -- nothing a
+  client can render as structured violations.
+
+  This blocks REQ-431's AC5 (a release-submission re-check surface showing the
+  fresh, real violation result after activate) as a pure frontend change,
+  since activate's real failure response today carries no violation payload
+  at all.
+
+  Fixed via two new render_activate/2 clauses mirroring the existing
+  render_validation/2 pattern -- see resolution.
+affected_files:
+  - lib/letflow/routers/definitions.ex
+queue_ref: null  # discovered directly by CODE-DESIGN-VALIDATOR mid-task, filed by ORCH; not a queue-originated task
+github_ref: null  # discovered directly in this repo; no GitHub mirror issue was opened
+status: resolved
+resolved_in_run: fix/iss-0912-activate-semantic-validation-500
+resolved_at: "2026-09-30T08:28:14Z"
+blocks: REQ-431
+resolution: >
+  Fixed via two new render_activate/2 clauses in
+  lib/letflow/routers/definitions.ex, mirroring the existing
+  render_validation/2 pattern, added ahead of the prior catch-all: one
+  matching {:error, {:semantic_validation_failed, violations}} and one
+  matching {:error, {:semantic_validation_precondition_failed, reason}} --
+  both now render a proper 422 carrying the real violations payload instead
+  of falling through to the catch-all's bare, contentless 500. This unblocks
+  REQ-431's AC5 (a release-submission re-check surface that needs a real
+  violation payload from activate's failure response, not a fixed 500 detail
+  string). Full gate chain: SECURITY-REVIEWER PASSed (INV-2, INV-8 --
+  confirmed no cross-tenant leakage in the violations payload and no new
+  unauthenticated surface). REVIEWER PASSed, independently reproducing the
+  fix's necessity by reverting it and re-checking (bare 500 returns without
+  the two clauses, 422-with-violations returns with them). RELEASE-VALIDATOR
+  PASSed, independently constructing a fresh, different test case from
+  REVIEWER's and confirming both new clauses return 422 with real,
+  non-empty violations content, not a stubbed/empty payload. Merged via PR
+  #2042 (branch fix/iss-0912-activate-semantic-validation-500; see PR for
+  merge commit SHA). No letflow-queue task to release (queue_ref: null --
+  discovered directly by CODE-DESIGN-VALIDATOR mid-task, not a
+  queue-originated task).
+note: >
+  Originally filed as ISS-0912 -- lost to an uncommitted-file collision when a
+  concurrent session's PR #2040 registered a DIFFERENT issue (QA meridian/vortex
+  seed-script operational step, queue task Q-904) at the same local filename.
+  Re-filed here as ISS-0913 with the same content; the actual fix (PR #2042,
+  branch fix/iss-0912-activate-semantic-validation-500) was already implemented
+  and gated (SECURITY-REVIEWER/REVIEWER/RELEASE-VALIDATOR) under the ISS-0912
+  label before the collision was discovered -- DOC-UPDATER will close this file
+  citing that same PR, not re-open new work. ISS-0912.yaml on disk is a
+  separate, unrelated, still-open issue (the QA meridian/vortex seed
+  operational step, queue task Q-904, GH-2039) and was NOT touched by this
+  closure.

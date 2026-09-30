@@ -1175,3 +1175,57 @@
       fix/ISS-0906-escalation-cancel-audit-timestamp, commit 9ca2966d),
       squash-merged to main (see PR for merge commit SHA). letflow-queue task
       900 released as done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T14:35:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0908
+      (MAJOR, QA tenant admission returned 503 "tenant at capacity" for
+      bpm-default at only 3-5 parallel requests) -- resolved: root cause was
+      config/runtime.exs's prod POOL_SIZE fallback of 10 combined with the
+      never-configured reserved_headroom default of 2 yielding
+      global_cap=8 for the entire QA node, a confirmed recurrence of
+      ISS-0786's root-cause class (which only fixed config/dev.exs and
+      explicitly left the prod path untouched). Fix: bumped the prod
+      POOL_SIZE fallback to 30 (mirroring dev.exs) and added a new
+      RESERVED_HEADROOM env var (default 2, unchanged) wired into the same
+      prod config block (commit c3acfde5, branch
+      fix/ISS-0908-admission-pool-headroom, PR #2054);
+      lib/letflow/admission.ex itself needed no code change. Full gate
+      chain: CODE-DESIGN-VALIDATOR PASS, REVIEWER PASS (fixed a stale
+      design-doc header directly, commit 69ffa637), TEST-RUNNER (only
+      unrelated Postgres connection-pool-contention flakes, 19-20 failures
+      shifting between runs, all too_many_connections, none touching
+      admission code), and RELEASE-VALIDATOR PASS via independent
+      re-derivation: fresh boot values never seen in the test file, a
+      genuine mutation test reverting POOL_SIZE to "10" and confirming 3/5
+      tests fail then restoring cleanly, and its own full-suite run with a
+      different failure count (12) reinforcing non-determinism/contention
+      rather than a real regression. docs/issues/ISS-0908.yaml set to
+      status: resolved (resolved_in_run:
+      fix/ISS-0908-admission-pool-headroom) in this same append -- this is
+      an ISSUE, not a REQ, so no docs/requirements.yaml entry is touched.
+      RESIDUAL OPERATIONAL RISK, NOT CLOSED HERE: QA's real out-of-repo
+      .env may still pin POOL_SIZE at or below 10 -- this fix only changes
+      the fallback used when unset; flagged as an action item for whoever
+      manages the QA host to confirm/update. DELIBERATELY DEFERRED, NOT
+      FIXED HERE: the fair-share-divisor tenant-growth gap (every tenant
+      ever attempted since restart) is tracked separately in
+      lib/letflow/design/iss0437-admission-tenant-eviction.md's OQ-2.
+      Merged via PR #2054 (branch fix/ISS-0908-admission-pool-headroom,
+      squash; see PR for merge commit SHA). letflow-queue task 898 to be
+      released as done in this same run.
+# VOLUME 24 — CLOSED 2026-09-30. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-29 through
+# 2026-09-30 (30 entries, 1219 frozen-prefix lines before this closure footer).
+# It is frozen: every line above this comment is preserved byte-for-byte. Closed
+# by DOC-UPDATER's own ISS-0908 closing SCOPE-CHANGE append, which brought this
+# file to 1219 lines -- over the declared roll_rule ceiling (1200 lines /
+# 120000 bytes). No entry above this footer was moved, edited or deleted.
+#
+# Successor:
+#   docs/status/requirement_status.v25.yaml
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none introduced by this closure.

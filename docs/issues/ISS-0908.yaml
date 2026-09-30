@@ -23,4 +23,33 @@ affected_files:
   - QA runtime configuration (per-tenant admission limit)
 queue_ref: Q-898  # queue allocated issue_ref ISS-0898, which collides with an existing local file; local filename kept as ISS-0908 and GH-2032 retitled to match
 github_ref: GH-2032
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0908-admission-pool-headroom
+resolved_at: "2026-09-30T14:20:00Z"
+resolution: >
+  Root cause: config/runtime.exs's prod POOL_SIZE fallback of 10 combined
+  with the never-configured reserved_headroom default of 2 yielded
+  global_cap=8 for the entire QA node -- a confirmed recurrence of
+  ISS-0786's root-cause class, which only fixed config/dev.exs and
+  explicitly left the prod path untouched. Fix: bumped the prod POOL_SIZE
+  fallback to 30 (mirroring dev.exs) and added a new RESERVED_HEADROOM env
+  var (default 2, unchanged) wired into the same prod config block;
+  lib/letflow/admission.ex itself needed no code change (commit c3acfde5,
+  branch fix/ISS-0908-admission-pool-headroom, PR #2054). Full gate chain:
+  CODE-DESIGN-VALIDATOR PASS, REVIEWER PASS (fixed a stale design-doc
+  header directly), TEST-RUNNER (only unrelated Postgres
+  connection-pool-contention flakes, 19-20 failures shifting between runs,
+  all too_many_connections, none touching admission code), and
+  RELEASE-VALIDATOR PASS via independent re-derivation: fresh boot values
+  never seen in the test file, a genuine mutation test reverting POOL_SIZE
+  to "10" and confirming 3/5 tests fail then restoring cleanly, and its own
+  full-suite run with a different failure count (12) reinforcing
+  non-determinism/contention rather than a real regression.
+  RESIDUAL OPERATIONAL RISK, NOT CLOSED HERE: QA's real out-of-repo .env
+  may still pin POOL_SIZE at or below 10 -- this fix only changes the
+  fallback used when the env var is unset. Flagged as an action item for
+  whoever manages the QA host to confirm/update the real .env value.
+  DELIBERATELY DEFERRED, NOT FIXED HERE: the fair-share-divisor
+  tenant-growth gap (every tenant ever attempted since restart counts
+  toward the divisor) is tracked separately in
+  lib/letflow/design/iss0437-admission-tenant-eviction.md's OQ-2.

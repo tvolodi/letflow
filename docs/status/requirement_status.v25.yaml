@@ -107,3 +107,15 @@ history:
       docs/issues/ISS-0911.yaml set to status: resolved in this same
       commit. This is an ISSUE closure, not a REQ -- docs/requirements.yaml
       untouched. letflow-queue task 903 released as done.
+  - req: REQ-294
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-30T20:46:08Z
+    note: >
+      Dart evaluator for Letflow.Engine.Expr implemented under
+      apps/mobile/lib/expr/, passing REQ-289's full 40-entry conformance
+      corpus (version 1.0.0, no drift since REQ-293). All 12 acceptance
+      criteria independently verified by RELEASE-VALIDATOR. Mobile suite
+      231/231 passed. Backend suite 5082 passed / 0 failures via ORCH's own
+      serial mix test run, after two RELEASE-VALIDATOR attempts were blocked
+      by host memory exhaustion. status: done in docs/requirements.yaml.

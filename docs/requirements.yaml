@@ -17556,7 +17556,7 @@ requirements:
       # REQ-420) confirmed done. Queue task 585 reopened via
       # POST /tasks/585/release {"force":true,"status":"open"} and locked
       # (tvolodi-orch) for WF02-REQ294-20260930. Started.
-    status: in_progress
+    status: done
     stage: S9
     description: >
       Implements step 12 of

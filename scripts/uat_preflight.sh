@@ -8,12 +8,34 @@
 #
 # Usage:
 #   scripts/uat_preflight.sh --base-url URL --environment SLUG --credential-source PATH \
-#       [--scenarios DIR] [--sha SHA] [--idp-url URL] [--out FILE]
+#       [--credential-protocol qa-login|qa-uat-env] [--scenarios DIR] [--sha SHA] \
+#       [--idp-url URL] [--out FILE]
 #
 #   --base-url           instance under test, e.g. https://qa.bizdala.com
 #   --environment        stable slug (qa | local | staging ...), printed in the report
-#   --credential-source  script that lists seeded usernames (no arg) and prints
-#                        "Password: <pw>" for `<username>` (ai-dala-infra/scripts/qa-login.sh)
+#   --credential-source  script implementing one of two protocols (see
+#                        --credential-protocol) for reaching seeded QA credentials.
+#   --credential-protocol
+#                        which protocol --credential-source speaks (default "qa-login"):
+#                          qa-login   -- ai-dala-infra/scripts/qa-login.sh shape: no-arg
+#                                        call lists seeded usernames, one per line, each
+#                                        2-space-indented (`^\s{2}([a-z0-9][\w-]*)\s`);
+#                                        `<script> <username>` prints a line
+#                                        `Password: <pw>` and uat_preflight performs the
+#                                        OIDC password grant itself.
+#                          qa-uat-env -- ai-dala-infra/scripts/qa-uat-env.sh shape: no
+#                                        stable no-arg username listing exists (accounts
+#                                        are realm-qualified, provisioned per-tenant, see
+#                                        ISS-0894/T-0150), so the seeded-username roster is
+#                                        instead taken directly from the scenario corpus's
+#                                        own actor ids (valid because this protocol's
+#                                        accounts are named exactly `actor-<tenant>-<name>`,
+#                                        the scenario id itself); `<script> token
+#                                        <actor_id>` prints a line `Token: <bearer-token>`
+#                                        -- a ready-made access token, not a password --
+#                                        which uat_preflight verifies with a single
+#                                        read-only `GET /api/v1/me/modules` call instead of
+#                                        performing its own OIDC grant. See ISS-0909(d).
 #   --scenarios          corpus dir (default test/fixtures/uat/scenarios); _throwaway skipped
 #   --sha                expected deployed build (default: `git rev-parse origin/main`)
 #   --idp-url            Keycloak base (default: derived, https://auth.<host minus first label
@@ -38,14 +60,22 @@
 #   actor-<tenant>-<name>       -> exact match first: a seeded username equal to the full
 #                                  actor id (e.g. "actor-swiftroute-lena") is tried before
 #                                  falling back to the older heuristic (a seeded username
-#                                  starting "<name>-", or == "<name>"); either way it must be
-#                                  able to log in to Keycloak realm <tenant> or bpm-default.
-#                                  See ISS-0894.
+#                                  starting "<name>-", or == "<name>"). The realm(s) tried
+#                                  are derived from the actor id itself -- <tenant> first,
+#                                  same as the "<tenant>" the actor id names, not from
+#                                  whichever OTHER scenario happened to reference this
+#                                  actor first -- falling back to the scenario's own
+#                                  declared tenant (if different) and finally bpm-default.
+#                                  A login failure is cached per (actor_id, realm), never
+#                                  per bare actor name, so a BAD_CRED in one realm can
+#                                  never poison a check of the same actor name in a
+#                                  DIFFERENT realm. See ISS-0894, ISS-0909(a).
 #   anything else               -> UNKNOWN
 #
 # Beyond token validity, two further per-scenario checks (ISS-0894) use the token(s)
-# obtained above: `app_roles` (GET /tasks/inbox, or /me/modules for candidate-labeled
-# actors -- 403 there is a role-binding gap, see ISS-0886) and `definitions` (GET
+# obtained above: `app_roles` (GET /tasks/inbox; /me/modules for candidate-labeled
+# actors; /admin/services for actor-platform-admin, see ISS-0909c -- 403 there is a
+# role-binding gap, see ISS-0886) and `definitions` (GET
 # /api/v1/definitions/active/<process_id> for proc-* process ids -- 404 there is a
 # definition-resolution gap, see ISS-0893/ISS-0897). When a
 # test/fixtures/uat/process-definition-aliases/<process_id>.yaml sidecar exists, its
@@ -81,6 +111,7 @@ class P(argparse.ArgumentParser):
 ap = P(add_help=False)
 ap.add_argument("--base-url"); ap.add_argument("--environment"); ap.add_argument("--credential-source")
 ap.add_argument("--scenarios"); ap.add_argument("--sha"); ap.add_argument("--idp-url"); ap.add_argument("--out")
+ap.add_argument("--credential-protocol", choices=["qa-login", "qa-uat-env"], default="qa-login")
 a = ap.parse_args(sys.argv[1:])
 for req in ("base_url", "environment", "credential_source"):
     if not getattr(a, req): usage_err("missing --" + req.replace("_", "-"))
@@ -226,58 +257,121 @@ for f in sorted(glob.glob(os.path.join(pd_alias_dir, "*.yaml"))):
 
 # ---------------------------------------------------------------- credentials (in-memory only)
 cred_src = winpath(a.credential_source)
+cred_protocol = a.credential_protocol
 cred_listing = None   # list of usernames, None = source unusable
 cred_err = None
 def run_cred(args, timeout):
     return subprocess.run([BASH, cred_src] + args, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
 
-try:
-    if not os.path.isfile(cred_src): raise RuntimeError("credential source not found: " + cred_src)
-    r = run_cred([], 30)
-    names = []
-    for l in r.stdout.splitlines():
-        m = re.match(r"^\s{2}([a-z0-9][\w-]*)\s", l)
-        if m: names.append(m.group(1))
-    if not names: raise RuntimeError("credential source listed no usernames")
-    cred_listing = names
-except Exception as e:
-    cred_err = str(e)
-
-def fetch_password(user):
+if cred_protocol == "qa-login":
     try:
-        r = run_cred([user], 60)
+        if not os.path.isfile(cred_src): raise RuntimeError("credential source not found: " + cred_src)
+        r = run_cred([], 30)
+        names = []
         for l in r.stdout.splitlines():
-            if l.startswith("Password:"): return l.split(":", 1)[1].strip()
+            m = re.match(r"^\s{2}([a-z0-9][\w-]*)\s", l)
+            if m: names.append(m.group(1))
+        if not names: raise RuntimeError("credential source listed no usernames")
+        cred_listing = names
+    except Exception as e:
+        cred_err = str(e)
+else:  # qa-uat-env -- see header comment; no stable no-arg listing exists for this
+    # protocol, so the seeded-username roster is taken directly from the scenario
+    # corpus's own actor ids (valid: this protocol's accounts are named exactly
+    # actor-<tenant>-<name>, the scenario actor id itself -- ISS-0894/T-0150).
+    try:
+        if not os.path.isfile(cred_src): raise RuntimeError("credential source not found: " + cred_src)
+        cred_listing = sorted({aid for sc in scenarios for aid in sc["actor_ids"]
+                                if not aid.startswith("actor-system-") and aid != "actor-any"})
+        if not cred_listing: raise RuntimeError("no login actors declared by the scenario corpus")
+    except Exception as e:
+        cred_err = str(e)
+
+def fetch_credential(user):
+    """Returns (kind, value) -- kind is "password" (qa-login protocol: a plaintext
+    password uat_preflight itself exchanges via an OIDC grant below) or "token"
+    (qa-uat-env protocol: an already-issued bearer access token, verified directly
+    instead of re-derived) -- or (None, None) if the source has nothing for `user`."""
+    try:
+        if cred_protocol == "qa-login":
+            r = run_cred([user], 60)
+            for l in r.stdout.splitlines():
+                if l.startswith("Password:"): return ("password", l.split(":", 1)[1].strip())
+        else:
+            r = run_cred(["token", user], 60)
+            for l in r.stdout.splitlines():
+                if l.startswith("Token:"): return ("token", l.split(":", 1)[1].strip())
     except Exception:
         pass
-    return None
+    return (None, None)
 
-_pw_cache = {}
-token_status = {}   # user -> (state, realm)   state in OK / BAD_CRED / NO_PASSWORD / NO_REALM
-tokens = {}         # in-memory only
-def try_login(user, realms):
-    if user in token_status: return token_status[user]
-    pw = fetch_password(user)
-    if not pw:
-        token_status[user] = ("NO_PASSWORD", None); return token_status[user]
-    result = ("BAD_CRED", None)
-    for realm in realms:
-        body = urllib.parse.urlencode({"client_id": CLIENT_ID, "username": user, "password": pw,
+realm_status = {}   # (actor_id, realm) -> "OK" | "BAD_CRED"  -- ISS-0909(a): never keyed
+                     # on the bare actor/username alone, so a failure in one realm can
+                     # never poison a later check of the same actor name in another realm.
+tokens = {}          # (actor_id, realm) -> access_token, in-memory only
+def try_login(aid, user, realms):
+    """Attempt realms in order for `aid`/`user`, returning (state, realm) where state is
+    OK / BAD_CRED / NO_PASSWORD. Caches per (aid, realm) pair (ISS-0909a) -- never per
+    bare `user` -- so a scenario that only ever tries realm X caching a failure there
+    does not stop a LATER scenario from correctly trying (and succeeding in) realm Y for
+    the same actor."""
+    dedup = []
+    for r in realms:
+        if r not in dedup: dedup.append(r)
+    kind, cred = fetch_credential(user)
+    if kind is None:
+        return ("NO_PASSWORD", None)
+    if kind == "token":
+        # qa-uat-env protocol: the credential source already performed the grant --
+        # verify the token with one read-only call instead of re-deriving it. The
+        # realm label is the actor id's own derived realm (dedup[0], see realms_for);
+        # we do not decode the JWT to avoid a new dependency.
+        realm = dedup[0] if dedup else "bpm-default"
+        cached = realm_status.get((aid, realm))
+        if cached == "OK": return ("OK", realm)
+        if cached == "BAD_CRED": return ("BAD_CRED", None)
+        st, _ = http("GET", base + "/api/v1/me/modules", auth(cred))
+        if st == 200:
+            tokens[(aid, realm)] = cred
+            realm_status[(aid, realm)] = "OK"
+            return ("OK", realm)
+        realm_status[(aid, realm)] = "BAD_CRED"
+        return ("BAD_CRED", None)
+    # kind == "password": qa-login protocol, own OIDC grant, one realm at a time.
+    for realm in dedup:
+        cached = realm_status.get((aid, realm))
+        if cached == "OK": return ("OK", realm)
+        if cached == "BAD_CRED": continue
+        body = urllib.parse.urlencode({"client_id": CLIENT_ID, "username": user, "password": cred,
                                        "grant_type": "password"}).encode()
         st, resp = http("POST", "%s/realms/%s/protocol/openid-connect/token" % (idp, realm),
                         {"Content-Type": "application/x-www-form-urlencoded"}, body)
         j = jload(resp) if st == 200 else None
         if j and j.get("access_token"):
-            tokens[user] = (realm, j["access_token"]); result = ("OK", realm); break
-    pw = None
-    token_status[user] = result
-    return result
+            tokens[(aid, realm)] = j["access_token"]
+            realm_status[(aid, realm)] = "OK"
+            cred = None
+            return ("OK", realm)
+        realm_status[(aid, realm)] = "BAD_CRED"
+    cred = None
+    return ("BAD_CRED", None)
 
-def realms_for(user, tenants):
-    r = ["bpm-default"]
-    for t in tenants:
-        if t and t != "platform" and t not in r: r.append(t)
-    return r
+def realms_for(aid, tenant):
+    """Realm attempt order for `aid`: the actor's OWN tenant realm, derived from the
+    actor id itself (actor-<tenant>-<name> -> <tenant>) FIRST -- never a realm carried
+    over from whatever other scenario/tenant happened to reference this actor id
+    earlier (ISS-0909a) -- then the current scenario's declared tenant (only if it
+    differs), then bpm-default as the final fallback. "platform"/"system" are never
+    realms."""
+    order = []
+    m = re.match(r"^actor-([a-z0-9]+)-", aid)
+    if m and m.group(1) not in ("platform", "system"):
+        order.append(m.group(1))
+    if tenant and tenant != "platform" and tenant not in order:
+        order.append(tenant)
+    if "bpm-default" not in order:
+        order.append("bpm-default")
+    return order
 
 # ---------------------------------------------------------------- global checks
 g = {}   # name -> (status, reason, owner)
@@ -295,8 +389,8 @@ for slug in sorted(set(tenant_slugs_needed) | {"bpm-default"}):
 admin_user = next((u for u in (cred_listing or []) if u in ("admin-user",)), None)
 admin_tok = None
 if admin_user:
-    s_, realm_ = try_login(admin_user, ["bpm-default"])
-    if s_ == "OK": admin_tok = tokens[admin_user][1]
+    s_, realm_ = try_login("actor-platform-admin", admin_user, ["bpm-default"])
+    if s_ == "OK": admin_tok = tokens[("actor-platform-admin", realm_)]
 
 def auth(tok): return {"Authorization": "Bearer " + tok, "Accept": "application/json"}
 
@@ -342,6 +436,40 @@ CHECKS = ["spec", "local_deps", "feature", "tenant", "realm", "actors", "app_rol
 rows = []
 def spec_path(s): return os.path.join(REPO, s["pipeline_test"]) if s["pipeline_test"] else None
 
+# ISS-0909(b): local_deps must catch a spec that ACTUALLY invokes local-only tooling
+# in executable code, not one that merely mentions it in prose (a header comment
+# describing history/rationale, e.g. "verified manually against docker compose ...").
+# Naive w.r.t. "//" inside a string literal (e.g. 'http://...') -- acceptable here
+# since it can only under-match (miss a real usage hidden after "//" in a string
+# literal), never over-match a comment as code.
+_JS_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
+_JS_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
+def _strip_js_comments(txt):
+    return _JS_LINE_COMMENT_RE.sub("", _JS_BLOCK_COMMENT_RE.sub("", txt))
+
+_LOCAL_DEPS_LITERAL_RE = re.compile(r"docker[ -]compose|docker exec|\bpsql\b")
+# `runSqlAgainstDevPostgres` (web/tests/e2e/db-exec.ts) is the one exported helper
+# that actually shells into `docker compose exec ... psql` at runtime -- a spec that
+# CALLS it in its own executable code is genuinely invoking local-only tooling even
+# though the literal words "docker"/"psql" never appear in the spec file itself (they
+# live inside db-exec.ts, which this check does not otherwise scan).
+_LOCAL_DEPS_HELPER_RE = re.compile(r"\brunSqlAgainstDevPostgres\s*\(")
+
+def local_deps_check(sp):
+    if not (sp and os.path.isfile(sp)):
+        return ("OK", "n/a (no spec file)", "")
+    code_txt = _strip_js_comments(open(sp, encoding="utf-8", errors="replace").read())
+    m = _LOCAL_DEPS_LITERAL_RE.search(code_txt)
+    if m:
+        return ("GAP", "spec invokes local-only tooling in executable code (`%s`)" % m.group(0),
+                 "letflow (rewrite spec to API/seed; ENV_NOT_SUPPORTED)")
+    if _LOCAL_DEPS_HELPER_RE.search(code_txt):
+        return ("GAP",
+                 "spec calls db-exec.ts's runSqlAgainstDevPostgres(...), which shells into "
+                 "`docker compose exec ... psql` at runtime (see web/tests/e2e/db-exec.ts)",
+                 "letflow (rewrite spec to API/seed; ENV_NOT_SUPPORTED)")
+    return ("OK", "no local-only tooling invoked in executable code (comments excluded)", "")
+
 for s in scenarios:
     c = {}
     sp = spec_path(s)
@@ -359,13 +487,7 @@ for s in scenarios:
         c["feature"] = ("UNKNOWN", "NOTE (ISS-...) calls the spec a forward-reference but the file now exists; NOTE may be stale", "letflow (BA/UAT-RUNNER: refresh NOTE)")
     else:
         c["feature"] = ("OK", "no forward-reference NOTE", "")
-    if sp and os.path.isfile(sp):
-        txt = open(sp, encoding="utf-8", errors="replace").read()
-        hit = re.search(r"docker[ -]compose|docker exec|\bpsql\b", txt)
-        c["local_deps"] = ("GAP", "spec uses local-only tooling (`%s`)" % hit.group(0), "letflow (rewrite spec to API/seed; ENV_NOT_SUPPORTED)") if hit \
-            else ("OK", "no local-only tooling found", "")
-    else:
-        c["local_deps"] = ("OK", "n/a (no spec file)", "")
+    c["local_deps"] = local_deps_check(sp)
     t = s["tenant"]
     if not t or t == "platform":
         c["tenant"] = ("OK", "platform scope", "")
@@ -401,9 +523,9 @@ for s in scenarios:
                     nm = m.group(2)
                     users = [u for u in cred_listing if u == nm or u.startswith(nm + "-")]
             if not users: missing.append(aid); continue
-            state, _r = try_login(users[0], realms_for(users[0], [t]))
+            state, realm_used = try_login(aid, users[0], realms_for(aid, t))
             if state != "OK": bad.append("%s(%s)" % (aid, state))
-            else: scenario_ok_tokens.append((aid, s["actor_labels"].get(aid, []), tokens[users[0]][1]))
+            else: scenario_ok_tokens.append((aid, s["actor_labels"].get(aid, []), tokens[(aid, realm_used)]))
         if missing or bad:
             reason = []
             if missing: reason.append("no seeded user: " + ", ".join(missing))
@@ -421,7 +543,19 @@ for s in scenarios:
         ok, gap, unk = [], [], []
         for aid, labels, tok in scenario_ok_tokens:
             is_candidate = any("candidate" in (lbl or "").lower() for lbl in labels)
-            path = "/api/v1/me/modules" if is_candidate else "/api/v1/tasks/inbox"
+            if aid == "actor-platform-admin":
+                # /tasks/inbox is uninformative for a platform admin -- an admin may
+                # hold no TASK-oriented role at all regardless of their actual role
+                # grant, so a 403/200 there says nothing real about role binding.
+                # /admin/services is PLATFORM_ADMIN-only (:AdminServicesRead ->
+                # :UsersGroupsRolesManage, lib/letflow/routers/admin_services.ex's own
+                # moduledoc), so 200 there is a real, specific signal for this actor.
+                # ISS-0909(c).
+                path = "/api/v1/admin/services"
+            elif is_candidate:
+                path = "/api/v1/me/modules"
+            else:
+                path = "/api/v1/tasks/inbox"
             st_, _ = http("GET", base + path, auth(tok))
             if st_ == 200: ok.append("%s(%s)" % (aid, path))
             elif st_ == 403: gap.append("%s(%s@%s)" % (aid, st_, path))
@@ -499,7 +633,8 @@ P_("actors (login)        : %s" % ", ".join(sorted({x for s in scenarios for x i
 P_("process definitions   : %s" % ", ".join(sorted({s["process_id"] for s in scenarios if s["process_id"]})))
 P_("pipeline specs        : %d declared" % sum(1 for s in scenarios if s["pipeline_test"]))
 P_("seeded usernames      : %s" % (", ".join(cred_listing) if cred_listing else "UNAVAILABLE (%s)" % cred_err))
-P_("credential validity   : " + (", ".join("%s=%s" % (u, v[0]) for u, v in sorted(token_status.items())) or "none checked"))
+P_("credential validity   : " + (", ".join("%s@%s=%s" % (aid, realm, state)
+                                            for (aid, realm), state in sorted(realm_status.items())) or "none checked"))
 P_("")
 P_("== GLOBAL CHECKS ==")
 for k, (st_, why, own) in g.items():

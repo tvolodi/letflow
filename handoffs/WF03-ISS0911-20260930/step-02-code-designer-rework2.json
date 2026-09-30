@@ -1,0 +1,53 @@
+{
+  "handoff_id": "4eec5342-13bd-4f0f-9156-cdaf49895fd3",
+  "run_id": "WF03-ISS0911-20260930",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0911-20260930/step-02-code-designer-rework2.json",
+  "created_at": "2026-09-30T07:30:52Z",
+  "started_at": "2026-09-30T07:30:52Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["435ac23f-72f9-479f-a49e-701f9f884ce6", "b37909a8-5205-4404-8a84-e764c513a4f0"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator-recheck1.json",
+      "lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md"
+    ],
+    "owned_modules": ["web/src/pages/instances/InstanceBoardPage.tsx", "web/src/hooks/useDefinitions.ts"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 2 on the ISS-0911 design. CODE-DESIGN-VALIDATOR's fresh re-check (handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator-recheck1.json's result.summary/issues -- read in full) found rework 1's merged effect genuinely closes the original two-effect race, but its lookupWroteDefinitionId guard is a PERSISTENT, non-expiring token (only ever overwritten, never cleared/consumed) -- so a definitionId value the effect wrote once can be wrongly mistaken for a fresh self-write arbitrarily later if an unrelated EXTERNAL definitionId change happens to revisit that same value (e.g. found('Alice') writes ref=aliceId -> dialog closes -> external change to bobId updates correctly (ref untouched, still aliceId) -> a LATER external change back to aliceId wrongly matches the stale ref, so the guard skips updating and startDefinitionVersion/startDefinitionId stay stuck at Bob's stale data). Also: the design never specifies resetting the guard on dialog open/close, letting it leak across dialog sessions.\n\nFix required: make lookupWroteDefinitionId a ONE-SHOT/EXPIRING guard -- either (a) consume and clear it the FIRST time step 3 checks it (so it can only ever suppress exactly one re-trigger, the one it itself caused, never a later coincidental id match), or (b) replace the bare id-equality check with a generation/render-token comparison (a monotonically incrementing counter bumped every time the effect's found-branch runs, compared against a captured value, never matched by an unrelated later event). State explicitly which you chose and why the other was rejected. Also specify that the guard/token is reset whenever the dialog closes and re-opens, so no state survives across dialog sessions. Update lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md.\n\nThis is rework iteration 2 of 3. If this fails a third time for a RELATED root cause (guard/token design), the next dispatch must change approach entirely (e.g. abandon the ref-guard pattern altogether in favor of routing the lookup-driven id through the SAME state-setting path as the external-definitionId path, so there is structurally only one writer and no guard is needed at all) rather than patching the guard shape again.",
+    "acceptance_criteria": [
+      "the fix calls definitionsApi.getActive(name) (or an equivalent exact-match backend lookup) keyed on the dialog's own typed value, not the page-level filtered list",
+      "a race-guard against out-of-order async responses (rapid typing) is explicitly designed, not left implicit",
+      "the version field's loading/not-found/found states are all specified",
+      "a single write path for startDefinitionVersion/startDefinitionId is designed, with no possibility of the new effect's own setSearchParams call re-triggering a second, independent effect that transiently desyncs the two values",
+      "NEW (this rework): the guard/token distinguishing a self-caused definitionId change from an external one is one-shot/expiring (or generation-token based), cannot be revived by an unrelated later event reaching the same id value, and is reset on dialog open/close"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

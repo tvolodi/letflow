@@ -1,6 +1,8 @@
 # Design: prod/QA admission headroom — `POOL_SIZE` default + `RESERVED_HEADROOM` env wiring (ISS-0908)
 
-**Status:** design, pending CODE-DESIGN-VALIDATOR.
+**Status:** design, CODE-DESIGN-VALIDATOR PASS. Implemented in
+`config/runtime.exs`/`deploy/.env.example`/`test/letflow/admission_runtime_config_test.exs`,
+REVIEWER PASS (idiom/scope/decision-record gate) recorded 2026-09-30.
 **Issue:** `docs/issues/ISS-0908.yaml` (queue ref Q-898/ISS-0898 collision, GH-2032,
 severity MAJOR, owner ELIXIR-DEV, status open).
 **Related:** `docs/issues/ISS-0786.yaml` (same root-cause class, `config/dev.exs`-only

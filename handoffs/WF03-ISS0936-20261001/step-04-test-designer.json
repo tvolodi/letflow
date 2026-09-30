@@ -9,7 +9,7 @@
   "created_at": "2026-09-30T21:26:07Z",
   "started_at": "2026-09-30T21:26:07Z",
   "completed_at": "2026-09-30T21:48:45Z",
-  "status": "COMPLETED",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -32,7 +32,7 @@
     "branch_name": "feature/WF03-ISS0936-20261001"
   },
   "task": {
-    "description": "WF-03 Step 4: write the regression test per the validated design section 6 (lib/letflow/design/iss0936-uat-preflight-bare-jwt.md): test/scripts/uat_preflight_bare_jwt_test.exs (ExUnit, T1-T7 with the pinned flags/substrings, run_preflight/2 helper, hermetic --idp-url) plus a test spec test/specs/ISS-0936.md. FAIL-FIRST proof is mandatory: run the tests against the PRE-FIX script (use a throwaway `git worktree` from origin/main, or copy `git show origin/main:scripts/uat_preflight.sh` into a temp path and point the test at it via an env var/param only if the design allows -- preferred: throwaway worktree of origin/main plus your new test file) and record which tests fail; then run on the fix branch and record pass. Additionally mutate the fix (e.g. drop the eyJ prefix requirement so hostnames pass; drop bare-JWT acceptance; print token) in a THROWAWAY worktree only and record which tests fail per mutant; remove worktrees after. Make sure the main fix worktree lib/ scripts/ stay unmutated (quote `git status --porcelain scripts/ lib/` at end: only expected diffs). Elixir toolchain: see docs/anti-patterns.md Docker fallback if mix is not installed locally; if you truly cannot run mix test, say so explicitly and run the equivalent otherwise. Use Git Bash via UAT_PF_BASH on this Windows host. Do not commit or push.",
+    "description": "WF-03 Step 4: write the regression test per the validated design section 6 (lib/letflow/design/iss0936-uat-preflight-bare-jwt.md): test/scripts/uat_preflight_bare_jwt_test.exs (ExUnit, T1-T7 with the pinned flags/substrings, run_preflight/2 helper, hermetic --idp-url) plus a test spec test/specs/ISS-0936.md. FAIL-FIRST proof is mandatory: run the tests against the PRE-FIX script (use a throwaway `git worktree` from origin/main, or copy `git show origin/main:scripts/uat_preflight.sh` into a temp path and point the test at it via an env var/param only if the design allows -- preferred: throwaway worktree of origin/main plus your new test file) and record which tests fail; then run on the fix branch and record pass. Additionally mutate the fix (e.g. drop the eyJ prefix requirement so hostnames pass; drop bare-JWT acceptance; print token) in a THROWAWAY worktree only and record which tests fail per mutant; remove worktrees after. Make sure the main fix worktree lib/ scripts/ stay unmutated (quote `git status --porcelain scripts/ lib/` at end: only expected diffs). Elixir toolchain: see docs/anti-patterns.md Docker fallback if mix is not installed locally; if you truly cannot run mix test, say so explicitly and run the equivalent otherwise. Use Git Bash via UAT_PF_BASH on this Windows host. Do not commit or push. REWORK ITERATION 1: step-04-run TEST-RUNNER FAIL -- mix format --check-formatted fails on test/scripts/uat_preflight_bare_jwt_test.exs (line ~93 `defp run_dead(tmp, lines, crlf), do: run_preflight(...)` must be split with `do:` on its own line). Run `mix format` on that file only (mix needs a toolchain; you ran mix before) and verify with --check-formatted; re-run the 8 tests. No semantic change. Flip status to COMPLETED/FAILED as normal on finishing.",
     "acceptance_criteria": [
       "Test file + spec written",
       "Fail-first against pre-fix quoted",
@@ -59,6 +59,6 @@
     "mix_letflow_check_test": "exit 0; 'mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.' (16 partitions, throwaway postgres container on 5499, removed). Aggregate total line and per-partition confirmation that the new file ran were not captured.",
     "cleanup": "all letflow-4-tmp-* worktrees removed; copied _build/deps removed; scripts/ and lib/ unmodified (git status clean for them)"
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

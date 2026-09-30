@@ -57,6 +57,11 @@ web/coverage/
 # carried over, not tracked here.
 web/tests/screenshots/
 web/tests/reports/
+# Per-run local-pipeline scratch state (bearer tokens, ephemeral process/task
+# ids captured by a local e2e run against docker-compose Postgres) -- not
+# fixture content, regenerated every run. Two files were committed by mistake
+# via a broad `git add` in PR #1743 (ISS-0785); untracked here (ISS-0890).
+web/tests/e2e/.pipeline-state/
 # The frontend env template is tracked on purpose (the blanket `.env.*` rule
 # above would otherwise swallow it).
 !web/.env.example

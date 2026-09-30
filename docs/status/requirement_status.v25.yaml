@@ -67,3 +67,29 @@
       (still open) -- its split ISS-0900 remains partially resolved,
       sub-splits ISS-0902/ISS-0903 genuinely open/unbuilt. letflow-queue
       task 906 released as done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T19:12:40Z"
+    note: >
+      ISS-0911 (ISS-0891 recurrence: Start Instance dialog version field
+      empty on late-resolving typeahead data) resolved. PR #2056, branch
+      fix/ISS-0911-start-instance-version-race, commit fec714e2. Root cause
+      confirmed as a genuine remaining frontend race -- NOT a QA-deploy-lag
+      or scenario-timing artifact; ISS-0891's original fix confirmed intact
+      and unregressed. Fix converted startDefinitionVersion/
+      startDefinitionId to a useMemo'd derivation that re-runs whenever the
+      typeahead query's data changes (same precedence order: exact match,
+      then page-level fallback, then undefined), removed the now-dead
+      one-shot syncing effect, added a proper loading indicator. Full gate
+      chain: CODE-DESIGN-VALIDATOR (2-attempt cycle -- 1st FAILed on a
+      format-only issue, fenced executable code instead of prose; reworked
+      and re-PASSed), FRONTEND-DEV implementation, REVIEWER PASS (traced a
+      subtle eslint-disable justification and confirmed it safe),
+      TEST-RUNNER PASS (full suite, only known connection-pool flakes), and
+      RELEASE-VALIDATOR PASS via independent re-derivation, a genuine
+      reversion mutation test proving the regression guard is non-vacuous,
+      plus an extra adversarial retype-during-in-flight-query scenario.
+      docs/issues/ISS-0911.yaml set to status: resolved in this same
+      commit. This is an ISSUE closure, not a REQ -- docs/requirements.yaml
+      untouched. letflow-queue task 903 released as done.

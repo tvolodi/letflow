@@ -87,6 +87,7 @@ defmodule Letflow.Identity.RoleBackfill do
 
   alias Letflow.Identity.RoleRegistry
   alias Letflow.Identity.TenantRole
+  alias Letflow.Identity.User
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -96,26 +97,49 @@ defmodule Letflow.Identity.RoleBackfill do
   seeding the six platform-role bindings for each via
   `Letflow.Identity.RoleRegistry.seed_default_platform_role_groups/1`.
 
-  Returns `{:ok, %{seeded: [tenant_id], unchanged: [tenant_id]}}` on success —
-  both lists in the same order `list_registrations/0` returned them (design
-  §2.1 step 3) — or the halted
-  `{:error, {:backfill_failed, tenant_id, reason}}` from the first tenant
-  whose `seed_default_platform_role_groups/1` call failed.
+  For every tenant this call genuinely seeds (`:seeded`, per `classify/3`'s
+  existing "held fewer than all six platform roles before this call" test),
+  ISS-0910 additionally bulk-resets `role_claims_synced_at` to `nil` for every
+  user row in that tenant's own schema
+  (`reset_role_claims_sync_markers/1`, in a transaction separate from
+  `seed_default_platform_role_groups/1`'s own — see
+  `lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md` §2), so
+  that tenant's existing users re-run `Letflow.Identity.sync_role_claims_from_token/3`
+  on their next login/token verification instead of staying stuck with
+  whatever (possibly stale, pre-backfill) claims their marker last recorded.
+  `:unchanged` tenants are never touched by this reset (design §0/§7 INV-BF5).
+
+  Returns `{:ok, %{seeded: [tenant_id], unchanged: [tenant_id], role_claims_markers_reset: count}}`
+  on success — `seeded`/`unchanged` in the same order `list_registrations/0`
+  returned them (design §2.1 step 3), `role_claims_markers_reset` the sum
+  across every `:seeded` tenant of that tenant's own reset row count (design
+  §5) — or the halted `{:error, {:backfill_failed, tenant_id, reason}}` from
+  the first tenant whose `seed_default_platform_role_groups/1` call, or
+  whose marker reset, failed.
   """
   @spec run() ::
-          {:ok, %{seeded: [Ecto.UUID.t()], unchanged: [Ecto.UUID.t()]}}
+          {:ok,
+           %{
+             seeded: [Ecto.UUID.t()],
+             unchanged: [Ecto.UUID.t()],
+             role_claims_markers_reset: non_neg_integer()
+           }}
           | {:error, {:backfill_failed, tenant_id :: Ecto.UUID.t(), reason :: term()}}
   def run do
     TenantProvisioning.list_registrations()
-    |> Enum.reduce_while({:ok, %{seeded: [], unchanged: []}}, fn registration, {:ok, acc} ->
-      process_registration(registration, acc)
-    end)
+    |> Enum.reduce_while(
+      {:ok, %{seeded: [], unchanged: [], role_claims_markers_reset: 0}},
+      fn registration, {:ok, acc} ->
+        process_registration(registration, acc)
+      end
+    )
     |> finalize()
   end
 
   @spec process_registration(Registration.t(), %{
           seeded: [Ecto.UUID.t()],
-          unchanged: [Ecto.UUID.t()]
+          unchanged: [Ecto.UUID.t()],
+          role_claims_markers_reset: non_neg_integer()
         }) ::
           {:cont, {:ok, map()}} | {:halt, {:error, {:backfill_failed, Ecto.UUID.t(), term()}}}
   defp process_registration(%Registration{tenant_id: tenant_id, schema_name: schema_name}, acc) do
@@ -123,7 +147,7 @@ defmodule Letflow.Identity.RoleBackfill do
 
     case RoleRegistry.seed_default_platform_role_groups(prefix: schema_name) do
       {:ok, _tenant_roles} ->
-        {:cont, {:ok, classify(acc, tenant_id, held_platform_role_names_before)}}
+        {:cont, {:ok, classify(acc, tenant_id, schema_name, held_platform_role_names_before)}}
 
       {:error, reason} ->
         {:halt, {:error, {:backfill_failed, tenant_id, reason}}}
@@ -138,13 +162,24 @@ defmodule Letflow.Identity.RoleBackfill do
       {:halt, {:error, {:backfill_failed, tenant_id, {:unexpected_exception, exception}}}}
   end
 
-  @spec classify(map(), Ecto.UUID.t(), [String.t()]) :: map()
-  defp classify(acc, tenant_id, held_platform_role_names_before)
+  # Only a genuinely `:seeded` tenant (held fewer than all six platform
+  # roles before this call) gets its users' role_claims_synced_at markers
+  # reset -- design §2 shape (a): the gate stays visible here, at the same
+  # call site classify/3 already uses, rather than hidden inside
+  # reset_role_claims_sync_markers/1 itself.
+  @spec classify(map(), Ecto.UUID.t(), String.t(), [String.t()]) :: map()
+  defp classify(acc, tenant_id, schema_name, held_platform_role_names_before)
        when length(held_platform_role_names_before) < 6 do
-    %{acc | seeded: [tenant_id | acc.seeded]}
+    reset_count = reset_role_claims_sync_markers(schema_name)
+
+    %{
+      acc
+      | seeded: [tenant_id | acc.seeded],
+        role_claims_markers_reset: acc.role_claims_markers_reset + reset_count
+    }
   end
 
-  defp classify(acc, tenant_id, _held_platform_role_names_before) do
+  defp classify(acc, tenant_id, _schema_name, _held_platform_role_names_before) do
     %{acc | unchanged: [tenant_id | acc.unchanged]}
   end
 
@@ -154,10 +189,32 @@ defmodule Letflow.Identity.RoleBackfill do
     |> Repo.all(prefix: schema_name)
   end
 
+  # ISS-0910: bulk-clears role_claims_synced_at for every user in this
+  # tenant's own schema, in its own transaction separate from
+  # seed_default_platform_role_groups/1's (design §2). "Every user with a
+  # membership in tenant X" is exactly "every row of tenant X's own `users`
+  # table" -- users carries no tenant_id column (Decision 0006 D1/D2); the
+  # tenant's own Postgres schema is the entire scoping mechanism, so no
+  # `where` clause is needed (design §0/§1). Naturally idempotent at the SQL
+  # level (design §3): re-nulling an already-nil column is a no-op write.
+  @spec reset_role_claims_sync_markers(schema_name :: String.t()) :: non_neg_integer()
+  defp reset_role_claims_sync_markers(schema_name) do
+    {reset_count, nil} =
+      Repo.update_all(User, [set: [role_claims_synced_at: nil]], prefix: schema_name)
+
+    reset_count
+  end
+
   @spec finalize({:ok, map()} | {:error, term()}) ::
-          {:ok, %{seeded: [Ecto.UUID.t()], unchanged: [Ecto.UUID.t()]}} | {:error, term()}
-  defp finalize({:ok, %{seeded: seeded, unchanged: unchanged}}) do
-    {:ok, %{seeded: Enum.reverse(seeded), unchanged: Enum.reverse(unchanged)}}
+          {:ok,
+           %{
+             seeded: [Ecto.UUID.t()],
+             unchanged: [Ecto.UUID.t()],
+             role_claims_markers_reset: non_neg_integer()
+           }}
+          | {:error, term()}
+  defp finalize({:ok, %{seeded: seeded, unchanged: unchanged} = acc}) do
+    {:ok, %{acc | seeded: Enum.reverse(seeded), unchanged: Enum.reverse(unchanged)}}
   end
 
   defp finalize({:error, _reason} = error), do: error

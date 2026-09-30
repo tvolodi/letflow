@@ -40,10 +40,11 @@ defmodule Mix.Tasks.Letflow.BackfillPlatformRoles do
     Mix.Task.run("app.start")
 
     case RoleBackfill.run() do
-      {:ok, %{seeded: seeded, unchanged: unchanged}} ->
+      {:ok, %{seeded: seeded, unchanged: unchanged, role_claims_markers_reset: reset_count}} ->
         Mix.shell().info(
           "ISS-0886 platform-role backfill complete: #{length(seeded)} tenant(s) seeded, " <>
-            "#{length(unchanged)} tenant(s) already fully seeded (unchanged)"
+            "#{length(unchanged)} tenant(s) already fully seeded (unchanged), " <>
+            "#{reset_count} user role_claims_synced_at marker(s) reset (ISS-0910)"
         )
 
         if seeded != [] do

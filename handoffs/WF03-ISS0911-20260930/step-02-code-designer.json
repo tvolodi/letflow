@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0911-20260930/step-02-code-designer.json",
   "created_at": "2026-09-30T07:04:36Z",
   "started_at": "2026-09-30T07:04:36Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T07:18:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,18 +36,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Wrote lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md. Design replaces onStartDefinitionNameChange's scan of definitionTypeahead.items (page-filter-scoped, root cause per Step 01) with a new useActiveDefinitionByName(name) hook (web/src/hooks/useDefinitions.ts) that calls definitionsApi.getActive(trimmedName) keyed on definitionKeys.active(trimmedName) -- the already-existing but previously-only-invalidated tenant-scoped key factory. The dialog debounces its own startDefinitionName (existing useDebounce hook, 300ms, matching DefinitionListPage.tsx's convention) before feeding it to the new hook. Race-guard (AC2): argued explicitly as structural, not an AbortController/generation-counter -- TanStack Query gives each distinct trimmed name its own cache entry/observer, so a late response for a superseded name can never overwrite the currently-subscribed key's data; AbortController is flagged as an out-of-scope efficiency-only addition (OQ-1) since web/src/api/client.ts's request() has no signal param today and wiring one is a shared-primitive change beyond this fix's owned_modules. UI states (AC3): a deriveVersionLookupState() pure function maps the query result to idle/loading/found/not_found/error (added 'error' beyond the AC's three named states, since a network/5xx failure must not be visually indistinguishable from a genuine 404), with a value/placeholder table for the start-definition-version input. Confirmed and documented (per task item 3) that definitionTypeahead keeps a legitimate remaining role -- backing the <datalist> the dialog input's list attribute still references for autocomplete suggestions -- and is left untouched. No implementation code included -- hook/type signatures and control-flow prose only (AC4).",
+    "artifacts_out": ["lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0911-20260930",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator-recheck1.json",
   "created_at": "2026-09-30T07:27:29Z",
   "started_at": "2026-09-30T07:27:29Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T07:52:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -33,19 +33,22 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Rework 1's merged single-effect design (§5.2 of lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md, commit 1f5da8e6) closes the specific race REVIEWER found in Step 03d, but independently tracing the merged effect's priority order against a 'stale ref from a previous dialog session' sequence surfaces a NEW, distinct desync bug the fix introduces. `lookupWroteDefinitionId` is written in step 1 (found) and cleared in step 2 (not_found/error), but per the design's own text (lines 331-333) is never touched by step 3 -- so once the ref is set to some id X by a found lookup, it remains X indefinitely across dialog close/reopen (openStartDialog, §1 lines 82-85, does not reset it) and across any number of subsequent EXTERNALLY-sourced definitionId changes, until another found/not_found overwrites it. Concrete repro, same page mount, no remount: (1) dialog session 1, user types 'Alice', lookup found -> step 1 sets version/id to Alice's data, ref=aliceId, setSearchParams(definitionId=aliceId); (2) dialog closes, ref untouched; (3) externally (page-level filter / onResolveDefinition / deep link, NOT the dialog), definitionId changes to bobId while versionLookupState is idle -> step 3 guard (bobId !== aliceId) does not fire -> correctly falls through to the externally-sourced branch and sets fields to Bob's data; ref still aliceId (step 3 never touches it); (4) externally, definitionId changes back to aliceId again (page-level filter, browser back/forward -- no dialog interaction, versionLookupState still idle) -> step 3 guard now sees definitionId(aliceId) === lookupWroteDefinitionId.current(aliceId) and INCORRECTLY fires, treating a fresh external cause as the effect's own stale-cache self-write -- the effect does nothing, leaving startDefinitionVersion/startDefinitionId at Bob's stale values even though definitionId (and page context) now says Alice. This reproduces the ISS-0891 invariant violation (submitted id out of sync with current definitionId context) in a new shape, and the design's own 'Invariant check' (lines 348-354) does not catch it, because it only reasons about the pair being written together, not about whether the guard can misfire against a RECURRING id value rather than only the render immediately following the effect's own write. Root defect: lookupWroteDefinitionId has no way to distinguish 'this is the direct next render after my own setSearchParams' (the only case the guard is meant to catch) from 'this render's definitionId happens to equal some id I wrote arbitrarily long ago' -- it needs to be a one-shot/expiring signal (e.g. cleared immediately after being consumed in step 3, or replaced with a generation/render-token comparison) and/or explicitly reset on dialog close/open, neither of which the design specifies.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md §5.2 (lines 277-333): lookupWroteDefinitionId is a persistent, non-expiring guard token -- it is only ever overwritten by steps 1/2, never cleared or consumed by step 3 -- so a definitionId value the effect wrote once can be mistaken for a fresh self-write arbitrarily later if an unrelated external definitionId change happens to revisit that same value, causing step 3's guard to wrongly skip updating startDefinitionVersion/startDefinitionId and leave them desynced from the current definitionId context.",
+      "§1 (lines 82-85) openStartDialog is documented as imperative/one-time and 'not part of the race' but the design never specifies resetting lookupWroteDefinitionId on dialog close or open, which is a necessary condition for the guard to not leak across dialog sessions."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0911-20260930",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to CODE-DESIGNER for rework 2: make lookupWroteDefinitionId a one-shot/expiring guard (consumed and cleared the first time step 3 checks it, or replaced by a generation/render-token comparison instead of a bare id-equality check), and specify that it is reset whenever the dialog closes/opens so a stale self-write tag cannot leak across dialog sessions or be revived by an unrelated external definitionId change recurring to the same value."
   },
   "rework_count": 1,
   "max_rework": 3,
@@ -57,6 +60,17 @@
       "summary": "Two independent effects both wrote startDefinitionVersion/startDefinitionId; the new effect's setSearchParams call re-triggered the old effect before its cache had the new id, transiently blanking the version display -- caught by REVIEWER (Step 3d), not by this design gate itself.",
       "issues": ["The design's own §1 asserted the old effect was 'already-correct, untouched' without accounting for the new effect's setSearchParams side effect reactivating it"],
       "next_action": "Route back to CODE-DESIGNER for design rework: fold both effects into a single write path."
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-30T07:50:00Z",
+      "status": "FAIL",
+      "summary": "Rework 1's single merged effect closes the original REVIEWER-found race, but lookupWroteDefinitionId is a non-expiring guard token that can misfire on a stale-ref-from-a-previous-dialog-session sequence: an external definitionId change that later revisits a value the effect once self-wrote is wrongly treated as a self-caused render, causing the effect to skip updating and leave startDefinitionVersion/startDefinitionId desynced from the current definitionId -- a new instance of the ISS-0891 invariant violation.",
+      "issues": [
+        "lookupWroteDefinitionId is only overwritten by steps 1/2, never cleared/consumed by step 3, so it can be stale-matched against an unrelated later external definitionId change that happens to equal the same id value",
+        "no reset of lookupWroteDefinitionId is specified on dialog close/open, so the guard's self-write tag can leak across dialog sessions"
+      ],
+      "next_action": "Route back to CODE-DESIGNER for rework 2: make the guard one-shot/expiring (consumed on first check, or generation-token based) and reset it on dialog close/open."
     }
   ]
 }

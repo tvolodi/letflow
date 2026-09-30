@@ -27,6 +27,14 @@ prior ACTIVE one); ACTIVE newer -> warn and do not downgrade. A 409 on create me
 `(name, version)` already exists as DRAFT/DEPRECATED/ARCHIVED: bump the fixture `version`,
 never delete. Requires `curl`, `jq` and GNU `sort -V`.
 
+**Data egress / safety.**
+1. The default `SERVICE_TASK_MOCK_BASE_URL` (`https://httpbin.org/anything`) is a third-party public echo
+   service: it receives the HTTP method, the URL path with rendered IDs (`application_id`, `review_id`,
+   `shipment_id`, `order_id`, `batch_ref`, `deviation_id`) and the QA server's source IP, and may log them.
+2. QA data used with these fixtures must be synthetic, with no PII.
+3. Any QA environment holding non-synthetic data must set `SERVICE_TASK_MOCK_BASE_URL` to a self-hosted echo endpoint.
+4. Never seed production with these fixtures.
+
 ## `mutate.py`
 
 ```

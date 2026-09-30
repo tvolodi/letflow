@@ -26,15 +26,17 @@ description: >
   case onto different versions happens only when someone deliberately asks.
 
 pipeline_test: web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts
-# NOTE (ISS-0527): this spec file does not exist in R-Co's own web/ tree at the
-# pinned commit either -- it is an aspirational forward-reference to a Playwright
-# test that was never authored anywhere, gated on the same missing feature this
-# scenario's own steps exercise. UAT-RUNNER cannot drive this pipeline_test yet;
-# treat any run of this scenario as BLOCKED/UNBUILT_FEATURE on the frontend leg
-# until FRONTEND-DEV authors it against a real shipped feature.
-# UAT-RUNNER drives this Playwright pipeline test for the operator's steps.
-# If this file does not exist or the test cannot run, that is a BLOCKER
-# (missing UI) and must be routed to FRONTEND-DEV before UAT can proceed.
+# ISS-0527 resolved 2026-09-30 (REQ-432): the spec above now exists and drives
+# the real GUI end to end -- retire then publish a service version on
+# /admin/services (step 2), the case-detail Dependency Versions panel (steps
+# 1/4), the rebind dialog with a reason (step 5), and the INSTANCE_PINS_REBOUND
+# History row showing operator, previous and new version and reason (EO-005).
+# Cases/services/definitions are set up via the real HTTP routes. Known limit
+# on step 3 (design req432 M5): ServiceTaskDispatcher.catalog_lookup_stub/2
+# returns {:error, :not_registered} unconditionally, so the in-flight service
+# step ends in EXECUTION_ERROR (request_build_error) instead of completing;
+# the spec asserts exactly the two designed outcomes and logs which occurred.
+# Step 2 retires first then publishes (design M4): retire/1 takes no version.
 
 actors:
   operator: actor-platform-admin

@@ -5021,7 +5021,7 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 26
+    entries: 27
     note: >
       MERGE NOTE: REQ-431 (PR #2050) and ISS-0905 (PR #2046) were appended
       concurrently on separate branches, each independently observing 24

@@ -259,8 +259,50 @@ classification-rule note above.
 first by exact name (`actor-<tenant>-<name>` itself, the `ai-dala-infra` realm-qualified
 convention) and, failing that, by the older `<name>-*` prefix heuristic; `actor-platform-admin`
 to the PLATFORM_ADMIN user), and `pipeline_test:` (must exist, must not carry an unresolved
-`NOTE (ISS-05xx)` forward-reference, must not use `docker compose`/`psql`). The mapping is
-best-effort; unmappable actors report UNKNOWN. A `proc-*` process_id is additionally checked
-against `GET /definitions/active/:name` — see ISS-0894. When a
-`test/fixtures/uat/process-definition-aliases/<process_id>.yaml` sidecar exists, its
+`NOTE (ISS-05xx)` forward-reference, must not invoke `docker compose`/`docker exec`/`psql`
+in its own executable code — a mention of those words in a comment does not count, and
+neither does a comment alone stop the check from also flagging a spec that calls
+`db-exec.ts`'s `runSqlAgainstDevPostgres(...)` helper, which really does shell into
+`docker compose` at runtime even though the spec file's own text never says so; see
+ISS-0909(b)). The mapping is best-effort; unmappable actors report UNKNOWN. A `proc-*`
+process_id is additionally checked against `GET /definitions/active/:name` — see ISS-0894.
+When a `test/fixtures/uat/process-definition-aliases/<process_id>.yaml` sidecar exists, its
 `definition_name` is resolved instead of the raw `process_id` — see ISS-0893.
+
+**Realm resolution and caching (ISS-0909a).** The realm(s) tried for a login actor are
+derived from the actor id itself (`actor-<tenant>-<name>` → `<tenant>` tried first),
+then the current scenario's own declared tenant if different, then `bpm-default` as the
+final fallback — never inherited from whichever OTHER scenario/tenant happened to
+reference the same actor name first. A login attempt is cached per `(actor_id, realm)`
+pair, never per bare actor/user name, so a `BAD_CRED` result in one realm can never
+poison a later check of the same actor id in a different realm.
+
+**`app_roles` probe per actor (ISS-0909c).** `actor-platform-admin` is probed against
+`GET /api/v1/admin/services` (`:AdminServicesRead` → `:UsersGroupsRolesManage`, held only
+by `PLATFORM_ADMIN` — `lib/letflow/routers/admin_services.ex`), not `/tasks/inbox`, since
+a platform admin may hold no TASK-oriented role at all regardless of their real role
+grant. A candidate-labeled actor is probed against `GET /api/v1/me/modules` (granted to
+every role); every other actor is probed against `GET /api/v1/tasks/inbox`.
+
+## `--credential-source` protocol (two recognized variants, ISS-0909d)
+
+`scripts/uat_preflight.sh --credential-source PATH --credential-protocol {qa-login|qa-uat-env}`
+(`--credential-protocol` defaults to `qa-login`, the original/pre-existing shape):
+
+- **`qa-login`** (`ai-dala-infra/scripts/qa-login.sh`): invoking `PATH` with no
+  arguments lists every seeded username, one per line, each 2-space-indented
+  (`^\s{2}([a-z0-9][\w-]*)\s` — trailing text on the line, e.g. a role annotation, is
+  ignored). Invoking `PATH <username>` prints a line `Password: <pw>`; preflight
+  performs the OIDC Resource Owner Password Credentials grant itself against the
+  actor's resolved realm(s).
+- **`qa-uat-env`** (`ai-dala-infra/scripts/qa-uat-env.sh`): this protocol has no stable
+  no-argument username listing (its accounts are realm-qualified and provisioned
+  per-tenant, ISS-0894/T-0150), so preflight instead takes the seeded-username roster
+  directly from the scenario corpus's own login actor ids — valid because this
+  protocol's accounts are named *exactly* `actor-<tenant>-<name>`, the scenario actor id
+  itself. Invoking `PATH token <actor_id>` prints a line `Token: <bearer-token>` — an
+  already-issued access token, not a password — which preflight verifies with a single
+  read-only `GET /api/v1/me/modules` call instead of performing its own OIDC grant.
+
+Both variants report through the same `actors`/`app_roles`/`definitions` checks and the
+same `(actor_id, realm)` cache described above; only credential *acquisition* differs.

@@ -1,0 +1,52 @@
+{
+  "handoff_id": "a3252ece-3f61-41ed-82e7-f9370b091e80",
+  "run_id": "WF03-ISS0911-20260930",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0911-20260930/step-03d-reviewer.json",
+  "created_at": "2026-09-30T07:20:43Z",
+  "started_at": "2026-09-30T07:20:43Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["457e475d-0125-4207-abd0-6281ece7d885"],
+    "artifacts_in": [
+      "web/src/hooks/useDefinitions.ts",
+      "web/src/pages/instances/InstanceBoardPage.tsx"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3d for ISS-0911, idiom/scope-creep hard gate. Read git diff main...HEAD -- web/src/hooks/useDefinitions.ts web/src/pages/instances/InstanceBoardPage.tsx yourself. Judge: (1) is the new useActiveDefinitionByName hook idiomatic for this codebase's existing TanStack Query patterns (compare against other hooks in useDefinitions.ts), (2) does the new effect settling startDefinitionVersion/startDefinitionId atomically genuinely preserve ISS-0891's original invariant (read that fix's own reasoning in docs/issues/ISS-0891.yaml if needed) rather than reintroducing a similar race in a new shape, (3) any scope creep beyond the two named files. FAIL if a genuine crutch, inconsistency, or scope creep is found; otherwise PASS.",
+    "acceptance_criteria": [
+      "the fix calls definitionsApi.getActive(name) keyed on the dialog's own typed value, not the page-level filtered list",
+      "the version field's loading/not-found/found states are all implemented with no gap",
+      "definitionTypeahead's other two call sites are unchanged",
+      "the ISS-0891 atomic-set invariant (version display and submitted definitionId always the same value at the same time) is preserved, not reintroduced as a new race"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

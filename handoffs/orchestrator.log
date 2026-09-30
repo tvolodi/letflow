@@ -2493,3 +2493,5 @@
 2026-09-30T17:25:36Z | DISPATCH | WF02-REQ432-20260930 | step-03 | ORCH -> TEST-DESIGNER | PENDING
 2026-09-30T17:29:33Z | PASS | WF02-REQ432-20260930 | step-03 | TEST-DESIGNER -> ORCH | PASS -- test/specs/REQ-432.md maps all 9 ACs with mutation reasoning and honesty statement; 4 REVIEWER MINORs fixed (step 07 web-first anchors, EO-004 cross-module test, spec header note, 200-event fallback test); npm test 150 files/995 passed, guards 52 passed. commit 17c4e2f3.
 2026-09-30T17:29:34Z | DISPATCH | WF02-REQ432-20260930 | step-03b | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-09-30T17:31:39Z | PASS | WF02-REQ432-20260930 | step-03b | TEST-DESIGN-VALIDATOR -> ORCH | PASS -- independently re-applied 4 mutants (M-a..M-d), all killed, all reverted, tree clean; AC1 + live halves of AC6/AC7 honestly open (pipeline spec never run green); M5 unverifiable half recorded.
+2026-09-30T17:31:41Z | DISPATCH | WF02-REQ432-20260930 | step-04 | ORCH -> TEST-RUNNER | PENDING

@@ -2491,3 +2491,5 @@
 2026-09-30T17:23:53Z | DISPATCH | WF02-REQ432-20260930 | step-02d | ORCH -> REVIEWER | PENDING
 2026-09-30T17:25:17Z | PASS | WF02-REQ432-20260930 | step-02d | REVIEWER -> ORCH | PASS -- no blockers; M1 event_id join ruled a legitimate frontend resolution (not a shim); 4 MINOR notes (step 07 vacuous absence assertion, near-tautological EO-004 component test, 200-event join bound, spec header missing unproven-live note) routed to TEST-DESIGNER (Step 3) since they are test-artefact fixes.
 2026-09-30T17:25:36Z | DISPATCH | WF02-REQ432-20260930 | step-03 | ORCH -> TEST-DESIGNER | PENDING
+2026-09-30T17:29:33Z | PASS | WF02-REQ432-20260930 | step-03 | TEST-DESIGNER -> ORCH | PASS -- test/specs/REQ-432.md maps all 9 ACs with mutation reasoning and honesty statement; 4 REVIEWER MINORs fixed (step 07 web-first anchors, EO-004 cross-module test, spec header note, 200-event fallback test); npm test 150 files/995 passed, guards 52 passed. commit 17c4e2f3.
+2026-09-30T17:29:34Z | DISPATCH | WF02-REQ432-20260930 | step-03b | ORCH -> TEST-DESIGN-VALIDATOR | PENDING

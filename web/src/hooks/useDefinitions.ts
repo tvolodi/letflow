@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { definitionsApi } from '@/api/definitions'
 import { definitionRollbackApi } from '@/api/definitionRollback'
-import type { DefinitionStatus, CreateDefinitionRequest } from '@/types/api'
+import type { ApiError, DefinitionStatus, CreateDefinitionRequest, ProcessDefinition } from '@/types/api'
 import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 
 export function useDefinitions(params?: { status?: DefinitionStatus; name?: string }) {
@@ -81,6 +81,34 @@ export function useRollbackDefinition() {
       qc.invalidateQueries({ queryKey: definitionKeys.active(args.processKey) })
       qc.invalidateQueries({ queryKey: definitionKeys.list({}) })
       qc.invalidateQueries({ queryKey: definitionKeys.versions(args.processKey) })
+    },
+  })
+}
+
+/** ISS-0911: exact-name active-definition lookup, keyed on the CALLER-supplied
+ *  name — used by any input that must resolve a name the user is actively
+ *  typing (not a page-level filter). `name` is trimmed before being used as
+ *  both the query key and the request argument, so two inputs differing only
+ *  in leading/trailing whitespace share one cache entry/request. `enabled` is
+ *  false for a blank/whitespace-only name, so no request fires for an empty
+ *  dialog input. Does not retry on a 404 — a 404 here means "no active
+ *  definition with this exact name," an expected outcome while the user is
+ *  still typing, not a transient failure. See
+ *  lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md §3. */
+export function useActiveDefinitionByName(name: string) {
+  const definitionKeys = useTenantScopedQueryKeys().definitions
+  const trimmedName = name.trim()
+  return useQuery<ProcessDefinition, ApiError>({
+    queryKey: definitionKeys.active(trimmedName),
+    queryFn: () => definitionsApi.getActive(trimmedName),
+    enabled: trimmedName.length > 0,
+    // ISS-0911 §3: design calls for staleTime 0 "(or left at the query
+    // client's default)" — left at the global default here (main.tsx) since
+    // an inline staleTime literal is guarded (CAC-UI-01, inline-stale-time)
+    // and only queryKeys.ts/main.tsx are exempted from it.
+    retry: (failureCount, error) => {
+      if (error.status === 404) return false
+      return failureCount < 2
     },
   })
 }

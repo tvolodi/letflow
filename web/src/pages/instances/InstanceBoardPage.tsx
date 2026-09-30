@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useInstances, useStartInstance } from '@/hooks/useInstances'
-import { useDefinitions, useDefinition } from '@/hooks/useDefinitions'
+import { useDefinitions, useDefinition, useActiveDefinitionByName } from '@/hooks/useDefinitions'
 import { useAuth } from '@/auth/AuthContext'
 import { usePolling } from '@/hooks/usePolling'
+import { useDebounce } from '@/hooks/useDebounce'
 import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
-import type { ProcessInstance, InstanceStatus } from '@/types/api'
+import type { ProcessInstance, InstanceStatus, ProcessDefinition, ApiError } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { Button } from '@/components/ui/Button'
@@ -19,6 +20,29 @@ import { deferClickState } from '@/utils/deferClickState'
 
 const STATUS_OPTIONS: InstanceStatus[] = ['ACTIVE', 'COMPLETED', 'CANCELLED', 'ERROR']
 const START_ROLES = ['PLATFORM_ADMIN', 'PROCESS_OPERATOR', 'PROCESS_DESIGNER']
+
+/** ISS-0911 §5 — explicit 5-state model for the Start Instance dialog's
+ *  version field, derived from the debounced exact-name lookup. */
+export type VersionLookupState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'found'; definition: ProcessDefinition }
+  | { kind: 'not_found' }
+  | { kind: 'error'; message: string }
+
+export function deriveVersionLookupState(
+  trimmedName: string,
+  query: Pick<UseQueryResult<ProcessDefinition, ApiError>, 'data' | 'isFetching' | 'isError' | 'error' | 'isSuccess'>,
+): VersionLookupState {
+  if (trimmedName === '') return { kind: 'idle' }
+  if (query.isFetching && !query.isSuccess) return { kind: 'loading' }
+  if (query.isSuccess && query.data) return { kind: 'found', definition: query.data }
+  if (query.isError && query.error) {
+    if (query.error.status === 404) return { kind: 'not_found' }
+    return { kind: 'error', message: query.error.message }
+  }
+  return { kind: 'idle' }
+}
 
 function toISODate(value: string | undefined): string {
   if (!value) return '—'
@@ -91,6 +115,17 @@ export default function InstanceBoardPage() {
     definitionId ?? '',
   )
 
+  // ISS-0911: the Start Instance dialog's own name input resolves against an
+  // exact-name backend lookup keyed on its OWN (debounced) typed value, not
+  // the page-level `definitionTypeahead` list — see design §2-4. Debouncing
+  // only reduces request volume; the actual race-guard against out-of-order
+  // responses is TanStack Query's per-key cache isolation (`definitionKeys
+  // .active(name)`), keyed on the trimmed debounced name below (design §4.1).
+  const debouncedStartDefinitionName = useDebounce(startDefinitionName, 300)
+  const trimmedDebouncedStartDefinitionName = debouncedStartDefinitionName.trim()
+  const activeDefinitionLookup = useActiveDefinitionByName(debouncedStartDefinitionName)
+  const versionLookupState = deriveVersionLookupState(trimmedDebouncedStartDefinitionName, activeDefinitionLookup)
+
   const instancesQuery = useInstances({
     status: statusFilters.length > 0 ? statusFilters : undefined,
     definition_id: definitionId,
@@ -110,6 +145,30 @@ export default function InstanceBoardPage() {
     setStartDefinitionVersion('')
     setStartDefinitionId(undefined)
   }, [definitionId, activeDefinitionByName?.id, activeDefinitionByName?.version])
+
+  // ISS-0911 §5.2: the dialog's own exact-name lookup settling drives
+  // `startDefinitionVersion`/`startDefinitionId` together, in the same effect
+  // pass, preserving the ISS-0891 invariant that the version text and the
+  // submit-target id never go one render apart. `idle`/`loading` deliberately
+  // leave the current values alone — a value that was `found` a moment ago is
+  // not eagerly cleared while the user is mid-edit; it only clears once the
+  // new debounced lookup actually settles as `not_found`/`error`.
+  useEffect(() => {
+    if (versionLookupState.kind === 'found') {
+      const { definition } = versionLookupState
+      setStartDefinitionVersion(definition.version)
+      setStartDefinitionId(definition.id)
+      const updated = new URLSearchParams(searchParams)
+      updated.set('definitionName', definition.name)
+      updated.set('definitionId', definition.id)
+      setSearchParams(updated)
+    } else if (versionLookupState.kind === 'not_found' || versionLookupState.kind === 'error') {
+      setStartDefinitionVersion('')
+      setStartDefinitionId(undefined)
+    }
+    // idle/loading: leave startDefinitionVersion/startDefinitionId as-is.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versionLookupState])
 
   const onStatusToggle = (status: InstanceStatus) => {
     const next = new Set(statusFilters)
@@ -178,25 +237,12 @@ export default function InstanceBoardPage() {
     deferClickState(() => setShowStart(false))
   }
 
+  // ISS-0911: no longer scans `definitionTypeahead.items` (a page-level,
+  // possibly-incomplete list) — resolution now flows through the debounced
+  // `useActiveDefinitionByName` lookup above and the effect that reacts to
+  // its settled state (design §5.2).
   const onStartDefinitionNameChange = (value: string) => {
     setStartDefinitionName(value)
-
-    const activeList = definitionTypeahead?.items ?? []
-    const exact = activeList.find((item) => item.name === value)
-    if (exact) {
-      // Set the dialog's own submit target synchronously, in the same
-      // render as the version text — see ISS-0891 above `startDefinitionId`
-      // for why this must NOT go through `setSearchParams`/`definitionId`.
-      setStartDefinitionVersion(exact.version)
-      setStartDefinitionId(exact.id)
-      const updated = new URLSearchParams(searchParams)
-      updated.set('definitionName', exact.name)
-      updated.set('definitionId', exact.id)
-      setSearchParams(updated)
-    } else {
-      setStartDefinitionVersion('')
-      setStartDefinitionId(undefined)
-    }
   }
 
   const submitStartInstance = async () => {
@@ -454,7 +500,23 @@ export default function InstanceBoardPage() {
               data-testid="start-definition-version"
               value={startDefinitionVersion}
               readOnly
-              placeholder={isLoadingActiveDefinition ? 'Loading active version…' : ''}
+              // ISS-0911 §5.1: `startDefinitionVersion` itself is the source of
+              // truth for `value` (set/cleared by the effect above per §5.2 —
+              // not eagerly cleared on idle/loading, to avoid a flicker while
+              // the user is mid-edit); the placeholder layers on the dialog's
+              // own lookup messaging (loading/not_found/error) on top of the
+              // pre-existing page-level `isLoadingActiveDefinition` case.
+              placeholder={
+                isLoadingActiveDefinition
+                  ? 'Loading active version…'
+                  : versionLookupState.kind === 'loading'
+                    ? 'Looking up active version…'
+                    : versionLookupState.kind === 'not_found'
+                      ? `No active definition named "${trimmedDebouncedStartDefinitionName}".`
+                      : versionLookupState.kind === 'error'
+                        ? `Could not check active version — ${versionLookupState.message}`
+                        : ''
+              }
               style={{
                 width: '100%',
                 marginBottom: '.6rem',

@@ -31,6 +31,13 @@ vi.mock('@/hooks/useInstances', () => ({
 vi.mock('@/hooks/useDefinitions', () => ({
   useDefinitions: vi.fn(() => ({ data: undefined })),
   useDefinition: vi.fn(() => ({ data: undefined, isLoading: false })),
+  useActiveDefinitionByName: vi.fn(() => ({
+    data: undefined,
+    isFetching: false,
+    isError: false,
+    error: null,
+    isSuccess: false,
+  })),
 }))
 
 vi.mock('@/auth/AuthContext', () => ({

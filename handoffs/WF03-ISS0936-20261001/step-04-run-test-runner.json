@@ -8,7 +8,7 @@
   "file": "handoffs/WF03-ISS0936-20261001/step-04-run-test-runner.json",
   "created_at": "2026-09-30T21:55:02Z",
   "started_at": "2026-09-30T21:55:02Z",
-  "completed_at": "2026-10-01T00:05:00Z",
+  "completed_at": "2026-10-01T00:20:00Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
@@ -39,8 +39,8 @@
     ]
   },
   "result": {
-    "status": "FAIL",
-    "summary": "Tests pass (8/8), compile clean, CI path confirmed, but `mix format --check-formatted` FAILS on the new test file (one unformatted line). This would fail the project format gate; needs a trivial formatting fix by TEST-DESIGNER (I may not edit test files in this step).",
+    "status": "PASS",
+    "summary": "Re-run after TEST-DESIGNER format-only fix: format check exit 0, 8/8 tests pass, compile --warnings-as-errors exit 0. CI-path partition evidence (partition 7 of 16 via --dry-run) from first run stands; file content changed only by formatting.",
     "test_run": {
       "cmd": "mix test test/scripts/uat_preflight_bare_jwt_test.exs (LETFLOW_DB_PORT=5497 throwaway postgres:16, UAT_PF_BASH=C:/Program Files/Git/bin/bash.exe)",
       "output": "Excluding tags: [:keycloak, :wasm_hang, :lua_wallclock_race]\n........\nFinished in 96.5 seconds\nResult: 8 passed",
@@ -61,7 +61,14 @@
     },
     "ci_path": "No test_paths/test_pattern override in mix.exs, so default test/**/*_test.exs applies. Mix partitions by sorted file index round-robin (rem(index,N)); in the 304 test files the new file is index 294 -> partition 7 of 16. Verified with `MIX_TEST_PARTITION=7 mix test --partitions 16 --dry-run --trace`: lists Letflow.Scripts.UatPreflightBareJwtTest with all 8 tests (lines 145,153,159,166,182,188,194,205). Full scripts/test_parallel.sh aggregate not re-run (would duplicate designer's `mix letflow.check.test` exit 0 run). Note: partition number depends on N (16 here) and file count. Attempt to run all 16 partitions concurrently failed from DB pool contention (skipped ecto setup); not a test defect, discarded.",
     "cleanup": "throwaway container letflow-iss0936-pg removed, copied deps/_build removed, temp logs removed; main checkout untouched; worktree git status shows only this handoff modified. No test/reports file written (task said modify only the handoff).",
-    "next_action": "Route to TEST-DESIGNER: run `mix format test/scripts/uat_preflight_bare_jwt_test.exs` (splits line 93), then re-run format check; no behavior change expected. Then proceed to RELEASE-VALIDATOR."
+    "next_action": "Proceed to RELEASE-VALIDATOR.",
+    "rerun": {
+      "format_check": "mix format --check-formatted test/scripts/uat_preflight_bare_jwt_test.exs exit 0",
+      "format_other_changed_files": "git diff --name-only origin/main filtered to .ex/.exs lists only the test file; nothing else to check",
+      "test_run": "Result: 8 passed (0 failed)",
+      "compile": "MIX_ENV=test mix compile --warnings-as-errors --force exit 0",
+      "cleanup": "container, deps, _build removed"
+    }
   },
   "rework_count": 0,
   "max_rework": 3

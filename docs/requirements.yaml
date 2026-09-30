@@ -17552,7 +17552,11 @@ requirements:
       # exists before the second MOB requirement merges; with only REQ-419 as
       # an edge this entry could be claimed in parallel with REQ-420 and merge
       # its Dart suite with no CI job running it.
-    status: pending
+      # 2026-09-30 (ORCH): all depends_on (REQ-290, REQ-292, REQ-293, REQ-419,
+      # REQ-420) confirmed done. Queue task 585 reopened via
+      # POST /tasks/585/release {"force":true,"status":"open"} and locked
+      # (tvolodi-orch) for WF02-REQ294-20260930. Started.
+    status: done
     stage: S9
     description: >
       Implements step 12 of

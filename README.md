@@ -98,7 +98,15 @@ fetch-failure, permission-denied, stale-version, validation-error,
 under `lib/renderers/` wraps itself in — and the first renderer built
 on it, the list renderer, querying entity records via
 `POST /api/v1/entities/query` with filters and keyset pagination on
-`next_cursor`. S9's three backend gaps
+`next_cursor`. `REQ-294` (0020 D1a step 12) added a Dart evaluator for
+the `Letflow.Engine.Expr` grammar under `apps/mobile/lib/expr/`,
+passing the same conformance corpus REQ-289 pins and REQ-293's
+TypeScript evaluator already passes — the third of the three
+implementations record 0020 D1a's argument requires. It powers
+`computed` and `visible_when` evaluation against cached form data with
+no server reachable, the offline-population case that motivated D1a;
+it does not make forms submittable offline (MOB-8 is unchanged) and
+does not extend the grammar itself. S9's three backend gaps
 closed earlier (`REQ-124`/`125`/`126`) and
 `REQ-418` added the mobile tier's own PKCE-S256 Keycloak client
 (`letflow-mobile`) plus its `client_id` on

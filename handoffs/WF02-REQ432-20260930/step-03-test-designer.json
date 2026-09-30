@@ -7,9 +7,9 @@
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF02-REQ432-20260930/step-03-test-designer.json",
   "created_at": "2026-09-30T17:25:36Z",
-  "started_at": "2026-09-30T17:25:36Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T17:25:38Z",
+  "completed_at": "2026-09-30T17:29:09Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -52,19 +52,42 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-432.md mapping all nine requirements.yaml acceptance criteria (the handoff's task.acceptance_criteria lists five step-level criteria; the nine are REQ-432's own) to named vitest/pipeline tests with mutation reasoning and an explicit honesty statement: AC2-AC5, AC9 and the UI halves of AC6/AC7 are proven by green vitest tests; AC1 and the live halves of AC6/AC7 are proven only by the pipeline spec, which has NOT run green (Keycloak localhost:8094 shadowed by wslrelay; spec compiles and lists, 1 test); the in-flight-step-completes half of AC7 is unverifiable on success because of backend gap M5 (catalog_lookup_stub/2); AC8 proven by command (git diff --name-only main...HEAD | grep service_catalog|pin_resolver|pin_rebind -> no output, exit 1; only lib/ file is the design doc). Four REVIEWER MINORs fixed: (1) pipeline step 07 now uses web-first toBeVisible anchors (Services heading; instance-pins-panel) then toHaveCount(0), waitForTimeout removed; (2) EO-004 test replaced with a cross-module test rendering real ServicesPage + InstancePinsPanel on independent mocks, asserting retire called, getPins not refetched, old version/Rebind button present, no error UI; mutation retireMutation.onSuccess -> invalidateQueries() made it fail ('expected spy to be called 1 times, but got 2 times'), reverted via git checkout; (3) spec header states not run live + unproven step 02/07 selector assumptions; (4) new unit test for the 200-event join fallback (UUID prefix, never 'system') in InstanceDetailPage.actorNames.test.tsx; mutation returning 'system' made it fail (1 failed | 1 passed), reverted. Gates from web/: type-check clean; lint clean (--max-warnings 0); npm test 150 files / 995 tests passed; guards 4 files / 52 tests passed; npx playwright test --list: Total: 1 test in 1 file. mix letflow.check.test not run: no Elixir test files touched (frontend-only). No non-test file under web/src changed (git status showed only test files). Commit 17c4e2f3 pushed to origin/feature/WF02-REQ432-20260930.",
+    "artifacts_out": [
+      "test/specs/REQ-432.md",
+      "web/src/components/instances/__tests__/InstancePinsPanel.rebind.test.tsx",
+      "web/src/pages/instances/__tests__/InstanceDetailPage.actorNames.test.tsx",
+      "web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "AC1 (and live halves of AC6/AC7) remain unverified: pipeline spec not run green because Keycloak at localhost:8094 is unreachable on this host (wslrelay). Needs a run on a working host or by UAT-RUNNER; step 02/07 selector assumptions (services list shows new/retired rows; worker can open /admin/services and case detail) are unproven live.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "Backend gap M5 (ServiceTaskDispatcher.catalog_lookup_stub/2 unconditional {:error,:not_registered}) makes the 'in-flight step completes without error' half of AC7 unverifiable on success; REQ-ANALYST follow-on needed.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "200-event timeline join bound still degrades the rebound row to the payload UUID prefix on very long cases (now unit-tested); proper fix is backend M1/M6 (actor on history items). No production-code defect found in this step.",
+        "affected_requirement": "REQ-432"
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "commit_sha_list": [
+        "17c4e2f3c97cfb037fa55a6a1da886dc48c8ffcf"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ432-20260930",
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH: route to TEST-DESIGN-VALIDATOR (Step 3b). Re-apply the two reported mutants (ServicesPage retire onSuccess invalidateQueries() -> InstancePinsPanel.rebind EO-004 test fails; EventHistoryPanel reboundActorCell returns 'system' when name undefined -> actorNames fallback test fails). Live pipeline run still outstanding."
   },
   "rework_count": 0,
   "max_rework": 3

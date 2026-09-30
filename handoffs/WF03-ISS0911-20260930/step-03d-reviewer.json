@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0911-20260930/step-03d-reviewer.json",
   "created_at": "2026-09-30T07:20:43Z",
   "started_at": "2026-09-30T07:20:43Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T07:45:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -33,19 +33,21 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "useActiveDefinitionByName itself is idiomatic (matches useDefinitionSearch's debounced-key-per-value pattern, correct enabled/retry-on-404 handling) and there is no scope creep (useDebounce is pre-existing, the test-file mock edit is a minimal fixture update). FAIL is on AC4 (ISS-0891 invariant). The new effect at InstanceBoardPage.tsx (versionLookupState effect, ~line 156) does not fully replace the pre-existing effect at ~line 139 that also writes startDefinitionVersion/startDefinitionId, keyed on `definitionId`/`useDefinition(definitionId)`. On a 'found' transition the new effect sets both state values correctly AND calls setSearchParams(definitionId=...). That searchParams write changes the `definitionId` prop on the next render, which re-triggers the OLD effect (line 139-147) before useDefinition(newDefinitionId) has any cached data for a brand-new id -- exactly the case ISS-0911 targets (a just-created/just-activated definition). The old effect then runs with activeDefinitionByName still undefined and does setStartDefinitionVersion('') while leaving setStartDefinitionId(definitionId) (still correct, via its `?? definitionId` fallback). Net effect: startDefinitionVersion and startDefinitionId transiently point at different 'truths' again -- version blanks (and the placeholder falls back to isLoadingActiveDefinition's 'Loading active version...' text) while the id is actually already correct -- until the redundant useDefinition(id) GET resolves and re-populates it. This is the same class of bug as ISS-0891 (version display and submit-target id going out of sync across two independently-owned effects) in a new shape: two useEffects now both own the same (startDefinitionVersion, startDefinitionId) pair, one driven by `definitionId`+`useDefinition(id)`, the other by the new debounced-name lookup, connected by a feedback loop through setSearchParams. It does not corrupt the actual submitted id (submitStartInstance still reads the correct startDefinitionId), but it does violate the stated invariant that version-display and submit-id are always the same value at the same time, and it fires an avoidable duplicate network request. Design doc (lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md) section 1 asserts the old effect's data path is 'different, already-correct, untouched by this bug' but does not account for the new effect's own setSearchParams side effect reactivating it -- this interaction was not analyzed by CODE-DESIGNER/CODE-DESIGN-VALIDATOR either. Route back to CODE-DESIGNER/ELIXIR-DEV to reconcile: either make the old definitionId-driven effect a no-op when it was the new effect's own setSearchParams call that changed definitionId (e.g. skip when startDefinitionId is already set to the same id), or fold both effects into one that derives from whichever of the two data sources last settled, with a single write path.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "InstanceBoardPage.tsx: the pre-existing definitionId/useDefinition(id)-driven effect (~lines 139-147) and the new versionLookupState-driven effect (~lines 156-171) both write startDefinitionVersion/startDefinitionId, connected via the new effect's own setSearchParams call, causing a transient version-blank/id-correct desync on exactly the newly-created-definition case ISS-0911 targets."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0911-20260930",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to CODE-DESIGNER/ELIXIR-DEV (rework) to reconcile the two effects writing startDefinitionVersion/startDefinitionId before re-submitting to REVIEWER."
   },
   "rework_count": 0,
   "max_rework": 3

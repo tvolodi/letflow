@@ -42,11 +42,53 @@ defmodule Letflow.AdmissionRuntimeConfigTest do
   `@tag :slow` -- each test spawns a fresh `mix run --no-start`, materially slower
   than the rest of the suite. Not `@tag :skip`: this project runs all tags by
   default (no `ExUnit.configure(exclude: ...)` in `mix.exs`).
+
+  ## Why `setup_all` precompiles `_build/prod` (ISS-0908 follow-up, flaky CI timeout)
+
+  All 5 tests below run `async: true` and each independently shells out to `mix run
+  --no-start` under `MIX_ENV=prod`, with `MIX_BUILD_PATH` nil'd (see above) so the
+  child process falls back to the default `_build/prod` directory. On a warm
+  checkout (already-compiled `_build/prod` from an earlier local run) this is fast.
+  On a genuinely cold CI runner, `_build/prod` doesn't exist yet, so whichever
+  subprocess reaches `mix run` first triggers a full project compile under
+  `MIX_ENV=prod` -- and because `async: true` starts all 5 tests concurrently, every
+  one of their subprocesses race into that same cold compile simultaneously. A
+  compile of this size can exceed ExUnit's default 60s per-test timeout, failing
+  whichever test's subprocess is still waiting when the clock runs out (observed in
+  CI run 36736055229: "RESERVED_HEADROOM absent ..." timed out at exactly 60000ms;
+  1418/1419 other tests passed -- a flaky timeout, not a real assertion failure).
+
+  The fix: pay the cold-compile cost exactly once, synchronously, in `setup_all`,
+  before any of the 5 tests start. `setup_all` runs in its own process with no
+  ExUnit-imposed timeout of its own (`ExUnit.Runner.run_setup_all/4` blocks on a
+  plain `receive` with no `after` clause -- confirmed by reading
+  `lib/ex_unit/runner.ex` in this project's installed Elixir/OTP 29 toolchain), so
+  an expensive first-time compile here has no 60s budget to race against. By the
+  time the 5 `async: true` tests start, `_build/prod` is already warm and each
+  test's own `mix run --no-start` subprocess only has to load already-compiled
+  `.beam` files, comfortably inside the 60s per-test timeout even under load.
   """
 
   use ExUnit.Case, async: true
 
   @moduletag :slow
+
+  setup_all do
+    env = [
+      {"MIX_ENV", "prod"},
+      {"MIX_TEST_PARTITION", nil},
+      {"MIX_BUILD_PATH", nil}
+    ]
+
+    {output, exit_status} =
+      System.cmd("mix", ["compile"], env: env, stderr_to_stdout: true, cd: File.cwd!())
+
+    if exit_status != 0 do
+      raise "precompiling _build/prod under MIX_ENV=prod failed (exit #{exit_status}):\n#{output}"
+    end
+
+    :ok
+  end
 
   # Not a real secret -- 64 lowercase-hex chars, deliberately not all-zero or
   # all-0xFF (config/runtime.exs's REQ-190 validation rejects both), used only to

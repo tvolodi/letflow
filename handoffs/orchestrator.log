@@ -2489,3 +2489,5 @@
 2026-09-30T17:22:54Z | DISPATCH | WF02-REQ432-20260930 | step-02c | ORCH -> SECURITY-REVIEWER | PENDING
 2026-09-30T17:23:52Z | PASS | WF02-REQ432-20260930 | step-02c | SECURITY-REVIEWER -> ORCH | PASS -- in scope (conservative, frontend mutations on tenant-scoped routes); INV-4 applies PASS, INV-1/2/3/5/7/8/9 N/A with evidence; checks a-e PASS (tenant-scoped query keys, cosmetic gating only, React text rendering, e2e fixtures unique per run).
 2026-09-30T17:23:53Z | DISPATCH | WF02-REQ432-20260930 | step-02d | ORCH -> REVIEWER | PENDING
+2026-09-30T17:25:17Z | PASS | WF02-REQ432-20260930 | step-02d | REVIEWER -> ORCH | PASS -- no blockers; M1 event_id join ruled a legitimate frontend resolution (not a shim); 4 MINOR notes (step 07 vacuous absence assertion, near-tautological EO-004 component test, 200-event join bound, spec header missing unproven-live note) routed to TEST-DESIGNER (Step 3) since they are test-artefact fixes.
+2026-09-30T17:25:36Z | DISPATCH | WF02-REQ432-20260930 | step-03 | ORCH -> TEST-DESIGNER | PENDING

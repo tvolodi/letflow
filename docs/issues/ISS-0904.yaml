@@ -58,7 +58,7 @@ affected_files:
   - lib/letflow/definitions/graph.ex
   - lib/letflow/definitions.ex
 source_reports: []
-queue_ref: null
-github_ref: null
+queue_ref: null  # discovered by FRONTEND-DEV mid-task on an unrelated fix, filed directly by ORCH; not a queue-originated task
+github_ref: null  # discovered directly in this repo; no GitHub mirror issue was opened
 status: open
 parent_issue: null

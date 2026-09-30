@@ -31,11 +31,17 @@
 #                                        own actor ids (valid because this protocol's
 #                                        accounts are named exactly `actor-<tenant>-<name>`,
 #                                        the scenario id itself); `<script> token
-#                                        <actor_id>` prints a line `Token: <bearer-token>`
-#                                        -- a ready-made access token, not a password --
-#                                        which uat_preflight verifies with a single
-#                                        read-only `GET /api/v1/me/modules` call instead of
-#                                        performing its own OIDC grant. See ISS-0909(d).
+#                                        <actor_id>` prints the access token either as a
+#                                        line `Token: <bearer-token>` or as a BARE JWT on a
+#                                        line by itself (three dot-separated base64url
+#                                        segments starting `eyJ`); other stdout lines
+#                                        (warnings, hostnames, banners) are ignored and the
+#                                        first line that parses wins. The token is a
+#                                        ready-made access token, not a password, and is
+#                                        never echoed; uat_preflight verifies it with a
+#                                        single read-only `GET /api/v1/me/modules` call
+#                                        instead of performing its own OIDC grant.
+#                                        See ISS-0909(d), ISS-0936.
 #   --scenarios          corpus dir (default test/fixtures/uat/scenarios); _throwaway skipped
 #   --sha                expected deployed build (default: `git rev-parse origin/main`)
 #   --idp-url            Keycloak base (default: derived, https://auth.<host minus first label
@@ -287,6 +293,21 @@ else:  # qa-uat-env -- see header comment; no stable no-arg listing exists for t
     except Exception as e:
         cred_err = str(e)
 
+_JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
+def parse_token_line(line):
+    """Pure helper (ISS-0936): returns the bearer token carried by ONE stdout line of a
+    qa-uat-env credential source, or None. Accepts `Token: <jwt>` (labelled, trusted, no
+    shape check) or a BARE JWT alone on the line (full-line match of three non-empty
+    base64url segments starting `eyJ`, total length >= 40). Anything else is noise.
+    Never prints or logs the value."""
+    s = line.strip()
+    if not s: return None
+    if s.startswith("Token:"):
+        v = s.split(":", 1)[1].strip()
+        return v or None
+    if len(s) >= 40 and _JWT_RE.fullmatch(s): return s
+    return None
+
 def fetch_credential(user):
     """Returns (kind, value) -- kind is "password" (qa-login protocol: a plaintext
     password uat_preflight itself exchanges via an OIDC grant below) or "token"
@@ -300,7 +321,8 @@ def fetch_credential(user):
         else:
             r = run_cred(["token", user], 60)
             for l in r.stdout.splitlines():
-                if l.startswith("Token:"): return ("token", l.split(":", 1)[1].strip())
+                tok = parse_token_line(l)
+                if tok: return ("token", tok)
     except Exception:
         pass
     return (None, None)

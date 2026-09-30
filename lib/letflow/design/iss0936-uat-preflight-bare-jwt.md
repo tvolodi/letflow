@@ -95,38 +95,93 @@ If either is missing the test fails loudly (no skipping, so no silent coverage l
 Bash resolution (host note): on this Windows host the default `bash` is the WSL stub. The test resolves
 the launcher as env `UAT_PF_BASH` if set, else `System.find_executable("bash")`, and runs
 `<launcher> scripts/uat_preflight.sh ...`. The script sets `UAT_PF_BASH="${BASH:-bash}"` itself (line 96),
-which equals the launcher. Windows developers export `UAT_PF_BASH` to git-bash (Q3).
+which equals the launcher. Windows developers export `UAT_PF_BASH` to git-bash (Q2).
 
-### 6.2 Fixtures (created per test in a tmp dir; no new repo fixtures)
+WSL-stub detection (mechanism): all tests call one shared helper `run_preflight/2` that, right after
+`System.cmd` returns, asserts the combined output contains the report header `UAT PREFLIGHT  environment=qa`
+(printed by the script's report section, always reached on a working launcher regardless of GAPs). If it is
+absent (WSL stub, missing python3, usage error), the helper fails with a message that includes the launcher
+used, the first 500 characters of the output, and the hint "set UAT_PF_BASH to a real bash (git-bash on
+Windows)". No separate probing of the launcher is done.
 
-- Fake credential source: a tiny executable shell script written by the test, handling
-  `token <user>` by printing a per-test stdout and some stderr noise. Passed via the script's credential
-  script flag with `--credential-protocol qa-uat-env` (exact flag name read from the argparse block; Q2).
-- Scenario dir: a tmp dir with one minimal scenario declaring one actor `actor-swiftroute-lena`,
-  modeled on a file under `test/fixtures/uat/scenarios/`. Passed with `--scenarios`.
-- Base URL: required option (a) unreachable `http://127.0.0.1:9` (parse success shows as a
-  non-NO_PASSWORD status such as BAD_CRED). Optional (b) a stdlib Python `http.server` stub on port 0
-  returning 200 for `GET /api/v1/me/modules`, for T7; drop it if flaky.
-- Fake JWT constant: `eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl` (51 chars, passes length floor).
-- Env hygiene: explicit `env` to `System.cmd`; pass a dummy `--sha` so git/origin/main is not consulted.
+### 6.2 Invocation and fixtures (all created per test in `@tag :tmp_dir`; no new repo fixtures)
 
-### 6.3 Test cases
+Command line (flags verified against scripts/uat_preflight.sh lines 112-114):
 
-| # | Fake source stdout | Assertion |
-|---|---|---|
-| T1 | noise line `WARN something`, then bare JWT line | output does NOT contain `NO_PASSWORD`; actor reached verification (e.g. BAD_CRED for unreachable URL) |
-| T2 | `Token: <jwt>` | still not NO_PASSWORD (regression guard for the old form) |
-| T3 | only noise (`WARN something`, banner text) | output contains `NO_PASSWORD` for the actor |
-| T4 | only `auth.qa.bizdala.com` (variant `qa.bizdala.com`) | `NO_PASSWORD` (hostname-like rejected) |
-| T5 | bare JWT with CRLF line ending | not NO_PASSWORD (R1) |
-| T6 | runs of T1/T2 | token literal absent from script stdout, stderr and the `--out` JSON file |
-| T7 (optional) | bare JWT + 200 stub | actor status OK |
+    <launcher> scripts/uat_preflight.sh --base-url <URL> --environment qa
+        --credential-source <tmp>/cred.sh --credential-protocol qa-uat-env
+        --scenarios <tmp>/scenarios --sha deadbeef --idp-url <URL> --out <tmp>/out.json
 
-Exact asserted substrings are taken from a real run of the script (step-01 reproduction showed
-`login failed: <actor>(NO_PASSWORD)` in the actors check and `=BAD_CRED` in the credential validity
-line); the test author captures them before writing assertions.
+`--sha deadbeef` keeps git/origin/main out of the run. `--idp-url <URL>` is set to the SAME URL as
+`--base-url` in every test (hermetic): without it the script derives `https://auth.<host>` (line 132), i.e.
+`https://auth.127.0.0.1`, and the realm discovery GETs (script lines ~384-386) would attempt real DNS/HTTPS. The whole run exits 1 (ENV_NOT_READY) in T1-T6
+because the unreachable base URL makes `/health` a GAP; tests therefore assert on output text, NOT on
+exit code, except T7 (see below). `System.cmd` is called with `stderr_to_stdout: true` (it cannot capture the two streams separately), so
+all assertions, including T6, run against the combined output; the fake source's own stderr is consumed
+inside the script's subprocess and never reaches it.
 
-Pre-fix: T1, T5, (T7) fail; T2-T4, T6 pass. Post-fix: all pass.
+- Fake credential source `<tmp>/cred.sh`: written by the test, invoked by the script as
+  `bash cred.sh token <user>`. It writes a per-test noise line to stderr and the per-test payload of
+  section 6.3 to stdout (payload embedded via a quoted heredoc so no shell expansion occurs). Any
+  other first argument prints nothing.
+- Scenario fixture: ONE file `<tmp>/scenarios/swiftroute/t.yaml` (the script globs `**/*.yaml`
+  under `--scenarios`, skipping `_throwaway`; `parse_scenario` uses PyYAML when installed, else a
+  regex fallback that reads top-level `id`, `company_id`, and an `actors:` block of indented
+  `label: actor-...` lines). Exact content (three keys, nothing else, so both parser paths agree):
+
+      id: t
+      company_id: swiftroute
+      actors:
+        dispatcher: actor-swiftroute-lena
+
+  No `process_id` (definitions check is then OK/n-a), no `pipeline_test` (spec check OK), label
+  `dispatcher` is not a "candidate" label so the app_roles check uses `GET /api/v1/tasks/inbox`.
+  Derived realm for the actor is `swiftroute`.
+- Fake JWT constant `@jwt`: `eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl` (49 chars: 20 + 1 + 15 +
+  1 + 12; passes the >= 40 floor).
+- Base URL and IdP URL, T1-T6: both `http://127.0.0.1:9` (nothing listens; every HTTP call returns status 0, so a
+  parsed token ends as BAD_CRED, which is how "reached verification" shows up).
+- Base URL, T7 (decision: IN): a stub HTTP server started inside the test with `:gen_tcp.listen(0,
+  [:binary, active: false, reuseaddr: true])` (port 0, real port read back with `:inet.port/1`), served
+  by a `Task` accept loop that reads one request and answers EVERY GET, whatever the path, with
+  `HTTP/1.1 200 OK`, `Content-Length: 2`, `Connection: close`, body `{}`; closed in `on_exit`. The script
+  issues GETs (verified against the script) to `/health` (twice: global check and SHA probe), exactly two
+  realm paths `/realms/swiftroute/.well-known/openid-configuration` and
+  `/realms/bpm-default/.well-known/openid-configuration` (served by the stub because `--idp-url` equals the
+  base URL), `/api/v1/me/modules` (token check) and `/api/v1/tasks/inbox` (app_roles); a catch-all 200
+  covers all of them, and since no seeded `admin-user` exists, `/api/v1/tenants` and `/api/v1/version`
+  are not requested. Because `{}` carries no tenant list the tenant check is UNKNOWN, so T7 asserts on
+  text, not on exit code. The loop accepts connections repeatedly (one request per connection) until
+  closed in `on_exit`.
+  No new dependency; the script's `urllib` talks plain HTTP/1.1 with
+  `Connection: close` so a one-request-per-connection loop suffices.
+
+### 6.3 Test cases and exact assertions
+
+Let A = `actor-swiftroute-lena`. All assertions are substring checks on captured stdout.
+Script-verified message forms: actors detail `login failed: <A>(<STATE>)`; credential-validity line
+`<A>@swiftroute=<STATE>` (present only after a login attempt reached verification; with no attempt the
+line reads `credential validity   : none checked`).
+
+| # | Fake source stdout (stderr always gets a `noise on stderr` line) | Required substrings | Forbidden substrings |
+|---|---|---|---|
+| T1 | `WARN something` line, then `@jwt` line | `login failed: A(BAD_CRED)` and `A@swiftroute=BAD_CRED` | `NO_PASSWORD` |
+| T2 | `Token: @jwt` | `A@swiftroute=BAD_CRED` | `NO_PASSWORD` |
+| T3 | `WARN something` and `Logged in as lena.x.y` (noise only) | `login failed: A(NO_PASSWORD)` and `credential validity   : none checked` | `BAD_CRED` |
+| T4 | only `auth.qa.bizdala.com`; second sub-case only `qa.bizdala.com` | `login failed: A(NO_PASSWORD)` | `BAD_CRED` |
+| T5 | `@jwt` followed by a CR LF line ending (written \r\n, emitted by the fake source with `printf '%s\r\n' "$JWT"`) | `A@swiftroute=BAD_CRED` | `NO_PASSWORD` |
+| T6 | same as T1, run with `--out` | `@jwt` (the full literal and its first segment `eyJhbGciOiJSUzI1NiJ9`) absent from the combined output and the `--out` JSON file | the JWT literal |
+| T7 | `@jwt` line, base URL = stub | `credential validity   : A@swiftroute=OK`; and actors cell not a GAP, i.e. stdout has no `login failed` | `NO_PASSWORD`, `BAD_CRED` |
+
+"OK" for T7 means exactly: the token check `GET /api/v1/me/modules` returned 200 so `try_login` returned
+OK, evidenced by the `A@swiftroute=OK` validity entry and absence of `login failed`.
+
+T5 note: the script reads the source with `subprocess.run(..., text=True)` (script line ~264), whose universal-newline
+mode turns CR LF into LF before `parse_token_line` sees the line, so T5 is an end-to-end guard that a
+CRLF-emitting source works; it does not by itself exercise rule R1's strip (R1 stays as defence in depth).
+
+Pre-fix: T1, T5, T7 fail (NO_PASSWORD); T2, T3, T4, T6 pass (T6 passes trivially pre-fix, it is a
+guard). Post-fix: all pass.
 
 ## 7. Acceptance-criteria mapping
 
@@ -147,11 +202,10 @@ Pre-fix: T1, T5, (T7) fail; T2-T4, T6 pass. Post-fix: all pass.
 - I3: qa-login behavior is byte-identical.
 - I4: the labelled `Token:` form keeps its pre-fix semantics (no shape check).
 
-## 9. Open questions (none block implementation; defaults stated)
+## 9. Open questions
 
-- Q1: the silent `except Exception: pass` hides source failures (timeouts, non-zero exit). Default: out
-  of scope; consider a follow-up issue for a distinct `CRED_SOURCE_ERROR` status.
-- Q2: exact CLI flag name for the credential script and the minimal scenario shape. Default: read the
-  script's argparse block and an existing fixture; this is discovery, not a design choice.
-- Q3: a Windows developer running `mix test` without `UAT_PF_BASH` hits the WSL stub. Default: the test
-  fails loudly with a message to set `UAT_PF_BASH`; Linux CI is the authority.
+- Q1: the silent `except Exception: pass` hides source failures (timeouts, non-zero exit). Explicitly
+  out of scope for ISS-0936; a follow-up issue may add a distinct `CRED_SOURCE_ERROR` status.
+- Q2: a Windows developer running `mix test` without `UAT_PF_BASH` hits the WSL stub bash. Decision:
+  the shared helper's header assertion fails with the hint above (section 6.1); Linux CI is the
+  authority. No further implementer decision is left.

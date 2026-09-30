@@ -975,6 +975,37 @@ defmodule Letflow.Routers.Definitions do
     Response.unprocessable(conn, "a referenced service is not usable by this tenant")
   end
 
+  # ISS-0912 -- REQ-372's semantic decision-rule violations reaching activate.
+  # Mirrors render_validation/2's {:ok, %{valid: false, violations: violations}}
+  # clause (~L370-381) exactly: same 422, same violation_map/1 shape, so a
+  # client renders both the standalone validate endpoint's and activate's
+  # failures identically.
+  defp render_activate(conn, {:error, {:semantic_validation_failed, violations}}) do
+    Response.send_problem(
+      conn,
+      %{
+        Error.unprocessable("definition graph failed semantic validation")
+        | errors: Enum.map(violations, &violation_map/1)
+      }
+    )
+  end
+
+  # ISS-0912 -- run_semantic_validation/2 (lib/letflow/definitions.ex ~2354-2379)
+  # could not even attempt the semantic pass (missing tenant prefix, or an
+  # unparsable definition id reaching VariableSchema.fetch_schemas/3). This is
+  # not a concurrent-state conflict (contrast :not_draft's 409 above) -- it is
+  # a request/environment precondition the semantic check itself depends on,
+  # so it gets the same 422 family as every other "activate could not
+  # validate" branch in this function, with the internal reason surfaced
+  # verbatim since it is not tenant-sensitive (an atom naming a missing
+  # server-side precondition, never definition content).
+  defp render_activate(conn, {:error, {:semantic_validation_precondition_failed, reason}}) do
+    Response.unprocessable(
+      conn,
+      "semantic validation could not run (#{inspect(reason)})"
+    )
+  end
+
   defp render_activate(conn, {:error, _common_error}), do: Response.internal_error(conn)
 
   # ── POST /definitions/:id/deprecate (REQ-082) ───────────────────────────

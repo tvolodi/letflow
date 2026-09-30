@@ -461,7 +461,11 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
 
       # EO-1: task_assigned — CEO task assignee evidence
       # current verifier checks assignee_type == "user"; ROLE-attributed tasks have
-      # assignee_type == nil (Engine §4.3, design settled-OQ-3), so outcome is :fail.
+      # assignee_type == "ROLE" (post-ISS-0905, resolve_assignee/1 derives "ROLE" from
+      # the role attribute), which the verifier's "user"-only check still never
+      # matches, so outcome remains :fail -- Runner's task_assigned verifier has no
+      # "ROLE"-matching arm (a separate, pre-existing gap, not fixed by ISS-0905; see
+      # lib/letflow/design/iss0905-role-assignee-type-not-derived.md §4.2).
       # The observed field still carries the assignee evidence (assignee_ref: "role-ceo").
       assert eo1.outcome in [:pass, :fail],
              "EO-1 task_assigned result must be :pass or :fail"

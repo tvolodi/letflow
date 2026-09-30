@@ -169,19 +169,28 @@ by reading `lib/letflow/api/authorization.ex`'s `evaluate_access/2`
 re-derived.
 
 **Role-attributed task assignee resolution — same settled fact REQ-206 found**, by
-reading `lib/letflow/engine/task_activation.ex`'s `resolve_assignee/1`: a
-role-attributed `HUMAN_TASK`'s `assignee_type` is `nil` and `assignee_ref` is the
-literal `role` attribute string (e.g. `"role-quality-manager"`). **This directly
-affects EO-1-style `task_assigned` verifications below** (§3.2/§3.3): exactly as
-REQ-206's own `req206_swiftroute_test.exs` found (`assignee_type == "user"` never
-matches a role-attributed task, so `Runner`'s `task_assigned` verifier necessarily
-returns `:fail` even though the assignment is semantically correct), this design's
-`task_assigned` outcome checks assert `outcome in [:pass, :fail]` with the `observed`
-map carrying the real `assignee_ref` value as the evidence — never asserting
-`:pass` outright — for any expected outcome scoped to a role-attributed task. This is
-not a new limitation this design introduces; it is `Letflow.Simulation.Runner`'s
-existing `task_assigned` method (REQ-205 §6, unchanged by REQ-206), applied to the
-same role-attribution shape REQ-206 already hit.
+reading `lib/letflow/engine/task_activation.ex`'s `resolve_assignee/1`: post-ISS-0905,
+a role-attributed `HUMAN_TASK`'s `assignee_type` is derived as `"ROLE"` (not `nil`)
+and `assignee_ref` is the literal `role` attribute string (e.g.
+`"role-quality-manager"`). **This directly affects EO-1-style `task_assigned`
+verifications below** (§3.2/§3.3): exactly as REQ-206's own `req206_swiftroute_test.exs`
+found, `Runner`'s `task_assigned` verifier checks specifically for
+`assignee_type == "user"` (lowercase) and has no `"ROLE"`-matching arm at all, so it
+still never matches a role-attributed task either way (`assignee_type` being `"ROLE"`
+instead of `nil` changes nothing here — the verifier was never checking for `nil`, it
+was only ever checking for `"user"`) — `Runner`'s `task_assigned` verifier necessarily
+still returns `:fail` even though the assignment is semantically correct, so this
+design's `task_assigned` outcome checks assert `outcome in [:pass, :fail]` with the
+`observed` map carrying the real `assignee_ref` value as the evidence — never
+asserting `:pass` outright — for any expected outcome scoped to a role-attributed
+task. This is not a new limitation this design introduces; it is
+`Letflow.Simulation.Runner`'s existing `task_assigned` method (REQ-205 §6, unchanged
+by REQ-206 or by ISS-0905), applied to the same role-attribution shape REQ-206
+already hit — `Runner` never learned to verify a `"ROLE"`-typed assignment, a
+separate, pre-existing, lower-severity gap left for REQ-ANALYST to size as a
+follow-up if a `"ROLE"`-scoped `task_assigned` UAT assertion is ever wanted to
+assert `:pass` outright (`lib/letflow/design/iss0905-role-assignee-type-not-derived.md`
+§4.2, OQ-ISS0905-2).
 
 ### §0.5 Entity/entity-query subsystem — confirmed NOT landed (settles AC4)
 

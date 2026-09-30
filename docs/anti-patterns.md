@@ -4102,3 +4102,46 @@ precondition polarity rather than assuming existence) is a separate, larger
 preflight-logic change, out of ISS-0895's scope; this entry exists so the
 next scenario author or preflight maintainer doesn't rediscover the gap
 from scratch.
+
+## An authorization scoping predicate was built correctly and reviewed correctly, but its marker field was never populated by anything, so every guarded row silently fell outside every branch of the check (2026-09-30, REVIEWER, ISS-0905)
+
+`Letflow.Tasks.filter_by_assignee_scope/2`'s `{:principal, ...}` clause and
+`apply_claim/5`'s `"ROLE"` clause were both correctly written and both
+correctly reviewed against `tasks.assignee_type == "ROLE"` — but no authoring
+or activation path in this codebase ever wrote that value.
+`Letflow.Engine.TaskActivation.resolve_assignee/1` only ever copied
+`node.attributes["assignee_type"]` verbatim, and no `:HUMAN_TASK` node in any
+process definition ever carries that key (only `role:`), so every
+role-assigned task was persisted with `assignee_type: nil`. The scoping
+predicate's `"ROLE"` arm was correct but unreachable dead code from day one;
+meanwhile `apply_claim/5`'s `%Task{assignee_type: nil}` clause — correct for a
+genuinely unassigned task — silently caught every role-assigned task too,
+since a `nil` marker is indistinguishable from "nobody set this yet." Net
+effect: the intended assignee (the role's members) saw zero tasks in their
+inbox, and any authenticated user could claim a task meant to be
+role-restricted. This is not a logic bug in the scoping/claim code at all —
+both were reviewed and are correct — it is a silent authorization gap
+one layer upstream, at the point that derives the marker the scoping logic
+keys off.
+
+This is a recognizable shape, not a one-off: a security-relevant predicate
+branches correctly on an enum-like marker field (`assignee_type`,
+`nil`/`"USER"`/`"GROUP"`/`"ROLE"`), but nothing in the write path that
+originates the row is checked end-to-end to confirm it ever actually
+populates the value the read-time predicate assumes exists. A `nil` marker
+reads as "no default invented — safe, permissive default" in isolation, but
+whichever branch treats `nil` as "unassigned, therefore self-claimable" is
+exactly wrong for a row that was supposed to carry a real value and just
+never got one.
+
+**Correct alternative:** when reviewing or designing an authorization
+predicate keyed off a marker/enum field, don't stop at confirming the
+predicate's branches are individually correct — trace at least one real
+write path end-to-end to confirm something actually populates every value
+the predicate branches on, for every row shape the schema allows. Treat a
+`nil`/absent-marker branch that grants access (rather than denying it) as
+requiring positive proof that "marker absent" and "genuinely unassigned" are
+the same thing for every row that can reach that branch — ISS-0905's fix
+(`lib/letflow/design/iss0905-role-assignee-type-not-derived.md`) closes the
+gap by deriving the marker at its one origin point (`resolve_assignee/1`)
+rather than special-casing the two already-correct consumers.

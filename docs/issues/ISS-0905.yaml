@@ -24,4 +24,47 @@ affected_files:
   - lib/letflow/ (task creation, inbox/list queries, claim authorization)
 queue_ref: Q-897  # queue allocated issue_ref ISS-0897, which collides with an existing local file; local filename kept as ISS-0905 and GH-2031 retitled to match
 github_ref: GH-2031
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0905-role-assignee-type-derivation
+resolved_at: "2026-09-30T11:17:55Z"
+resolution: >
+  Letflow.Engine.TaskActivation.resolve_assignee/1 never derived
+  assignee_type for role-attributed HUMAN_TASK nodes -- a universal bug, not
+  an edge case: every role-assigned task persisted assignee_type: nil,
+  making it invisible to its intended group's members (GET /tasks/inbox's
+  ROLE filter arm never matched) AND claimable by any authenticated
+  TASK_WORKER regardless of role membership (the claim authorization's
+  nil-assignee_type clause matched unconditionally instead of the ROLE
+  clause). Fixed with a three-branch precedence: an explicit assignee_type
+  wins; else a present role attribute derives assignee_type: "ROLE"; else
+  nil. Added Letflow.Engine.TaskAssigneeTypeBackfill + mix
+  letflow.backfill_task_assignee_type to repair already-broken existing
+  task rows (assignee_type IS NULL AND assignee_ref IS NOT NULL) in any
+  pre-existing environment. Rewrote two existing tests
+  (test/letflow/engine_test.exs's REQ-047 AC1 test and a stale comment in
+  test/letflow/simulation/req206_swiftroute_test.exs) that had encoded the
+  bug as correct behavior, and corrected a stale assignee_type quote in
+  req207's design doc. Full gate chain: SECURITY-REVIEWER PASSed (INV-1,
+  INV-6), REVIEWER PASSed (added the req207 doc fix plus a new
+  anti-patterns.md entry generalizing this bug class -- "authorization
+  predicate correct, but its marker field is never populated by any write
+  path"), TEST-DESIGN-VALIDATOR PASSed with real mutation testing (3
+  mutants applied directly to source, all 3 caught), TEST-RUNNER PASSed
+  (full suite; remaining failures triaged as known host flakes), and
+  RELEASE-VALIDATOR PASSed a complete live end-to-end reproduction of the
+  original Marco/tobias scenario: created a real role-gated task, confirmed
+  the role's member sees it in their inbox, confirmed a non-member's claim
+  attempt is genuinely rejected with 409, confirmed the positive claim path
+  works, and independently verified the backfill mix task is load-bearing
+  via a 4th, separate mutation angle. This is the most rigorously verified
+  fix of the session (SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR,
+  TEST-RUNNER, RELEASE-VALIDATOR all PASSed). Merged via PR #2046
+  (squash; see PR for merge commit SHA).
+
+  FOLLOW-UP OPERATIONAL ACTION, NOT DONE HERE: this fix does not
+  retroactively repair already-broken task rows in any already-deployed
+  environment (e.g. QA, where the original bug was found in
+  WF05-FULL2-20260930) -- that requires actually running `mix
+  letflow.backfill_task_assignee_type` against that environment, a
+  separate operational step not performed as part of this closure (same
+  honesty discipline as ISS-0886/ISS-0897).

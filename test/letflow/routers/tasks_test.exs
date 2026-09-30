@@ -1736,6 +1736,104 @@ defmodule Letflow.Routers.TasksTest do
     end
   end
 
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0905 -- role-assignee task created via the real activation path
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "ISS-0905: role-assignee task created via the real activation path" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0905")}
+
+    # graph_human_task_end/0 (already defined above for REQ-085 AC1) is
+    # exactly the fixture this bug needs: a single :HUMAN_TASK node carrying
+    # only attributes: %{"role" => "approver"} -- no "assignee_type" key --
+    # the only shape any authoring path in this codebase ever produces
+    # (CHK-09). start_instance_with_pending_task!/2 drives it through the
+    # real Letflow.Engine.create/2 activation path, not insert_task!/2 (which
+    # bypasses resolve_assignee/1 entirely and therefore cannot exercise this
+    # bug at all).
+
+    # Fail-first against unfixed code: pre-fix, resolve_assignee/1 returns
+    # assignee_type: nil for this task, which matches none of
+    # filter_by_assignee_scope/2's three OR arms, so the role's sole member
+    # sees 0 items instead of 1.
+    test "a role-assigned task created via Engine.create/2 IS visible in GET /tasks/inbox to a member of that role",
+         %{tenant: tenant} do
+      member = insert_user!(tenant, %{username: "iss0905-marco"})
+      group = insert_group!(tenant, name: "iss0905-approvers")
+      insert_group_member!(tenant, group.id, member.id)
+      insert_role!(tenant, "approver", group.id)
+
+      {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
+
+      # "approver" here is a :process_routing_role (insert_role!/3), not a
+      # platform role -- Identity.list_effective_role_names/2 only surfaces
+      # platform roles (ISS-0774), so it plays no part in this scoping check.
+      # The inbox route's own RBAC gate is satisfied the same way every other
+      # scoped-inbox test in this file satisfies it (build_conn's roles:
+      # field, a companion platform-role grant) -- the assignee-scope
+      # filtering that actually proves this bug's fix is
+      # resolve_principal_scope/2's real, DB-backed role_names resolution
+      # (queries ALL TenantRole rows regardless of :kind), reached via
+      # filter_by_assignee_scope/2's {:principal, ...} clause.
+      conn =
+        build_conn(:get, "/inbox?page_size=50", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: member.id
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert task.id in item_ids(body)
+    end
+
+    # Fail-first: pre-fix, apply_claim/5's first clause
+    # (%Task{assignee_type: nil}) matches this row unconditionally and lets
+    # any authenticated caller self-assign -- this is the issue's Tobias
+    # case (a non-member could claim it, HTTP 200). Post-fix, assignee_type
+    # is "ROLE" and apply_claim/5's ROLE clause rejects a non-member with
+    # :assignee_role_not_held (409), and the task row is unchanged.
+    test "the same role-assigned task is REJECTED when claimed by a non-member (ISS-0905)",
+         %{tenant: tenant} do
+      non_member = insert_user!(tenant, %{username: "iss0905-tobias"})
+
+      # Some OTHER role's group exists so `approver` genuinely has zero
+      # members bound -- non_member is a member of a different group/role
+      # entirely, matching the issue's "authenticated TASK_WORKER, not a
+      # member of role-ops-manager" shape.
+      other_group = insert_group!(tenant, name: "iss0905-other-group")
+      insert_group_member!(tenant, other_group.id, non_member.id)
+      insert_role!(tenant, "some-other-role", other_group.id)
+
+      {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
+
+      conn =
+        build_conn(:post, "/#{task.id}/claim", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: non_member.id
+        )
+        |> dispatch()
+
+      assert conn.status == 409
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.assignee_type == "ROLE"
+      assert unchanged.assignee_ref == "approver"
+    end
+
+    # Confirms the persisted row's actual assignee_type post-activation, as
+    # a direct proof this fix's derivation reached the real insert path (not
+    # just resolve_assignee/1's own unit test).
+    test "the persisted task row's assignee_type is \"ROLE\" (not nil) after real activation from a role-only HUMAN_TASK node",
+         %{tenant: tenant} do
+      {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
+
+      row = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert row.assignee_type == "ROLE"
+      assert row.assignee_ref == "approver"
+    end
+  end
+
   # ── Test-file-local helper (REQ-085 AC2) -- matches
   #    test/letflow/routers/req078_supporting_routes_test.exs's own
   #    strip_comments_and_docs/1 precedent for a grep-shaped structural test.

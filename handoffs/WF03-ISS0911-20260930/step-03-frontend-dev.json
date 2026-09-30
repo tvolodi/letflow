@@ -1,0 +1,56 @@
+{
+  "handoff_id": "457e475d-0125-4207-abd0-6281ece7d885",
+  "run_id": "WF03-ISS0911-20260930",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0911-20260930/step-03-frontend-dev.json",
+  "created_at": "2026-09-30T07:11:09Z",
+  "started_at": "2026-09-30T07:11:09Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["70dbb88c-9ca5-42c3-a052-8c8081699bc8"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md",
+      "web/src/hooks/useDefinitions.ts",
+      "web/src/api/definitions.ts",
+      "web/src/api/useTenantScopedQueryKeys.ts",
+      "web/src/pages/instances/InstanceBoardPage.tsx"
+    ],
+    "owned_modules": ["web/src/pages/instances/InstanceBoardPage.tsx", "web/src/hooks/useDefinitions.ts"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 for ISS-0911. Implement lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md's PASSed design in full: (1) add useActiveDefinitionByName(name) hook to web/src/hooks/useDefinitions.ts calling definitionsApi.getActive, keyed via the existing definitionKeys.active(name) factory in web/src/api/useTenantScopedQueryKeys.ts. (2) In InstanceBoardPage.tsx's onStartDefinitionNameChange, replace the definitionTypeahead.items scan with a debounced call into the new hook keyed on the dialog's own startDefinitionName (use the existing useDebounce hook, 300ms, matching DefinitionListPage.tsx's convention per the design). (3) Implement the 5-state version-field model (idle/loading/found/not_found/error) via a deriveVersionLookupState()-shaped function, wiring the version display input's value/placeholder per each state. (4) Leave definitionTypeahead's other two call sites (onResolveDefinition at the page-level onBlur, and the datalist suggestions) untouched.\n\nRun web/'s standard gates: `npm run type-check && npm run lint && npm test && npm run guards`, quoting real output. If web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts exists and can plausibly be exercised via any available local harness, note whether you attempted it -- but this environment likely has no live backend, so state explicitly if a live e2e run is not possible rather than claiming one.",
+    "acceptance_criteria": [
+      "the fix calls definitionsApi.getActive(name) (or an equivalent exact-match backend lookup) keyed on the dialog's own typed value, not the page-level filtered list",
+      "a race-guard against out-of-order async responses (rapid typing) is genuinely in place, matching the PASSed design's TanStack Query per-key cache isolation approach",
+      "the version field's loading/not-found/found states are all implemented with no gap",
+      "definitionTypeahead's other two call sites are unchanged",
+      "web/'s type-check, lint, test, and guards gates all pass, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ432-20260930/step-final-git-merge.json",
   "created_at": "2026-09-30T20:53:57Z",
   "started_at": "2026-09-30T20:54:00Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-30T20:54:27Z",
+  "status": "FAILED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -44,10 +44,15 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Rebase onto origin/main (6a61647e, 2 commits ahead: ISS-0911 fix #2056 and one other) aborted at the first replayed commit (6d39b3a6, ORCH step-00 bookkeeping): conflicts in docs/requirements.yaml, docs/status/requirement_status.index.yaml, docs/status/requirement_status.v25.yaml (3 files; all three are in the task CONFLICT RULES protected list). Per instructions git rebase --abort was run; branch is unchanged at its pre-rebase tip, nothing pushed, no PR, no build/test run (they are post-rebase steps). origin/main also touched docs/issues/ISS-0890/0898/0911/0916..0921 and handoffs/registry.json/orchestrator.log per the ORIG_HEAD..origin/main name list (issue-id files ISS-0917..0921 exist on both sides; not resolved or renumbered here). ORCH decides resolution.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "rebase conflict in protected files: docs/requirements.yaml, docs/status/requirement_status.index.yaml, docs/status/requirement_status.v25.yaml (first conflicting commit 6d39b3a6 ORCH step-00 bookkeeping vs origin/main 6a61647e)"
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
       "commit_sha_list": [],
@@ -56,7 +61,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH resolves the requirements.yaml/requirement_status conflict (and any ISS-0917..0921 id collision) then re-dispatches step-final."
   },
   "rework_count": 0,
   "max_rework": 3

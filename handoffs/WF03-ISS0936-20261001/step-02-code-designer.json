@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0936-20261001/step-02-code-designer.json",
   "created_at": "2026-09-30T21:17:16Z",
   "started_at": "2026-09-30T21:17:16Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T00:00:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -38,7 +38,14 @@
       "Handoff result filled, status COMPLETED"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Design written: pure parse_token_line helper (Token: form trusted; bare form requires full-line eyJ three-segment regex + len>=40; hostnames/noise rejected), no-secret-echo invariant, header doc update, ExUnit test test/scripts/uat_preflight_bare_jwt_test.exs run by mix test in CI (existing test/scripts/*.sh are not run by CI), cases T1-T7, AC mapping, open questions.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

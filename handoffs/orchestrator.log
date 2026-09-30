@@ -2520,3 +2520,4 @@
 2026-09-30T21:15:02Z | DISPATCH | WF03-ISS0936-20261001 | step-01 | ORCH -> ISSUE-FIXER | PENDING
 2026-09-30T21:17:16Z | PASS | WF03-ISS0936-20261001 | step-01 | ISSUE-FIXER -> ORCH | PASS -- ORCH read result: root cause fetch_credential lines 300-303 accepts only 'Token:' prefix; reproduced by running real script (bare JWT -> NO_PASSWORD, prefixed -> reaches HTTP/BAD_CRED). Handoff skipped IN_PROGRESS claim, cosmetic.
 2026-09-30T21:17:16Z | DISPATCH | WF03-ISS0936-20261001 | step-02 | ORCH -> CODE-DESIGNER | PENDING
+2026-09-30T21:18:45Z | PASS | WF03-ISS0936-20261001 | step-02 | CODE-DESIGNER -> ORCH | PASS -- design doc lib/letflow/design/iss0936-uat-preflight-bare-jwt.md exists (ORCH checked)

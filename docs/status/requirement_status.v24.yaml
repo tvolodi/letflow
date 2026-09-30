@@ -976,3 +976,49 @@
       for merge commit SHA). No letflow-queue task to release (queue_ref:
       null -- discovered directly by CODE-DESIGN-VALIDATOR mid-task, filed
       by ORCH, not a queue-originated task).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T11:17:55Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0905
+      (BLOCKER -- Letflow.Engine.TaskActivation.resolve_assignee/1 never
+      derived assignee_type for role-attributed HUMAN_TASK nodes, a
+      universal bug: every role-assigned task was invisible to its
+      intended group in GET /tasks/inbox and claimable by any
+      authenticated user, discovered by UAT-RUNNER in WF05-FULL2-20260930)
+      -- resolved: three-branch resolve_assignee/1 precedence (explicit
+      assignee_type wins; role attribute present derives assignee_type:
+      "ROLE"; else nil). Added Letflow.Engine.TaskAssigneeTypeBackfill +
+      mix letflow.backfill_task_assignee_type for pre-fix task rows.
+      Rewrote test/letflow/engine_test.exs's REQ-047 AC1 test and a stale
+      comment in test/letflow/simulation/req206_swiftroute_test.exs that
+      had encoded the bug as correct behavior, and corrected a stale
+      assignee_type quote in req207's design doc. Full gate chain:
+      SECURITY-REVIEWER PASSed (INV-1, INV-6); REVIEWER PASSed (added the
+      req207 doc fix and a new anti-patterns.md entry generalizing this
+      bug class); TEST-DESIGN-VALIDATOR PASSed with real mutation testing
+      (3 mutants applied directly to source, all 3 caught); TEST-RUNNER
+      PASSed (full suite, remaining failures triaged as known host
+      flakes); RELEASE-VALIDATOR PASSed a complete live end-to-end
+      reproduction of the original Marco/tobias scenario against a real
+      backend -- created a real role-gated task, confirmed the role's
+      member sees it in their inbox, confirmed a non-member's claim is
+      genuinely rejected with 409, confirmed the positive claim path
+      works, and independently verified the backfill mix task is
+      load-bearing via a 4th mutation angle. Most rigorously verified fix
+      of the session. docs/issues/ISS-0905.yaml set to status: resolved
+      (resolved_in_run: fix/ISS-0905-role-assignee-type-derivation) in
+      this same append -- this is an ISSUE, not a REQ, so no
+      docs/requirements.yaml entry is touched. FOLLOW-UP FLAGGED, NOT
+      DONE: this fix does not retroactively repair already-broken task
+      rows in any already-deployed environment (e.g. the QA environment
+      where the bug was found) -- running `mix
+      letflow.backfill_task_assignee_type` there is a separate,
+      not-yet-performed operational step (same honesty discipline as
+      ISS-0886/ISS-0897). Merged via PR #2046 (branch
+      fix/ISS-0905-role-assignee-type-derivation, squash; see PR for merge
+      commit SHA). No letflow-queue task to release (queue_ref: null --
+      discovered by UAT-RUNNER in a concurrent session's WF05-FULL2 run
+      and filed locally, not a queue-originated task).

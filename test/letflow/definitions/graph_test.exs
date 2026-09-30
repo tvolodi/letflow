@@ -1445,5 +1445,61 @@ defmodule Letflow.Definitions.GraphTest do
       assert violation.message =~ "h1"
       assert violation.message =~ "NOT-ISO"
     end
+
+    # NOTE on these four tests' assertions: a non-map `attributes` also makes
+    # CHK-09 (`check_human_task_role/1`, via `blank_or_missing_string?/2`'s
+    # own pre-existing non-map fallback) treat the 'role' attribute as
+    # absent, since it can't read a "role" key out of anything that isn't a
+    # map either -- so `validate_node_attributes/1` on a HUMAN_TASK node with
+    # non-map `attributes` still returns a `:missing_role` violation from
+    # CHK-09, same as it always has. That is expected, pre-existing, correct
+    # (non-crashing) CHK-09 behavior, not part of this fix. What ISS-0904's
+    # fix changes is narrower: CHK-21 no longer raises BadMapError and
+    # contributes zero escalation-specific violations
+    # (:invalid_escalation_timer / :missing_escalation_role /
+    # :missing_escalation_timer_duration) for a non-map `attributes` --
+    # these tests assert exactly that, rather than an overall `valid: true`
+    # that would incorrectly fold CHK-09's independent, unrelated behavior
+    # into this fix's assertion.
+    test "attributes is a JSON-encoded string (wire-contract shape) -> no crash, no escalation-specific violation" do
+      # ISS-0904 regression: a HUMAN_TASK node whose `attributes` is the
+      # wire-contract string form (as sent by every existing e2e spec and
+      # the real canvas editor, e.g. `flowToGraph.ts`) used to raise
+      # BadMapError inside check_human_task_escalation/1 because
+      # `Map.get/3` was called directly on a non-map value with no
+      # `is_map/1` guard. Post-fix, a non-map `attributes` degrades to
+      # "escalation attributes absent" -- the same disposition as a
+      # HUMAN_TASK node with no escalation attributes at all -- and must
+      # not crash.
+      g =
+        graph(
+          [attr_node("h1", :HUMAN_TASK, "{\"role\":\"OPS_REVIEWER\"}")],
+          []
+        )
+
+      result = Graph.validate_node_attributes(g)
+      assert codes(result) == [:missing_role]
+    end
+
+    test "attributes is nil -> no crash, no escalation-specific violation" do
+      g = graph([attr_node("h1", :HUMAN_TASK, nil)], [])
+
+      result = Graph.validate_node_attributes(g)
+      assert codes(result) == [:missing_role]
+    end
+
+    test "attributes is a list -> no crash, no escalation-specific violation" do
+      g = graph([attr_node("h1", :HUMAN_TASK, [])], [])
+
+      result = Graph.validate_node_attributes(g)
+      assert codes(result) == [:missing_role]
+    end
+
+    test "attributes is a bare integer -> no crash, no escalation-specific violation" do
+      g = graph([attr_node("h1", :HUMAN_TASK, 42)], [])
+
+      result = Graph.validate_node_attributes(g)
+      assert codes(result) == [:missing_role]
+    end
   end
 end

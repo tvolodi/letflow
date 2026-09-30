@@ -905,46 +905,57 @@ defmodule Letflow.Definitions.Graph do
   defp check_human_task_escalation(%__MODULE__{nodes: nodes}) do
     nodes
     |> Enum.filter(&(&1.node_type == :HUMAN_TASK))
-    |> Enum.flat_map(fn node ->
-      attrs = node.attributes || %{}
-      raw_duration = Map.get(attrs, "escalation_timer_duration")
-      raw_role = Map.get(attrs, "escalation_role")
-      has_duration = not is_nil(raw_duration)
-      has_role = not is_nil(raw_role) and is_binary(raw_role) and String.trim(raw_role) != ""
-
-      cond do
-        has_duration and is_binary(raw_duration) and not valid_iso8601_duration?(raw_duration) ->
-          [
-            %Violation{
-              code: :invalid_escalation_timer,
-              message:
-                "Node '#{node.id}' (HUMAN_TASK) has an invalid 'escalation_timer_duration' attribute (#{inspect(raw_duration)}); must be a valid ISO-8601 duration string"
-            }
-          ]
-
-        has_duration and not has_role ->
-          [
-            %Violation{
-              code: :missing_escalation_role,
-              message:
-                "Node '#{node.id}' (HUMAN_TASK) has 'escalation_timer_duration' but is missing a non-empty 'escalation_role' attribute"
-            }
-          ]
-
-        not has_duration and not is_nil(raw_role) ->
-          [
-            %Violation{
-              code: :missing_escalation_timer_duration,
-              message:
-                "Node '#{node.id}' (HUMAN_TASK) has 'escalation_role' but is missing 'escalation_timer_duration'"
-            }
-          ]
-
-        true ->
-          []
-      end
-    end)
+    |> Enum.flat_map(&human_task_escalation_violations(&1, &1.attributes || %{}))
   end
+
+  # `attributes` is documented as `map() | nil` with string keys, but a node
+  # built from the wire-contract shape (`attributes: string | null`, e.g. a
+  # JSON-encoded string) can reach here un-decoded -- the `is_map/1` guard is
+  # a defensive belt-and-suspenders check so this helper stays total (never
+  # raises) even when handed something other than a map. A non-map value is
+  # treated as "escalation attributes absent," the same disposition as the
+  # `cond`'s own `true -> []` branch below for a map with neither field set.
+  @spec human_task_escalation_violations(Node.t(), map() | nil | term()) :: [Violation.t()]
+  defp human_task_escalation_violations(node, attrs) when is_map(attrs) do
+    raw_duration = Map.get(attrs, "escalation_timer_duration")
+    raw_role = Map.get(attrs, "escalation_role")
+    has_duration = not is_nil(raw_duration)
+    has_role = not is_nil(raw_role) and is_binary(raw_role) and String.trim(raw_role) != ""
+
+    cond do
+      has_duration and is_binary(raw_duration) and not valid_iso8601_duration?(raw_duration) ->
+        [
+          %Violation{
+            code: :invalid_escalation_timer,
+            message:
+              "Node '#{node.id}' (HUMAN_TASK) has an invalid 'escalation_timer_duration' attribute (#{inspect(raw_duration)}); must be a valid ISO-8601 duration string"
+          }
+        ]
+
+      has_duration and not has_role ->
+        [
+          %Violation{
+            code: :missing_escalation_role,
+            message:
+              "Node '#{node.id}' (HUMAN_TASK) has 'escalation_timer_duration' but is missing a non-empty 'escalation_role' attribute"
+          }
+        ]
+
+      not has_duration and not is_nil(raw_role) ->
+        [
+          %Violation{
+            code: :missing_escalation_timer_duration,
+            message:
+              "Node '#{node.id}' (HUMAN_TASK) has 'escalation_role' but is missing 'escalation_timer_duration'"
+          }
+        ]
+
+      true ->
+        []
+    end
+  end
+
+  defp human_task_escalation_violations(_node, _attrs), do: []
 
   # `attributes` is documented as `map() | nil` with string keys (design doc
   # §2) -- the `is_map/1` guard is a defensive belt-and-suspenders check so

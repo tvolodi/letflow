@@ -15,6 +15,7 @@ import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { deferClickState } from '@/utils/deferClickState'
 import type {
   EffectivePin,
   EffectivePinSource,
@@ -100,19 +101,24 @@ export function InstancePinsPanel({
 
   const showRebind = canRebind && instanceActive
 
+  // ISS-0662 family: defer click-triggered state (see utils/deferClickState.ts).
   function openRebind(pin: EffectivePin) {
-    rebind.reset()
-    setRebindTarget(pin)
-    setNewVersion('')
-    setReason('')
-    // One key per dialog open; a retry from the same open dialog reuses it.
-    setIdempotencyKey(newIdempotencyKey())
-    setSuccessMessage(null)
+    deferClickState(() => {
+      rebind.reset()
+      setRebindTarget(pin)
+      setNewVersion('')
+      setReason('')
+      // One key per dialog open; a retry from the same open dialog reuses it.
+      setIdempotencyKey(newIdempotencyKey())
+      setSuccessMessage(null)
+    })
   }
 
   function closeRebind() {
-    setRebindTarget(null)
-    rebind.reset()
+    deferClickState(() => {
+      setRebindTarget(null)
+      rebind.reset()
+    })
   }
 
   const trimmedVersion = newVersion.trim()
@@ -128,26 +134,28 @@ export function InstancePinsPanel({
   function submitRebind(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!rebindTarget || !canSubmit) return
-    rebind.mutate(
-      {
-        body: {
-          reason: trimmedReason,
-          entries: [{ kind: rebindTarget.kind, ref: rebindTarget.ref, version: trimmedVersion }],
+    deferClickState(() => {
+      rebind.mutate(
+        {
+          body: {
+            reason: trimmedReason,
+            entries: [{ kind: rebindTarget.kind, ref: rebindTarget.ref, version: trimmedVersion }],
+          },
+          idempotencyKey,
         },
-        idempotencyKey,
-      },
-      {
-        onSuccess: (response: RebindPinsResponse) => {
-          const change = response.changes[0]
-          setSuccessMessage(
-            change
-              ? `Moved ${change.ref} from ${change.prior_version} to ${change.new_version}`
-              : 'No change: already on that version',
-          )
-          setRebindTarget(null)
+        {
+          onSuccess: (response: RebindPinsResponse) => {
+            const change = response.changes[0]
+            setSuccessMessage(
+              change
+                ? `Moved ${change.ref} from ${change.prior_version} to ${change.new_version}`
+                : 'No change: already on that version',
+            )
+            setRebindTarget(null)
+          },
         },
-      },
-    )
+      )
+    })
   }
 
   const rendererState: RendererState = pinsQuery.isLoading

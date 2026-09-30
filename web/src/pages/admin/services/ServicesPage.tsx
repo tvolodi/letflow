@@ -12,6 +12,7 @@ import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { Button } from '@/components/ui/Button'
+import { deferClickState } from '@/utils/deferClickState'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 
@@ -108,14 +109,21 @@ export default function ServicesPage() {
     return 'Failed to retire service.'
   }
 
+  // ISS-0662 family: a React setState inside the native dispatch turn of a real
+  // trusted click freezes the renderer (see utils/deferClickState.ts). Every
+  // click-triggered state change on the REQ-432 controls is deferred one macrotask.
   function openPublish(row: ServiceRecord) {
-    publishMutation.reset()
-    setPublishTarget(row)
+    deferClickState(() => {
+      publishMutation.reset()
+      setPublishTarget(row)
+    })
   }
 
   function openRetire(serviceId: string) {
-    retireMutation.reset()
-    setRetireTarget(serviceId)
+    deferClickState(() => {
+      retireMutation.reset()
+      setRetireTarget(serviceId)
+    })
   }
 
   function handlePublishSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -135,7 +143,8 @@ export default function ServicesPage() {
       const raw = (form.get(name) as string | null) ?? ''
       if (raw.trim()) body[name] = raw
     }
-    publishMutation.mutate({ serviceId: publishTarget.service_id, body })
+    const serviceId = publishTarget.service_id
+    deferClickState(() => publishMutation.mutate({ serviceId, body }))
   }
 
   function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -463,7 +472,7 @@ export default function ServicesPage() {
                 </div>
               )}
               <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-                <Button variant="secondary" size="sm" onClick={() => setPublishTarget(null)}>Cancel</Button>
+                <Button variant="secondary" size="sm" onClick={() => deferClickState(() => setPublishTarget(null))}>Cancel</Button>
                 <Button
                   variant="primary"
                   size="sm"
@@ -493,13 +502,13 @@ export default function ServicesPage() {
               </div>
             )}
             <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" size="sm" onClick={() => setRetireTarget(null)}>Cancel</Button>
+              <Button variant="secondary" size="sm" onClick={() => deferClickState(() => setRetireTarget(null))}>Cancel</Button>
               <Button
                 variant="danger"
                 size="sm"
                 data-testid="service-retire-confirm"
                 loading={retireMutation.isPending}
-                onClick={() => retireMutation.mutate(retireTarget)}
+                onClick={() => deferClickState(() => retireMutation.mutate(retireTarget))}
               >
                 {retireMutation.isPending ? 'Retiring…' : 'Retire'}
               </Button>

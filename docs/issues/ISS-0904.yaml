@@ -60,5 +60,26 @@ affected_files:
 source_reports: []
 queue_ref: null  # discovered by FRONTEND-DEV mid-task on an unrelated fix, filed directly by ORCH; not a queue-originated task
 github_ref: null  # discovered directly in this repo; no GitHub mirror issue was opened
-status: open
+status: resolved
+resolved_in_run: "fix/ISS-0904-human-task-escalation-badmaperror"
+resolved_at: "2026-09-30T05:10:00Z"
+resolution: >
+  Letflow.Definitions.Graph.check_human_task_escalation/1 split into a
+  two-clause pattern: the original logic is kept guarded `when is_map(attrs)`,
+  and an unguarded fallback clause returns `[]` for any non-map `attributes`
+  (JSON-encoded string, nil, list, bare integer, etc.), matching the
+  established sibling convention already used by every other per-node-type
+  check in this module (see `blank_or_missing_string?/2`'s own `is_map`
+  guard + `_, do: true` fallback). 4 new regression tests added to
+  test/letflow/definitions/graph_test.exs covering non-map attributes as a
+  JSON-encoded string, nil, a list, and a bare integer -- all asserting no
+  crash and a clean CHK-21 degrade instead of BadMapError, alongside the 4
+  pre-existing map-form CHK-21 tests (all 76 tests in the file pass).
+  SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (real mutation testing:
+  3 mutants applied directly to source, all 3 caught), TEST-RUNNER, and
+  RELEASE-VALIDATOR all PASSed. RELEASE-VALIDATOR independently reproduced
+  the original crash live at the exact call site
+  (Letflow.Definitions.create/2 -> Graph.check_human_task_escalation/1) and
+  confirmed it now returns a clean validation-error tuple instead of a 500.
+  Merged via PR #2024 (branch fix/ISS-0904-human-task-escalation-badmaperror).
 parent_issue: null

@@ -836,3 +836,33 @@
       (see PR for merge commit SHA). No letflow-queue task to release for
       ISS-0900 itself (queue_ref: null -- filed directly by ORCH as a split
       of ISS-0890/queue task 890, not itself a separately queued task).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T05:10:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0904
+      (MAJOR -- Letflow.Definitions.Graph.check_human_task_escalation/1
+      BadMapError-crashed with a 500 on any HUMAN_TASK node whose attributes
+      is the wire-contract JSON-string form, found by FRONTEND-DEV while
+      seeding a real instance for ISS-0900 scenario 1). Fix: split
+      check_human_task_escalation/1 into a two-clause pattern -- original
+      logic kept `when is_map(attrs)`, unguarded fallback returns `[]` --
+      matching the sibling convention already used by every other
+      per-node-type check in the module. 4 new regression tests added to
+      test/letflow/definitions/graph_test.exs (non-map attributes as JSON
+      string, nil, list, bare integer), all 76 tests in the file pass.
+      SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (real mutation
+      testing, 3/3 mutants caught), TEST-RUNNER, and RELEASE-VALIDATOR all
+      PASSed; RELEASE-VALIDATOR independently reproduced the original crash
+      live at the exact call site (Letflow.Definitions.create/2) and
+      confirmed it now returns a clean validation-error tuple instead of a
+      500. docs/issues/ISS-0904.yaml set to status: resolved
+      (resolved_in_run: fix/ISS-0904-human-task-escalation-badmaperror) in
+      this same append -- this is an ISSUE, not a REQ, so no
+      docs/requirements.yaml entry is touched. Merged via PR #2024 (branch
+      fix/ISS-0904-human-task-escalation-badmaperror), squash-merged to main
+      (see PR for merge commit SHA). No letflow-queue task to release for
+      ISS-0904 itself (queue_ref: null -- discovered directly by an agent
+      mid-task, not a queue-originated task).

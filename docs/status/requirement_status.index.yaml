@@ -5021,8 +5021,19 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 19
+    entries: 20
     note: >
+      Bumped to 20 by DOC-UPDATER after appending ISS-0900's SCOPE-CHANGE
+      done-event (fix/ISS-0900-a11y-instance-detail-surface, PR #2023,
+      2026-09-30T02:40:00Z -- scenario 1 (platform-frontend-guard-selfcheck)
+      resolved via the merged a11y-gate instance-detail surface fix,
+      scenario 2 (platform-out-of-order-effect-completion) resolved via
+      confirmed-elsewhere disposition; ISS-0900 stays open as tracking
+      umbrella pending ISS-0902/ISS-0903) --
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 20
+      on-disk entries. 838 lines / 50963 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Bumped to 19 by DOC-UPDATER after appending ISS-0899's SCOPE-CHANGE
       done-event (fix/ISS-0899-renderer-permission-denied-spec,
       2026-09-30T02:12:45Z -- authored

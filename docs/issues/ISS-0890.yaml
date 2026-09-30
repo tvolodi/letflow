@@ -53,3 +53,19 @@ progress_2026_09_30: >
   fixed during review) resolved -- see docs/issues/ISS-0899.yaml's own
   resolution note. 2 of 4 split follow-ups now closed (0901, 0899); ISS-0898
   and ISS-0900 remain open. ISS-0890 itself stays open until all four close.
+
+  UPDATE (2026-09-30T02:40:00Z, DOC-UPDATER, fix/ISS-0900-a11y-instance-
+  detail-surface, PR #2023): ISS-0900 (the 4 via:system-only platform
+  scenarios) is now partially resolved: scenario 1
+  (platform-frontend-guard-selfcheck) resolved via the merged a11y-gate
+  `instance-detail` surface fix, and scenario 2
+  (platform-out-of-order-effect-completion) resolved via confirmed-elsewhere
+  disposition (test/letflow/ordering_test.exs already covers every expected
+  outcome, no code change needed) -- see docs/issues/ISS-0900.yaml's own
+  progress note for full detail. Scenarios 3 and 4 remain open as their own
+  split issues, ISS-0902 and ISS-0903. ISS-0900 itself stays open as
+  tracking umbrella until ISS-0902/ISS-0903 also resolve. ISS-0890's own
+  split-tracking state is therefore: 0898 (open), 0899 (resolved), 0900
+  (partially resolved, 2 of 4 scenarios, umbrella still open), 0901
+  (resolved). ISS-0890 itself stays open until all four of its own splits
+  close.

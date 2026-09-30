@@ -86,3 +86,32 @@ progress_2026_09_30: >
   ISS-0900 stays open as this sub-tracking umbrella until: the a11y-gate
   fix (scenario 1) merges, scenario 2's disposition is recorded in the next
   UAT report cycle, and ISS-0902/ISS-0903 both resolve.
+
+  UPDATE (2026-09-30T02:40:00Z, DOC-UPDATER, fix/ISS-0900-a11y-instance-detail-surface,
+  PR #2023): scenario 1 (platform-frontend-guard-selfcheck) and scenario 2
+  (platform-out-of-order-effect-completion) are now both resolved.
+
+  Scenario 1 resolved via the merged a11y-gate `instance-detail` surface fix
+  (web/tests/e2e/a11y-gate.e2e.spec.ts's SURFACES array now covers all 6
+  required screens, including the previously-missing "process detail"
+  (instances/:id), with a real seeded instance to navigate to) -- REVIEWER
+  and RELEASE-VALIDATOR both PASSed; RELEASE-VALIDATOR independently
+  reproduced the fixed surface working. While seeding the real instance for
+  this fix, a genuine, unrelated backend crash (BadMapError on any
+  HUMAN_TASK node whose attributes is the wire-contract string form) was
+  found and filed separately as ISS-0904 -- RELEASE-VALIDATOR independently
+  reproduced that crash live too, confirming this fix's own workaround
+  (seeding a START/END-only definition instead) is genuinely necessary
+  rather than incidental. ISS-0904 is NOT resolved by this fix and remains
+  its own open issue, filed for ELIXIR-DEV/ISSUE-FIXER follow-up.
+
+  Scenario 2 resolved via confirmed-elsewhere disposition, no code change
+  needed: test/letflow/ordering_test.exs already covers every expected
+  outcome (EO-001..EO-005) via AC3/AC4/AC5/AC7/AC8, matching the diagnosis
+  recorded above -- a pure test-tier classification mismatch, not a product
+  gap.
+
+  ISS-0900 itself STAYS OPEN as tracking umbrella: 2 of 4 scenarios now
+  resolved (1, 2); scenarios 3 and 4 remain open as ISS-0902/ISS-0903
+  respectively. Close ISS-0900 only once ISS-0902 and ISS-0903 also
+  resolve.

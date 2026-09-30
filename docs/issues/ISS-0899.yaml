@@ -20,5 +20,25 @@ affected_files:
   - web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts
 queue_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
 github_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890); no GitHub mirror issue was opened for the split itself
-status: open
+status: resolved
 parent_issue: ISS-0890
+resolved_in_run: fix/ISS-0899-renderer-permission-denied-spec
+resolved_at: "2026-09-30T00:00:00Z"
+resolution: >
+  Resolved via PR #2021 (branch fix/ISS-0899-renderer-permission-denied-spec,
+  commit d1f8e24f). Two parts: (a) authored the missing
+  web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts, exercising
+  REQ-378's already-shipped live OIDC role-revocation enforcement and the
+  PermissionDenied.tsx renderer contract -- no application code change was
+  needed for this part, spec-authoring only, as scoped. (b) A genuine NEW bug
+  was found and fixed during review, unrelated to (a): web/src/pages/admin/
+  GroupsPage.tsx had the same synchronous-setState-inside-click-dispatch
+  freeze bug previously seen in ISS-0662/0737/0739, never previously audited,
+  fixed with the established deferClickState pattern. REVIEWER PASSed twice
+  (second pass after the GroupsPage.tsx fix was added). RELEASE-VALIDATOR
+  PASSed: independently reproduced the freeze on unmodified GroupsPage.tsx
+  code and confirmed the fix resolves it via a genuine mutation-revert-and-
+  refreeze proof (reverting the fix reintroduced the freeze; restoring it
+  cleared it), and separately ran the new renderer-states spec 3/3 against a
+  live backend. CI (Backend/Frontend/Mobile gates) green on PR #2021; merged
+  to main.

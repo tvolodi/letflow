@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { deferClickState } from '@/utils/deferClickState'
 
 type GroupRow = Group & {
   group_id?: string
@@ -102,6 +103,50 @@ export default function GroupsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: tenantKeys.admin.groups() }),
   })
 
+  // ISS-0899 follow-up (freeze confirmed empirically -- see this fix's
+  // handoff/spec header comment): GroupsPage exhibits the identical
+  // synchronous-setState-inside-native-click-dispatch freeze first found in
+  // ISS-0662 (EntityCrudPage/DataTable), ISS-0737 (DefinitionListPage) and
+  // ISS-0739 (InstanceBoardPage) -- deferring every click-triggered setState
+  // by one macrotask (deferClickState, see that helper's moduledoc) clears
+  // it the same way it did there.
+  const openCreateGroup = () => {
+    deferClickState(() => setCreating(true))
+  }
+  const cancelCreateGroup = () => {
+    deferClickState(() => setCreating(false))
+  }
+  const submitCreateGroup = () => {
+    deferClickState(() => createGroup.mutate(form))
+  }
+  const openManageMembers = (group: GroupRow) => {
+    deferClickState(() => setActiveGroup(group))
+  }
+  const closeManageMembers = () => {
+    deferClickState(() => {
+      setActiveGroup(null)
+      setSelectedUserId('')
+    })
+  }
+  const submitAddMember = (id: string, userId: string) => {
+    deferClickState(() => addMember.mutate({ groupId: id, userId }))
+  }
+  const submitRemoveMember = (id: string, userId: string) => {
+    deferClickState(() => removeMember.mutate({ groupId: id, userId }))
+  }
+  const openDeleteGroup = (group: GroupRow) => {
+    deferClickState(() => setPendingDelete(group))
+  }
+  const cancelDeleteGroup = () => {
+    deferClickState(() => setPendingDelete(null))
+  }
+  const confirmDeleteGroup = (id: string) => {
+    deferClickState(() => {
+      deleteGroup.mutate(id)
+      setPendingDelete(null)
+    })
+  }
+
   const availableUsers = useMemo(() => {
     const list = users?.items ?? []
     const memberIds = new Set(members.map((user) => user.id))
@@ -126,12 +171,12 @@ export default function GroupsPage() {
       accessor: (g) => {
         return (
           <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-            <Button variant="primary" size="sm" onClick={() => setActiveGroup(g)}>
+            <Button variant="primary" size="sm" onClick={() => openManageMembers(g)}>
               Manage members
             </Button>
             {/* ISS-0811: is_system and member_count never sent by group_map/1;
                 Delete shown for all groups — backend enforces deletion constraints */}
-            <Button variant="danger" size="sm" data-testid={`delete-group-${g.id}`} onClick={() => setPendingDelete(g)}>
+            <Button variant="danger" size="sm" data-testid={`delete-group-${g.id}`} onClick={() => openDeleteGroup(g)}>
               Delete
             </Button>
           </div>
@@ -145,7 +190,7 @@ export default function GroupsPage() {
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
         <h2 style={{ margin: 0 }}>Groups</h2>
         <span style={{ marginLeft: 'auto' }}>
-          <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+          <Button variant="primary" size="sm" onClick={openCreateGroup}>
             + New Group
           </Button>
         </span>
@@ -165,8 +210,8 @@ export default function GroupsPage() {
             </div>
           ))}
           <div style={{ display: 'flex', gap: '.5rem' }}>
-            <Button variant="primary" size="sm" onClick={() => createGroup.mutate(form)}>Save</Button>
-            <Button variant="secondary" size="sm" onClick={() => setCreating(false)}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={submitCreateGroup}>Save</Button>
+            <Button variant="secondary" size="sm" onClick={cancelCreateGroup}>Cancel</Button>
           </div>
         </div>
       )}
@@ -193,7 +238,7 @@ export default function GroupsPage() {
                 <h3 style={{ margin: 0 }}>Manage members</h3>
                 <p style={{ margin: '.25rem 0 0', color: 'var(--text-secondary)' }}>{groupTitle(activeGroup)}</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => { setActiveGroup(null); setSelectedUserId('') }}>Close</Button>
+              <Button variant="ghost" size="sm" onClick={closeManageMembers}>Close</Button>
             </div>
 
             <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem', alignItems: 'end', flexWrap: 'wrap' }}>
@@ -219,7 +264,7 @@ export default function GroupsPage() {
                 disabled={!selectedUserId}
                 onClick={() => {
                   if (!selectedUserId) return
-                  addMember.mutate({ groupId: groupId(activeGroup), userId: selectedUserId })
+                  submitAddMember(groupId(activeGroup), selectedUserId)
                 }}
               >
                 Add member
@@ -245,7 +290,7 @@ export default function GroupsPage() {
                           <div style={{ fontWeight: 600 }}>{user.display_name}</div>
                           <div style={{ color: 'var(--text-secondary)', fontSize: '.875rem' }}>{user.email}</div>
                         </div>
-                        <Button variant="danger" size="sm" onClick={() => removeMember.mutate({ groupId: groupId(activeGroup), userId: id })}>
+                        <Button variant="danger" size="sm" onClick={() => submitRemoveMember(groupId(activeGroup), id)}>
                           Remove
                         </Button>
                       </div>
@@ -266,14 +311,11 @@ export default function GroupsPage() {
             <h3 style={{ marginTop: 0 }}>Delete group?</h3>
             <p style={{ color: 'var(--text-secondary)' }}>Delete {groupTitle(pendingDelete)} only if it is empty. This action cannot be undone.</p>
             <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" size="md" onClick={() => setPendingDelete(null)}>Cancel</Button>
+              <Button variant="secondary" size="md" onClick={cancelDeleteGroup}>Cancel</Button>
               <Button
                 variant="danger"
                 size="md"
-                onClick={() => {
-                  deleteGroup.mutate(groupId(pendingDelete))
-                  setPendingDelete(null)
-                }}
+                onClick={() => confirmDeleteGroup(groupId(pendingDelete))}
               >
                 Delete group
               </Button>

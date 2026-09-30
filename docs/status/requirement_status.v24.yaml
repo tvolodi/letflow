@@ -759,3 +759,36 @@
       commit SHA). No letflow-queue task to release for ISS-0901 itself
       (queue_ref: null -- filed directly by ORCH as a split of ISS-0890/queue
       task 890, not itself a separately queued task).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T02:12:45Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0899
+      (MINOR, author renderer-states.pipeline.e2e.spec.ts against REQ-378's
+      already-shipped fix -- one of ISS-0890's 4 split follow-ups) --
+      resolved: authored the missing
+      web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts, exercising
+      REQ-378's already-shipped live OIDC role-revocation enforcement and the
+      PermissionDenied.tsx renderer contract. During review a genuine NEW bug
+      was found and fixed, unrelated to the spec-authoring scope:
+      web/src/pages/admin/GroupsPage.tsx had the same synchronous-setState-
+      inside-click-dispatch freeze bug as ISS-0662/0737/0739, never previously
+      audited, fixed with the established deferClickState pattern. REVIEWER
+      PASSed twice (second pass after the GroupsPage.tsx fix). RELEASE-
+      VALIDATOR PASSed with a genuine mutation-revert-and-refreeze proof: it
+      independently reproduced the freeze on unmodified GroupsPage.tsx code,
+      confirmed the fix resolves it, and separately ran the new spec 3/3
+      against a live backend. docs/issues/ISS-0899.yaml set to status:
+      resolved (resolved_in_run: fix/ISS-0899-renderer-permission-denied-spec)
+      in this same append -- this is an ISSUE, not a REQ, so no
+      docs/requirements.yaml entry is touched. docs/issues/ISS-0890.yaml's
+      progress_2026_09_30 note updated (append, not rewrite) to record 2 of
+      its 4 split follow-ups now resolved (0901, 0899); ISS-0898 and ISS-0900
+      remain open; ISS-0890's own status stays open (tracking umbrella).
+      Merged via PR #2021 (branch fix/ISS-0899-renderer-permission-denied-spec,
+      commit d1f8e24f), squash-merged to main (see PR for merge commit SHA).
+      No letflow-queue task to release for ISS-0899 itself (queue_ref: null --
+      filed directly by ORCH as a split of ISS-0890/queue task 890, not itself
+      a separately queued task).

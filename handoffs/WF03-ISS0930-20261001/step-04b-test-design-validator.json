@@ -1,0 +1,42 @@
+{
+  "handoff_id": "42dfe4a7-84cd-4dca-94c7-50bd9bd19af9",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0930-20261001/step-04b-test-design-validator.json",
+  "created_at": "2026-09-30T23:11:15Z",
+  "started_at": "2026-09-30T23:11:15Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs",
+      "lib/letflow/design/iss0930-seed-service-task-endpoints.md",
+      "handoffs/WF03-ISS0930-20261001/step-04-test-designer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4b gate. Validate test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs (TEST-DESIGNER handoff: step-04-test-designer.json) against the design section 6 and the defect (ISS-0930: seeded service-task endpoints were relative 'POST /path' strings). Verify: every design-specified assertion has a runnable test; no skipped/excluded tests; fixtures self-sufficient, no network; all 5 fixtures x all 25 nodes covered (count them independently). You MUST INDEPENDENTLY APPLY at least two mutants yourself (WF-03 doc: preferred technique is a THROWAWAY git worktree or temp copy, never mutating context.worktree; e.g. revert one fixture node endpoint to 'POST /x'; change one to http://; single-brace placeholder; remove the method) and run the test to see it fail - do not just accept reported counts (reported: 7/31 passed pre-fix; mutants fail 1-2 tests each). Also independently reproduce the pre-fix failure by running the new test against origin/main fixtures in a throwaway copy. Note the reported surviving mutant (hostname localhost passes with stub resolver) and judge whether it is an acceptable gap (UrlValidator has its own tests). Remove throwaways and verify `git status --porcelain lib/ test/ scripts/` in context.worktree is clean (new test is already committed). Also run `mix format --check-formatted` on the test file. Modify nothing but this handoff. Set IN_PROGRESS at claim, then COMPLETED/FAILED with result.status PASS/FAIL; next_action 'Route to TEST-RUNNER' on PASS. NOTE: the full `mix letflow.check.test` is heavy (16 partitions, exhausted Postgres connections in the previous step) - do NOT run it; TEST-RUNNER owns that.",
+    "acceptance_criteria": [
+      "Every design assertion has a test",
+      "Node count independently verified",
+      "Two+ mutants independently applied and run",
+      "Pre-fix failure independently reproduced",
+      "Throwaways removed, tree clean"
+    ]
+  },
+  "result": null
+}

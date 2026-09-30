@@ -20,4 +20,38 @@ affected_files:
   - web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts
 queue_ref: Q-901  # queue allocated issue_ref ISS-0901, which collides with an existing local file; local filename kept as ISS-0907 and GH-2035 retitled to match
 github_ref: GH-2035
-status: open
+status: closed_not_applicable
+resolved_at: "2026-09-30T12:55:00Z"
+resolution: >
+  ISSUE-FIXER diagnosis (2026-09-30): NOT a code defect. Confirmed by direct
+  trace: GET /tasks/inbox is policy-gated on :TasksList -> :TasksRead, and
+  core_role_allows?(:TASK_WORKER, :TasksRead) is true (lib/letflow/api/authorization.ex)
+  -- TASK_WORKER alone is sufficient, no PROCESS_OPERATOR/PLATFORM_ADMIN needed.
+  Identity.list_effective_role_names/2 does a plain per-request join with no
+  cross-group cache, so revoking one group cannot bleed into another group's
+  role. The already-merged web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts
+  (ISS-0899) already asserts this exact "My Tasks survives DLQ-role revocation"
+  behavior via a permanent TASK_WORKER membership precondition, and passed 3/3
+  against a live backend at merge time.
+
+  Root cause is a QA-environment data gap, already tracked and remediated:
+  ISS-0886 (pre-existing QA tenants never had role/group backfill run against
+  the real database from this sandbox -- code fix merged, QA application
+  pending) and ISS-0910 (backfill seeds tenant_role/groups but never
+  group_members, and sync_role_claims_from_token/3 only fires once per user)
+  were BOTH discovered in this SAME WF05-FULL2-20260930 UAT run and describe
+  exactly the missing-membership state that would make operator-user's
+  TASK_WORKER precondition fail to take effect on QA specifically, while
+  passing locally where mix letflow.seed already grants all six roles. The
+  UAT report's own diagnosis_hint (test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-PLATFORM.yaml:125-129)
+  reaches the same conclusion and confirms membership was restored and
+  /tasks/inbox returned to 200 after remediation.
+
+  Action item (environment-verification, not engineering work): once
+  ISS-0910's QA remediation is confirmed durable, re-run
+  platform-renderer-permission-denied-surface on QA to confirm step 5 passes.
+
+  Minor unrelated observation flagged for future awareness, not confirmed
+  in-play for this incident: web/src/utils/classifyError.ts collapses HTTP 401
+  and 403 into the same 'permission-denied' UI state, which could misleadingly
+  render an unrelated auth-token failure as "no access" -- not acted on here.

@@ -1115,3 +1115,32 @@
       via PR #2051 (branch fix/ISS-0909-uat-preflight-followups),
       squash-merged to main (see PR for merge commit SHA). letflow-queue task
       902 released as done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-09-30T12:55:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0907
+      (renderer-permission-denied-surface step 5: My Tasks also shows the
+      permission-denied message after the operator's group is revoked) --
+      closed status: closed_not_applicable, no code change. ISSUE-FIXER
+      diagnosis confirmed this is NOT a code defect: GET /tasks/inbox is
+      policy-gated on :TasksRead, TASK_WORKER alone is sufficient per
+      core_role_allows?/2, and Identity.list_effective_role_names/2 does a
+      plain per-request join with no cross-group cache -- revoking one
+      group's membership cannot bleed into another group's role. The
+      already-merged web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts
+      (ISS-0899) already asserts this exact "My Tasks survives DLQ-role
+      revocation" behavior via a permanent TASK_WORKER precondition and
+      passed 3/3 against a live backend at merge time. Root cause is a
+      QA-environment data gap already tracked by ISS-0886 (QA role/group
+      backfill never applied to the real database) and ISS-0910 (backfill
+      never wrote group_members, one-time resync marker), both discovered in
+      the SAME WF05-FULL2-20260930 UAT run -- the UAT report's own
+      diagnosis_hint reaches the same conclusion and confirms
+      /tasks/inbox returned to 200 after remediation. Action item left as an
+      environment-verification task (re-run the scenario on QA after
+      confirming ISS-0910's remediation is durable), not new engineering
+      work. No letflow-queue task released (queue_ref Q-901 belongs to the
+      queue's own record, not a separate claimable task from this closure).

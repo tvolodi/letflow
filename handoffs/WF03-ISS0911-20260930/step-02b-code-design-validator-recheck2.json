@@ -1,0 +1,71 @@
+{
+  "handoff_id": "f2643a46-13cc-45e7-9004-386a12943a45",
+  "run_id": "WF03-ISS0911-20260930",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator-recheck2.json",
+  "created_at": "2026-09-30T07:35:45Z",
+  "started_at": "2026-09-30T07:35:45Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["4eec5342-13bd-4f0f-9156-cdaf49895fd3", "b37909a8-5205-4404-8a84-e764c513a4f0"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md",
+      "web/src/pages/instances/InstanceBoardPage.tsx"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "FINAL re-check -- this is the last budgeted rework attempt (rework_count is already 2 of max_rework 3). Read lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md directly: the one-shot guard fix (step 3 reads-then-immediately-clears lookupWroteDefinitionId every run) plus the dialog-open/close reset. Independently verify the one-shot claim's own reasoning about the effect's dependency array (does the argument that 'exactly one run can ever observe a self-written definitionId before activeDefinitionByName resolves or versionLookupState routes elsewhere' actually hold, or is there a sequence where two runs both see the same self-written definitionId while activeDefinitionByName is still resolving, e.g. an unrelated re-render firing the effect a second time with the same dependencies before the query settles?). Also verify the dialog-open/close reset doesn't itself introduce a new gap (what if the guard fires between a close and the ref-clear, or vice versa). Run the complete Step 2 design gate over the whole document one more time. If this FAILs, state explicitly that this exhausts the run's rework budget so ORCH escalates rather than dispatching a fourth rework.",
+    "acceptance_criteria": [
+      "the fix calls definitionsApi.getActive(name) (or an equivalent exact-match backend lookup) keyed on the dialog's own typed value, not the page-level filtered list",
+      "a race-guard against out-of-order async responses (rapid typing) is explicitly designed, not left implicit",
+      "the version field's loading/not-found/found states are all specified",
+      "a single write path for startDefinitionVersion/startDefinitionId is designed, with no possibility of the new effect's own setSearchParams call re-triggering a second, independent effect that transiently desyncs the two values",
+      "the guard/token distinguishing a self-caused definitionId change from an external one is one-shot/expiring, cannot be revived by an unrelated later event reaching the same id value, and is reset on dialog open/close"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-30T07:23:10Z",
+      "status": "FAIL",
+      "summary": "Two independent effects both wrote startDefinitionVersion/startDefinitionId; the new effect's setSearchParams call re-triggered the old effect before its cache had the new id.",
+      "issues": ["Design's own claim that the old effect was 'already-correct, untouched' didn't account for the new effect's setSearchParams reactivating it"],
+      "next_action": "Fold both effects into a single write path."
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-30T07:30:20Z",
+      "status": "FAIL",
+      "summary": "lookupWroteDefinitionId was a persistent, non-expiring guard token -- an unrelated later external definitionId change coincidentally matching a previously-self-written value fooled the guard into skipping an update, leaving fields stuck at stale data.",
+      "issues": ["Guard never cleared/consumed, never reset on dialog open/close"],
+      "next_action": "Make the guard one-shot/expiring or generation-token based, reset on dialog open/close."
+    }
+  ]
+}

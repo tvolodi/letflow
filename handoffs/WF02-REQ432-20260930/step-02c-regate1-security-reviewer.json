@@ -1,0 +1,73 @@
+{
+  "handoff_id": "e14a3948-138c-4b2d-95ab-9632db9c3764",
+  "run_id": "WF02-REQ432-20260930",
+  "workflow_id": "WF-02",
+  "step": "02c-regate1",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ432-20260930/step-02c-regate1-security-reviewer.json",
+  "created_at": "2026-09-30T18:42:00Z",
+  "started_at": "2026-09-30T18:42:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-432"
+    ],
+    "requirement_text": {
+      "REQ-432": "Follow-on to REQ-373 (service_catalog version/status lifecycle + real PinResolver.Lookup, status: done on the backend) and to REQ-399 (case-detail dependency-version/provenance screen, status: done -- REQ-399 already built the GET /api/v1/instances/{id}/pins route, web/src/hooks/useInstancePins.ts, and web/src/components/instances/InstancePinsPanel.tsx, wired into InstanceDetailPage.tsx). Filed from ISS-0898, split from ISS-0890's WF05-FULL-20260929 PLATFORM UAT report: the platform-instance-pin-survives-catalog-change scenario (test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml) is BLOCKED not because the read-only provenance screen is missing (REQ-399 built that) but because two operator ACTIONS the scenario's own steps exercise have no UI anywhere, and REQ-399's own SCOPE explicitly excluded one of them: \"any UI affordance to CHANGE a pin from this screen... is a separate requirement if one is ever filed.\"\nWHAT EXISTS TODAY, verified 2026-09-30 by direct source read: - `POST /api/v1/admin/services/:service_id/versions` (publish) and\n  `POST /api/v1/admin/services/:service_id/retire` (retire) are real,\n  shipped REQ-373 routes (lib/letflow/routers/admin_services.ex,\n  design doc lib/letflow/design/req373-service-catalog-version-lifecycle.md\n  §7), gated by the existing :AdminServicesManage permission. Grepping\n  web/src/api/services.ts and web/src/pages/admin/services/ServicesPage.tsx\n  for \"publish\"/\"retire\"/\"version\" returns zero hits beyond the existing\n  `ServiceRecord` type -- neither route has any frontend client function or\n  UI control. An operator today cannot publish a new service-connection\n  version or retire an old one from the GUI at all, which is exactly the\n  scenario's own step 2 action.\n- `POST /instances/:id/rebind-pins` is a real, shipped REQ-078/PIN-05 route\n  (lib/letflow/routers/instances.ex, `Letflow.Engine.PinRebind.rebind_pins/3`,\n  200 response `{instance_id, changes, rebound_at}`, each change item\n  carrying `ref`/`prior_version`/`new_version` per the\n  `INSTANCE_PINS_REBOUND` event it appends). Grepping web/src for \"rebind\"\n  returns zero hits beyond REQ-399's own read-only provenance panel and its\n  test -- there is no rebind client function, no rebind action/button/dialog\n  anywhere in web/src. An operator today cannot deliberately move a running\n  case onto a different pinned version from the GUI at all, which is\n  exactly the scenario's own step 5 action (with a caller-supplied reason\n  -- `rebind_attrs()` requires `:idempotency_key`, per\n  lib/letflow/routers/instances.ex's own design notes, and the scenario's\n  step 5 input is `reason: \\\"External system retires the old endpoint at\n  month end.\\\"`).\n- Case history rendering: grepped web/src for any existing generic\n  event-timeline renderer capable of showing an `INSTANCE_PINS_REBOUND`\n  entry with actor/prior_version/new_version/reason (EO-005's own evidence\n  requirement, \"the case history shows the change with the operator's\n  name, the previous and new version, and the reason given\") -- confirm at\n  implementation time whether InstanceDetailPage.tsx's existing\n  history/timeline section already renders arbitrary event types generically\n  (in which case this requirement only needs the rebind action itself to\n  produce the right event, already true by construction since\n  `rebind_pins/3` already appends the real event) or needs a\n  dedicated case for this event type -- do not assume either way without\n  checking.\n\nTHIS REQUIREMENT BUILDS: (1) a typed `publish`/`retire` client pair in web/src/api/services.ts and UI controls on web/src/pages/admin/services/ServicesPage.tsx (a \"publish new version\" action taking the publish_attrs() fields plus a version string, and a \"retire\" action) for a PLATFORM_ADMIN-equivalent operator; (2) a typed `rebind` client function (POST /instances/:id/rebind-pins) and a rebind action/dialog on REQ-399's InstancePinsPanel.tsx (or InstanceDetailPage.tsx) requiring the caller to supply a reason string, wired to the real endpoint; (3) confirm, and if needed extend, the case history/timeline rendering so an `INSTANCE_PINS_REBOUND` entry's actor, prior_version, new_version and reason are all visible per EO-005; (4) the named pipeline_test spec.\nOUT OF SCOPE: any change to `Letflow.ServiceCatalog`, `PinResolver`, `PinRebind`, or any of REQ-373/REQ-399's already-shipped routes (pure frontend consumption/action wiring against already-shipped endpoints); re-scoping or modifying REQ-399's read-only provenance display beyond what is needed to add the rebind action to the same screen; PLC-01/module_ref catalog versioning (still the identical, already-named SCOPE GAP pin_resolver.ex's own moduledoc states, unscoped to any stage, restated by both REQ-373 and REQ-399).\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      ".claude/agents/security-reviewer.md",
+      "handoffs/WF02-REQ432-20260930/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json",
+      "handoffs/WF02-REQ432-20260930/step-04b-test-runner-pipeline.json",
+      "web/src/pages/admin/services/ServicesPage.tsx",
+      "web/src/components/instances/InstancePinsPanel.tsx",
+      "web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts",
+      "lib/letflow/design/req432-rebind-pins-publish-retire-ui.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RE-GATE ITERATION 1 -- WF-02 Step 2c (security gate, HARD GATE) for REQ-432, after FRONTEND-DEV rework 1 (handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json). Your earlier PASS is in handoffs/WF02-REQ432-20260930/step-02c-security-reviewer.json (same scope-test and INV verdict format applies; do a fresh full pass, not a delta-only one, but you may reuse file-level facts you re-verify). Verify branch feature/WF02-REQ432-20260930. Read the real diff yourself: git diff main...HEAD -- web/ lib/ test/fixtures/ (whole branch), and specifically the rework commits ae293b4e (production change: deferClickState applied to click handlers in web/src/pages/admin/services/ServicesPage.tsx and web/src/components/instances/InstancePinsPanel.tsx) and dbad5879 (pipeline spec: startCase now sends initial_variables {}; step 03 now accepts three outcomes A/B/C; spec header). Apply the scope test and INV-1..INV-8 (and INV-9 if present in security-invariants.md) verdict-by-number as before. Specifically check: (a) deferClickState (find its definition in web/src) does not drop, reorder, double-fire or leak state across tenants/sessions for mutation handlers -- in particular that a deferred mutate() cannot fire with a stale idempotency key or stale target after the dialog closed/changed, and that Retire/Publish/Rebind confirm handlers cannot be invoked twice by a double click (a double publish/retire/rebind is a mutation-integrity risk on tenant data): reason from the code, and if unsure run the relevant single vitest files read-only (cd web && npx vitest run <file>); (b) the spec has no literal secrets, still uses resolveCredential helpers, cleanup touches only fixtures it created in its own tenant; (c) the step-03 acceptance of a 500 response in the spec does not hide a security-relevant failure class (e.g. it must not accept 401/403/404 as outcome B) -- read the assertion. FAIL immediately on any applicable invariant failing. Read-only / single-file vitest only; run no servers. Lint your handoff: mix letflow.lint_handoffs --dir handoffs/WF02-REQ432-20260930/step-02c-regate1-security-reviewer.json. Commit your handoff by explicit filename and push to origin feature/WF02-REQ432-20260930. Claim by setting status IN_PROGRESS only (this is a re-gate dispatch; on finish you flip status to COMPLETED/FAILED as normal); fill result, real-clock completed_at; never edit task/created_at/started_at; do not write registry.json. Run everything synchronously in the foreground.",
+    "acceptance_criteria": [
+      "fresh scope test and INV-1..INV-8 verdicts by number against the whole-branch diff",
+      "deferClickState behaviour on mutation handlers verified (no double-fire, no stale key/target)",
+      "step-03 outcome acceptance verified not to accept auth/tenant failure classes",
+      "PASS or FAIL with every failed invariant enumerated"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ432-20260930",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-30T17:23:00Z",
+      "status": "PASS",
+      "summary": "SECURITY-REVIEWER PASS on the original Step 2b diff (in scope conservatively; INV-4 applies PASS; INV-1/2/3/5/7/8/9 N/A; checks a-e PASS). Full text in handoffs/WF02-REQ432-20260930/step-02c-security-reviewer.json.",
+      "issues": [],
+      "next_action": "Re-gate required because rework 1 changed production web/src files."
+    }
+  ]
+}

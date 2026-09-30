@@ -7,9 +7,9 @@
   "to_agent": "SECURITY-REVIEWER",
   "file": "handoffs/WF02-REQ432-20260930/step-02c-security-reviewer.json",
   "created_at": "2026-09-30T17:22:54Z",
-  "started_at": "2026-09-30T17:22:54Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T17:22:57Z",
+  "completed_at": "2026-09-30T17:23:29Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -49,8 +49,8 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
+    "status": "PASS",
+    "summary": "SECURITY-REVIEWER PASS for REQ-432. Scope test: IN SCOPE (conservative) - frontend-only diff (web/, one scenario yaml, one design doc; no lib/ code, no migrations, no config) but it adds client mutations against tenant-scoped routes (rebind-pins, admin publish/retire) and renders tenant event payload/actor data, i.e. response-consuming/shaping of a tenant-scoped entity. INV-1 NOT-APPLICABLE: no Ecto schema/migration/table/query touched (git diff main...HEAD -- lib/ config/ priv/ lists only lib/letflow/design/req432-...md); tenant prefix derivation remains server-side. INV-2 NOT-APPLICABLE: no server response shape changed; client only hides controls cosmetically, backend routes are authoritative (see c). INV-3 NOT-APPLICABLE: no Lua/WASM host function. INV-4 APPLIES, PASS: no token/secret stored or logged in app code (grep localStorage/sessionStorage/console in new src files: 0 hits); Idempotency-Key is a random UUID (crypto.randomUUID, InstancePinsPanel.tsx newIdempotencyKey) not a secret; INV-4 heuristic grep for literal secrets over changed files: 0 hits; grep on config/ lib/ not needed (no change). INV-5 NOT-APPLICABLE: no new server lookup-by-ID handler; client uses existing routes, 404 surfaced as generic 'Case not found.' (InstancePinsPanel.tsx rebindErrorMessage) with no cross-tenant distinction. INV-6 satisfied by this handoff (each invariant assessed above). INV-7 NOT-APPLICABLE: no lib/ or migration change, no Repo.query. INV-8 NOT-APPLICABLE to Elixir (no lib/ change); frontend error paths are typed (err.status branches with default fallback). INV-9 NOT-APPLICABLE to this diff: publish form sends endpoint_url (ServicesPage.tsx) but client never makes the outbound request; server-side validation is backend scope, platform-admin-only route, REQ-373. Checks: (a) PASS - no token/secret persisted or logged; no new auth storage; instances.ts/services.ts use relative /api/v1 paths via shared client (postWithHeaders pre-existing, client.ts:262); e2e spec has no literal secrets: passwords come from resolveCredential('UAT_QA_ADMIN_PASSWORD','admin-pass') / worker equivalent (spec lines 102-103, 359-360); the 'admin-pass' fallback is the existing dev-realm convention used across web/tests/e2e (admin/services.e2e.spec.ts, categories, env04 etc.), API base is process.env.BPM_TEST_URL ?? 127.0.0.1:8080 (line 56), non-blocking note only. (b) PASS - useRebindPins.ts uses useTenantScopedQueryKeys().instances and invalidates instanceKeys.all(); InstanceDetailPage.tsx page-level timeline query goes through useInstanceTimeline which keys on useTenantScopedQueryKeys().instances.timeline(id,cursor,pageSize) (useInstances.ts:56-62); ServicesPage invalidates tenantKeys.admin.services(). (c) PASS - gating is cosmetic: rebind button gated by canCancel (CANCEL_ROLES, InstanceDetailPage.tsx:31,143,335) and ACTIVE status; publish/retire controls inside existing isPlatformAdmin block (ServicesPage.tsx:29,215); no client-side check is a security control, errors 403/404/409/422 from server are surfaced. No new role idiom invented. (d) PASS - PinsReboundSummary.tsx and EventHistoryPanel.tsx render payload.reason, refs, versions, actor as React text children; grep for dangerouslySetInnerHTML/innerHTML/href= across new/changed components and ServicesPage diff: 0 hits; payload fields are type-guarded as strings (str()). (e) PASS - e2e spec creates its own uniquely-named fixtures (pl_pin_<uuid8>), cleanup only cancels the three case ids it created via the admin session of its own tenant (spec lines 129-136); published service version intentionally left; no delete of tenant-wide data, no cross-tenant ids.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
@@ -61,7 +61,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Proceed to REVIEWER (WF-02 Step 2d). No rework required."
   },
   "rework_count": 0,
   "max_rework": 3

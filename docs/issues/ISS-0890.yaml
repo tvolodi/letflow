@@ -17,3 +17,26 @@ affected_files:
 queue_ref: Q-890
 github_ref: GH-1997
 status: open
+progress_2026_09_30: >
+  ISSUE-FIXER triage complete (2026-09-30T00:20:00Z). Two items resolved
+  directly, no new issue needed: platform-sandbox-cross-tenant-probe is
+  closed_not_applicable (same never-adopted runtime-agent subsystem
+  disposition as ISS-0740 -- Letflow.SandboxPool confirmed unrelated,
+  AgentRequests/AgentResponses/AgentEvents still listed as deferred/unscoped
+  in lib/letflow/router.ex's own moduledoc table); and the tracked
+  web/tests/e2e/.pipeline-state/*.json scratch files (committed by mistake
+  via PR #1743/ISS-0785) were untracked and gitignored (PR #2018).
+
+  Remaining 8 scenarios split into 4 right-sized follow-up issues, same
+  precedent as ISS-0892's own split into ISS-0893/0894/0895/0897:
+  ISS-0898 (definition-type-error-blocked + instance-pin-survives-catalog-change
+  frontend follow-ons for REQ-372/REQ-373), ISS-0899 (renderer-states spec
+  authoring against REQ-378's already-shipped fix), ISS-0900 (the 4
+  via:system-only scenarios needing a built-vs-uncovered diagnosis pass --
+  outbox-cap-backpressure confirmed genuinely unbuilt, the other 3 ambiguous),
+  ISS-0901 (env_limitation sidecars for the 2 docker-compose-Postgres-only
+  scenarios, reusing ISS-0894/0895's mechanism).
+
+  KEPT OPEN as a tracking umbrella (not closed-by-split), same as ISS-0892's
+  own current state -- close only once ISS-0898/0899/0900/0901 are all
+  resolved.

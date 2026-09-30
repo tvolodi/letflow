@@ -1,0 +1,56 @@
+id: ISS-0900
+title: "Diagnose+build the 4 via:system-only platform scenarios with no pipeline_test/HTTP surface"
+discovered_by: ISSUE-FIXER
+discovered_in_run: ISS-0890 triage, filed by ORCH
+discovered_at: "2026-09-30T00:20:00Z"
+severity: MINOR
+owner: "ISSUE-FIXER (diagnosis) then per-scenario routing"
+description: >
+  Split from ISS-0890 (WF05-FULL-20260929 PLATFORM report). Four platform
+  scenarios are all-`via: system` (no GUI actor) and were not covered by the
+  2026-09-20 GUI-review sweep, so their real disposition is the least
+  settled of ISS-0890's ten scenarios:
+
+  1. platform-frontend-guard-selfcheck: real self-check machinery already
+     exists (web/tests/a11y/a11yGate.ts + a11yGate.test.ts,
+     guardReporter.test.ts, web/tests/guards/forbidlist.ts,
+     bundle-scan.spec.ts, role-set.spec.ts) -- ambiguous whether this
+     scenario's intent is already verified-elsewhere (wrong tier for
+     UAT-RUNNER) or genuinely missing something.
+
+  2. platform-out-of-order-effect-completion: backend mechanism
+     (Letflow.Ordering, REQ-199, ORD-01..04) is real, shipped, and
+     ExUnit-tested (test/letflow/ordering_test.exs) -- likely
+     "already covered by ExUnit, wrong tier for UAT-RUNNER" rather than
+     unbuilt, needs confirmation.
+
+  3. platform-outbox-cap-backpressure: CONFIRMED genuinely unbuilt.
+     lib/letflow/plugs/api_pipeline.ex's own moduledoc table lists
+     `Letflow.Plugs.OutboxCap <- outbox_cap.zig` as "S6 (outbox subsystem)
+     -- not yet ported", the same deferred-routes table that listed the
+     AgentAuth mechanism already confirmed unbuilt via ISS-0740.
+
+  4. platform-unsafe-migration-rejected: lib/letflow/platform/migration_rollout.ex
+     has start_rollout/3, resume_rollout/1, rollout_status/1 (REQ-374's
+     fanout runner) but no confirmed pre-flight "review the whole change set
+     before touching any workspace, reject unbounded-duration/under-specified
+     changes, protect reserved names" check -- a distinct concern from
+     REQ-374's per-company failure isolation. Not fully resolved by
+     ISS-0890's triage pass; needs a focused diagnosis.
+
+  Expect this issue to itself fan out into 2-3 further sub-issues once each
+  scenario is diagnosed (matching the ISS-0892->0893/4/5/7 precedent) --
+  #3 is confirmed unbuilt and can go straight to CODE-DESIGNER; #1/#2/#4
+  need an ISSUE-FIXER diagnosis pass first to settle built-vs-uncovered
+  before sizing any requirement.
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+affected_files:
+  - lib/letflow/plugs/api_pipeline.ex
+  - lib/letflow/platform/migration_rollout.ex
+  - web/tests/a11y/
+  - test/letflow/ordering_test.exs
+queue_ref: N/A  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
+github_ref: N/A
+status: open
+parent_issue: ISS-0890

@@ -1,0 +1,48 @@
+id: ISS-0901
+title: "env_limitation sidecars for docker-compose-Postgres-only platform scenarios"
+discovered_by: ISSUE-FIXER
+discovered_in_run: ISS-0890 triage, filed by ORCH
+discovered_at: "2026-09-30T00:20:00Z"
+severity: MINOR
+owner: "ELIXIR-DEV (tooling/fixture work, no lib/letflow/ changes expected)"
+description: >
+  Split from ISS-0890 (WF05-FULL-20260929 PLATFORM report). Two platform
+  scenarios are fully built and passing everywhere except QA, because they
+  need a direct docker-compose Postgres write (via web/tests/e2e/db-exec.ts
+  or an equivalent psql INSERT) with no HTTP surface to do the same thing
+  against a real QA environment:
+
+  1. platform-partition-retention-drop: backend+frontend (REQ-376/377) both
+     status: done, and
+     web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts
+     already exists. BLOCKED only because the spec backdates partitions via
+     `docker compose exec postgres psql`, which has no QA-runnable
+     equivalent.
+
+  2. platform-tenant-switch-cache-isolation EO-001: EO-002 and EO-003 in the
+     same scenario already PASS; only EO-001 (cross-tenant cache isolation)
+     is BLOCKED, needing a direct `docker-compose psql INSERT` into
+     tenant_memberships with no HTTP write path.
+
+  Reuse the existing scripts/uat_preflight.sh +
+  test/fixtures/uat/scenario-env-limitations/ sidecar mechanism ISS-0894 and
+  ISS-0895 already built (env_limitation check, ENV_NOT_SUPPORTED
+  classification) rather than inventing a new one.
+
+  Open design question flagged by ISSUE-FIXER: the existing env_limitation
+  sidecar is scenario-id granularity (one file per scenario_id), but EO-001
+  is only ONE of three expected_outcomes in the tenant-switch-cache-isolation
+  scenario -- CODE-DESIGNER needs to decide how to record "one EO of three is
+  env-blocked, the other two pass" without falsely marking the whole
+  scenario env-limited (which would silently stop verifying EO-002/EO-003).
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+affected_files:
+  - scripts/uat_preflight.sh
+  - test/fixtures/uat/scenario-env-limitations/
+  - web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/tenant-switch-cache-isolation.pipeline.e2e.spec.ts
+queue_ref: N/A  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
+github_ref: N/A
+status: open
+parent_issue: ISS-0890

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "435ac23f-72f9-479f-a49e-701f9f884ce6",
+  "run_id": "WF03-ISS0911-20260930",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0911-20260930/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-30T07:23:43Z",
+  "started_at": "2026-09-30T07:23:43Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["70dbb88c-9ca5-42c3-a052-8c8081699bc8", "a3252ece-3f61-41ed-82e7-f9370b091e80"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0911-20260930/step-03d-reviewer.json",
+      "lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md",
+      "web/src/pages/instances/InstanceBoardPage.tsx"
+    ],
+    "owned_modules": ["web/src/pages/instances/InstanceBoardPage.tsx", "web/src/hooks/useDefinitions.ts"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 on the ISS-0911 design. REVIEWER's full FAIL verdict (handoffs/WF03-ISS0911-20260930/step-03d-reviewer.json's result.summary -- read it in full) found a defect the design's own §1 missed: InstanceBoardPage.tsx now has TWO effects independently writing startDefinitionVersion/startDefinitionId -- the pre-existing effect (driven by definitionId/useDefinition(definitionId)) and the new one (driven by the debounced exact-name lookup). On a 'found' transition, the new effect sets both values correctly AND calls setSearchParams(definitionId=...), which changes the definitionId prop on the next render and RE-TRIGGERS the OLD effect -- before useDefinition(newDefinitionId) has any cache entry for a brand-new id. The old effect then runs with activeDefinitionByName still undefined, transiently blanking startDefinitionVersion back to '' while startDefinitionId stays correct via its '?? definitionId' fallback -- the version display and the submit-target id go briefly out of sync again (the exact invariant ISS-0891 established), plus an avoidable duplicate GET /definitions/:id fires.\n\nRedesign the effect interaction so there is a SINGLE write path for startDefinitionVersion/startDefinitionId, not two effects racing via a shared side channel (the URL search param). Two directions worth considering (choose and justify one, or propose a better one): (a) make the old (definitionId-driven) effect a no-op when the definitionId change originated from the new effect's own setSearchParams call (e.g. a ref-based 'last set by us' guard comparing the incoming definitionId against what the new effect just wrote); (b) fold both effects into one, with a single reducer-shaped state update that only ever has one effect writing these two fields, and have the definitionId-driven path and the name-lookup-driven path both funnel into that one writer rather than each owning independent effects. Update lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md with the corrected design. Update the acceptance criteria/section stating the invariant explicitly: 'the version display and submitted definitionId are always the same value at the same time, with no intermediate render showing one updated and not the other, even when a URL search-param write triggered by this fix's own new effect re-renders the component.'",
+    "acceptance_criteria": [
+      "the fix calls definitionsApi.getActive(name) (or an equivalent exact-match backend lookup) keyed on the dialog's own typed value, not the page-level filtered list",
+      "a race-guard against out-of-order async responses (rapid typing) is explicitly designed, not left implicit",
+      "the version field's loading/not-found/found states are all specified",
+      "NEW (this rework): a single write path for startDefinitionVersion/startDefinitionId is designed, with no possibility of the new effect's own setSearchParams call re-triggering a second, independent effect that transiently desyncs the two values"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

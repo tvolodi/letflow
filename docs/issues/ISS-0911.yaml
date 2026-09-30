@@ -22,4 +22,31 @@ affected_files:
   - web/tests/e2e/pipelines/
 queue_ref: Q-903
 github_ref: GH-2037
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0911-start-instance-version-race
+resolved_at: "2026-09-30T19:10:00Z"
+resolution: >
+  Root cause confirmed as a genuine remaining frontend race, NOT a QA-deploy-lag
+  or scenario-timing artifact -- ISS-0891's original fix was verified intact and
+  unregressed. The Start Instance dialog's startDefinitionVersion/startDefinitionId
+  were written by a one-shot useState update at keystroke time, matched only
+  against whatever the typeahead query's data held at that instant; when
+  useDefinitions was still in flight (a cold fetch on first mount), the match
+  missed and nothing ever re-checked once that data arrived late, leaving the
+  version field empty for the rest of that dialog-open.
+  Fix: converted startDefinitionVersion/startDefinitionId to a useMemo'd
+  derivation that re-runs whenever the typeahead query's data changes, keeping
+  the same precedence order as before (exact match, then page-level fallback,
+  then undefined); removed the now-dead one-shot syncing effect; added a proper
+  loading indicator (isResolvingStartDefinitionVersion) independent of
+  useDefinition's own loading flag, which never starts in the failing race.
+  PR #2056, branch fix/ISS-0911-start-instance-version-race, commit fec714e2,
+  merged to main via squash merge. Full gate chain: CODE-DESIGN-VALIDATOR
+  (2-attempt cycle -- 1st attempt FAILed on a format-only issue, fenced
+  executable code in the design doc instead of prose; reworked and re-PASSed),
+  FRONTEND-DEV implementation, REVIEWER PASS (traced a subtle eslint-disable
+  justification and confirmed it safe), TEST-RUNNER PASS (full suite, only
+  known connection-pool flakes), and RELEASE-VALIDATOR PASS via independent
+  re-derivation plus a genuine reversion mutation test proving the new
+  regression guard is non-vacuous, and an extra adversarial
+  retype-during-in-flight-query scenario.

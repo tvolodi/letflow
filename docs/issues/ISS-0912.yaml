@@ -1,0 +1,27 @@
+id: ISS-0912
+title: "Run meridian/vortex definition seed scripts on QA, then re-run preflight and the 9 ENV_BLOCKED narrative scenarios (operational remainder of ISS-0892)"
+discovered_by: ORCH
+discovered_in_run: QUEUE-TRIAGE-20260930
+discovered_at: "2026-09-30T07:10:00Z"
+severity: MAJOR
+owner: "session with QA credential source (ai-dala-infra scripts/qa-uat-env.sh)"
+description: >
+  Successor to blocked Q-887/ISS-0892 (the queue has no blocked->open transition, so
+  the remaining operational step gets its own claimable task). Code deliverables are
+  merged (ISS-0893/0894/0895/0897). WF05-FULL2-20260930 showed meridian and vortex
+  tenants have zero definitions (Loan Origination, Regulatory Compliance Review,
+  Supplier Quality Deviation, Production Order Release -> 404) because
+  scripts/seed_meridian_definition.sh and scripts/seed_vortex_definition.sh were never
+  run against QA. Steps: run both seeds against QA; verify GET /definitions/active/<name>
+  returns 200 in each tenant; run scripts/uat_preflight.sh; re-run the 9 ENV_BLOCKED
+  narrative scenarios (meridian x3, vortex x4, swiftroute attach-delivery-note,
+  swiftroute tenant-onboarding-happy). Vortex entity-type seeding (actor-vortex-karl
+  403 on /entities) may need its own follow-up. Excludes promo-proposer accounts and
+  master-realm admin credential (ISS-0888, infra-owned).
+source_reports:
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
+related:
+  - ISS-0892
+queue_ref: Q-904  # queue allocated issue_ref ISS-0904, which collides with an existing local file; local filename kept as ISS-0912 and GH-2039 (retitle to match)
+github_ref: GH-2039
+status: open

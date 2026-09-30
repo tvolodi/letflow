@@ -5019,10 +5019,27 @@ volumes:
 
   - volume: 24
     path: docs/status/requirement_status.v24.yaml
-    status: current
+    status: closed
     opened: 2026-09-29
-    entries: 29
+    closed: 2026-09-30
+    entries: 30
+    lines: 1231
+    bytes_working_tree: 75171
+    frozen_prefix_lines: 1219
+    frozen_prefix_sha256: "7ca6d4ba573116cf9c5bc1daf31e1fda0628d6260a816e70a7ffc8d308f9f546"
     note: >
+      Closed by DOC-UPDATER after appending ISS-0908's closing SCOPE-CHANGE
+      done-event (2026-09-30T14:35:00Z -- prod admission POOL_SIZE
+      fallback/RESERVED_HEADROOM headroom fix, PR #2054). Recounted
+      directly: `grep -c "^  - req:" docs/status/requirement_status.v24.yaml`
+      = 30 on-disk entries. 1219 lines / 74510 bytes -- over the
+      1200-line/120000-byte roll ceiling, so this append triggered the roll:
+      closure footer appended (frozen_prefix_sha256 computed BEFORE the
+      footer, over exactly the 1219 frozen-prefix lines via `head -n 1219 |
+      sha256sum`), volume 25 opened with the same header text and an empty
+      entry list, and this volume's status set to closed in the same
+      commit.
+
       Bumped to 29 by DOC-UPDATER after appending ISS-0906's closing
       SCOPE-CHANGE done-event (2026-09-30T13:45:00Z -- escalation-cancel
       task.cancel audit event + updated_at fix, PR #2053). Recounted
@@ -5804,6 +5821,19 @@ volumes:
       predecessor path updated) and an empty `history:` list, per this
       index's `roll_rule.on_exceed` procedure.
 
+
+  - volume: 25
+    path: docs/status/requirement_status.v25.yaml
+    status: current
+    opened: 2026-09-30
+    entries: 0
+    note: >
+      Opened by DOC-UPDATER's own ISS-0908 closing SCOPE-CHANGE append,
+      successor to volume 24 (closed at 30 entries / 1219 frozen-prefix
+      lines, over the 1200-line roll ceiling). Created with volume 24's
+      header text verbatim (volume number, opening date and predecessor
+      path updated) and an empty entry list, per this index's
+      `roll_rule.on_exceed` procedure.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

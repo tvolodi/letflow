@@ -1,0 +1,25 @@
+id: ISS-0911
+title: "ISS-0891 recurrence: Start Instance version field empty in 5 of 6 untraced runs on QA (platform-definition-promotion-rollback)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL2-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T06:26:54Z"
+severity: MINOR
+owner: "FRONTEND-DEV (confirm deployed build first)"
+description: >
+  ISS-0891 is marked resolved (PR #2017), but in WF05-FULL2-20260930 the
+  platform-definition-promotion-rollback spec failed 5 of 6 untraced runs at step
+  02: after typing the process key into the Start Instance dialog, the read-only
+  start-definition-version input stayed empty for 10s where 2.0.0 was expected.
+  One traced (slower) run passed. Some runs were also affected by the 503 tenant
+  admission cap (ISS-0908). QA exposes no build SHA, so first confirm the ISS-0891
+  fix is actually deployed; if it is, reopen/fix the remaining race. Referencing
+  ISS-0891 as a new issue because that file has no notes/history field.
+source_reports:
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
+affected_files:
+  - web/src/pages/instances/InstanceBoardPage.tsx
+  - web/tests/e2e/pipelines/
+queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+status: open

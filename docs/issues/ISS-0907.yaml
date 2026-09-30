@@ -1,0 +1,23 @@
+id: ISS-0907
+title: "renderer-permission-denied-surface step 5: My Tasks also shows the permission-denied message after the operator's group is revoked"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL2-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T06:26:54Z"
+severity: MINOR
+owner: "FRONTEND-DEV"
+description: >
+  Found in platform/renderer-permission-denied-surface (WF05-FULL2-20260930, QA).
+  Steps 1-4 pass. At step 5, after the operator's group membership is revoked,
+  the My Tasks page also renders the permission-denied message; the scenario
+  expects My Tasks to be unaffected (or to show its own empty/permission state as
+  specified). Confirm the intended behaviour against the scenario and REQ-378,
+  then fix either the page or the scenario expectation.
+source_reports:
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
+affected_files:
+  - web/src/ (My Tasks page, permission-denied renderer)
+  - web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts
+queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+status: open

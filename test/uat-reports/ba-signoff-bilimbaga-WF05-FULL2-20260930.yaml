@@ -1,0 +1,50 @@
+report_id: ba-signoff-bilimbaga-WF05-FULL2-20260930
+run_id: WF05-FULL2-20260930
+vertical: bilimbaga
+solution_pack: bilimbaga
+generated_at: "2026-09-30T00:00:00Z"
+persona: Ainur Zhaksybekova (Head of Learning & Assessment)
+source_uat_report: test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-BILIMBAGA.yaml
+
+scope_note: >
+  This sign-off covers the BilimBaga vertical only. The wider run was
+  reported as environment-not-ready because of other organizations'
+  setups (missing logins, unseeded processes); none of those items touch
+  BilimBaga's exam scenario, and this sign-off makes no statement about them.
+
+scenarios_reviewed: 1
+domain_verdict: PASS
+
+scenario_verdicts:
+  - scenario_id: bilimbaga-candidate-timed-exam-autograde
+    title: "Candidate takes a timed certification exam and receives an auto-graded score"
+    persona_verdict: PASS
+    business_note: >
+      This time the whole candidate journey was watched in a real browser on
+      the live QA site. A candidate signed in, found the Safety Certification
+      Exam in their list, started it, and saw the countdown running down
+      (29:57 at the start, visibly ticking). They answered both questions,
+      saw each answer saved, submitted, and immediately got "2 of 2 (100%)"
+      and "Passed" -- which matches the correct answers, so the score is
+      trustworthy. This closes the gap I flagged last time about nobody
+      having seen the screens render.
+    issues:
+      - BA-BILIMBAGA-004
+
+domain_issues:
+  - id: BA-BILIMBAGA-004
+    severity: MINOR
+    business_description: >
+      The side panel for the BilimBaga candidate still shows "Unknown
+      workspace" where the organization name should appear. It does not
+      affect taking the exam or seeing the result, but a candidate could
+      find it confusing or think they are in the wrong place.
+    affected_scenario: bilimbaga-candidate-timed-exam-autograde
+    suggested_action: route_to_req_analyst
+
+overall_note: >
+  From the BilimBaga side, the core promise is now verified end to end in a
+  real browser: timed exam, saved answers, immediate and accurate score. I
+  am comfortable with this vertical shipping; the organization-name label is
+  a polish item, not a blocker. I cannot speak for the other organizations'
+  readiness in this run.

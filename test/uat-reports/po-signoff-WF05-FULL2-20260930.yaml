@@ -1,0 +1,102 @@
+report_id: po-signoff-WF05-FULL2-20260930
+run_id: WF05-FULL2-20260930
+generated_at: "2026-09-30T13:00:00Z"
+scope: "Full UAT run against the QA environment (platform, BilimBaga, SwiftRoute, Meridian, Vortex)"
+
+ba_verdicts:
+  bilimbaga: PASS
+  swiftroute: FAIL
+  # meridian, vortex: no sign-off -- every scenario was blocked by the environment.
+  # platform: no business-analyst persona by design.
+
+criteria_coverage:
+  # Counts are not computed: the run is not evaluable (see release_rationale).
+  # Only the BilimBaga scenario is a fully passing scenario; nothing for
+  # SwiftRoute, Meridian or Vortex was exercised to a passing result.
+  must_criteria_this_batch: null
+  covered_by_passing_scenario: null
+  uncovered:
+    - requirement_id: "swiftroute-shipment-approval (all scenarios)"
+      criterion: "No passing scenario: 2 failed, 2 environment-blocked"
+    - requirement_id: "meridian (all scenarios)"
+      criterion: "No scenario executed: environment-blocked (loan/compliance processes not resolvable, sign-in failures)"
+    - requirement_id: "vortex (all scenarios)"
+      criterion: "No scenario executed: environment-blocked (processes not resolvable, sign-in failures)"
+    - requirement_id: "platform (13 of 20 scenarios)"
+      criterion: "6 environment-blocked, 8 unbuilt-feature; only 2 platform scenarios passed and 3 failed"
+
+cross_vertical_findings:
+  - id: PO-001
+    description: >
+      The BilimBaga sign-off is fully positive while the SwiftRoute sign-off
+      is negative. These do not conflict: they concern different verticals
+      and different business rules.
+    severity: MINOR
+    affected_verticals: [bilimbaga, swiftroute]
+    ruling: "No arbitration needed; each vertical's verdict stands within its own domain."
+    rationale: "No shared platform behaviour was interpreted differently by the two sign-offs."
+
+blocker_overrides: []
+
+release_recommendation: BLOCKED
+release_rationale: >
+  This run cannot be approved. The test environment was not ready: several
+  organizations could not be checked at all because logins were missing or
+  their processes were not set up, so Meridian and Vortex have no evidence
+  either way. Separately, SwiftRoute raised a release-blocking concern: work
+  meant for the operations manager role does not reach him and can be taken
+  by someone outside the role, so shipment approvals cannot be trusted.
+  BilimBaga's timed exam journey was verified end to end and is ready.
+  Re-run once the environment is prepared and the routing defect is fixed.
+
+issues:
+  - id: PO-002
+    severity: BLOCKER
+    description: >
+      Run not evaluable: the environment was not ready (missing logins,
+      processes not resolvable, capacity errors on the QA site). Approval is
+      not permitted for such a run.
+    suggested_action: route_to_uat_runner
+    related_issues: [ISS-0909, ISS-0910, ISS-0908, ISS-0893]
+  - id: PO-003
+    severity: BLOCKER
+    description: >
+      SwiftRoute BLOCKER: role-based task routing is not enforced; the
+      operations manager sees no review tasks and a non-member can claim them.
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0905]
+  - id: PO-004
+    severity: MAJOR
+    description: >
+      SwiftRoute: the manager approval, CEO co-sign and shipment release
+      steps have no automated check, so the core two-approval promise is
+      unverified.
+    suggested_action: route_to_req_analyst
+  - id: PO-005
+    severity: MAJOR
+    description: >
+      Meridian and Vortex have no sign-off and no executed scenarios; their
+      coverage is entirely missing.
+    suggested_action: route_to_uat_runner
+  - id: PO-006
+    severity: MAJOR
+    description: >
+      Several platform checks are for features not yet built or lack an
+      automated check; these are coverage gaps that stay uncovered.
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0898, ISS-0900, ISS-0902, ISS-0903, ISS-0740]
+  - id: PO-007
+    severity: MAJOR
+    description: >
+      Failed platform checks recorded this run (definition promotion
+      rollback start form, permission-denied surface, and others) remain open.
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0887, ISS-0907, ISS-0911]
+  - id: PO-008
+    severity: MINOR
+    description: >
+      SwiftRoute: the cancelled operations review leaves no audit entry.
+      BilimBaga: side panel shows "Unknown workspace" instead of the
+      organization name.
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0906]

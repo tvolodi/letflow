@@ -1,0 +1,26 @@
+id: ISS-0908
+title: "QA tenant admission returns 503 'tenant at capacity' for bpm-default at 3-5 parallel requests (about one page load)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL2-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T06:26:54Z"
+severity: MAJOR
+owner: "ELIXIR-DEV (investigate limit/config)"
+description: >
+  Letflow.Plugs.Admission rejected ordinary traffic on QA with HTTP 503
+  {"detail":"tenant at capacity, retry shortly"} at only 3-5 parallel requests
+  on bpm-default (about one browser page load), reproduced with curl. It made the
+  login-routing, template-update, rollback and branding specs flaky in
+  WF05-FULL2-20260930 (SPA showed Unknown workspace / failed to load). Other UAT
+  slices may have been running against the same tenant, but a cap that rejects at
+  3 parallel requests is itself a finding. Investigate the configured per-tenant
+  concurrency limit and its QA value, whether slots leak or are held by slow
+  requests, and whether the default is sensible for SPA page loads.
+source_reports:
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
+affected_files:
+  - lib/letflow/plugs/admission.ex (or equivalent)
+  - QA runtime configuration (per-tenant admission limit)
+queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+status: open

@@ -1,0 +1,32 @@
+id: ISS-0903
+title: "Port outbox_cap.zig backpressure mechanism (Letflow.Plugs.OutboxCap) -- S6 subsystem never ported"
+discovered_by: ISSUE-FIXER
+discovered_in_run: ISS-0900 triage, filed by ORCH
+discovered_at: "2026-09-30T02:40:00Z"
+severity: MINOR
+owner: "REQ-ANALYST"
+description: >
+  Split from ISS-0900 (itself split from ISS-0890, WF05-FULL-20260929
+  PLATFORM report). The platform-outbox-cap-backpressure UAT scenario is
+  BLOCKED because the mechanism it tests does not exist at all --
+  confirmed genuinely unbuilt by two independent triage passes.
+
+  lib/letflow/plugs/api_pipeline.ex's own moduledoc table lists
+  `Letflow.Plugs.OutboxCap <- outbox_cap.zig` as "S6 (outbox subsystem) --
+  not yet ported" -- the same deferred-routes table that listed the
+  AgentAuth mechanism confirmed unbuilt via ISS-0740.
+
+  Needed: a REQ-ANALYST-sized requirement to port the R-Co outbox_cap.zig
+  backpressure logic into a real Letflow.Plugs.OutboxCap module, following
+  this project's established stage-6 migration porting conventions (see
+  docs/migration/stage-6-*.md for rationale/scope of what else was ported
+  in that stage).
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+affected_files:
+  - lib/letflow/plugs/api_pipeline.ex
+  - test/fixtures/uat/scenarios/platform/outbox-cap-backpressure.yaml
+queue_ref: N/A  # filed directly by ORCH as a split of ISS-0900/ISS-0890 (queue task 890), not itself a separately queued task
+github_ref: N/A
+status: open
+parent_issue: ISS-0900

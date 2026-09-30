@@ -1,0 +1,42 @@
+id: ISS-0902
+title: "No pre-flight safety review for tenant migration change sets (unbounded-duration, under-specified, reserved-name changes not rejected)"
+discovered_by: ISSUE-FIXER
+discovered_in_run: ISS-0900 triage, filed by ORCH
+discovered_at: "2026-09-30T02:40:00Z"
+severity: MINOR
+owner: "REQ-ANALYST"
+description: >
+  Split from ISS-0900 (itself split from ISS-0890, WF05-FULL-20260929
+  PLATFORM report). The platform-unsafe-migration-rejected UAT scenario
+  requires a pre-flight check that reviews an entire proposed change SET
+  before touching any tenant workspace, and rejects it wholesale if it
+  contains: an unbounded-duration change, an under-specified/missing
+  required field, or an attempt to touch a reserved/platform-protected name.
+
+  Confirmed genuinely unbuilt, not merely missing a spec (ISSUE-FIXER's
+  diagnosis, read in full before starting):
+  lib/letflow/platform/migration_rollout.ex implements REQ-374's fanout
+  runner for exactly ONE concrete change (promoting one new column onto one
+  entity type) -- its own moduledoc states this scope explicitly. It has no
+  concept of a "set" of multiple changes at all, so it cannot be
+  incrementally extended to do set-level review; a genuinely new mechanism
+  sitting above/before MigrationRollout is needed. No reserved-name
+  protection mechanism exists anywhere in the codebase (confirmed by search
+  -- only unrelated hits in tenant_provisioning.ex, audit.ex).
+
+  Needed: a REQ-ANALYST-sized requirement for a pre-flight change-set safety
+  checker: validates the whole batch atomically before any MigrationRollout
+  invocation, rejects unbounded-duration changes, rejects under-specified
+  changes (missing required fields per the entity/attribute schema), and
+  protects a defined set of reserved/platform names from tenant-initiated
+  changes.
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+affected_files:
+  - lib/letflow/platform/migration_rollout.ex
+  - lib/letflow/design/req374-tenant-migration-fanout-runner.md
+  - test/fixtures/uat/scenarios/platform/unsafe-migration-rejected.yaml
+queue_ref: N/A  # filed directly by ORCH as a split of ISS-0900/ISS-0890 (queue task 890), not itself a separately queued task
+github_ref: N/A
+status: open
+parent_issue: ISS-0900

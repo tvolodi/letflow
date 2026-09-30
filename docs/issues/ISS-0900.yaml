@@ -50,7 +50,7 @@ affected_files:
   - lib/letflow/platform/migration_rollout.ex
   - web/tests/a11y/
   - test/letflow/ordering_test.exs
-queue_ref: N/A  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
-github_ref: N/A
+queue_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
+github_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890); no GitHub mirror issue was opened for the split itself
 status: open
 parent_issue: ISS-0890

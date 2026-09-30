@@ -18,7 +18,7 @@ source_reports:
   - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
 affected_files:
   - web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts
-queue_ref: N/A  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
-github_ref: N/A
+queue_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
+github_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890); no GitHub mirror issue was opened for the split itself
 status: open
 parent_issue: ISS-0890

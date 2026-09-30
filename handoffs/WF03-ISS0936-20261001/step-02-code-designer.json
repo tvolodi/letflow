@@ -9,7 +9,7 @@
   "created_at": "2026-09-30T21:17:16Z",
   "started_at": "2026-09-30T21:17:16Z",
   "completed_at": "2026-10-01T00:00:00Z",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,7 +40,7 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Design written: pure parse_token_line helper (Token: form trusted; bare form requires full-line eyJ three-segment regex + len>=40; hostnames/noise rejected), no-secret-echo invariant, header doc update, ExUnit test test/scripts/uat_preflight_bare_jwt_test.exs run by mix test in CI (existing test/scripts/*.sh are not run by CI), cases T1-T7, AC mapping, open questions.",
+    "summary": "Rework 1: G1 flags named (--base-url --environment --credential-source --credential-protocol --scenarios --sha --out); G2 exact substrings pinned per T1-T7 from script report formats; G3 T7 + gen_tcp port-0 catch-all 200 stub decided IN with exact OK assertion; G4 exact 3-key scenario fixture given; G5 JWT corrected to 49 chars; G6 old Q2 removed, Q3 resolved into Q2 with stated decision. Also stderr captured via stderr_to_stdout.",
     "artifacts_out": [
       "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md"
     ],

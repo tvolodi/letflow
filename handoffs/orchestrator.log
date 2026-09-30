@@ -2523,3 +2523,4 @@
 2026-09-30T21:18:45Z | PASS | WF03-ISS0936-20261001 | step-02 | CODE-DESIGNER -> ORCH | PASS -- design doc lib/letflow/design/iss0936-uat-preflight-bare-jwt.md exists (ORCH checked)
 2026-09-30T21:18:45Z | DISPATCH | WF03-ISS0936-20261001 | step-02b | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
 2026-09-30T21:19:49Z | FAIL | WF03-ISS0936-20261001 | step-02b | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- design defers test decisions (flag names, assertion substrings, T7, fixture shape); rework 1/3 routed to CODE-DESIGNER
+2026-09-30T21:20:43Z | PASS | WF03-ISS0936-20261001 | step-02 | CODE-DESIGNER -> ORCH | PASS -- rework 1 complete, design revised

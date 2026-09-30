@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0936-20261001/step-05-issue-fixer-close.json",
   "created_at": "2026-09-30T22:05:39Z",
   "started_at": "2026-09-30T22:05:39Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T22:06:45Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -37,7 +37,14 @@
       "handoff COMPLETED PASS"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Closed ISS-0936: docs/issues/ISS-0936.yaml status open -> resolved, added resolved_in_run WF03-ISS0936-20261001, resolved_at 2026-09-30T22:06:30Z (from date -u; clock reads 2026-09-30 UTC), and a resolution note linking Q-919 / GH-2070, scripts/uat_preflight.sh, the design doc and regression test test/scripts/uat_preflight_bare_jwt_test.exs (8/8 pass per step-04 TEST-RUNNER). Verified both the test and design files exist. ISSUE_QUEUE.md's resolved definition requires root cause removed plus regression test; both met. No gh issue close performed: GH#2070 is closed by release_lock(done) sync after merge; no github close is needed now. Only the issue file and this handoff were edited; no commit.",
+    "next_action": "Route to Step Final",
+    "artifacts": [
+      "docs/issues/ISS-0936.yaml"
+    ]
+  },
   "rework_count": 0,
   "max_rework": 3
 }

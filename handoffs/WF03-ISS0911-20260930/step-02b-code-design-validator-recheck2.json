@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator-recheck2.json",
   "created_at": "2026-09-30T07:35:45Z",
   "started_at": "2026-09-30T07:35:45Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T08:05:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -34,19 +34,23 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "FINAL re-check FAILS. This exhausts the run's rework budget (would be rework 3 of max_rework 3) -- ORCH must escalate rather than dispatch a fourth rework. The one-shot guard's own reasoning about 'exactly one run can ever observe a self-written definitionId' does not hold, for a reason independent of the specific race the task hypothesized (a re-render re-firing with literally unchanged dependency VALUES is correctly ruled out -- React skips an effect whose dependency array compares equal by Object.is). The real gap is dependency-array IDENTITY instability: the effect's dependency array is specified (Sec 5.2, 'The single effect's dependencies are [definitionId, activeDefinitionByName?.id, activeDefinitionByName?.version, versionLookupState]') to include the whole versionLookupState value, but versionLookupState is produced by deriveVersionLookupState(...), a pure function that returns a FRESH object literal on every call (confirmed against the already-landed implementation of this exact function in web/src/pages/instances/InstanceBoardPage.tsx lines 33-45: every branch returns a new '{ kind: ... }' object, not a cached/memoized one, and the design nowhere specifies wrapping the call in useMemo or decomposing the dependency array into primitive fields like versionLookupState.kind/definition?.id/definition?.version). Because InstanceBoardPage is a large component with many other state slots (pagination, filters, polling, etc.), ANY unrelated re-render of the component re-invokes deriveVersionLookupState and produces a new object reference for this dependency slot even when its logical kind/data is unchanged from the previous render. React's effect-dependency comparison is per-element Object.is, and object identity differs every time regardless of logical content, so this effect does NOT skip on 'no meaningful change' the way the design's central argument assumes -- it re-runs on every render of the component, full stop. This directly falsifies section 'Rework 2' bullet 2's load-bearing claim ('a useEffect body only re-runs when a dependency's identity changes, not on every component re-render') as applied to this specific dependency array: identity changes on every render here, so in practice it IS 'on every component re-render'. Concrete consequence for the one-shot guard: after step 1's self-write (ref set, setSearchParams called), the very next render is guaranteed to re-run the effect regardless of whether activeDefinitionByName has resolved yet -- but so is EVERY render before and after that, including ones caused by completely unrelated state (e.g. usePolling's periodic refetch, pagination cursor changes, status-filter toggles). Each such spurious run still executes the fixed step-1/2/3 priority check: while versionLookupState.kind is (still, per-render) 'found', it keeps re-executing step 1 (idempotent re-writes plus a repeated setSearchParams call every render, which is itself a wasteful/potentially loop-prone side effect the design never analyzes), and the one-shot ref set in that step-1 branch gets re-armed to the same id on every one of those spurious runs too -- not just once. The moment versionLookupState.kind transitions to idle/loading for any reason, step 3 executes and consumes whichever value happens to be in the ref at that arbitrary spurious-render boundary, which is no longer reliably 'the id step 1 just wrote as part of this self-write episode' -- it is 'whatever the ref held at the last of however many spurious re-runs happened to interleave before this transition', a timing-dependent quantity the design's 'exactly one run' counting argument (Rework 2 section, 'the effect's dependency array only allows exactly one run to ever observe a self-written definitionId') does not account for at all, because that argument implicitly assumes the effect only re-runs on logically-meaningful dependency changes, which is false for a freshly-allocated object dependency. Separately verified and NOT a further defect: the dialog-open/close reset has no interleaving gap, since closeStartDialog/openStartDialog are synchronous event-handler bodies that set the ref alongside their other state writes in one synchronous pass, and this effect (being effect-scheduled, i.e. post-commit) cannot run in between two statements of the same synchronous handler -- so 'guard fires between a close and the ref-clear, or vice versa' cannot occur. That part of the design is sound; the object-identity gap above is the sole but sufficient failure. Fix direction for a hypothetical rework (not actioned here, budget exhausted): decompose the effect's dependency array into stable primitives (versionLookupState.kind, and, only when kind==='found', definition.id/definition.version) instead of depending on the derived object itself, or memoize deriveVersionLookupState's result with useMemo keyed on those same primitives so equal-by-value results are also equal-by-reference across renders.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "Sec 5.2's effect dependency array names the whole `versionLookupState` object as a dependency, but `deriveVersionLookupState` (already implemented at web/src/pages/instances/InstanceBoardPage.tsx lines 33-45) allocates a new object literal on every call with no memoization -- so this dependency's identity changes on every component render regardless of logical content, meaning the effect re-runs far more often than the design's 'exactly one subsequent run observes the new definitionId' argument assumes (it re-runs on every render, not only on meaningful transitions)",
+      "Consequence: the one-shot guard ref can be re-armed and consumed across an arbitrary, timing-dependent number of spurious effect runs triggered by wholly unrelated component state changes (pagination, polling, filters), not just the single run the design's counting argument relies on -- the 'exactly one run' invariant this rework's whole fix is built on does not hold as specified",
+      "This exhausts the run's rework budget (rework_count 2 of max_rework 3; a third FAIL means no fourth rework is authorized) -- ORCH must escalate this design to a human/architecture-level decision rather than dispatching another CODE-DESIGNER rework attempt"
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0911-20260930",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ESCALATE -- rework budget exhausted (3/3). Do not dispatch a fourth CODE-DESIGNER rework. Route to ORCH for an escalation decision: either a human/architecture-level review of the effect-dependency-identity problem, or a materially different design approach (e.g. decomposed primitive dependencies / memoized versionLookupState) proposed and validated as a new design iteration outside the exhausted budget for this handoff chain."
   },
   "rework_count": 2,
   "max_rework": 3,
@@ -66,6 +70,14 @@
       "summary": "lookupWroteDefinitionId was a persistent, non-expiring guard token -- an unrelated later external definitionId change coincidentally matching a previously-self-written value fooled the guard into skipping an update, leaving fields stuck at stale data.",
       "issues": ["Guard never cleared/consumed, never reset on dialog open/close"],
       "next_action": "Make the guard one-shot/expiring or generation-token based, reset on dialog open/close."
+    },
+    {
+      "iteration": 2,
+      "gated_at": "2026-09-30T08:05:00Z",
+      "status": "FAIL",
+      "summary": "The one-shot guard's own 'exactly one subsequent run' counting argument is false as specified: the effect's dependency array depends on the whole `versionLookupState` object, but `deriveVersionLookupState` (already implemented, InstanceBoardPage.tsx lines 33-45) returns a fresh, unmemoized object literal every call, so that dependency's identity changes on every component render, not only on meaningful transitions -- the effect actually re-runs on every render (pagination, polling, filters, anything), which can re-arm/consume the one-shot ref across a timing-dependent number of spurious runs, not the single run the design's invariant relies on.",
+      "issues": ["Undeclared dependency-identity instability on `versionLookupState` in the Sec 5.2 effect deps array falsifies the 'exactly one run' claim underpinning the whole one-shot guard"],
+      "next_action": "ESCALATE -- rework budget exhausted (3/3); do not dispatch a fourth rework."
     }
   ]
 }

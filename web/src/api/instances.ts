@@ -7,6 +7,8 @@ import type {
   EventRecord,
   TimelinePage,
   InstancePinsResponse,
+  RebindPinsRequest,
+  RebindPinsResponse,
 } from '@/types/api'
 
 export const instancesApi = {
@@ -53,4 +55,13 @@ export const instancesApi = {
   // PinResolver.reconstruct_effective_pins/2, no query params.
   getPins: (id: string) =>
     client.get<InstancePinsResponse>(`/api/v1/instances/${id}/pins`),
+
+  // REQ-432: already-shipped route (REQ-078/PIN-05). Idempotency-Key is a
+  // header, not a body field; the caller decides its lifetime.
+  rebindPins: (id: string, body: RebindPinsRequest, idempotencyKey: string) =>
+    client.postWithHeaders<RebindPinsResponse>(
+      `/api/v1/instances/${id}/rebind-pins`,
+      body,
+      { 'Idempotency-Key': idempotencyKey },
+    ),
 }

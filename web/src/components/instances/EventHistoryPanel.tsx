@@ -1,10 +1,27 @@
 import { useMemo, useState } from 'react'
 import { useInstanceEvents, type EventFilters } from '@/hooks/useInstances'
 import { EventJsonExpandable } from './EventJsonExpandable'
+import { PinsReboundSummary } from './PinsReboundSummary'
 import { formatDateTime } from '@/i18n/format'
 
 interface EventHistoryPanelProps {
   instanceId: string
+  /** REQ-432 §6.2: event_id -> operator display name for INSTANCE_PINS_REBOUND
+   *  events, joined by the page from the timeline feed. */
+  actorNamesByEventId?: Record<string, string>
+}
+
+const REBOUND_EVENT_TYPE = 'INSTANCE_PINS_REBOUND'
+
+const EMPTY_NAMES: Record<string, string> = {}
+
+function reboundActorCell(
+  event: { payload?: Record<string, unknown> },
+  name: string | undefined,
+): string {
+  if (name) return name
+  const actor = event.payload?.actor
+  return typeof actor === 'string' && actor ? actor.slice(0, 8) : 'unknown'
 }
 
 function toDatetimeLocal(isoValue: string | undefined): string {
@@ -30,7 +47,7 @@ function compactFilters(filters: EventFilters): EventFilters {
   return compacted
 }
 
-export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
+export function EventHistoryPanel({ instanceId, actorNamesByEventId = EMPTY_NAMES }: EventHistoryPanelProps) {
   const [draftEventType, setDraftEventType] = useState('')
   const [draftFrom, setDraftFrom] = useState('')
   const [draftTo, setDraftTo] = useState('')
@@ -187,22 +204,33 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
                 </thead>
                 <tbody>
                   {events.map((event) => (
-                    <tr key={event.event_id} style={{ borderBottom: '1px solid var(--border-default)', verticalAlign: 'top' }}>
+                    <tr key={event.event_id} data-testid={`event-row-${event.event_id}`} style={{ borderBottom: '1px solid var(--border-default)', verticalAlign: 'top' }}>
                       <td style={{ padding: '.5rem .75rem', color: 'var(--color-neutral-500)', fontFamily: 'monospace' }}>
                         {event.sequence_number}
                       </td>
                       <td style={{ padding: '.5rem .75rem', fontFamily: 'monospace', fontSize: '.8rem' }}>
                         {event.event_type}
                       </td>
-                      <td style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '.8rem' }}>
-                        {typeof event.actor_id === 'string' && event.actor_id
-                          ? event.actor_id.slice(0, 8)
-                          : 'system'}
+                      <td
+                        data-testid={`event-actor-${event.event_id}`}
+                        style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '.8rem' }}
+                      >
+                        {event.event_type === REBOUND_EVENT_TYPE
+                          ? reboundActorCell(event, actorNamesByEventId[event.event_id])
+                          : typeof event.actor_id === 'string' && event.actor_id
+                            ? event.actor_id.slice(0, 8)
+                            : 'system'}
                       </td>
                       <td style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)' }}>
                         {formatDateTime(event.created_at)}
                       </td>
                       <td style={{ padding: '.5rem .75rem', minWidth: '180px' }}>
+                        {event.event_type === REBOUND_EVENT_TYPE && (
+                          <PinsReboundSummary
+                            payload={event.payload ?? {}}
+                            actorLabel={actorNamesByEventId[event.event_id]}
+                          />
+                        )}
                         <EventJsonExpandable payload={event.payload ?? {}} />
                       </td>
                     </tr>

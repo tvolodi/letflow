@@ -263,6 +263,33 @@ export interface InstancePinsResponse {
   pins: EffectivePin[]
 }
 
+// ── Rebind pins (REQ-432, POST /instances/:id/rebind-pins) ────────────────────
+
+/** One entry of the rebind request body — exactly `{ kind, ref, version }`. */
+export interface RebindPinEntry {
+  kind: EffectivePinKind
+  ref: string
+  version: string
+}
+
+export interface RebindPinsRequest {
+  reason: string
+  entries: RebindPinEntry[]
+}
+
+export interface RebindPinChange {
+  kind: EffectivePinKind
+  ref: string
+  prior_version: string
+  new_version: string
+}
+
+export interface RebindPinsResponse {
+  instance_id: string
+  changes: RebindPinChange[]
+  rebound_at: string
+}
+
 export interface AttachmentLink {
   attachment_id: string
   token: string

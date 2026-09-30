@@ -2,7 +2,12 @@
    Edit only inside CUSTOM blocks. Re-run codegen to refresh. */
 import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { servicesApi, type RegisterServiceBody, type ServiceRecord } from '@/api/services'
+import {
+  servicesApi,
+  type PublishServiceVersionBody,
+  type RegisterServiceBody,
+  type ServiceRecord,
+} from '@/api/services'
 import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
@@ -30,8 +35,11 @@ export default function ServicesPage() {
   const [editScope, setEditScope] = useState<'global' | 'tenant'>('global')
   const [editOwner, setEditOwner] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [publishTarget, setPublishTarget] = useState<ServiceRecord | null>(null)
+  const [retireTarget, setRetireTarget] = useState<string | null>(null)
   const createFormRef = useRef<HTMLFormElement>(null)
   const editFormRef = useRef<HTMLFormElement>(null)
+  const publishFormRef = useRef<HTMLFormElement>(null)
 
   const listQueryKey = tenantKeys.admin.services()
   const listQuery = useQuery({
@@ -66,6 +74,69 @@ export default function ServicesPage() {
       setDeleteTarget(null)
     },
   })
+
+  // REQ-432 (REQ-373 lifecycle routes). Error text branches on err.status only.
+  const publishMutation = useMutation({
+    mutationFn: ({ serviceId, body }: { serviceId: string; body: PublishServiceVersionBody }) =>
+      servicesApi.publishVersion(serviceId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: listQueryKey })
+      setPublishTarget(null)
+    },
+  })
+
+  const retireMutation = useMutation({
+    mutationFn: (serviceId: string) => servicesApi.retire(serviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: listQueryKey })
+      setRetireTarget(null)
+    },
+  })
+
+  function publishErrorMessage(err: unknown): string {
+    const status = (err as { status?: number } | null)?.status
+    if (status === 409) return 'That version already exists for this service.'
+    if (status === 404) return 'Service not found.'
+    if (status === 422 || status === 400) return 'The version details are invalid.'
+    return 'Failed to publish version.'
+  }
+
+  function retireErrorMessage(err: unknown): string {
+    const status = (err as { status?: number } | null)?.status
+    if (status === 409) return 'This service is already retired.'
+    if (status === 404) return 'Service not found.'
+    return 'Failed to retire service.'
+  }
+
+  function openPublish(row: ServiceRecord) {
+    publishMutation.reset()
+    setPublishTarget(row)
+  }
+
+  function openRetire(serviceId: string) {
+    retireMutation.reset()
+    setRetireTarget(serviceId)
+  }
+
+  function handlePublishSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!publishTarget) return
+    const form = new FormData(e.currentTarget)
+    const text = (name: string) => ((form.get(name) as string | null) ?? '').trim()
+    const body: PublishServiceVersionBody = {
+      version: text('version'),
+      endpoint_url: text('endpoint_url'),
+      timeout_ms: Number(form.get('timeout_ms')),
+    }
+    // Empty optional strings are omitted (the backend reads present keys as-is).
+    const authMethod = text('auth_method')
+    if (authMethod) body.auth_method = authMethod
+    for (const name of ['request_schema', 'response_schema', 'retry_policy'] as const) {
+      const raw = (form.get(name) as string | null) ?? ''
+      if (raw.trim()) body[name] = raw
+    }
+    publishMutation.mutate({ serviceId: publishTarget.service_id, body })
+  }
 
   function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -115,6 +186,20 @@ export default function ServicesPage() {
     { id: 'service_id', header: 'Service ID', accessor: (row) => <span style={{ fontFamily: 'var(--font-mono)' }}>{row.service_id}</span> },
     { id: 'scope', header: 'Scope', accessor: (row) => row.scope },
     {
+      id: 'version',
+      header: 'Version',
+      accessor: (row) => (
+        <span data-testid={`service-version-${row.service_id}`} style={{ fontFamily: 'var(--font-mono)' }}>
+          {row.version ?? '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      accessor: (row) => <span data-testid={`service-status-${row.service_id}`}>{row.status ?? '—'}</span>,
+    },
+    {
       id: 'endpoint',
       header: 'Endpoint',
       accessor: (row) => (
@@ -145,6 +230,23 @@ export default function ServicesPage() {
               <div style={{ display: 'flex', gap: '.5rem' }}>
                 <Button variant="secondary" size="sm" onClick={() => openEditScope(row)}>
                   Edit scope
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  data-testid={`service-publish-btn-${row.service_id}`}
+                  onClick={() => openPublish(row)}
+                >
+                  Publish version
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  data-testid={`service-retire-btn-${row.service_id}`}
+                  disabled={row.status === 'RETIRED'}
+                  onClick={() => openRetire(row.service_id)}
+                >
+                  Retire
                 </Button>
                 <Button variant="danger" size="sm" onClick={() => setDeleteTarget(row.service_id)}>
                   Delete
@@ -310,6 +412,98 @@ export default function ServicesPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM: Publish version modal (platform-admin only; REQ-432) */}
+      {publishTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div data-testid="service-publish-modal" style={{ background: 'var(--surface-card)', borderRadius: '8px', padding: '1.5rem', width: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ margin: '0 0 1rem' }}>Publish new version — {publishTarget.service_id}</h3>
+            <form ref={publishFormRef} onSubmit={handlePublishSubmit}>
+              {([
+                { name: 'version', label: 'Version', testId: 'service-publish-version-input', defaultValue: '' },
+                { name: 'endpoint_url', label: 'Endpoint URL', testId: 'service-publish-endpoint-input', defaultValue: publishTarget.endpoint_url },
+              ] as const).map((f) => (
+                <label key={f.name} style={{ display: 'block', marginBottom: '.75rem' }}>
+                  <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>{f.label}</span>
+                  <input type="text" name={f.name} required data-testid={f.testId} defaultValue={f.defaultValue} style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box' }} />
+                </label>
+              ))}
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Timeout (ms)</span>
+                <input type="number" name="timeout_ms" required min={0} data-testid="service-publish-timeout-input" defaultValue={publishTarget.timeout_ms} style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box' }} />
+              </label>
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Auth method</span>
+                <select name="auth_method" data-testid="service-publish-auth-select" defaultValue={publishTarget.required_auth || 'NONE'} style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }}>
+                  <option value="NONE">None</option>
+                  <option value="API_KEY">API Key</option>
+                  <option value="OAUTH2">OAuth2</option>
+                  <option value="MUTUAL_TLS">Mutual TLS</option>
+                </select>
+              </label>
+              {([
+                { name: 'request_schema', label: 'Request schema', testId: 'service-publish-request-schema-input', defaultValue: publishTarget.request_schema },
+                { name: 'response_schema', label: 'Response schema', testId: 'service-publish-response-schema-input', defaultValue: publishTarget.response_schema },
+              ] as const).map((f) => (
+                <label key={f.name} style={{ display: 'block', marginBottom: '.75rem' }}>
+                  <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>{f.label}</span>
+                  <textarea name={f.name} rows={3} data-testid={f.testId} defaultValue={f.defaultValue} style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box', fontFamily: 'var(--font-mono)', fontSize: '.82rem' }} />
+                </label>
+              ))}
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Retry policy (optional)</span>
+                <input type="text" name="retry_policy" data-testid="service-publish-retry-policy-input" style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box' }} />
+              </label>
+              {publishMutation.isError && (
+                <div role="alert" data-testid="service-publish-error" style={{ padding: '.6rem', background: 'var(--color-error-tint)', border: '1px solid var(--color-error-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-error-dark)', marginBottom: '.75rem', fontSize: '.85rem' }}>
+                  {publishErrorMessage(publishMutation.error)}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" size="sm" onClick={() => setPublishTarget(null)}>Cancel</Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  data-testid="service-publish-submit"
+                  loading={publishMutation.isPending}
+                  onClick={() => publishFormRef.current?.requestSubmit()}
+                >
+                  {publishMutation.isPending ? 'Publishing…' : 'Publish'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM: Retire confirmation modal (platform-admin only; REQ-432) */}
+      {retireTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div data-testid="service-retire-modal" style={{ background: 'var(--surface-card)', borderRadius: '8px', padding: '1.5rem', width: '420px' }}>
+            <h3 style={{ margin: '0 0 .75rem' }}>Retire service version?</h3>
+            <p style={{ margin: '0 0 1rem', fontSize: '.9rem', color: 'var(--text-secondary)' }}>
+              Retiring <strong>{retireTarget}</strong> stops NEW cases from resolving this service until a new version is published. Cases already running keep the version they started with.
+            </p>
+            {retireMutation.isError && (
+              <div role="alert" data-testid="service-retire-error" style={{ padding: '.6rem', background: 'var(--color-error-tint)', border: '1px solid var(--color-error-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-error-dark)', marginBottom: '.75rem', fontSize: '.85rem' }}>
+                {retireErrorMessage(retireMutation.error)}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" size="sm" onClick={() => setRetireTarget(null)}>Cancel</Button>
+              <Button
+                variant="danger"
+                size="sm"
+                data-testid="service-retire-confirm"
+                loading={retireMutation.isPending}
+                onClick={() => retireMutation.mutate(retireTarget)}
+              >
+                {retireMutation.isPending ? 'Retiring…' : 'Retire'}
+              </Button>
+            </div>
           </div>
         </div>
       )}

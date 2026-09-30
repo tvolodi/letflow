@@ -122,6 +122,20 @@ export default function InstanceDetailPage() {
     timelineRequested,
   )
 
+  // REQ-432 §6.2: operator names for INSTANCE_PINS_REBOUND history rows, joined
+  // from the existing timeline feed by event_id. Distinct cache key from the
+  // Timeline tab's (cursor, 50) query, so that tab's pagination is untouched.
+  const actorNamesQuery = useInstanceTimeline(id!, { page_size: 200 }, activeTab === 'history')
+  const actorNamesByEventId = useMemo(() => {
+    const names: Record<string, string> = {}
+    for (const entry of actorNamesQuery.data?.items ?? []) {
+      if (entry.event_type === 'INSTANCE_PINS_REBOUND' && entry.actor_display_name) {
+        names[entry.event_id] = entry.actor_display_name
+      }
+    }
+    return names
+  }, [actorNamesQuery.data])
+
   const currentNodes = Array.isArray(instance?.current_nodes) ? instance.current_nodes : []
   const instanceVariables = instance?.variables && typeof instance.variables === 'object' ? instance.variables : {}
   const instanceGraph = instance?.definition_snapshot ?? definition?.graph
@@ -316,7 +330,11 @@ export default function InstanceDetailPage() {
 
       <section style={{ marginBottom: '1.25rem' }}>
         <h3 style={{ marginBottom: '.5rem' }}>Dependency Versions</h3>
-        <InstancePinsPanel instanceId={id!} />
+        <InstancePinsPanel
+          instanceId={id!}
+          canRebind={canCancel}
+          instanceActive={instance.status === 'ACTIVE'}
+        />
       </section>
 
       <div style={{ display: 'flex', gap: '.5rem', borderBottom: '1px solid var(--border-default)', marginBottom: '1rem' }}>
@@ -341,7 +359,7 @@ export default function InstanceDetailPage() {
       {activeTab === 'history' && (
         <>
           <h3 style={{ marginBottom: '.75rem' }}>Event history</h3>
-          <EventHistoryPanel instanceId={id!} />
+          <EventHistoryPanel instanceId={id!} actorNamesByEventId={actorNamesByEventId} />
         </>
       )}
 

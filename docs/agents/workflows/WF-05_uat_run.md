@@ -82,7 +82,13 @@ realms/actors, deployed definitions, and specs needing local Postgres). Prepare 
      attempted. Confirm the sidecar's `applies_to_environments` and `review`
      condition are still accurate; if so, this GAP is expected and reported
      every run by design — do not loop trying to close it, and do not
-     re-file it as a new issue (cite the sidecar's `issue_ref` instead).
+     re-file it as a new issue (cite the sidecar's `issue_ref` instead). A
+     sidecar's condition may additionally be scoped to specific expected
+     outcomes via `applies_to_expected_outcomes: [<EO-id>, ...]`; when
+     present, only those expected outcomes are exempted from Step 0
+     remediation and are reported BLOCKED-by-environment — every other
+     expected outcome in the same scenario is not exempted and must be
+     verified normally by UAT-RUNNER.
    Re-run the preflight after each remediation round.
 4. Only scenarios still unmet after prep are BLOCKED. Classify each:
    - BLOCKED-by-environment: `ENV_*`, `CREDENTIALS_MISSING`, `PRECONDITION_NOT_MET`,

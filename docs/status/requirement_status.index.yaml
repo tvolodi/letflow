@@ -5021,8 +5021,25 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 17
+    entries: 18
     note: >
+      Bumped to 18 by DOC-UPDATER after appending ISS-0901's SCOPE-CHANGE
+      done-event (fix/ISS-0901-env-limitation-sidecars, 2026-09-30T00:32:56Z
+      -- two new env_limitation sidecars for the docker-compose-Postgres-only
+      platform scenarios, plus a new `applies_to_expected_outcomes` sidecar
+      field so a partial-scenario env-block doesn't swallow the scenario's
+      other passing expected outcomes; also fixed a blocking-CI
+      `mix letflow.check_issue_refs` violation across ISS-0898/0899/0900/0901
+      pre-existing on main from PR #2019, `N/A` -> `null` with a trailing
+      comment). Fetched/pulled origin/main immediately before this append
+      (still e451ec5c, no new commits) and recounted directly rather than
+      trusting the prior note's arithmetic: `grep -c "^  - req:"
+      docs/status/requirement_status.v24.yaml` = 18 on-disk entries (the
+      prior 17 + this done-event). `git diff --numstat` on this file for
+      this append showed 0 deletions. 761 lines / 46101 bytes (working-tree),
+      well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered.
+
       Bumped to 17 by DOC-UPDATER after appending ISS-0891's SCOPE-CHANGE
       done-event (fix/ISS-0891-start-instance-version-race-20260929,
       2026-09-29T23:41:00Z -- Start Instance dialog's submitted

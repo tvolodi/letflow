@@ -471,9 +471,14 @@ for s in scenarios:
     if not lim or a.environment not in (lim.get("applies_to_environments") or []):
         c["env_limitation"] = ("OK", "no known environment limitation", "")
     else:
+        eo_scope = lim.get("applies_to_expected_outcomes")
+        reason_ = "%s: %s" % (lim.get("classification", "ENV_NOT_SUPPORTED"), lim.get("reason", ""))
+        if eo_scope:
+            reason_ += " (scope: %s only; other expected outcomes in this scenario are " \
+                "unaffected and must still be verified)" % ", ".join(eo_scope)
         c["env_limitation"] = (
             "GAP",
-            "%s: %s" % (lim.get("classification", "ENV_NOT_SUPPORTED"), lim.get("reason", "")),
+            reason_,
             "environment-structural (permanent; issue_ref=%s) -- no prep remediation; "
             "re-running preflight will report this same GAP by design" % lim.get("issue_ref", "?"),
         )

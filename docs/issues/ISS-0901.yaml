@@ -42,7 +42,68 @@ affected_files:
   - test/fixtures/uat/scenario-env-limitations/
   - web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts
   - web/tests/e2e/pipelines/tenant-switch-cache-isolation.pipeline.e2e.spec.ts
-queue_ref: N/A  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
-github_ref: N/A
-status: open
+queue_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
+github_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890); no GitHub mirror issue was opened for the split itself
+status: resolved
+resolved_in_run: fix/ISS-0901-env-limitation-sidecars
+resolved_at: "2026-09-30T01:15:00Z"
+resolution: >
+  Resolved by adding two new env_limitation sidecars under
+  test/fixtures/uat/scenario-env-limitations/, reusing the ISS-0894/ISS-0895
+  mechanism rather than inventing a new one:
+
+  1. platform-partition-retention-drop.yaml: whole-scenario ENV_NOT_SUPPORTED
+     on qa (the spec backdates partitions via `docker compose exec postgres
+     psql`, imported through web/tests/e2e/db-exec.ts, with no HTTP surface
+     and none planned).
+
+  2. platform-tenant-switch-cache-isolation.yaml: per-expected-outcome, via a
+     new optional `applies_to_expected_outcomes: [EO-001]` field on the
+     sidecar schema -- only EO-001 (cross-tenant cache isolation, needing a
+     direct tenant_memberships INSERT with no HTTP write path per REQ-384 OQ-2)
+     is env-blocked; EO-002/EO-003 in the same scenario already PASS on real
+     QA and must keep being executed and reported, not silently swallowed by
+     a whole-scenario GAP.
+
+  scripts/uat_preflight.sh's env_limitation check folds the new field into its
+  GAP reason string additively and guardedly (`if eo_scope:`), appending a
+  "(scope: EO-001 only; other expected outcomes ... must still be verified)"
+  clause when present; the existing whole-scenario path (no
+  applies_to_expected_outcomes) is unchanged. .claude/agents/uat-runner.md and
+  docs/agents/workflows/WF-05_uat_run.md both updated so UAT-RUNNER's
+  "must-not-be-executed" rule for a GAP sidecar scopes to only the named
+  expected-outcome id(s) when applies_to_expected_outcomes is set -- every
+  other expected_outcomes[].id in the same scenario still gets its own real
+  verdict, so UAT-RUNNER does not over-apply the rule to EO-002/EO-003 and
+  silently stop verifying them. Design doc:
+  lib/letflow/design/iss0901-env-limitation-sidecars-partition-tenant-switch.md.
+  Full gate chain: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV
+  implement -> REVIEWER PASS -> RELEASE-VALIDATOR PASS.
+
+  KNOWN, ACCEPTED MINOR GAP (RELEASE-VALIDATOR finding, not fixed, not worth a
+  standalone follow-up issue): the documented invariant is that
+  `applies_to_expected_outcomes`, when present, is a YAML list of
+  expected-outcome ids. scripts/uat_preflight.sh's reason-string fold does
+  `", ".join(eo_scope)` without a type check -- if a future sidecar author
+  violates the invariant and sets it to a bare string instead of a list,
+  Python's `str.join` iterates the string's characters rather than crashing
+  or falling back cleanly, so the resulting reason text is garbled (e.g.
+  "scope: E, O, -, 0, 0, 1 only"). This has no exit-code or GAP/OK/BLOCKED
+  classification impact -- only the human-readable reason string is affected,
+  and only if a sidecar author first breaks the documented schema. Accepted
+  as-is given how narrow and self-inflicted-only the trigger condition is.
+
+  ISS-0901 is one of ISS-0890's four split follow-ups (see ISS-0890's own
+  progress_2026_09_30 note); ISS-0890 itself stays open as a tracking umbrella
+  until ISS-0898/0899/0900 also close. Cosmetic fix applied in this same
+  branch: docs/issues/ISS-0898.yaml, ISS-0899.yaml, ISS-0900.yaml and this
+  file's own `queue_ref`/`github_ref` fields were changed from the literal
+  string `N/A` to `null` with an explanatory trailing comment -- `mix
+  letflow.check_issue_refs` (R3: a non-null queue_ref/github_ref must match
+  `Q-<n>`/`GH-<n>`; R4: `null` requires a trailing comment) was failing CI on
+  this PR because that check scans every file under docs/issues/, not just
+  this branch's diff, and PR #2019 (ISS-0890's own split, merged just before
+  this branch) had introduced all four `N/A` values pre-existing on main.
+  Fixed here rather than left blocking, since it was blocking this and every
+  other PR's Backend gate.
 parent_issue: ISS-0890

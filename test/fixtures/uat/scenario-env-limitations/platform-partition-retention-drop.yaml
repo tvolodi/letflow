@@ -1,0 +1,30 @@
+scenario_id: platform-partition-retention-drop
+applies_to_environments: [qa]
+classification: ENV_NOT_SUPPORTED
+reason: >
+  The pipeline_test (web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts)
+  backdates event-history partitions using helpers imported from
+  web/tests/e2e/db-exec.ts (pickEligibleBackdatedMonth and related setup),
+  which shell out via `docker compose exec postgres psql` against the local
+  dev Postgres instance. There is no HTTP surface in Letflow for a test to
+  backdate a partition's period against a real database, and none is planned
+  -- constructing an artificially-aged partition is a test-fixture need only,
+  not a legitimate product write path. uat_preflight.sh's local_deps check
+  does NOT catch this: the spec file's own text contains no literal "docker
+  compose"/"psql" string (confirmed by direct grep), only imports from
+  db-exec.ts, whose docker/psql invocation lives in that helper file, which
+  local_deps does not scan. This sidecar is therefore the mechanism that
+  correctly reports this scenario ENV_NOT_SUPPORTED on qa; without it,
+  preflight falsely shows OK. Confirmed BLOCKED/ENV_NOT_SUPPORTED against real
+  QA in WF05-FULL-20260929
+  (test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml): "Spec
+  backdates partitions with `docker compose exec postgres psql`... The
+  command failed in this environment. Not a defect in the target."
+recorded_by: ELIXIR-DEV
+recorded_at: "2026-09-30"
+issue_ref: ISS-0901
+review: >
+  Revisit if Letflow ever ships an admin/test-only HTTP endpoint for
+  backdating event-history partitions (unlikely -- deliberately not a product
+  capability), or if a disposable per-run QA-equivalent Postgres lane becomes
+  available for this one spec's setup step.

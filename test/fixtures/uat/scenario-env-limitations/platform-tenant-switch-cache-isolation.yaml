@@ -1,0 +1,37 @@
+scenario_id: platform-tenant-switch-cache-isolation
+applies_to_environments: [qa]
+applies_to_expected_outcomes: [EO-001]
+classification: ENV_NOT_SUPPORTED
+reason: >
+  Only EO-001 (cross-tenant cache isolation across a mid-session company
+  switch) is env-blocked on qa. Its test block
+  (web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts,
+  test('EO-001: switching tenants via the in-app control never shows stale
+  tenant-A data', ...)) provisions a second tenant's tenant_memberships row
+  via db-exec.ts's insertTenantMembershipSql/runSqlAgainstDevPostgres, a
+  direct SQL write against the local dev Postgres (itself backed by `docker
+  compose exec postgres psql`, per db-exec.ts's own moduledoc) -- REQ-384
+  ships no HTTP write path for tenant_memberships
+  (lib/letflow/design/req384-tenant-switcher-cache-isolation.md SS1.1, OQ-2).
+  EO-002 (test('EO-002: sign-out clears same-tab tenant-selection residue
+  (bpm_realm_slug)')) and EO-003 (test('EO-003: a task shows the form it was
+  created against, not a later published version')) are independent test
+  blocks in the same spec file that write no such row and already PASS
+  against real QA (test/uat-reports/uat-2026-09-22-WF02-REQ384-EO001-20260922.yaml;
+  test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml: "EO-002
+  (sign-out clears bpm_realm_slug residue) PASS; EO-003 (task shows the form
+  version it was created against) PASS"). uat_preflight.sh's local_deps check
+  does not catch this spec either, for the same reason as
+  platform-partition-retention-drop (the literal docker/psql text lives in
+  db-exec.ts, not in this spec file). Do NOT read this sidecar as "the whole
+  scenario is blocked" -- EO-002/EO-003 must keep being executed and reported
+  on every run; only EO-001 is permanently unrunnable against qa.
+recorded_by: ELIXIR-DEV
+recorded_at: "2026-09-30"
+issue_ref: ISS-0901
+review: >
+  Revisit if REQ-384 (or a successor requirement) ships an HTTP write path
+  for tenant_memberships that a test could call against real QA instead of
+  direct SQL (closing OQ-2 in req384-tenant-switcher-cache-isolation.md would
+  be the natural trigger), or if a disposable per-run QA-equivalent Postgres
+  lane becomes available for this one test block.

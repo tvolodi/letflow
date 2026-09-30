@@ -5826,14 +5826,22 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 2
+    entries: 3
     note: >
       Opened by DOC-UPDATER's own ISS-0908 closing SCOPE-CHANGE append,
       successor to volume 24 (closed at 30 entries / 1219 frozen-prefix
       lines, over the 1200-line roll ceiling). Created with volume 24's
       header text verbatim (volume number, opening date and predecessor
       path updated) and an empty entry list, per this index's
-      `roll_rule.on_exceed` procedure.
+      `roll_rule.on_exceed` procedure. First entry (REQ-294 started, ORCH,
+      2026-09-30T16:59:00Z) appended without updating this `entries:`
+      counter -- caught by TEST-RUNNER (A9 invariant) during
+      WF02-REQ294-20260930's Step 4; corrected 0 -> 1 in that run's own fix
+      commit (080c54ea). Rebasing WF02-REQ294-20260930 onto origin/main
+      during its own Step Final then composed that fix with two entries
+      concurrently appended directly to main (REQ-432 done, SCOPE-CHANGE/
+      ISS-0911 done) -- updated here to 3 to match the three entries
+      actually on disk in v25.yaml at this point in the rebase.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

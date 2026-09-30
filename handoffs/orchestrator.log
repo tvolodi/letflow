@@ -2532,3 +2532,4 @@
 2026-09-30T21:23:21Z | DISPATCH | WF03-ISS0936-20261001 | step-03 | ORCH -> ELIXIR-DEV | PENDING
 2026-09-30T21:24:57Z | PASS | WF03-ISS0936-20261001 | step-03 | ELIXIR-DEV -> ORCH | PASS -- scripts/uat_preflight.sh changed (ORCH saw diff), 6 real-run cases quoted
 2026-09-30T21:24:57Z | DISPATCH | WF03-ISS0936-20261001 | step-03c | ORCH -> SECURITY-REVIEWER | PENDING
+2026-09-30T21:25:36Z | PASS | WF03-ISS0936-20261001 | step-03c | SECURITY-REVIEWER -> ORCH | PASS -- sentinel token 0 occurrences in stdout/stderr/--out; only used as Bearer to configured base-url

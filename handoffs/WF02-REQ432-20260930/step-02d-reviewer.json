@@ -7,9 +7,9 @@
   "to_agent": "REVIEWER",
   "file": "handoffs/WF02-REQ432-20260930/step-02d-reviewer.json",
   "created_at": "2026-09-30T17:23:52Z",
-  "started_at": "2026-09-30T17:23:52Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T17:23:55Z",
+  "completed_at": "2026-09-30T17:25:01Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -45,10 +45,33 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "PASS. Read the real diff (git diff main...HEAD -- web/ test/fixtures/ lib/) plus the validated design. Q1 idiom: React idioms sound - hooks at top level, no derived-state-in-effect (actorNamesByEventId is useMemo; dialog state reset in event handlers), rebind key generated once per dialog open in openRebind() and reused on retry (rebind.reset() only on open/close), one prefix invalidation in useRebindPins, Idempotency-Key as header via existing client.postWithHeaders (not in diff). Q2 supervision: N/A (no lib/ change). Q3 type-safety: no any/ts-ignore/non-null assertions added beyond pre-existing id! pattern; test-only 'as unknown as typeof window.fetch'; MINOR optional-field typing notes only, nothing in transition logic so no docs/issues filed. Q4 scope creep: none - no new state/routing/build tool, no hardcoded base URL (spec uses BPM_TEST_URL env fallback like sibling specs), no new abstraction beyond PinsReboundSummary which design section 6.3 requires. Fence (1): git diff --name-only main...HEAD | grep ^lib/ -> only lib/letflow/design/req432-rebind-pins-publish-retire-ui.md; nothing under service_catalog*, pin_resolver.ex, pin_rebind.ex. InstancePinsPanel diff is additive (imports, rebind state, an optional Actions column appended only when showRebind, dialog); existing columns untouched. Guard integrity (2): git diff main...HEAD -- web/tests/guards web/eslint* web/tsconfig* web/package.json web/vite* web/playwright* | wc -l -> 0; grep of added lines for eslint-disable/ts-ignore/ts-expect-error/test.skip/fixme/.only -> 0 hits. M1 RULING: the event_id join is LEGITIMATE frontend-side resolution, not a shim. It consumes a real, already-typed, already-shipped backend feed (TimelineEntry.actor_display_name + event_id, useInstanceTimeline) that the page already uses; it does not rewrite, rename or normalise a backend response field, does not fabricate data (when no name resolves it falls back to the honest payload actor UUID prefix, never 'system'), is applied only to INSTANCE_PINS_REBOUND rows, leaves all other event types' Actor logic unchanged, and the backend mismatch (history_item_map omits actor_id) remains reported as design M1/M6 for a backend follow-on. Caveat recorded MINOR: bounded to the first 200 timeline events, so on very long cases the name degrades to the UUID prefix. Tests (5): ran 19 vitest files / 93 tests for the new+adjacent files, all pass. Mutation reasoning: (a) InstancePinsPanel.rebind 'retry reuses key; reopen generates new' fails if the key were regenerated per submit or if openRebind stopped generating one; (b) 'blocks submit on empty reason / unchanged version' fails if canSubmit dropped the trimmedReason or versionUnchanged clause; (c) 'sends body + Idempotency-Key, refetches pins' asserts exact body toEqual and getPins called twice, fails if invalidation were removed or entries shape changed; (d) status-code table test fails if any rebindErrorMessage branch is altered; (e) pipeline step 6 asserts actor cell equals the timeline-API name and not 'system', and old+new version and reason on the same row - fails if the Actor cell regressed. Weak spot (MINOR): the EO-004 component test 'keeps showing its old version after retire' only re-renders a mock that always returns version 1, so it is near-tautological and would pass with no retire handling at all; real EO-004 evidence is pipeline step 3/4. Pipeline spec honesty (4): no skip/fixme/only; no page.route; fixtures via real HTTP; step 3 dual outcome matches design 7.4 exactly (SERVICE_TASK_COMPLETED, or EXECUTION_ERROR with error_type service_task_retries_exhausted AND details.last_failure_kind request_build_error; anything else gates) and logs which occurred; retire-before-publish order per M4. Spec has NOT run green (Keycloak/wslrelay host issue) and step 02/07 selector assumptions are disclosed as unproven live in the 02b handoff (MAJOR there) but not in the spec header - MINOR. Step 07 asserts count()==0 after fixed waitForTimeout with no positive anchor, so it could pass if the page failed to render - MINOR. Blockers: none.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ432-20260930/step-02d-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Pipeline step 07 (worker sees no publish/retire/rebind controls) asserts count()==0 after waitForTimeout with no positive anchor (e.g. a visible page heading or the Dependency Versions panel), so it passes vacuously if the page fails to render or redirects. Add a positive presence assertion for the page before the absence counts.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "InstancePinsPanel.rebind test \"a running case keeps showing its old version after the service was retired (EO-004)\" is near-tautological: getPins mock always returns version 1 and no retire action is exercised, so it cannot fail if the AC were violated. Real EO-004 evidence lives in the (not-yet-run-live) pipeline step 3/4; consider renaming or dropping the claim.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "M1 event_id join is bounded to the first 200 timeline events (page_size 200); on longer cases the rebound row degrades to the payload actor UUID prefix. Backend follow-on M1/M6 (emit actor_id/display name on history items) remains the proper fix; REQ-ANALYST should file it.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Pipeline spec header does not state that steps 02/07 selector assumptions and the whole spec are unproven live (only the 02b handoff says so). Add a one-line note to the spec header so UAT-RUNNER sees it. Also ServiceRecord version/status optional fields and PublishServiceVersionBody.auth_method?: string could be typed as unions (ServiceAuthMethod) - low-value type tightening, not filed.",
+        "affected_requirement": "REQ-432"
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
       "commit_sha_list": [],
@@ -57,7 +80,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH: proceed to TEST-DESIGNER (Step 3) on REQ-432; optionally route the MINOR notes to FRONTEND-DEV in the same pass."
   },
   "rework_count": 0,
   "max_rework": 3

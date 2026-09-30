@@ -1,0 +1,41 @@
+{
+  "handoff_id": "1a1a9a82-abff-4cf2-b319-2e3319fb8493",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0930-20261001/step-02-r1-code-designer.json",
+  "created_at": "2026-09-30T22:36:35Z",
+  "started_at": "2026-09-30T22:36:35Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0930-seed-service-task-endpoints.md",
+      "handoffs/WF03-ISS0930-20261001/step-02b-code-design-validator.json",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine.ex"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 of WF-03 Step 2 (fix design). The validator (handoffs/WF03-ISS0930-20261001/step-02b-code-design-validator.json, result) FAILED your design lib/letflow/design/iss0930-seed-service-task-endpoints.md on 4 issues: (1) section 6 names a non-existent Letflow.Engine.Graph.Node; real struct is Letflow.Definitions.Graph.Node (lib/letflow/definitions/graph.ex:156), enforce_keys :id and :node_type, so the test must build it with node_type: :SERVICE_TASK plus id/attributes; (2) OQ-1/section 2 wrongly says tenant variable_schemas could reject merged httpbin keys; the service-task merge passes nil validations (engine.ex:2944) so that cannot happen - correct the statement; (3) section 5 replacement rule 'replace when active version differs' would also downgrade a newer ACTIVE version (e.g. 1.2) to 1.1 - specify the downgrade case explicitly (e.g. skip with a warning when the active version is newer/not older, compare numerically; or whatever you justify after reading the script) ; (4) section 6 must state the exact sample value used when rendering {{variables.KEY}} placeholders, and state that parsed Config.method is an atom (:POST) and how the test compares it to the fixture's string method. Edit the existing design file in place to fix these (re-verify each against the code yourself), keep everything else that the validator confirmed. Design only, no implementation code. Work only in context.worktree; do not commit. Do not repeat the claim boilerplate: this is a rework - when finished set status to COMPLETED (or FAILED) and fill result with result.status PASS/FAIL as normal; next_action 'Route to CODE-DESIGN-VALIDATOR'.",
+    "acceptance_criteria": [
+      "All 4 validator issues resolved in the design file",
+      "Each fix verified against code",
+      "No implementation code"
+    ]
+  },
+  "result": null
+}

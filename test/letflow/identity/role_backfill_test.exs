@@ -303,7 +303,9 @@ defmodule Letflow.Identity.RoleBackfillTest do
     Repo.get!(User, user.id, prefix: schema_name)
   end
 
-  @a_past_timestamp DateTime.utc_now() |> DateTime.add(-3600, :second) |> DateTime.truncate(:microsecond)
+  @a_past_timestamp DateTime.utc_now()
+                    |> DateTime.add(-3600, :second)
+                    |> DateTime.truncate(:microsecond)
 
   describe "run/0 resets role_claims_synced_at for a :seeded tenant's users (ISS-0910 AC1)" do
     test "a user with a previously-set marker has it reset to nil after run/0" do

@@ -54,3 +54,35 @@ queue_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890
 github_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890); no GitHub mirror issue was opened for the split itself
 status: open
 parent_issue: ISS-0890
+progress_2026_09_30: >
+  ISSUE-FIXER diagnosis complete (2026-09-30T02:40:00Z). Definitive per-scenario
+  disposition, each independently verified against source:
+
+  1. platform-frontend-guard-selfcheck: covered-elsewhere for EO-001/002/003/005
+     (meta-control.spec.ts, bundle-scan.spec.ts, reporter.ts/reportWriter.ts all
+     genuinely satisfy them); ONE real narrow gap in EO-004 -- the a11y-gate
+     e2e's SURFACES array covers 5 of the 6 required screens, missing
+     "process detail" (instances/:id). Small FRONTEND-DEV fix dispatched
+     directly (adding the missing surface + a real seeded instance to
+     navigate to), no new requirement needed.
+
+  2. platform-out-of-order-effect-completion: NO GAP. Every expected outcome
+     (EO-001..EO-005) maps exactly onto an existing, passing acceptance
+     criterion in test/letflow/ordering_test.exs (AC3/AC4/AC5/AC7/AC8).
+     Pure test-tier classification mismatch, not a product gap -- closing
+     this scenario's disposition as verified-elsewhere, no code/test change
+     needed.
+
+  3. platform-unsafe-migration-rejected: CONFIRMED genuinely unbuilt (a
+     pre-flight whole-change-set safety review sitting above/before
+     MigrationRollout, which has no batching concept to extend
+     incrementally). Split into ISS-0902 for its own REQ-ANALYST-sized
+     requirement.
+
+  4. platform-outbox-cap-backpressure: re-confirmed genuinely unbuilt (no
+     change from prior triage). Split into ISS-0903 for its own
+     REQ-ANALYST-sized requirement.
+
+  ISS-0900 stays open as this sub-tracking umbrella until: the a11y-gate
+  fix (scenario 1) merges, scenario 2's disposition is recorded in the next
+  UAT report cycle, and ISS-0902/ISS-0903 both resolve.

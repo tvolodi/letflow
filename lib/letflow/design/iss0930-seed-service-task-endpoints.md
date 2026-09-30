@@ -182,16 +182,35 @@ Mechanism (per `seed_definition` unit in meridian/vortex; once in swiftroute):
 1. `GET /definitions?name=<n>&status=active`.
 2. Let `fixture_version` = `.version` of the fixture JSON (`jq -r .version`). Let
    `active_version` = `.items[0].version // empty`.
-3. If `active_version == fixture_version` -> skip (idempotent no-op; existing message).
-4. Otherwise (none active, or a different version active) -> `POST /definitions` with the
-   rewritten payload, then `POST /definitions/{id}/activate`. Print, when a prior active
-   existed, `Replacing ACTIVE v<old> (id <id>) with v<new>; the platform will deprecate v<old>.`
+3. Three-way decision on `active_version` vs `fixture_version`, compared **numerically by
+   dotted components, not as strings and not by `!=`** (shell helper
+   `version_is_older <a> <b>`: true iff `a` sorts strictly before `b` under
+   `sort -V`, i.e. `1.9` < `1.10`; `sort -V` ships with GNU coreutils in the scripts' runtime,
+   same class of prerequisite as `jq`). The server treats `version` as an opaque string
+   (uniqueness `(name, version)` only; no ordering in `Definitions`), so ordering is decided
+   client-side by this helper:
+   - `active_version` empty (none active) -> proceed to step 4.
+   - `active_version == fixture_version` -> skip (idempotent no-op; existing message).
+   - `active_version` strictly older than `fixture_version` (e.g. QA's 1.0 vs 1.1) -> proceed
+     to step 4.
+   - `active_version` strictly NEWER than `fixture_version` (e.g. a hand-promoted 1.2 vs
+     fixture 1.1) -> **do not replace**: print
+     `WARNING: ACTIVE v<active> is newer than fixture v<fixture>; not downgrading. Bump the fixture version above v<active> to re-seed.`
+     to stderr, skip the create/activate calls, and exit 0 (seed is a no-op, never a
+     downgrade). Rationale: replacing would deprecate a newer operator-promoted definition
+     with an older graph; the script cannot know the newer one is wrong, and a false
+     no-op is recoverable (bump fixture) while a silent downgrade is not obviously so.
+4. Replace path -> `POST /definitions` with the rewritten payload, then
+   `POST /definitions/{id}/activate`. Print, when a prior active existed,
+   `Replacing ACTIVE v<old> (id <id>) with v<new>; the platform will deprecate v<old>.`
 5. A 409 on create means `(name, fixture_version)` already exists in DRAFT/DEPRECATED/
    ARCHIVED; the script prints that cause (current hint text is updated from "already
    exists as DRAFT" to also name DEPRECATED/ARCHIVED) and exits 1. Recovery is to bump the
    fixture `version`, never to delete. Stated explicitly so nobody reaches for FORCE.
 
 Consequences checked:
+- Downgrade guard: the static content block (section 6) also pins the literal
+  `not downgrading` and the `version_is_older` helper name in each script.
 - Scenario/alias lookups: `definition_name` -> `get_active_by_name` returns the new ACTIVE
   v1.1. Sidecars and `uat_preflight.sh` need no change (preflight compares names, not
   versions; verified by grep).
@@ -215,10 +234,16 @@ fixture is covered automatically); each decoded with `Jason.decode!/1`; nodes ta
 `graph.nodes` where `node_type == "SERVICE_TASK"`.
 
 Exercise path (reuses production code, no reimplementation of the rules): build a
-`Letflow.Engine.Graph.Node` struct from the node's `id`/`attributes` and call
-`Letflow.Engine.ServiceTask.parse_config_from_node_attributes/1`; render the
-`url_template` by substituting a fixed sample value for each `{{variables.KEY}}` token
-(same token grammar as `Engine.render_service_task_url/2`); call
+`%Letflow.Definitions.Graph.Node{}` (real struct, `lib/letflow/definitions/graph.ex:156`;
+`@enforce_keys [:id, :node_type]`) with `id: <node id>`, `node_type: :SERVICE_TASK` (atom;
+the JSON string `"SERVICE_TASK"` is only used to select nodes) and
+`attributes: <the node's string-keyed attributes map>` (`label` left nil), and call
+`Letflow.Engine.ServiceTask.parse_config_from_node_attributes/1` (it pattern-matches
+`%Graph.Node{id:, attributes:}` where `Graph` aliases `Letflow.Definitions.Graph`). Render
+the `url_template` by substituting the **exact sample value `"sample1"`** for every
+`{{variables.KEY}}` token (same token grammar as `Engine.render_service_task_url/2`:
+regex `\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}`; `"sample1"` is URL-safe alphanumeric so
+it cannot itself alter scheme/host); call
 `Letflow.Webhooks.UrlValidator.validate(rendered_url, resolver)` with an injected stub
 resolver (a 1-arity fun over a charlist host returning
 `{:ok, [{:inet, {93, 184, 216, 34}, []}]}`, a public documentation-range-safe address,
@@ -230,9 +255,14 @@ message (TC ids assigned by TEST-DESIGNER):
    (guards against a silently empty glob).
 2. Every SERVICE_TASK node has `attributes.endpoint` as a binary, parses via
    `URI.parse/1` with `scheme == "https"` and non-empty `host`.
-3. Every node has an explicit `attributes.method` that is one of
+3. Every node has an explicit `attributes.method` (binary) that is one of
    `["GET","POST","PUT","PATCH","DELETE"]` (case-insensitive), and the parsed
-   `Config.method` agrees.
+   `Config.method` agrees. Type note: the fixture value is a JSON **string** (`"POST"`),
+   whereas parsed `Config.method` is an **atom** (`:POST`; `parse_method/1` does
+   `String.upcase |> safe_to_existing_atom` and accepts only `@valid_methods ~w(GET POST PUT
+   PATCH DELETE)a`). The test compares them by normalising the fixture side:
+   `String.to_existing_atom(String.upcase(fixture_method)) == config.method` (all five atoms
+   exist because `ServiceTask` is loaded), never by comparing atom to string directly.
 4. `parse_config_from_node_attributes/1` returns `{:ok, %Config{route_kind: :inline_url}}`
    (no `service_id` present -- catalog routing can never dispatch today).
 5. After rendering, `UrlValidator.validate(rendered, stub_resolver)` returns `:ok`
@@ -247,7 +277,7 @@ message (TC ids assigned by TEST-DESIGNER):
 Second, tiny file-content assertion block in the same module (static, no shell
 execution): each of the three seed scripts contains the literal `SERVICE_TASK_MOCK_BASE_URL`
 and sources `scripts/lib/seed_service_task_base.sh`, and contains `fixture_version`-style
-comparison text (`jq -r .version`). This pins the seed/fixture linkage without requiring
+comparison text (`jq -r .version`), `version_is_older` and `not downgrading` (section 5). This pins the seed/fixture linkage without requiring
 live QA (same caveat the existing seed test documents: live-seed ACs are not CI
 auto-executable).
 
@@ -306,9 +336,12 @@ the contract.
 ## 9. Open questions (explicit; none blocks implementation)
 
 - OQ-1: Response keys `args,data,files,form,headers,json,method,origin,url` from httpbin
-  are merged into instance variables (and may be checked against tenant
-  `variable_schemas`). No collision found in fixtures/scenarios today; if a tenant later
-  defines a schema for one of these names the merge would be rejected. Default chosen
+  are merged into instance variables. Verified: the service-task merge calls
+  `VariableMerge.merge(seed_state.variables, decoded_body, nil)` (`engine.ex`
+  `advance_service_task_dispatch/4`, ~line 2944), i.e. with **nil validations**, so tenant
+  `variable_schemas` are NOT applied here and cannot reject these keys. Residual risk is only
+  semantic: the keys pollute instance variables, and an existing process variable of the same
+  name (none found in fixtures/scenarios) would be overwritten by the echo. Default chosen
   anyway; overridable via `SERVICE_TASK_MOCK_BASE_URL`.
 - OQ-2: Should the simulation YAML sources also move to absolute endpoints? Designed as NO
   (not generation source; no test compares endpoints). Flag for REVIEWER if they disagree.

@@ -2483,3 +2483,5 @@
 2026-09-30T16:55:06Z | DISPATCH | WF02-REQ432-20260930 | step-01-rework1 | ORCH -> CODE-DESIGNER | PENDING
 2026-09-30T17:02:48Z | PASS | WF02-REQ432-20260930 | step-01-rework1 | CODE-DESIGNER -> ORCH | PASS -- design revised (c933023c): EO-005 single-view actor resolution via timeline event_id join, pipeline fixture mechanism + step-3 events from source, exact instances.all() invalidation. New finding M5: ServiceTaskDispatcher.catalog_lookup_stub is unconditional {:error,:not_registered}, so a catalog service step cannot complete end to end (backend gap, to be forwarded).
 2026-09-30T17:03:05Z | DISPATCH | WF02-REQ432-20260930 | step-01b-recheck1 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-30T17:05:10Z | PASS | WF02-REQ432-20260930 | step-01b-recheck1 | CODE-DESIGN-VALIDATOR -> ORCH | PASS -- design verified against source after rework 1; M5 judged honest-not-hollow, forwarded as MAJOR non-blocking (catalog_lookup_stub unconditional). Next: Step 2b FRONTEND-DEV (Step 2a skipped: frontend-only, no lib/ change).
+2026-09-30T17:05:11Z | DISPATCH | WF02-REQ432-20260930 | step-02b | ORCH -> FRONTEND-DEV | PENDING

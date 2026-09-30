@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator.json",
   "created_at": "2026-09-30T07:09:00Z",
   "started_at": "2026-09-30T07:09:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T07:24:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,18 +36,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "All four ACs independently verified against source, not the design doc's own assertions. (1) definitionsApi.getActive(name) exists (web/src/api/definitions.ts:22-23, exact-match GET /api/v1/definitions/active/:name); design's useActiveDefinitionByName calls it keyed on the dialog's own debounced startDefinitionName, never definitionTypeahead. (2) Race-guard independently checked: web/src/main.tsx:19-26 sets a global QueryClient default (staleTime 30_000, retry 0) -- confirmed this does NOT undermine the per-key-isolation claim, since staleTime only governs refetch-on-mount/window-focus behavior for a given key's cache entry, not whether two distinct keys share a slot; the design's per-name queryKey (definitionKeys.active(trimmedName), already defined at web/src/api/useTenantScopedQueryKeys.ts:59) gives each distinct typed value its own cache entry/observer under TanStack Query v5.28 (web/package.json:29) semantics, which is the actual, correct basis for the race-guard, not the debounce (which the design itself correctly calls only a cosmetic request-volume reducer, section 4.2). No shared mutable slot exists for a stale response to land in. (3) Version-field state model (idle/loading/found/not_found/error) is exhaustive with no gap; idle vs loading vs not_found are kept distinct (blank input vs in-flight vs settled 404), matching the ORCH task's own framing that 5 states, not the AC's literal 3, is the correct exhaustive set. (4) definitionTypeahead's call sites independently re-grepped in web/src/pages/instances/InstanceBoardPage.tsx: line 85-88 declares it, line 141 (onResolveDefinition, page-level onBlur handler) and line 358 (datalist suggestion options) are the two sites the design claims remain untouched and legitimate -- confirmed both are unrelated to the dialog's resolution path; line 184 (onStartDefinitionNameChange) is the one site the design correctly identifies as the bug and replaces. No other call sites exist. (5) No implementation code in the design doc -- only type/function signatures (useActiveDefinitionByName, VersionLookupState, deriveVersionLookupState) and control-flow prose; no request bodies, no effect bodies, no JSX.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0911-20260930",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Proceed to WF-03 Step 03 (ELIXIR-DEV/FRONTEND-DEV implementation) per docs/agents/workflows/WF-02_requirement_implementation.md."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -40,7 +40,7 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0911-20260930",
-      "commit_sha_list": [],
+      "commit_sha_list": ["1f5da8e6"],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,

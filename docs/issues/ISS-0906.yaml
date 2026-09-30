@@ -19,4 +19,22 @@ affected_files:
   - lib/letflow/ (task cancel path, audit events)
 queue_ref: Q-900  # queue allocated issue_ref ISS-0900, which collides with an existing local file; local filename kept as ISS-0906 and GH-2034 retitled to match
 github_ref: GH-2034
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0906-escalation-cancel-audit-timestamp
+resolved_at: "2026-09-30T13:45:00Z"
+resolution: >
+  persist_escalation_timer_fired_advance/7's :cancel_original_task Multi step
+  replaced its bare `update_all` (which bypassed Ecto's changeset/timestamp
+  machinery entirely) with a fetch+lock+Task.complete_changeset/2+update, plus
+  a new Multi.merge step writing a real task.cancel Letflow.Audit entry. Full
+  gate chain: SECURITY-REVIEWER PASS, REVIEWER PASS (added a new
+  docs/anti-patterns.md entry generalizing this bug class -- "bulk
+  update_all silently skips audit + timestamp"), TEST-DESIGN-VALIDATOR PASS
+  (real mutation testing, 3 mutants applied/caught/reverted), TEST-RUNNER
+  PASS, and RELEASE-VALIDATOR PASS with an independent live end-to-end
+  reproduction via raw SQL directly against the tasks/audit_entries tables,
+  confirming both the updated_at bump and the new task.cancel audit row are
+  real, not merely test-mocked. The sibling gap in cancel_task_rows/4 /
+  cancel_instance/3 (no per-task audit event written on that path either) was
+  identified but deliberately deferred, not fixed in this change -- tracked
+  separately, not closed by this issue.

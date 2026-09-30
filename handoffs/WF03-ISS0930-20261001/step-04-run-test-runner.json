@@ -1,0 +1,40 @@
+{
+  "handoff_id": "60ee3468-21e5-43c0-a277-f2a34e7a6c5f",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0930-20261001/step-04-run-test-runner.json",
+  "created_at": "2026-09-30T23:13:57Z",
+  "started_at": "2026-09-30T23:13:57Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs",
+      "handoffs/WF03-ISS0930-20261001/step-04-test-designer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4 run. Run the tests relevant to ISS-0930 in context.worktree and report real output: (1) `mix test test/letflow/scripts/` (whole scripts test dir, includes the new qa_fixture_service_task_endpoints_test.exs and seed_swiftroute_definition_test.exs); (2) any other test that reads test/fixtures/qa/ or scripts/seed_* (grep test/); (3) `mix format --check-formatted`; (4) `mix compile --warnings-as-errors` if not already compiled. The previous agent reported that the full `mix letflow.check.test` (16 partitions, then TEST_PARALLEL_N=4) failed on DB connection exhaustion / stalled and left Postgres with too_many_connections. FIRST check Postgres health (e.g. via the repo's documented DB access; see docs/anti-patterns.md for docker fallback) and whether orphaned beam/psql sessions from that run (command lines containing letflow-4-wf03-iss0930) still hold connections - terminate only those orphans (NOT processes from other sessions/worktrees, never the main checkout's). Then attempt `mix letflow.check.test` ONCE with modest parallelism (TEST_PARALLEL_N=2) under a hard timeout of 25 minutes; if it cannot complete for environmental reasons, say so plainly with evidence and report it as PARTIAL (CI on the PR will run the full suite as the authoritative gate) - do not loop. Do not modify files other than this handoff. Set IN_PROGRESS at claim, then COMPLETED/FAILED with result.status PASS/PARTIAL/FAIL; next_action 'Route to DOC-UPDATER / Step 5' on PASS or PARTIAL-with-targeted-green.",
+    "acceptance_criteria": [
+      "Targeted tests run with real counts quoted",
+      "Format/compile checks quoted",
+      "Full-suite attempt made once or environmental blocker evidenced",
+      "No files modified except handoff"
+    ]
+  },
+  "result": null
+}

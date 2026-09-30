@@ -903,3 +903,39 @@
       same append -- this is an ISSUE, not a REQ, so no
       docs/requirements.yaml entry is touched. letflow-queue task 889 to be
       released as done in this same run.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T06:30:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0887
+      (MAJOR, PATCH /api/v1/tenant/settings: web client (REQ-383) and its
+      e2e/UAT seed sent {"settings":{brand_colors}} but the REQ-382 route
+      expects flat {brand_colors}, so the request 200'd with settings {}
+      and nothing persisted) -- resolved: flattened
+      web/src/api/tenantSettings.ts's request body and the e2e
+      seedBrandColor helper
+      (web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts) from
+      the wrapped {"settings":{"brand_colors":...}} shape to the flat
+      {"brand_colors":...} shape, matching REQ-382's real router contract
+      (lib/letflow/routers/tenant_settings.ex's partition logic
+      deliberately left unchanged -- the design justified this against an
+      existing REQ-382/AC3 acceptance test). Added a new e2e
+      persistence-check test, a backend regression-pin test, and a
+      frontend unit test asserting the exact flat request shape (commit
+      ac305e16, branch fix/ISS-0887-tenant-settings-contract-mismatch, PR
+      #2028). Full gate chain: SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGN-VALIDATOR (real mutation testing), TEST-RUNNER, and
+      RELEASE-VALIDATOR all PASSed. RELEASE-VALIDATOR independently
+      reproduced the original bug live and confirmed the fix end-to-end
+      via a real PATCH+GET round trip against a live backend: reverting
+      the client fix caused the new tests to fail exactly as ISS-0887
+      described (GUI reports success, nothing persists); restoring it
+      round-tripped a real PATCH+GET through the live backend correctly.
+      docs/issues/ISS-0887.yaml set to status: resolved (resolved_in_run:
+      fix/ISS-0887-tenant-settings-contract-mismatch-20260930) in this
+      same append -- this is an ISSUE, not a REQ, so no
+      docs/requirements.yaml entry is touched. Merged via PR #2028 (see PR
+      for merge commit SHA). letflow-queue task 885 (queue_ref Q-885,
+      github_ref GH-1990) to be released as done in this same run.

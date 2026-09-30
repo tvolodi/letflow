@@ -1,0 +1,30 @@
+id: ISS-0918
+title: "GET /api/v1/instances/:id/events history items omit actor_id (history_item_map/1), so the History tab shows 'system' for every event; service_record_json omits max_retries/retry_policy; stale 'not permission-gated' moduledoc on rebind-pins"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF02-REQ432-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T20:50:51Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  Found by WF02-REQ432-20260930 design/review (lib/letflow/design/req432-rebind-pins-
+  publish-retire-ui.md sections 6 and 9, M1/M2/M3). (M1) lib/letflow/routers/instances.ex
+  history_item_map/1 (~903-910) emits only event_id, event_type, sequence_number,
+  created_at, payload; it omits actor_id (and any display name), while web EventRecord
+  declares actor_id and EventHistoryPanel falls back to the literal 'system' for every
+  event. REQ-432 works around it ONLY for INSTANCE_PINS_REBOUND rows via a bounded (200
+  events) frontend join on the timeline feed by event_id; the proper fix is to emit actor_id
+  (and actor_display_name) on history items. (M2) lib/letflow/routers/admin_services.ex
+  service_record_json/1 emits no max_retries/retry_policy although web
+  ServiceRecord.max_retries and the ServicesPage Retries column expect it (renders blank;
+  publish accepts retry_policy but never echoes it). (M3) lib/letflow/routers/instances.ex
+  moduledoc says rebind-pins is 'not permission-gated' but the route is authz_post
+  :InstancesCancel (instances.ex ~338); doc-only cleanup. Owner ELIXIR-DEV. Severity MINOR.
+source_reports:
+  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json
+  - test/reports/report-20260930-WF02-REQ432-20260930.yaml
+affected_files:
+  - lib/letflow/routers/instances.ex
+  - lib/letflow/routers/admin_services.ex
+queue_ref: Q-908  # queue allocated issue_ref ISS-0908, which collides with an existing local file; local filename kept as ISS-0918 (next free on origin/main) and GH-2058 retitled to match
+github_ref: GH-2058
+status: open

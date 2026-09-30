@@ -1,0 +1,27 @@
+id: ISS-0919
+title: "ServicesPage.tsx Edit-scope, Create-cancel and Delete click handlers are not wrapped in deferClickState: ISS-0662-class renderer freeze on /admin/services"
+discovered_by: FRONTEND-DEV
+discovered_in_run: WF02-REQ432-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T20:50:51Z"
+severity: MINOR
+owner: "FRONTEND-DEV"
+description: >
+  Found by WF02-REQ432-20260930 step-02b-rework1 (live Playwright run against the real SPA,
+  FRONTEND-DEV): on /admin/services every trusted click that performs a synchronous setState
+  hung the tab, including pre-existing handlers (Edit scope, Create cancel, Delete) that
+  were NOT touched by REQ-432. REQ-432 wrapped only its own new handlers
+  (openPublish/openRetire/confirm/submit, rebind dialog) with
+  web/src/utils/deferClickState.ts per the project convention (ISS-0662/0737/0739 family).
+  The remaining handlers in web/src/pages/admin/services/ServicesPage.tsx still freeze; the
+  underlying root cause of the freeze is still not identified (deferClickState is a
+  documented workaround). Fix: apply deferClickState to the remaining handlers and add a
+  click-through regression test; ideally root-cause. Owner FRONTEND-DEV. Severity MINOR.
+source_reports:
+  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json
+  - test/reports/report-20260930-WF02-REQ432-20260930.yaml
+affected_files:
+  - web/src/pages/admin/services/ServicesPage.tsx
+  - web/src/utils/deferClickState.ts
+queue_ref: Q-909  # queue allocated issue_ref ISS-0909, which collides with an existing local file; local filename kept as ISS-0919 (next free on origin/main) and GH-2059 retitled to match
+github_ref: GH-2059
+status: open

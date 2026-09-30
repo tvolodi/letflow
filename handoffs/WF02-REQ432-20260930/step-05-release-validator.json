@@ -7,9 +7,9 @@
   "to_agent": "RELEASE-VALIDATOR",
   "file": "handoffs/WF02-REQ432-20260930/step-05-release-validator.json",
   "created_at": "2026-09-30T18:57:38Z",
-  "started_at": "2026-09-30T18:57:38Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T18:57:42Z",
+  "completed_at": "2026-09-30T20:50:06Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -50,10 +50,66 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
+    "status": "PASS",
+    "summary": "PASS (conditional, see ruling). Independent re-derivation: (1) backend full suite re-run by me with scripts/test_parallel.sh TEST_PARALLEL_N=6, executed as 4 path-partitioned chunks because one foreground call cannot outlast the 10 min tool cap: engine 1146 tests+1 property, routers/api/plugs 1209, rest-part-1 1491, rest-part-2 1225+7 properties = 5071 tests, 8 properties, 0 failures (5079/5079), identical to TEST-RUNNER combined count. Then mix letflow.check.test with TEST_PARALLEL_N=6: \"mix letflow.check.test: OK\" (partitions 851/972/712/899/917/720 tests; combined: 5071 tests, 8 properties, 0 failures (5079/5079 passed)). Structural scope: git diff --name-only main...HEAD -- lib test/letflow test/support config priv mix.exs mix.lock lists only lib/letflow/design/req432-rebind-pins-publish-retire-ui.md (a design doc), so no failure could be attributable to REQ-432 code. Infra/unattributed events, reported not folded: (a) unmodified mix letflow.check.test (N=nproc=16) aborted on DBConnection 15s timeout at test/support/tenant_template.ex:181 (same host effect as step-04); (b) two runs (first full-suite attempt and rest-part-1 attempt 1) had 5-6 partition BEAMs die simultaneously with no error text and script exit 127/1; UNATTRIBUTED (no test or lib code contains taskkill/kill; identical re-runs passed clean), treated as host interference, worth filing. (2) web: type-check clean, lint clean (max-warnings 0), npm test 150 files/995 tests passed, guards 4 files/52 tests passed. (3) pipeline spec live by me: attempts 1 and 2 failed at assertServiceReadiness (Keycloak discovery fetch ECONNRESET from Playwright node; localhost:8094 flaky on this host though curl 127.0.0.1 gave 200); attempt 3 with the exact recipe: 1 passed (8.7s), step 3 outcome B logged. Backend stopped via trap; no listener on 4000/4173 and no erl/beam/chrome/node process afterwards. (4) All nine ACs checked with file evidence, see issues[]. RULING on AC7 in-flight half: mark REQ-432 DONE with that half documented as unverifiable-on-success and an independent backend issue forwarded; not PARTIAL/FAIL. Reasons: (i) the requirement own fence (AC8 plus OUT OF SCOPE) forbids the only change that could make it demonstrable (catalog_lookup_stub/2 in lib/letflow/engine/service_task_dispatcher.ex returns {:error,:not_registered} unconditionally); (ii) AC wording is retiring does not error or block: the observed failure is causally independent of retirement (stub ignores catalog state) and is pinned by the spec to exactly n3/service_task_url_rendered_empty with no TASK_COMPLETED(n2); (iii) the pin-display half is proven by a mutation-verified unit test and live. Honesty conditions: do not record AC7 as fully met; the done status event must say the in-flight half is not demonstrated on success; the backend dispatcher/catalog-lookup follow-on must be filed (REQ-ANALYST) at flip time. Residual weakness: the spec has no paired control run showing outcome B identical without retirement; causal independence rests on reading the stub. Stale-text MINORs confirmed still present in test/specs/REQ-432.md: says 39 tests (line 19; TEST-RUNNER measured 36) and AC1 section (line 53) says NOT run green although the honesty statement says it ran green (DOC-UPDATER Step 6). Docs: requirements.yaml REQ-432 is in_progress and requirement_status.v25.yaml has the started event only; no staleness beyond the pending done flip. No decision record contradicted (no Elixir change). release-validator.md prescribes no decision-record file; none written.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "Backend gap outside REQ-432 fence: Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2 is an unconditional {:error,:not_registered}; completing a user task whose next node is a catalog-only SERVICE_TASK yields HTTP 500 + EXECUTION_ERROR n3/service_task_url_rendered_empty (reproduced live by me, outcome B). Needs its own requirement/issue (resolve service_id via pinned catalog version; arguably non-500 mapping in routers/tasks.ex). Forward at or before the DOC-UPDATER flip.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC1 pipeline spec: PASS (live 1 passed 8.7s by me; TEST-RUNNER 2/2); it passes by accepting tightly-pinned outcome B for step 3.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC2 publish: PASS. web/src/api/services.ts:75-77 POST /api/v1/admin/services/${id}/versions; services.versions.test.ts asserts URL/method/body; ServicesPage.versions.test.tsx covers prefilled submit, 409, non-admin gating; live step 02.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC3 retire: PASS. services.ts:79-81 POST .../retire; tests for confirm call/refresh, 409, disabled on RETIRED; live step 02.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC4 rebind with required reason: PASS. instances.ts:63 POST /api/v1/instances/${id}/rebind-pins with Idempotency-Key; InstancePinsPanel.rebind.test.tsx (9 tests: gating, empty/whitespace reason blocked, body, key reuse per open) and useRebindPins.test.tsx; live step 05.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC5 history evidence: PASS. EventHistoryPanel.rebound.test.tsx, PinsReboundSummary.test.tsx, InstanceDetailPage.actorNames.test.tsx show actor, prior, new version, reason in one row; live step 06. Residual: 200-event join bound degrades to UUID prefix (never system).",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC6 distinct pins: PASS. InstancePinsPanel.rebind.test.tsx two cases each with own version (component level) plus live step 04.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "AC7: pin-display half PASS (unit cross-module test mutation-verified; live steps 03/04); in-flight-step-completes-successfully half NOT demonstrable (backend stub, issue above). Ruling: done-with-forwarded-issue with explicit caveat.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC8 fence: PASS. git diff --name-only main...HEAD | grep -E lib/letflow/(service_catalog|engine/pin_resolver|engine/pin_rebind) prints nothing; entire Elixir-side diff is one design doc.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC9 frontend suite: PASS. 150 files/995 tests, guards 52, type-check and lint clean.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Host flakiness, UNATTRIBUTED, not REQ-432: simultaneous death of several partition BEAMs mid-run twice (no error output; rerun clean), N=16 tenant-template 15s abort, intermittent Keycloak ECONNRESET/localhost resolution. Suggest ORCH file a host/infra issue.",
+        "affected_requirement": null
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
       "commit_sha_list": [],
@@ -62,7 +118,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to DOC-UPDATER (Step 6) with the AC7 caveat and forwarded backend issue; correct the two stale spec-text MINORs."
   },
   "rework_count": 0,
   "max_rework": 3

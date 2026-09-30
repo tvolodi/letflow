@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0936-20261001/step-04-test-designer.json",
   "created_at": "2026-09-30T21:26:07Z",
   "started_at": "2026-09-30T21:26:07Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T21:48:45Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -41,7 +41,24 @@
       "Real test run output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "summary": "Wrote test/scripts/uat_preflight_bare_jwt_test.exs (T1-T7 plus T5b, 8 tests) and test/specs/ISS-0936.md. Not committed.",
+    "fail_first_prefix_origin_main": "3/8 passed; failed T1,T5,T5b,T6,T7",
+    "fix_branch": "8/8 passed (direct ExUnit run, UAT_PF_BASH=git-bash)",
+    "mutants": {
+      "M1a drop eyJ prefix": "T4 fails (1)",
+      "M1b drop prefix+length floor": "T4 (1)",
+      "M1c drop length floor": "T4 (1)",
+      "M2 drop bare JWT acceptance": "T1,T5,T5b,T6,T7 (5)",
+      "M3 print token": "T6 (1)",
+      "M4 drop Token: branch": "T2 (1)",
+      "M5 accept any line": "T3,T4 (2)",
+      "M7 drop strip": "T5b (1)"
+    },
+    "notes": "M1a/M1c first survived; T4 extended with a long non-eyJ 3-segment hostname and short eyJh.a.b to kill them. Test names must not contain NO_PASSWORD/BAD_CRED (tmp_dir path echoed by script).",
+    "mix_letflow_check_test": "exit 0; 'mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.' (16 partitions, throwaway postgres container on 5499, removed). Aggregate total line and per-partition confirmation that the new file ran were not captured.",
+    "cleanup": "all letflow-4-tmp-* worktrees removed; copied _build/deps removed; scripts/ and lib/ unmodified (git status clean for them)"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "ac07f5bf-1601-4dc7-a7c6-1012e5ae7efe",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0910-20260930/step-02b-code-design-validator.json",
+  "created_at": "2026-09-30T07:53:27Z",
+  "started_at": "2026-09-30T07:53:27Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["16876a17-0e6f-4fcf-b645-f2aa01e9b914"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md",
+      "lib/letflow/identity/role_backfill.ex",
+      "lib/letflow/identity/user.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 2, hard gate on CODE-DESIGNER's design. Read lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md directly. Verify: (1) the 'users is a per-tenant-schema table, no join needed' claim by reading lib/letflow/identity/user.ex and confirming the schema/prefix mechanism yourself, not accepting the design's assertion; (2) the Repo.update_all bulk-reset precedent citations (promotion.ex:474, definitions.ex:2660/2666) are real -- open those files and confirm the pattern actually matches; (3) role_claims_synced_at is genuinely nullable with no migration needed -- confirm against user.ex's schema definition; (4) the idempotency argument (NULL->NULL no-op, :seeded-only gating) is sound; (5) OQ-1 (separate-transaction retry gap) is honestly flagged, not silently glossed as solved; (6) no implementation code present -- signatures/shapes only. FAIL immediately on any check failure.",
+    "acceptance_criteria": [
+      "the fix resets role_claims_synced_at to nil for users with a membership in each tenant in RoleBackfill.run/0's own :seeded list, not :unchanged tenants",
+      "the reset reuses sync_role_claims_from_token/3's existing gated call sites (no new sync-triggering code path invented)",
+      "the fix is idempotent -- running the backfill twice does not error and does not incorrectly re-affect already-corrected users",
+      "no implementation code in the design doc -- signatures/shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,56 @@
+{
+  "handoff_id": "0a2f2d4d-5592-42ca-8413-f8f3259f77f9",
+  "run_id": "WF03-ISS0911-20260930",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0911-20260930/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-30T07:00:35Z",
+  "started_at": "2026-09-30T07:00:35Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0911.yaml",
+      "docs/issues/ISS-0891.yaml",
+      "web/src/pages/instances/InstanceBoardPage.tsx",
+      "web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts",
+      "test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-PLATFORM.yaml",
+      "test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml"
+    ],
+    "owned_modules": ["web/src/pages/instances/InstanceBoardPage.tsx"]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0911 (queue task 903, GH#2037), combined. ISS-0891 (already resolved, PR #2017, commit d2bb3817, merged to main -- confirmed present in the current tree) fixed a race where the wrong/stale definitionId was SUBMITTED on Start despite the UI showing the correct version -- fixed by adding a synchronous startDefinitionId state. ISS-0911 reports a DIFFERENT-shaped symptom in WF05-FULL2-20260930: the read-only start-definition-version DISPLAY field itself stayed EMPTY for 10s in 5 of 6 untraced (fast) runs, while the one traced (slower, more instrumentation overhead) run passed. This symptom shape (display empty until a slow async resolution completes, worse without trace-induced slowdown) suggests the version TEXT shown to the user may be bound to a different, still-async source (e.g. a query/fetch for activeDefinitionByName's version, separate from the startDefinitionId fix) that has not itself been synchronized -- read InstanceBoardPage.tsx's full version-display binding (not just the startDefinitionId submission path ISS-0891 already fixed) to determine this.\n\nStep 0.5: check docs/issues/ for other resolved entries with a similar 'version field empty/stale' symptom before this one -- none expected beyond ISS-0891 itself.\n\nStep 1: (a) Confirm ISS-0891's fix is genuinely present in the current code (already spot-checked by ORCH: startDefinitionId exists, lines ~77-112, 208, 228 of InstanceBoardPage.tsx -- verify fully yourself). (b) Trace exactly what the read-only version-display field's own value is bound to -- is it activeDefinitionByName?.version (a query result) or startDefinitionId-derived, and does THAT binding have its own unsynchronized async gap the ISS-0891 fix didn't address? (c) State explicitly whether this is (i) a genuine residual code-side race requiring a further fix, or (ii) purely a QA-deployment-lag question this repo cannot determine (the fix is in main but QA's deployed build may predate it) -- in which case state that plainly as the diagnosis rather than fixing speculative code, since ISS-0911's own filing text says 'QA exposes no build SHA, so first confirm the ISS-0891 fix is actually deployed' and this checkout has no way to query QA's live deployed commit. If your best determination is (ii), do NOT implement a speculative fix -- report this and let ORCH route to a no_defect/instrumented-style close per WF-03's own vocabulary (see docs/agents/protocols/ISSUE_QUEUE.md's status vocabulary) rather than guessing at code that may not even be the problem. If (i), give CODE-DESIGNER a precise description of the additional race to close.",
+    "acceptance_criteria": [
+      "ISS-0891's fix (startDefinitionId) is independently reconfirmed present and correctly wired, with exact line citations",
+      "the version-display field's actual data-binding path is traced and named explicitly (which state/query/prop it reads from)",
+      "a clear determination is made: residual code race (i) vs. undeterminable-from-this-repo QA-deployment-lag question (ii) -- not left ambiguous",
+      "no speculative fix implemented if the determination is (ii)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

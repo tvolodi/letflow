@@ -61,20 +61,20 @@ export default function InstanceBoardPage() {
 
   const [showStart, setShowStart] = useState(false)
   const [startDefinitionName, setStartDefinitionName] = useState(definitionName)
-  const [startDefinitionVersion, setStartDefinitionVersion] = useState('')
-  // ISS-0891: the dialog's own submit target. Deliberately NOT derived from
-  // `definitionId` (the page-level list filter, sourced from the URL via
-  // `useSearchParams`) — `setSearchParams` commits through react-router's
-  // navigation, which can land a render *after* the plain `useState` update
-  // to `startDefinitionVersion` from the same keystroke handler. That gap
-  // let the version field visibly show the right value while `definitionId`
-  // (what `submitStartInstance` actually validates/sends) still lagged, so
-  // "Start" intermittently hit the "Select a valid active definition name."
-  // validation branch even though the version was already populated —
-  // reproduced under concurrent load (`--repeat-each` with multiple
-  // workers) and confirmed absent once submission reads this local id
-  // instead. See docs/issues/ISS-0891.yaml.
-  const [startDefinitionId, setStartDefinitionId] = useState<string | undefined>(undefined)
+  // ISS-0891/ISS-0911: `startDefinitionVersion`/`startDefinitionId` are NOT
+  // `useState` — they are derived below (`matchedStartDefinition` and the
+  // two consts that follow it) from the typed `startDefinitionName` plus
+  // whatever definition data has resolved so far. ISS-0891's invariant still
+  // holds and is preserved structurally: the derivation never routes through
+  // `setSearchParams`/the URL-derived `definitionId` for the dialog's own
+  // submit target — see the precedence comment at the derivation site.
+  // ISS-0911 fixed the companion bug where a one-shot `useState` write at
+  // keystroke time, matched only against whatever `definitionTypeahead.items`
+  // held *at that instant*, was never re-checked once a slow typeahead fetch
+  // resolved late — leaving the field stuck empty for the rest of that
+  // dialog-open. Deriving both values at render time means every render
+  // (including the one triggered by the fetch finally resolving) recomputes
+  // them. See docs/issues/ISS-0891.yaml and docs/issues/ISS-0911.yaml.
   const [startCorrelationKey, setStartCorrelationKey] = useState('')
   const [startVariablesJson, setStartVariablesJson] = useState('{\n  \n}')
   const [startError, setStartError] = useState<string | null>(null)
@@ -82,7 +82,7 @@ export default function InstanceBoardPage() {
 
   const canStartInstance = session?.roles.some((role) => START_ROLES.includes(role)) ?? false
 
-  const { data: definitionTypeahead } = useDefinitions({
+  const { data: definitionTypeahead, isLoading: isLoadingDefinitionTypeahead } = useDefinitions({
     status: 'ACTIVE',
     name: definitionName || undefined,
   })
@@ -90,6 +90,46 @@ export default function InstanceBoardPage() {
   const { data: activeDefinitionByName, isLoading: isLoadingActiveDefinition } = useDefinition(
     definitionId ?? '',
   )
+
+  // ISS-0911 §3.2: the dialog's version/id fields are derived, not synced.
+  // Recomputed on every render that changes either the typed dialog name or
+  // the typeahead's item list — including the render triggered by a slow
+  // `useDefinitions` fetch finally resolving, which is exactly the race this
+  // fixes (see docs/issues/ISS-0911.yaml).
+  const matchedStartDefinition = useMemo(
+    () => definitionTypeahead?.items?.find((item) => item.name === startDefinitionName),
+    [definitionTypeahead?.items, startDefinitionName],
+  )
+
+  // Precedence: (1) exact typeahead match for the typed name; (2) the
+  // page-level `useDefinition` fallback, but ONLY while the typed name still
+  // equals the page-level `definitionName` filter the dialog was opened with
+  // (the user hasn't changed it since); (3) undefined/'' — submission stays
+  // blocked. ISS-0891: `startDefinitionId` is a plain local value, never
+  // round-tripped through `searchParams`/`definitionId` — the dialog's
+  // submit target must not silently read a URL value that may lag behind
+  // what's on screen.
+  const startDefinitionId = matchedStartDefinition
+    ? matchedStartDefinition.id
+    : startDefinitionName === definitionName
+      ? (activeDefinitionByName?.id ?? definitionId)
+      : undefined
+
+  const startDefinitionVersion = matchedStartDefinition
+    ? matchedStartDefinition.version
+    : startDefinitionName === definitionName
+      ? (activeDefinitionByName?.version ?? '')
+      : ''
+
+  // ISS-0911 §3.4: independent of `isLoadingActiveDefinition` (which never
+  // starts fetching in the failing race, since `definitionId` is never set
+  // when the typeahead match hasn't resolved yet) — true exactly during the
+  // window: dialog open, name typed, no match yet, typeahead still loading.
+  const isResolvingStartDefinitionVersion =
+    showStart &&
+    startDefinitionName.trim().length > 0 &&
+    !matchedStartDefinition &&
+    isLoadingDefinitionTypeahead
 
   const instancesQuery = useInstances({
     status: statusFilters.length > 0 ? statusFilters : undefined,
@@ -101,15 +141,25 @@ export default function InstanceBoardPage() {
 
   const startInstance = useStartInstance()
 
+  // ISS-0911 §3.3: preserves the pre-existing "typing a match into the
+  // dialog also updates the page-level filter" side effect, but keyed on
+  // the resolved match itself (not fired only at keystroke time), so it
+  // also re-fires when a match resolves late. Guarded so it only runs while
+  // the dialog is open, and is a no-op once the page-level filter already
+  // agrees with the match (avoids a render loop against the
+  // `useSearchParams`-derived `definitionName`/`definitionId`).
   useEffect(() => {
-    if (definitionId) {
-      setStartDefinitionVersion(activeDefinitionByName?.version ?? '')
-      setStartDefinitionId(activeDefinitionByName?.id ?? definitionId)
-      return
-    }
-    setStartDefinitionVersion('')
-    setStartDefinitionId(undefined)
-  }, [definitionId, activeDefinitionByName?.id, activeDefinitionByName?.version])
+    if (!showStart) return
+    if (!matchedStartDefinition) return
+    if (definitionId === matchedStartDefinition.id && definitionName === matchedStartDefinition.name) return
+
+    const updated = new URLSearchParams(searchParams)
+    updated.set('definitionName', matchedStartDefinition.name)
+    updated.set('definitionId', matchedStartDefinition.id)
+    setSearchParams(updated)
+    setCursorStack([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showStart, matchedStartDefinition?.id, matchedStartDefinition?.name, definitionId, definitionName])
 
   const onStatusToggle = (status: InstanceStatus) => {
     const next = new Set(statusFilters)
@@ -163,9 +213,11 @@ export default function InstanceBoardPage() {
 
   const openStartDialog = () => {
     deferClickState(() => {
+      // startDefinitionVersion/startDefinitionId are derived (see above) and
+      // will already reflect the right value the instant startDefinitionName
+      // is seeded — the derivation's page-level-fallback branch covers what
+      // this used to set explicitly.
       setStartDefinitionName(definitionName)
-      setStartDefinitionVersion(activeDefinitionByName?.version ?? '')
-      setStartDefinitionId(activeDefinitionByName?.id ?? definitionId)
       setStartCorrelationKey('')
       setStartVariablesJson('{\n  \n}')
       setStartError(null)
@@ -179,24 +231,10 @@ export default function InstanceBoardPage() {
   }
 
   const onStartDefinitionNameChange = (value: string) => {
+    // Matching and the searchParams side effect both now live in the
+    // derivation (matchedStartDefinition) and its companion effect above —
+    // see ISS-0911 §3.2/§3.3.
     setStartDefinitionName(value)
-
-    const activeList = definitionTypeahead?.items ?? []
-    const exact = activeList.find((item) => item.name === value)
-    if (exact) {
-      // Set the dialog's own submit target synchronously, in the same
-      // render as the version text — see ISS-0891 above `startDefinitionId`
-      // for why this must NOT go through `setSearchParams`/`definitionId`.
-      setStartDefinitionVersion(exact.version)
-      setStartDefinitionId(exact.id)
-      const updated = new URLSearchParams(searchParams)
-      updated.set('definitionName', exact.name)
-      updated.set('definitionId', exact.id)
-      setSearchParams(updated)
-    } else {
-      setStartDefinitionVersion('')
-      setStartDefinitionId(undefined)
-    }
   }
 
   const submitStartInstance = async () => {
@@ -454,7 +492,11 @@ export default function InstanceBoardPage() {
               data-testid="start-definition-version"
               value={startDefinitionVersion}
               readOnly
-              placeholder={isLoadingActiveDefinition ? 'Loading active version…' : ''}
+              placeholder={
+                isLoadingActiveDefinition || isResolvingStartDefinitionVersion
+                  ? 'Loading active version…'
+                  : ''
+              }
               style={{
                 width: '100%',
                 marginBottom: '.6rem',

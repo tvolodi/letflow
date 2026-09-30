@@ -280,4 +280,164 @@ defmodule Letflow.Identity.RoleBackfillTest do
                Repo.get_by(TenantProvisioning.Registration, tenant_id: vanished_tenant_id)
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0910: role_claims_synced_at reset on the seeded/:unchanged split
+  # ---------------------------------------------------------------------------------
+  #
+  # See lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md. run/0
+  # iterates EVERY tenant registered via TenantProvisioning.list_registrations/0,
+  # so each test below provisions its own fresh tenant(s) and relies on
+  # TenantFixture.provisioned_tenant!/1's default `teardown: true` (DROP SCHEMA +
+  # Registration cleanup via on_exit) to keep prior tests' tenants out of a later
+  # test's run/0 call -- without that, the returned counts below (AC4) would be
+  # contaminated by whatever other tenants happen to still be registered.
+
+  defp stamp_role_claims_synced_at!(user, schema_name, %DateTime{} = value) do
+    user
+    |> Ecto.Changeset.change(%{role_claims_synced_at: value})
+    |> Repo.update!(prefix: schema_name)
+  end
+
+  defp reload_user!(user, schema_name) do
+    Repo.get!(User, user.id, prefix: schema_name)
+  end
+
+  @a_past_timestamp DateTime.utc_now() |> DateTime.add(-3600, :second) |> DateTime.truncate(:microsecond)
+
+  describe "run/0 resets role_claims_synced_at for a :seeded tenant's users (ISS-0910 AC1)" do
+    test "a user with a previously-set marker has it reset to nil after run/0" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        platform_admin_only_tenant_fixture!("iss0910-seeded")
+
+      user = insert_user!(schema_name)
+      stamp_role_claims_synced_at!(user, schema_name, @a_past_timestamp)
+
+      assert {:ok, %{seeded: seeded}} = RoleBackfill.run()
+      assert tenant_id in seeded
+
+      assert %User{role_claims_synced_at: nil} = reload_user!(user, schema_name)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0910 AC2: an :unchanged tenant is never touched
+  # ---------------------------------------------------------------------------------
+
+  describe "run/0 leaves an :unchanged tenant's role_claims_synced_at markers untouched (ISS-0910 AC2)" do
+    test "a user's existing non-nil marker survives run/0 unchanged when the tenant is already fully seeded" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        TenantFixture.provisioned_tenant!(
+          slug_prefix: "iss0910-unchanged",
+          display_name: "ISS-0910 already-fully-seeded fixture"
+        )
+
+      assert {:ok, roles} = RoleRegistry.seed_default_platform_role_groups(prefix: schema_name)
+      assert length(roles) == 6
+
+      user = insert_user!(schema_name)
+      original_marker = @a_past_timestamp
+      stamp_role_claims_synced_at!(user, schema_name, original_marker)
+
+      assert {:ok, %{seeded: seeded, unchanged: unchanged}} = RoleBackfill.run()
+      refute tenant_id in seeded
+      assert tenant_id in unchanged
+
+      assert %User{role_claims_synced_at: ^original_marker} = reload_user!(user, schema_name)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0910 AC3: idempotency across two successive run/0 calls
+  # ---------------------------------------------------------------------------------
+
+  describe "run/0's marker reset is idempotent across two successive calls (ISS-0910 AC3)" do
+    test "the second run classifies the now-fully-seeded tenant :unchanged and does not re-touch a marker re-synced after the first run" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        platform_admin_only_tenant_fixture!("iss0910-idem")
+
+      user = insert_user!(schema_name)
+      stamp_role_claims_synced_at!(user, schema_name, @a_past_timestamp)
+
+      # First run: tenant is :seeded, marker is reset to nil.
+      assert {:ok, %{seeded: seeded_first}} = RoleBackfill.run()
+      assert tenant_id in seeded_first
+      assert %User{role_claims_synced_at: nil} = reload_user!(user, schema_name)
+
+      # Simulate the user's next login re-syncing their claims (the exact
+      # follow-up this reset is meant to provoke) before the second run.
+      resynced_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+      user = reload_user!(user, schema_name)
+      stamp_role_claims_synced_at!(user, schema_name, resynced_at)
+
+      # Second run: tenant now holds all six platform roles, so it is
+      # :unchanged -- the already-re-synced marker must NOT be reset back to
+      # nil a second time.
+      assert {:ok, %{seeded: seeded_second, unchanged: unchanged_second}} = RoleBackfill.run()
+      refute tenant_id in seeded_second
+      assert tenant_id in unchanged_second
+
+      assert %User{role_claims_synced_at: ^resynced_at} = reload_user!(user, schema_name)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0910 AC4: the returned role_claims_markers_reset count is exact
+  # ---------------------------------------------------------------------------------
+
+  describe "run/0 returns an accurate role_claims_markers_reset count (ISS-0910 AC4)" do
+    test "the returned count equals the exact number of users whose marker was reset, across seeded and unchanged tenants" do
+      %{tenant_id: seeded_tenant_id, schema_name: seeded_schema} =
+        platform_admin_only_tenant_fixture!("iss0910-count-seeded")
+
+      seeded_users =
+        for _ <- 1..3 do
+          u = insert_user!(seeded_schema)
+          stamp_role_claims_synced_at!(u, seeded_schema, @a_past_timestamp)
+          u
+        end
+
+      # A user with an ALREADY-nil marker on the same seeded tenant still
+      # counts: update_all's return value is "rows matched", not "rows whose
+      # value actually changed" -- design §3's "naturally idempotent at the
+      # SQL level" note. insert_user!/1 leaves role_claims_synced_at nil by
+      # default (no value passed to the changeset), so this user contributes
+      # to the row count without contributing a "was non-nil" fact.
+      _already_nil_user = insert_user!(seeded_schema)
+
+      %{tenant_id: unchanged_tenant_id, schema_name: unchanged_schema} =
+        TenantFixture.provisioned_tenant!(
+          slug_prefix: "iss0910-count-unchanged",
+          display_name: "ISS-0910 AC4 unchanged fixture"
+        )
+
+      assert {:ok, _} = RoleRegistry.seed_default_platform_role_groups(prefix: unchanged_schema)
+      unchanged_user = insert_user!(unchanged_schema)
+      unchanged_original_marker = @a_past_timestamp
+      stamp_role_claims_synced_at!(unchanged_user, unchanged_schema, unchanged_original_marker)
+
+      assert {:ok,
+              %{
+                seeded: seeded,
+                unchanged: unchanged,
+                role_claims_markers_reset: role_claims_markers_reset
+              }} = RoleBackfill.run()
+
+      assert seeded_tenant_id in seeded
+      assert unchanged_tenant_id in unchanged
+
+      # Exactly the 4 users on the seeded tenant (3 stamped + 1 already-nil) --
+      # NOT the unchanged tenant's 1 user, which must never be touched.
+      assert role_claims_markers_reset == 4
+
+      for u <- seeded_users do
+        assert %User{role_claims_synced_at: nil} = reload_user!(u, seeded_schema)
+      end
+
+      # The unchanged tenant's user keeps its marker -- confirms the count
+      # above is not an approximation that happens to add up by coincidence.
+      assert %User{role_claims_synced_at: ^unchanged_original_marker} =
+               reload_user!(unchanged_user, unchanged_schema)
+    end
+  end
 end

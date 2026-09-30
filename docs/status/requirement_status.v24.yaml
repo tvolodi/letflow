@@ -1076,3 +1076,42 @@
       commit SHA). No letflow-queue task to release (queue_ref: null --
       discovered by UAT-RUNNER in a concurrent session's WF05-FULL2 run
       and filed locally, not a queue-originated task).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T13:10:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0909
+      (MINOR, uat_preflight.sh: BAD_CRED cached from first scenario's realms
+      poisons later actors; false local_deps GAP; wrong app_roles probe;
+      credential-source protocol gaps) -- resolved, all 4 sub-fixes, branch
+      fix/ISS-0909-uat-preflight-followups (PR #2051). (a) try_login's
+      BAD_CRED cache is now keyed per-(actor_id, realm), with realm derived
+      from the actor id (actor-<tenant>-<name>), so a failure against the
+      first scenario's realm no longer poisons later checks for actors in
+      other realms. (b) local_deps now strips /* */ and // comments before
+      matching docker-compose/docker-exec/psql usage, plus recognizes the
+      runSqlAgainstDevPostgres( helper-call pattern as a genuine invocation,
+      closing the header-comment false positive. (c) the app_roles probe for
+      actor-platform-admin switched from /tasks/inbox (task-role-only) to GET
+      /api/v1/admin/services, a probe meaningful for a platform-admin actor.
+      (d) new --credential-protocol flag with genuine ai-dala-infra
+      qa-uat-env.sh support, backward-compatible default (existing
+      qa-login.sh-based callers unaffected). REVIEWER PASSed, independently
+      tracing all 4 fixes against the actual diff. RELEASE-VALIDATOR PASSed,
+      independently reimplementing and re-verifying each of the 4 fixes
+      against real behavior, and additionally found one genuine but
+      non-blocking latent gap in the local_deps check: a string literal that
+      merely mentions "docker compose"/"psql" as prose is not yet
+      distinguished from a real invocation -- narrower than what ISS-0909(b)
+      itself asked for (which was specifically about comments, now fixed),
+      and confirmed not to affect today's real 31-scenario corpus. Filed
+      separately as docs/issues/ISS-0915.yaml (added in this same commit)
+      rather than reopening this issue or blocking this closure.
+      docs/issues/ISS-0909.yaml set to status: resolved (resolved_in_run:
+      fix/ISS-0909-uat-preflight-followups) in this same append -- this is an
+      ISSUE, not a REQ, so no docs/requirements.yaml entry is touched. Merged
+      via PR #2051 (branch fix/ISS-0909-uat-preflight-followups),
+      squash-merged to main (see PR for merge commit SHA). letflow-queue task
+      902 released as done.

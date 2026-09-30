@@ -1,0 +1,34 @@
+id: ISS-0915
+title: "uat_preflight.sh local_deps check: a string literal mentioning 'docker compose'/'psql' as prose (not an invocation) still triggers a false GAP"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: ISS-0909 validation, filed by ORCH
+discovered_at: "2026-09-30T12:20:00Z"
+severity: MINOR
+owner: "ELIXIR-DEV (tooling)"
+description: >
+  Found while independently re-verifying ISS-0909's local_deps comment-stripping
+  fix (PR #2051). The fix correctly strips /* */ and // comments before matching
+  docker-compose/docker-exec/psql, closing the originally-reported false positive
+  (a header COMMENT mentioning "docker compose"). However, an ordinary string
+  literal that merely mentions these words as prose -- e.g.
+  `console.log("...docker compose...")`, a log message, not an executable
+  invocation -- is NOT distinguished from a real call and still triggers a false
+  GAP. Confirmed via a constructed test case; confirmed this does NOT currently
+  affect the real 31-scenario corpus (every real occurrence today is either
+  inside a stripped comment or a genuine invocation), so this is a latent gap,
+  not a live regression. Narrower fix scope than ISS-0909(b) itself asked for
+  (which was specifically about comments), filed separately rather than
+  reopening that closed issue.
+
+  Fix direction: the local_deps check needs to distinguish an actual function
+  call/shell invocation from a string literal mentioning the same keywords --
+  e.g. only match when the keyword appears as part of an actual exec/spawn call
+  syntax (already partially done via the runSqlAgainstDevPostgres( helper-call
+  regex), or require the docker/psql keyword match to NOT be inside a quoted
+  string literal (a second stripping pass for string contents, similar to the
+  existing comment-stripping pass).
+affected_files:
+  - scripts/uat_preflight.sh
+queue_ref: null  # discovered directly by RELEASE-VALIDATOR mid-task, filed by ORCH; not a queue-originated task
+github_ref: null  # discovered directly in this repo; no GitHub mirror issue was opened
+status: open

@@ -31,4 +31,36 @@ affected_files:
   - docs/agents/uat-scenario-schema.md
 queue_ref: Q-902  # queue allocated issue_ref ISS-0902, which collides with an existing local file; local filename kept as ISS-0909 and GH-2036 retitled to match
 github_ref: GH-2036
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0909-uat-preflight-followups
+resolved_at: "2026-09-30T13:05:00Z"
+resolution: >
+  All 4 sub-fixes resolved on branch fix/ISS-0909-uat-preflight-followups (PR
+  #2051). (a) try_login's BAD_CRED caching fixed: realm is now derived from
+  the actor id (actor-<tenant>-<name>) and the cache key is per-(actor_id,
+  realm), so a failure against the first scenario's realm no longer poisons
+  later checks for actors in other realms (actor-swiftroute-alice/-lena/
+  -marco, actor-vortex-karl). (b) local_deps's false GAP fixed: the check now
+  strips /* */ and // comments before matching docker-compose/docker-exec/
+  psql usage, and also recognizes the runSqlAgainstDevPostgres( helper-call
+  pattern as a genuine invocation, so a prose mention in a header comment (or
+  an actual helper call) is no longer misclassified. (c) the app_roles probe
+  for actor-platform-admin no longer uses /tasks/inbox (a task-role-only
+  probe); it now uses GET /api/v1/admin/services, a probe meaningful for a
+  platform-admin actor. (d) --credential-source gained a genuine
+  --credential-protocol flag with real ai-dala-infra qa-uat-env.sh support
+  (not just qa-login.sh's 2-space-indented user list), defaulting to the
+  existing qa-login.sh-compatible behavior when unset, so existing callers
+  are unaffected. REVIEWER independently traced all 4 fixes against the
+  actual script diff and PASSed. RELEASE-VALIDATOR independently
+  re-implemented and re-verified each of the 4 fixes against real
+  behavior (not prior steps' summaries) and PASSed, additionally finding one
+  genuine but non-blocking latent gap in the local_deps check -- a string
+  literal that merely mentions "docker compose"/"psql" as prose (not an
+  executable invocation) is not yet distinguished from a real call. Confirmed
+  narrower than what ISS-0909(b) itself asked for (which was specifically
+  about comments, now fixed) and confirmed not to affect today's real
+  31-scenario corpus. Filed separately as docs/issues/ISS-0915.yaml rather
+  than reopening this issue or blocking this closure. Merged via PR #2051
+  (branch fix/ISS-0909-uat-preflight-followups), squash-merged to main (see
+  PR for merge commit SHA).

@@ -7,9 +7,9 @@
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ432-20260930/step-03b-regate1-test-design-validator.json",
   "created_at": "2026-09-30T18:44:17Z",
-  "started_at": "2026-09-30T18:44:17Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T18:44:20Z",
+  "completed_at": "2026-09-30T18:46:10Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -47,10 +47,15 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "PASS (re-gate 1). Fresh full pass over the current tree. Opened: test/specs/REQ-432.md, the pipeline spec, InstancePinsPanel.rebind/InstanceDetailPage.actorNames/ServicesPage.versions tests, deferClickState.ts, REQ-432 entry (9 criteria in yaml: 8 listed AC + AC9 suite criterion per spec numbering), plus the 5 other REQ-432 unit files. Each AC maps to a runnable falsifiable test (AC1 pipeline spec, compiles: playwright --list = 1 test; AC2/AC3 services.versions + ServicesPage.versions; AC4 instances.rebind + useRebindPins + InstancePinsPanel.rebind; AC5 EventHistoryPanel.rebound + PinsReboundSummary + actorNames; AC6 per-instance pins test + pipeline step 04; AC7 cross-module EO-004 test + pipeline step 03; AC8 by git-diff command, appropriate). No skip/only/fixme/todo in any file (grep empty); no fake timers, waitFor used (assertions still run after deferClickState); per-test fixtures; no hardcoded secrets (pipeline uses resolveCredential with env names; dev defaults admin-pass/worker-pass are the shared UAT fixture pattern). Step 03 verified strict by reading: pl.gate = expect(cond,msg).toBeTruthy() (hard fail, no try/catch, console.log is informational only). Outcome B branch is entered only when EXECUTION_ERROR error_type==service_task_url_rendered_empty and then requires status===500 AND affected.node_id==='n3' AND !TASK_COMPLETED(n2). Outcome C requires 2xx + TASK_COMPLETED(n2) + retries_exhausted + request_build_error. Outcome A requires 2xx + TASK_COMPLETED(n2). 401/403/404 produce no SERVICE_TASK_COMPLETED/EXECUTION_ERROR event so the 45s poll gate fails; a retirement-induced EXECUTION_ERROR with any other error_type falls to the C branch and fails. Mutant reasoning: changing n3 to n2 or dropping the ===500 makes B reject/accept differently exactly at those gate terms; not run live (no servers). Unit mutants applied myself, each killed, each reverted with git checkout, git status --porcelain src empty after each: M1 ServicesPage retire onSuccess -> invalidateQueries() : InstancePinsPanel.rebind 1 failed|13 passed (spy called 2 times). M2 EventHistoryPanel reboundActorCell returns 'system' when name undefined: actorNames 1 failed|1 passed; EventHistoryPanel.rebound 1 failed|2 passed. M3 idempotencyKey: newIdempotencyKey() per submit (inside deferClickState handler): rebind key-reuse test failed (1 failed|13 passed). M4 reason guard removed (trimmedReason !== '' -> true) in deferClickState-wrapped submit path: 'blocks submit on empty reason...' failed (1 failed|13 passed). Final: git status --porcelain lib/ test/ web/src empty; InstancePinsPanel.rebind re-run 14 passed. Baseline counts measured: 14+2+7+2+1+2+3+5 = 36 unit tests across the 8 REQ-432 files, all green. Spec honesty: live status (green 2026-09-30, step 03 outcome B) and the AC7 'in-flight step completes without error' gap are stated truthfully and consistently with the pipeline header; AC1 section in the spec still says 'authored, compiles, listed, NOT run green' which contradicts the honesty statement (live green) - MINOR stale text.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ432-20260930/step-03b-regate1-test-design-validator.json"
+    ],
+    "issues": [
+      "MINOR: test/specs/REQ-432.md says 39 unit/component tests; measured 36 (persisting from iteration 0).",
+      "MINOR: test/specs/REQ-432.md AC1 section still reads 'NOT run green' / 'unrun' for live steps, contradicting the Honesty statement that the pipeline ran green live on 2026-09-30; stale text, not a coverage defect."
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
       "commit_sha_list": [],
@@ -59,7 +64,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Proceed to Step 4 (test runner); optionally DOC/TEST-DESIGNER to correct the two MINOR spec-text items."
   },
   "rework_count": 1,
   "max_rework": 3,

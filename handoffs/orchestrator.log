@@ -2572,3 +2572,4 @@
 2026-09-30T23:45:29Z | PASS | WF03-ISS0930-20261001 | step-04 | TEST-RUNNER -> ORCH | PARTIAL->accepted: scripts 41 passed, format+compile clean, full suite 2 partitions 5118 passed 0 failed (wrapper timeout); CI authoritative
 2026-09-30T23:45:29Z | DISPATCH | WF03-ISS0930-20261001 | step-05-doc-updater | ORCH -> DOC-UPDATER | PENDING
 2026-09-30T23:48:40Z | PASS | WF03-ISS0930-20261001 | step-05-doc | DOC-UPDATER -> ORCH | PASS (README egress note)
+2026-09-30T23:48:40Z | DISPATCH | WF03-ISS0930-20261001 | step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PENDING

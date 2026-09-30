@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0910-20260930/step-02-code-designer.json",
   "created_at": "2026-09-30T07:50:10Z",
   "started_at": "2026-09-30T07:50:10Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T08:30:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,18 +36,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Design written: lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md. Key decisions: (1) Query shape -- no join needed: users is a per-tenant-schema table (Decision 0006 D1/D2, no tenant_id column), so 'users with a membership in tenant X' is exactly every row of that tenant's own users table; bulk Repo.update_all(User, [set: [role_claims_synced_at: nil]], prefix: schema_name) (no WHERE needed for correctness), matching this codebase's existing bulk-marker-reset precedent (promotion.ex:474, definitions.ex:2660/2666) rather than a per-user changeset loop. (2) Placement: inside process_registration/2's {:ok, _tenant_roles} branch, gated on the same held_platform_role_names_before < 6 classification classify/3 already uses (only :seeded tenants, never :unchanged) -- not a separate post-reduce pass. Transaction: a SEPARATE transaction from seed_default_platform_role_groups/1's own internal one, never merged -- reasoning and the resulting partial-failure gap documented as OQ-1 (a reset failure after successful seeding leaves that tenant reclassified :unchanged on retry, so the reset never retries; accepted as an out-of-scope rare-case gap, operator-visible via the existing halt shape). (3) Idempotency confirmed explicitly: NULL-to-NULL is a no-op at the SQL level, and gating on :seeded classification means a second run/0 call never re-touches a tenant whose roles are already fully seeded, so a user's freshly-synced marker from a legitimate login is never clobbered by a later backfill run. (4) No migration -- role_claims_synced_at already exists and is nullable (lib/letflow/identity/user.ex:45), confirmed by reading the schema directly. (5) Logging: extends run/0's existing return-value-based reporting style (no new Logger calls) with a new role_claims_markers_reset: non_neg_integer() counter alongside seeded/unchanged, summed across affected tenants; the CLI wrapper (lib/mix/tasks/letflow.backfill_platform_roles.ex, an owned module) must surface it. No changes to lib/letflow/identity.ex or role_registry.ex -- sync_role_claims_from_token/3 and its two call sites are reused unmodified, satisfying the no-new-sync-path acceptance criterion. Two explicit open questions left for ELIXIR-DEV/REVIEWER: OQ-1 (retry gap above) and OQ-2 (optional is_nil filter as a pure write-volume optimization, not required for correctness). No implementation code in the doc -- @spec signatures and type shapes only.",
+    "artifacts_out": ["lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0910-20260930",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

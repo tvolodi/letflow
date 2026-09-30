@@ -7,9 +7,9 @@
   "to_agent": "TEST-RUNNER",
   "file": "handoffs/WF02-REQ432-20260930/step-04-test-runner.json",
   "created_at": "2026-09-30T17:31:41Z",
-  "started_at": "2026-09-30T17:31:41Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T17:31:44Z",
+  "completed_at": "2026-09-30T18:15:43Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -49,10 +49,23 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PARTIAL",
+    "summary": "Backend (TEST_PARALLEL_N=6): combined 5071 tests, 8 properties, 0 failures (5079/5079 passed). First attempt at N=16 (nproc) aborted 11/16 partitions on a 15s tenant-template DB timeout (infra, not REQ-432; no lib/test Elixir in diff). Frontend: type-check 0, lint 0, npm test 150 files/995 tests passed, guards 4 files/52 tests passed. Pipeline spec live run BLOCKED: Playwright request.fetch goes through Chromium, so NODE_OPTIONS ipv4first does not help; localhost:8094 resets on ::1 (wslrelay) and helpers.ts normalizeIdpBaseUrl rewrites 127.0.0.1 back to localhost. Spec never passed assertServiceReadiness, so no selector finding. Cleaned up 3 orphan erl.exe from the N=16 run; no listeners remain.",
+    "artifacts_out": [
+      "test/reports/report-20260930-WF02-REQ432-20260930.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "AC1 and live halves of AC6/AC7 unverified: pipeline spec blocked by host IPv6 shadowing of localhost:8094 (wslrelay) plus helpers.ts normalizeIdpBaseUrl forcing localhost; ipv4first has no effect on Chromium's fetch. Exact output in report.",
+        "affected_requirement": "REQ-432"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Candidate issue: scripts/test_parallel.sh at N=nproc=16 aborts 11 partitions on tenant-template 15s DB timeout (test/support/tenant_template.ex:139) and leaves orphan erl.exe; unrelated to REQ-432 (route 1 structural; route 3 N=6 passes).",
+        "affected_requirement": null
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
       "commit_sha_list": [],
@@ -61,7 +74,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH: decide on PARTIAL (host cannot run live pipeline spec); file the two candidate issues; proceed to RELEASE-VALIDATOR with the live-run limitation noted."
   },
   "rework_count": 0,
   "max_rework": 3

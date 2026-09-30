@@ -1,0 +1,85 @@
+# TEST-RUNNER report, WF-02 step 4, REQ-432 (frontend-only diff: web/ + scenario yaml + design doc; no lib/ change)
+run_id: WF02-REQ432-20260930
+requirement: REQ-432
+branch: feature/WF02-REQ432-20260930
+date: 2026-09-30
+overall: PARTIAL   # everything green; live pipeline spec blocked by host environment (stated below)
+
+backend:
+  command: scripts/test_parallel.sh
+  attempt_1:
+    partition_count: 16
+    n_source: nproc (no TEST_PARALLEL_N set)
+    outcome: INFRASTRUCTURE ABORT, not a test failure
+    output: |
+      partition 1: 286 tests, 1 property, 0 failures, exit 0
+      partitions 5, 8, 12, 13 passed; partitions 2,3,4,6,7,9,10,11,14,15,16: "no Result: line in its log (compile/config/crash abort), exit=1"
+      combined: 1553 tests, 7 properties, 0 failures (1560/1560 passed)   # only 5 of 16 partitions produced results
+    cause: >
+      partition logs show DBConnection.ConnectionError "client timed out because it queued and checked out the
+      connection for longer than 15000ms" inside Letflow.Test.TenantTemplate.ensure_template!/0
+      (test/support/tenant_template.ex:139, test_helper.exs:94): 16 concurrent tenant-template builds on this host
+      exceed the 15s DB timeout before any test ran. No ExUnit test executed in those partitions. Three of the hung
+      partition erl.exe processes were left alive by the script and were stopped by this agent.
+    attribution: >
+      Route 1 (structural): failing code is test support/DB setup under test/support/tenant_template.ex, absent from
+      `git diff --name-only main...HEAD` (diff has no lib/ or test/ Elixir file). Route 3: attempt 2 at lower N passes
+      everything, measuring load contention as the mechanism.
+  attempt_2:
+    partition_count: 6
+    n_source: TEST_PARALLEL_N=6 env override (same script, lower concurrency)
+    output: |
+      partition 1: 851 tests, 4 properties, 0 failures, exit 0
+      partition 2: 972 tests, 0 properties, 0 failures, exit 0
+      partition 3: 712 tests, 1 property, 0 failures, exit 0
+      partition 4: 899 tests, 3 properties, 0 failures, exit 0
+      partition 5: 917 tests, 0 properties, 0 failures, exit 0
+      partition 6: 720 tests, 0 properties, 0 failures, exit 0
+      combined: 5071 tests, 8 properties, 0 failures (5079/5079 passed)
+  candidate_issue_for_orch: >
+    scripts/test_parallel.sh with N=nproc=16 on this 16-core Windows host aborts 11/16 partitions on the 15s
+    tenant-template build timeout, and leaves orphan erl.exe behind. Not attributable to REQ-432; file as a
+    test-infra issue (cap default N or raise the template-build timeout).
+
+frontend:
+  cwd: web/
+  type_check: "npm run type-check -> tsc -b, exit 0"
+  lint: "npm run lint -> eslint --max-warnings 0, exit 0"
+  unit_tests: "npm test -> Test Files 150 passed (150); Tests 995 passed (995); exit 0"
+  guards: "npm run guards -> Test Files 4 passed (4); Tests 52 passed (52); exit 0"
+
+pipeline_spec_live_run:
+  spec: web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts
+  outcome: BLOCKED (environmental) -- spec never reached step 1
+  backend_started: LETFLOW_DEV_DB_CONFIRMED=1 MIX_ENV=dev mix run --no-halt (Postgres 5482), listening on 4000 (HTTP 404 on / = up)
+  keycloak_checks:
+    curl_localhost_8094: "000 (reset)"
+    curl_127.0.0.1_8094: "200"
+    node_fetch_default: ECONNRESET
+    node_fetch_with_NODE_OPTIONS=--dns-result-order=ipv4first: "200"
+  attempt_1_command: >
+    cd web && NODE_OPTIONS=--dns-result-order=ipv4first BPM_TEST_URL=http://127.0.0.1:4000
+    BPM_IDP_BASE_URL=http://localhost:8094 VITE_API_BASE_URL=http://127.0.0.1:4000
+    npx playwright test --config=playwright.config.ts tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts
+  attempt_1_output: |
+    Error: apiRequestContext.fetch: read ECONNRESET
+    - GET http://localhost:8094/realms/bpm-default/.well-known/openid-configuration
+    at helpers.ts:243 assertServiceReadiness   (1 failed, retry also failed)
+  attempt_2: >
+    Same command with BPM_IDP_BASE_URL=http://127.0.0.1:8094 and --retries=0: identical ECONNRESET against
+    http://localhost:8094, because helpers.ts normalizeIdpBaseUrl() rewrites '://127.0.0.1' to '://localhost'.
+  blocker: >
+    Playwright's request.fetch uses Chromium's network stack (user agent Chrome/148), not Node's resolver, so
+    NODE_OPTIONS=--dns-result-order=ipv4first has no effect; Chromium resolves localhost to ::1, where wslrelay.exe
+    resets the connection. The only remaining workarounds (kill wslrelay.exe, change WSL/network settings, edit
+    helpers.ts/spec to hardcode 127.0.0.1) are forbidden by the task. ACs 1, 6-live, 7-live remain UNVERIFIED live.
+  not_a_finding: no selector/assumption failure was observed, because the spec never ran past assertServiceReadiness.
+  candidate_issue_for_orch: >
+    helpers.ts normalizeIdpBaseUrl forcing localhost makes the e2e suite unrunnable on hosts where ::1:8094 is
+    shadowed (wslrelay). Env-level fix would need a host-side change (free ::1:8094 or run Chromium with IPv4-only).
+    Also, backend JWKS/issuer fetch from Erlang was not exercised since no token was requested.
+
+cleanup:
+  backend_stopped: true
+  leftover_erl_exe: "3 hung partition processes from attempt_1 (--partitions 16) found and stopped"
+  verified: "no erl/beam/node/chrome processes, no listeners on 4000/4173 after cleanup"

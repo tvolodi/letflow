@@ -1,0 +1,51 @@
+{
+  "handoff_id": "13ad566e-e07f-49b7-9b81-7fec53f62c8d",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0910-20260930/step-03c-security-reviewer.json",
+  "created_at": "2026-09-30T07:59:17Z",
+  "started_at": "2026-09-30T07:59:17Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["c9f3412e-b201-4bcc-8c9a-9ad178bea187"],
+    "artifacts_in": [
+      "lib/letflow/identity/role_backfill.ex",
+      "lib/mix/tasks/letflow.backfill_platform_roles.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3c for ISS-0910 -- IN SCOPE per security-reviewer.md (a bulk write to the users table, a tenant-data path). Read git diff main...HEAD -- lib/letflow/identity/role_backfill.ex lib/mix/tasks/letflow.backfill_platform_roles.ex yourself. Run the full INV-1..INV-8 procedure. Pay particular attention to: (1) INV-1 tenant isolation -- confirm the Repo.update_all call is genuinely scoped to one tenant's schema at a time (prefix: schema_name) and cannot cross-affect another tenant's users table; (2) INV-7 no string interpolation of tenant/user input into raw SQL -- confirm schema_name is never interpolated as a raw string into a query rather than passed as Ecto's prefix option; (3) confirm this bulk reset cannot be triggered by anything other than the existing, already-reviewed mix task/RoleBackfill.run/0 entry point (no new HTTP-reachable trigger). FAIL immediately on any applicable invariant failing.",
+    "acceptance_criteria": [
+      "the fix resets role_claims_synced_at to nil for users with a membership in each tenant in RoleBackfill.run/0's own :seeded list, not :unchanged tenants",
+      "the reset reuses sync_role_claims_from_token/3's existing gated call sites (no new sync-triggering code path invented)",
+      "the fix is idempotent -- running the backfill twice does not error and does not incorrectly re-affect already-corrected users"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

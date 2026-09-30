@@ -2,19 +2,31 @@
 # seed_vortex_definition.sh
 #
 # Deploys the two Vortex ProcessDefinitions to a live Letflow QA instance:
-#   1. "Production Order Release" v1.0  (proc-vortex-production-order-release)
-#   2. "Supplier Quality Deviation" v1.0 (proc-vortex-supplier-quality-deviation,
+#   1. "Production Order Release" v1.1  (proc-vortex-production-order-release)
+#   2. "Supplier Quality Deviation" v1.1 (proc-vortex-supplier-quality-deviation,
 #       proc-vortex-quality-deviation -- both aliases resolve to this same
 #       definition; see decision C in
 #       lib/letflow/design/iss0897-meridian-vortex-definition-seeding.md)
-# Idempotent: each unit skips creation if its definition already exists and is
-# ACTIVE. A failure in one unit still exits the whole script (set -euo pipefail).
+# Version-aware idempotency per unit (versions compared numerically by
+# `sort -V`, see scripts/lib/seed_service_task_base.sh):
+#   none ACTIVE                -> create the fixture version and activate it
+#   ACTIVE == fixture version  -> skip (no-op)
+#   ACTIVE older than fixture  -> create + activate the fixture version; the
+#                                 platform deprecates the prior ACTIVE one
+#   ACTIVE newer than fixture  -> warn, do not downgrade, skip (exit 0)
+# A 409 on create means (name, fixture version) already exists as DRAFT /
+# DEPRECATED / ARCHIVED: bump the fixture "version"; never delete.
+# A failure in one unit still exits the whole script (set -euo pipefail).
 #
 # Prerequisites:
 #   - curl and jq installed
 #   - QA_AUTH_TOKEN: Bearer token for a user in the vortex tenant with
 #       DefinitionsWrite. Provisioned via
 #       `qa-uat-env.sh token vortex-admin-user` (ai-dala-infra, sibling repo).
+#   - SERVICE_TASK_MOCK_BASE_URL: optional https:// base that every SERVICE_TASK
+#       endpoint in the seeded fixtures is pointed at (default:
+#       https://httpbin.org/anything). Engine service tasks need an absolute,
+#       public https URL returning 2xx JSON (ISS-0930). http:// is refused.
 #   - QA_URL: base URL of the QA instance (default: https://qa.bizdala.com)
 #
 # Usage:
@@ -43,9 +55,12 @@ fi
 
 AUTH_HEADER="Authorization: Bearer ${QA_AUTH_TOKEN}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib/seed_service_task_base.sh
+source "${SCRIPT_DIR}/lib/seed_service_task_base.sh"
 
 echo "=== seed_vortex_definition.sh ==="
 echo "QA_URL: ${QA_URL}"
+echo "Service-task mock base: ${SERVICE_TASK_EFFECTIVE_BASE_URL}"
 
 seed_definition() {
   local display_name="$1"
@@ -64,26 +79,38 @@ seed_definition() {
     exit 1
   }
 
-  local existing_id
+  local existing_id existing_version fixture_version
   existing_id=$(echo "${existing}" | jq -r '.items[0].id // empty')
+  existing_version=$(echo "${existing}" | jq -r '.items[0].version // empty')
+  fixture_version=$(jq -r '.version' "${SCRIPT_DIR}/../${fixture_path}")
 
   if [[ -n "${existing_id}" ]]; then
-    echo "Definition already exists and is ACTIVE — skipping creation."
-    echo "  Definition ID : ${existing_id}"
-    echo "  Name          : $(echo "${existing}" | jq -r '.items[0].name')"
-    echo "  Version       : $(echo "${existing}" | jq -r '.items[0].version')"
-    echo "  Status        : $(echo "${existing}" | jq -r '.items[0].status')"
-    echo ""
-    echo "Browse at: ${QA_URL}/api/v1/definitions/${existing_id}"
-    for alias in "${aliases[@]}"; do
-      echo "  Scenario process_id : ${alias} (see test/fixtures/uat/process-definition-aliases/${alias}.yaml)"
-    done
-    return 0
+    local skip=1
+    if [[ "${existing_version}" == "${fixture_version}" ]]; then
+      echo "Definition already exists and is ACTIVE at v${fixture_version} — skipping creation."
+    elif version_is_older "${existing_version}" "${fixture_version}"; then
+      echo "Replacing ACTIVE v${existing_version} (id ${existing_id}) with v${fixture_version}; the platform will deprecate v${existing_version}."
+      skip=0
+    else
+      echo "WARNING: ACTIVE v${existing_version} is newer than fixture v${fixture_version}; not downgrading. Bump the fixture version above v${existing_version} to re-seed." >&2
+    fi
+    if [[ "${skip}" -eq 1 ]]; then
+      echo "  Definition ID : ${existing_id}"
+      echo "  Name          : $(echo "${existing}" | jq -r '.items[0].name')"
+      echo "  Version       : ${existing_version}"
+      echo "  Status        : $(echo "${existing}" | jq -r '.items[0].status')"
+      echo ""
+      echo "Browse at: ${QA_URL}/api/v1/definitions/${existing_id}"
+      for alias in "${aliases[@]}"; do
+        echo "  Scenario process_id : ${alias} (see test/fixtures/uat/process-definition-aliases/${alias}.yaml)"
+      done
+      return 0
+    fi
   fi
 
-  echo "--- ${display_name}: creating definition (DRAFT) ---"
+  echo "--- ${display_name}: creating definition v${fixture_version} (DRAFT) ---"
   local payload
-  payload=$(cat "${SCRIPT_DIR}/../${fixture_path}")
+  payload=$(rewrite_service_task_base "$(cat "${SCRIPT_DIR}/../${fixture_path}")")
 
   local create_response
   create_response=$(curl -sf \
@@ -93,7 +120,7 @@ seed_definition() {
     -d "${payload}" \
     "${API}/definitions") || {
     echo "ERROR: POST /api/v1/definitions failed for '${display_name}'." >&2
-    echo "       If you got a 409 the definition already exists as DRAFT; activate it manually or re-run after deleting it." >&2
+    echo "       A 409 means '${display_name}' v${fixture_version} already exists as DRAFT, DEPRECATED or ARCHIVED; bump the fixture \"version\" (do not delete)." >&2
     exit 1
   }
 

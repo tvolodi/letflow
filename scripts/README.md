@@ -10,6 +10,22 @@ convention downstream agents need without re-deriving it.
 | `timed_test.sh` | Times a `mix test` run. |
 | `uat_preflight.sh` | WF-05 Step 0: read-only preflight of a target environment against the UAT scenario corpus's PRECONDITIONS manifest; prints a scenario x check gap table; exit 1 means `ENV_NOT_READY`. Usage in its header comment. |
 | `mutate.py` | Single-occurrence substitution mutation-testing helper (apply mutant, run tests, report kill/survive, always revert). See below. |
+| `seed_meridian_definition.sh`, `seed_vortex_definition.sh`, `seed_swiftroute_definition.sh` | Seed the QA ProcessDefinitions from `test/fixtures/qa/*.json` (create + activate). Sources `lib/seed_service_task_base.sh`. See "QA seed scripts" below. |
+
+## QA seed scripts (`seed_*_definition.sh`)
+
+Service-task endpoints (ISS-0930): the engine needs an absolute public `https://` URL that
+returns a 2xx JSON object, so the QA fixtures point every SERVICE_TASK at
+`https://httpbin.org/anything/<path>` with an explicit `"method": "POST"`. Set
+`SERVICE_TASK_MOCK_BASE_URL` (https only, no whitespace; one trailing `/` is stripped) to
+substitute another echo host at seed time without editing the fixtures; the chosen base is
+printed in the script banner. `http://` is refused before any network call.
+
+Re-seed rule (version-aware, compared by `sort -V`): ACTIVE == fixture version -> skip;
+ACTIVE older -> create the fixture version and activate it (the platform deprecates the
+prior ACTIVE one); ACTIVE newer -> warn and do not downgrade. A 409 on create means
+`(name, version)` already exists as DRAFT/DEPRECATED/ARCHIVED: bump the fixture `version`,
+never delete. Requires `curl`, `jq` and GNU `sort -V`.
 
 ## `mutate.py`
 

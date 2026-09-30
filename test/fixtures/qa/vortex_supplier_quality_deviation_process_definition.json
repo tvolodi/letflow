@@ -1,6 +1,6 @@
 {
   "name": "Supplier Quality Deviation",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Raised when incoming goods fail inspection. Quality Manager classifies severity. For CRITICAL a sub-process is spawned. Exercises: sub-process spawn, severity-driven branching, compensation.",
   "graph": {
     "nodes": [
@@ -12,7 +12,8 @@
         "id": "quarantine-batch",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /mes/batches/{batch_ref}/quarantine",
+          "endpoint": "https://httpbin.org/anything/mes/batches/{{variables.batch_ref}}/quarantine",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -31,7 +32,8 @@
         "id": "release-quarantine",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /mes/batches/{batch_ref}/release",
+          "endpoint": "https://httpbin.org/anything/mes/batches/{{variables.batch_ref}}/release",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -47,7 +49,8 @@
         "id": "default-to-major",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /internal/deviations/{deviation_id}/default-severity",
+          "endpoint": "https://httpbin.org/anything/internal/deviations/{{variables.deviation_id}}/default-severity",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -55,7 +58,8 @@
         "id": "supplier-warning",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /webhooks/supplier-warning",
+          "endpoint": "https://httpbin.org/anything/webhooks/supplier-warning",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -63,7 +67,8 @@
         "id": "supplier-notification",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /webhooks/supplier-notify",
+          "endpoint": "https://httpbin.org/anything/webhooks/supplier-notify",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -71,7 +76,8 @@
         "id": "close-deviation",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /quality/deviations/{deviation_id}/close",
+          "endpoint": "https://httpbin.org/anything/quality/deviations/{{variables.deviation_id}}/close",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },

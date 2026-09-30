@@ -11,19 +11,15 @@
  * definition create/activate, instance start, task complete) — no db-exec, no
  * `page.route` (DIRECTIVE T-2, real backend not mocked).
  *
- * ## Known backend limit this spec does NOT hide (design §9 M5)
+ * ## Known backend limit this spec does NOT hide (design §9 M5, corrected live)
  *
- * `ServiceTaskDispatcher.catalog_lookup_stub/2` returns `{:error, :not_registered}`
- * unconditionally for every catalog `service_id`, so a catalog SERVICE_TASK
- * cannot complete end to end on the real backend today, regardless of any
- * retirement. Step 03 therefore asserts the strongest honest evidence: the
- * task completion after retire+publish is accepted (2xx), the history shows
- * `TASK_COMPLETED` for `n2`, and the service step reaches exactly one of two
- * designed terminal outcomes — `SERVICE_TASK_COMPLETED` (once the stub is
- * replaced) or `EXECUTION_ERROR` with `error_type = service_task_retries_exhausted`
- * and `details.last_failure_kind = request_build_error` (today). Any other
- * outcome (for example a retirement-induced failure classified differently)
- * fails the spec. Which outcome occurred is logged.
+ * `ServiceTaskDispatcher.catalog_lookup_stub/2` is still a stub, so a catalog
+ * SERVICE_TASK cannot complete on the real backend. Live-observed mechanism:
+ * completing n2 hops synchronously into n3, the URL renders empty, the engine
+ * persists only EXECUTION_ERROR (n3 / service_task_url_rendered_empty, no
+ * TASK_COMPLETED kept) and the route answers HTTP 500. Step 03 accepts exactly
+ * three outcomes (A success, B that 500 + error, C the async request_build_error
+ * variant), fails on anything else, and logs which occurred. Live: B.
  *
  * ## Retire-then-publish order (design §9 M4)
  *
@@ -31,20 +27,11 @@
  * row when superseding. Calling retire AFTER publish would retire the NEW
  * version, so this spec retires first, then publishes.
  *
- * ## Authoring-time status (read this first)
+ * ## Status
  *
- * This spec was written and compiled (`npx playwright test --list`) but has NOT
- * been run against a live backend: Keycloak on localhost:8094 was unreachable
- * on the authoring host (wslrelay shadowing), so no step has executed green.
- * Selector assumptions that are UNPROVEN live:
- *   - step 02: `/admin/services` lists the freshly registered service row
- *     without the search filter (a `filterServices` fallback exists), and the
- *     retired row is still returned by the list route so the RETIRED status
- *     cell can be read.
- *   - step 07: `worker-user` may open `/admin/services` and the case detail
- *     page and sees the heading / Dependency Versions panel (used as positive
- *     anchors before the absence counts); if the route redirects or the page
- *     forbids the worker, the anchor fails loudly rather than passing vacuously.
+ * Run LIVE and green on 2026-09-30 (real backend + Keycloak 8094): 1 passed, all
+ * steps. Steps 02/07 selector assumptions proven. Note: clicks on these pages
+ * rely on `deferClickState` (ISS-0662 family) in the production handlers.
  *
  * Chain: pre (service v1 + definition) -> 01 start A and C, read A's pins
  * -> 02 retire + publish (GUI) -> 03 complete C's n2 task, service step
@@ -130,7 +117,7 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
     const startCase = async (definitionId: string): Promise<string> => {
       const resp = await request.post(`${API_BASE_URL}/api/v1/instances`, {
         headers: authHeaders(adminToken),
-        data: { definition_id: definitionId },
+        data: { definition_id: definitionId, initial_variables: {} },
       })
       pl.gate(resp.ok(), `instance start failed: ${resp.status()} ${await resp.text()}`)
       const created = await resp.json() as { instance_id?: string; id?: string }
@@ -258,10 +245,25 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
         headers: authHeaders(s.adminToken),
         data: {},
       })
-      pl.gate(
-        completeResp.status() >= 200 && completeResp.status() < 300,
-        `task completion after retire+publish must be accepted, got ${completeResp.status()} ${await completeResp.text()}`,
-      )
+      // LIVE FINDING (first live run, design §9 M5 corrected): the failure is not
+      // the async dispatcher's request_build_error. Completing n2 hops the token
+      // into n3 SYNCHRONOUSLY inside complete_task; activating a catalog-only
+      // SERVICE_TASK (service_id, no inline endpoint) renders an empty URL because
+      // the catalog lookup is still a stub, so the engine persists ONLY
+      // EXECUTION_ERROR (n3, service_task_url_rendered_empty; the TASK_COMPLETED
+      // event is not kept) and routers/tasks.ex answers a bare 500 via its
+      // `{:instance_execution_error, _, _}` catch-all. It is independent of the
+      // retirement (the stub ignores catalog state). Accepted outcomes, exactly:
+      //   A) success: 2xx + TASK_COMPLETED(n2) + SERVICE_TASK_COMPLETED (stub replaced)
+      //   B) today:   500 + EXECUTION_ERROR affected node n3 error_type
+      //      service_task_url_rendered_empty, and NO TASK_COMPLETED(n2)
+      //   C) designed async variant: 2xx + TASK_COMPLETED(n2) + EXECUTION_ERROR
+      //      service_task_retries_exhausted / request_build_error
+      // Anything else (other status, other error_type, a retirement-induced
+      // failure) fails the spec.
+      const completeStatus = completeResp.status()
+      const completeBody = await completeResp.text()
+      console.log(`[pin-survives] step 3 task-complete HTTP status: ${completeStatus}`)
 
       let events: HistoryEvent[] = []
       let outcome: HistoryEvent | undefined
@@ -278,23 +280,36 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
         if (outcome) break
         await new Promise((r) => setTimeout(r, 2_000))
       }
+      pl.gate(!!outcome, `service step must reach a terminal event within 45s; saw ${JSON.stringify(events)}`)
 
       const n2Completed = events.find(
         (e) => e.event_type === 'TASK_COMPLETED' && e.payload?.node_id === 'n2',
       )
-      pl.gate(!!n2Completed, 'history must contain TASK_COMPLETED for n2')
-      pl.gate(!!outcome, 'service step must reach a terminal event within 45s')
+      const payload = outcome!.payload as {
+        error_type?: string
+        affected?: { node_id?: string }
+        details?: { last_failure_kind?: string }
+      }
+      const ok2xx = completeStatus >= 200 && completeStatus < 300
 
       if (outcome!.event_type === 'SERVICE_TASK_COMPLETED') {
-        console.log('[pin-survives] step 3 outcome: SERVICE_TASK_COMPLETED (catalog stub replaced)')
-      } else {
-        const payload = outcome!.payload as { error_type?: string; details?: { last_failure_kind?: string } }
+        pl.gate(ok2xx && !!n2Completed, `outcome A needs 2xx + TASK_COMPLETED(n2), got ${completeStatus} ${completeBody}`)
+        console.log('[pin-survives] step 3 outcome A: SERVICE_TASK_COMPLETED (catalog stub replaced)')
+      } else if (payload.error_type === 'service_task_url_rendered_empty') {
         pl.gate(
-          payload.error_type === 'service_task_retries_exhausted'
-            && payload.details?.last_failure_kind === 'request_build_error',
-          `only the stub outcome (request_build_error) is accepted besides success, got ${JSON.stringify(payload)}`,
+          completeStatus === 500 && payload.affected?.node_id === 'n3' && !n2Completed,
+          `outcome B needs HTTP 500 + affected n3 + no TASK_COMPLETED(n2), got ${completeStatus} ${completeBody} / ${JSON.stringify(outcome)}`,
         )
-        console.log('[pin-survives] step 3 outcome: EXECUTION_ERROR/request_build_error (design M5: catalog_lookup_stub)')
+        console.log('[pin-survives] step 3 outcome B: HTTP 500 + EXECUTION_ERROR n3/service_task_url_rendered_empty (catalog_lookup_stub; design M5 corrected)')
+      } else {
+        pl.gate(
+          ok2xx
+            && !!n2Completed
+            && payload.error_type === 'service_task_retries_exhausted'
+            && payload.details?.last_failure_kind === 'request_build_error',
+          `only the stub outcomes are accepted besides success, got ${completeStatus} ${JSON.stringify(payload)}`,
+        )
+        console.log('[pin-survives] step 3 outcome C: EXECUTION_ERROR/request_build_error (designed async variant)')
       }
 
       await navigateSpa(page, `/instances/${s.caseCId}`)

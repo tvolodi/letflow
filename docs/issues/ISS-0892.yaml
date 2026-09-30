@@ -29,3 +29,28 @@ progress_2026_09_29: >
   exist on QA; swiftroute "Shipment Approval" v1.0 is seeded. STILL OPEN: meridian/vortex process
   definitions and seed scripts (ISS-0897); swiftroute definition key null (ISS-0893); onboarding
   scenario precondition conflict (ISS-0895); preflight support (ISS-0894). Keep open until those close.
+progress_2026_09_30: >
+  All 4 blockers listed in progress_2026_09_29 are now resolved with merged PRs,
+  independently re-verified this session: ISS-0893 (PR #2011, merged 2026-09-29T22:44:10Z),
+  ISS-0894 (PR #2010, merged 2026-09-29T21:24:50Z), ISS-0895 (PR #2009, merged
+  2026-09-29T20:44:10Z), ISS-0897 (PR #2016, merged 2026-09-29T23:19:09Z). This session
+  also has genuine network reachability to QA (unlike the sessions that filed these
+  issues): https://qa.bizdala.com returns 200 with the real Letflow SPA, and
+  auth.qa.bizdala.com/realms/{swiftroute,meridian,vortex}/.well-known/openid-configuration
+  all return 200 with real Keycloak issuer JSON (a control probe against a nonexistent
+  realm correctly 404s), confirming the three Keycloak realms genuinely exist on QA now.
+  However, NOT yet verified: whether scripts/seed_meridian_definition.sh and
+  scripts/seed_vortex_definition.sh (delivered by ISS-0897, never executed against QA
+  per that issue's own resolution note) have actually been run to deploy+activate the
+  5 meridian/vortex process definitions. This session has no QA_AUTH_TOKEN, no
+  ai-dala-infra checkout (hence no scripts/qa-uat-env.sh credential-source), and
+  GET /api/v1/definitions/active/<name> returns 401 unauthenticated, so deployment
+  state cannot be confirmed from here; scripts/uat_preflight.sh also refuses to run
+  without --credential-source. No test/uat-reports/* file postdates the ISS-0897 merge,
+  so no scenario run has happened since these fixes landed either. Keep status open:
+  the code/tooling deliverable across all 4 sub-issues is complete, but the operational
+  step (run both seed scripts against live QA, then a fresh scripts/uat_preflight.sh
+  and UAT-RUNNER pass over the 11 affected scenarios) still needs a session with a real
+  QA_AUTH_TOKEN / credential-source. Close ISS-0892 only after that run confirms the
+  11 scenarios' preflight checks (definitions/env_limitation/actors) report OK/expected-GAP
+  as designed, not before.

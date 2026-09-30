@@ -9,7 +9,7 @@
   "created_at": "2026-09-30T21:26:07Z",
   "started_at": "2026-09-30T21:26:07Z",
   "completed_at": "2026-09-30T21:48:45Z",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -57,7 +57,8 @@
     },
     "notes": "M1a/M1c first survived; T4 extended with a long non-eyJ 3-segment hostname and short eyJh.a.b to kill them. Test names must not contain NO_PASSWORD/BAD_CRED (tmp_dir path echoed by script).",
     "mix_letflow_check_test": "exit 0; 'mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.' (16 partitions, throwaway postgres container on 5499, removed). Aggregate total line and per-partition confirmation that the new file ran were not captured.",
-    "cleanup": "all letflow-4-tmp-* worktrees removed; copied _build/deps removed; scripts/ and lib/ unmodified (git status clean for them)"
+    "cleanup": "all letflow-4-tmp-* worktrees removed; copied _build/deps removed; scripts/ and lib/ unmodified (git status clean for them)",
+    "rework_1": "Ran mix format on the test file only (run_dead defp, do: on its own line; no semantic change). mix format --check-formatted exit 0; 8/8 tests pass (direct ExUnit run, UAT_PF_BASH=git-bash). Copied _build/deps removed; no Postgres container needed or started."
   },
   "rework_count": 1,
   "max_rework": 3

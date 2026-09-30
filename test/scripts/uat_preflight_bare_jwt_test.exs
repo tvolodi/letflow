@@ -90,7 +90,8 @@ defmodule Letflow.Scripts.UatPreflightBareJwtTest do
     {out, if(File.exists?(out_json), do: File.read!(out_json), else: "")}
   end
 
-  defp run_dead(tmp, lines, crlf), do: run_preflight(tmp, lines: lines, base_url: @dead_url, crlf: crlf)
+  defp run_dead(tmp, lines, crlf),
+    do: run_preflight(tmp, lines: lines, base_url: @dead_url, crlf: crlf)
 
   # Stub HTTP server answering every GET with 200 `{}`; returns its base URL.
   defp start_stub do

@@ -108,9 +108,26 @@ if config_env() == :prod do
       For example: ecto://letflow:PASSWORD@db/letflow_prod
       """
 
+  # ISS-0908 (GH-2032): prior default (10) drove Letflow.Admission's derived
+  # global_cap (pool_size - reserved_headroom) down to 8 on QA, rejecting
+  # ordinary SPA page loads (3-5 parallel requests) with 503 "tenant at
+  # capacity". Raised to 30 -- the SAME value config/dev.exs already settled
+  # on for ISS-0786's identical root-cause class -- mirroring that fix, not
+  # re-deriving it. POOL_SIZE remains fully operator-overridable via env var;
+  # only the fallback used when it's absent changes.
   config :letflow, Letflow.Repo,
     url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "30")
+
+  # ISS-0908 (GH-2032): wires Letflow.Admission's reserved_headroom to a real
+  # env var in prod/QA -- previously no config file ever set
+  # :letflow, :admission, :reserved_headroom, so the module's own
+  # @default_reserved_headroom (2) always applied with no way for an operator
+  # to tune it without a redeploy. Default kept at 2, matching
+  # @default_reserved_headroom exactly -- this fix targets the pool_size side
+  # of the cap, not the headroom side.
+  config :letflow, :admission,
+    reserved_headroom: String.to_integer(System.get_env("RESERVED_HEADROOM") || "2")
 
   # ISS-0015 (GH#71): the port was previously hardcoded in
   # lib/letflow/application.ex, despite config/prod.exs's own comment

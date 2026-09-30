@@ -1,0 +1,43 @@
+{
+  "handoff_id": "81744545-b4e2-46ca-8791-2837a6628881",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0930-20261001/step-03d-reviewer.json",
+  "created_at": "2026-09-30T22:41:39Z",
+  "started_at": "2026-09-30T22:41:39Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0930-seed-service-task-endpoints.md",
+      "handoffs/WF03-ISS0930-20261001/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0930-20261001/step-03-elixir-dev.json",
+      "docs/migration/decisions/"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 3d REVIEWER gate for ISS-0930. Review git diff origin/main..HEAD (non-handoff files) in context.worktree against the validated design lib/letflow/design/iss0930-seed-service-task-endpoints.md: scope creep (only fixtures/seed scripts/helper/README; engine, url_validator, simulation YAML untouched), consistency with decision records in docs/migration/decisions/ (esp. any on service tasks / SSRF / connector catalog / seeding ISS-0897 design), idiomatic shell correctness (set -euo pipefail interplay with the new helper, sourcing path robustness when run from any cwd, jq usage), behaviour vs design section 5 version rules, fixture JSON sanity (25 nodes, 1.1 versions, no leftover relative endpoints or single-brace placeholders: verify with jq yourself), and whether bumping fixture version to 1.1 conflicts with any other consumer of these fixtures (grep test/, scripts/, docs/ for '1.0' assumptions, e.g. UAT scenarios keyed by version, definition_name lookups). Also list the MINOR from SECURITY-REVIEWER (step-03c): README should state httpbin.org receives rendered path IDs and QA data must be synthetic - say whether it is required now (if so FAIL with that single item, or PASS with it as a mandatory DOC follow-up: ORCH will have it applied before merge - choose PASS with follow-up unless something else blocks). Modify nothing but this handoff. Set IN_PROGRESS at claim, then COMPLETED/FAILED with result.status PASS/FAIL; next_action 'Route to TEST-DESIGNER' on PASS.",
+    "acceptance_criteria": [
+      "No scope creep",
+      "Decision-record consistency checked",
+      "Shell and fixture correctness independently verified",
+      "Other consumers of fixture version checked",
+      "Verdict"
+    ]
+  },
+  "result": null
+}

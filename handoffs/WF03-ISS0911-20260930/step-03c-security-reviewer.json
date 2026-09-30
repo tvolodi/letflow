@@ -1,0 +1,51 @@
+{
+  "handoff_id": "d600cb25-bc6b-4ffe-9faa-99893bc2716b",
+  "run_id": "WF03-ISS0911-20260930",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0911-20260930/step-03c-security-reviewer.json",
+  "created_at": "2026-09-30T07:19:07Z",
+  "started_at": "2026-09-30T07:19:07Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["457e475d-0125-4207-abd0-6281ece7d885"],
+    "artifacts_in": [
+      "web/src/hooks/useDefinitions.ts",
+      "web/src/pages/instances/InstanceBoardPage.tsx"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3c for ISS-0911. Run your own scope test first per security-reviewer.md against git diff main...HEAD -- web/src/hooks/useDefinitions.ts web/src/pages/instances/InstanceBoardPage.tsx (FRONTEND-DEV's own assessment: this adds a new call site for an already-used GET /api/v1/definitions/active/:name endpoint plus client-side query/UI state, no tenant resolution/auth/token handling/response-shaping change -- but reach your own independent determination, do not defer to that assessment). If out of scope, PASS with a one-clause reason and route to REVIEWER. If in scope, run the full INV-1..INV-8 procedure.",
+    "acceptance_criteria": [
+      "the fix calls definitionsApi.getActive(name) keyed on the dialog's own typed value, not the page-level filtered list",
+      "the version field's loading/not-found/found states are all implemented with no gap",
+      "definitionTypeahead's other two call sites are unchanged"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

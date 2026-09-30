@@ -64,22 +64,41 @@
  * pixel-baseline mechanism, same reasoned choice as
  * `platform-login-routing-by-role.pipeline.e2e.spec.ts` (its own file header, §1.7).
  *
- * INTERACTION NOTE: every click below uses `locator.dispatchEvent('click')` rather
- * than `locator.click()`. Confirmed directly while writing this spec (not assumed):
- * in the dev sandbox this was authored and verified against,
- * actionability-based `.click()`/`.fill()` calls hang indefinitely at Playwright's
- * final "performing click/fill action" phase — reproduced identically against an
- * unrelated, pre-existing, already-merged spec
- * (`admin-user-lifecycle.pipeline.e2e.spec.ts`'s very first `.fill()` call), and
- * against raw `page.mouse.down()`/`.up()`, ruling out anything specific to this file
- * or to `GroupsPage.tsx` — a real-input-dispatch limitation of that sandbox's
- * headless Chromium, not a defect in this spec or in `web/`'s own code.
- * `dispatchEvent('click')` fires a real, bubbling DOM `click` event that React's
- * root-level synthetic-event delegation handles exactly the same as a trusted one
- * (confirmed end-to-end below: real fetch calls fire, real backend responses come
- * back, real UI state changes) — it only skips Playwright's own actionability
- * pre-checks (visible/stable/not-obscured), which this spec's own `waitFor()`/
- * `expect(...).toBeVisible()` calls already establish immediately beforehand.
+ * INTERACTION NOTE (revised, ISS-0899 REVIEWER finding): every click below uses a
+ * real, UA-trusted gesture — `locator.hover()` + `page.mouse.down()` +
+ * `page.mouse.up()`, raced against a bounded timeout — exactly the pattern this
+ * codebase already established and trusts in `iss-0662-entity-crud-click-freeze.e2e.spec.ts`,
+ * `iss-0737-definition-name-click-freeze.e2e.spec.ts` and
+ * `iss-0739-instance-start-dialog-click-freeze.e2e.spec.ts`. This file originally used
+ * `Locator.dispatchEvent('click')`, justified at the time as a workaround for a claimed
+ * sandbox-wide hang on real click/fill actionability. REVIEWER found that justification
+ * wrong on both counts: (1) `dispatchEvent('click')` is precisely the mechanism those
+ * three prior regression specs deliberately avoid, because it is the one thing proven
+ * NOT to reproduce this exact freeze class (see their own header comments); relying on
+ * it here would have silently exempted this spec from ever catching this bug again, and
+ * (2) REVIEWER independently exercised this sandbox's Chromium against a minimal static
+ * page and got a normal ~300ms `.click()`/`.fill()` resolution, refuting the "sandbox
+ * hangs on all real clicks" claim outright.
+ *
+ * GroupsPage.tsx was checked directly against the real mechanism, not assumed either
+ * way: a throwaway diagnostic spec drove `page.mouse.down()`/`mouse.up()` (hover first,
+ * bounded at 5s, identical to `trustedClickBounded` in the three specs above) against
+ * "Manage members" on a real running dev stack (`mix run` on :4000, Keycloak/Postgres via
+ * `docker compose`). The very first trusted click — "Manage members" — froze the
+ * renderer past the 5s bound: real, reproduced, not a Playwright-dispatch artifact. This
+ * is the identical bug class as ISS-0662/0737/0739 — `GroupsPage.tsx`'s "Manage
+ * members"/"Add member"/"Remove"/"Delete"/"+ New Group" buttons all called `setState`
+ * (or a mutation whose `onSuccess` calls `setState`) synchronously inside their `onClick`
+ * handler, the exact trigger shape those three fixes target. Fixed the same way as
+ * `DataTable.tsx`/`EntityCrudPage.tsx`/`DefinitionListPage.tsx`/`InstanceBoardPage.tsx`:
+ * every affected handler in `web/src/pages/admin/GroupsPage.tsx` now runs through
+ * `deferClickState` (`web/src/utils/deferClickState.ts`), deferring the state update by
+ * one macrotask so it never lands inside the native click's own dispatch turn. Re-ran the
+ * same diagnostic trusted-click sequence (Manage members -> Add member -> Remove ->
+ * Close) against the fixed tree: all four resolved normally, well under the 5s bound.
+ * This fix (and the GroupsPage-specific finding) is bundled into this same PR rather than
+ * filed separately — it is the direct, narrowly-scoped root cause of why this spec could
+ * not safely use a real click in the first place, not an unrelated drift item.
  */
 
 import * as fs from 'fs'
@@ -97,9 +116,37 @@ const ADMIN_PASSWORD = resolveCredential('UAT_QA_ADMIN_PASSWORD', 'admin-pass')
 
 const PERMISSION_DENIED_TEXT = 'You do not have access to this area. Contact your tenant administrator.'
 
-/** See the file header's INTERACTION NOTE. */
-async function click(locator: Locator): Promise<void> {
-  await locator.dispatchEvent('click')
+/**
+ * A real, UA-trusted click — hover, then `mouse.down()`/`mouse.up()`, raced
+ * against a bounded timeout. See the file header's INTERACTION NOTE: this is
+ * the same mechanism `iss-0662-entity-crud-click-freeze.e2e.spec.ts`'s
+ * `trustedClickBounded` uses, and for the same reason — it is proven to
+ * reproduce the synchronous-setState-inside-native-click-dispatch freeze
+ * class where `dispatchEvent('click')` is proven NOT to.
+ */
+async function click(locator: Locator, label = 'element', boundMs = 5_000): Promise<void> {
+  await locator.hover()
+  const page = locator.page()
+  await page.mouse.down()
+  const upPromise = page.mouse.up()
+  upPromise.catch(() => {
+    // Swallow a late rejection/resolution racing past the bound below —
+    // already handled via the timeout branch; this only prevents an
+    // unhandled-rejection warning if the underlying gesture errors after
+    // this function has already returned.
+  })
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`trusted click on "${label}" did not resolve within ${boundMs}ms (renderer freeze?)`)),
+      boundMs,
+    )
+  })
+  try {
+    await Promise.race([upPromise, timeout])
+  } finally {
+    clearTimeout(timer!)
+  }
 }
 
 async function shot(page: Page, stepName: string): Promise<void> {

@@ -162,7 +162,12 @@ handoff's `context` — never assume "whatever instance is reachable":
   naming the missing field. A scenario whose report shows `env_limitation: GAP` must be
   recorded BLOCKED with the sidecar's `reason` and `issue_ref` verbatim (see
   `test/fixtures/uat/scenario-env-limitations/`), and must not be executed against that
-  environment — mirrors the rule above for any other GAP column.
+  environment — mirrors the rule above for any other GAP column. If the matched sidecar
+  sets `applies_to_expected_outcomes`, this "must not be executed" rule scopes to only
+  the named expected-outcome id(s) — every other `expected_outcomes[].id` in the same
+  scenario must still be executed and reported with its own real verdict; the scenario's
+  overall `verdict:` still reads BLOCKED, but the report's `evidence:` must break out
+  each expected outcome's own outcome by id.
 
 Result classification: a scenario that cannot run for an environment reason
 (`ENV_*`, `CREDENTIALS_MISSING`, `PRECONDITION_NOT_MET`, `ENV_NOT_SUPPORTED`) is

@@ -17,6 +17,6 @@ source_reports:
   - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
 affected_files:
   - lib/letflow/ (task cancel path, audit events)
-queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
-github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+queue_ref: Q-900  # queue allocated issue_ref ISS-0900, which collides with an existing local file; local filename kept as ISS-0906 and GH-2034 retitled to match
+github_ref: GH-2034
 status: open

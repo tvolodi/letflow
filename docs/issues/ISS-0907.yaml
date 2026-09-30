@@ -18,6 +18,6 @@ source_reports:
 affected_files:
   - web/src/ (My Tasks page, permission-denied renderer)
   - web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts
-queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
-github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+queue_ref: Q-901  # queue allocated issue_ref ISS-0901, which collides with an existing local file; local filename kept as ISS-0907 and GH-2035 retitled to match
+github_ref: GH-2035
 status: open

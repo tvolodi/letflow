@@ -20,6 +20,6 @@ source_reports:
 affected_files:
   - web/src/pages/instances/InstanceBoardPage.tsx
   - web/tests/e2e/pipelines/
-queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
-github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+queue_ref: Q-903  # queue allocated issue_ref ISS-0903, which collides with an existing local file; local filename kept as ISS-0911 and GH-2037 retitled to match
+github_ref: GH-2037
 status: open

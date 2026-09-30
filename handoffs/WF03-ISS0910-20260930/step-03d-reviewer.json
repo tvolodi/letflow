@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0910-20260930/step-03d-reviewer.json",
   "created_at": "2026-09-30T08:01:04Z",
   "started_at": "2026-09-30T08:01:04Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T08:02:27Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -33,18 +33,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Reviewed git diff main...HEAD for role_backfill.ex and its Mix task against .claude/agents/reviewer.md's four questions plus design doc lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md. (1) Idiom: reset call site is clean -- gated in classify/3's existing < 6 (:seeded) branch (design shape (a)), not entangled; classify/3 stays a pure classifier plus one gated side-effect call, no case-do state-machine crutch. (2) Supervision: n/a, no process/isolation concerns in this change. (3) Type-safety: no new invalid-state class introduced; reset writes nil to an already-nullable column, no gap worth filing. (4) Scope: tight -- only role_backfill.ex (reset helper + 3-key accumulator threading) and one Mix.shell().info line in the CLI wrapper changed; identity.ex, user.ex, role_registry.ex untouched, matching design SS6. OQ-1 (separate-transaction retry hole: a tenant whose reset fails after seeding already committed reclassifies :unchanged on retry and never gets retried) is stated honestly in both the design doc (SS2, SS8) and the code's own moduledoc/run/0 @doc ('or whose marker reset, failed') -- not hidden. Verified via grep that sync_role_claims_from_token/3 and its two existing gated call sites in identity.ex are unmodified -- no new sync-triggering path invented, satisfying the acceptance criterion. Verified via Letflow.Identity.User's moduledoc and the update_all call's prefix: schema_name (no where, no tenant_id) that this is consistent with Decision 0006 D1/D2's per-tenant-schema design -- no tenant_id reintroduced anywhere. Idempotency confirmed: re-nulling an already-nil column is a no-op, and a tenant already fully seeded reclassifies :unchanged on a second run so its users are never re-touched. No crutch, no broken invariant, no scope creep found. PASS.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0910-20260930",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Dispatch Step 03e / next step to TEST-DESIGNER."
   },
   "rework_count": 0,
   "max_rework": 3

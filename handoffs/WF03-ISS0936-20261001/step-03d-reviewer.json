@@ -1,0 +1,43 @@
+{
+  "handoff_id": "07c1d655-090e-4685-9d69-272e08243f8a",
+  "run_id": "WF03-ISS0936-20261001",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0936-20261001/step-03d-reviewer.json",
+  "created_at": "2026-09-30T21:25:36Z",
+  "started_at": "2026-09-30T21:25:36Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0936": "Issue ISS-0936 (local record docs/issues/ISS-0936.yaml, queue_ref Q-919, queue task 919, GH#2070; record may not yet be on this branch - PR #2071): scripts/uat_preflight.sh's qa-uat-env credential protocol (fetch_credential, ~line 290) expects the credential source's `token <user>` to print a line `Token: <jwt>`, but ai-dala-infra's qa-uat-env.sh `token <user>` prints a BARE JWT, so every actor login reports NO_PASSWORD. Fix: make fetch_credential accept a bare JWT line (three dot-separated base64url segments) as well as the `Token:` form. Add/adjust tests per project's existing preflight tests (none found under test/ -- TEST-DESIGNER decides a minimal in-repo test shape). Also update the script's header docs (qa-uat-env protocol paragraph) and scripts/README.md if they state the Token: form."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "scripts/uat_preflight.sh",
+      "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md"
+    ],
+    "owned_modules": [
+      "scripts/uat_preflight.sh"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0936",
+    "branch_name": "feature/WF03-ISS0936-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 3d hard gate: review diff of scripts/uat_preflight.sh (git diff origin/main in the worktree) against the validated design lib/letflow/design/iss0936-uat-preflight-bare-jwt.md: matches design rules, no scope creep (qa-login branch untouched, no unrelated edits), docs header consistent, decision-record consistency (0004 etc. as relevant), no stray files. Verdict PASS/FAIL. Modify only your handoff; no commit.",
+    "acceptance_criteria": [
+      "Matches design",
+      "No scope creep",
+      "Verdict PASS/FAIL"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

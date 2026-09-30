@@ -46,3 +46,10 @@ progress_2026_09_30: >
   scenarios) resolved -- see docs/issues/ISS-0901.yaml's own resolution note.
   1 of 4 split follow-ups now closed; ISS-0898, ISS-0899 and ISS-0900 remain
   open. ISS-0890 itself stays open until all four close.
+
+  UPDATE (2026-09-30T02:10:00Z, DOC-UPDATER, fix/ISS-0899-renderer-permission-
+  denied-spec): ISS-0899 (renderer-states spec authoring against REQ-378's
+  already-shipped fix, plus a genuine new GroupsPage.tsx freeze bug found and
+  fixed during review) resolved -- see docs/issues/ISS-0899.yaml's own
+  resolution note. 2 of 4 split follow-ups now closed (0901, 0899); ISS-0898
+  and ISS-0900 remain open. ISS-0890 itself stays open until all four close.

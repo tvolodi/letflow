@@ -87,6 +87,24 @@
 
 set -u
 
+# ISS-0917 §3.2 step 1: enable bash job control (`set -m`) so every
+# backgrounded job launched from here on (Step 2's partitions in
+# particular) gets its OWN process group, with pgid == the job's own pid
+# (bash's own job-control convention, not something this script computes).
+# This is the "equivalent job-control idiom" the design allows in place of
+# an external `setsid` binary -- deliberately NOT `setsid`: this script also
+# runs on Windows/Git-Bash hosts (this issue's own title names one), where
+# `setsid` does not exist, while `set -m` is a bash builtin. It is what
+# makes `kill -- -$pid` (a negative pid = "the whole process group", not
+# just the immediate child) reach the real `erl.exe`/`beam.smp` grandchild a
+# plain `kill $pid` or a default `timeout` invocation cannot -- the
+# documented gap in docs/anti-patterns.md's zombie-BEAM entry. Side effect:
+# bash may print its own "[N]+ Done/Terminated ..." job-control notices to
+# this script's stderr as jobs complete -- harmless noise, not parsed by
+# anything (the aggregator in Step 4 reads each partition's own redirected
+# log file, never this script's own stdout/stderr).
+set -m
+
 # --- Step 0: derive N (AC4 -- never hardcoded) ---------------------------
 
 n_source=""
@@ -335,6 +353,44 @@ cleanup_tmp_dir() {
     kill "$_test_parallel_sampler_pid" 2>/dev/null
   fi
 
+  # ISS-0917 §3.2 step 3 / AC6: reap any partition PID still alive at trap
+  # time, on EVERY exit path (normal completion, the new Fix 2 hard-fail,
+  # an external interruption, or any pre-existing `exit 1` path) -- not
+  # just the tmp-dir/sampler cleanup above. `pids[]` is declared later in
+  # the script (Step 2) but expands to an empty list here under `set -u` if
+  # this trap fires before Step 2 is ever reached (e.g. an early Step 1
+  # failure), so this is safe at every exit point, not just the late ones.
+  # `kill -TERM -- "-$pid"` targets the WHOLE process group (pgid == pid,
+  # per Step 2's `set -m`), not just the immediate child -- reaching the
+  # real erl.exe/beam.smp grandchild the zombie-BEAM anti-pattern entry
+  # names as the actual gap in a plain `kill $pid`.
+  _reap_pgid=0
+  for _idx in "${!pids[@]}"; do
+    _pid="${pids[$_idx]}"
+    if kill -0 "$_pid" 2>/dev/null; then
+      echo "test_parallel: EXIT trap reaping still-alive partition $_idx (pid=$_pid) -- sending TERM to its process group" >&2
+      kill -TERM -- "-$_pid" 2>/dev/null
+      _reap_pgid=1
+    fi
+  done
+  if [ "$_reap_pgid" -eq 1 ]; then
+    sleep "${TEST_PARALLEL_PARTITION_KILL_GRACE_S:-10}"
+    for _idx in "${!pids[@]}"; do
+      _pid="${pids[$_idx]}"
+      if kill -0 "$_pid" 2>/dev/null; then
+        echo "test_parallel: EXIT trap partition $_idx still alive after TERM+grace -- escalating to KILL on its process group" >&2
+        kill -KILL -- "-$_pid" 2>/dev/null
+      fi
+    done
+  fi
+
+  # Per-partition watchdogs (Step 2) are no longer needed once we're
+  # tearing down -- kill any still-sleeping ones so they don't linger past
+  # this script's own exit.
+  for _idx in "${!watchdog_pids[@]}"; do
+    kill "${watchdog_pids[$_idx]}" 2>/dev/null
+  done
+
   if [ "$exit_code" -eq 0 ] && [ -z "${TEST_PARALLEL_KEEP_LOGS:-}" ]; then
     rm -rf "$tmp_dir"
   else
@@ -402,6 +458,87 @@ done
 
 echo "test_parallel: all $N partition databases created+migrated"
 
+# --- Step 1.8: capped-concurrency template-build admission control (ISS-0917) -
+#
+# See lib/letflow/design/iss0917-test-parallel-template-contention.md §1.3.
+# Root cause: Step 2 below used to launch all N partitions' `mix test`
+# processes with no stagger at all, and each one's test_helper.exs
+# immediately calls ensure_template!/0 -- which, on this partition's first
+# run, does a full CREATE SCHEMA + 53-migration replay pinned to ONE
+# checked-out connection for the whole build. At N partitions simultaneously,
+# that is N full migration replays hitting Postgres at the same instant -- a
+# real CPU/IO/lock-manager contention burst, not a connection-count overflow
+# (Step 1.5's clamp already prevents that part). Under that load, a
+# straggler partition's pinned connection can exceed Repo.checkout/2's
+# default 15000ms client-side timeout and abort before ever producing a
+# Result: line. Same idiom as Step 1.7's ecto.create/ecto.migrate burst fix
+# (ISS-0698), one phase later: cap how many partitions are simultaneously
+# INSIDE their own template build, without serializing the whole suite --
+# every partition still gets launched by the end of this step, just not all
+# at once.
+#
+# tenant_template.ex's own advisory lock (build_template!/0 -> ensure_template!/0)
+# is unchanged and unaffected by this -- it serializes callers WITHIN one
+# partition database, which is a different (already-solved) problem; this
+# step serializes ACROSS partitions, at the launch level, before any of
+# them ever calls that lock.
+template_ready_dir="$tmp_dir/template-ready"
+mkdir -p "$template_ready_dir"
+export TEST_PARALLEL_TEMPLATE_READY_DIR="$template_ready_dir"
+
+# OQ-1 (design doc §7): default re-measured against this host's own N=nproc
+# full-suite run (not assumed from ISS-0698's reused value without
+# verification) -- see docs/issues/ISS-0917.yaml's resolution notes / this
+# change's own PR description for the measurement this default is based on.
+max_concurrent_template_builds="${TEST_PARALLEL_MAX_CONCURRENT_TEMPLATE_BUILDS:-4}"
+if ! printf '%s' "$max_concurrent_template_builds" | grep -Eq '^[1-9][0-9]*$'; then
+  echo "test_parallel: ERROR TEST_PARALLEL_MAX_CONCURRENT_TEMPLATE_BUILDS='$max_concurrent_template_builds' is not a positive integer" >&2
+  exit 1
+fi
+
+echo "test_parallel: template-build admission control capped at $max_concurrent_template_builds concurrent (ready dir: $template_ready_dir)"
+
+# partition index -> pid, tracked ONLY while that partition's own template
+# build is in flight (its ready-file has not yet appeared). Populated by
+# Step 2's launch loop below.
+declare -A building_partition_pid
+in_flight_builders=0
+
+# Polls the ready-dir/PID-liveness once. Decrements in_flight_builders for
+# every newly-seen ready-file. If a tracked partition's OWN process has
+# exited without ever producing a ready-file (design §1.3 mechanism 5 --
+# e.g. it crashed during its own build, or Step 3.2's own per-partition
+# watchdog killed it for running past TEST_PARALLEL_PARTITION_TIMEOUT_S),
+# that is an immediate, loud, script-level failure -- admission control
+# must not hang forever waiting for a ready-file that will never arrive.
+poll_template_ready_dir() {
+  local progressed=0
+  local idx pid
+  for idx in "${!building_partition_pid[@]}"; do
+    pid="${building_partition_pid[$idx]}"
+    if [ -e "$template_ready_dir/partition-$idx.ready" ]; then
+      unset 'building_partition_pid[$idx]'
+      in_flight_builders=$((in_flight_builders - 1))
+      progressed=1
+    elif ! kill -0 "$pid" 2>/dev/null; then
+      echo "test_parallel: ERROR partition $idx's process exited during its own template build, before producing a ready-file ($template_ready_dir/partition-$idx.ready) -- no further partitions admitted (see $tmp_dir/partition-$idx.log)" >&2
+      exit 1
+    fi
+  done
+  if [ "$progressed" -eq 0 ]; then
+    sleep 0.2
+  fi
+}
+
+# Blocks (via the bounded ready-file/PID-liveness poll above -- never an
+# unbounded spin, since a genuinely-stuck partition is itself bounded by its
+# own wall-clock deadline, §3.2) until fewer than the cap are mid-build.
+wait_for_build_admission_slot() {
+  while [ "$in_flight_builders" -ge "$max_concurrent_template_builds" ]; do
+    poll_template_ready_dir
+  done
+}
+
 # --- Step 2: launch N background partitions -------------------------------
 
 # ISS-0217: a single tag shared by every partition THIS invocation launches, so
@@ -420,6 +557,28 @@ declare -a exits
 declare -a properties
 declare -a tests_count
 declare -a failures
+# ISS-0917 §3.2: partition index -> watchdog-process pid (the background
+# sleep-then-maybe-kill job Step 2 launches alongside each partition).
+declare -A watchdog_pids
+
+# ISS-0917 §3.2 / OQ-3: per-partition wall-clock deadline. Must be generous
+# enough to never false-positive on a genuinely slow-but-healthy partition.
+# Measured directly (not guessed): a full, clean run on this host (8-core,
+# TEST_PARALLEL_N=8, the full 5079-test suite) completed end to end in
+# ~495s wall-clock, and a TEST_PARALLEL_N=6 run in ~520s -- i.e. every real
+# partition finishes in well under 10 minutes here. 1800s (30 minutes) is
+# set as the default: a >3x margin over this host's own slowest observed
+# partition, generous enough to absorb a materially slower/busier CI host
+# without false-positiving, while still bounding a genuinely-stuck
+# partition to well under an hour rather than hanging indefinitely.
+partition_timeout_s="${TEST_PARALLEL_PARTITION_TIMEOUT_S:-1800}"
+if ! printf '%s' "$partition_timeout_s" | grep -Eq '^[1-9][0-9]*$'; then
+  echo "test_parallel: ERROR TEST_PARALLEL_PARTITION_TIMEOUT_S='$partition_timeout_s' is not a positive integer" >&2
+  exit 1
+fi
+# Grace window between TERM and KILL, both for the per-partition watchdog
+# below and for the EXIT trap's own sweep (cleanup_tmp_dir, Step 1.7 area).
+partition_kill_grace_s="${TEST_PARALLEL_PARTITION_KILL_GRACE_S:-10}"
 
 # ISS-0287 §4.3: opt-in pg_stat_activity connection-count sampler, gated
 # behind TEST_PARALLEL_SAMPLE_CONNECTIONS=1 (default unset/off -- adds zero
@@ -455,14 +614,53 @@ fi
 
 i=1
 while [ "$i" -le "$N" ]; do
+  # ISS-0917 §1.3 step 3: admission control -- blocks here (bounded, never
+  # forever, see wait_for_build_admission_slot/poll_template_ready_dir
+  # above) until fewer than max_concurrent_template_builds partitions are
+  # still mid-template-build, so at most that many partitions are ever
+  # simultaneously inside ensure_template!/0's migration replay.
+  wait_for_build_admission_slot
+
   # MIX_BUILD_PATH is set per-invocation (command-scoped), not exported
   # globally, because every partition must see a *different* value --
   # unlike TEST_PARALLEL_GROUP/TEST_POOL_SIZE above, which are deliberately
   # global-exported since every partition shares the same value there.
+  #
+  # ISS-0917 §3.2 step 1: launched under `set -m` (top of script), so this
+  # job gets its own process group with pgid == its own pid -- what makes
+  # the watchdog below (and the EXIT trap) able to signal the WHOLE tree
+  # (mix + erl.exe/beam.smp), not just this immediate child.
   MIX_TEST_PARTITION="$i" MIX_BUILD_PATH="_build/test-partition-$i" LETFLOW_SKIP_ECTO_SETUP=1 \
     mix test --partitions "$N" --no-color $high_pool_demand_exclude "$@" \
     > "$tmp_dir/partition-$i.log" 2>&1 &
   pids[$i]=$!
+  building_partition_pid[$i]=$!
+  in_flight_builders=$((in_flight_builders + 1))
+
+  # ISS-0917 §3.2 step 2: per-partition wall-clock deadline, enforced by a
+  # small background watchdog rather than an external `timeout` binary --
+  # `timeout` only signals its own immediate child by default and would
+  # miss the grandchild erl.exe the same way a bare background job does;
+  # this watchdog signals the process GROUP instead (TERM, then KILL after
+  # a grace window if TERM is ignored), same as the EXIT trap's own sweep.
+  # Killed off in Step 3 as soon as its partition's own `wait` returns, so
+  # it does not linger for the rest of partition_timeout_s once the
+  # partition finishes normally.
+  (
+    _watchdog_pid=${pids[$i]}
+    sleep "$partition_timeout_s"
+    if kill -0 "$_watchdog_pid" 2>/dev/null; then
+      echo "test_parallel: WARNING partition $i exceeded TEST_PARALLEL_PARTITION_TIMEOUT_S=${partition_timeout_s}s -- sending TERM to its process group" >&2
+      kill -TERM -- "-$_watchdog_pid" 2>/dev/null
+      sleep "$partition_kill_grace_s"
+      if kill -0 "$_watchdog_pid" 2>/dev/null; then
+        echo "test_parallel: WARNING partition $i still alive after TERM+grace -- escalating to KILL on its process group" >&2
+        kill -KILL -- "-$_watchdog_pid" 2>/dev/null
+      fi
+    fi
+  ) &
+  watchdog_pids[$i]=$!
+
   i=$((i + 1))
 done
 
@@ -472,6 +670,13 @@ i=1
 while [ "$i" -le "$N" ]; do
   wait "${pids[$i]}"
   exits[$i]=$?
+  # This partition is done (one way or another) -- its own watchdog is no
+  # longer needed. Kill it now rather than letting it sleep uselessly for
+  # the rest of partition_timeout_s (ISS-0917 §3.2).
+  if [ -n "${watchdog_pids[$i]:-}" ]; then
+    kill "${watchdog_pids[$i]}" 2>/dev/null
+    wait "${watchdog_pids[$i]}" 2>/dev/null
+  fi
   i=$((i + 1))
 done
 
@@ -495,6 +700,13 @@ total_properties=0
 total_tests=0
 total_failures=0
 any_failed=0
+# ISS-0917 §2 -- explicit, structural "did everyone report" invariant,
+# independent of (in addition to) the per-partition has_result/
+# partition_failed anomaly checks below. reporting_count counts partitions
+# whose log had a real Result: line; missing_partition_indices names every
+# partition index that did NOT (see the hard check right after this loop).
+reporting_count=0
+declare -a missing_partition_indices=()
 
 i=1
 while [ "$i" -le "$N" ]; do
@@ -507,6 +719,9 @@ while [ "$i" -le "$N" ]; do
   has_result=1
   if [ -z "$result_line" ]; then
     has_result=0
+    missing_partition_indices+=("$i")
+  else
+    reporting_count=$((reporting_count + 1))
   fi
 
   passed_i=0
@@ -590,8 +805,22 @@ done
 total_passed=$((total_properties + total_tests - total_failures))
 total_all=$((total_properties + total_tests))
 
+# ISS-0917 §2.2/AC3: explicit, structural invariant -- reporting_count == N
+# -- checked ONCE here, independent of (in addition to) the per-partition
+# has_result/partition_failed anomaly checks the loop above already does.
+# ALWAYS a hard failure when it doesn't hold, regardless of what
+# total_failures parsed to (the exact "1553 tests/0 failures" shape this
+# issue reports, with only 5/16 partitions having actually reported).
+# Printed BEFORE the combined summary line below, so this is the first
+# thing visible, not something a reader has to scroll up past a
+# misleadingly-clean-looking totals line to find.
+if [ "$reporting_count" -ne "$N" ]; then
+  echo "test_parallel: ERROR only $reporting_count/$N partitions reported a Result: line -- missing (never reported) partition(s): ${missing_partition_indices[*]}" >&2
+  any_failed=1
+fi
+
 echo "---"
-echo "combined: $total_tests tests, $total_properties properties, $total_failures failures ($total_passed/$total_all passed)"
+echo "combined: $total_tests tests, $total_properties properties, $total_failures failures ($total_passed/$total_all passed) -- $reporting_count/$N partitions reported"
 
 # --- Step 5: exit-code contract (AC3) --------------------------------------
 #

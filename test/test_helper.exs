@@ -94,6 +94,24 @@ if System.get_env("LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD") != "1" do
   Letflow.Test.TenantTemplate.ensure_template!()
 end
 
+# ISS-0917 §1.3 (lib/letflow/design/iss0917-test-parallel-template-contention.md):
+# signals this partition's own template build/ready-check as complete, for
+# scripts/test_parallel.sh's Step 1.8 capped-concurrency admission control
+# to poll on. Deliberately placed HERE (the call site), not inside
+# `ensure_template!/0` itself -- that function's own moduledoc scopes it as
+# "not referenced from `lib/`, a plain module" with no CI-signaling
+# responsibility of its own; this keeps that module's public contract
+# unchanged and keeps the signal entirely a test-harness-level concern.
+# Only set when TEST_PARALLEL_TEMPLATE_READY_DIR is exported, i.e. only
+# under scripts/test_parallel.sh -- a bare `mix test` or `mix
+# letflow.check.test` single-process run (no such var) is unaffected, and
+# so is the ISS-0426 nested `mix test --only lua_wallclock_race`
+# subprocess (it never sets this var either).
+if ready_dir = System.get_env("TEST_PARALLEL_TEMPLATE_READY_DIR") do
+  partition = System.get_env("MIX_TEST_PARTITION") || "0"
+  File.write!(Path.join(ready_dir, "partition-#{partition}.ready"), "")
+end
+
 ExUnit.after_suite(fn _stats ->
   Letflow.TenantSchemaReaper.sweep_orphans()
   Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)

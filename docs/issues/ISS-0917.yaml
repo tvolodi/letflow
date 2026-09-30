@@ -1,0 +1,30 @@
+id: ISS-0917
+title: "scripts/test_parallel.sh at N=nproc (16) aborts most partitions on a 15s tenant-template DB timeout (test/support/tenant_template.ex ensure_template!) and leaves orphan erl.exe processes on this Windows host"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ432-20260930 step-04, filed by ORCH
+discovered_at: "2026-09-30T18:58:22Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  Found by WF02-REQ432-20260930 step-04 TEST-RUNNER
+  (test/reports/report-20260930-WF02-REQ432-20260930.yaml,
+  handoffs/WF02-REQ432-20260930/step-04-test-runner.json). With the default
+  partition count N = nproc = 16, 11 of 16 partitions aborted on a 15s DB
+  connection timeout in test/support/tenant_template.ex:139 (ensure_template!),
+  leaving 3 hung erl.exe partition processes alive (had to be stopped by hand);
+  the combined line read 1553 tests/0 failures while only 5 partitions had
+  reported (parsed-count-authoritative exit code did not flag the missing
+  partitions as a failure signal clearly). Re-run at TEST_PARALLEL_N=6 passed
+  5079/5079. Needed: cap default N or serialise template creation; ensure the
+  aggregator fails when partitions abort (count of reporting partitions != N)
+  and cleans up child processes. Not caused by any branch diff (route 1: no
+  Elixir change; route 3: passes at N=6).
+source_reports:
+  - test/reports/report-20260930-WF02-REQ432-20260930.yaml
+  - handoffs/WF02-REQ432-20260930/step-04-test-runner.json
+affected_files:
+  - scripts/test_parallel.sh
+  - test/support/tenant_template.ex
+queue_ref: Q-910  # queue allocated issue_ref ISS-0910, which collides with an existing local file (a different, already-resolved role-backfill issue); local filename kept as ISS-0917 and GH-2060 retitled to match
+github_ref: GH-2060
+status: open

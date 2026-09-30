@@ -33,7 +33,31 @@ affected_files:
   - web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts
 queue_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
 github_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890); no GitHub mirror issue was opened for the split itself
-status: open
+status: resolved
+resolution: >
+  Both of this issue's split follow-ons are now done. REQ-431
+  (definition-type-error-blocked frontend presentation) -- WF02-REQ431-20260930,
+  PR #2050, REVIEWER and RELEASE-VALIDATOR both PASSed (RELEASE-VALIDATOR ran a
+  real 2x-repeated e2e verification against a live backend plus the full test
+  suite); one sub-scenario (AC6's incremental fix-one/fix-other e2e path) was
+  honestly deferred as docs/issues/ISS-0914.yaml (a real, pre-existing
+  ConditionDialog re-open interaction defect, not that PR's scope), not papered
+  over. REQ-432 (instance-pin-survives-catalog-change: rebind-pins and
+  publish/retire operator UI) -- PR #2055, branch
+  feat/REQ-432-rebind-publish-retire-ui, commit 86029b54. Full gate chain on
+  REQ-432: CODE-DESIGN-VALIDATOR (2nd attempt -- 1st FAILed on a real AC5 gap,
+  the rebind-history rendering didn't actually surface prior/new
+  version/reason/actor-name as originally claimed; fixed via an actor-name
+  cross-reference against the timeline endpoint's already-resolved names,
+  joined by shared event_id), FRONTEND-DEV implementation, REVIEWER PASS
+  (filed one non-blocking follow-up, docs/issues/ISS-0916.yaml --
+  pre-existing ServicesPage/RebindPinDialog click-handler-freeze bug,
+  unrelated to this PR's correctness, needs its own separate fix later),
+  TEST-RUNNER (full suite + e2e, only known flakes), and RELEASE-VALIDATOR
+  PASS via independent re-derivation of all 9 ACs, 2x independent e2e
+  reruns, adversarial empty-reason-rejection and already-retired-409 checks,
+  and actor-name-fallback source confirmation. This issue's own status is now
+  resolved; both split follow-ons closed.
 parent_issue: ISS-0890
 progress_2026_09_30: >
   Of this issue's two split follow-ons: REQ-431 (definition-type-error-blocked
@@ -46,3 +70,6 @@ progress_2026_09_30: >
   papered over. REQ-432 (instance-pin-survives-catalog-change frontend
   presentation) remains pending its own implementation. This issue's own
   status stays open (tracking umbrella) until REQ-432 also closes.
+resolution_2026_09_30: >
+  REQ-432 now done -- see `resolution:` field above for full detail. Both
+  split follow-ons (REQ-431, REQ-432) closed; this issue resolved.

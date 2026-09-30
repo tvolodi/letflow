@@ -40,3 +40,30 @@
 # A closed volume may carry known-anomaly declarations in the index under two
 # keys: `known_anomalies:` (vocabulary) and `known_shape_anomalies:` (field
 # set/order). A roll must never drop the `known_shape_anomalies:` declaration.
+  - req: REQ-432
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T18:20:13Z"
+    note: >
+      PR #2055, branch feat/REQ-432-rebind-publish-retire-ui, commit
+      86029b54, merged to main. Rebind-pins and publish/retire operator UI,
+      wired to REQ-399's case-detail provenance screen, plus the
+      platform-instance-pin-survives-catalog-change e2e spec. Full gate
+      chain: CODE-DESIGN-VALIDATOR (2nd attempt -- 1st FAILed on a real AC5
+      gap, rebind-history rendering didn't actually surface prior/new
+      version/reason/actor-name as originally claimed; fixed via an
+      actor-name cross-reference against the timeline endpoint's
+      already-resolved names, joined by shared event_id), FRONTEND-DEV
+      implementation, REVIEWER PASS (filed one non-blocking follow-up,
+      docs/issues/ISS-0916.yaml -- pre-existing ServicesPage/RebindPinDialog
+      click-handler-freeze bug, unrelated to this PR's correctness),
+      TEST-RUNNER (full suite + e2e, only known flakes), and
+      RELEASE-VALIDATOR PASS via independent re-derivation of all 9 ACs, 2x
+      independent e2e reruns, adversarial empty-reason-rejection and
+      already-retired-409 checks, and actor-name-fallback source
+      confirmation. docs/issues/ISS-0898.yaml set to status: resolved in
+      this same append -- both of its split follow-ons (REQ-431, REQ-432)
+      are now done. docs/issues/ISS-0890.yaml's own status left untouched
+      (still open) -- its split ISS-0900 remains partially resolved,
+      sub-splits ISS-0902/ISS-0903 genuinely open/unbuilt. letflow-queue
+      task 906 released as done.

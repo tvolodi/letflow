@@ -31635,7 +31635,7 @@ requirements:
   - id: REQ-427
     title: "MOB-4 (part 2): form renderer for every platform field type, with visible_when / computed / cross-field validation evaluated on-device by REQ-294's Dart Expr evaluator (0020 D1a)"
     owner: MOBILE-DEV
-    status: pending
+    status: in_progress
     stage: S9
     impl_order: 864  # letflow-queue task id, GH#1881. Registered 2026-09-27T03:00:05Z by ORCH (WF-01 Step 3).
     description: >

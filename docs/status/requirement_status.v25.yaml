@@ -119,3 +119,14 @@ history:
       231/231 passed. Backend suite 5082 passed / 0 failures via ORCH's own
       serial mix test run, after two RELEASE-VALIDATOR attempts were blocked
       by host memory exhaustion. status: done in docs/requirements.yaml.
+  - req: REQ-427
+    event: started
+    agent: ORCH
+    at: "2026-09-30T21:47:05Z"
+    note: >
+      WF-02 run WF02-REQ427-20261001. Eligible now that REQ-294 and REQ-426
+      are both done (depends_on satisfied). Verified GH#1881 (letflow-queue
+      task 864) is OPEN with no blocking labels -- no mechanical reopen
+      needed this time, unlike REQ-294. Branch feature/WF02-REQ427-20261001
+      created from freshly-pulled origin/main (93cdc0fd) and pushed.
+      status: in_progress in docs/requirements.yaml.

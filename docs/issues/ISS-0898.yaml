@@ -1,0 +1,37 @@
+id: ISS-0898
+title: "Frontend follow-ons for REQ-372/REQ-373 (definition-type-error-blocked, instance-pin-survives-catalog-change)"
+discovered_by: ISSUE-FIXER
+discovered_in_run: ISS-0890 triage, filed by ORCH
+discovered_at: "2026-09-30T00:20:00Z"
+severity: MINOR
+owner: "REQ-ANALYST; FRONTEND-DEV"
+description: >
+  Split from ISS-0890 (WF05-FULL-20260929 PLATFORM report). Two UAT scenarios
+  are BLOCKED because their frontend half was never filed as a follow-on
+  requirement, unlike the equivalent REQ-374->375 and REQ-376->377 pairs:
+
+  1. platform-definition-type-error-blocked: REQ-372 (semantic decision-rule
+     validation) is status: done on the backend. No frontend requirement
+     exists for canvas/problem-list presentation of the resulting errors, and
+     web/tests/e2e/pipelines/platform-definition-type-error-blocked.pipeline.e2e.spec.ts
+     does not exist.
+
+  2. platform-instance-pin-survives-catalog-change: REQ-373 (catalog
+     version/status lifecycle + real PinResolver.Lookup) is status: done on
+     the backend, explicitly deferring "the frontend case-detail
+     version/provenance screen" and GET /instances/{id}/pins as a named
+     follow-on that was never filed. Spec still missing.
+
+  Needed: file both frontend follow-on requirements in docs/requirements.yaml
+  (same sizing/schema as REQ-374/375/376/377), implement them, and author
+  both named pipeline_test specs.
+source_reports:
+  - test/uat-reports/uat-2026-09-29-WF05-FULL-20260929-PLATFORM.yaml
+affected_files:
+  - docs/requirements.yaml
+  - web/tests/e2e/pipelines/platform-definition-type-error-blocked.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts
+queue_ref: N/A  # filed directly by ORCH as a split of ISS-0890 (queue task 890), not itself a separately queued task
+github_ref: N/A
+status: open
+parent_issue: ISS-0890

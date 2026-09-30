@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ432-20260930/step-01b-code-design-validator.json",
   "created_at": "2026-09-30T16:53:18Z",
-  "started_at": "2026-09-30T16:53:18Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T16:53:20Z",
+  "completed_at": "2026-09-30T16:54:38Z",
+  "status": "FAILED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -48,10 +48,15 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
+    "status": "FAILED",
+    "summary": "FAIL. Design file lib/letflow/design/req432-rebind-pins-publish-retire-ui.md read in full (200 lines). No implementation bodies found; no literal TBD wording. Verified against source and CONFIRMED: publish/retire routes, body/status codes/response fields and :AdminServicesManage gate (lib/letflow/routers/admin_services.ex handle_publish/handle_retire/service_record_json); rebind route @rebind_schema, entry shape, Idempotency-Key header truncation/UUID fallback, :InstancesCancel gate, 200 shape and error mapping (lib/letflow/routers/instances.ex 338,437-522,1566-1670; lib/letflow/engine/pin_rebind.ex 445-480 payload {entries,actor,reason}); client.postWithHeaders exists (web/src/api/client.ts:262; precedent is onboarding.ts:114, design says :117, trivial); timeline finding F2 (timeline_item metadata != payload, description 'Instance pins rebound by <actor>', instances.ex 278,320-335) and F3/F4 (history_item_map omits actor_id, instances.ex:903-910; EventHistoryPanel falls back to 'system'); M4 (service_catalog.ex retire/1 retires only the single current row, publish/3 archives a retired current row unconditionally, so retire-then-publish IS achievable through the real backend and publish-then-retire would wrongly retire the new version). Checks FAILED: see issues. Route back to CODE-DESIGNER.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "FAIL [EO-005 / build item 3: 'actor, prior_version, new_version and reason are all visible'; EO-005 verification 'the case history shows the change with the operator's name, the previous and new version, and the reason given']: design §6 splits the evidence across two tabs: History tab shows versions+reason but only the actor UUID (and the same row's Actor column shows the literal 'system', per F4), Timeline tab shows the name but no versions/reason. No single case-history view shows name + prior + new + reason, and the History row shows a contradictory 'system' actor for a named operator. The design declares this adequate and leaves it as OQ-1 ('confirm with REQ owner whether one-tab display is required'), i.e. an open question on an AC-mapped element, contrary to the gate. A frontend-only remedy exists and was rejected without justification: the Timeline feed already returns event_id + actor_display_name (web/src/types/api.ts TimelineEntry; instances.ex timeline_item) so the History tab (or a combined view in InstanceDetailPage) can resolve actorLabel by event_id from the existing timeline query with no backend change. Rework: design the actor-name resolution (source query, matching key, fallback when absent) so that the INSTANCE_PINS_REBOUND history entry itself shows operator name, prior_version, new_version and reason, and make the pipeline step 06 assert all four on one view; drop OQ-1 as a deferral of this AC.",
+      "FAIL [EO-001/EO-004 'in-flight step' coverage, pipeline spec §7 steps pre and 03]: precondition mechanism for a live process definition with a catalog_entry pin and a service-task is deferred to OQ-4 ('this design does not prescribe it'), and step 03 ('let case A reach the service step ... completes the step without error') does not say how the service step executes against a registered service (endpoint_url reachability/outcome, which task to complete, which assertion proves the step ran). EO-001/EO-004 evidence explicitly requires 'the case history entry for the step performed at step 3', but OQ-9 leaves that history assertion unspecified and the design asserts only case status/pins panel. The AC 'retiring a version does not error or block the already-running case's pin display or in-flight step' is therefore only covered for pin display (step 04), not for the in-flight step. Rework: specify the concrete definition/fixture mechanism (read the definitions routes and db-exec helper now, it is resolvable from source), the service-step endpoint/expected outcome, and the exact history event type/assertion for step 3. Ordering itself (retire first, then publish) is verified achievable and is not the defect.",
+      "FAIL [build item 2 cache invalidation, §4.3 and §1]: §4.3 gives conditional/deferred instruction ('FRONTEND-DEV: if events/timeline key factories take extra filter/cursor args, invalidate by the shared prefix ... do not construct keys by hand') while §1 asserts 'No new query-key factory is needed'. Source resolves the condition: queryKeys.instances.events(tenantId,id,filters?) and timeline(tenantId,id,cursor,pageSize) (web/src/api/queryKeys.ts:97-100) take extra args and the tenant-scoped wrapper exposes no prefix-only form. Design must state the exact invalidation (e.g. instances.all() prefix as useCancelInstance does, or a named new prefix helper) rather than leave the choice to the implementer.",
+      "NOTE (non-blocking, fix in same rework): §4.3/§5.3 reuse an Idempotency-Key for retries while OQ-5 admits replay semantics were not verified; state the verified replay behaviour from EventStore.append or reduce the claim. Also minor citation drift: postWithHeaders precedent is web/src/api/onboarding.ts:114, not :117."
+    ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ432-20260930",
       "commit_sha_list": [],
@@ -60,7 +65,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to CODE-DESIGNER (rework 1 of 3) to address issues 1-3 in lib/letflow/design/req432-rebind-pins-publish-retire-ui.md; then re-run CODE-DESIGN-VALIDATOR."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,34 @@
+id: ISS-0909
+title: "uat_preflight.sh: BAD_CRED cached from first scenario's realms poisons later actors; false local_deps GAP; wrong app_roles probe; credential-source protocol gaps"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL2-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T06:26:54Z"
+severity: MINOR
+owner: "ELIXIR-DEV (tooling)"
+description: >
+  Follow-ups to scripts/uat_preflight.sh from WF05-FULL2-20260930 (see
+  test/uat-reports/preflight-2026-09-30-qa.txt); ISS-0894 covered the earlier
+  round.
+  (a) try_login caches BAD_CRED per user after trying only the realms from the
+  first scenario's tenant list (platform scenarios -> only bpm-default), which
+  poisons later checks for actor-swiftroute-alice/-lena/-marco and
+  actor-vortex-karl whose credentials are valid. Also derive the realm from the
+  actor id (actor-<tenant>-<name>) and do not cache a failure across realms.
+  (b) local_deps reported a GAP for platform-renderer-permission-denied-surface
+  that was a false positive (the scenario ran fine over HTTP; the spec matched on
+  the words 'docker compose' in a header comment). Match executable usage, not
+  comments.
+  (c) The app_roles probe for actor-platform-admin uses /tasks/inbox, which is only
+  meaningful for task roles; pick a probe suited to the actor's role.
+  (d) --credential-source protocol lists names only in a 2-space-indented format
+  and only covers qa-login.sh users. Add support and documentation for
+  ai-dala-infra qa-uat-env.sh (an adapter was used in this run).
+source_reports:
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
+affected_files:
+  - scripts/uat_preflight.sh
+  - docs/agents/uat-scenario-schema.md
+queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+status: open

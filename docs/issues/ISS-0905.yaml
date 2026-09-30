@@ -1,0 +1,27 @@
+id: ISS-0905
+title: "Role-based task routing not enforced: task created with assignee_ref=role-ops-manager, assignee_type=null is invisible to the role's only member and claimable by a non-member"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL2-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T06:26:54Z"
+severity: BLOCKER
+owner: "ELIXIR-DEV (diagnose via ISSUE-FIXER first)"
+description: >
+  Found in swiftroute/shipment-high-value-happy EO-001 (WF05-FULL2-20260930, QA).
+  The ops-review task was created with assignee_ref=role-ops-manager and
+  assignee_type=null. Marco, the sole member of the role-ops-manager group,
+  sees 0 tasks in /tasks/inbox and /tasks, while tobias (not a member) could
+  claim the task (HTTP 200). Role/group-based task routing is therefore not
+  enforced in either direction: the intended assignee cannot see the task and an
+  unauthorised user can take it. Likely causes to check: assignee_type is not
+  being set/derived when a process definition assigns by role, and the inbox
+  query and claim authorization both key off assignee_type. Cross-user task
+  access is a tenant-data-path concern, so SECURITY-REVIEWER is a required gate
+  on the fix.
+source_reports:
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
+affected_files:
+  - lib/letflow/ (task creation, inbox/list queries, claim authorization)
+queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+status: open

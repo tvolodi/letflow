@@ -1,0 +1,95 @@
+report_id: ba-signoff-swiftroute-WF05-FULL2-20260930
+run_id: WF05-FULL2-20260930
+vertical: swiftroute
+solution_pack: swiftroute
+generated_at: "2026-09-30T12:00:00Z"
+persona: Alice Bauer (Chief Executive Officer, SwiftRoute Logistics)
+source_uat_report: test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
+
+scenarios_reviewed: 4
+domain_verdict: FAIL
+
+scenario_verdicts:
+  - scenario_id: swiftroute-shipment-high-value-happy
+    title: "High-value shipment correctly routed to CEO for co-sign"
+    persona_verdict: FAIL
+    business_note: >
+      The review task for the operations manager was created, but our
+      operations manager could not see it in his own list of work, and a
+      dispatcher who is not an operations manager was able to take it over.
+      The approval chain is only as good as who is allowed to act on it, so
+      I cannot accept this. The later steps (manager approves, CEO co-signs,
+      shipment released) were not exercised because they rely on screens
+      that have no automated check yet.
+    issues: [BA-SWIFTROUTE-001, BA-SWIFTROUTE-003]
+
+  - scenario_id: swiftroute-shipment-ops-timeout-escalation
+    title: "Unanswered operations review escalates to the CEO"
+    persona_verdict: PARTIAL
+    business_note: >
+      When the operations manager does not respond in time, the review is
+      closed and the CEO gets the approval task, and a late attempt to
+      complete the closed review is correctly refused. That is the behaviour
+      I want. However, there is no record showing the review was closed
+      before the escalation happened, which I need for after-the-fact
+      accountability. The CEO's own approval step was not exercised.
+    issues: [BA-SWIFTROUTE-002]
+
+  - scenario_id: swiftroute-shipment-attach-delivery-note
+    title: "Attach a delivery note to a shipment"
+    persona_verdict: PARTIAL
+    business_note: >
+      Not assessed. The check could not be run in the QA environment, so I
+      have no view on whether delivery notes work.
+    issues: [BA-SWIFTROUTE-004]
+
+  - scenario_id: swiftroute-tenant-onboarding-happy
+    title: "New tenant onboarding"
+    persona_verdict: PARTIAL
+    business_note: >
+      Not assessed. This check does not apply in an environment where
+      SwiftRoute is already set up, so it gives no evidence either way.
+    issues: []
+
+domain_issues:
+  - id: BA-SWIFTROUTE-001
+    severity: BLOCKER
+    business_description: >
+      Review tasks meant for the operations manager role are not properly
+      tied to that role. The operations manager sees nothing waiting for him,
+      so high-value shipments would sit unreviewed, and the approval can
+      also be picked up by people outside the role. Shipment approval cannot
+      be trusted to reach the right person.
+    affected_scenario: swiftroute-shipment-high-value-happy
+    suggested_action: route_to_wf03
+  - id: BA-SWIFTROUTE-002
+    severity: MINOR
+    business_description: >
+      When a review times out and escalates, no history entry records that
+      the operations review was closed. The outcome is right but the trail is
+      incomplete for audit purposes.
+    affected_scenario: swiftroute-shipment-ops-timeout-escalation
+    suggested_action: route_to_wf03
+  - id: BA-SWIFTROUTE-003
+    severity: MAJOR
+    business_description: >
+      The manager-approves, CEO-co-signs and shipment-release steps have no
+      automated check, so the core promise of the process (nothing ships
+      without both approvals) is unverified.
+    affected_scenario: swiftroute-shipment-high-value-happy
+    suggested_action: route_to_req_analyst
+  - id: BA-SWIFTROUTE-004
+    severity: MINOR
+    business_description: >
+      Delivery-note attachment could not be checked in QA because the check
+      needs administrator access and a local database that QA does not
+      provide. Coverage gap, not a defect finding.
+    affected_scenario: swiftroute-shipment-attach-delivery-note
+    suggested_action: route_to_req_analyst
+
+overall_note: >
+  Not ready for release. Approval routing is the heart of SwiftRoute's
+  shipment process and it does not reliably reach, or stay with, the
+  operations manager, which on its own blocks release. The wider run was
+  also not ready (meridian and vortex were entirely blocked by environment),
+  so no sign-off is given for those verticals.

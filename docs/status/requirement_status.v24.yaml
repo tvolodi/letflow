@@ -1144,3 +1144,34 @@
       confirming ISS-0910's remediation is durable), not new engineering
       work. No letflow-queue task released (queue_ref Q-901 belongs to the
       queue's own record, not a separate claimable task from this closure).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T13:45:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0906
+      (MINOR, cancelled ops-review task on the escalation/timeout path had no
+      task.cancel audit event and updated_at equalled created_at) -- resolved:
+      persist_escalation_timer_fired_advance/7's :cancel_original_task Multi
+      step replaced its bare `update_all` (which bypassed Ecto's
+      changeset/timestamp machinery entirely) with a fetch+lock+
+      Task.complete_changeset/2+update, plus a new Multi.merge step writing a
+      real task.cancel Letflow.Audit entry. Full gate chain: SECURITY-REVIEWER
+      PASS, REVIEWER PASS (added a new docs/anti-patterns.md entry
+      generalizing this bug class -- "bulk update_all silently skips audit +
+      timestamp"), TEST-DESIGN-VALIDATOR PASS (real mutation testing, 3
+      mutants applied/caught/reverted), TEST-RUNNER PASS, and
+      RELEASE-VALIDATOR PASS with an independent live end-to-end reproduction
+      via raw SQL directly against the tasks/audit_entries tables, confirming
+      both the updated_at bump and the new task.cancel audit row are real.
+      The sibling gap in cancel_task_rows/4 / cancel_instance/3 (no per-task
+      audit event written on that path either) was identified but
+      deliberately deferred, not fixed here -- tracked separately.
+      docs/issues/ISS-0906.yaml set to status: resolved (resolved_in_run:
+      fix/ISS-0906-escalation-cancel-audit-timestamp) in this same append --
+      this is an ISSUE, not a REQ, so docs/requirements.yaml is not touched.
+      Merged via PR #2053 (branch
+      fix/ISS-0906-escalation-cancel-audit-timestamp, commit 9ca2966d),
+      squash-merged to main (see PR for merge commit SHA). letflow-queue task
+      900 released as done.

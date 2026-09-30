@@ -5021,8 +5021,15 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 28
+    entries: 29
     note: >
+      Bumped to 29 by DOC-UPDATER after appending ISS-0906's closing
+      SCOPE-CHANGE done-event (2026-09-30T13:45:00Z -- escalation-cancel
+      task.cancel audit event + updated_at fix, PR #2053). Recounted
+      directly: `grep -c "^  - req:" docs/status/requirement_status.v24.yaml`
+      = 29 on-disk entries. 1177 lines / 71934 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Bumped to 28 by ORCH after appending ISS-0907's closed_not_applicable
       SCOPE-CHANGE done-event (2026-09-30T12:55:00Z -- My Tasks
       permission-denied leak confirmed a QA data gap, not a code defect, per

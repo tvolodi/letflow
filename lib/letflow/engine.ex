@@ -2703,20 +2703,63 @@ defmodule Letflow.Engine do
         {:advanced, final_instance_state, prepared_children} ->
           multi =
             Multi.new()
+            # ISS-0906: fetch+lock the original HUMAN_TASK row first (mirrors
+            # cancel_task_rows/4's fetch_and_lock_open_tasks/3 precedent), so
+            # the following :cancel_original_task step can use
+            # Task.complete_changeset/2 (changeset-backed Repo.update/2, which
+            # bumps updated_at) instead of update_all/3 (which bypassed it).
+            |> Multi.run(:original_task_row, fn inner_repo, _changes ->
+              Letflow.Engine.Task
+              |> where([t], t.token_id == ^timer.token_id and t.status == :pending)
+              |> lock("FOR UPDATE")
+              |> inner_repo.one(prefix: prefix)
+              |> case do
+                nil -> {:ok, :no_pending_task}
+                %Letflow.Engine.Task{} = task -> {:ok, {:found, task}}
+              end
+            end)
             # AC-3c: cancel the original HUMAN_TASK before creating the new task.
-            |> Multi.run(:cancel_original_task, fn inner_repo, _changes ->
-              {_count, _} =
-                Letflow.Engine.Task
-                |> where(
-                  [t],
-                  t.token_id == ^timer.token_id and t.status == :pending
-                )
-                |> inner_repo.update_all(
-                  [set: [status: :cancelled, cancelled_at: now]],
-                  prefix: prefix
-                )
+            |> Multi.run(:cancel_original_task, fn inner_repo, %{original_task_row: row_result} ->
+              case row_result do
+                :no_pending_task ->
+                  {:ok, :no_pending_task}
 
-              {:ok, :cancelled}
+                {:found, task} ->
+                  task
+                  |> Letflow.Engine.Task.complete_changeset(%{
+                    status: :cancelled,
+                    cancelled_at: now
+                  })
+                  |> inner_repo.update(prefix: prefix)
+                  |> case do
+                    {:ok, updated} -> {:ok, {:cancelled, task, updated}}
+                    {:error, reason} -> {:error, reason}
+                  end
+              end
+            end)
+            # ISS-0906: audit the cancellation (task.cancel), mirroring
+            # record_task_complete_audit/4 / record_task_assign_audit/2.
+            |> Multi.merge(fn %{cancel_original_task: outcome} ->
+              case outcome do
+                :no_pending_task ->
+                  Multi.new()
+
+                {:cancelled, before_task, updated_task} ->
+                  Audit.append_multi(
+                    Multi.new(),
+                    :cancel_original_task_audit,
+                    %{
+                      actor_id: actor_id,
+                      action: "task.cancel",
+                      resource_type: "task",
+                      resource_id: before_task.id,
+                      before_state: Audit.struct_state(before_task),
+                      after_state: Audit.struct_state(updated_task),
+                      trace_id: nil
+                    },
+                    prefix
+                  )
+              end
             end)
             |> Multi.merge(fn _changes ->
               Multi.new()

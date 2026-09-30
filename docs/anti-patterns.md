@@ -4145,3 +4145,45 @@ the same thing for every row that can reach that branch — ISS-0905's fix
 (`lib/letflow/design/iss0905-role-assignee-type-not-derived.md`) closes the
 gap by deriving the marker at its one origin point (`resolve_assignee/1`)
 rather than special-casing the two already-correct consumers.
+
+## A bulk `update_all` used for a state transition silently skips both the audit call and the `updated_at` timestamp bump that a changeset-backed write would have produced (2026-09-30, REVIEWER, ISS-0906)
+
+`Letflow.Engine.persist_escalation_timer_fired_advance/7`'s `:cancel_original_task`
+Multi step cancelled the original `HUMAN_TASK` row with a bare
+`Ecto.Query.update_all/3` (`where(...) |> update_all([set: [status: :cancelled,
+cancelled_at: now]], ...)`) instead of the fetch+changeset+`Repo.update/2` shape
+every sibling cancel/complete path in this module already uses
+(`cancel_task_rows/4`, `record_task_complete_audit/4`). Two independent
+consequences fell out of that one shortcut, both invisible until UAT actually
+looked for them: `update_all/3` never runs a changeset, so Ecto's
+`timestamps/1` auto-touch never fired and `updated_at` stayed frozen at
+`inserted_at`; and because `update_all/3` returns only a row count, not the
+before/after structs `Letflow.Audit.append_multi/4` needs, there was no
+before/after pair available to audit even if someone had remembered to call
+it — so no `task.cancel` audit entry was ever written for this path. Neither
+gap failed a test, compiled with a warning, or triggered a Dialyzer complaint;
+both were only caught by a UAT run that happened to check the row's
+timestamps and the audit trail directly (`docs/issues/ISS-0906.yaml`).
+
+This is a recognizable shape, not a one-off: `update_all`/`delete_all` are the
+right tool when a query-shaped bulk write genuinely has no per-row audit or
+timestamp obligation, but the moment a state transition needs *either* an
+audit trail entry *or* a timestamp bump that depends on a changeset running,
+`update_all` quietly satisfies neither — it doesn't error, doesn't warn, it
+just does less than the surrounding code assumes. A reviewer skimming the
+`where(...) |> update_all(...)` call in isolation sees a correct, idiomatic
+Ecto bulk update; the gap only shows up by cross-checking it against what
+every *other* write to the same table in this module does (fetch, lock,
+`Task.complete_changeset/2`, `Repo.update/2`, then an `Audit.append_multi/4`
+step) and noticing this one path skipped that shape.
+
+**Correct alternative:** before accepting an `update_all`/`delete_all` call
+in review, check what the table's other write paths for the same kind of
+transition do — if any sibling path threads the write through a changeset
+and/or an `Audit.append_multi/4` step, treat that as the required shape for
+this path too, not an optional enhancement, and ask explicitly whether this
+row's timestamp and its audit trail need to reflect the transition. ISS-0906's
+fix (`lib/letflow/design/iss0906-escalation-task-cancel-audit-timestamp.md`)
+replaces the single `update_all` step with fetch-with-`lock("FOR UPDATE")`,
+`Task.complete_changeset/2`, `Repo.update/2`, then a `Multi.merge` audit step
+identical in shape to `cancel_task_rows/4` and `record_task_complete_audit/4`.

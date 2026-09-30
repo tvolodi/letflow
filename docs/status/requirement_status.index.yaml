@@ -5021,8 +5021,22 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 21
+    entries: 22
     note: >
+      Bumped to 22 by DOC-UPDATER after appending ISS-0889's SCOPE-CHANGE
+      done-event (closure bookkeeping only, no new code/PR --
+      2026-09-30T05:50:00Z -- RELEASE-VALIDATOR PASSed noting full
+      satisfaction required PR #1993 plus the separately-resolved ISS-0894
+      (PR #2010) combined, since PR #1993 alone shipped no `definitions`
+      preflight check despite the issue naming it explicitly).
+      Fetched/pulled origin/main immediately before this append and
+      recounted directly rather than trusting the prior note's arithmetic:
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 22
+      on-disk entries (the prior 21 + this done-event). `git diff
+      --numstat` on this file for this append showed 0 deletions. 905
+      lines / 55004 bytes (working-tree), well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Bumped to 21 by DOC-UPDATER after appending ISS-0904's SCOPE-CHANGE
       done-event (fix/ISS-0904-human-task-escalation-badmaperror, PR #2024,
       2026-09-30T05:10:00Z -- Letflow.Definitions.Graph.

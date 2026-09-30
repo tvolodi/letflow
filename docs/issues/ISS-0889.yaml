@@ -15,9 +15,45 @@ affected_files:
   - scripts/uat_preflight.sh
 queue_ref: Q-889
 github_ref: GH-1996
-status: open
-in_flight_note: >
-  DO NOT START (scanners): already in flight. PR 1993 (branch
-  feature/WF05-step0-env-prep-20260929, "docs(WF-05): mandatory Step 0 environment
-  preparation + scripts/uat_preflight.sh") is being prepared by the filing session.
-  Do not lock or reimplement; review/merge that PR instead.
+status: resolved
+resolved_in_run: >
+  PR 1993 (branch feature/WF05-step0-env-prep-20260929, merged) + ISS-0894
+  (fix/ISS0894-uat-preflight-actor-realm-check-20260929, PR 2010, merged) --
+  full satisfaction of this issue required both.
+resolved_at: "2026-09-30T05:45:00Z"
+resolution: >
+  RELEASE-VALIDATOR PASSed with an important nuance, independently verified
+  rather than taken on either PR's own word. PR #1993 alone delivered the
+  mandatory WF-05 Step 0 mandate, ENV_NOT_READY verdict discipline, and
+  genuine (non-stub) realms/tenants/credentials preflight checks in
+  scripts/uat_preflight.sh -- but its CHECKS list had NO `definitions` entry,
+  despite this issue's own description explicitly naming "definitions" as one
+  of the four things Step 0 must verify ("verifies realms, tenants,
+  definitions and credentials"). RELEASE-VALIDATOR confirmed this gap by
+  diffing PR #1993's originally-delivered scripts/uat_preflight.sh against
+  current main: the `CHECKS` list at PR #1993's merge commit read
+  `["spec", "local_deps", "feature", "tenant", "realm", "actors"]` -- no
+  `definitions` entry anywhere in the array or in any per-scenario check
+  function. That gap was not fixed by PR #1993 itself; it was closed
+  separately by ISS-0894 (filed independently, resolved via PR #2010,
+  merged), which added the `definitions` check (process_id -> deployed
+  definition resolution via GET /api/v1/definitions/active/:name, folding in
+  the ISS-0893 alias-sidecar mechanism for corpus/definition-name mismatches)
+  alongside the `app_roles` check. RELEASE-VALIDATOR confirmed current main's
+  scripts/uat_preflight.sh CHECKS list now reads
+  `["spec", "local_deps", "feature", "tenant", "realm", "actors", "app_roles",
+  "definitions", "env_limitation"]` (line 341) -- `definitions` present and
+  wired into real per-scenario logic (lines 436-464), not a stub: it branches
+  on OK/GAP/UNKNOWN with real HTTP calls and cites ISS-0893/ISS-0897 for the
+  GAP case. RELEASE-VALIDATOR also independently confirmed a real preflight
+  run against QA genuinely exercised this: test/uat-reports/preflight-2026-09-29-qa.txt
+  shows a live run (environment=qa, base_url=https://qa.bizdala.com, 31
+  scenarios) producing a real GAP TABLE with actual GAP/UNKNOWN findings per
+  scenario x check column (e.g. meridian-loan-origination-above-threshold:
+  tenant/realm/actors all GAP; platform-migration-partial-failure-resume:
+  feature UNKNOWN) -- not a stubbed all-OK or all-blank result. Conclusion:
+  ISS-0889 is fully satisfied only by the CURRENT state of main (PR #1993 +
+  ISS-0894 combined), not by PR #1993 in isolation -- the issue's own
+  four-thing enumeration (realms, tenants, definitions, credentials) is now
+  completely covered. Not a docs/requirements.yaml entry: this is an ISSUE
+  closure, no requirement status changed.

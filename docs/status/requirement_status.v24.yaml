@@ -866,3 +866,40 @@
       (see PR for merge commit SHA). No letflow-queue task to release for
       ISS-0904 itself (queue_ref: null -- discovered directly by an agent
       mid-task, not a queue-originated task).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T05:50:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0889
+      (MAJOR, WF-05 had no environment-preparation/preflight step -- an
+      all-BLOCKED UAT run was reported as a normal result) -- closure
+      bookkeeping only, no new code/PR: RELEASE-VALIDATOR PASSed with the
+      nuance that full satisfaction required two merged PRs together, not
+      PR #1993 alone. PR #1993 (branch feature/WF05-step0-env-prep-20260929,
+      already merged) delivered the mandatory WF-05 Step 0 mandate,
+      ENV_NOT_READY verdict discipline, and genuine (non-stub)
+      realms/tenants/credentials preflight checks in
+      scripts/uat_preflight.sh, but its CHECKS list had no `definitions`
+      entry despite this issue's own description explicitly naming
+      "definitions" as one of the four things to verify.
+      RELEASE-VALIDATOR independently confirmed this by diffing PR #1993's
+      originally-delivered CHECKS list (no `definitions`) against current
+      main's (`["spec", "local_deps", "feature", "tenant", "realm",
+      "actors", "app_roles", "definitions", "env_limitation"]`, line 341,
+      with real per-scenario `definitions` logic at lines 436-464, not a
+      stub). That gap was closed separately by ISS-0894 (already resolved,
+      merged via PR #2010), which added the `definitions` check. So
+      ISS-0889 is only fully satisfied by the CURRENT state of main (PR
+      #1993 + ISS-0894 combined), not by PR #1993 in isolation.
+      RELEASE-VALIDATOR also independently confirmed a real preflight run
+      genuinely produced ENV_NOT_READY with real GAP/UNKNOWN findings, not
+      a stub: test/uat-reports/preflight-2026-09-29-qa.txt (environment=qa,
+      31 scenarios, live GAP TABLE with real per-scenario/per-check
+      OK/GAP/UNKNOWN results). docs/issues/ISS-0889.yaml set to status:
+      resolved (resolved_in_run: citing both PR #1993/
+      feature/WF05-step0-env-prep-20260929 and ISS-0894/PR #2010) in this
+      same append -- this is an ISSUE, not a REQ, so no
+      docs/requirements.yaml entry is touched. letflow-queue task 889 to be
+      released as done in this same run.

@@ -31903,8 +31903,7 @@ requirements:
       - "git diff shows no file under lib/letflow/definitions/, lib/letflow/definitions.ex, or lib/letflow/definitions/semantic_validation.ex modified by this requirement"
       - "the frontend test suite passes, with real output quoted"
     depends_on: [REQ-372]
-    # impl_order: UNREGISTERED -- filed directly by REQ-ANALYST as ISS-0898's
-    # split, not yet claimed via a WF-01 Step 3 letflow-queue registration pass.
+    impl_order: 905  # letflow-queue task id, GH#2043. Registered 2026-09-30T08:46:51Z by ORCH (WF-01 Step 3).
 
   - id: REQ-432
     title: "Rebind-pins and publish/retire operator UI, wired to REQ-399's case-detail provenance screen, plus the platform-instance-pin-survives-catalog-change e2e spec (frontend)"
@@ -31998,5 +31997,4 @@ requirements:
       - "git diff shows no file under lib/letflow/service_catalog.ex, lib/letflow/service_catalog/, lib/letflow/engine/pin_resolver.ex, or lib/letflow/engine/pin_rebind.ex modified by this requirement"
       - "the frontend test suite passes, with real output quoted"
     depends_on: [REQ-373, REQ-399]
-    # impl_order: UNREGISTERED -- filed directly by REQ-ANALYST as ISS-0898's
-    # split, not yet claimed via a WF-01 Step 3 letflow-queue registration pass.
+    impl_order: 906  # letflow-queue task id, GH#2044. Registered 2026-09-30T08:46:56Z by ORCH (WF-01 Step 3).

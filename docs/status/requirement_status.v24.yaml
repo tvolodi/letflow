@@ -792,3 +792,47 @@
       No letflow-queue task to release for ISS-0899 itself (queue_ref: null --
       filed directly by ORCH as a split of ISS-0890/queue task 890, not itself
       a separately queued task).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T02:40:00Z"
+    note: >
+      WF-03 (docs/agents/workflows/WF-03_issue_resolving.md), ISS-0900
+      (MINOR, 4 via:system-only platform scenarios needing a built-vs-
+      uncovered diagnosis pass -- one of ISS-0890's 4 split follow-ups) --
+      scenario 1 (platform-frontend-guard-selfcheck) and scenario 2
+      (platform-out-of-order-effect-completion) now resolved. Scenario 1:
+      the a11y-gate e2e's SURFACES array was missing the "process detail"
+      (instances/:id) screen; fixed by adding the missing surface plus a
+      real seeded instance to navigate to (branch
+      fix/ISS-0900-a11y-instance-detail-surface, commit 83053107). REVIEWER
+      and RELEASE-VALIDATOR both PASSed; RELEASE-VALIDATOR independently
+      reproduced the fixed instance-detail surface working. While seeding
+      the real instance for this fix, a genuine unrelated backend crash
+      (BadMapError in Letflow.Definitions.Graph.check_human_task_escalation/1
+      on any HUMAN_TASK node whose attributes is the wire-contract string
+      form) was found and filed separately as ISS-0904 -- RELEASE-VALIDATOR
+      independently reproduced that crash live too, confirming the fix's
+      own workaround (seeding a START/END-only definition instead of a
+      HUMAN_TASK one) is genuinely necessary, not incidental. ISS-0904 is
+      NOT resolved by this fix and remains its own open issue for
+      ELIXIR-DEV/ISSUE-FIXER follow-up. Scenario 2 resolved via
+      confirmed-elsewhere disposition, no code/test change needed:
+      test/letflow/ordering_test.exs already covers every expected outcome
+      (EO-001..EO-005) via AC3/AC4/AC5/AC7/AC8 -- a pure test-tier
+      classification mismatch, not a product gap. docs/issues/ISS-0900.yaml's
+      progress_2026_09_30 note updated (append, not rewrite) to record both
+      dispositions; ISS-0900's own status stays open (tracking umbrella)
+      until ISS-0902/ISS-0903 (scenarios 3/4, confirmed genuinely unbuilt,
+      already split into their own issues) also resolve. This is an ISSUE,
+      not a REQ, so no docs/requirements.yaml entry is touched.
+      docs/issues/ISS-0890.yaml's progress_2026_09_30 note also updated
+      (append, not rewrite) to reflect ISS-0900's partial resolution: 0898
+      (open), 0899 (resolved), 0900 (partially resolved, umbrella still
+      open), 0901 (resolved); ISS-0890 itself stays open until all four
+      close. Merged via PR #2023 (branch
+      fix/ISS-0900-a11y-instance-detail-surface), squash-merged to main
+      (see PR for merge commit SHA). No letflow-queue task to release for
+      ISS-0900 itself (queue_ref: null -- filed directly by ORCH as a split
+      of ISS-0890/queue task 890, not itself a separately queued task).

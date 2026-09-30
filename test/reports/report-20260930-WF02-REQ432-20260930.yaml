@@ -135,3 +135,32 @@ pipeline_rerun:
   cleanup:
     backend_stopped: true
     verified: "tasklist shows no erl/beam/node/chrome; no listeners on 4000/4173"
+
+rerun_after_rework1:
+  run_date: "2026-09-30"
+  handoff: handoffs/WF02-REQ432-20260930/step-04-rerun1-test-runner.json
+  verdict: PASS
+  backend_unchanged_evidence:
+    measured_report_commit: f2c4ddc1
+    latest_report_commit_before_rework: a05b1f22
+    command: "git diff --name-only f2c4ddc1..HEAD -- lib test/letflow test/support config priv mix.exs mix.lock"
+    output: "(empty; also empty for a05b1f22..HEAD)"
+    conclusion: "No Elixir-side file changed since the measured full suite (5079/5079, 0 failures, N=6); backend suite NOT re-run here, RELEASE-VALIDATOR re-runs it at Step 5."
+  web_gates:
+    type_check: "tsc -b tsconfig.json - clean, no output"
+    lint: "eslint --max-warnings 0 - clean, no output"
+    npm_test: "Test Files 150 passed (150); Tests 995 passed (995); Duration 30.81s"
+    guards: "Test Files 4 passed (4); Tests 52 passed (52); Duration 18.15s"
+  live_pipeline:
+    spec: web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts
+    backend: "MIX_ENV=dev mix run --no-halt, Postgres 5482, LETFLOW_SECRETS_MASTER_KEY from .env; Keycloak localhost:8094"
+    run1:
+      output: "1 passed (10.8s); ok 1 [chromium] ... (8.7s); step 3 task-complete HTTP 500; outcome B (HTTP 500 + EXECUTION_ERROR n3/service_task_url_rendered_empty)"
+      exit: 0
+    run2:
+      output: "1 passed (10.3s); ok 1 [chromium] ... (8.2s); step 3 task-complete HTTP 500; outcome B"
+      exit: 0
+    flaky: false
+    note: "Outcome B reflects known design M5 (catalog_lookup_stub); not a REQ-432 defect. Dev DB keeps harmless pl_pin_* leftovers."
+  cleanup:
+    verified: "tasklist shows no erl/beam/node/chrome after each run; no LISTEN on 4000/4173"

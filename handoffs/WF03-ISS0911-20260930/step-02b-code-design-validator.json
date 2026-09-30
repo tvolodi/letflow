@@ -1,0 +1,54 @@
+{
+  "handoff_id": "be1e62e6-7d98-4efd-a3be-1e482e7c16b2",
+  "run_id": "WF03-ISS0911-20260930",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator.json",
+  "created_at": "2026-09-30T07:09:00Z",
+  "started_at": "2026-09-30T07:09:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["70dbb88c-9ca5-42c3-a052-8c8081699bc8"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md",
+      "web/src/hooks/useDefinitions.ts",
+      "web/src/api/definitions.ts",
+      "web/src/pages/instances/InstanceBoardPage.tsx"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 2, hard gate on CODE-DESIGNER's design. Read lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md directly. Verify: (1) the fix genuinely calls definitionsApi.getActive keyed on the dialog's own typed value, not the page-level filtered list; (2) the race-guard reasoning (TanStack Query per-key cache/observer isolation preventing a stale response from landing in a superseded key) is actually correct -- read web/src/hooks/useDefinitions.ts and confirm the project's query client is genuinely configured this way (check for any global dedup/staleTime setting that could undermine the claim) rather than accepting the design's assertion at face value; (3) the 5-state version-field model (idle/loading/found/not_found/error) covers every real outcome with no gap; (4) definitionTypeahead's other uses are correctly identified as unaffected, verify this yourself by reading its other call sites in InstanceBoardPage.tsx; (5) no implementation code present -- signatures/shapes only. FAIL immediately on any check failure.",
+    "acceptance_criteria": [
+      "the fix calls definitionsApi.getActive(name) (or an equivalent exact-match backend lookup) keyed on the dialog's own typed value, not the page-level filtered list",
+      "a race-guard against out-of-order async responses (rapid typing) is explicitly designed and independently verified correct, not just asserted",
+      "the version field's loading/not-found/found states are all specified with no gap",
+      "no implementation code in the design doc -- signatures/shapes and control-flow prose only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

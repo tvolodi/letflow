@@ -4187,3 +4187,31 @@ fix (`lib/letflow/design/iss0906-escalation-task-cancel-audit-timestamp.md`)
 replaces the single `update_all` step with fetch-with-`lock("FOR UPDATE")`,
 `Task.complete_changeset/2`, `Repo.update/2`, then a `Multi.merge` audit step
 identical in shape to `cancel_task_rows/4` and `record_task_complete_audit/4`.
+
+
+## Running a full WF-02 pipeline on a REQ another session is delivering at the same time, because the queue lock was the only signal checked (ORCH, WF02-REQ432-20260930)
+
+**What happened.** ORCH was handed REQ-432 (queue task 906, GH-2044) with the queue lock already held by
+`tvolodi-orch`, and ran the complete WF-02 pipeline (about nine agent roles, two rework loops, two live
+Playwright runs, two full backend suites, roughly four hours). A sibling session, which did not consult
+task 906's lock, implemented and merged the same requirement as PR #2055 (5d7ca7bf, merged
+2026-09-30T18:32:08Z) while this run was still in Step 4. The collision surfaced only at Step Final, when the
+rebase conflicted on `docs/requirements.yaml` (`REQ-432` already `status: done` on `origin/main`) and the
+requirement-status volume. Nothing before that step looked at `origin/main`. The run was cancelled as a
+duplicate and its branch was not merged (`handoffs/registry.json`, run `WF02-REQ432-20260930`, `CANCELLED`).
+
+**Why the existing guards did not catch it.** `TASK_QUEUE.md`'s lock arbitrates between agents that ask the
+queue; it cannot stop a session that never asked. Step 00 (`GIT_SETUP.md`) fetches `main` once and never again,
+and no later step re-checks whether the requirement's status or its named artefacts have changed upstream.
+
+**Correct alternative.** Before dispatching Step 00, and again before each expensive step (first implementation
+dispatch, Step 4, Step 5), ORCH runs `git fetch origin main` and checks two things against `origin/main`: that
+the requirement's `status:` in `docs/requirements.yaml` is still not `done`, and that none of the requirement's
+named deliverable paths (for REQ-432 the pipeline spec file named in its own acceptance criterion) has appeared
+there. A positive on either means stop and reconcile rather than continue. This costs one fetch; the duplicate
+cost four hours.
+
+**What was salvaged, so the lesson is not only a loss.** The duplicate run's live Playwright evidence produced
+the forwarded issues ISS-0917 (catalog `SERVICE_TASK` stub), ISS-0918 (history items omit `actor_id`), ISS-0920
+and ISS-0921 (full-suite host flakiness), and adopted queue task 909 as the queue/GitHub mirror of the sibling's
+ISS-0916.

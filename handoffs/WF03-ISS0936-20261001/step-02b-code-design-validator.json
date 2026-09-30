@@ -1,0 +1,58 @@
+{
+  "handoff_id": "2523ee2d-4ec0-42ea-88ba-71d23401beba",
+  "run_id": "WF03-ISS0936-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0936-20261001/step-02b-code-design-validator.json",
+  "created_at": "2026-09-30T21:18:45Z",
+  "started_at": "2026-09-30T21:18:45Z",
+  "completed_at": "2026-10-01T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0936": "Issue ISS-0936 (local record docs/issues/ISS-0936.yaml, queue_ref Q-919, queue task 919, GH#2070; record may not yet be on this branch - PR #2071): scripts/uat_preflight.sh's qa-uat-env credential protocol (fetch_credential, ~line 290) expects the credential source's `token <user>` to print a line `Token: <jwt>`, but ai-dala-infra's qa-uat-env.sh `token <user>` prints a BARE JWT, so every actor login reports NO_PASSWORD. Fix: make fetch_credential accept a bare JWT line (three dot-separated base64url segments) as well as the `Token:` form. Add/adjust tests per project's existing preflight tests (none found under test/ -- TEST-DESIGNER decides a minimal in-repo test shape). Also update the script's header docs (qa-uat-env protocol paragraph) and scripts/README.md if they state the Token: form."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md",
+      "handoffs/WF03-ISS0936-20261001/step-01-issue-fixer-diagnose.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0936",
+    "branch_name": "feature/WF03-ISS0936-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2b hard gate: validate lib/letflow/design/iss0936-uat-preflight-bare-jwt.md against step-01 diagnosis and the issue text in context.source_text. Check it covers: Token: form retained; bare JWT accepted; hostnames/noise rejected; no secret echo; header docs; tests wired into something CI actually runs (verify yourself that test/scripts/*_test.sh is not run by ci.yml and that an ExUnit file under test/ is picked up by mix test); no implementation code; unambiguous. Verify claims by reading the script/CI files yourself. Report PASS/FAIL with concrete issues. Do not edit the design; modify only your own handoff. Work only in context.worktree; do not commit.",
+    "acceptance_criteria": [
+      "Every criterion of the issue maps to a design element",
+      "No implementation code",
+      "CI wiring claim independently verified",
+      "Verdict PASS/FAIL with evidence"
+    ]
+  },
+  "result": {
+    "agent": "CODE-DESIGN-VALIDATOR",
+    "status": "FAIL",
+    "summary": "FAIL. Substance is sound and independently verified: (1) CI wiring claim is TRUE - .github/workflows/ci.yml runs `mix letflow.check` (line 371) -> lib/mix/tasks/letflow.check.test.ex shells out to scripts/test_parallel.sh -> `mix test --partitions N` (line 463), default test_paths recurses test/, mix.exs has no test_paths/test_pattern override, so test/scripts/uat_preflight_bare_jwt_test.exs IS picked up; grep of .github, mix.exs, lib, scripts finds NO reference to test/scripts/*_test.sh (only prose in config/test.exs:116), so the 3 existing .sh tests are not run by CI. (2) Code facts verified: fetch_credential line 290-306, Token: test at line 303, try_login maps kind None -> NO_PASSWORD at 321-323, UAT_PF_BASH set at line 96, header paragraph lines 26-38 states the Token: form at line 34; scripts/README.md has no Token:/qa-uat-env hits. (3) Coverage: Token: retained (R2,T2), bare JWT accepted (R3,T1), hostnames/noise rejected (R3/R4,T3,T4), no secret echo (sec 4,T6), header docs (sec 5), no implementation code (one signature + one regex only). However the gate is strict on deferral/ambiguity and the test shape still leaves buildable-from-the-design gaps (G1-G6). Route back to CODE-DESIGNER to close them; expected to be a small revision.",
+    "issues": [
+      "G1 (deferral, design sec 6.2 + Q2): credential-source flag name is left as 'read from the argparse block'. It is already knowable: scripts/uat_preflight.sh line 112-114 defines --credential-source and --credential-protocol {qa-login,qa-uat-env}. Name the flags (and --base-url, --scenarios, --sha, --out) explicitly in the design.",
+      "G2 (deferral, sec 6.3 last paragraph): 'the test author captures [asserted substrings] before writing assertions' defers assertion shapes. Step-01 already recorded them: actors check `login failed: actor-swiftroute-lena(NO_PASSWORD)` and validity line `actor-swiftroute-lena@swiftroute=BAD_CRED`. Pin the exact substrings per test T1-T5 (and what 'actor status OK' means for T7).",
+      "G3 (ambiguity, sec 6.2 / T7): T7 and the http.server stub are 'optional ... drop it if flaky'. Design must decide: in or out. If in, specify stub routes (whole set of GETs the script issues, not just /api/v1/me/modules), port-0 handling, and the exact OK assertion; if out, remove T7 and the stub.",
+      "G4 (ambiguity, sec 6.2): scenario fixture is 'modeled on a file under test/fixtures/uat/scenarios/' with no shape given. Specify the minimal scenario file (file name, required keys, the actor key/value declaring actor-swiftroute-lena) or name the existing fixture to copy, so the test is buildable without discovery.",
+      "G5 (factual error, sec 6.2): fake JWT `eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl` is stated as 51 chars; it is 49 (20+1+15+1+12). Still passes the >=40 floor but the stated number is wrong; correct it.",
+      "G6 (minor, sec 9 Q1/Q3): open questions are labelled 'none block implementation; defaults stated' - acceptable for Q1 (explicit out of scope) but Q2 (see G1) is not a question, it is resolvable now; remove or resolve it."
+    ],
+    "artifacts_out": [],
+    "next_action": "Route back to CODE-DESIGNER (rework 1 of 3) to fix G1-G6 in lib/letflow/design/iss0936-uat-preflight-bare-jwt.md, then re-submit to CODE-DESIGN-VALIDATOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

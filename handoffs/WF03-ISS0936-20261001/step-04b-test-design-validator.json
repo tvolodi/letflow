@@ -1,0 +1,57 @@
+{
+  "handoff_id": "265d472f-00bb-4034-adbb-39817822b8a3",
+  "run_id": "WF03-ISS0936-20261001",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0936-20261001/step-04b-test-design-validator.json",
+  "created_at": "2026-09-30T21:49:02Z",
+  "started_at": "2026-09-30T21:49:02Z",
+  "completed_at": "2026-09-30T21:54:45Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0936": "Issue ISS-0936 (local record docs/issues/ISS-0936.yaml, queue_ref Q-919, queue task 919, GH#2070; record may not yet be on this branch - PR #2071): scripts/uat_preflight.sh's qa-uat-env credential protocol (fetch_credential, ~line 290) expects the credential source's `token <user>` to print a line `Token: <jwt>`, but ai-dala-infra's qa-uat-env.sh `token <user>` prints a BARE JWT, so every actor login reports NO_PASSWORD. Fix: make fetch_credential accept a bare JWT line (three dot-separated base64url segments) as well as the `Token:` form. Add/adjust tests per project's existing preflight tests (none found under test/ -- TEST-DESIGNER decides a minimal in-repo test shape). Also update the script's header docs (qa-uat-env protocol paragraph) and scripts/README.md if they state the Token: form."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/scripts/uat_preflight_bare_jwt_test.exs",
+      "test/specs/ISS-0936.md",
+      "handoffs/WF03-ISS0936-20261001/step-04-test-designer.json",
+      "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md"
+    ],
+    "owned_modules": [
+      "test/scripts/uat_preflight_bare_jwt_test.exs",
+      "test/specs/ISS-0936.md"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0936",
+    "branch_name": "feature/WF03-ISS0936-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4b hard gate on test/scripts/uat_preflight_bare_jwt_test.exs + test/specs/ISS-0936.md (see step-04-test-designer.json result for claims). Verify: every design T1-T7 covered, isolated self-sufficient fixtures (tmp dirs, hermetic --idp-url, cleaned up), tests are picked up by `mix test` / CI (verify test path and that nothing excludes test/scripts, and that CI Linux would find bash/python; check for Windows-only assumptions that would break Linux CI, e.g. bash launcher default), no skipped/flaky constructs (stub server ports, timeouts). You MUST independently APPLY at least one reported mutant (in a throwaway git worktree OUTSIDE the repo, e.g. C:/Users/tvolo/dev/ai-dala/letflow-4-tmp-val; remove it after) and run the test file, reproducing the claimed failing set; also re-run the test on the unmutated fix and on pre-fix (origin/main script) to reproduce the fail-first. Elixir toolchain: see the test-designer's handoff for how it ran mix (Postgres container, copying _build/deps) -- clean up anything you create. Quote `git status --porcelain scripts/ lib/ test/` at end (only expected untracked/modified). Verdict PASS/FAIL. Modify only your handoff; no commit.",
+    "acceptance_criteria": [
+      "Mutant independently applied and reproduced",
+      "Fail-first reproduced",
+      "Linux CI portability assessed",
+      "Verdict PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All design T1-T7 (plus T5b) covered by runnable, unskipped, self-contained tests (per-test @tmp_dir, per-test fake cred.sh and scenario, hermetic --idp-url == --base-url, stub server on an ephemeral port closed in on_exit, no hardcoded secrets beyond a fake JWT constant). Independently measured, direct ExUnit run (elixir script requiring the test file; UAT_PF_BASH=git-bash): fix HEAD 8/8 passed. Pre-fix (origin/main script + new test, throwaway worktree): 3/8 passed, failing T1,T5,T5b,T6,T7 -- matches claim. Mutant M2 (bare-JWT acceptance dropped; `if len(s)>=40 and _JWT_RE.fullmatch(s): return s` -> pass): 3/8, failing T1,T5,T5b,T6,T7. Mutant M1 (eyJ prefix dropped from regex, length floor kept): 7/8, failing T4 only. Both match TEST-DESIGNER's claims.",
+    "issues": [
+      "LOW/non-blocking: on Windows each unreachable-URL run takes ~8.5-10s (T4 = 34s for 4 runs vs ExUnit's 60s default per-test timeout); Linux refuses 127.0.0.1:9 immediately so CI is not at risk. Optional hardening: split T4 or add @tag timeout.",
+      "INFO: TEST-DESIGNER did not capture the aggregate `mix letflow.check.test` total or per-partition confirmation that the new file ran; I did not run the full mix suite (needs Postgres) -- I ran the file directly. Pickup by mix test is by path/convention (test/scripts/*_test.exs; no test_paths/exclude in mix.exs; test_helper excludes only :keycloak/:wasm_hang/:lua_wallclock_race, none used here)."
+    ],
+    "linux_ci_portability": "ci.yml runs on ubuntu-latest (mix test). Launcher falls back to System.find_executable(\"bash\") which exists there; script picks python3 (PyYAML optional, regex fallback); relative path scripts/uat_preflight.sh resolves from mix's cwd (repo root); ExUnit tmp dir is under gitignored tmp/; stub and dead URL use 127.0.0.1 only (no DNS/network). Windows-only assumptions are confined to the UAT_PF_BASH hint for local devs, and the shared helper fails loudly (not skips) if the script does not reach its report.",
+    "cleanup": "Throwaway worktrees letflow-4-tmp-val-{m2,m1,pre} removed (git worktree list shows only pre-existing ones); temp runner scripts removed. `git status --porcelain scripts/ lib/ test/` in the fix worktree: empty. Full `git status --porcelain` of fix worktree: empty. Main checkout untouched (only its pre-existing untracked test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml). Fix-branch test re-run 8/8 was performed before the mutants were created, and the fix worktree was never mutated.",
+    "next_action": "Proceed to next WF-03 step (implementation/review gates)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

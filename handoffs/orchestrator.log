@@ -2516,3 +2516,33 @@
 2026-09-30T20:55:47Z | FAIL | WF02-REQ432-20260930 | step-final | FRONTEND-DEV -> ORCH | FAIL -- rebase onto origin/main aborted (conflicts in docs/requirements.yaml, requirement_status index+v25 at first replayed commit); investigation found origin/main 5d7ca7bf 'REQ-432: publish/retire + rebind-pins operator UI (#2055)' merged 2026-09-30T18:32:08Z by a sibling session (branch feat/REQ-432-rebind-publish-retire-ui, REQ-432 already status: done, ISS-0898 resolved) while this run was in progress -- this run is a duplicate of already-merged work. ORCH decision: do NOT merge this branch; cancel the run, salvage the non-duplicate forwarded issues and the handoff audit trail via a docs-only PR.
 2026-09-30T20:56:59Z | RUN_CANCELLED | WF02-REQ432-20260930 | ORCH | CANCELLED (duplicate) -- origin/main already delivered REQ-432 via PR #2055 (5d7ca7bf, merged 2026-09-30T18:32:08Z, sibling session; REQ-432 status: done on main, queue task 906 already done/unlocked). Branch feature/WF02-REQ432-20260930 NOT merged (kept on remote as archive). Salvaged via docs-only close-out PR: handoff audit trail, registry entry, this log, forwarded issues ISS-0917/0918/0920/0921 (Q-907/908/910/912; GH-2057/2058/2060/2063) and ISS-0916 queue/GH mirror (Q-909/GH-2059). No RUN_DONE: the requirement was not delivered by this run.
 2026-09-30T20:59:39Z | RUN_DONE | ISS0912-QA-RERUN-20261001 | ORCH | Seeds run on QA, 4 definitions active; UAT 0/7 pass (6 FAIL, 1 BLOCKED); defects registered as queue tasks Q-913..919, local records ISS-0930..0936. Successor task Q-911 (GH#2062) released done.
+2026-09-30T21:14:49Z | START | WF03-ISS0936-20261001 | step-00 | ORCH | Step 00 done by ORCH in worktree ../letflow-4-wf03-iss0936 (branch feature/WF03-ISS0936-20261001 pushed from origin/main 854b6baa); queue task 919 already locked by tvolodi-orch
+2026-09-30T21:15:02Z | DISPATCH | WF03-ISS0936-20261001 | step-01 | ORCH -> ISSUE-FIXER | PENDING
+2026-09-30T21:17:16Z | PASS | WF03-ISS0936-20261001 | step-01 | ISSUE-FIXER -> ORCH | PASS -- ORCH read result: root cause fetch_credential lines 300-303 accepts only 'Token:' prefix; reproduced by running real script (bare JWT -> NO_PASSWORD, prefixed -> reaches HTTP/BAD_CRED). Handoff skipped IN_PROGRESS claim, cosmetic.
+2026-09-30T21:17:16Z | DISPATCH | WF03-ISS0936-20261001 | step-02 | ORCH -> CODE-DESIGNER | PENDING
+2026-09-30T21:18:45Z | PASS | WF03-ISS0936-20261001 | step-02 | CODE-DESIGNER -> ORCH | PASS -- design doc lib/letflow/design/iss0936-uat-preflight-bare-jwt.md exists (ORCH checked)
+2026-09-30T21:18:45Z | DISPATCH | WF03-ISS0936-20261001 | step-02b | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-30T21:19:49Z | FAIL | WF03-ISS0936-20261001 | step-02b | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- design defers test decisions (flag names, assertion substrings, T7, fixture shape); rework 1/3 routed to CODE-DESIGNER
+2026-09-30T21:20:43Z | PASS | WF03-ISS0936-20261001 | step-02 | CODE-DESIGNER -> ORCH | PASS -- rework 1 complete, design revised
+2026-09-30T21:20:43Z | DISPATCH | WF03-ISS0936-20261001 | step-02b-r1 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-30T21:21:42Z | FAIL | WF03-ISS0936-20261001 | step-02b-r1 | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- N1 non-hermetic idp-url, N2 broken T5 cell, N3 WSL detection; rework 2/3 to CODE-DESIGNER
+2026-09-30T21:22:31Z | PASS | WF03-ISS0936-20261001 | step-02 | CODE-DESIGNER -> ORCH | PASS -- rework 2 complete
+2026-09-30T21:22:31Z | DISPATCH | WF03-ISS0936-20261001 | step-02b-r2 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-30T21:23:21Z | PASS | WF03-ISS0936-20261001 | step-02b-r2 | CODE-DESIGN-VALIDATOR -> ORCH | PASS -- design validated (nit: stale 'except T7' wording in 6.2, non-blocking)
+2026-09-30T21:23:21Z | DISPATCH | WF03-ISS0936-20261001 | step-03 | ORCH -> ELIXIR-DEV | PENDING
+2026-09-30T21:24:57Z | PASS | WF03-ISS0936-20261001 | step-03 | ELIXIR-DEV -> ORCH | PASS -- scripts/uat_preflight.sh changed (ORCH saw diff), 6 real-run cases quoted
+2026-09-30T21:24:57Z | DISPATCH | WF03-ISS0936-20261001 | step-03c | ORCH -> SECURITY-REVIEWER | PENDING
+2026-09-30T21:25:36Z | PASS | WF03-ISS0936-20261001 | step-03c | SECURITY-REVIEWER -> ORCH | PASS -- sentinel token 0 occurrences in stdout/stderr/--out; only used as Bearer to configured base-url
+2026-09-30T21:25:36Z | DISPATCH | WF03-ISS0936-20261001 | step-03d | ORCH -> REVIEWER | PENDING
+2026-09-30T21:26:07Z | PASS | WF03-ISS0936-20261001 | step-03d | REVIEWER -> ORCH | PASS -- matches design, no scope creep
+2026-09-30T21:26:07Z | DISPATCH | WF03-ISS0936-20261001 | step-04 | ORCH -> TEST-DESIGNER | PENDING
+2026-09-30T21:49:02Z | PASS | WF03-ISS0936-20261001 | step-04 | TEST-DESIGNER -> ORCH | PASS -- 8 tests; fail-first 3/8 pass on origin/main + new test; 8 mutants recorded; caveat: new file not proven inside mix letflow.check.test aggregate output
+2026-09-30T21:49:02Z | DISPATCH | WF03-ISS0936-20261001 | step-04b | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-09-30T21:55:02Z | PASS | WF03-ISS0936-20261001 | step-04b | TEST-DESIGN-VALIDATOR -> ORCH | PASS -- validator independently applied M2 and M1 mutants and reproduced claimed failing sets; fail-first reproduced
+2026-09-30T21:55:02Z | DISPATCH | WF03-ISS0936-20261001 | step-04-run | ORCH -> TEST-RUNNER | PENDING
+2026-09-30T22:00:27Z | FAIL | WF03-ISS0936-20261001 | step-04-run | TEST-RUNNER -> ORCH | FAIL -- 8/8 pass but mix format --check-formatted fails on the new test file; rework 1/3 to TEST-DESIGNER
+2026-09-30T22:02:58Z | PASS | WF03-ISS0936-20261001 | step-04 | TEST-DESIGNER -> ORCH | PASS -- rework 1 format-only fix
+2026-09-30T22:05:22Z | PASS | WF03-ISS0936-20261001 | step-04-run | TEST-RUNNER -> ORCH | PASS -- 8 passed, format exit 0, compile warnings-as-errors exit 0
+2026-09-30T22:05:39Z | DISPATCH | WF03-ISS0936-20261001 | step-05 | ORCH -> ISSUE-FIXER | PENDING
+2026-09-30T22:06:07Z | PASS | WF03-ISS0936-20261001 | step-05 | ISSUE-FIXER -> ORCH | PASS -- ISS-0936 status resolved (ORCH verified yaml)
+2026-09-30T22:06:07Z | DISPATCH | WF03-ISS0936-20261001 | step-final-git-merge | ORCH -> ELIXIR-DEV | PENDING

@@ -1,0 +1,51 @@
+{
+  "handoff_id": "3d0b1346-0f1f-446f-9223-55d6a41eea77",
+  "run_id": "WF03-ISS0936-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b-r2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0936-20261001/step-02b-r2-code-design-validator.json",
+  "created_at": "2026-09-30T21:22:31Z",
+  "started_at": "2026-09-30T21:22:31Z",
+  "completed_at": "2026-10-01T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0936": "Issue ISS-0936 (local record docs/issues/ISS-0936.yaml, queue_ref Q-919, queue task 919, GH#2070; record may not yet be on this branch - PR #2071): scripts/uat_preflight.sh's qa-uat-env credential protocol (fetch_credential, ~line 290) expects the credential source's `token <user>` to print a line `Token: <jwt>`, but ai-dala-infra's qa-uat-env.sh `token <user>` prints a BARE JWT, so every actor login reports NO_PASSWORD. Fix: make fetch_credential accept a bare JWT line (three dot-separated base64url segments) as well as the `Token:` form. Add/adjust tests per project's existing preflight tests (none found under test/ -- TEST-DESIGNER decides a minimal in-repo test shape). Also update the script's header docs (qa-uat-env protocol paragraph) and scripts/README.md if they state the Token: form."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md",
+      "handoffs/WF03-ISS0936-20261001/step-02b-r1-code-design-validator.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0936",
+    "branch_name": "feature/WF03-ISS0936-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2b re-validation after rework 2 (prior r1 FAIL: N1 non-hermetic idp-url, N2 broken T5 cell, N3 WSL detection -- see step-02b-r1 result). Independently verify in the revised design doc, against scripts/uat_preflight.sh: every test passes --idp-url; T7 route list matches the script's real requests (verify by reading); T5 cell well-formed; WSL detection specified; no regressions of earlier gaps. Verdict PASS/FAIL with evidence. Modify only your handoff; no commit.",
+    "acceptance_criteria": [
+      "N1-N3 closed and verified against script",
+      "Verdict PASS/FAIL"
+    ]
+  },
+  "result": {
+    "agent": "CODE-DESIGN-VALIDATOR",
+    "status": "PASS",
+    "summary": "PASS. N1-N3 closed, verified by reading scripts/uat_preflight.sh. N1: every test command passes --idp-url equal to --base-url; script line 132 derives idp only when absent and realm GETs (lines 384-386) use idp, so runs are hermetic. T7 route list matches the script: /health x2 (line 378 and SHA probe lines 399-402), exactly two realm well-known paths (swiftroute from company_id, bpm-default), /api/v1/me/modules (line 333), /api/v1/tasks/inbox (non-candidate label, lines 555-558); /api/v1/tenants and /api/v1/version are skipped because admin_user needs 'admin-user' in cred_listing, which for qa-uat-env is scenario actor ids only (lines 284-289, 389-393); no process_id so no definitions GET. N2: T5 row is one well-formed table line using printf '%s\r\n'; T5 note correctly says text=True (line 264) normalises CRLF so T5 is end-to-end, not an R1 exercise. N3: WSL-stub detection pinned as shared run_preflight/2 helper asserting header 'UAT PREFLIGHT  environment=qa' (script line 624, two spaces) with failure message naming launcher, first 500 chars and UAT_PF_BASH hint. Earlier gaps (flags lines 112-114, substrings lines 532/636, fixture, JWT length 49, Q2) not regressed. No implementation code beyond one signature and one regex; no TBD/deferral language.",
+    "issues": [
+      "Non-blocking nit: design 6.2 says tests assert on text 'NOT on exit code, except T7 (see below)', but the T7 paragraph says T7 also asserts on text, not exit code. Stale 'except T7' wording; the T7 table row lists no exit-code assertion so the table governs. Clean up opportunistically."
+    ],
+    "artifacts_out": [],
+    "next_action": "Proceed to the next WF-03 step (TEST-DESIGNER / ELIXIR-DEV per run plan)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

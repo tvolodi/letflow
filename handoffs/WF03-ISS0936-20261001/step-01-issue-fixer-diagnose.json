@@ -1,0 +1,46 @@
+{
+  "handoff_id": "76310209-3987-4b37-86ac-204d8e7cddd0",
+  "run_id": "WF03-ISS0936-20261001",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0936-20261001/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-30T21:15:02Z",
+  "started_at": "2026-09-30T21:15:02Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0936": "Issue ISS-0936 (local record docs/issues/ISS-0936.yaml, queue_ref Q-919, queue task 919, GH#2070; record may not yet be on this branch - PR #2071): scripts/uat_preflight.sh's qa-uat-env credential protocol (fetch_credential, ~line 290) expects the credential source's `token <user>` to print a line `Token: <jwt>`, but ai-dala-infra's qa-uat-env.sh `token <user>` prints a BARE JWT, so every actor login reports NO_PASSWORD. Fix: make fetch_credential accept a bare JWT line (three dot-separated base64url segments) as well as the `Token:` form. Add/adjust tests per project's existing preflight tests (none found under test/ -- TEST-DESIGNER decides a minimal in-repo test shape). Also update the script's header docs (qa-uat-env protocol paragraph) and scripts/README.md if they state the Token: form."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "scripts/uat_preflight.sh",
+      "docs/issues/ISS-0909.yaml",
+      "docs/agents/workflows/WF-05_uat_run.md"
+    ],
+    "owned_modules": [
+      "scripts/uat_preflight.sh"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0936",
+    "branch_name": "feature/WF03-ISS0936-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup: resolved issues about uat_preflight / qa-uat-env, esp. ISS-0909) + Step 1 (diagnose), combined. Read scripts/uat_preflight.sh fetch_credential and try_login; confirm by reading code that a bare JWT line is rejected (NO_PASSWORD). You cannot reach the real qa-uat-env.sh; reproduce with a tiny fake credential-source script that prints a bare JWT for `token <user>` (write it in your scratchpad/tmp, not the repo) if the script can be run offline against a scenario corpus, otherwise reproduce the parsing logic minimally. Recommend fix shape (accept `Token:` prefixed OR a line matching three dot-separated base64url segments; never log the token; ignore non-JWT noise lines such as warnings), note tests: there are no existing preflight tests under test/ -- recommend a minimal shape. Do NOT implement the fix. Work ONLY in the worktree given in context.worktree (never the main checkout C:/Users/tvolo/dev/ai-dala/letflow-4). Do not commit; ORCH commits. Fill result in this handoff file; claim by setting status IN_PROGRESS only, then COMPLETED/FAILED at end with result.status PASS/FAIL, next_action 'Route to CODE-DESIGNER for fix design'.",
+    "acceptance_criteria": [
+      "Diagnosis names root cause with line citations",
+      "Registry lookup result stated",
+      "Reproduction evidence quoted",
+      "Fix shape and test shape recommended",
+      "No files modified other than this handoff"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

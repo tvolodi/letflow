@@ -1,0 +1,66 @@
+{
+  "handoff_id": "4ad2b737-765e-43a4-88b4-80eaaba45e1d",
+  "run_id": "WF02-REQ432-20260930",
+  "workflow_id": "WF-02",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ432-20260930/step-04b-test-runner-pipeline.json",
+  "created_at": "2026-09-30T18:16:46Z",
+  "started_at": "2026-09-30T18:16:46Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-432"
+    ],
+    "requirement_text": {
+      "REQ-432": "Follow-on to REQ-373 (service_catalog version/status lifecycle + real PinResolver.Lookup, status: done on the backend) and to REQ-399 (case-detail dependency-version/provenance screen, status: done -- REQ-399 already built the GET /api/v1/instances/{id}/pins route, web/src/hooks/useInstancePins.ts, and web/src/components/instances/InstancePinsPanel.tsx, wired into InstanceDetailPage.tsx). Filed from ISS-0898, split from ISS-0890's WF05-FULL-20260929 PLATFORM UAT report: the platform-instance-pin-survives-catalog-change scenario (test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml) is BLOCKED not because the read-only provenance screen is missing (REQ-399 built that) but because two operator ACTIONS the scenario's own steps exercise have no UI anywhere, and REQ-399's own SCOPE explicitly excluded one of them: \"any UI affordance to CHANGE a pin from this screen... is a separate requirement if one is ever filed.\"\nWHAT EXISTS TODAY, verified 2026-09-30 by direct source read: - `POST /api/v1/admin/services/:service_id/versions` (publish) and\n  `POST /api/v1/admin/services/:service_id/retire` (retire) are real,\n  shipped REQ-373 routes (lib/letflow/routers/admin_services.ex,\n  design doc lib/letflow/design/req373-service-catalog-version-lifecycle.md\n  §7), gated by the existing :AdminServicesManage permission. Grepping\n  web/src/api/services.ts and web/src/pages/admin/services/ServicesPage.tsx\n  for \"publish\"/\"retire\"/\"version\" returns zero hits beyond the existing\n  `ServiceRecord` type -- neither route has any frontend client function or\n  UI control. An operator today cannot publish a new service-connection\n  version or retire an old one from the GUI at all, which is exactly the\n  scenario's own step 2 action.\n- `POST /instances/:id/rebind-pins` is a real, shipped REQ-078/PIN-05 route\n  (lib/letflow/routers/instances.ex, `Letflow.Engine.PinRebind.rebind_pins/3`,\n  200 response `{instance_id, changes, rebound_at}`, each change item\n  carrying `ref`/`prior_version`/`new_version` per the\n  `INSTANCE_PINS_REBOUND` event it appends). Grepping web/src for \"rebind\"\n  returns zero hits beyond REQ-399's own read-only provenance panel and its\n  test -- there is no rebind client function, no rebind action/button/dialog\n  anywhere in web/src. An operator today cannot deliberately move a running\n  case onto a different pinned version from the GUI at all, which is\n  exactly the scenario's own step 5 action (with a caller-supplied reason\n  -- `rebind_attrs()` requires `:idempotency_key`, per\n  lib/letflow/routers/instances.ex's own design notes, and the scenario's\n  step 5 input is `reason: \\\"External system retires the old endpoint at\n  month end.\\\"`).\n- Case history rendering: grepped web/src for any existing generic\n  event-timeline renderer capable of showing an `INSTANCE_PINS_REBOUND`\n  entry with actor/prior_version/new_version/reason (EO-005's own evidence\n  requirement, \"the case history shows the change with the operator's\n  name, the previous and new version, and the reason given\") -- confirm at\n  implementation time whether InstanceDetailPage.tsx's existing\n  history/timeline section already renders arbitrary event types generically\n  (in which case this requirement only needs the rebind action itself to\n  produce the right event, already true by construction since\n  `rebind_pins/3` already appends the real event) or needs a\n  dedicated case for this event type -- do not assume either way without\n  checking.\n\nTHIS REQUIREMENT BUILDS: (1) a typed `publish`/`retire` client pair in web/src/api/services.ts and UI controls on web/src/pages/admin/services/ServicesPage.tsx (a \"publish new version\" action taking the publish_attrs() fields plus a version string, and a \"retire\" action) for a PLATFORM_ADMIN-equivalent operator; (2) a typed `rebind` client function (POST /instances/:id/rebind-pins) and a rebind action/dialog on REQ-399's InstancePinsPanel.tsx (or InstanceDetailPage.tsx) requiring the caller to supply a reason string, wired to the real endpoint; (3) confirm, and if needed extend, the case history/timeline rendering so an `INSTANCE_PINS_REBOUND` entry's actor, prior_version, new_version and reason are all visible per EO-005; (4) the named pipeline_test spec.\nOUT OF SCOPE: any change to `Letflow.ServiceCatalog`, `PinResolver`, `PinRebind`, or any of REQ-373/REQ-399's already-shipped routes (pure frontend consumption/action wiring against already-shipped endpoints); re-scoping or modifying REQ-399's read-only provenance display beyond what is needed to add the rebind action to the same screen; PLC-01/module_ref catalog versioning (still the identical, already-named SCOPE GAP pin_resolver.ex's own moduledoc states, unscoped to any stage, restated by both REQ-373 and REQ-399).\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      ".claude/agents/test-runner.md",
+      "handoffs/WF02-REQ432-20260930/step-04-test-runner.json",
+      "handoffs/WF02-REQ432-20260930/step-02b-frontend-dev.json",
+      "test/reports/report-20260930-WF02-REQ432-20260930.yaml",
+      "web/tests/e2e/pipeline.ts",
+      "web/tests/e2e/helpers.ts",
+      "web/playwright.config.ts",
+      "web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts",
+      "lib/letflow/design/req432-rebind-pins-publish-retire-ui.md",
+      "docs/agents/instructions/core-directives.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md"
+    ],
+    "owned_modules": [
+      "test/reports/report-20260930-WF02-REQ432-20260930.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 4 follow-up (pipeline-spec live run only) for REQ-432. This is a RE-RUN of one sub-check, NOT rework: your predecessor's Step 4 (handoffs/WF02-REQ432-20260930/step-04-test-runner.json, report test/reports/report-20260930-WF02-REQ432-20260930.yaml) found backend and web gates green but could not run the Playwright pipeline spec because http://localhost:8094 (Keycloak) reset connections on ::1 (wslrelay.exe). ORCH re-probed at 2026-09-30T18:16Z: curl to http://127.0.0.1:8094, http://[::1]:8094 and http://localhost:8094 /realms/master/.well-known/openid-configuration ALL return 200 now, so the host condition appears to have cleared. Verify branch feature/WF02-REQ432-20260930. Re-check reachability yourself first (curl the three forms, and a Node fetch to http://localhost:8094/realms/bpm-default/.well-known/openid-configuration). If reachable: run the pipeline spec live exactly per step-02b-frontend-dev.json result.issues[0] (backend: start from this checkout with LETFLOW_SECRETS_MASTER_KEY taken from ./.env, LETFLOW_DEV_DB_CONFIRMED=1 MIX_ENV=dev mix run --no-halt against this checkout's own Postgres letflow-4-postgres-1 port 5482, started as a child of your own synchronous command or via a script that you wait on -- never run_in_background, Monitor, or a cross-turn wait; then cd web && BPM_TEST_URL=http://127.0.0.1:4000 BPM_IDP_BASE_URL=http://localhost:8094 VITE_API_BASE_URL=http://127.0.0.1:4000 npx playwright test --config=playwright.config.ts tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts). Quote the real Playwright output. RESULT LADDER: spec passes -> PASS; spec fails on a selector/assumption or behaviour finding in the spec or in web/src (steps 02/07 selector assumptions are known-unproven) -> FAIL, with exact failing step, locator, error message and trace/screenshot path, routed to FRONTEND-DEV (do NOT edit web/ or the spec yourself); spec fails only because of backend gap M5 beyond the two designed step-3 outcomes or because of another backend defect -> FAIL with precise evidence and name the backend owner; host still cannot reach Keycloak -> PARTIAL, exact blocker, do not work around (do not kill wslrelay.exe, do not edit helpers/spec to hardcode issuers, do not change system/network/WSL settings). Before finishing STOP the backend/dev server/Playwright browsers and verify no erl.exe/beam/node/chrome processes and no listeners on 4000/4173 remain. Do not re-run the backend full suite (already measured). Append the pipeline run outcome (command, exact output excerpt, result) to test/reports/report-20260930-WF02-REQ432-20260930.yaml as a new top-level key `pipeline_rerun` without altering existing keys (YAML, preserve the rest byte-for-byte), commit it by explicit filename, push to origin feature/WF02-REQ432-20260930. Also report any test data the spec left in this checkout's dev DB in result.summary. Lint your handoff: mix letflow.lint_handoffs --dir handoffs/WF02-REQ432-20260930/step-04b-test-runner-pipeline.json. Claim by setting status IN_PROGRESS only; on finish set COMPLETED/FAILED, fill result, real-clock completed_at; never edit task/created_at/started_at; do not write registry.json.",
+    "acceptance_criteria": [
+      "Keycloak reachability re-checked with real output",
+      "pipeline spec live run executed with real Playwright output quoted, or exact environmental blocker stated",
+      "no orphan processes or listeners remain",
+      "report file updated with pipeline_rerun key, committed and pushed"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ432-20260930",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

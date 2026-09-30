@@ -2495,3 +2495,5 @@
 2026-09-30T17:29:34Z | DISPATCH | WF02-REQ432-20260930 | step-03b | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
 2026-09-30T17:31:39Z | PASS | WF02-REQ432-20260930 | step-03b | TEST-DESIGN-VALIDATOR -> ORCH | PASS -- independently re-applied 4 mutants (M-a..M-d), all killed, all reverted, tree clean; AC1 + live halves of AC6/AC7 honestly open (pipeline spec never run green); M5 unverifiable half recorded.
 2026-09-30T17:31:41Z | DISPATCH | WF02-REQ432-20260930 | step-04 | ORCH -> TEST-RUNNER | PENDING
+2026-09-30T18:16:45Z | PARTIAL | WF02-REQ432-20260930 | step-04 | TEST-RUNNER -> ORCH | PARTIAL -- backend 5079/5079 passed 0 failed (N=6; N=16 infra abort tenant-template 15s timeout, route 1/3 attribution); web type-check/lint clean, npm test 150 files/995 passed, guards 52 passed. Live pipeline run blocked (localhost:8094 ::1 reset). ORCH re-probed 8094 after the run: curl via 127.0.0.1, [::1] and localhost now all return 200 (host shadowing cleared) -> dispatching a pipeline-only re-run (step-04b), not counted as rework.
+2026-09-30T18:16:47Z | DISPATCH | WF02-REQ432-20260930 | step-04b | ORCH -> TEST-RUNNER | PENDING

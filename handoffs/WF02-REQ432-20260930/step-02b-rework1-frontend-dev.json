@@ -1,0 +1,80 @@
+{
+  "handoff_id": "8025eb11-6158-4da6-ab07-76afc3f49066",
+  "run_id": "WF02-REQ432-20260930",
+  "workflow_id": "WF-02",
+  "step": "02b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json",
+  "created_at": "2026-09-30T18:18:58Z",
+  "started_at": "2026-09-30T18:18:58Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-432"
+    ],
+    "requirement_text": {
+      "REQ-432": "Follow-on to REQ-373 (service_catalog version/status lifecycle + real PinResolver.Lookup, status: done on the backend) and to REQ-399 (case-detail dependency-version/provenance screen, status: done -- REQ-399 already built the GET /api/v1/instances/{id}/pins route, web/src/hooks/useInstancePins.ts, and web/src/components/instances/InstancePinsPanel.tsx, wired into InstanceDetailPage.tsx). Filed from ISS-0898, split from ISS-0890's WF05-FULL-20260929 PLATFORM UAT report: the platform-instance-pin-survives-catalog-change scenario (test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml) is BLOCKED not because the read-only provenance screen is missing (REQ-399 built that) but because two operator ACTIONS the scenario's own steps exercise have no UI anywhere, and REQ-399's own SCOPE explicitly excluded one of them: \"any UI affordance to CHANGE a pin from this screen... is a separate requirement if one is ever filed.\"\nWHAT EXISTS TODAY, verified 2026-09-30 by direct source read: - `POST /api/v1/admin/services/:service_id/versions` (publish) and\n  `POST /api/v1/admin/services/:service_id/retire` (retire) are real,\n  shipped REQ-373 routes (lib/letflow/routers/admin_services.ex,\n  design doc lib/letflow/design/req373-service-catalog-version-lifecycle.md\n  §7), gated by the existing :AdminServicesManage permission. Grepping\n  web/src/api/services.ts and web/src/pages/admin/services/ServicesPage.tsx\n  for \"publish\"/\"retire\"/\"version\" returns zero hits beyond the existing\n  `ServiceRecord` type -- neither route has any frontend client function or\n  UI control. An operator today cannot publish a new service-connection\n  version or retire an old one from the GUI at all, which is exactly the\n  scenario's own step 2 action.\n- `POST /instances/:id/rebind-pins` is a real, shipped REQ-078/PIN-05 route\n  (lib/letflow/routers/instances.ex, `Letflow.Engine.PinRebind.rebind_pins/3`,\n  200 response `{instance_id, changes, rebound_at}`, each change item\n  carrying `ref`/`prior_version`/`new_version` per the\n  `INSTANCE_PINS_REBOUND` event it appends). Grepping web/src for \"rebind\"\n  returns zero hits beyond REQ-399's own read-only provenance panel and its\n  test -- there is no rebind client function, no rebind action/button/dialog\n  anywhere in web/src. An operator today cannot deliberately move a running\n  case onto a different pinned version from the GUI at all, which is\n  exactly the scenario's own step 5 action (with a caller-supplied reason\n  -- `rebind_attrs()` requires `:idempotency_key`, per\n  lib/letflow/routers/instances.ex's own design notes, and the scenario's\n  step 5 input is `reason: \\\"External system retires the old endpoint at\n  month end.\\\"`).\n- Case history rendering: grepped web/src for any existing generic\n  event-timeline renderer capable of showing an `INSTANCE_PINS_REBOUND`\n  entry with actor/prior_version/new_version/reason (EO-005's own evidence\n  requirement, \"the case history shows the change with the operator's\n  name, the previous and new version, and the reason given\") -- confirm at\n  implementation time whether InstanceDetailPage.tsx's existing\n  history/timeline section already renders arbitrary event types generically\n  (in which case this requirement only needs the rebind action itself to\n  produce the right event, already true by construction since\n  `rebind_pins/3` already appends the real event) or needs a\n  dedicated case for this event type -- do not assume either way without\n  checking.\n\nTHIS REQUIREMENT BUILDS: (1) a typed `publish`/`retire` client pair in web/src/api/services.ts and UI controls on web/src/pages/admin/services/ServicesPage.tsx (a \"publish new version\" action taking the publish_attrs() fields plus a version string, and a \"retire\" action) for a PLATFORM_ADMIN-equivalent operator; (2) a typed `rebind` client function (POST /instances/:id/rebind-pins) and a rebind action/dialog on REQ-399's InstancePinsPanel.tsx (or InstanceDetailPage.tsx) requiring the caller to supply a reason string, wired to the real endpoint; (3) confirm, and if needed extend, the case history/timeline rendering so an `INSTANCE_PINS_REBOUND` entry's actor, prior_version, new_version and reason are all visible per EO-005; (4) the named pipeline_test spec.\nOUT OF SCOPE: any change to `Letflow.ServiceCatalog`, `PinResolver`, `PinRebind`, or any of REQ-373/REQ-399's already-shipped routes (pure frontend consumption/action wiring against already-shipped endpoints); re-scoping or modifying REQ-399's read-only provenance display beyond what is needed to add the rebind action to the same screen; PLC-01/module_ref catalog versioning (still the identical, already-named SCOPE GAP pin_resolver.ex's own moduledoc states, unscoped to any stage, restated by both REQ-373 and REQ-399).\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ432-20260930/step-04b-test-runner-pipeline.json",
+      "test/reports/report-20260930-WF02-REQ432-20260930.yaml",
+      "handoffs/WF02-REQ432-20260930/step-02b-frontend-dev.json",
+      "lib/letflow/design/req432-rebind-pins-publish-retire-ui.md",
+      ".claude/agents/frontend-dev.md",
+      "docs/guides/frontend_developer_guide.md",
+      "web/tests/guards/forbidlist.ts",
+      "web/tests/e2e/pipeline.ts",
+      "web/tests/e2e/helpers.ts",
+      "web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts",
+      "web/tests/e2e/pipelines/platform-migration-partial-failure-resume.pipeline.e2e.spec.ts",
+      "lib/letflow/routers/instances.ex",
+      "test/specs/REQ-432.md",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md"
+    ],
+    "owned_modules": [
+      "web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts",
+      "web/src/api/services.ts",
+      "web/src/api/instances.ts",
+      "web/src/pages/admin/services/ServicesPage.tsx",
+      "web/src/components/instances/InstancePinsPanel.tsx",
+      "web/src/components/instances/EventHistoryPanel.tsx",
+      "web/src/components/instances/PinsReboundSummary.tsx",
+      "web/src/pages/instances/InstanceDetailPage.tsx",
+      "web/src/hooks/useRebindPins.ts",
+      "test/specs/REQ-432.md"
+    ]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 of 3 -- WF-02 Step 2b for REQ-432. This is NOT a first dispatch: TEST-RUNNER's live run of your pipeline spec FAILED (handoffs/WF02-REQ432-20260930/step-04b-test-runner-pipeline.json, result.summary/issues, and test/reports/report-20260930-WF02-REQ432-20260930.yaml key pipeline_rerun). Claim by setting status to IN_PROGRESS; when finished flip status to COMPLETED/FAILED exactly as normal (HANDOFF_PROTOCOL.md section 4) and fill result. Verify branch feature/WF02-REQ432-20260930. Facts established by TEST-RUNNER: the host Keycloak condition cleared (localhost:8094 reachable on 127.0.0.1, ::1, localhost); this checkout's dev DB has now been seeded with mix letflow.seed (tenant schema exists); the spec's 'pre' step passes live; step '01' fails because startCase() (spec ~lines 135 and 212) POSTs /api/v1/instances with {definition_id} only and the route answers 422 'initial_variables is required'. THIS SPEC IS YOURS AND UNPROVEN BEYOND 'pre': your job now is to drive it to a real green live run, which is the requirement's first acceptance criterion ('authored against these real screens and passes'). Procedure: (1) fix startCase per the real route contract (read lib/letflow/routers/instances.ex create handler / schema; do not guess; the sibling specs show how instances are started); (2) run the spec live using the recipe in handoffs/WF02-REQ432-20260930/step-02b-frontend-dev.json result.issues[0] (backend: LETFLOW_SECRETS_MASTER_KEY from ./.env, LETFLOW_DEV_DB_CONFIRMED=1 MIX_ENV=dev mix run --no-halt against this checkout's own Postgres 5482; start it so that you wait synchronously, e.g. a script you run in the foreground that starts the backend, waits for /api/v1/health, runs Playwright, then stops the backend in a finally/trap -- never run_in_background, never Monitor or a cross-turn wait; cd web && BPM_TEST_URL=http://127.0.0.1:4000 BPM_IDP_BASE_URL=http://localhost:8094 VITE_API_BASE_URL=http://127.0.0.1:4000 npx playwright test --config=playwright.config.ts tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts); (3) iterate on every further live failure, fixing the root cause: selector/assumption errors in the spec (steps 02/07), real defects in your web/src components (fix them), and so on; change-approach rule: if the same failure recurs, change strategy, do not repeat the same edit. (4) A failure caused by a BACKEND defect or contract mismatch is NOT shimmed in web/ and NOT fixed under lib/ (out of scope fence): if the real backend cannot satisfy a step, state precisely which step/route/response, keep the strongest honest assertion consistent with the validated design (lib/letflow/design/req432-rebind-pins-publish-retire-ui.md sections 7.3/7.4 and M5 -- the two designed step-3 outcomes are already accepted), and report it in result.issues with the exact evidence; do NOT skip or weaken assertions to get green, do not use test.skip/fixme, do not page.route-mock the backend. If you change any production file under web/src (not tests), say so explicitly in result.summary and list the file: it will be re-gated by SECURITY-REVIEWER/REVIEWER. (5) When the spec is green, run the four gates from web/ and quote real output: npm run type-check && npm run lint && npm test && npm run guards. Never weaken a guard. (6) Cleanup: stop every backend/dev server/browser you started and verify no erl.exe/beam/node/chrome process or listener on 4000/4173 remains. Report in result.summary any test data the run left in the dev DB (known: service_catalog pl_pin_e3217b22/pl_pin_17abc8a5 and two active definitions pl-pin-survives-e3217b22/-17abc8a5 from the prior run; leftovers are harmless, the scenario says published versions are intentionally left). Quote the real final Playwright output (passed/failed counts, duration) in result.summary. If after a genuine, well-evidenced effort a step still cannot pass because of something outside web/ (backend/host), result.status PARTIAL with the exact step, evidence, and the exact command. Also fix: test/specs/REQ-432.md and the spec header if they now state things that are no longer true (e.g. 'not run live'), updating them with the real outcome. Commit in logical commits by explicit filename (never git add -A), push to origin feature/WF02-REQ432-20260930. Lint your handoff: mix letflow.lint_handoffs --dir handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json. Never edit task/created_at/started_at; do not write registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "the pipeline spec has been run live against the real backend and its real Playwright output is quoted: green, or a precisely evidenced out-of-web blocker on a named step",
+      "startCase fixed per the real route contract; no assertion weakened, skipped or mocked; no lib/ change",
+      "any production web/src file changed is explicitly listed",
+      "web type-check, lint, npm test, guards pass with real output quoted",
+      "no orphan processes or listeners remain; dev-DB leftovers reported",
+      "test/specs/REQ-432.md and the spec header updated to the true live-run status"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ432-20260930",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

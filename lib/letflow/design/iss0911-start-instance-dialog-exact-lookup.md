@@ -1,5 +1,68 @@
 # Design: ISS-0911 — Start Instance dialog exact-name version lookup
 
+## Rework 2 (2026-09-30) — one-shot self-write guard, reset on dialog open/close
+
+CODE-DESIGN-VALIDATOR's fresh re-check after rework 1
+(`handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator-recheck1.json`) found that
+rework 1's merged single effect (§5.2) genuinely closes the two-effect race REVIEWER
+originally found, but its `lookupWroteDefinitionId` ref is a **persistent, non-expiring**
+guard token: it is only ever *overwritten* by steps 1/2, never cleared/consumed by step 3.
+Concrete repro the validator traced: dialog session writes `definitionId = aliceId`
+(ref = `aliceId`) → dialog closes (ref untouched) → an unrelated **external** change sets
+`definitionId = bobId` (ref still `aliceId`, no match, correctly falls through to Bob's
+data) → a **later**, also external, change sets `definitionId` back to `aliceId` (e.g.
+page-level filter, browser back/forward — no dialog interaction at all) → step 3's guard
+now sees `definitionId(aliceId) === lookupWroteDefinitionId.current(aliceId)` and wrongly
+treats this fresh external cause as its own stale-cache self-write, so it does nothing —
+`startDefinitionVersion`/`startDefinitionId` stay stuck at Bob's data while `definitionId`
+now says Alice. This is a new instance of the exact ISS-0891 invariant (submitted id must
+track current `definitionId` context) the whole fix exists to protect.
+
+**Chosen fix: option (a), one-shot/expiring guard — consumed (cleared) the first time
+step 3 examines it, whether or not it matches.** Rejected alternative and why:
+
+- **Option (b) (generation/render-token counter) was considered and rejected as
+  unnecessary complexity here**, not because it wouldn't work: a monotonically
+  incrementing counter captured alongside the written id would also prevent a stale
+  match. It was rejected because the underlying hazard window it would protect against
+  — multiple effect re-runs between the self-write and `useDefinition(definitionId)`'s
+  cache catching up, during which the plain ref could be legitimately needed more than
+  once — does not exist in this design. The merged effect's dependency array is
+  `[definitionId, activeDefinitionByName?.id, activeDefinitionByName?.version,
+  versionLookupState]` (unchanged from rework 1); a `useEffect` body only re-runs when a
+  dependency's identity changes, not on every component re-render. After step 1's
+  self-write, exactly **one** subsequent effect run observes the new `definitionId` with
+  `activeDefinitionByName` still reflecting the old/uncached lookup — the very next run
+  after that is triggered either by `activeDefinitionByName` itself updating (at which
+  point the data is correct and no guard is needed) or by `versionLookupState` changing
+  again (already routed to steps 1/2, not step 3, whenever the debounced exact-name
+  lookup is still `found`/settling). A background refetch of the exact-name lookup does
+  not reopen this window either: `deriveVersionLookupState` (§5) only reports `loading`
+  when `isFetching && !isSuccess` — a background refetch keeps `isSuccess: true` (cached
+  data still present), so it stays classified `found` and is handled by step 1, never
+  step 3. So step 3's guard only ever needs to suppress exactly **one** render per
+  self-write, which is precisely what a one-shot consumed-on-first-check guard provides,
+  with less state (`string | undefined` ref, same as rework 1 — no added counter type)
+  and a simpler invariant to audit ("can this ever match twice?" → no, by construction,
+  because it is cleared the instant it is read) than a generation counter would add.
+
+**Reset on dialog open/close (the second gap the validator found, §1 lines 82-85):**
+`openStartDialog` (`InstanceBoardPage.tsx` lines 223-234) already imperatively
+re-initializes `startDefinitionVersion`/`startDefinitionId` once, at dialog-open time,
+from the page-level `activeDefinitionByName`/`definitionId` — it is now also specified to
+clear `lookupWroteDefinitionId.current = undefined` in that same pass, and
+`closeStartDialog` (lines 236-238) is now specified to do the same on close. This is
+**defense-in-depth, not load-bearing for correctness** given the one-shot consume above
+already makes a cross-session stale match structurally impossible (the ref cannot survive
+being read once, and it is only ever written by step 1/2 of the dialog's own effect, which
+only runs while `versionLookupState` reflects the dialog's own live input) — but it keeps
+the invariant "no guard state outlives the dialog session that created it" true by
+construction as well as by argument, in case a future change to the effect's dependency
+list or `deriveVersionLookupState` ever widens the one-render window above.
+
+§5.2 below is rewritten in place to reflect the one-shot guard and the open/close reset;
+rework 1's own account of *why one effect, not two* (unchanged) is preserved below it.
+
 ## Rework 1 (2026-09-30) — single write path for `startDefinitionVersion`/`startDefinitionId`
 
 REVIEWER's Step 03d FAIL (`handoffs/WF03-ISS0911-20260930/step-03d-reviewer.json`) found
@@ -79,10 +142,12 @@ This design changes exactly one behavior: how the Start Instance dialog's **own*
   "a different, already-correct, untouched data path" was wrong: that effect and the new
   one both write the same two state fields, and the new effect's own `setSearchParams`
   call re-triggers the old one. They can no longer be two independent effects.
-- Does **not** touch `submitStartInstance` or `openStartDialog` (which sets
+- Does **not** touch `submitStartInstance`. **(Rework 2)** `openStartDialog` and
+  `closeStartDialog` each gain exactly one added line each (clearing
+  `lookupWroteDefinitionId.current`, §5.2) — `openStartDialog` otherwise still sets
   `startDefinitionVersion`/`startDefinitionId` imperatively, once, from
-  `activeDefinitionByName`/`definitionId` at dialog-open time — not effect-driven, not
-  part of the race) — both are outside this bug's data path.
+  `activeDefinitionByName`/`definitionId` at dialog-open time, not effect-driven, not part
+  of the race.
 - Does **not** remove `definitionTypeahead` — it has a legitimate remaining use
   (§4) that must be preserved untouched.
 
@@ -284,6 +349,22 @@ now seeing changed for some other reason" (initial mount with a deep-linked
 `definitionId`, `onResolveDefinition`'s own `setSearchParams`, `onDefinitionInputChange`
 clearing the filter, browser back/forward).
 
+**(Rework 2) The guard is one-shot/expiring, not persistent.** It is consumed — set back
+to `undefined` — the first time step 3 examines it, unconditionally, whether or not
+`definitionId` matched it (see step 3 below for the exact point of consumption). A value
+this ref ever held can therefore influence at most one subsequent effect run; it can never
+be matched again by any later render, including one where an unrelated external
+`definitionId` change happens to revisit the same id value (the defect
+`step-02b-code-design-validator-recheck1.json` found). It is additionally cleared
+whenever the dialog closes or (re-)opens — see the added line in `openStartDialog`/
+`closeStartDialog`, §1 — as defense-in-depth, though the one-shot consumption above
+already makes a cross-session match structurally impossible on its own (rationale in the
+"Rework 2" section at the top of this document, including why a generation-token counter
+was considered and rejected as unneeded: the effect's dependency array only allows
+exactly one run to ever observe a self-written `definitionId` before
+`activeDefinitionByName` either resolves for it, correctly ending the need for the guard,
+or `versionLookupState` moves the next run to step 1/2 instead of step 3).
+
 The single effect's dependencies are `[definitionId, activeDefinitionByName?.id,
 activeDefinitionByName?.version, versionLookupState]`. Its control flow, evaluated in
 this fixed priority order every time it runs:
@@ -314,23 +395,49 @@ this fixed priority order every time it runs:
    opinion this render (nothing has settled yet, or the input is empty). Fall through to
    the `definitionId`-driven source, but only if this render's `definitionId` was **not**
    caused by this effect's own step-1 write:
-   - **Guard:** if `definitionId === lookupWroteDefinitionId.current`, this render is
-     the direct result of this effect's own `setSearchParams` call from a prior pass —
-     `activeDefinitionByName` (from `useDefinition(definitionId)`) is known to be
-     uncached/stale for this brand-new id at this exact moment. **Do nothing** — leave
-     `startDefinitionVersion`/`startDefinitionId` exactly as step 1 already set them.
-     This is the guard that eliminates the bug: the old effect's blanking write simply
-     never happens for a self-caused `definitionId` change.
-   - **Otherwise** (an externally-sourced `definitionId`: initial mount with a
-     deep-linked id, `onResolveDefinition`, `onDefinitionInputChange`, browser
-     navigation) — behave exactly as the original pre-existing effect did:
-     - if `definitionId` is set: `setStartDefinitionVersion(activeDefinitionByName?.version
-       ?? '')` and `setStartDefinitionId(activeDefinitionByName?.id ?? definitionId)`.
-     - if `definitionId` is unset: `setStartDefinitionVersion('')` and
-       `setStartDefinitionId(undefined)`.
-   - Neither branch here touches `lookupWroteDefinitionId.current` — it only ever
-     changes in steps 1 and 2, so a run of step 3 never fabricates a false "self-caused"
-     signal for a later render.
+   - **Guard (Rework 2 — one-shot):** first, read and immediately clear the ref in one
+     step: `const wroteId = lookupWroteDefinitionId.current;
+     lookupWroteDefinitionId.current = undefined`. This unconditional clear is what makes
+     the guard one-shot — every execution of step 3 consumes whatever the ref held,
+     regardless of the comparison's outcome, so no value the ref ever held can be
+     compared against on a later run.
+     - If `definitionId === wroteId` (using the just-read, pre-clear value): this render
+       is the direct result of this effect's own `setSearchParams` call from a prior
+       pass — `activeDefinitionByName` (from `useDefinition(definitionId)`) is known to
+       be uncached/stale for this brand-new id at this exact moment. **Do nothing** —
+       leave `startDefinitionVersion`/`startDefinitionId` exactly as step 1 already set
+       them. This is the guard that eliminates the original bug: the old effect's
+       blanking write simply never happens for a self-caused `definitionId` change. Per
+       the one-shot rule above, this comparison can succeed for at most one effect run
+       per self-write — the very next run either sees `activeDefinitionByName` resolved
+       for this id (falls to the "otherwise" branch below with now-correct data) or sees
+       `versionLookupState` no longer `idle`/`loading` (handled by step 1/2 instead).
+     - **Otherwise** (`definitionId !== wroteId` — an externally-sourced
+       `definitionId`: initial mount with a deep-linked id, `onResolveDefinition`,
+       `onDefinitionInputChange`, browser navigation, or a self-written id being
+       revisited after its one-shot guard was already consumed on an earlier run) —
+       behave exactly as the original pre-existing effect did:
+       - if `definitionId` is set: `setStartDefinitionVersion(activeDefinitionByName?.version
+         ?? '')` and `setStartDefinitionId(activeDefinitionByName?.id ?? definitionId)`.
+       - if `definitionId` is unset: `setStartDefinitionVersion('')` and
+         `setStartDefinitionId(undefined)`.
+   - `lookupWroteDefinitionId.current` is already `undefined` on exit from step 3 in
+     both branches above (cleared at the top, and never re-armed by step 3 — it is only
+     ever set again by a future step-1 run), so a run of step 3 never fabricates a false
+     "self-caused" signal for a later render, and never leaves stale guard state for a
+     future unrelated `definitionId` value to coincidentally match.
+
+**(Rework 2) Reset on dialog open/close.** `openStartDialog` (`InstanceBoardPage.tsx`
+lines 223-234) sets `lookupWroteDefinitionId.current = undefined` as part of its existing
+imperative initialization pass (alongside `setStartDefinitionVersion`/
+`setStartDefinitionId`/etc.), and `closeStartDialog` (lines 236-238) does the same. This
+does not change either function's existing behavior toward
+`startDefinitionVersion`/`startDefinitionId` themselves — only the guard ref, which is
+dialog-session-scoped state and must not leak a stale self-write tag from one dialog
+session into the next (the second gap `step-02b-code-design-validator-recheck1.json`
+found). Combined with the one-shot consumption above, this ref can now never hold a value
+across a dialog close, and can never be matched more than once even within a single
+session.
 
 **Why one effect, not two effects plus a same-id skip guard (rework's option (a)).** A
 skip-guard bolted onto the *old* effect alone, while the *new* effect stays separate,
@@ -352,6 +459,16 @@ pair, or step 3's externally-sourced pair) — there is no code path in which on
 written and the other is not, and no code path in which this effect's own
 `setSearchParams` causes a *second* write pass with different (stale) data, because
 there is no second effect left to run one.
+
+**(Rework 2) Second invariant check — the guard cannot desync the pair either.** The
+one-shot guard only ever causes step 3 to do *nothing* (leaving the pair exactly as step 1
+already wrote it, together) or to fall through to the "otherwise" branch's own
+together-written pair — it never itself writes only one of the two fields, and, being
+consumed on every read (matched or not), it cannot cause "do nothing" to fire for a
+`definitionId` value it has no business vouching for anymore, closing the specific defect
+`step-02b-code-design-validator-recheck1.json` found (an indefinitely-stale ref wrongly
+vouching for a `definitionId` value that recurred long after the self-write it was meant
+to describe).
 
 ## 6. `definitionTypeahead` — confirmed remaining legitimate use
 
@@ -402,3 +519,4 @@ its declaration is in scope for this fix.
 | Loading/not-found/found version-field states specified | §5 `VersionLookupState`, §5.1 state→UI table (plus `error`, a state the AC's own three-state framing didn't name but the design must not collapse into "not found") |
 | No implementation code in the design doc | Type signatures (§3, §5) and control-flow prose only — no request bodies, no effect bodies, no component render output |
 | **(Rework 1)** Single write path for `startDefinitionVersion`/`startDefinitionId`, no possibility of the new effect's own `setSearchParams` re-triggering a second, independent effect that transiently desyncs the two values | §5.2 (rewritten) — one merged effect, `lookupWroteDefinitionId` ref guard against acting on a self-caused `definitionId` change while `activeDefinitionByName` is still uncached for the new id; explicit invariant statement at top of doc under "Rework 1" |
+| **(Rework 2)** Guard/token distinguishing a self-caused `definitionId` change from an external one must be one-shot/expiring (or generation-token based), cannot be revived by an unrelated later event reaching the same id value, and is reset on dialog open/close | §5.2 step 3 guard rewritten to read-then-immediately-clear `lookupWroteDefinitionId` (one-shot, option (a) — chosen over a generation-token counter; rationale at top of doc under "Rework 2"); `openStartDialog`/`closeStartDialog` (§1, §5.2) both clear the ref; second invariant check added at end of §5.2 |

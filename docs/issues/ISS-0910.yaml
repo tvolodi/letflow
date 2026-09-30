@@ -1,0 +1,29 @@
+id: ISS-0910
+title: "ISS-0886 fix gap: RoleBackfill seeds tenant_role/groups but never group_members; users who logged in before backfill stay roles:[] / 403"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL2-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T06:26:54Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  ISS-0886 (resolved) added a role backfill, but on QA users on pre-existing
+  tenants who had logged in before the backfill (admin-user, worker-user,
+  bilimbaga-admin-user, etc.) remained roles:[] and got 403. RoleBackfill seeds
+  tenant_role rows and groups but never group_members, and
+  sync_role_claims_from_token/3 only runs when users.role_claims_synced_at is nil
+  (lib/letflow/identity.ex ~line 1707), so already-synced users are never
+  re-synced. Remediated manually on QA on 2026-09-30 by setting
+  role_claims_synced_at = NULL for those users (bpm-default 6 rows, bilimbaga 1
+  row) after a pg_dumpall backup. Fix direction: the backfill should also reset
+  the marker for affected users, or re-sync memberships from claims/Keycloak.
+  Any other environment with pre-existing tenants has the same exposure.
+source_reports:
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
+affected_files:
+  - lib/letflow/identity.ex
+  - lib/letflow/identity/role_registry.ex
+  - lib/mix/tasks/ (backfill_platform_roles)
+queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+status: open

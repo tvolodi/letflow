@@ -1,0 +1,213 @@
+run_id: WF05-FULL2-20260930-NARRATIVE
+date: "2026-09-30"
+agent: UAT-RUNNER
+slice: "narrative corpora meridian (3) + swiftroute (4) + vortex (4) = 11 scenarios"
+environment:
+  base_url: https://qa.bizdala.com
+  idp: https://auth.qa.bizdala.com
+  environment: qa
+  credential_source: ai-dala-infra/scripts/qa-uat-env.sh (token <user>, in-process only; no secret written anywhere)
+  preflight_report: test/uat-reports/preflight-2026-09-30-qa.txt
+  health: "tenants swiftroute, meridian, vortex now listed (status active) by GET /api/v1/tenants"
+result_overall: ENV_NOT_READY
+summary: >
+  11 scenarios: 0 PASS, 2 FAIL (swiftroute/shipment-high-value-happy EO-001 BLOCKER-candidate;
+  swiftroute/shipment-ops-timeout-escalation EO-003 MINOR; both also have GUI-leg EOs recorded
+  UNBUILT_FEATURE because no pipeline_test exists), 9 ENV_BLOCKED. result_overall is ENV_NOT_READY
+  because ENV_BLOCKED scenarios remain (meridian x3, vortex x4, swiftroute attach-delivery-note,
+  swiftroute tenant-onboarding-happy).
+counts:
+  PASS: 0
+  FAIL: 2          # shipment-high-value-happy (EO-001), shipment-ops-timeout-escalation (EO-003); both also carry UNBUILT_FEATURE GUI-leg EOs
+  UNBUILT_FEATURE_only: 0
+  ENV_BLOCKED: 9   # meridian x3, vortex x4, swiftroute attach-delivery-note, swiftroute tenant-onboarding-happy
+observed_facts:
+  - "GET /api/v1/tenants (swiftroute-admin-user token): bpm-default, bilimbaga, req384-eo001-b-*, swiftroute, meridian, vortex all status active."
+  - "Token grants via qa-uat-env.sh succeeded (HTTP token length >1500) for swiftroute-admin-user, meridian-admin-user, vortex-admin-user, actor-swiftroute-{lena,marco,alice,tobias}, actor-vortex-karl. Preflight BAD_CRED for alice/lena/marco/karl is a confirmed false positive (ORCH correction verified)."
+  - "GET /api/v1/definitions in tenant meridian -> items:[] ; in tenant vortex -> items:[] ; in swiftroute -> one row 'Shipment Approval' v1.0 ACTIVE (id 498deba9-3036-4287-80d4-ba37679d2662)."
+  - "GET /definitions/active/{Loan Origination, Regulatory Compliance Review} as meridian-admin-user -> 404; GET /definitions/active/{Supplier Quality Deviation, Production Order Release} as vortex-admin-user -> 404."
+  - "swiftroute: GET /definitions/active/proc-swiftroute-shipment-approval -> 404, GET /definitions/active/Shipment%20Approval -> 200. POST /instances with definition_name 'Shipment Approval' -> 201 (works). Scenario process_id key does not resolve = ISS-0893 (cited, not re-filed)."
+  - "Identity users actor-swiftroute-{alice,marco,lena,tobias}, actor-meridian-* (9), actor-vortex-* (6) all resolvable via GET /identity/users?search=. role-ops-manager and role-ceo exist; group role-ops-manager members = [actor-swiftroute-marco]."
+  - "Vortex: actor-vortex-karl GET /entities -> 403, /entities/types -> 403; no vortex entity types/batches seeded; definitions/instances/tasks all empty."
+side_effects: >
+  Created and then cancelled 4 swiftroute instances (sim-ship-001 68ee06b6-51bd-4562-94c2-11b5f358cec1 CANCELLED 200;
+  sim-ship-002 1640512d-746b-4a07-9bec-0310aa8d3e56 CANCELLED 200; a diagnostic sim-ship-diag 179454f1-8b59-4ec5-a891-a05c78e59066 CANCELLED 200;
+  cleanup complete per scenario cleanup blocks). Tasks claimed by marco (sim-ship-001) and tobias (diag) as part of the diagnosis. No definitions,
+  tenants, realms, roles or users were created; no QA infrastructure touched; scripts/seed_* not run by this run. No code changed, nothing committed.
+scenarios:
+
+  - id: swiftroute/shipment-high-value-happy
+    verdict: FAIL
+    branch: n/a (flat steps)
+    detail: >
+      Step 1 (api, actor-swiftroute-lena): POST /api/v1/instances definition_name 'Shipment Approval', sim-ship-001, declared_value 750
+      -> 201 instance_id 68ee06b6-51bd-4562-94c2-11b5f358cec1 status ACTIVE. Steps 2 and 3 are via: gui and the scenario has NO pipeline_test key
+      -> frontend leg UNBUILT_FEATURE; not substituted with an API-only path, so the ops approve / CEO co-sign / completion chain was not driven.
+    expected_outcomes:
+      - id: EO-001
+        verdict: FAIL
+        severity_if_confirmed: BLOCKER
+        evidence: >
+          Literal check PASSES: GET /tasks?instance_id=... (admin) -> task ops-review PENDING, assignee_ref 'role-ops-manager' created ~12ms after instance.
+          Description ('the operations manager receives a review task') FAILS: GET /tasks/inbox as actor-swiftroute-marco (TASK_WORKER, sole member of group
+          role-ops-manager) -> count 0, GET /tasks -> count 0, even though GET /tasks/{id} returns the task. The task row has assignee_type=null and assignee_ref='role-ops-manager'
+          (a name), which the per-principal inbox scope (group ids) never matches. Additionally, actor-swiftroute-tobias (NOT an ops manager) POST /tasks/{id}/claim on a fresh
+          ops-review task -> 200 and became assignee: role routing is not enforced on claim for assignee_type=null tasks.
+        diagnosis_hint: >
+          HUMAN_TASK node attribute role='role-ops-manager' is materialised as assignee_ref=<role name> with assignee_type=NULL instead of resolving to a GROUP/ROLE
+          assignee (group id role-ops-manager dd0064a0-...). Letflow.Tasks.apply_claim(%Task{assignee_type: nil}) treats it as unassigned (claimable by anyone) and
+          resolve_principal_scope/inbox never matches the name. Look at Engine task creation for HUMAN_TASK 'role' attribute resolution (name -> group_id, type GROUP/ROLE).
+        existing_issue: "none found among ISS-0886..0897/0901 -> new finding for ORCH to file (possible security-adjacent: any task worker can claim role-routed tasks)"
+      - id: EO-002
+        verdict: UNBUILT_FEATURE
+        evidence: "Depends on step 2 (gui, no pipeline_test). Not executed."
+      - id: EO-003
+        verdict: UNBUILT_FEATURE
+        evidence: "Depends on steps 2-3 (gui, no pipeline_test). Not executed."
+      - id: EO-004
+        verdict: UNBUILT_FEATURE
+        evidence: "Instance never driven to COMPLETED; SLA audit comparison impossible."
+    known_open: [ISS-0893]
+
+  - id: swiftroute/shipment-ops-timeout-escalation
+    verdict: FAIL
+    detail: >
+      Step 1 (api, actor-swiftroute-tobias): POST /instances 'Shipment Approval' sim-ship-002 declared_value 200 -> 201 instance 1640512d-746b-4a07-9bec-0310aa8d3e56.
+      Step 2 (system, advance-timer): POST /instances/:id/advance-timer {node_id: ops-review} as tobias -> 200 {timer_id bf65ae79-..., timer_status: fired}
+      (as swiftroute-admin-user -> 404 after the timer had already fired). Step 3 (gui, CEO) has no pipeline_test -> not executed (UNBUILT_FEATURE frontend leg).
+    expected_outcomes:
+      - id: EO-001
+        verdict: PASS
+        evidence: >
+          After timer fire, GET /tasks?instance_id -> ceo-approval assignee_ref 'role-ceo' PENDING (created 03:15:12.644Z); ops-review assignee_ref 'role-ops-manager'
+          status CANCELLED; no PENDING task remains on role-ops-manager. Timeline shows INSTANCE_STARTED then TIMER_FIRED(ops-review).
+          Caveat: same assignee_type=null routing weakness as high-value EO-001 (inbox visibility not verified to reach a role-ceo member without PLATFORM_ADMIN; alice sees it via admin scope).
+      - id: EO-002
+        verdict: UNBUILT_FEATURE
+        evidence: "Needs step 3 (CEO approves via GUI); no pipeline_test in scenario. Instance left ACTIVE with ceo-approval PENDING, then cancelled in cleanup."
+      - id: EO-003
+        verdict: FAIL
+        severity_if_confirmed: MINOR
+        evidence: >
+          Behavioural half passes: POST /tasks/9b08d374-.../complete by marco on the CANCELLED ops-review task -> 409 'task is not pending'. Audit half fails:
+          GET /api/v1/audit shows only task.create(ops-review 03:15:08.572Z), instance.create, task.create(ceo-approval 03:15:12.644Z); no task.cancel/timeout audit row for
+          ops-review, GET /instances/:id/history has only INSTANCE_STARTED + TIMER_FIRED, and the cancelled task row's updated_at equals its created_at (03:15:08.571574Z),
+          so no record shows ops-review moved to cancelled BEFORE ceo-approval was created.
+        diagnosis_hint: "Timer-fire path cancels the sibling HUMAN_TASK (status CANCELLED) without emitting a task.cancel audit event or bumping updated_at. Check Scheduler.fire_timer / Engine timeout-edge token cancellation for missing Audit.record + updated_at touch."
+        existing_issue: "none found -> new finding (MINOR)"
+
+  - id: swiftroute/shipment-attach-delivery-note
+    verdict: ENV_BLOCKED
+    classification: ENV_NOT_SUPPORTED
+    detail: >
+      pipeline_test web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts exists but imports getMasterAdminToken (Keycloak master admin, not in the
+      credential source) and runSqlAgainstDevPostgres/bindTenantIdpRealm from db-exec.ts (docker compose psql; direct SQL to lower tenant storage allowance) and provisions
+      a fresh tenant+realm itself. Cannot run against qa without master-admin creds and local Postgres. Not run (would otherwise create a tenant+realm on shared QA).
+    expected_outcomes:
+      - {id: EO-001, verdict: ENV_BLOCKED}
+      - {id: EO-002, verdict: ENV_BLOCKED}
+      - {id: EO-003, verdict: ENV_BLOCKED}
+      - {id: EO-004, verdict: ENV_BLOCKED}
+      - {id: EO-005, verdict: ENV_BLOCKED}
+    known_open: [ISS-0896, ISS-0901 (same db-exec docker/psql class)]
+
+  - id: swiftroute/tenant-onboarding-happy
+    verdict: ENV_BLOCKED
+    classification: ENV_NOT_SUPPORTED
+    detail: >
+      Permanent env-limitation sidecar test/fixtures/uat/scenario-env-limitations/swiftroute-tenant-onboarding-happy.yaml (applies_to_environments [qa], no per-EO scope,
+      so all EOs exempt). Confirmed still accurate: GET /tenants shows slug 'swiftroute' registered/active, so precondition #1 (slug unregistered) cannot hold.
+    expected_outcomes:
+      - {id: EO-001, verdict: ENV_BLOCKED}
+      - {id: EO-002, verdict: ENV_BLOCKED}
+      - {id: EO-003, verdict: ENV_BLOCKED}
+      - {id: EO-004, verdict: ENV_BLOCKED}
+    known_open: [ISS-0895]
+
+  - id: meridian/loan-origination-above-threshold
+    verdict: ENV_BLOCKED
+    classification: PRECONDITION_NOT_MET
+    detail: >
+      process_definition_active precondition false: meridian tenant GET /definitions -> items:[]; GET /definitions/active/Loan%20Origination -> 404. Actors (lars, ben, miriam,
+      thomas, julia, eva, marcus) now exist, but instance step 1 cannot start without the definition. Not created by this run (no seed_meridian script exists).
+    expected_outcomes:
+      - {id: EO-001, verdict: ENV_BLOCKED}
+      - {id: EO-002, verdict: ENV_BLOCKED}
+      - {id: EO-003, verdict: ENV_BLOCKED}
+      - {id: EO-004, verdict: ENV_BLOCKED}
+    known_open: [ISS-0893, ISS-0897]
+
+  - id: meridian/loan-origination-below-threshold
+    verdict: ENV_BLOCKED
+    classification: PRECONDITION_NOT_MET
+    detail: "Same as above: meridian definitions empty; Loan Origination 404."
+    expected_outcomes:
+      - {id: EO-001, verdict: ENV_BLOCKED}
+      - {id: EO-002, verdict: ENV_BLOCKED}
+      - {id: EO-003, verdict: ENV_BLOCKED}
+    known_open: [ISS-0893, ISS-0897]
+
+  - id: meridian/regulatory-compliance-review-bafin
+    verdict: ENV_BLOCKED
+    classification: PRECONDITION_NOT_MET
+    detail: "meridian definitions empty; GET /definitions/active/Regulatory%20Compliance%20Review -> 404."
+    expected_outcomes:
+      - {id: EO-001, verdict: ENV_BLOCKED}
+      - {id: EO-002, verdict: ENV_BLOCKED}
+      - {id: EO-003, verdict: ENV_BLOCKED}
+    known_open: [ISS-0893, ISS-0897]
+
+  - id: vortex/production-order-above-threshold
+    verdict: ENV_BLOCKED
+    classification: PRECONDITION_NOT_MET
+    detail: "vortex definitions empty; GET /definitions/active/Production%20Order%20Release -> 404. Actors anna/sabine/stefan resolvable."
+    expected_outcomes:
+      - {id: EO-001, verdict: ENV_BLOCKED}
+      - {id: EO-002, verdict: ENV_BLOCKED}
+      - {id: EO-003, verdict: ENV_BLOCKED}
+      - {id: EO-004, verdict: ENV_BLOCKED}
+    known_open: [ISS-0893, ISS-0897]
+
+  - id: vortex/supplier-quality-deviation-critical
+    verdict: ENV_BLOCKED
+    classification: PRECONDITION_NOT_MET
+    detail: "vortex definitions empty; GET /definitions/active/Supplier%20Quality%20Deviation -> 404. Actors nina/karl/felix resolvable (karl token OK)."
+    expected_outcomes:
+      - {id: EO-001, verdict: ENV_BLOCKED}
+      - {id: EO-002, verdict: ENV_BLOCKED}
+      - {id: EO-003, verdict: ENV_BLOCKED}
+      - {id: EO-004, verdict: ENV_BLOCKED}
+    known_open: [ISS-0893, ISS-0897]
+
+  - id: vortex/supplier-quality-deviation-false-positive
+    verdict: ENV_BLOCKED
+    classification: PRECONDITION_NOT_MET
+    detail: "Same as above."
+    expected_outcomes:
+      - {id: EO-001, verdict: ENV_BLOCKED}
+      - {id: EO-002, verdict: ENV_BLOCKED}
+      - {id: EO-003, verdict: ENV_BLOCKED}
+    known_open: [ISS-0893, ISS-0897]
+
+  - id: vortex/entity-list-filter-and-page
+    verdict: ENV_BLOCKED
+    classification: PRECONDITION_NOT_MET (+ UNBUILT_FEATURE on frontend leg)
+    detail: >
+      Preconditions 'system_seeded' (production batches from several suppliers) and quarantined Nordmetall batches are false: vortex has no entity types or batches
+      (karl GET /entities and /entities/types -> 403; vortex-admin-user GET /entities -> 404; definitions/instances empty). The named pipeline_test
+      entity-list-query.pipeline.e2e.spec.ts exists but its own header shows it exercises the BilimBaga 'tag' entity as admin-user in the default realm, not Vortex batches
+      or karl/anna, so it does not cover this scenario (NOTE ISS-0526 still applies: no spec written against Vortex's data). Not run.
+    expected_outcomes:
+      - {id: EO-001, verdict: ENV_BLOCKED}
+      - {id: EO-002, verdict: ENV_BLOCKED}
+      - {id: EO-003, verdict: ENV_BLOCKED}
+      - {id: EO-004, verdict: ENV_BLOCKED}
+      - {id: EO-005, verdict: ENV_BLOCKED}
+    known_open: [ISS-0897, ISS-0526-note]
+
+recommended_actions:
+  - "ISS-0897: add scripts/seed_{meridian,vortex}_definition.sh + fixtures and seed vortex/meridian process definitions and vortex batch data; then re-run 7 blocked scenarios."
+  - "ISS-0893: give the seeded Shipment Approval a key/process_key matching proc-swiftroute-shipment-approval (definition_name works today)."
+  - "New finding A (BLOCKER-candidate): HUMAN_TASK role routing produces assignee_type=null/assignee_ref=<role name>; role members do not see the task in /tasks/inbox and any task worker can claim it."
+  - "New finding B (MINOR): timer-driven cancellation of the ops-review task writes no audit/task.cancel event and does not bump updated_at."
+  - "FRONTEND-DEV/BA: author pipeline_tests (or a documented API leg) for swiftroute shipment-high-value-happy and shipment-ops-timeout-escalation GUI steps 2/3."

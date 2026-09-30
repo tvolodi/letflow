@@ -1,0 +1,22 @@
+id: ISS-0906
+title: "Cancelled ops-review task has no task.cancel audit event and updated_at equals created_at"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL2-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T06:26:54Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  Found in swiftroute/shipment-ops-timeout-escalation EO-003 (WF05-FULL2-20260930,
+  QA). When the ops-review task is cancelled by the timeout/escalation path, no
+  task.cancel audit event is written and the task row's updated_at remains equal
+  to created_at, so the cancellation is neither audited nor reflected in the
+  row's timestamps. Expected: a task.cancel audit event and an updated_at bump on
+  every cancel path.
+source_reports:
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-PLATFORM.yaml
+  - test/uat-reports/uat-2026-09-30-WF05-FULL2-20260930-NARRATIVE.yaml
+affected_files:
+  - lib/letflow/ (task cancel path, audit events)
+queue_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+github_ref: null  # local-only, filed by WF05-FULL2-20260930 ORCH
+status: open

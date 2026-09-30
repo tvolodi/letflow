@@ -1,0 +1,44 @@
+run_id: WF05-FULL2-20260930-BILIMBAGA
+date: "2026-09-30"
+agent: UAT-RUNNER
+slice: bilimbaga
+environment:
+  base_url: https://qa.bizdala.com
+  environment: qa
+  idp: https://auth.qa.bizdala.com
+  credential_source: ai-dala-infra/scripts/qa-uat-env.sh (actor/token candidate-user; used in-process, not recorded)
+  preflight_report: test/uat-reports/preflight-2026-09-30-qa.txt (bilimbaga scenario: no GAP)
+  readiness: "GET https://qa.bizdala.com/health -> 200 {status: ok}"
+  realm_note: "Spec mints token directly against the bilimbaga realm (ISS-0727 workaround built into the spec); ISS-0727 not re-tested here."
+result_overall: PASS
+scenarios:
+  - id: bilimbaga-candidate-timed-exam-autograde
+    file: test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    verdict: PASS
+    driver: "npx playwright test tests/e2e/pipelines/bilimbaga-candidate-timed-exam.pipeline.e2e.spec.ts --retries=0 (from web/) -> 1 passed (11.7s)"
+    prior_state_verification:
+      - "candidate-user token (bilimbaga realm) roles: offline_access, CANDIDATE, uma_authorization, default-roles-bilimbaga"
+      - "GET /api/v1/me/modules with that token -> 200 {installed_modules:[{module_id: exam, version: 0.1.0}]} (was 403 on 2026-09-29; ISS-0886 backfill effective)"
+      - "Observation only (not part of scenario): GET /api/v1/me/memberships -> 403 and GET /api/v1/modules/exam/exams -> 403 for CANDIDATE; the UI exam list does not depend on them"
+    steps:
+      step_1: "PASS - after loginWithToken + navigateSpa('/exam'), exam-list-page and exam-list rendered, no '[object Object]' in titles"
+      step_2: "PASS - clicking exam-list-start-<id> opened exam-session-page (session created on real QA)"
+      step_3: "PASS - answered both MCQ questions, saved status shown each time, submitted; exam-result-page rendered"
+    expected_outcomes:
+      EO-001:
+        verdict: PASS
+        evidence: "Screenshot step-2 shows 'Time remaining: 29:57'; spec asserted title matches mm:ss and that a reading taken 2s later differs (countdown ticks)."
+      EO-002:
+        verdict: PASS
+        evidence: "After submit, same page shows exam-result-page with 'Score: 2 / 2 (100%)' and 'Passed'; exam-result-pending count 0 (score not deferred). Screenshot step-3."
+      EO-003:
+        verdict: PASS
+        evidence: "Both questions answered with the previously confirmed correct options (Red / Evacuate via the nearest exit); result shows 100% / Passed, matching correct grading (spec asserts /100 ?%/). Verified via result screen served by GET exam-session, not by direct DB read (is_correct is redacted to all callers by design)."
+    minor_observation: "Sidebar header still reads 'UNKNOWN WORKSPACE' on the bilimbaga session (cosmetic; likely ISS-0727 tenant-config/realm-by-host related, not re-filed)."
+    evidence_files:
+      - web/tests/screenshots/pipelines/bilimbaga-candidate-timed-exam-step-1--sign-in-and-open-the-list-of-available-exams.png
+      - web/tests/screenshots/pipelines/bilimbaga-candidate-timed-exam-step-2--start-a-timed-certification-exam-session.png
+      - web/tests/screenshots/pipelines/bilimbaga-candidate-timed-exam-step-3--answer-every-question-and-submit-before-time-runs-out.png
+    cleanup: "Session was submitted by the UI in step 3; no open session left."
+known_open_issues_cited: [ISS-0727, ISS-0726, ISS-0729, ISS-0886]
+env_blocked: []

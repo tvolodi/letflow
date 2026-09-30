@@ -2549,3 +2549,5 @@
 2026-09-30T22:27:00Z | PASS | WF03-ISS0936-20261001 | step-final | ELIXIR-DEV -> ORCH | PASS -- PR #2074 squash-merged as 63f26fa4 (CI green); ORCH verified merge state, ISS-0936 resolved on main, fix+test on main
 2026-09-30T22:27:00Z | RUN_DONE | WF03-ISS0936-20261001 | ORCH | DONE -- ISS-0936/Q-919/GH#2070 resolved; queue task 919 release_lock(done) OK (status done, unlocked)
 2026-09-30T22:29:14Z | DISPATCH | WF03-ISS0930-20261001 | step-01-issue-fixer-diagnose | ORCH -> ISSUE-FIXER | PENDING
+2026-09-30T22:31:23Z | PASS | WF03-ISS0930-20261001 | step-01 | ISSUE-FIXER -> ORCH | PASS -- root cause: seeded endpoints are relative 'POST /path' strings; engine requires absolute https URL (url_validator check_scheme) -> {:request_build_error,:target_url_not_allowed}; fix in seed
+2026-09-30T22:31:23Z | DISPATCH | WF03-ISS0930-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING

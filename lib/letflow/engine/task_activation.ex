@@ -129,14 +129,41 @@ defmodule Letflow.Engine.TaskActivation do
   group/role-membership resolution (design §4.3, INV-EE47-4). `assignee_ref`
   is `node.attributes["role"]` (guaranteed present and non-empty on a
   structurally valid `:HUMAN_TASK` node by REQ-029's PD-05 CHK-09).
-  `assignee_type` is `node.attributes["assignee_type"]` if present, `nil`
-  otherwise — no default is invented for an absent key (OQ-1).
+
+  `assignee_type` resolves in this precedence order (ISS-0905, settling
+  req047 OQ-1 permanently — see
+  `lib/letflow/design/iss0905-role-assignee-type-not-derived.md` §1.1/§2):
+
+    1. An explicit `node.attributes["assignee_type"]`, if present and
+       non-`nil`, always wins verbatim — future-proofing for any later
+       authoring path that assigns by field instead of by role (none exists
+       today).
+    2. Otherwise, if `assignee_ref` (`attributes["role"]`) is present and
+       non-`nil`, `assignee_type` is derived as `"ROLE"` — every
+       `:HUMAN_TASK` node authored by this codebase today reaches this
+       branch, since no authoring path ever populates `"assignee_type"`
+       (`Letflow.Definitions.SemanticValidation`'s moduledoc: HUMAN_TASK
+       assignment-by-field is out of scope). Before this fix, this branch
+       incorrectly returned `nil` here, leaving every role-assigned task
+       invisible to its role's members in `GET /tasks/inbox` and claimable
+       by any authenticated `TASK_WORKER` (ISS-0905).
+    3. Otherwise (both keys absent — the `attributes: nil`/empty-map case),
+       `assignee_type` is `nil` — no default is invented for a genuinely
+       unassigned task.
   """
   @spec resolve_assignee(node :: Graph.Node.t()) ::
           {assignee_type :: String.t() | nil, assignee_ref :: String.t() | nil}
   def resolve_assignee(%Graph.Node{attributes: attributes}) do
     attributes = attributes || %{}
-    {Map.get(attributes, "assignee_type"), Map.get(attributes, "role")}
+    assignee_ref = Map.get(attributes, "role")
+
+    assignee_type =
+      case Map.get(attributes, "assignee_type") do
+        nil -> if is_nil(assignee_ref), do: nil, else: "ROLE"
+        explicit -> explicit
+      end
+
+    {assignee_type, assignee_ref}
   end
 
   @doc """

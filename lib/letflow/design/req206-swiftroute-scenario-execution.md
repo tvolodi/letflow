@@ -527,10 +527,14 @@ task's `id`), followed by the `POST .../complete` dispatch shown below — both 
 
 **Settled (was OQ-3) — the `roles:` claim value each actor's token needs, confirmed
 by reading `lib/letflow/engine/task_activation.ex`'s `resolve_assignee/1` this
-session:** that function returns `{Map.get(attributes, "assignee_type"), Map.get(attributes,
-"role")}` — for a `role:`-attributed `HUMAN_TASK` node, `assignee_ref` is
-`node.attributes["role"]` verbatim, the literal role-attribute string written in the
-process YAML (`process_route_approval.yaml`'s `ops-review` node carries `role:
+session:** post-ISS-0905, that function resolves `assignee_type` in a three-branch
+precedence (explicit `attributes["assignee_type"]` wins if present; else, if
+`attributes["role"]` is present, `assignee_type` is derived as `"ROLE"`; else `nil`)
+and `assignee_ref` is always `node.attributes["role"]` verbatim — for a
+`role:`-attributed `HUMAN_TASK` node (no explicit `assignee_type` key, the only shape
+any authoring path produces), this resolves to `{"ROLE", node.attributes["role"]}`.
+`assignee_ref` is the literal role-attribute string written in the process YAML
+(`process_route_approval.yaml`'s `ops-review` node carries `role:
 role-ops-manager`, its `ceo-approval` node carries `role: role-ceo`). `Letflow.Tasks`'s
 `assignee_type == "ROLE"` claim/complete-scope resolution matches an actor's granted
 roles list against that identical string. This settles the exact token shape: each

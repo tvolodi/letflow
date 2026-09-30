@@ -103,10 +103,16 @@ defmodule Letflow.Engine.TaskActivationTest do
       assert TaskActivation.resolve_assignee(n) == {"GROUP", "approver"}
     end
 
-    test "assignee_type is nil when the key is absent -- no invented default (OQ-1)" do
+    # ISS-0905 fail-first: a role-attributed HUMAN_TASK with no explicit
+    # "assignee_type" key must derive "ROLE", not nil (this is the exact
+    # broken shape every HUMAN_TASK node produces today per CHK-09 -- see
+    # lib/letflow/design/iss0905-role-assignee-type-not-derived.md). This
+    # rewrites the previous "no invented default (OQ-1)" test, which asserted
+    # the bug itself as correct behavior.
+    test "role present, no explicit assignee_type -> assignee_type is derived as \"ROLE\" (ISS-0905, settles OQ-1)" do
       n = node("task", :HUMAN_TASK, attributes: %{"role" => "approver"})
 
-      assert TaskActivation.resolve_assignee(n) == {nil, "approver"}
+      assert TaskActivation.resolve_assignee(n) == {"ROLE", "approver"}
     end
 
     # AC4's own concrete proof at this layer: a group name with zero members is not a
@@ -145,7 +151,7 @@ defmodule Letflow.Engine.TaskActivationTest do
                token_id: "record-1",
                node_id: "task",
                node_name: "Approve request",
-               assignee_type: nil,
+               assignee_type: "ROLE",
                assignee_ref: "approver",
                form_schema: nil
              }

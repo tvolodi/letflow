@@ -1,0 +1,53 @@
+{
+  "handoff_id": "ce552eb3-dfc4-4441-bbf1-6ac88fcfda76",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0910-20260930/step-04b-test-design-validator.json",
+  "created_at": "2026-09-30T08:54:54Z",
+  "started_at": "2026-09-30T08:54:54Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["b41cc438-2ec7-4b17-8024-7c430dc25ef8"],
+    "artifacts_in": [
+      "test/letflow/identity/role_backfill_test.exs",
+      "lib/letflow/identity/role_backfill.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 4b, hard gate on TEST-DESIGNER's coverage for ISS-0910. Read test/letflow/identity/role_backfill_test.exs and lib/letflow/identity/role_backfill.ex directly. Per docs/agents/workflows/WF-03_issue_resolving.md's mutation-testing rule: independently APPLY at least one of TEST-DESIGNER's two reported mutants yourself (Mutant A: classify/3's :unchanged clause resets unconditionally; Mutant B: drop prefix: schema_name from the Repo.update_all) -- do not just accept the reported pass/fail counts. Confirm the exact reported test(s) fail and no others, then revert and verify (git status --porcelain lib/ test/ empty, suite re-runs green). Also check: fixtures use per-test unique/isolated data, no hardcoded secrets, tests are self-sufficient (no inter-test ordering dependency). FAIL immediately on any check failure -- no partial credit.",
+    "acceptance_criteria": [
+      "a test proves a :seeded tenant's users have role_claims_synced_at reset to nil",
+      "a test proves an :unchanged tenant's users are NOT touched",
+      "a test proves idempotency across two successive run/0 calls",
+      "a test proves the returned role_claims_markers_reset count is accurate, not approximate",
+      "at least 2 targeted mutants applied and reverted, with each one's specific test failure(s) recorded and the revert verified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

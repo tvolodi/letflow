@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0936-20261001/step-02b-r1-code-design-validator.json",
   "created_at": "2026-09-30T21:20:43Z",
   "started_at": "2026-09-30T21:20:43Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-30T21:25:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -37,7 +37,18 @@
       "Verdict PASS/FAIL"
     ]
   },
-  "result": null,
+  "result": {
+    "agent": "CODE-DESIGN-VALIDATOR",
+    "status": "FAIL",
+    "summary": "FAIL (2 new defects, prior 6 gaps all closed). Prior gaps verified closed against scripts/uat_preflight.sh: G1 flags named and match argparse lines 112-114; G2 substrings match real output (line 532 `login failed: <aid>(<STATE>)` in DETAIL; line 636 `credential validity   : <aid>@<realm>=<STATE>` with 3 spaces and `none checked` fallback; realm derives to swiftroute via realms_for); G3 T7 decided IN with stub spec; G4 fixture pinned, both parse_scenario paths (yaml and regex fallback, lines 156-175) yield id/company_id/actors; G5 JWT length 49 verified (20+15+12+2); G6/Q2 resolved. However re-verification against the script found two new defects that block a clean build.",
+    "issues": [
+      "N1 (factual error + hermeticity, design sec 6.2 T7 and Base URL bullets): the design claims the stub server receives the three /realms/<slug>/.well-known/openid-configuration GETs and that the catch-all 200 covers them. In the script (line 132) idp defaults to 'https://auth.' + host, i.e. https://auth.127.0.0.1 for base http://127.0.0.1:<port>, and the realm GETs (lines 384-386) go to idp, NOT base. So they never reach the stub; there are also only TWO slugs (swiftroute, bpm-default), not three. Consequence: every test T1-T7 makes real DNS/HTTPS attempts to auth.127.0.0.1 (non-hermetic, possibly slow in CI; each call has 15s timeout). Fix: add `--idp-url <base URL>` (argparse line 113 supports it) to the pinned command line for all tests (T1-T6 http://127.0.0.1:9, T7 the stub URL), and correct the T7 route list to: /health, two realm well-known paths via the stub (now that idp=base), /api/v1/me/modules, /api/v1/tasks/inbox.",
+      "N2 (formatting defect making the spec ambiguous, design lines 159-161): the T5 row contains two literal blank lines inside the cell (`followed by CRLF (` newline newline `) line ending`), which splits the markdown table; T5 and T6/T7 rows no longer render as table rows and the CRLF payload is unreadable. Replace with an escaped form in the cell, e.g. `@jwt` followed by `\\r\\n`, and state how the fake source emits it (printf '%s\\r\\n'). Also note for accuracy: the script's subprocess.run uses text=True (universal newlines, line 264) so CR is normalized before R1 is reached; T5 therefore guards end-to-end behavior, not R1 specifically. State that or drop the claim that T5 exercises the strip.",
+      "N3 (minor, sec 6.1/Q2): 'the test fails loudly with a message telling the developer to set UAT_PF_BASH' does not say how a WSL-stub bash is detected. Pin the mechanism (e.g. if the run output contains neither 'UAT PREFLIGHT' header nor ... assert with a failure message naming UAT_PF_BASH), or state that the ordinary assertion failure message must include that hint."
+    ],
+    "artifacts_out": [],
+    "next_action": "Route back to CODE-DESIGNER (rework 2 of 3; note this handoff's rework_count field counts from the r1 step) to fix N1-N3 in lib/letflow/design/iss0936-uat-preflight-bare-jwt.md, then re-submit to CODE-DESIGN-VALIDATOR. Expected to be a small edit."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

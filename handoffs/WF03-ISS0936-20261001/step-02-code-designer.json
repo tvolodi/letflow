@@ -9,7 +9,7 @@
   "created_at": "2026-09-30T21:17:16Z",
   "started_at": "2026-09-30T21:17:16Z",
   "completed_at": "2026-10-01T00:00:00Z",
-  "status": "COMPLETED",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -30,7 +30,7 @@
     "branch_name": "feature/WF03-ISS0936-20261001"
   },
   "task": {
-    "description": "WF-03 Step 2: design the fix from step-01's diagnosis (read handoffs/WF03-ISS0936-20261001/step-01-issue-fixer-diagnose.json result.summary). Produce a design doc lib/letflow/design/iss0936-uat-preflight-bare-jwt.md (design only, no implementation code beyond short signature/regex illustration): a small pure helper in scripts/uat_preflight.sh's embedded Python (parse_token_line or similar) accepting `Token: <jwt>` OR a full-line bare JWT (three dot-separated base64url segments, require eyJ prefix / min length so hostnames like auth.qa.bizdala.com are rejected), ignoring noise lines, never echoing tokens; header doc paragraph update; test shape (temp fake credential source + tiny scenario dir, UAT_PF_BASH env var because default bash on this host is WSL stub; local stdlib HTTP stub for 200 on GET /api/v1/me/modules optional; asserts: bare JWT not NO_PASSWORD, Token: form still works, noise-only -> NO_PASSWORD, hostname-like line rejected), and WHERE the test lives and how it runs in CI (decide: e.g. a python unittest/ExUnit wrapper under test/ -- check mix.exs/.github workflows to see what CI runs so the test is actually executed). Every acceptance criterion must map to a design element. Work only in context.worktree; do not commit. REWORK ITERATION 1: step-02b FAIL -- (1) name flags --credential-source/--credential-protocol (script lines 112-114), remove Q2; (2) pin exact assertion substrings for T1-T5 (e.g. 'login failed: actor-swiftroute-lena(NO_PASSWORD)' vs 'actor-swiftroute-lena@swiftroute=BAD_CRED'), and define what OK means for T7; (3) decide T7+HTTP stub IN or OUT (if in: every route served + exact assertion); (4) give minimal scenario fixture shape or name the fixture to copy; (5) fake JWT is 49 chars not 51; (6) remove resolved Q2. See step-02b handoff result. Flip status to COMPLETED/FAILED as normal on finishing.",
+    "description": "WF-03 Step 2: design the fix from step-01's diagnosis (read handoffs/WF03-ISS0936-20261001/step-01-issue-fixer-diagnose.json result.summary). Produce a design doc lib/letflow/design/iss0936-uat-preflight-bare-jwt.md (design only, no implementation code beyond short signature/regex illustration): a small pure helper in scripts/uat_preflight.sh's embedded Python (parse_token_line or similar) accepting `Token: <jwt>` OR a full-line bare JWT (three dot-separated base64url segments, require eyJ prefix / min length so hostnames like auth.qa.bizdala.com are rejected), ignoring noise lines, never echoing tokens; header doc paragraph update; test shape (temp fake credential source + tiny scenario dir, UAT_PF_BASH env var because default bash on this host is WSL stub; local stdlib HTTP stub for 200 on GET /api/v1/me/modules optional; asserts: bare JWT not NO_PASSWORD, Token: form still works, noise-only -> NO_PASSWORD, hostname-like line rejected), and WHERE the test lives and how it runs in CI (decide: e.g. a python unittest/ExUnit wrapper under test/ -- check mix.exs/.github workflows to see what CI runs so the test is actually executed). Every acceptance criterion must map to a design element. Work only in context.worktree; do not commit. REWORK ITERATION 1: step-02b FAIL -- (1) name flags --credential-source/--credential-protocol (script lines 112-114), remove Q2; (2) pin exact assertion substrings for T1-T5 (e.g. 'login failed: actor-swiftroute-lena(NO_PASSWORD)' vs 'actor-swiftroute-lena@swiftroute=BAD_CRED'), and define what OK means for T7; (3) decide T7+HTTP stub IN or OUT (if in: every route served + exact assertion); (4) give minimal scenario fixture shape or name the fixture to copy; (5) fake JWT is 49 chars not 51; (6) remove resolved Q2. See step-02b handoff result. Flip status to COMPLETED/FAILED as normal on finishing. REWORK ITERATION 2: step-02b-r1 FAIL -- N1: IdP realm discovery goes to --idp-url (default https://auth.127.0.0.1, script line 132), never the stub: add --idp-url <stub base URL> to the pinned command line for ALL tests (hermetic), correct T7 route list, only two slugs (swiftroute, bpm-default); N2: T5 table cell has literal blank lines -- use escaped \r\n, state how the fake source emits it, and note text=True normalizes CR so T5 is end-to-end only; N3: say how WSL-stub bash is detected. See step-02b-r1 result. Flip status to COMPLETED/FAILED as normal on finishing.",
     "acceptance_criteria": [
       "Design doc exists at lib/letflow/design/iss0936-uat-preflight-bare-jwt.md",
       "Covers parse rules, hostname rejection, no-secret-echo, header docs, test shape and CI wiring",
@@ -46,6 +46,6 @@
     ],
     "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
-  "rework_count": 1,
+  "rework_count": 2,
   "max_rework": 3
 }

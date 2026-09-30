@@ -1,5 +1,34 @@
 # Design: ISS-0911 — Start Instance dialog exact-name version lookup
 
+## Rework 1 (2026-09-30) — single write path for `startDefinitionVersion`/`startDefinitionId`
+
+REVIEWER's Step 03d FAIL (`handoffs/WF03-ISS0911-20260930/step-03d-reviewer.json`) found
+that the original version of this design (and its implementation) still had **two**
+independent `useEffect`s writing `startDefinitionVersion`/`startDefinitionId`: the
+pre-existing `definitionId`/`useDefinition(definitionId)`-driven effect (§5.2's old text,
+now superseded) and the new `versionLookupState`-driven effect (§5.2, original). The new
+effect's own `setSearchParams` call on a `found` transition changes the `definitionId`
+prop on the next render, which re-triggers the *old* effect before
+`useDefinition(newDefinitionId)` has any cache entry for that brand-new id — the old
+effect then runs with `activeDefinitionByName` still `undefined` and blanks
+`startDefinitionVersion` back to `''` while `startDefinitionId` stays correct (via its
+`?? definitionId` fallback), transiently desyncing the two values — the exact class of
+bug ISS-0891 already fixed once, reintroduced in a new shape via a URL-search-param
+feedback loop between two effects.
+
+**Explicit invariant this rework must hold** (this is now the binding acceptance
+criterion for both AC1-3 above and the rework's own AC4): *the version display
+(`startDefinitionVersion`) and the submitted definitionId (`startDefinitionId`) are
+always the same value at the same time, with no intermediate render showing one updated
+and not the other — even when a URL search-param write triggered by this fix's own new
+effect re-renders the component.*
+
+**Chosen direction: fold both effects into one, single write path** (option (b) from the
+rework task, not a same-id skip-guard bolted onto two still-separate effects — see
+rationale at the end of §5.2). §5.2 below is rewritten in full to specify this; §1's
+former claim that the old effect is "a different, already-correct, untouched data path"
+is retracted — it is no longer untouched; it is merged into the new single effect.
+
 ## 0. Sources read for this design
 
 - `handoffs/WF03-ISS0911-20260930/step-01-issue-fixer-diagnose.json` — ISSUE-FIXER's
@@ -40,15 +69,20 @@ This design changes exactly one behavior: how the Start Instance dialog's **own*
 - Adds a small pure derivation function, `deriveVersionLookupState`, used only by the
   dialog's version field to turn the new hook's raw TanStack Query result into one of
   four explicit UI states (§3).
-- Does **not** touch `startDefinitionId`'s own synchronization discipline (ISS-0891,
-  lines 65-77) — the new lookup still sets `startDefinitionVersion` and
-  `startDefinitionId` together, in the same synchronous state-update pass, for exactly
-  the same "must not go through `setSearchParams`" reason already documented there.
-- Does **not** touch `submitStartInstance` (lines 202-239), `openStartDialog`
-  (lines 164-175), or the mount-time effect (lines 104-112) — all three already resolve
-  their version/id from `activeDefinitionByName` (the **page-level** `useDefinition(
-  definitionId)` query, keyed off the URL's `definitionId`), which is a different,
-  already-correct data path untouched by this bug (§4).
+- Preserves `startDefinitionId`'s own synchronization discipline (ISS-0891) — the
+  lookup-driven write still sets `startDefinitionVersion` and `startDefinitionId`
+  together, in the same synchronous state-update pass, for exactly the same "must not go
+  through `setSearchParams`" reason already documented there.
+- **(Rework 1)** Merges the pre-existing `definitionId`/`useDefinition(definitionId)`-
+  driven effect and the new `versionLookupState`-driven effect into **one** effect with
+  one write path (§5.2) — the original design's claim that the pre-existing effect was
+  "a different, already-correct, untouched data path" was wrong: that effect and the new
+  one both write the same two state fields, and the new effect's own `setSearchParams`
+  call re-triggers the old one. They can no longer be two independent effects.
+- Does **not** touch `submitStartInstance` or `openStartDialog` (which sets
+  `startDefinitionVersion`/`startDefinitionId` imperatively, once, from
+  `activeDefinitionByName`/`definitionId` at dialog-open time — not effect-driven, not
+  part of the race) — both are outside this bug's data path.
 - Does **not** remove `definitionTypeahead` — it has a legitimate remaining use
   (§4) that must be preserved untouched.
 
@@ -224,40 +258,100 @@ and is untouched by this design (§6); the dialog's own placeholder is now drive
 `deriveVersionLookupState(debouncedStartDefinitionName, activeDefinitionLookup)`
 instead, replacing the dialog-typed-value branch of what that field shows.
 
-### 5.2 Effect on `startDefinitionVersion` / `startDefinitionId` (ISS-0891 invariant preserved)
+### 5.2 Single write path for `startDefinitionVersion` / `startDefinitionId` (Rework 1 — ISS-0891 invariant preserved under the new race)
 
-`onStartDefinitionNameChange` no longer scans `definitionTypeahead.items`. Its new
-control flow:
+`onStartDefinitionNameChange` no longer scans `definitionTypeahead.items`, and — as
+established in the original design — does **not** itself set
+`startDefinitionVersion`/`startDefinitionId`:
 
 1. `setStartDefinitionName(value)` — unchanged, still synchronous, still the source the
    debounce (§4.2) derives from.
-2. It does **not** itself set `startDefinitionVersion`/`startDefinitionId` — those two
-   are now driven by a `useEffect` (or equivalent derived-state sync) keyed on
-   `activeDefinitionLookup`'s `found`/`not_found`/`error` transitions, specifically:
-   - On `found`: `setStartDefinitionVersion(definition.version)` and
-     `setStartDefinitionId(definition.id)`, set together in the same effect pass — the
-     ISS-0891 invariant ("version text and submit-target id are set atomically, never
-     one render apart") is preserved because both still originate from one state
-     transition (the query settling), not two independent handlers.
-   - On `not_found` or `error`: `setStartDefinitionVersion('')` and
-     `setStartDefinitionId(undefined)` — matches today's else-branch behavior (lines
-     196-199), just retriggered by the query's settled-miss state instead of a
-     synchronous list-scan miss.
-   - On `idle`/`loading`: leaves `startDefinitionVersion`/`startDefinitionId` at
-     whatever they currently are — critically, this means a value that was `found` a
-     moment ago (e.g. user backspaces one character mid-edit) is **not** eagerly
-     cleared the instant the debounce window reopens; it only clears once the new
-     debounced lookup actually settles as `not_found`/`error`. This avoids a visible
-     "flicker to empty" on every keystroke, which the old synchronous list-scan did not
-     have to worry about (it resolved same-render) but a debounced async lookup would
-     introduce if state were cleared eagerly on every raw keystroke instead of on
-     settled lookup state.
-3. The existing side effect of pushing the resolved name/id into the **page-level**
-   `searchParams` (lines 192-195, `updated.set('definitionName', exact.name)` /
-   `updated.set('definitionId', exact.id)`) is preserved, moved into the same `found`
-   branch of the new effect — this fix does not remove that URL-sync behavior, since
-   nothing in ISS-0911's diagnosis implicates it and removing it would be scope creep
-   beyond the owned bug.
+
+Both fields are now written by **exactly one** `useEffect`, replacing the two effects
+that previously existed (the `definitionId`/`useDefinition(definitionId)`-driven one and
+the `versionLookupState`-driven one). This single effect takes **both** data sources as
+inputs and arbitrates between them with an explicit precedence rule, so there is never a
+render in which a second, independent effect can observe a `definitionId` change this
+effect itself caused and act on stale/uncached data.
+
+**New piece of state: a ref, `lookupWroteDefinitionId` (`useRef<string | undefined>
+(undefined)`).** It records the id most recently written to `startDefinitionId` *by this
+effect's own `found` branch* (i.e. what the effect itself just pushed into the URL via
+`setSearchParams`), so that on the next render — triggered by that very
+`setSearchParams` call changing the `definitionId` prop — the effect can tell "the
+`definitionId` I'm now seeing is the one I just wrote" apart from "the `definitionId` I'm
+now seeing changed for some other reason" (initial mount with a deep-linked
+`definitionId`, `onResolveDefinition`'s own `setSearchParams`, `onDefinitionInputChange`
+clearing the filter, browser back/forward).
+
+The single effect's dependencies are `[definitionId, activeDefinitionByName?.id,
+activeDefinitionByName?.version, versionLookupState]`. Its control flow, evaluated in
+this fixed priority order every time it runs:
+
+1. **`versionLookupState.kind === 'found'`** — the debounced exact-name lookup is the
+   most authoritative signal available (it is a confirmed, current backend exact match
+   on what the user is actively typing/selecting), and takes precedence over the
+   `definitionId`-driven source unconditionally:
+   - `setStartDefinitionVersion(definition.version)` and
+     `setStartDefinitionId(definition.id)`, set together in this one effect pass — the
+     ISS-0891 invariant is preserved because both still originate from one state
+     transition, not two independently-scheduled effects.
+   - `lookupWroteDefinitionId.current = definition.id` — records that this effect, not
+     an external navigation, is the author of the `definitionId` change about to happen.
+   - Then pushes `definitionName`/`definitionId` into `searchParams` via
+     `setSearchParams` (same URL-sync behavior the original design already specified —
+     unchanged, not removed).
+2. **`versionLookupState.kind === 'not_found' | 'error'`** — the debounced lookup has
+   settled as a definite miss/failure for the currently-typed name:
+   - `setStartDefinitionVersion('')` and `setStartDefinitionId(undefined)`.
+   - `lookupWroteDefinitionId.current = undefined` — a miss/error means the dialog's
+     typed value no longer resolves to anything, so any earlier self-write is no longer
+     "current truth"; this also re-arms the guard in step 3 so a subsequent
+     externally-sourced `definitionId` (e.g. the user clears the dialog and the page-
+     level filter's own `definitionId` is still present) is not mistaken for a stale
+     self-write.
+3. **`versionLookupState.kind === 'idle' | 'loading'`** — the lookup branch has no
+   opinion this render (nothing has settled yet, or the input is empty). Fall through to
+   the `definitionId`-driven source, but only if this render's `definitionId` was **not**
+   caused by this effect's own step-1 write:
+   - **Guard:** if `definitionId === lookupWroteDefinitionId.current`, this render is
+     the direct result of this effect's own `setSearchParams` call from a prior pass —
+     `activeDefinitionByName` (from `useDefinition(definitionId)`) is known to be
+     uncached/stale for this brand-new id at this exact moment. **Do nothing** — leave
+     `startDefinitionVersion`/`startDefinitionId` exactly as step 1 already set them.
+     This is the guard that eliminates the bug: the old effect's blanking write simply
+     never happens for a self-caused `definitionId` change.
+   - **Otherwise** (an externally-sourced `definitionId`: initial mount with a
+     deep-linked id, `onResolveDefinition`, `onDefinitionInputChange`, browser
+     navigation) — behave exactly as the original pre-existing effect did:
+     - if `definitionId` is set: `setStartDefinitionVersion(activeDefinitionByName?.version
+       ?? '')` and `setStartDefinitionId(activeDefinitionByName?.id ?? definitionId)`.
+     - if `definitionId` is unset: `setStartDefinitionVersion('')` and
+       `setStartDefinitionId(undefined)`.
+   - Neither branch here touches `lookupWroteDefinitionId.current` — it only ever
+     changes in steps 1 and 2, so a run of step 3 never fabricates a false "self-caused"
+     signal for a later render.
+
+**Why one effect, not two effects plus a same-id skip guard (rework's option (a)).** A
+skip-guard bolted onto the *old* effect alone, while the *new* effect stays separate,
+still leaves two effects racing on every other dimension (mount order, dependency-array
+timing, React's effect-scheduling relative order is not part of either effect's own
+contract) — the fix would be correct only by accident of both effects currently being
+declared adjacent to each other in source order. Folding them into one effect makes the
+precedence between the two data sources an explicit, single, ordered piece of logic
+(§5.2 steps 1-3) that cannot depend on effect-scheduling order, because there is only one
+effect left to schedule. This also directly answers REVIEWER's finding: there is no
+longer a second effect for a `setSearchParams` call to "re-trigger" independently of the
+first — there is one effect, and it recognizes its own prior write via
+`lookupWroteDefinitionId`.
+
+**Invariant check.** At any render, `startDefinitionVersion`/`startDefinitionId` are
+either both untouched (step 3 guard fires, or idle/loading with an unrelated
+`definitionId`) or both freshly written together in the same branch (step 1 or step 2's
+pair, or step 3's externally-sourced pair) — there is no code path in which one is
+written and the other is not, and no code path in which this effect's own
+`setSearchParams` causes a *second* write pass with different (stale) data, because
+there is no second effect left to run one.
 
 ## 6. `definitionTypeahead` — confirmed remaining legitimate use
 
@@ -307,3 +401,4 @@ its declaration is in scope for this fix.
 | Race-guard against out-of-order async responses (rapid typing), explicit | §4.1 (per-value query-key cache isolation, explicitly reasoned, not left implicit) |
 | Loading/not-found/found version-field states specified | §5 `VersionLookupState`, §5.1 state→UI table (plus `error`, a state the AC's own three-state framing didn't name but the design must not collapse into "not found") |
 | No implementation code in the design doc | Type signatures (§3, §5) and control-flow prose only — no request bodies, no effect bodies, no component render output |
+| **(Rework 1)** Single write path for `startDefinitionVersion`/`startDefinitionId`, no possibility of the new effect's own `setSearchParams` re-triggering a second, independent effect that transiently desyncs the two values | §5.2 (rewritten) — one merged effect, `lookupWroteDefinitionId` ref guard against acting on a self-caused `definitionId` change while `activeDefinitionByName` is still uncached for the new id; explicit invariant statement at top of doc under "Rework 1" |

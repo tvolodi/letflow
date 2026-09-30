@@ -784,7 +784,10 @@ defmodule Letflow.EngineTest do
       assert task.instance_id == result.instance_id
       assert task.node_id == "task"
       assert task.node_name == "task"
-      assert task.assignee_type == nil
+      # ISS-0905: assignee_type is derived as "ROLE" when the node carries
+      # only a role attribute (no explicit assignee_type) -- see
+      # Letflow.Engine.TaskActivation.resolve_assignee/1.
+      assert task.assignee_type == "ROLE"
       assert task.assignee_ref == "approver"
       assert task.status == :pending
 

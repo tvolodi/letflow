@@ -7,9 +7,9 @@
   "to_agent": "SECURITY-REVIEWER",
   "file": "handoffs/WF02-REQ432-20260930/step-02c-regate1-security-reviewer.json",
   "created_at": "2026-09-30T18:42:00Z",
-  "started_at": "2026-09-30T18:42:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-30T18:42:03Z",
+  "completed_at": "2026-09-30T18:42:35Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -44,8 +44,8 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": "",
+    "status": "PASS",
+    "summary": "RE-GATE PASS (fresh full pass, whole-branch diff + ae293b4e + dbad5879). Scope test: in scope conservatively (touches admin publish/retire and instance rebind client wiring, Idempotency-Key, API response rendering; no lib/ or migration change). INV-1 N/A (no tenant-scoped table/schema/migration touched; frontend only). INV-2 N/A. INV-3 N/A. INV-4 PASS (no literal secrets in web/src or spec; spec uses resolveCredential with local-dev fallbacks only, same as sibling specs; no secret resolution added). INV-5 N/A (no server lookup-by-id handler added). INV-6 N/A (no new data-access path; consumes shipped routes). INV-7 N/A (no SQL). INV-8 PASS (mutation errors handled via status-mapped messages; no unhandled crash paths). INV-9 N/A (endpoint_url is sent to already-shipped REQ-373 server which owns validation; no outbound fetch from client). Check (a): deferClickState is setTimeout(fn,0), preserves order, no shared/global state, nothing tenant or session keyed. Rebind: idempotencyKey generated once per dialog open (crypto.randomUUID) and captured in the submit closure, so a deferred mutate cannot use a different or stale key; a double submit reuses the same key, so the server idempotency dedupes. Retire: Button loading disables after isPending; confirm captures retireTarget from render closure, the same target shown in the dialog. Publish: serviceId/body captured synchronously before deferral. Residual non-blocking observation: publish/retire submit handlers do not themselves guard isPending, so two clicks inside the same macrotask window could enqueue two mutates; in practice separate input events are separate tasks and re-render disables the button, and the backend rejects a duplicate retire (409) and re-publish. Vitest InstancePinsPanel.rebind + ServicesPage.versions: 21/21 pass. Check (b): PASS, no literal secrets, resolveCredential used, cleanup only cancels the spec's own three instances created under its admin token in its own tenant, published service version deliberately left (unique per-run service id pl_pin_<uuid>). Check (c): PASS, outcome B requires exactly HTTP 500 AND error_type service_task_url_rendered_empty AND affected node n3 AND no TASK_COMPLETED(n2); 401/403/404 cannot satisfy it (and outcome A/C require 2xx); a 4xx fails the spec. History fetch gates on ok().",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
@@ -56,7 +56,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Proceed to REVIEWER (WF-02 step 2d)."
   },
   "rework_count": 1,
   "max_rework": 3,

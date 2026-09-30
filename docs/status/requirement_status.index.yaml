@@ -5021,8 +5021,22 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 24
+    entries: 25
     note: >
+      Bumped to 25 by DOC-UPDATER after appending REQ-431's done-event
+      (WF02-REQ431-20260930, PR #2050, 2026-09-30T10:45:20Z -- frontend
+      canvas/problem-list presentation of REQ-372's semantic decision-rule
+      violations plus a release-submission re-check surface; REVIEWER and
+      RELEASE-VALIDATOR both PASSed, the latter running a real 2x-repeated
+      e2e verification against a live backend plus the full test suite).
+      Fetched/pulled origin/main immediately before this append and
+      recounted directly rather than trusting the prior note's arithmetic:
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 25
+      on-disk entries (the prior 24 + this done-event). `git diff
+      --numstat` on this file for this append showed 0 deletions. 1032
+      lines / 62943 bytes (working-tree), well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Bumped to 24 by DOC-UPDATER after appending ISS-0913's SCOPE-CHANGE
       done-event (fix/iss-0912-activate-semantic-validation-500, PR #2042,
       2026-09-30T08:28:14Z -- two new render_activate/2 clauses in

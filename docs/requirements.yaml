@@ -31802,7 +31802,30 @@ requirements:
   - id: REQ-431
     title: "Canvas/problem-list presentation of REQ-372's semantic decision-rule violations, plus a release-submission re-check surface (frontend)"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
+    completion_note: >
+      WF02-REQ431-20260930, PR #2050. Implements: a new
+      web/src/utils/canvas/semanticViolationMapping.ts (message-grammar regex parsing
+      of the two REQ-372 violation codes' verbatim message text into
+      ValidationError[] entries per §2.2/§2.3's stated grammar) wired into
+      DefinitionEditorPage.tsx's existing save-time validation pipeline; a new
+      web/src/components/canvas/ReleaseCheckPanel.tsx implementing an
+      idle/checking/clean/blocked/error state machine so activate/2's fresh
+      {:semantic_validation_failed, violations} re-check on release
+      submission is visibly distinct from the last save-time result
+      (EO-005); and a matching validate client function + hook addition in
+      web/src/api/definitions.ts. Two bundled pre-existing bug fixes found
+      and fixed along the way, unrelated to this requirement's own scope:
+      ProcessCanvas.tsx's fitViewOptions object lacked referential stability
+      across renders, and DefinitionEditorPage.tsx's draft-mirror comparison
+      had a stale-closure bug. AC6's incremental fix-one-then-fix-other e2e
+      sub-scenario was honestly deferred: a real, pre-existing
+      ConditionDialog re-open interaction defect (not introduced by, and not
+      in scope of, this PR) makes a second same-run canvas edit unreliable
+      in a real browser; tracked as docs/issues/ISS-0914.yaml rather than
+      papered over. REVIEWER and RELEASE-VALIDATOR both independently
+      PASSed -- RELEASE-VALIDATOR ran a real, 2x-repeated e2e verification
+      against a live backend plus the full test suite.
     stage: S8
     description: >
       Follow-on to REQ-372 (semantic decision-rule validation: field-existence +

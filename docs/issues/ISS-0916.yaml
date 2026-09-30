@@ -1,0 +1,58 @@
+id: ISS-0916
+title: "ServicesPage.tsx row-action buttons (Edit scope/Delete, and now Publish/Retire) likely hit the ISS-0662-class real-click freeze; page never received the deferClickState treatment"
+discovered_by: REVIEWER
+discovered_in_run: PR #2055 (REQ-432 idiom/scope review)
+discovered_at: "2026-09-30T00:00:00Z"
+severity: MINOR
+owner: "FRONTEND-DEV"
+description: >
+  While reviewing PR #2055 (REQ-432: publish/retire + rebind-pins operator
+  UI), FRONTEND-DEV's own report noted a real Playwright `.click()` on the
+  new ServicesPage "Retire"/"Publish new version" buttons and
+  `RebindPinDialog`'s "Confirm rebind" button hangs the tab, worked around in
+  the new e2e spec via `.dispatchEvent('click')`, and that the SAME hang
+  reproduces on ServicesPage's pre-existing, untouched "Edit scope" button
+  (used as a control).
+
+  Confirmed by direct source read: `openEditScope` (pre-existing,
+  `ServicesPage.tsx` line ~112) and the new `setPublishTarget(row)` /
+  `setRetireTarget(...)` handlers (this PR) all call a React `setState`
+  synchronously inside the button's `onClick`, with no `deferClickState`
+  wrapper. This is exactly the trigger condition documented in
+  `web/src/utils/deferClickState.ts`'s own moduledoc (ISS-0662: "a React
+  `setState` call that runs synchronously inside the same native browser
+  event-dispatch turn as a real, UA-trusted click ... freezes the entire
+  tab's main thread"). That fix was applied piecemeal, page by page
+  (`DataTable.tsx`, `GroupsPage.tsx`, `DefinitionListPage.tsx`,
+  `InstanceBoardPage.tsx`) — `ServicesPage.tsx` was never one of the pages
+  fixed, so this is a pre-existing gap on this page, not a regression
+  introduced by PR #2055's new buttons; the new buttons simply inherited the
+  page's existing unfixed pattern. `RebindPinDialog.tsx` (new,
+  `web/src/components/instances/RebindPinDialog.tsx`) has the same
+  unguarded `setState`-in-onClick shape on its own Confirm button.
+
+  Not filed as a blocker on PR #2055: the e2e workaround is real, the new
+  code is no worse than the page's own pre-existing buttons, and PR #2055's
+  scope (per its design doc and REQ-432's own text) is the publish/retire/
+  rebind operator UI, not a general ISS-0662-class sweep of ServicesPage.
+  Filed so the real, user-facing freeze (should a real operator click these
+  buttons rather than automation dispatching a synthetic event) becomes
+  claimable work, matching the existing precedent (ISS-0737, ISS-0739) of
+  fixing one page at a time as each is found.
+
+  Fix direction: wrap `openEditScope`, `setPublishTarget`, `setRetireTarget`,
+  `setDeleteTarget` (ServicesPage.tsx) and `RebindPinDialog`'s mutation-
+  trigger/close handlers in `deferClickState` the same way
+  `GroupsPage.tsx`/`DefinitionListPage.tsx`/`InstanceBoardPage.tsx` already
+  do; confirm the fix with a real trusted-click regression test mirroring
+  `iss-0662-entity-crud-page-click-freeze.e2e.spec.ts`'s
+  `mouse.down()`/`mouse.up()` mechanism (not `.click()` or
+  `.dispatchEvent('click')`, per that file's own documented reasoning for
+  why those don't reproduce the freeze).
+affected_files:
+  - web/src/pages/admin/services/ServicesPage.tsx
+  - web/src/components/instances/RebindPinDialog.tsx
+  - web/src/utils/deferClickState.ts
+queue_ref: null  # discovered incidentally during a REVIEWER gate pass, not queue-originated
+github_ref: null  # not yet mirrored to GitHub
+status: open

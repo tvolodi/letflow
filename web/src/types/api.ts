@@ -263,6 +263,37 @@ export interface InstancePinsResponse {
   pins: EffectivePin[]
 }
 
+// ── Rebind pins (PIN-05/REQ-078, operator UI: REQ-432) ─────────────────────
+
+/** Body entry for `POST /instances/:id/rebind-pins` — mirrors
+ *  `PinRebind.rebind_pins/3`'s `entries` item shape field-for-field. */
+export interface RebindPinEntry {
+  kind: EffectivePinKind
+  ref: string
+  version: string
+}
+
+export interface RebindPinsRequestBody {
+  reason: string
+  entries: RebindPinEntry[]
+}
+
+/** One changed entry in `rebind_result_map/1`'s response. `kind` is kept a
+ *  plain string (not narrowed to `EffectivePinKind`) — the route's own
+ *  response-side mapping does no atom-safety narrowing either. */
+export interface RebindChangedEntry {
+  kind: string
+  ref: string
+  prior_version: string
+  new_version: string
+}
+
+export interface RebindPinsResult {
+  instance_id: string
+  changes: RebindChangedEntry[]
+  rebound_at: string
+}
+
 export interface AttachmentLink {
   attachment_id: string
   token: string

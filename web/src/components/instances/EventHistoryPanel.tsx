@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { useInstanceEvents, type EventFilters } from '@/hooks/useInstances'
+import { useInstanceEvents, useInstanceTimeline, type EventFilters } from '@/hooks/useInstances'
 import { EventJsonExpandable } from './EventJsonExpandable'
+import { RebindEventDetails } from './RebindEventDetails'
 import { formatDateTime } from '@/i18n/format'
 
 interface EventHistoryPanelProps {
@@ -37,6 +38,25 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
   const [appliedFilters, setAppliedFilters] = useState<EventFilters>({})
 
   const eventsQuery = useInstanceEvents(instanceId, appliedFilters)
+
+  // REQ-432 design §4 — the History tab's own EventRecord projection never
+  // carries a resolved actor display name (only a raw actor_id). The
+  // Timeline tab's projection does resolve one (`actor_display_name`), via
+  // the only backend code path that does an id->name lookup unrestricted to
+  // any authenticated, tenant-scoped caller. Cross-referenced here by
+  // event_id (both projections carry it) rather than duplicating that
+  // resolution logic or calling the :UsersManage-gated identity route.
+  const timelineQuery = useInstanceTimeline(instanceId, { page_size: 100 })
+
+  const actorNameByEventId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const item of timelineQuery.data?.items ?? []) {
+      if (item.event_id && item.actor_display_name) {
+        map.set(item.event_id, item.actor_display_name)
+      }
+    }
+    return map
+  }, [timelineQuery.data])
 
   const events = useMemo(() => {
     const raw = eventsQuery.data as unknown
@@ -186,27 +206,40 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {events.map((event) => (
-                    <tr key={event.event_id} style={{ borderBottom: '1px solid var(--border-default)', verticalAlign: 'top' }}>
-                      <td style={{ padding: '.5rem .75rem', color: 'var(--color-neutral-500)', fontFamily: 'monospace' }}>
-                        {event.sequence_number}
-                      </td>
-                      <td style={{ padding: '.5rem .75rem', fontFamily: 'monospace', fontSize: '.8rem' }}>
-                        {event.event_type}
-                      </td>
-                      <td style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '.8rem' }}>
-                        {typeof event.actor_id === 'string' && event.actor_id
-                          ? event.actor_id.slice(0, 8)
-                          : 'system'}
-                      </td>
-                      <td style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)' }}>
-                        {formatDateTime(event.created_at)}
-                      </td>
-                      <td style={{ padding: '.5rem .75rem', minWidth: '180px' }}>
-                        <EventJsonExpandable payload={event.payload ?? {}} />
-                      </td>
-                    </tr>
-                  ))}
+                  {events.map((event) => {
+                    const resolvedActorName = actorNameByEventId.get(event.event_id) ?? null
+                    const actorFallback = typeof event.actor_id === 'string' && event.actor_id
+                      ? event.actor_id.slice(0, 8)
+                      : 'system'
+                    const isRebindEvent = event.event_type === 'INSTANCE_PINS_REBOUND'
+
+                    return (
+                      <tr key={event.event_id} style={{ borderBottom: '1px solid var(--border-default)', verticalAlign: 'top' }}>
+                        <td style={{ padding: '.5rem .75rem', color: 'var(--color-neutral-500)', fontFamily: 'monospace' }}>
+                          {event.sequence_number}
+                        </td>
+                        <td style={{ padding: '.5rem .75rem', fontFamily: 'monospace', fontSize: '.8rem' }}>
+                          {event.event_type}
+                        </td>
+                        <td style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '.8rem' }}>
+                          {resolvedActorName ?? actorFallback}
+                        </td>
+                        <td style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)' }}>
+                          {formatDateTime(event.created_at)}
+                        </td>
+                        <td style={{ padding: '.5rem .75rem', minWidth: '180px' }}>
+                          {isRebindEvent ? (
+                            <RebindEventDetails
+                              payload={event.payload ?? {}}
+                              resolvedActorName={resolvedActorName}
+                            />
+                          ) : (
+                            <EventJsonExpandable payload={event.payload ?? {}} />
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </>

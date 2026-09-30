@@ -5,11 +5,16 @@
  *  QueryStateBoundary" pattern that page already follows. See
  *  lib/letflow/design/req399-instance-pin-provenance.md §4.
  */
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useInstancePins } from '@/hooks/useInstancePins'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
+import { Button } from '@/components/ui/Button'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { RebindPinDialog } from './RebindPinDialog'
 import type { EffectivePin, EffectivePinSource, EffectivePinKind } from '@/types/api'
 
 interface InstancePinsPanelProps {
@@ -40,6 +45,9 @@ const KIND_LABELS: Record<EffectivePinKind, string> = {
 
 export function InstancePinsPanel({ instanceId }: InstancePinsPanelProps) {
   const pinsQuery = useInstancePins(instanceId)
+  const queryClient = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys().instances
+  const [rebindTarget, setRebindTarget] = useState<EffectivePin | null>(null)
 
   const rendererState: RendererState = pinsQuery.isLoading
     ? 'loading'
@@ -50,11 +58,32 @@ export function InstancePinsPanel({ instanceId }: InstancePinsPanelProps) {
   const pins: EffectivePin[] = pinsQuery.data?.pins ?? []
   const hasPins = pins.length > 0
 
+  // REQ-432 — on a successful rebind, invalidate every screen that could
+  // show stale pin/history state: the pins panel itself, the History tab's
+  // events query, and the Timeline query (also the actor-name join source
+  // EventHistoryPanel uses — see its own design §4). Uses the broad
+  // `instances.all()` prefix (same convention useCancelInstance already
+  // uses) rather than each individually-keyed query, since `events`/
+  // `timeline`'s own key builders require filter/cursor/page-size
+  // arguments this success handler has no specific value for.
+  function handleRebindSuccess() {
+    queryClient.invalidateQueries({ queryKey: tenantKeys.all() })
+  }
+
   const columns: DataTableColumn<PinRow>[] = [
     { id: 'ref', header: 'Dependency', accessor: (row) => row.pin.ref },
     { id: 'kind', header: 'Kind', accessor: (row) => KIND_LABELS[row.pin.kind] },
     { id: 'version', header: 'Version', accessor: (row) => row.pin.version },
     { id: 'source', header: 'How it was set', accessor: (row) => SOURCE_LABELS[row.pin.source] },
+    {
+      id: 'actions',
+      header: '',
+      accessor: (row) => (
+        <Button variant="secondary" size="sm" onClick={() => setRebindTarget(row.pin)}>
+          Rebind
+        </Button>
+      ),
+    },
   ]
 
   const rows: PinRow[] = pins.map((pin) => ({ key: `${pin.kind}:${pin.ref}`, pin }))
@@ -72,6 +101,14 @@ export function InstancePinsPanel({ instanceId }: InstancePinsPanelProps) {
           <p style={{ color: 'var(--text-secondary)' }}>No dependencies recorded for this case.</p>
         )}
       </QueryStateBoundary>
+
+      <RebindPinDialog
+        open={rebindTarget !== null}
+        instanceId={instanceId}
+        pin={rebindTarget}
+        onClose={() => setRebindTarget(null)}
+        onSuccess={handleRebindSuccess}
+      />
     </section>
   )
 }

@@ -439,3 +439,111 @@ escalations:
       forcing, per TASK_QUEUE.md's force-release recovery guidance).
       Neither branch-protection weakening nor a fabricated impl_order/
       blocked-by target was used, per this record's own "Do NOT" list.
+
+  - run_id: WF03-ISS0911-20260930
+    requirement_ids: []
+    handoff_file: handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator-recheck2.json
+    step: "02b (CODE-DESIGN-VALIDATOR design gate)"
+    escalated_at: 2026-09-30T07:39:34Z
+    rework_count: 3
+    max_rework: 3
+    branch: feature/WF03-ISS0911-20260930
+    queue_task_id: 903
+    queue_agent_id: tvolo-win11-orch
+    summary: >
+      ISS-0911 (a suspected ISS-0891 recurrence: the Start Instance
+      dialog's read-only version-display field stays empty for 10s in 5 of
+      6 untraced QA e2e runs) reached max_rework at the DESIGN gate
+      (Step 2b) without ever advancing to implementation. ISSUE-FIXER's
+      diagnosis (real, independently reproducible from source, not a
+      QA-deployment-lag question) was sound: the dialog's exact-name
+      version lookup scans a page-level useDefinitions({name:
+      definitionId}) query result instead of calling the existing
+      definitionsApi.getActive(name) keyed on the dialog's own typed
+      input. Three successive design iterations each closed the specific
+      race the prior gate found, but each fix surfaced a new, genuinely
+      distinct race in the same InstanceBoardPage.tsx state-synchronization
+      area -- not the identical-root-cause pattern ORCHESTRATOR.md Sec5's
+      "change approach on the third attempt" rule targets in the strict
+      sense (each iteration's defect was structurally different: (0) two
+      independent effects racing via a setSearchParams side-channel; (1) a
+      persistent non-expiring self-write guard token vulnerable to an
+      unrelated later id collision; (2) the guard's own one-shot fix
+      relies on an effect dependency array containing a non-memoized
+      object literal (deriveVersionLookupState's return value) that
+      changes identity on every component render regardless of logical
+      content, so the "exactly one run observes a self-written
+      definitionId" counting argument the whole one-shot-guard approach is
+      built on does not actually hold). All three findings are real,
+      independently reproduced by CODE-DESIGN-VALIDATOR each time (not
+      accepted on the design's or a producer's narrative), and none of the
+      three reworks weakened the diagnosis, the acceptance criteria, or
+      any gate to force a pass.
+    current_state: >
+      lib/letflow/design/iss0911-start-instance-dialog-exact-lookup.md
+      exists on the branch (3 revisions) but has never PASSed Step 2b.
+      No implementation has been attempted (Step 3/FRONTEND-DEV never
+      dispatched for the redesigned version -- the FIRST design's
+      implementation was built, reviewed, and itself caught the very
+      first race by REVIEWER at Step 3d, then abandoned in favor of
+      redesigning rather than patching the implementation directly; that
+      implementation commit (e1840b6d) is superseded and must not be
+      reused as-is). docs/issues/ISS-0911.yaml remains status: open
+      (correctly -- not resolved, not falsely closed). Queue task 903
+      (GH#2037) remains locked to this session; ORCH has NOT released it,
+      since the issue is not resolved and a bare unlock would leave it
+      open/immediately-reclaimable, reproducing the exact re-selection
+      hazard TASK_QUEUE.md's release_lock section warns against for a
+      genuine hand-back. ORCH will release with status: "blocked"
+      (not "done") once this escalation record is written, per WF-03
+      Step 5's instrumented/no_defect branch -- this is closer to
+      "instrumented" in spirit (real diagnostic work shipped, root cause
+      NOT removed) but no fix landed at all, so neither status/resolved_*
+      nor status/verdict_* keys apply cleanly; the NEXT session should
+      make the final call on ISS-0911.yaml's own status field rather than
+      ORCH guessing at a vocabulary term that doesn't quite fit an
+      escalated-with-no-shipped-fix outcome.
+    diagnosis: >
+      The recurring theme across all three failed iterations is that
+      InstanceBoardPage.tsx's existing effect-based state synchronization
+      around startDefinitionVersion/startDefinitionId/definitionId is
+      already fragile (ISS-0891 itself was a fix to a similar class of
+      bug in the same component), and layering a THIRD state-writer
+      (the new exact-name lookup) into that same effect/ref/URL-param web
+      keeps producing genuinely new timing bugs rather than converging.
+      Each individual reviewer catch was correct and well-reasoned; the
+      pattern suggests the approach itself (one more useEffect coordinating
+      with the existing ones via refs and dependency arrays) may not be
+      the right shape for this component, not that any one reviewer or
+      designer made a mistake.
+    next_step: >
+      A fresh session should consider changing the STRUCTURAL approach
+      rather than a fourth patch to the guard/dependency-array design:
+      (a) reconsider whether the dialog's version-lookup state belongs in
+      a useReducer with a single explicit action set (LOOKUP_STARTED,
+      LOOKUP_FOUND, LOOKUP_NOT_FOUND, EXTERNAL_DEFINITION_CHANGED) instead
+      of multiple useState/useEffect/ref combinations reacting to each
+      other indirectly -- this removes the entire class of "which effect
+      wins" and "is this write self-caused or external" questions by
+      construction, since a reducer has one update path per action and no
+      implicit re-triggering; (b) alternatively, decouple the dialog's
+      version display from definitionId/URL state entirely -- the dialog
+      is a modal with its own lifecycle, and the page-level
+      definitionId/searchParams state may not need to be touched by the
+      dialog's lookup AT ALL until the user actually clicks Start (i.e.
+      don't call setSearchParams during typing/lookup, only on submit) --
+      review whether the current design's setSearchParams-during-lookup
+      behavior is even a real product requirement or an artifact carried
+      over from the original (pre-ISS-0911) implementation. Whichever
+      direction is chosen, CODE-DESIGN-VALIDATOR should specifically
+      pressure-test any new design's claims about React effect/dependency
+      timing against actual re-render triggers in this large,
+      multi-concern component (pagination, polling, filters all live
+      here) rather than reasoning about the dialog in isolation -- that
+      gap (an object-literal dependency assumed stable when nothing
+      memoizes it) is what let iteration 2's fix look sound on paper
+      while failing in practice, twice now in slightly different forms.
+      Before starting a redesign, re-read all three gate_history entries
+      in handoffs/WF03-ISS0911-20260930/step-02b-code-design-validator-
+      recheck2.json in full -- they are the fastest way to avoid
+      re-deriving the same three defects from scratch.

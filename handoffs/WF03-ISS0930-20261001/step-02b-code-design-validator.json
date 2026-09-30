@@ -1,0 +1,45 @@
+{
+  "handoff_id": "8e7579eb-8419-44be-bb68-fc010acc7479",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0930-20261001/step-02b-code-design-validator.json",
+  "created_at": "2026-09-30T22:34:20Z",
+  "started_at": "2026-09-30T22:34:20Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0930-seed-service-task-endpoints.md",
+      "handoffs/WF03-ISS0930-20261001/step-02-code-designer.json",
+      "handoffs/WF03-ISS0930-20261001/step-01-issue-fixer-diagnose.json",
+      "test/fixtures/qa/",
+      "scripts/seed_meridian_definition.sh",
+      "docs/issues/ISS-0930.yaml"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2b: validate the fix design lib/letflow/design/iss0930-seed-service-task-endpoints.md (producer handoff: handoffs/WF03-ISS0930-20261001/step-02-code-designer.json). Check: covers every acceptance criterion of the defect (docs/issues/ISS-0930.yaml + diagnosis in step-01); contains no implementation code; unambiguous enough to build from; INDEPENDENTLY verify its key claims rather than copying them: count the service-task nodes in test/fixtures/qa/*.json (design claims 25) and confirm none is missed; confirm ServiceTask.parse_config_from_node_attributes/1 + UrlValidator behaviour cited; confirm the seed scripts' skip-if-ACTIVE and version-replacement logic claim by reading them (and optionally the definitions API lifecycle in lib/) so that re-seeding v1.1 on QA will actually replace v1.0; confirm how the dispatcher treats the httpbin JSON response body (merging into instance variables - any risk to gateway conditions / variable collisions e.g. keys 'args','data','json','url','headers','method','origin','form','files'); confirm the proposed test fails on current fixtures. You may curl https://httpbin.org from your own host to sanity check. Do not modify files other than this handoff. Work only in context.worktree. Set IN_PROGRESS at claim, then COMPLETED/FAILED with result.status PASS/FAIL and concrete numbered issues on FAIL; next_action 'Route to ELIXIR-DEV' on PASS.",
+    "acceptance_criteria": [
+      "Independent node count verified",
+      "No implementation code in design",
+      "Replacement-of-ACTIVE mechanism verified against scripts/API code",
+      "Response-body merge collision risk assessed",
+      "Verdict PASS/FAIL with evidence"
+    ]
+  },
+  "result": null
+}

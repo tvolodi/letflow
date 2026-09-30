@@ -39,8 +39,7 @@
     "status": "PASS",
     "summary": "Added 'Data egress / safety' note (4 points, 7 lines) to the QA seed scripts section of scripts/README.md. Design doc untouched. No requirement status flip or status-history append (WF-03 follow-up; none requested).",
     "artifacts_out": [
-      "scripts/README.md",
-      "handoffs/WF03-ISS0930-20261001/step-05-doc-updater.json"
+      "scripts/README.md"
     ],
     "next_action": "Route to ORCH"
   }

@@ -35,3 +35,14 @@ queue_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890
 github_ref: null  # filed directly by ORCH as a split of ISS-0890 (queue task 890); no GitHub mirror issue was opened for the split itself
 status: open
 parent_issue: ISS-0890
+progress_2026_09_30: >
+  Of this issue's two split follow-ons: REQ-431 (definition-type-error-blocked
+  frontend presentation) is now done -- WF02-REQ431-20260930, PR #2050,
+  REVIEWER and RELEASE-VALIDATOR both PASSed (RELEASE-VALIDATOR ran a real
+  2x-repeated e2e verification against a live backend plus the full test
+  suite). One sub-scenario (AC6's incremental fix-one/fix-other e2e path) was
+  honestly deferred as docs/issues/ISS-0914.yaml (a real, pre-existing
+  ConditionDialog re-open interaction defect, not this PR's scope), not
+  papered over. REQ-432 (instance-pin-survives-catalog-change frontend
+  presentation) remains pending its own implementation. This issue's own
+  status stays open (tracking umbrella) until REQ-432 also closes.

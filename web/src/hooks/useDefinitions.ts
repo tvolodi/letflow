@@ -52,6 +52,16 @@ export function useActivateDefinition() {
   })
 }
 
+/** REQ-431 — read-only, save-time server-side semantic-validation re-check.
+ *  No onSuccess invalidation: validate_definition_graph/2 adds no rule of its
+ *  own and mutates no server state (design §3.4). Mirrors useActivateDefinition's
+ *  shape minus the invalidateQueries calls. */
+export function useValidateDefinition() {
+  return useMutation({
+    mutationFn: (id: string) => definitionsApi.validate(id),
+  })
+}
+
 export function useArchiveDefinition() {
   const qc = useQueryClient()
   const definitionKeys = useTenantScopedQueryKeys().definitions

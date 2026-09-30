@@ -976,3 +976,57 @@
       for merge commit SHA). No letflow-queue task to release (queue_ref:
       null -- discovered directly by CODE-DESIGN-VALIDATOR mid-task, filed
       by ORCH, not a queue-originated task).
+
+  - req: REQ-431
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-30T10:45:20Z"
+    note: >
+      WF02-REQ431-20260930 closed, PR #2050. Follow-on to REQ-372 (semantic
+      decision-rule validation, done since WF02-REQ372-20260921), filed from
+      ISS-0898 (split of ISS-0890's platform UAT report). Implements: a new
+      web/src/utils/canvas/semanticViolationMapping.ts (message-grammar regex
+      parsing of the two REQ-372 violation codes' verbatim message text,
+      per design lib/letflow/design/req431-definition-validation-canvas-
+      presentation.md §2.2/§2.3's stated grammar, into ValidationError[]
+      entries) wired into DefinitionEditorPage.tsx's existing save-time
+      validation pipeline alongside its existing client-side checks; a new
+      web/src/components/canvas/ReleaseCheckPanel.tsx implementing an
+      idle/checking/clean/blocked/error state machine so that
+      activate/2's fresh {:semantic_validation_failed, violations} re-check
+      on release submission is visibly distinct from the last save-time
+      validate result, not a stale reuse of it (EO-005); and a typed
+      validate client function + hook addition in web/src/api/definitions.ts
+      calling POST /api/v1/definitions/:id/validate, following this
+      codebase's existing api-client/hook pairing convention. Two bundled
+      pre-existing bug fixes found and fixed along the way, both unrelated
+      to this requirement's own scope: ProcessCanvas.tsx's fitViewOptions
+      object lacked referential stability across renders, and
+      DefinitionEditorPage.tsx's draft-mirror comparison had a stale-closure
+      bug. git diff confirmed no file under lib/letflow/definitions/,
+      lib/letflow/definitions.ex, or lib/letflow/definitions/
+      semantic_validation.ex touched (per AC7 -- pure frontend consumption
+      of already-shipped backend data). AC6's incremental
+      fix-one-rule-then-fix-the-other e2e sub-scenario was honestly
+      deferred, not papered over: a real, pre-existing ConditionDialog
+      re-open interaction defect (a second same-run canvas double-click
+      edit is intermittently unreliable in a real browser after an
+      intervening save/re-layout cycle -- not introduced by, and not in
+      scope of, this PR) makes that incremental path untestable in a real
+      browser today; filed as docs/issues/ISS-0914.yaml, with a KNOWN GAP
+      comment block at the top of the e2e spec itself pointing at it. Full
+      gate chain: REVIEWER PASSed and RELEASE-VALIDATOR PASSed, both
+      independently -- RELEASE-VALIDATOR ran a real, 2x-repeated e2e
+      verification (web/tests/e2e/pipelines/platform-definition-type-error-
+      blocked.pipeline.e2e.spec.ts) against a live backend plus the full
+      frontend/backend test suite, with real output quoted, rather than
+      trusting prior steps' summaries. docs/requirements.yaml's REQ-431
+      status: pending -> done in this same append, with a completion_note
+      summarizing the above. docs/issues/ISS-0898.yaml's
+      progress_2026_09_30 note updated (append, not rewrite) to record
+      REQ-431 as done; REQ-432 (ISS-0898's other split follow-on) remains
+      pending its own implementation, so ISS-0898's own status stays open
+      (tracking umbrella). Merged via PR #2050 (branch
+      feature/WF02-REQ431-20260930), squash-merged to main (see PR for
+      merge commit SHA). letflow-queue task 905 (GH#2043) released as done
+      in this same run.

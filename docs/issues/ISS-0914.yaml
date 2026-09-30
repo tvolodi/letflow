@@ -1,0 +1,64 @@
+id: ISS-0914
+title: >
+  ConditionDialog cannot be reliably re-opened for a SECOND edge-condition
+  edit within the same e2e test run (real browser) -- blocks e2e coverage
+  of any incremental "fix one rule, save, fix the other" scenario
+discovered_by: REVIEWER (WF02-REQ431-20260930, PR #2050 gate)
+discovered_in_run: WF02-REQ431-20260930
+discovered_at: "2026-09-30T00:00:00Z"
+tags:
+  - e2e
+  - frontend
+  - canvas
+severity: MINOR
+owner: ISSUE-FIXER
+description: >
+  Found (not introduced) while implementing REQ-431's
+  platform-definition-type-error-blocked.pipeline.e2e.spec.ts. The very
+  FIRST double-click on a freshly-loaded canvas reliably opens
+  `ConditionDialog` for an edge, but re-opening it for a SECOND edit of an
+  edge already edited earlier in the same test run -- after an intervening
+  save/re-layout cycle -- is intermittently unreliable in a real browser.
+
+  FRONTEND-DEV tried, and ruled out: a preceding single click before the
+  double-click, `force: true`, avoiding MiniMap overlap, and dispatching the
+  DOM mousedown/mouseup/click/dblclick sequence directly against the edge's
+  own element (bypassing Playwright's pointer-position-based click) --
+  first edit is always reliable, a second edit after an intervening
+  save/re-layout is not.
+
+  This blocks e2e coverage of any scenario needing an INCREMENTAL
+  fix-one-rule-then-the-other flow on the same canvas within one test run --
+  concretely, REQ-431's own scenario steps 3/4 ("fix ONLY the misspelled
+  field name, save again" / "fix the remaining rule, save") and EO-004/AC6's
+  literal "once both violations are corrected" path via that incremental
+  route. REQ-431's own e2e spec was deliberately trimmed to what passes
+  reliably (a single save exercising both violations at once, EO-001/EO-003/
+  AC2/AC3, and a separate happy-path test for EO-005) rather than continuing
+  to chase this pre-existing interaction defect under that requirement's own
+  scope -- see the "KNOWN GAP" comment block at the top of
+  web/tests/e2e/pipelines/platform-definition-type-error-blocked.pipeline.e2e.spec.ts.
+
+  Filed here as a discoverable pointer beyond that code comment, since the
+  underlying defect is a real ProcessCanvas/ConditionDialog interaction gap
+  that will block any FUTURE e2e spec needing the same incremental-edit
+  pattern, not just this one.
+affected_files:
+  - web/src/components/canvas/ProcessCanvas.tsx
+  - web/src/components/canvas/ConditionDialog.tsx
+  - web/tests/e2e/pipelines/platform-definition-type-error-blocked.pipeline.e2e.spec.ts
+related_requirements:
+  - REQ-431
+queue_ref: null  # discovered directly by REVIEWER during PR gate review, not queue-originated; ORCH to register if/when prioritized
+github_ref: null  # not yet mirrored to GitHub
+status: open
+suggested_fix: >
+  Root-cause the actual DOM/event condition that makes a second dblclick
+  dispatch fail to register with xyflow's edge click handler after a
+  save/re-layout cycle (candidate suspects: a stale node/edge element
+  reference held past a re-render, an event listener detached and not
+  re-attached by xyflow's internal reconciliation, or a z-index/hit-testing
+  regression introduced by the auto-layout step). ISSUE-FIXER should
+  reproduce directly (a minimal Playwright repro outside the full pipeline
+  spec) before proposing a fix, per this project's diagnosis-before-fix
+  convention.

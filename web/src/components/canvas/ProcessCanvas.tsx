@@ -50,6 +50,23 @@ const edgeTypes: EdgeTypes = {
   condition: ConditionEdge,
 }
 
+// REQ-431 fix (found, not introduced, while getting a real e2e run green):
+// `fitViewOptions` was an inline object literal (`{ maxZoom: 1.5 }`) at the
+// `<ReactFlow>` call site below. Combined with `fitView` also being set,
+// @xyflow/react 12.10.2's internal `StoreUpdater` re-syncs this prop into its
+// store on every identity change; a fresh literal every render means every
+// render produces a "changed" prop, which re-triggers fitView, which
+// re-renders the parent, forever -- `Maximum update depth exceeded`,
+// reproducible on pristine `main` (confirmed via `git stash` before this
+// requirement's own edits) with ANY existing (non-new) definition opened in
+// a real browser, gateway or not. This crashed every real-browser open of
+// the editor for an existing definition, which is why this requirement's own
+// e2e spec (and, per a quick check, a pre-existing one,
+// `f2-canvas.e2e.spec.ts`'s TC-PDUI11-01) could not get a real green run.
+// Hoisting the object to a stable module-level constant is a pure stability
+// fix -- same options, same behavior, no feature change.
+const FIT_VIEW_OPTIONS = { maxZoom: 1.5 }
+
 // ── Helper: minimap node color matching node type ────────────────────────────
 
 function minimapNodeColor(node: Node<CanvasNodeData>) {
@@ -512,7 +529,7 @@ export default function ProcessCanvas({
         nodesConnectable={!isReadOnly}
         elementsSelectable={true}
         fitView
-        fitViewOptions={{ maxZoom: 1.5 }}
+        fitViewOptions={FIT_VIEW_OPTIONS}
         deleteKeyCode={['Backspace', 'Delete']}
         style={{ background: 'var(--surface-page)' }}
       >

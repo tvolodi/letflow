@@ -39,9 +39,11 @@ defmodule Letflow.Engine.HumanTaskEscalationTest do
 
   import Ecto.Query
 
+  alias Letflow.Audit.Entry
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.Engine.Task, as: EngineTask
+  alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Repo
   alias Letflow.Scheduler
@@ -162,6 +164,31 @@ defmodule Letflow.Engine.HumanTaskEscalationTest do
              "expected orig-task to be :cancelled, got #{inspect(reloaded_orig.status)}"
 
       assert reloaded_orig.cancelled_at != nil
+
+      # ISS-0906: updated_at is genuinely bumped past inserted_at (proves the
+      # fix uses a changeset-backed Repo.update/2, not update_all/3, which
+      # bypasses Ecto's timestamp auto-touch).
+      assert DateTime.compare(reloaded_orig.updated_at, reloaded_orig.inserted_at) == :gt,
+             "expected updated_at (#{reloaded_orig.updated_at}) to be strictly after " <>
+               "inserted_at (#{reloaded_orig.inserted_at})"
+
+      # ISS-0906: a task.cancel audit entry was written for the cancelled
+      # original task.
+      audit_entries =
+        Entry
+        |> where(
+          [e],
+          e.resource_type == "task" and e.resource_id == ^orig_task.id and
+            e.action == "task.cancel"
+        )
+        |> Repo.all(prefix: schema_name)
+
+      assert [%Entry{} = audit_entry] = audit_entries,
+             "expected exactly one task.cancel audit entry for orig_task, got: #{inspect(audit_entries)}"
+
+      assert audit_entry.actor_id == EventStore.platform_actor_id()
+      assert audit_entry.before_state != nil
+      assert audit_entry.after_state != nil
 
       # (b) exactly one new task exists for the escalation role.
       all_tasks_after = Repo.all(EngineTask, prefix: schema_name)

@@ -7307,6 +7307,37 @@
                      "completed_at":  "2026-09-27T14:49:26Z",
                      "last_known_step":  "Step Final COMPLETED PASS -- PR #1912 (d75da9bf) squash-merged via --admin (structural attribution: pre-existing Letflow.IdentityTest REQ-019 AC1 flake, already tracked as ISS-0766, confirmed untouched by this branch's diff). REVIEWER PASS, TEST-RUNNER PASS, RELEASE-VALIDATOR PASS (independent full-suite re-run, zero failures referencing MigrationRolloutTest). Rework iteration 1 on Step 02 (CODE-DESIGN-VALIDATOR caught literal .exs code blocks in the design doc); PASSed on re-check. Queue task 829 released done.",
                      "note":  "Queue issue-type task ISS-0829 (local record docs/issues/ISS-0825.yaml) jumped the line ahead of the S9 mobile requirement backlog per get_next_task's LIFO issue priority. Root cause (ISSUE-FIXER): EO-004/EO-005 asserted global rollout/tenant state that MigrationRollout.apply_to_existing_rollout/2 legitimately recomputes over all active tenants on every call (a documented design choice, req374 Sec9 OQ-1) -- not a defect. Fix: tenant/rollout-scoped assertions, test-only, following the file's existing ISS-0716 precedent. Two pre-existing, unrelated failure classes surfaced incidentally during independent re-verification runs: Letflow.IdentityTest REQ-019 AC1 (already tracked as ISS-0766) and Letflow.EventStore.RetentionOperationsTest (newly filed as ISS-0873, queue task 873, GH#1913, PR #1914)."
+                 },
+                 {
+                     "run_id": "WF02-REQ432-20260930",
+                     "workflow_id": "WF-02",
+                     "requirement_ids": [
+                         "REQ-432"
+                     ],
+                     "stage": "S6",
+                     "status": "CANCELLED",
+                     "queue_task_id": 906,
+                     "queue_agent_id": "tvolodi-orch",
+                     "github_issue_number": 2044,
+                     "owned_modules": [
+                         "web/src/api/services.ts",
+                         "web/src/pages/admin/services/ServicesPage.tsx",
+                         "web/src/components/instances/InstancePinsPanel.tsx",
+                         "web/src/pages/instances/InstanceDetailPage.tsx",
+                         "web/src/hooks/",
+                         "web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts",
+                         "lib/letflow/design/req432-rebind-pins-publish-retire-ui.md",
+                         "test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml"
+                     ],
+                     "branch_name": "feature/WF02-REQ432-20260930",
+                     "started_at": "2026-09-30T16:47:36Z",
+                     "completed_at": "2026-09-30T20:56:41Z",
+                     "lock_acquired_at": "2026-09-30T16:46:16Z",
+                     "lock_released_at": null,
+                     "released_lock": false,
+                     "backfilled": false,
+                     "last_known_step": "Step 6 COMPLETED PASS (DOC-UPDATER; ORCH verified files). Step Final FAILED: rebase onto origin/main conflicted in protected files; investigation found origin/main 5d7ca7bf (PR #2055) already delivered REQ-432 via a sibling session. Run CANCELLED as a duplicate; branch NOT merged.",
+                     "note": "Duplicate of already-merged work. Full WF-02 pipeline ran (Step 00; Step 1 design with 1 rework; 1b gate FAIL then PASS; 2b build + rework 1 after a live e2e run exposed a spec defect and an ISS-0662-class click freeze; 2c/2d/3b re-gated; Step 4 + live reruns; Step 5 RELEASE-VALIDATOR PASS conditional; Step 6 doc update) while a sibling session implemented and merged the same requirement as PR #2055 (merged 2026-09-30T18:32:08Z, REQ-432 already status: done, ISS-0898 resolved). The sibling did not consult the queue lock on task 906 (held by tvolodi-orch from 2026-09-30T16:46:16Z). Decision (ORCH, no human available): do NOT merge feature/WF02-REQ432-20260930 (kept pushed on the remote as an archive, unmerged, intentionally not deleted); land only this docs-only close-out: the handoff audit trail, this registry entry, the orchestrator.log lines, and the non-duplicate forwarded issues ISS-0917 (catalog_lookup_stub/2 unconditional stub, HTTP 500 on task complete; Q-907/GH-2057), ISS-0918 (history items omit actor_id etc.; Q-908/GH-2058), ISS-0920 (test_parallel.sh N=nproc abort; Q-910/GH-2060), ISS-0921 (host flakiness; Q-912/GH-2063). The run's click-freeze finding (queue task 909/GH-2059) duplicated the sibling's ISS-0916 and was adopted as ISS-0916's queue/GitHub mirror instead of a new local record. Queue task 906 was already status done and unlocked when this run looked at close-out (released by the sibling session after PR #2055); this run made no release_lock call (nothing left to release) and did not reopen it. Decision lesson for anti-patterns: a directly-named REQ with a pre-held queue lock was worked by two sessions at once; the lock is only as good as the other session checking it."
                  }
              ]
 }

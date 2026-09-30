@@ -1,0 +1,54 @@
+{
+  "handoff_id": "16876a17-0e6f-4fcf-b645-f2aa01e9b914",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0910-20260930/step-02-code-designer.json",
+  "created_at": "2026-09-30T07:50:10Z",
+  "started_at": "2026-09-30T07:50:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["a61c6060-c985-4819-9e6e-da6abf8eda6e"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0910-20260930/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/identity/role_backfill.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/role_registry.ex"
+    ],
+    "owned_modules": ["lib/letflow/identity/role_backfill.ex", "lib/mix/tasks/letflow.backfill_platform_roles.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 2 for ISS-0910. Design the fix per ISSUE-FIXER's recommendation (handoffs/WF03-ISS0910-20260930/step-01-issue-fixer-diagnose.json): RoleBackfill.run/0 (lib/letflow/identity/role_backfill.ex) already computes and returns {:ok, %{seeded: [tenant_id], unchanged: [tenant_id]}} -- the seeded list is exactly the set of tenants genuinely affected by this run (held fewer than all six roles before it). Design a fix that, for every tenant in the seeded list, resets role_claims_synced_at to nil for every user with a membership in that tenant, forcing sync_role_claims_from_token/3 to re-run on their next login/token verification (both existing gated call sites in lib/letflow/identity.ex, unchanged).\n\nSpecify: (1) the exact query/changeset shape for the reset (which table, which join to scope 'users with a membership in tenant X', a bulk Repo.update_all-shaped operation vs. a per-user changeset loop -- state which and why given this may touch many rows); (2) where in RoleBackfill.run/0's control flow this reset happens (after the seeded list is finalized, or per-tenant during the reduce) and whether it should be in the SAME transaction as the tenant_role/group seeding or a separate one (idempotency and partial-failure implications either way); (3) confirm idempotency explicitly -- running the backfill twice must not error and must not need to reset an already-nil marker a second time in a way that matters; (4) whether this needs a new Ecto migration (unlikely, role_claims_synced_at already exists) -- confirm by checking the users schema; (5) logging/telemetry for how many users' markers were reset, matching the existing style of RoleBackfill's own return-value reporting. Write lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md -- @spec-style signatures and type shapes only, no full function bodies.",
+    "acceptance_criteria": [
+      "the fix resets role_claims_synced_at to nil for users with a membership in each tenant in RoleBackfill.run/0's own :seeded list, not :unchanged tenants",
+      "the reset reuses sync_role_claims_from_token/3's existing gated call sites (no new sync-triggering code path invented)",
+      "the fix is idempotent -- running the backfill twice does not error and does not incorrectly re-affect already-corrected users",
+      "no implementation code in the design doc -- signatures/shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

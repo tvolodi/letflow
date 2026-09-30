@@ -229,6 +229,61 @@ defmodule Letflow.Routers.TenantSettingsTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════════
+  # Contract regression (ISS-0887): a wrapped {settings: {...}} body is
+  # inert, never persists. This is not a true fail-first test -- the router's
+  # behavior here is unchanged by ISS-0887's fix (the fix is entirely
+  # client-side, see lib/letflow/design/iss0887-tenant-settings-contract-mismatch.md
+  # §4) -- it pins today's real, tested, REQ-382-AC3-consistent behavior as a
+  # permanent regression guard: if this router ever changes to unwrap
+  # "settings", this test fails loudly, forcing a conscious decision rather
+  # than a silent contract widening.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "contract regression (ISS-0887): a wrapped {settings: {...}} body is inert, never persists" do
+    test "a {settings: {brand_colors: {...}}} wrapped body (the shape the web client sent before ISS-0887's fix) is treated as an unrecognized key and never persists" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0887-wrapped")
+      before = Repo.get!(Tenant, tenant.tenant_id)
+
+      resp =
+        patch_settings(tenant,
+          body: %{"settings" => %{"brand_colors" => %{"primary" => "#1864AB"}}}
+        )
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert body["settings"] == %{}
+
+      reloaded = Repo.get!(Tenant, tenant.tenant_id)
+      assert (reloaded.settings || %{}) == (before.settings || %{})
+    end
+
+    test "the corrected flat {brand_colors: {...}} body (the shape the web client sends after ISS-0887's fix) persists and round-trips through GET /api/tenant-config" do
+      # A one-line, explicitly ISS-0887-labeled restatement of AC1's existing
+      # full round-trip test above -- documents that this is the shape
+      # ISS-0887's client fix now sends, and that it already round-trips
+      # (no router change was needed or made for this issue).
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0887-flat")
+
+      {1, nil} =
+        Repo.update_all(
+          from(t in Tenant, where: t.id == ^tenant.tenant_id),
+          set: [idp_realm_id: "iss0887-flat-realm-#{tenant.tenant_id}"]
+        )
+
+      resp = patch_settings(tenant, body: %{"brand_colors" => %{"primary" => "#1864AB"}})
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert body["settings"]["brand_colors"] == %{"primary" => "#1864AB"}
+
+      {config_conn, config_body} = get_tenant_config(tenant.tenant.slug)
+
+      assert config_conn.status == 200
+      assert config_body["branding"]["brand_colors"] == %{"primary" => "#1864AB"}
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
   # AC4 — the same rejected-key request writes exactly one Letflow.Audit
   # entry naming the tenant, actor, rejected key(s), and attempted value(s);
   # GET /api/v1/audit surfaces it with zero frontend change

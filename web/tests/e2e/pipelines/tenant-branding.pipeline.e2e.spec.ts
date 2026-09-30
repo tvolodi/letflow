@@ -6,7 +6,7 @@
  * `web/src/pages/admin/AppearanceSettingsPage.tsx`, which calls REQ-382's
  * `PATCH /api/v1/tenant/settings` (merged, `lib/letflow/routers/tenant_settings.ex`).
  *
- * Three tests, one per acceptance-relevant outcome:
+ * Four tests, one per acceptance-relevant outcome:
  *   - EO-001/AC1 (BLOCKER): a tenant admin applies a new brand colour, sees a
  *     confirmation, and the colour takes effect on the same screen without a
  *     page reload.
@@ -17,6 +17,20 @@
  *     BrandingProvider's post-paint useEffect resolves — see
  *     lib/letflow/design/req383-appearance-settings-screen.md §8 and the
  *     scenario's own EO-005 (`suggested_action: none`).
+ *   - Contract regression guard (ISS-0887): a real GUI save through this
+ *     screen must actually persist, not just report success client-side.
+ *     None of the three tests above ever reads back a persisted value — they
+ *     only read the client-side `--color-brand-600` DOM custom property,
+ *     which `applyBrandingColors` writes on the mutation's `onSuccess`
+ *     regardless of whether the PATCH body was recognized by the router.
+ *     That gap is exactly why ISS-0887 (the web client sending a
+ *     `{settings: {brand_colors: {...}}}`-wrapped body against a router that
+ *     expects the flat `{brand_colors: {...}}` shape) shipped uncaught: the
+ *     wrapped body was silently treated as an unrecognized top-level key,
+ *     the router no-op'd and returned 200, and every existing assertion in
+ *     this file was satisfied anyway. The fourth test below closes that gap
+ *     by asserting `GET /api/tenant-config` reflects the colour actually
+ *     submitted through the GUI.
  *
  * Fixture colours mirror test/letflow/routers/tenant_settings_test.exs's own
  * REQ-382 AC2 test exactly, so this spec's pass/fail boundary matches the
@@ -51,7 +65,7 @@ async function readAppliedPrimary(page: import('@playwright/test').Page): Promis
 async function seedBrandColor(request: import('@playwright/test').APIRequestContext, token: string, primary: string): Promise<void> {
   const resp = await request.patch(`${API_BASE_URL}/api/v1/tenant/settings`, {
     headers: authHeaders(token),
-    data: { settings: { brand_colors: { primary } } },
+    data: { brand_colors: { primary } },
   })
   expect(resp.ok(), `seed PATCH /api/v1/tenant/settings failed: ${resp.status()} ${await resp.text()}`).toBeTruthy()
 }
@@ -170,5 +184,40 @@ test.describe('Pipeline: tenant-branding-applied (PW-14)', () => {
       'per BrandingProvider.tsx applying branding post-paint. If this now passes with equal colours, EO-005 may have been fixed -- ' +
       'update this test and the scenario fixture/severity accordingly rather than deleting the assertion.',
     ).toBe(true)
+  })
+
+  test('contract: GET /api/tenant-config reflects the colour saved via the GUI (regression guard for ISS-0887)', async ({ page, request }) => {
+    await assertServiceReadiness(request, API_BASE_URL)
+
+    const adminToken = await getKeycloakToken(
+      request, 'admin-user', resolveCredential('UAT_QA_ADMIN_PASSWORD', 'admin-pass'),
+    )
+
+    // Deterministic starting point, independent of any other test's order.
+    await seedBrandColor(request, adminToken, PASSING_COLOR)
+
+    await loginWithToken(page, adminToken)
+    await navigateSpa(page, '/admin/appearance')
+
+    // A fourth, distinct passing colour -- not PASSING_COLOR, not EO-001's
+    // '#0b4f8a' -- so this test's own state is unambiguous in any
+    // shared-tenant test-order diagnosis.
+    const contractColor = '#0a3d91'
+    await page.getByTestId('appearance-settings-primary-color-input').fill(contractColor)
+    await page.getByTestId('appearance-settings-save').getByRole('button').click()
+
+    // Same client-side-success proof EO-001 already uses -- establishes the
+    // GUI itself believes the save succeeded, the same starting condition
+    // that let ISS-0887 go uncaught.
+    await expect(page.getByTestId('appearance-settings-confirmation')).toBeVisible({ timeout: 10_000 })
+
+    // The assertion absent from every other test in this file: read back the
+    // actual persisted value through the real read-side endpoint. With the
+    // wrapped-body bug in place, this call would return PASSING_COLOR (or
+    // the platform default), not contractColor, because nothing persisted.
+    const configResp = await request.get(`${API_BASE_URL}/api/tenant-config?realm=bpm-default`)
+    expect(configResp.ok(), `GET /api/tenant-config failed: ${configResp.status()} ${await configResp.text()}`).toBeTruthy()
+    const configBody = await configResp.json()
+    expect(configBody.branding.brand_colors.primary.toLowerCase()).toBe(contractColor.toLowerCase())
   })
 })

@@ -2,13 +2,14 @@
    Edit only inside CUSTOM blocks. Re-run codegen to refresh. */
 import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { servicesApi, type RegisterServiceBody, type ServiceRecord } from '@/api/services'
+import { servicesApi, type RegisterServiceBody, type ServiceRecord, type PublishVersionBody } from '@/api/services'
 import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { Button } from '@/components/ui/Button'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { classifyError, type RendererState } from '@/utils/classifyError'
+import type { ApiError } from '@/types/api'
 
 /**
  * ServicesPage — SVC-04
@@ -30,8 +31,12 @@ export default function ServicesPage() {
   const [editScope, setEditScope] = useState<'global' | 'tenant'>('global')
   const [editOwner, setEditOwner] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  // CUSTOM: REQ-432 — publish new version / retire row actions
+  const [publishTarget, setPublishTarget] = useState<ServiceRecord | null>(null)
+  const [retireTarget, setRetireTarget] = useState<string | null>(null)
   const createFormRef = useRef<HTMLFormElement>(null)
   const editFormRef = useRef<HTMLFormElement>(null)
+  const publishFormRef = useRef<HTMLFormElement>(null)
 
   const listQueryKey = tenantKeys.admin.services()
   const listQuery = useQuery({
@@ -67,6 +72,24 @@ export default function ServicesPage() {
     },
   })
 
+  // CUSTOM: REQ-432 — publish new version / retire mutations
+  const publishMutation = useMutation({
+    mutationFn: ({ serviceId, body }: { serviceId: string; body: PublishVersionBody }) =>
+      servicesApi.publishVersion(serviceId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: listQueryKey })
+      setPublishTarget(null)
+    },
+  })
+
+  const retireMutation = useMutation({
+    mutationFn: (serviceId: string) => servicesApi.retireVersion(serviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: listQueryKey })
+      setRetireTarget(null)
+    },
+  })
+
   function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
@@ -99,6 +122,39 @@ export default function ServicesPage() {
       serviceId: editTarget.service_id,
       body: { scope: editScope, owner_tenant_id: editOwner.trim() || undefined },
     })
+  }
+
+  // CUSTOM: REQ-432 — publish new version submit handler
+  function handlePublishSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!publishTarget) return
+    const form = new FormData(e.currentTarget)
+    const retryPolicy = (form.get('retry_policy') as string)?.trim() || undefined
+    publishMutation.mutate({
+      serviceId: publishTarget.service_id,
+      body: {
+        version: form.get('version') as string,
+        endpoint_url: form.get('endpoint_url') as string,
+        timeout_ms: Number(form.get('timeout_ms')),
+        request_schema: (form.get('request_schema') as string) || undefined,
+        response_schema: (form.get('response_schema') as string) || undefined,
+        auth_method: (form.get('auth_method') as string) || undefined,
+        retry_policy: retryPolicy,
+      },
+    })
+  }
+
+  function publishErrorMessage(error: unknown): string {
+    const status = (error as ApiError | undefined)?.status
+    if (status === 409) return 'Version already exists for this service.'
+    if (status === 422) return 'Validation failed — check the required fields.'
+    return 'Failed to publish version.'
+  }
+
+  function retireErrorMessage(error: unknown): string {
+    const status = (error as ApiError | undefined)?.status
+    if (status === 409) return 'This version is already retired.'
+    return 'Failed to retire service.'
   }
 
   const items = listQuery.data?.items ?? []
@@ -142,9 +198,21 @@ export default function ServicesPage() {
             id: 'actions',
             header: 'Actions',
             accessor: (row: ServiceRecord) => (
-              <div style={{ display: 'flex', gap: '.5rem' }}>
+              <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
                 <Button variant="secondary" size="sm" onClick={() => openEditScope(row)}>
                   Edit scope
+                </Button>
+                {/* CUSTOM: REQ-432 — publish new version / retire row actions */}
+                <Button variant="secondary" size="sm" onClick={() => setPublishTarget(row)}>
+                  Publish new version
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={row.status === 'RETIRED'}
+                  onClick={() => setRetireTarget(row.service_id)}
+                >
+                  Retire
                 </Button>
                 <Button variant="danger" size="sm" onClick={() => setDeleteTarget(row.service_id)}>
                   Delete
@@ -336,6 +404,112 @@ export default function ServicesPage() {
                 onClick={() => deleteMutation.mutate(deleteTarget)}
               >
                 {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM: REQ-432 — Publish new version modal (platform-admin only) */}
+      {publishTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div data-testid="publish-version-dialog" style={{ background: 'var(--surface-card)', borderRadius: '8px', padding: '1.5rem', width: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ margin: '0 0 1rem' }}>Publish new version — {publishTarget.service_id}</h3>
+            <form ref={publishFormRef} onSubmit={handlePublishSubmit}>
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Version</span>
+                <input type="text" name="version" data-testid="publish-version-input" required style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box' }} />
+              </label>
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Endpoint URL</span>
+                <input
+                  type="text"
+                  name="endpoint_url"
+                  data-testid="publish-endpoint-url-input"
+                  required
+                  defaultValue={publishTarget.endpoint_url}
+                  style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box' }}
+                />
+              </label>
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Timeout (ms)</span>
+                <input
+                  type="number"
+                  name="timeout_ms"
+                  data-testid="publish-timeout-ms-input"
+                  required
+                  min={0}
+                  defaultValue={publishTarget.timeout_ms}
+                  style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box' }}
+                />
+              </label>
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Request schema</span>
+                <textarea name="request_schema" rows={3} defaultValue={publishTarget.request_schema} style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box', fontFamily: 'var(--font-mono)', fontSize: '.82rem' }} />
+              </label>
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Response schema</span>
+                <textarea name="response_schema" rows={3} defaultValue={publishTarget.response_schema} style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box', fontFamily: 'var(--font-mono)', fontSize: '.82rem' }} />
+              </label>
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Auth method</span>
+                <select name="auth_method" defaultValue={publishTarget.required_auth} style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }}>
+                  <option value="NONE">None</option>
+                  <option value="API_KEY">API Key</option>
+                  <option value="OAUTH2">OAuth2</option>
+                  <option value="MUTUAL_TLS">Mutual TLS</option>
+                </select>
+              </label>
+              <label style={{ display: 'block', marginBottom: '.75rem' }}>
+                <span style={{ display: 'block', marginBottom: '.25rem', fontWeight: 500 }}>Retry policy</span>
+                <input type="text" name="retry_policy" style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box' }} />
+              </label>
+              {publishMutation.isError && (
+                <div style={{ padding: '.6rem', background: 'var(--color-error-tint)', border: '1px solid var(--color-error-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-error-dark)', marginBottom: '.75rem', fontSize: '.85rem' }}>
+                  {publishErrorMessage(publishMutation.error)}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" size="sm" onClick={() => setPublishTarget(null)}>Cancel</Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  data-testid="publish-version-submit"
+                  loading={publishMutation.isPending}
+                  onClick={() => publishFormRef.current?.requestSubmit()}
+                >
+                  {publishMutation.isPending ? 'Publishing…' : 'Publish'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM: REQ-432 — Retire confirmation modal (platform-admin only) */}
+      {retireTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div data-testid="retire-confirm-dialog" style={{ background: 'var(--surface-card)', borderRadius: '8px', padding: '1.5rem', width: '380px' }}>
+            <h3 style={{ margin: '0 0 .75rem' }}>Retire service version?</h3>
+            <p style={{ margin: '0 0 1rem', fontSize: '.9rem', color: 'var(--text-secondary)' }}>
+              This retires <strong>{retireTarget}</strong>&apos;s current version. Instances already
+              using it will keep running unaffected; new instances will no longer be able to choose it.
+            </p>
+            {retireMutation.isError && (
+              <div style={{ padding: '.6rem', background: 'var(--color-error-tint)', border: '1px solid var(--color-error-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-error-dark)', marginBottom: '.75rem', fontSize: '.85rem' }}>
+                {retireErrorMessage(retireMutation.error)}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" size="sm" onClick={() => setRetireTarget(null)}>Cancel</Button>
+              <Button
+                variant="danger"
+                size="sm"
+                data-testid="retire-confirm-submit"
+                loading={retireMutation.isPending}
+                onClick={() => retireMutation.mutate(retireTarget)}
+              >
+                {retireMutation.isPending ? 'Retiring…' : 'Retire'}
               </Button>
             </div>
           </div>

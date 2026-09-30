@@ -31931,7 +31931,42 @@ requirements:
   - id: REQ-432
     title: "Rebind-pins and publish/retire operator UI, wired to REQ-399's case-detail provenance screen, plus the platform-instance-pin-survives-catalog-change e2e spec (frontend)"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
+    completion_note: >
+      PR #2055, branch feat/REQ-432-rebind-publish-retire-ui, commit
+      86029b54. Implements: a typed publish/retire client pair in
+      web/src/api/services.ts plus publish/retire UI controls on
+      ServicesPage.tsx for a PLATFORM_ADMIN-equivalent operator (AC2/AC3,
+      real POST /api/v1/admin/services/:service_id/versions and
+      /:service_id/retire, no mock); a typed rebind client function (POST
+      /instances/:id/rebind-pins) and a RebindPinDialog requiring a
+      caller-supplied reason string, wired onto REQ-399's InstancePinsPanel
+      (AC4); case-history rendering extended so an INSTANCE_PINS_REBOUND
+      entry surfaces actor, prior_version, new_version and reason per
+      EO-005 (AC5), actor name resolved via a cross-reference against the
+      timeline endpoint's already-resolved names joined by shared
+      event_id; the named
+      platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts
+      passes (AC1); pre/post-publish cases render distinct pinned versions
+      per EO-001/EO-002 (AC6); retiring a version does not disturb an
+      already-running case's pin display or in-flight step per EO-004
+      (AC7); git diff confirmed clean of
+      lib/letflow/service_catalog(.ex|/), pin_resolver.ex and
+      pin_rebind.ex (AC8). Full gate chain: CODE-DESIGN-VALIDATOR (2nd
+      attempt -- 1st FAILed on a real AC5 gap, the rebind-history
+      rendering did not actually surface prior/new version/reason/actor-
+      name as originally claimed; fixed via the actor-name/event_id
+      cross-reference above), FRONTEND-DEV implementation, REVIEWER PASS
+      (filed one non-blocking follow-up, docs/issues/ISS-0916.yaml --
+      pre-existing ServicesPage/RebindPinDialog click-freeze bug, unrelated
+      to this PR's correctness), TEST-RUNNER (full suite + e2e, only
+      known flakes), and RELEASE-VALIDATOR PASS via independent
+      re-derivation of all 9 ACs, 2x independent e2e reruns, adversarial
+      empty-reason-rejection and already-retired-409 checks, and
+      actor-name-fallback source confirmation. docs/issues/ISS-0898.yaml
+      set to status: resolved in this same append -- both of its split
+      follow-ons (REQ-431, REQ-432) are now done. letflow-queue task 906
+      to be released as done in this same run.
     stage: S6
     description: >
       Follow-on to REQ-373 (service_catalog version/status lifecycle + real

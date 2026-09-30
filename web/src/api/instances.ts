@@ -7,6 +7,8 @@ import type {
   EventRecord,
   TimelinePage,
   InstancePinsResponse,
+  RebindPinsRequestBody,
+  RebindPinsResult,
 } from '@/types/api'
 
 export const instancesApi = {
@@ -53,4 +55,13 @@ export const instancesApi = {
   // PinResolver.reconstruct_effective_pins/2, no query params.
   getPins: (id: string) =>
     client.get<InstancePinsResponse>(`/api/v1/instances/${id}/pins`),
+
+  // REQ-078/PIN-05, operator UI: REQ-432. No explicit idempotency-key
+  // header is set — the backend sources it from the `idempotency-key`
+  // request header when present, and generates one server-side when absent
+  // (design §3.1/OQ-2); this UI has no cross-request retry/dedup need of
+  // its own, so the simplest correct choice is to let the backend generate
+  // one per call.
+  rebindPins: (id: string, body: RebindPinsRequestBody) =>
+    client.post<RebindPinsResult>(`/api/v1/instances/${id}/rebind-pins`, body),
 }

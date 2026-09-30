@@ -69,3 +69,14 @@ progress_2026_09_30: >
   (partially resolved, 2 of 4 scenarios, umbrella still open), 0901
   (resolved). ISS-0890 itself stays open until all four of its own splits
   close.
+
+  UPDATE (2026-09-30T18:20:13Z, DOC-UPDATER, PR #2055,
+  feat/REQ-432-rebind-publish-retire-ui): ISS-0898 now closes -- REQ-432
+  (rebind-pins and publish/retire operator UI) done, full gate chain PASS
+  (CODE-DESIGN-VALIDATOR 2nd attempt, FRONTEND-DEV, REVIEWER, TEST-RUNNER,
+  RELEASE-VALIDATOR); see docs/issues/ISS-0898.yaml's own resolution note.
+  ISS-0890's own split-tracking state is therefore: 0899, 0901, and now
+  0898 permanently resolved; 0900 still open pending its own sub-splits
+  ISS-0902/ISS-0903, which are genuinely open/unbuilt. ISS-0890 itself
+  stays open (status untouched by this update) until 0900's own
+  sub-splits (0902, 0903) also resolve.

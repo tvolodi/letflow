@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b41cc438-2ec7-4b17-8024-7c430dc25ef8",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0910-20260930/step-04-test-designer.json",
+  "created_at": "2026-09-30T08:02:53Z",
+  "started_at": "2026-09-30T08:02:53Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/identity/role_backfill.ex",
+      "test/letflow/identity/role_backfill_test.exs"
+    ],
+    "owned_modules": ["test/letflow/identity/role_backfill_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 for ISS-0910. Write regression tests proving reset_role_claims_sync_markers/1's behavior in test/letflow/identity/role_backfill_test.exs (existing file, 7 tests already there per Step 3's report). Required test cases: (1) a user in a tenant that RoleBackfill.run/0 classifies :seeded, with role_claims_synced_at previously set (non-nil), has it reset to nil after run/0; (2) a user in a tenant classified :unchanged keeps their existing role_claims_synced_at value untouched; (3) running run/0 TWICE against the same seeded tenant is idempotent -- the second run classifies that tenant :unchanged (already fully seeded) and does not re-touch already-nil or already-re-synced markers; (4) the returned role_claims_markers_reset count matches the actual number of users whose marker was reset (not a hardcoded/approximate count).\n\nThis reset behavior is NEW (no pre-fix version existed -- WF-03's own 'pre-fix failure is non-existence' rule applies, see docs/agents/workflows/WF-03_issue_resolving.md). Prove discriminating power via mutation: apply at least 2 targeted mutants to the shipped reset_role_claims_sync_markers/1 or its call site (e.g. mutant A: call the reset unconditionally regardless of :seeded/:unchanged classification -- must fail test (2); mutant B: remove the prefix: schema_name option from the update_all call, defaulting to the public/global schema -- must fail test (1) or (2) depending on test DB setup, or cause an error test (4) catches via a wrong count) -- run the tests against each mutant, record which specific test(s) fail, then revert every mutation and verify (git status --porcelain lib/ test/ empty, suite re-runs green). Use a throwaway git worktree if practical.",
+    "acceptance_criteria": [
+      "a test proves a :seeded tenant's users have role_claims_synced_at reset to nil",
+      "a test proves an :unchanged tenant's users are NOT touched",
+      "a test proves idempotency across two successive run/0 calls",
+      "a test proves the returned role_claims_markers_reset count is accurate, not approximate",
+      "at least 2 targeted mutants applied and reverted, with each one's specific test failure(s) recorded and the revert verified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

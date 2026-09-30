@@ -5021,8 +5021,25 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 22
+    entries: 23
     note: >
+      Bumped to 23 by DOC-UPDATER after appending ISS-0887's SCOPE-CHANGE
+      done-event (fix/ISS-0887-tenant-settings-contract-mismatch, PR #2028,
+      2026-09-30T06:30:00Z -- flattened web/src/api/tenantSettings.ts's
+      PATCH body and the e2e seedBrandColor helper to match REQ-382's flat
+      router contract; SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR
+      (real mutation testing), TEST-RUNNER, and RELEASE-VALIDATOR all
+      PASSed, the latter independently reproducing the original bug and
+      confirming the fix end-to-end via a real PATCH+GET round trip
+      against a live backend). Fetched/pulled origin/main immediately
+      before this append (still d3b332f4, no new commits) and recounted
+      directly rather than trusting the prior note's arithmetic: `grep -c
+      "^  - req:" docs/status/requirement_status.v24.yaml` = 23 on-disk
+      entries (the prior 22 + this done-event). `git diff --numstat` on
+      this file for this append showed 0 deletions. 941 lines / 57142
+      bytes (working-tree), well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+
       Bumped to 22 by DOC-UPDATER after appending ISS-0889's SCOPE-CHANGE
       done-event (closure bookkeeping only, no new code/PR --
       2026-09-30T05:50:00Z -- RELEASE-VALIDATOR PASSed noting full

@@ -42,4 +42,28 @@ related:
   - REQ-383
 queue_ref: Q-885  # queue allocated issue_ref ISS-0885, which collides with an existing local file (Q-881); local filename shifted to the next free number.
 github_ref: GH-1990
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0887-tenant-settings-contract-mismatch-20260930
+resolved_at: "2026-09-30T06:30:00Z"
+resolution: >
+  Adopted the flat contract per REQ-382's real router partition logic
+  (lib/letflow/routers/tenant_settings.ex, deliberately left unchanged --
+  the design justified this against an existing REQ-382/AC3 acceptance
+  test). Flattened web/src/api/tenantSettings.ts's request body and the
+  e2e seedBrandColor helper
+  (web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts) from the
+  wrapped {"settings":{"brand_colors":{...}}} shape to the flat
+  {"brand_colors":{...}} shape the backend actually expects. Added a new
+  e2e persistence-check test (GET /api/tenant-config reflects the saved
+  colour after the GUI save), a backend regression-pin test, and a
+  frontend unit test asserting the exact flat request shape (commit
+  ac305e16, branch fix/ISS-0887-tenant-settings-contract-mismatch, PR
+  #2028). Full gate chain: SECURITY-REVIEWER, REVIEWER,
+  TEST-DESIGN-VALIDATOR (real mutation testing), TEST-RUNNER, and
+  RELEASE-VALIDATOR all PASSed. RELEASE-VALIDATOR independently
+  reproduced the original bug live and confirmed the fix end-to-end via
+  a real PATCH+GET round trip against a live backend: reverting the
+  client fix caused the new tests to fail exactly as ISS-0887 described
+  (GUI reports success, nothing persists); restoring it round-tripped a
+  real PATCH+GET through the live backend correctly. Merged via PR #2028
+  (see PR for merge commit SHA).

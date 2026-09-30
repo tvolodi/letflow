@@ -5021,8 +5021,16 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 27
+    entries: 28
     note: >
+      Bumped to 28 by ORCH after appending ISS-0907's closed_not_applicable
+      SCOPE-CHANGE done-event (2026-09-30T12:55:00Z -- My Tasks
+      permission-denied leak confirmed a QA data gap, not a code defect, per
+      ISSUE-FIXER diagnosis). Recounted directly:
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 28
+      on-disk entries. 1146 lines / 70078 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       MERGE NOTE: REQ-431 (PR #2050) and ISS-0905 (PR #2046) were appended
       concurrently on separate branches, each independently observing 24
       prior entries and computing entries: 25; reconciled here during the

@@ -46,6 +46,10 @@ vi.mock('@tanstack/react-query', async () => {
 vi.mock('@/hooks/useDefinitions', () => ({
   useDefinition: vi.fn(),
   useCreateDefinition: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  // REQ-431 — DefinitionEditorPage now also calls these; this suite doesn't
+  // exercise save/release, so bare no-op stubs are sufficient.
+  useValidateDefinition: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useActivateDefinition: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
 }))
 
 vi.mock('@/auth/AuthContext', () => ({

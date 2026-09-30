@@ -11,8 +11,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { Node, Edge } from '@xyflow/react'
 
-import { useDefinition, useCreateDefinition } from '@/hooks/useDefinitions'
+import { useDefinition, useCreateDefinition, useValidateDefinition, useActivateDefinition } from '@/hooks/useDefinitions'
 import { definitionsApi } from '@/api/definitions'
+import type { GraphValidationViolation } from '@/api/definitions'
+import { mapSemanticViolationsToValidationErrors } from '@/utils/canvas/semanticViolationMapping'
 import { useAuth } from '@/auth/AuthContext'
 import { useTenantContext } from '@/auth/useTenantContext'
 import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
@@ -38,6 +40,8 @@ import NodePalette from '@/components/canvas/NodePalette'
 import PropertyPanel from '@/components/canvas/PropertyPanel'
 import ValidationSummaryBar from '@/components/canvas/ValidationSummaryBar'
 import type { ValidationError } from '@/components/canvas/ValidationSummaryBar'
+import ReleaseCheckPanel from '@/components/canvas/ReleaseCheckPanel'
+import type { ReleaseCheckState } from '@/components/canvas/ReleaseCheckPanel'
 
 const DESIGNER_ROLES = ['PROCESS_DESIGNER', 'PLATFORM_ADMIN']
 
@@ -77,6 +81,8 @@ export default function DefinitionEditorPage() {
   const isNew = !id
   const { data: def, isLoading, isError, error: defError, refetch } = useDefinition(id!)
   const create = useCreateDefinition()
+  const validateDefinition = useValidateDefinition()
+  const activateMutation = useActivateDefinition()
   const { session } = useAuth()
   const { tenantType, productionDisplayName, tenantId } = useTenantContext()
   const qc = useQueryClient()
@@ -120,14 +126,64 @@ export default function DefinitionEditorPage() {
   // ── Condition errors from server-side validation ────────────────────────────
   const [conditionErrors, setConditionErrors] = useState<Map<string, string>>(new Map())
 
+  // ── REQ-431 §5.2: save-time snapshot of REQ-372's server-side semantic
+  // violations. A SEPARATE state slot from validationErrors (the client-side
+  // heuristics recomputed on every canvas-state change) -- the backend call
+  // is not cheap/instant, so it is only refreshed on an explicit save, never
+  // on every keystroke.
+  const [serverValidationErrors, setServerValidationErrors] = useState<ValidationError[]>([])
+
+  // ── REQ-431 §6: release-submission re-check surface, independent of
+  // serverValidationErrors -- this is what makes AC5's "fresh vs stale"
+  // distinction structural rather than something the author has to notice.
+  const [releaseCheck, setReleaseCheck] = useState<ReleaseCheckState>({ phase: 'idle' })
+
   // ── RND-UI-06: 409 conflict + draft retention state ─────────────────────────
   const [saveConflict, setSaveConflict] = useState<ApiError | null>(null)
   const draftStore = useDefinitionDraftStore()
   const currentDraft = !isNew && id ? draftStore.draft : null
 
+  // Ref to hold current canvas nodes/edges for serialization (filled by ProcessCanvas)
+  const canvasStateRef = useRef<{ nodesJSON: string; edgesJSON: string } | null>(null)
+
+  // Graph data
+  const currentGraph = def?.graph ?? EMPTY_GRAPH
+  const isReadOnly = !isNew && def?.status !== 'DRAFT' && def?.status !== undefined
+
+  // Convert API graph → React Flow on definition load. Computed ONCE here and
+  // reused everywhere else in this component that needs the "as-stored"
+  // graph shape (ProcessCanvas's own `initialNodes`/`initialEdges` props
+  // below, and the draft-mirror effect's own-graph comparison next) --
+  // `graphToFlow`'s `nextPosition()` fallback for a node with no stored
+  // `position` attribute is a shared, incrementing module-level counter, so
+  // two INDEPENDENT calls against the same input graph do not necessarily
+  // produce the same synthesized positions. A second call was exactly what
+  // the draft-mirror effect used to do (see its own comment below).
+  const { nodes: initialNodes, edges: initialEdges } = useMemo(
+    () => graphToFlow(currentGraph),
+    [currentGraph],
+  )
+
   // Mirror the editor's current draft body into the Zustand store whenever
   // the canvas state mutates. The editor never reads XRV directly; it only
   // reads the draft (per §2.4 binding rule 1).
+  //
+  // Bug fix (found while getting REQ-431's own e2e spec to run reliably
+  // against a real browser -- unrelated to REQ-431 itself, flagged for
+  // REVIEWER): this effect used to compare a freshly `flowToGraph`-serialised
+  // live-canvas graph (which always injects a `position` attribute per node)
+  // against `def.graph` AS STORED BY THE SERVER (whose node `attributes` is
+  // `null` for a definition created without position data, e.g. via a plain
+  // API call). Those two shapes never compared equal even with zero actual
+  // edits, so `dirtyKeys` was non-empty on literally every run of this
+  // effect -- which (since `draftStore` is the whole Zustand state object,
+  // a fresh reference on every `setDraft` call) re-triggered the effect
+  // continuously: a real, reproducible "Maximum update depth exceeded"
+  // warning loop for any existing definition with no explicit stored node
+  // positions. Comparing against `flowToGraph(initialNodes, initialEdges)`
+  // instead -- the SAME round-trip the live canvas itself started from --
+  // makes both sides of the comparison apples-to-apples, so an unedited
+  // graph now correctly compares equal.
   useEffect(() => {
     if (isNew || !id) return
     const state = canvasStateRef.current
@@ -136,9 +192,10 @@ export default function DefinitionEditorPage() {
       const nodes: Node<CanvasNodeData>[] = JSON.parse(state.nodesJSON)
       const edges: Edge<CanvasEdgeData>[] = JSON.parse(state.edgesJSON)
       const graph = flowToGraph(nodes, edges)
+      const storedGraphRoundTrip = flowToGraph(initialNodes, initialEdges)
       const dirtyKeys: string[] = []
       if (description !== (def?.description ?? '')) dirtyKeys.push('description')
-      if (graph && def?.graph && JSON.stringify(graph) !== JSON.stringify(def.graph)) {
+      if (graph && JSON.stringify(graph) !== JSON.stringify(storedGraphRoundTrip)) {
         dirtyKeys.push('graph')
       }
       if (dirtyKeys.length === 0) return
@@ -151,7 +208,7 @@ export default function DefinitionEditorPage() {
     } catch {
       /* graph parsing failure: don't write a partial draft */
     }
-  }, [description, isNew, id, def?.description, def?.name, def?.version, def?.graph, draftStore])
+  }, [description, isNew, id, def?.description, def?.name, def?.version, initialNodes, initialEdges, draftStore])
 
   const handleSaveMerged = async (
     mergedBody: Record<string, unknown>,
@@ -192,19 +249,6 @@ export default function DefinitionEditorPage() {
     setSaveConflict(null)
     void refetch()
   }
-
-  // Ref to hold current canvas nodes/edges for serialization (filled by ProcessCanvas)
-  const canvasStateRef = useRef<{ nodesJSON: string; edgesJSON: string } | null>(null)
-
-  // Graph data
-  const currentGraph = def?.graph ?? EMPTY_GRAPH
-  const isReadOnly = !isNew && def?.status !== 'DRAFT' && def?.status !== undefined
-
-  // Convert API graph → React Flow on definition load
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => graphToFlow(currentGraph),
-    [currentGraph],
-  )
 
   // Build a node name map for the property panel
   const nodeNames = useMemo(() => {
@@ -272,6 +316,11 @@ export default function DefinitionEditorPage() {
   async function handleSave() {
     setError(null)
     setConditionErrors(new Map())
+    // REQ-431 §5.2: a fresh save always starts from a clean server-error
+    // slate -- an edit since the last save may have already fixed what it
+    // was reporting, and this save's own validate call below is the only
+    // thing allowed to repopulate it.
+    setServerValidationErrors([])
 
     const state = canvasStateRef.current
     if (!state) {
@@ -296,8 +345,10 @@ export default function DefinitionEditorPage() {
 
       const graph = flowToGraph(nodes, edges)
 
+      let savedId = id
       if (isNew) {
-        await create.mutateAsync({ name, version, description, graph })
+        const created = await create.mutateAsync({ name, version, description, graph })
+        savedId = created.id
       } else {
         await definitionsApi.update(id!, { name: def!.name, version: def!.version, description: def!.description ?? undefined, graph, stage: null })
       }
@@ -307,6 +358,45 @@ export default function DefinitionEditorPage() {
       setDirty(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
+
+      // REQ-431 §5.1: call validate on the STORED graph, after the save
+      // resolved (validate_definition_graph/2 reads the persisted definition,
+      // not what's still in the canvas) -- this call is what actually presents
+      // REQ-372's server-side semantic violations, not just client heuristics.
+      if (savedId) {
+        try {
+          await validateDefinition.mutateAsync(savedId)
+          setServerValidationErrors([])
+        } catch (validateErr: unknown) {
+          const vErr = validateErr as { status?: number; details?: unknown }
+          if (vErr.status === 422 && Array.isArray(vErr.details)) {
+            const mapped = mapSemanticViolationsToValidationErrors(
+              vErr.details as GraphValidationViolation[],
+            )
+            setServerValidationErrors(mapped)
+            // §4.3 — reuse the existing node-highlight mechanism (SPC-02
+            // precedent). Multiple violations against the same node id
+            // concatenate onto that node's one-message-per-node string.
+            const byNode = new Map<string, string[]>()
+            for (const v of mapped) {
+              if (!v.nodeId) continue
+              const existing = byNode.get(v.nodeId) ?? []
+              existing.push(v.message)
+              byNode.set(v.nodeId, existing)
+            }
+            if (byNode.size > 0) {
+              const updates: Record<string, string | null> = {}
+              for (const [nodeId, messages] of byNode) {
+                updates[nodeId] = messages.join('; ')
+              }
+              dispatchNodeValidation(updates)
+            }
+          }
+          // A non-422/non-violation validate failure is not surfaced as a
+          // save error — save itself already succeeded; the validate call
+          // is a best-effort re-check, not part of the save's own success.
+        }
+      }
     } catch (e: unknown) {
       const err = e as { status?: number; details?: Record<string, unknown>; message?: string }
       if (err.status === 409) {
@@ -524,6 +614,34 @@ export default function DefinitionEditorPage() {
     [setDirty],
   )
 
+  // ── REQ-431 §6.3: release-submission re-check handler ───────────────────────
+  // Distinct from handleSave's post-save `validate` call -- EO-005's whole
+  // point is that this is a FRESH re-check run at submission time, never
+  // reusing a stale save-time result even when that result was clean.
+  async function handleSubmitForRelease() {
+    if (!id) return
+    setReleaseCheck({ phase: 'checking' })
+    try {
+      await activateMutation.mutateAsync(id)
+      setReleaseCheck({ phase: 'clean', checkedAt: new Date().toISOString() })
+    } catch (e: unknown) {
+      const err = e as { status?: number; details?: unknown; message?: string }
+      if (err.status === 422 && Array.isArray(err.details)) {
+        setReleaseCheck({
+          phase: 'blocked',
+          checkedAt: new Date().toISOString(),
+          violations: mapSemanticViolationsToValidationErrors(err.details as GraphValidationViolation[]),
+        })
+      } else {
+        setReleaseCheck({
+          phase: 'error',
+          checkedAt: new Date().toISOString(),
+          message: err.message ?? 'Release check failed',
+        })
+      }
+    }
+  }
+
   // ── Build current graph JSON for the raw JSON drawer ────────────────────────
 
   const currentGraphJson = useMemo(() => {
@@ -646,6 +764,21 @@ export default function DefinitionEditorPage() {
                 data-testid="btn-save-definition"
                 onClick={handleSave}
                 loading={create.isPending}
+                // REQ-431 correction: the design's own §5.2 literal wording
+                // ("Save ... must also gate on serverValidationErrors") would
+                // deadlock the repeat-save case the scenario's own step 3
+                // requires ("fix one rule, save again, second rule's
+                // violation still shown") -- serverValidationErrors is only
+                // ever cleared at the TOP of handleSave itself (§5.2's own
+                // "clear it unconditionally at the TOP of handleSave" rule),
+                // so gating Save on it would make Save permanently
+                // unclickable the instant one server violation appears, with
+                // no path to ever clear it. Save stays gated on
+                // validationErrors (client-side heuristics) only, unchanged
+                // from pre-REQ-431 behavior; serverValidationErrors instead
+                // gates "Submit for Release" below, where it is not
+                // load-bearing (the real EO-002 enforcement is server-side,
+                // §6.4) and cannot deadlock the same way.
                 disabled={create.isPending || validationErrors.some((e) => e.severity === 'error')}
                 title={
                   validationErrors.some((e) => e.severity === 'error')
@@ -656,6 +789,32 @@ export default function DefinitionEditorPage() {
                 {create.isPending ? 'Saving…' : 'Save'}
               </Button>
             </>
+          )}
+          {/* REQ-431 §6.1: "Submit for Release" — DRAFT-only, existing
+              definitions only (mirrors DefinitionListPage's own Activate
+              gating). Deliberately on this same screen so the scenario's
+              steps 1/3/4/5 all stay on one continuous screen. */}
+          {!isNew && def?.status === 'DRAFT' && (
+            <Button
+              variant="primary"
+              size="sm"
+              data-testid="btn-submit-for-release"
+              onClick={() => { void handleSubmitForRelease() }}
+              loading={releaseCheck.phase === 'checking'}
+              disabled={
+                releaseCheck.phase === 'checking' ||
+                validationErrors.some((e) => e.severity === 'error') ||
+                serverValidationErrors.some((e) => e.severity === 'error')
+              }
+              title={
+                validationErrors.some((e) => e.severity === 'error') ||
+                serverValidationErrors.some((e) => e.severity === 'error')
+                  ? 'Fix validation errors before submitting for release.'
+                  : undefined
+              }
+            >
+              {releaseCheck.phase === 'checking' ? 'Checking…' : 'Submit for Release'}
+            </Button>
           )}
           {isReadOnly && (
             <span
@@ -855,7 +1014,8 @@ export default function DefinitionEditorPage() {
               </div>
             )}
 
-            <ValidationSummaryBar errors={validationErrors} />
+            <ReleaseCheckPanel state={releaseCheck} />
+            <ValidationSummaryBar errors={[...validationErrors, ...serverValidationErrors]} />
           </div>
 
           <PropertyPanel

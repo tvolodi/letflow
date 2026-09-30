@@ -1,0 +1,51 @@
+{
+  "handoff_id": "4fa84ea4-3bda-4532-97ac-b7b3666cc35f",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0910-20260930/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-30T09:22:06Z",
+  "started_at": "2026-09-30T09:22:06Z",
+  "completed_at": "2026-09-30T09:23:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0910.yaml",
+      "test/reports/report-20260930-WF03-ISS0910-20260930.yaml"
+    ],
+    "owned_modules": ["docs/issues/ISS-0910.yaml"]
+  },
+  "task": {
+    "description": "WF-03 Step 5 for ISS-0910. Root cause was genuinely removed (RoleBackfill.run/0 now resets role_claims_synced_at for every :seeded tenant's users, forcing a re-sync via the existing sync_role_claims_from_token/3 gate, proven by a real mutation-tested regression suite), so this is a `resolved` close. Set docs/issues/ISS-0910.yaml's status: resolved, resolved_in_run: WF03-ISS0910-20260930, resolved_at: <real UTC timestamp -- READ THE ACTUAL CLOCK, do not estimate or use local time labelled Z; a prior run this session (ISS-0896) had to be corrected for exactly this mistake>. The GitHub issue is GH#2033 (github_ref field) -- close it with `gh issue close 2033 --comment \"Fixed in WF03-ISS0910-20260930. See docs/issues/ISS-0910.yaml and the regression tests at test/letflow/identity/role_backfill_test.exs.\"` per WF-03 Step 5's exact resolved-status comment template (see docs/agents/workflows/WF-03_issue_resolving.md Step 5). Note: QA itself was already manually remediated per the issue's own description (role_claims_synced_at nulled for 7 affected rows) -- this closure is about the CODE fix preventing recurrence in any environment, not a claim that QA needed further manual work.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0910.yaml status: resolved with resolved_in_run/resolved_at set, resolved_at a genuine freshly-read UTC timestamp",
+      "GitHub issue GH#2033 closed with a --comment citing the resolving evidence (run-id, issue file, regression test path)",
+      "next_action: Route to Step Final"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/issues/ISS-0910.yaml updated: status: resolved, resolved_in_run: WF03-ISS0910-20260930, resolved_at: 2026-09-30T09:23:04Z (freshly read via `date -u +\"%Y-%m-%dT%H:%M:%SZ\"` in this run, not estimated/local-time). GitHub issue GH#2033 closed via `gh issue close 2033 --comment \"Fixed in WF03-ISS0910-20260930. See docs/issues/ISS-0910.yaml and the regression tests at test/letflow/identity/role_backfill_test.exs.\"` -- confirmed by gh CLI output: 'Closed issue tvolodi/letflow#2033'. Root cause (RoleBackfill.run/0 never reset role_claims_synced_at, so sync_role_claims_from_token/3's nil-only gate skipped already-synced pre-existing users) was removed and proven by the mutation-tested regression suite reported PASS in step 04 (test/reports/report-20260930-WF03-ISS0910-20260930.yaml).",
+    "artifacts_out": ["docs/issues/ISS-0910.yaml"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0910-20260930",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step Final"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

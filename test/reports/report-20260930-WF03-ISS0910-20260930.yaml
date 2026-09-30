@@ -1,0 +1,161 @@
+run_id: WF03-ISS0910-20260930
+agent: TEST-RUNNER
+date: 2026-09-30T14:25:00Z
+branch: feature/WF03-ISS0910-20260930
+issue: ISS-0910
+scope:
+  description: >
+    git diff --name-only main...HEAD for this branch touches only
+    lib/letflow/identity/role_backfill.ex,
+    lib/mix/tasks/letflow.backfill_platform_roles.ex,
+    test/letflow/identity/role_backfill_test.exs,
+    lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md (design
+    doc, no executable code), and handoffs/ bookkeeping
+    (handoffs/WF03-ISS0910-20260930/*.json, handoffs/orchestrator.log). No
+    other lib/letflow/ application code, no priv/repo/migrations/, no
+    test/mix/tasks/letflow_check_deferral_staleness_test.exs, and no
+    docs/requirements.yaml were changed. It cannot cause a new failure in
+    the deferral-staleness check.
+  files_touched_directly:
+    - lib/letflow/identity/role_backfill.ex
+    - lib/mix/tasks/letflow.backfill_platform_roles.ex
+    - test/letflow/identity/role_backfill_test.exs
+    - lib/letflow/design/iss0910-role-backfill-resync-marker-reset.md
+  prior_gates: >
+    CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, and
+    TEST-DESIGN-VALIDATOR all already PASSed this branch's design/
+    implementation/test-design. This run is the independent execution/
+    verification step (WF-03 Step 4 / WF-04 Step 1).
+
+environment:
+  toolchain: "Elixir/Erlang toolchain present, mix deps already resolved -- no deps.get needed"
+  docker: "docker compose up -d -- letflow-postgres-1 and letflow-keycloak-1, both already Running (no .env LETFLOW_DB_PORT override present, so default port 5462 applies)"
+  free_memory_verified_by_me: >
+    Re-checked via Get-CimInstance Win32_OperatingSystem immediately before
+    running: FreePhysicalMemory 6117060 KB (~5.83GB) of 33389048 KB total --
+    above the ~4GB minimum but not comfortably so, matching the dispatch's
+    own assessment. Used TEST_PARALLEL_N=4 as instructed (this host's
+    documented default per docs/anti-patterns.md), not full
+    nproc-derived parallelism.
+
+steps:
+  - step: "docker compose up -d"
+    result: "Both containers already Running (letflow-postgres-1, letflow-keycloak-1)."
+
+  - step: "TEST_PARALLEL_N=4 bash scripts/test_parallel.sh"
+    result: >
+      Ran to completion, foreground/blocking (auto-moved to a
+      tool-managed background slot by the harness after its 600s
+      per-call cap, polled via the task-completion notification rather
+      than a self-armed cross-turn Monitor -- no speculative result was
+      reported while it was in flight).
+    n_partitions: 4
+    per_partition_summary: |
+      partition 1: 1315 tests, 0 properties, 2 failures, exit 2
+      partition 2: 1325 tests, 3 properties, 0 failures, exit 0
+      partition 3: 1308 tests, 5 properties, 0 failures, exit 0
+      partition 4: 1106 tests, 0 properties, 0 failures, exit 0
+    combined_totals: "5054 tests, 8 properties, 2 failures (5060/5062 passed)"
+    exit_code: 1
+    failure_detail: >
+      Both failures are in partition 1, both in
+      Mix.Tasks.Letflow.CheckDeferralStalenessTest
+      (test/mix/tasks/letflow_check_deferral_staleness_test.exs):
+      (1) "T-LIVE-* -- the real docs/requirements.yaml T-LIVE-GREEN -- the
+      real corpus produces zero violations" at line 829/830 -- fails
+      because the live corpus currently has two stale deferrals,
+      REQ-431 (stage S8 now ACTIVE) and REQ-432 (stage S6 now ACTIVE),
+      neither registered via register_task nor re-scoped to a live
+      blocked-by rationale;
+      (2) "T-LIVE-* -- the staleness rule is now load-bearing, not
+      vacuous -- T-LIVE-DEFERRED-COUNT" at line 1022/1244 -- asserts
+      result.deferral_count == 0, got 2 (the same REQ-431/REQ-432
+      pair).
+    structural_attribution: >
+      Neither test/mix/tasks/letflow_check_deferral_staleness_test.exs
+      nor docs/requirements.yaml appear in
+      `git diff --name-only main...HEAD` for this branch (that diff is
+      limited to lib/letflow/identity/role_backfill.ex,
+      lib/mix/tasks/letflow.backfill_platform_roles.ex,
+      test/letflow/identity/role_backfill_test.exs, one design markdown
+      doc, and handoffs/ bookkeeping). REQ-431/REQ-432 staleness is a
+      pre-existing condition of the live requirements corpus dated
+      before this branch existed; role_backfill.ex and its mix task
+      touch no requirement-registration or deferral-rationale code
+      path. This independently re-confirms (not merely re-attributes on
+      say-so) TEST-DESIGNER's own prior finding of the same 2
+      pre-existing, unrelated failures.
+    role_backfill_test_evidence: >
+      grep for RoleBackfillTest activity in partition 1's log shows all
+      11 role_backfill_test.exs examples ran to teardown with no
+      failure reported against any of them (the only 2 failures
+      reported for partition 1 are both CheckDeferralStalenessTest, as
+      above). Isolated re-run confirms this directly below.
+
+  - step: "mix test test/letflow/identity/role_backfill_test.exs (isolated re-run)"
+    result: "Result: 11 passed, 0 failures."
+
+  - step: "mix compile --warnings-as-errors"
+    result: "PASS -- exit 0, no warnings."
+
+  - step: "mix format --check-formatted"
+    result: >
+      Initially FAILED: test/letflow/identity/role_backfill_test.exs
+      (owned by TEST-RUNNER) had one unformatted multi-line pipe
+      expression (@a_past_timestamp ...). Fixed directly with
+      `mix format test/letflow/identity/role_backfill_test.exs` (a
+      mechanical formatting fix within TEST-RUNNER's own owned test
+      file, not a loosening of any assertion). Re-ran
+      `mix format --check-formatted`: PASS, exit 0. Re-ran the test
+      file after formatting: Result: 11 passed, 0 failures --
+      confirms the formatting fix changed no behavior.
+
+verdict: PASS
+rationale: >
+  All 6 of ISS-0910's acceptance criteria are met: the 4 role_backfill
+  behavioral criteria (seeded-tenant marker reset to nil, unchanged-tenant
+  users untouched, idempotency across two successive run/0 calls, and an
+  exact -- not approximate -- role_claims_markers_reset count) are each
+  covered by a passing test in test/letflow/identity/role_backfill_test.exs
+  (11/11 passed, isolated and within the full suite), mix compile
+  --warnings-as-errors exits 0, and mix format --check-formatted now passes
+  after a mechanical fix to the one owned test file that needed it. The
+  full backend suite's only 2 failures (both
+  Mix.Tasks.Letflow.CheckDeferralStalenessTest, both about pre-existing
+  stale REQ-431/REQ-432 deferrals) are structurally confirmed unrelated:
+  this branch's diff touches no file in the deferral-staleness check's own
+  test, no docs/requirements.yaml, and no requirement-registration code
+  path. This is an independent re-confirmation of TEST-DESIGNER's own prior
+  finding, not an acceptance of it on say-so.
+full_suite_status: >
+  TEST_PARALLEL_N=4: 5054 tests, 8 properties, 2 failures (5060/5062
+  passed), both failures pre-existing and unrelated
+  (CheckDeferralStalenessTest / REQ-431,432 stale deferrals).
+  role_backfill_test.exs: 11/11 passed (both within the full run and in
+  isolation). mix compile --warnings-as-errors: PASS. mix format
+  --check-formatted: PASS (after a mechanical formatting fix to
+  role_backfill_test.exs).
+
+commands_run:
+  - "docker compose up -d"
+  - "TEST_PARALLEL_N=4 bash scripts/test_parallel.sh"
+  - "mix test test/letflow/identity/role_backfill_test.exs"
+  - "mix compile --warnings-as-errors"
+  - "mix format --check-formatted"
+  - "mix format test/letflow/identity/role_backfill_test.exs"
+  - "mix format --check-formatted (re-run, PASS)"
+  - "mix test test/letflow/identity/role_backfill_test.exs (re-run post-format, PASS)"
+
+issues_filed:
+  - "None filed as a new issue this run. REQ-431/REQ-432 stale-deferral
+     staleness is a pre-existing condition of the live requirements corpus,
+     already identified by TEST-DESIGNER's prior run and independently
+     re-confirmed here; it is a documentation/requirements-corpus concern
+     (register_task or re-scope the deferral rationale), not a defect in
+     this branch's role_backfill implementation or tests."
+
+next_action: >
+  Feeds Step 5 (ISSUE-FIXER close) on PASS. RELEASE-VALIDATOR should
+  independently re-run the suite per its own procedure rather than trusting
+  this report; full-partition logs are preserved at
+  /tmp/letflow_test_parallel.bObPvP (ephemeral local temp, not committed).

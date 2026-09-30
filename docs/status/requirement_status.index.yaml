@@ -5021,8 +5021,20 @@ volumes:
     path: docs/status/requirement_status.v24.yaml
     status: current
     opened: 2026-09-29
-    entries: 25
+    entries: 26
     note: >
+      MERGE NOTE: REQ-431 (PR #2050) and ISS-0905 (PR #2046) were appended
+      concurrently on separate branches, each independently observing 24
+      prior entries and computing entries: 25; reconciled here during the
+      ISS-0905 branch's merge of origin/main by recounting directly on the
+      merged file rather than trusting either branch's arithmetic:
+      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 26
+      on-disk entries (the prior 24 + both done-events, REQ-431 then
+      ISS-0905 in timestamp order). `git diff --numstat` on this file for
+      this merge showed 0 deletions. 1078 lines / 65812 bytes
+      (working-tree), well under the 1200-line/120000-byte roll ceiling,
+      so no roll triggered.
+
       Bumped to 25 by DOC-UPDATER after appending ISS-0905's SCOPE-CHANGE
       done-event (fix/ISS-0905-role-assignee-type-derivation, PR #2046,
       2026-09-30T11:17:55Z -- BLOCKER: resolve_assignee/1 never derived
@@ -5033,15 +5045,18 @@ volumes:
       SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (real mutation
       testing, 3/3 mutants caught), TEST-RUNNER, and RELEASE-VALIDATOR all
       PASSed, the latter completing a full live end-to-end reproduction of
-      the original role-routing bug against a real backend). Fetched/pulled
-      origin/main immediately before this append (branch already merged
-      with main at commit d3900e47, CI green, no new commits on main) and
-      recounted directly rather than trusting the prior note's arithmetic:
-      `grep -c "^  - req:" docs/status/requirement_status.v24.yaml` = 25
-      on-disk entries (the prior 24 + this done-event). `git diff
-      --numstat` on this file for this append showed 0 deletions. 1024
-      lines / 62337 bytes (working-tree), well under the
-      1200-line/120000-byte roll ceiling, so no roll triggered.
+      the original role-routing bug against a real backend). Computed on
+      this branch before it saw origin/main's concurrent REQ-431 append
+      (see MERGE NOTE above for the reconciled true count).
+
+      Bumped to 25 by DOC-UPDATER after appending REQ-431's done-event
+      (WF02-REQ431-20260930, PR #2050, 2026-09-30T10:45:20Z -- frontend
+      canvas/problem-list presentation of REQ-372's semantic decision-rule
+      violations plus a release-submission re-check surface; REVIEWER and
+      RELEASE-VALIDATOR both PASSed, the latter running a real 2x-repeated
+      e2e verification against a live backend plus the full test suite).
+      Computed on origin/main before it saw this branch's concurrent
+      ISS-0905 append (see MERGE NOTE above for the reconciled true count).
 
       Bumped to 24 by DOC-UPDATER after appending ISS-0913's SCOPE-CHANGE
       done-event (fix/iss-0912-activate-semantic-validation-500, PR #2042,

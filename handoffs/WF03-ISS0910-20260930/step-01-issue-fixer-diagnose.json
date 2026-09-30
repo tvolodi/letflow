@@ -1,0 +1,53 @@
+{
+  "handoff_id": "a61c6060-c985-4819-9e6e-da6abf8eda6e",
+  "run_id": "WF03-ISS0910-20260930",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0910-20260930/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-30T07:47:30Z",
+  "started_at": "2026-09-30T07:47:30Z",
+  "completed_at": "2026-09-30T08:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0910.yaml",
+      "lib/letflow/identity.ex",
+      "lib/mix/tasks/letflow.backfill_platform_roles.ex"
+    ],
+    "owned_modules": ["lib/letflow/identity.ex", "lib/mix/tasks/letflow.backfill_platform_roles.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0910 (queue task 899, GH#2033), combined. ISS-0886 (already resolved) added a role backfill (lib/mix/tasks/letflow.backfill_platform_roles.ex) that seeds tenant_role rows and groups, but never group_members -- and sync_role_claims_from_token/3 (lib/letflow/identity.ex, callers at lines ~1714/1827) only runs when a user's role_claims_synced_at is nil, so a user who logged in and synced BEFORE the backfill ran never gets re-synced afterward, staying roles:[]/403 even though the backfill created the tenant_role/group rows they should now belong to. QA was remediated manually by nulling role_claims_synced_at for the 7 affected rows -- this issue is about the CODE fix so this doesn't need manual remediation on every environment with pre-existing tenants.\n\nStep 0.5: check docs/issues/ for ISS-0886's own record and any other resolved entry with a similar symptom -- read it for context on what the original backfill was meant to do and why group_members specifically was missed.\n\nStep 1: (a) read backfill_platform_roles.ex in full to confirm exactly what it seeds (tenant_role, groups) and confirm group_members is genuinely never touched; (b) read sync_role_claims_from_token/3's full body and its two call sites to confirm the nil-only-guard behavior precisely; (c) determine the correct fix shape: does the backfill task itself need to also reset role_claims_synced_at to nil for every user in the affected tenant(s) (forcing a re-sync on next login), or should it directly seed group_members itself during the backfill (avoiding a login-triggered re-sync dependency entirely), or both -- state a clear recommendation with reasoning, considering idempotency (the backfill may be run more than once) and blast radius (must not affect tenants that were never affected by the original gap). Do NOT implement the fix.",
+    "acceptance_criteria": [
+      "backfill_platform_roles.ex's exact seeding behavior (tenant_role/groups, no group_members) is confirmed by reading the actual code, with line citations",
+      "sync_role_claims_from_token/3's nil-only-guard behavior is confirmed with line citations",
+      "a clear fix-shape recommendation is given (reset the sync marker vs. directly seed group_members vs. both) with idempotency and blast-radius reasoning",
+      "next_action names CODE-DESIGNER as the next step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step 0.5: ISS-0886.yaml (resolved) read in full -- its own resolution note already flags that RoleBackfill/RoleRegistry.seed_default_platform_role_groups/1 write only tenant_role/groups, never group_members, and that a backfilled tenant's existing users need 'their next login (sync_role_claims_from_token/3) or an explicit add_group_member/3 call' to actually gain a grant -- same root cause class as ISS-0910, this is the gap that was flagged but never closed. No separate resolved-entry recurrence beyond ISS-0886 itself; ISS-0910 is the follow-through on that flagged-but-unactioned gap, not a fresh regression.\n\nStep 1a (backfill_platform_roles.ex / RoleBackfill / RoleRegistry): lib/mix/tasks/letflow.backfill_platform_roles.ex just wraps Letflow.Identity.RoleBackfill.run/0 (line 42). RoleBackfill.process_registration/2 (lib/letflow/identity/role_backfill.ex:121-139) calls only RoleRegistry.seed_default_platform_role_groups(prefix: schema_name) (line 124), which (lib/letflow/identity/role_registry.ex:129-144) only touches Group (get_or_create_group_by_name/2, line 133) and TenantRole (upsert_role/4, line 134) -- no GroupMember/group_members reference anywhere in either module. RoleBackfill's own moduledoc states this explicitly and by design (lines 77-83): 'Writes only groups/tenant_role rows ... never a group_members row (INV-BF2): seeding a role binding does not by itself grant any existing user membership in it. A backfilled tenant's existing users still need their next login (Letflow.Identity.sync_role_claims_from_token/3) or an explicit Letflow.Identity.add_group_member/3 call.' Confirmed: group_members is genuinely never touched by the backfill.\n\nStep 1b (sync_role_claims_from_token/3 nil-only guard): the function itself (lib/letflow/identity.ex:740-809) does not check the marker -- its own moduledoc (lines 729-733) states 'Callers must only call this when user.role_claims_synced_at is nil ... this function itself does not re-check the marker'. Both real call sites gate on is_nil/1 before calling: upsert_by_external_identity/4 at lib/letflow/identity.ex:1713-1718 (`if is_nil(existing.role_claims_synced_at) do sync_role_claims_from_token(...) else existing end`) and re_select_on_conflict/3 at lib/letflow/identity.ex:1826-1831 (identical shape). insert_or_fetch/4's call at line 1766 is unconditional but only reachable for a brand-new row whose marker is always nil, so it doesn't change the analysis. Net effect: any user whose row already has a non-nil role_claims_synced_at (i.e. logged in and synced at least once, at any point before this backfill run) takes neither branch ever again on subsequent logins -- the backfill's newly-seeded tenant_role/Group rows for that tenant never get reflected into that user's group_members, so list_effective_role_names/2 keeps returning a subset (or none) of their true entitlement and they stay roles:[]/403 indefinitely. Confirmed precisely.\n\nFix-shape recommendation: RESET THE SYNC MARKER, scoped to tenants the backfill actually changed -- not 'seed group_members directly' and not 'both'. Reasoning: (1) Correctness/architecture -- RoleBackfill operates purely at the tenant-schema level (Group/TenantRole rows) and has no access to any individual user's IdentityContext/token claims; it cannot know which of the six platform roles any given existing user should actually receive without re-deriving that from their OIDC claims, which is exactly what sync_role_claims_from_token/3 already does via resolve_group_ids_for_role_names/2. Having the backfill directly write group_members would mean either (a) guessing/granting all roles to all users (a privilege-escalation risk SECURITY-REVIEWER would rightly reject), or (b) re-implementing claims resolution inside the backfill task, duplicating sync_role_claims_from_token/3's logic and creating two divergent code paths for the same grant decision. (2) Idempotency -- sync_role_claims_from_token/3's own group_members writes are already on_conflict: :nothing / idempotent (comment at identity.ex:756-763), and resetting an already-nil marker to nil again is a no-op, so a bulk 'set role_claims_synced_at = NULL' is safe to re-run. (3) Blast radius -- RoleBackfill.run/0 already computes and returns exactly the right scope for free: the `seeded` list (tenant_ids that held <6 platform roles before this call, role_backfill.ex:141-149) is precisely 'tenants this run actually changed'; the marker reset should apply only to users in those tenants' schemas, never to tenants in the `unchanged` list (already fully seeded, never affected by the original gap) and never cross-tenant. Concretely: after seed_default_platform_role_groups/1 succeeds for a tenant classified :seeded, bulk UPDATE that tenant schema's users table setting role_claims_synced_at = NULL (unconditionally is fine and stays idempotent; excluding already-nil rows is a pure optimization, not a correctness requirement) -- this forces exactly those users through the existing, already-reviewed, claims-driven, idempotent sync path on their next login/token verification, with no new grant-decision logic to design or review. Tradeoff to flag to CODE-DESIGNER: this only takes effect on the user's *next* request that goes through upsert_by_external_identity/4 or re_select_on_conflict/3 (i.e. next token verification), not instantly -- matches ISS-0886's own resolution note precedent ('their next login') and is consistent with REQ-378's existing marker semantics, so should not need a design exception, but is worth stating explicitly as an accepted latency rather than leaving it implicit.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0910-20260930",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for fix design"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

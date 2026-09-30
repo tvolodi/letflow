@@ -1,0 +1,39 @@
+{
+  "handoff_id": "5d454635-a6b1-4e41-964e-3084f5d1a8f2",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0930-20261001/step-05-doc-updater.json",
+  "created_at": "2026-09-30T23:45:29Z",
+  "started_at": "2026-09-30T23:45:29Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "scripts/README.md",
+      "handoffs/WF03-ISS0930-20261001/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0930-20261001/step-03d-reviewer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 documentation follow-up for ISS-0930 (mandatory per REVIEWER step-03d and SECURITY-REVIEWER step-03c). Edit ONLY scripts/README.md (QA seed scripts section added by ELIXIR-DEV): add a short 'Data egress / safety' note stating: (1) the default SERVICE_TASK_MOCK_BASE_URL (https://httpbin.org/anything) is a third-party public echo service that receives the HTTP method, the URL path with rendered IDs (application_id, review_id, shipment_id, order_id, batch_ref, deviation_id) and the QA server's source IP, and may log them; (2) QA data used with these fixtures must be synthetic, no PII; (3) any QA environment holding non-synthetic data should set SERVICE_TASK_MOCK_BASE_URL to a self-hosted echo endpoint; (4) production must never be seeded with these fixtures. Also in the design doc lib/letflow/design/iss0930-seed-service-task-endpoints.md do NOT change anything. Keep it concise (<=10 lines). Work only in context.worktree; do not commit. Set IN_PROGRESS at claim then COMPLETED/FAILED with result.status PASS/FAIL; next_action 'Route to ORCH'.",
+    "acceptance_criteria": [
+      "README note added covering all 4 points",
+      "No other files changed except handoff"
+    ]
+  },
+  "result": null
+}

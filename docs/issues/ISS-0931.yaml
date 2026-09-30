@@ -1,0 +1,16 @@
+id: ISS-0931
+title: "D2: meridian/vortex seeded tasks reference role groups that do not exist (role-credit-manager, role-controller, ...); no persona/role seed"
+discovered_by: UAT-RUNNER
+discovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MAJOR
+description: >
+  Actors get empty inbox and 409 on claim. Needs meridian/vortex equivalent of scripts/seed_swiftroute_persona_actors.sh.
+  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.
+source_reports:
+  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml
+related:
+  - ISS-0912
+queue_ref: Q-914  # queue issue_ref ISS-0914 collides with an existing local file; local filename ISS-0931
+github_ref: GH-2065
+status: open

@@ -1,0 +1,214 @@
+run_id: ISS0912-NARRATIVE
+date: "2026-10-01"
+agent: UAT-RUNNER
+slice: "narrative corpora meridian (3) + vortex (4) = 7 scenarios (the 7 ENV_BLOCKED by WF05-FULL2-20260930-NARRATIVE for missing definitions, ISS-0912). swiftroute not touched."
+environment:
+  base_url: https://qa.bizdala.com
+  idp: https://auth.qa.bizdala.com
+  environment: qa
+  credential_source: ai-dala-infra/scripts/qa-uat-env.sh (token <user>, fetched on demand, held in-process/scratch only, deleted after run; no secret written to this report or repo)
+  preflight_report: "test/uat-reports/preflight-2026-09-30-qa.txt is the newest on disk; dispatcher stated a later preflight shows no GAP for these 7 (no 2026-10-01 preflight file present in test/uat-reports/ at run time)"
+result_overall: FAIL
+summary: >
+  7 scenarios: 0 PASS, 6 FAIL, 1 BLOCKED (vortex/entity-list-filter-and-page, PRECONDITION_NOT_MET + UNBUILT_FEATURE
+  frontend leg). The seeded definitions now exist and start (all 4 names resolve via definition_name, tenant-scoped, 201),
+  so the prior ENV_BLOCKED cause is closed. The scenarios now fail on real product/seed defects, not environment:
+  (D1) every seeded service-task endpoint ('POST /kyc/screen', 'POST /mes/...') fails with request_build_error, putting the
+  instance in ERROR at the first service task; (D2) no role groups for role-credit-manager / role-production-manager / etc.
+  exist in meridian or vortex, so scenario actors cannot see or claim their tasks; (D3) Regulatory Compliance Review has no
+  timer on risk-evaluation and its timeout edge does not reach regulatory-auto-escalation; (D4) vortex has no entity
+  definitions. Because one scenario is BLOCKED (precondition), this is reported with both FAIL findings and one
+  BLOCKED-by-precondition; FAIL dominates result_overall.
+counts:
+  PASS: 0
+  FAIL: 6
+  BLOCKED: 1
+observed_facts:
+  - "GET /definitions as meridian-admin-user: Loan Origination 1.0 ACTIVE (29c96786-b8ae-4453-90c0-ffb3519ac0cc), Regulatory Compliance Review 1.0 ACTIVE (ae5015bc-58a3-4afe-a3a7-51debf9fa51c). As vortex-admin-user: Supplier Quality Deviation 1.0 ACTIVE (6764f399-265b-4e00-bec6-f86e04162282), Production Order Release 1.0 ACTIVE (2b45e323-6d32-4818-8b4a-e30028463a05)."
+  - "POST /instances {definition_name, initial_variables} works in both tenants (201). Scenario process_id keys (proc-...) are not used; definition_name is (known ISS-0893 class, cited not re-filed)."
+  - "GET /identity/roles and /identity/groups in meridian and in vortex list only the 6 platform roles (AGENT_RUNNER, CANDIDATE, PLATFORM_ADMIN, PROCESS_DESIGNER, PROCESS_OPERATOR, TASK_WORKER). No role-credit-manager, role-risk-manager, role-compliance-officer, role-production-manager, role-controller, role-quality-manager, role-procurement-manager groups exist."
+  - "Tasks are created with assignee_type ROLE and the correct assignee_ref (e.g. role-credit-manager) -- unlike the swiftroute assignee_type=null finding -- but GET /tasks/inbox is count 0 for actor-meridian-ben / -miriam / actor-vortex-sabine, and POST /tasks/:id/claim as those actors -> 409 'caller does not hold the assigned role'."
+  - "POST /tasks/:id/complete by an actor who does NOT hold the assigned role (no claim): actor-meridian-claudia on evidence-collection -> 200; actor-vortex-sabine on capacity-review -> 200; actor-vortex-stefan on budget-approval -> 200. Claim enforces the role, complete does not (observation; see D5)."
+  - "GET /entities/definitions as vortex-admin-user and as actor-vortex-karl -> items:[]; POST /entities/query entity_type production_batch -> items:[] (200) for both. No Vortex entity types or batches exist."
+side_effects: >
+  Created 6 instances (3 meridian, 3 vortex) and completed 4 tasks on them (meridian evidence-collection 8b0cf75a; vortex capacity-review bf987eed and budget-approval ce970f36).
+  All 6 instances cancelled at end of run (HTTP 200 CANCELLED each). Instance ids: meridian 3b4d6ca7-a94a-4ced-89ce-9e37fbdf5689, fcd8c850-b29e-4887-bfb5-08e4131e9ecd,
+  b32d5ab3-cfef-4ab9-9e56-a146254fdd57; vortex aaa76d89-d71c-4d11-81e5-bb86da9730c8, fddc986c-6f6b-45f3-af97-a97cdd26bf10, 89ed6272-9b05-4207-a88a-5eb9dacf8fd0.
+  No definitions, tenants, roles, users or groups were created; no scripts/seed_* run; no source code changed; nothing committed. No 503 admission-cap responses were hit.
+scenarios:
+
+  - id: meridian/loan-origination-above-threshold
+    verdict: FAIL
+    branch: n/a (flat steps)
+    detail: >
+      Step 1 (actor-meridian-lars): POST /instances 'Loan Origination' requested_amount_eur 750000 -> 201 instance 3b4d6ca7-... ACTIVE.
+      ~3s later GET /instances/:id -> status ERROR, error_detail service_task_retries_exhausted at node kyc-aml-check,
+      last_failure_kind request_build_error ('not retriable'); timeline: INSTANCE_STARTED, EXECUTION_ERROR. Step 2 (ben, credit-memo-review): claim -> 409
+      'caller does not hold the assigned role'; complete as ben -> 500 internal-error (trace d9064e20-f8ed-4814-bf67-759754b4d499); complete by miriam on risk-assessment -> 500
+      (trace 6f6803e4-...); complete as meridian-admin-user -> 500 (trace 13b05c3f-...). Steps 3-6 could not be driven; instance cannot progress past the ERROR.
+    expected_outcomes:
+      - id: EO-001
+        verdict: PASS
+        evidence: "GET /tasks?instance_id -> credit-memo-review assignee_ref role-credit-manager type ROLE PENDING; risk-assessment assignee_ref role-risk-manager type ROLE PENDING (created ~12ms after start). Caveat: task is not visible in the assigned role holders' inbox (D2); kyc-aml-check (third parallel track) errored instead of running (D1)."
+      - id: EO-002
+        verdict: FAIL
+        evidence: "No credit-committee-vote task exists; instance stuck in ERROR at kyc-aml-check so assessment-join/eligibility-gate/authority-routing were never reached. Routing for 750000 > 500000 could not be observed."
+      - id: EO-003
+        verdict: FAIL
+        evidence: "Variable committee_outcome absent; instance variables contain only the submitted input."
+      - id: EO-004
+        verdict: FAIL
+        evidence: "Instance status ERROR (later CANCELLED by cleanup), never COMPLETED / end-disbursed."
+    known_open: [ISS-0893]
+
+  - id: meridian/loan-origination-below-threshold
+    verdict: FAIL
+    branch: n/a (flat steps)
+    detail: >
+      Step 1 (actor-meridian-sophie): POST /instances requested_amount_eur 50000 -> 201 fcd8c850-...; GET /instances/:id after ~6s -> ERROR at kyc-aml-check
+      (request_build_error), identical to the above scenario. Two tasks PENDING (credit-memo-review/role-credit-manager, risk-assessment/role-risk-manager). Steps 2-6 not driven
+      (same 409 claim / 500 complete behaviour observed on the sibling instance).
+    expected_outcomes:
+      - id: EO-001
+        verdict: FAIL
+        evidence: "l1-approval / l2-approval tasks never created; instance in ERROR before assessment-join."
+      - id: EO-002
+        verdict: FAIL
+        evidence: "No credit-committee-vote task exists, but only because the instance died at kyc-aml-check; the absence is vacuous and not evidence of correct threshold routing, so not counted as PASS."
+      - id: EO-003
+        verdict: FAIL
+        evidence: "Instance never COMPLETED / end-disbursed (ERROR, then CANCELLED by cleanup)."
+
+  - id: meridian/regulatory-compliance-review-bafin
+    verdict: FAIL
+    branch: n/a (flat steps)
+    detail: >
+      Step 1 (actor-meridian-claudia): POST /instances 'Regulatory Compliance Review' -> 201 b32d5ab3-... ACTIVE, evidence-collection task PENDING role-compliance-officer.
+      Step 2: complete as claudia -> 200 (note she holds no role-compliance-officer; claim as claudia -> 409), current_nodes [risk-evaluation], risk-evaluation task PENDING role-risk-manager.
+      Step 3: POST /instances/:id/advance-timer {node_id: risk-evaluation} as claudia -> 404 (also before step 2 completed); GET /timers?instance_id -> 404. The risk-evaluation node carries attributes {role} only (no timer / escalation_timer_duration, unlike swiftroute ops-review which has escalation_timer_duration PT2H), so no timer exists to advance.
+      Instance remains ACTIVE with risk-evaluation PENDING.
+    expected_outcomes:
+      - id: EO-001
+        verdict: FAIL
+        severity_if_confirmed: BLOCKER
+        evidence: "No regulatory-auto-escalation event: GET /instances/:id/timeline has only INSTANCE_STARTED and TASK_COMPLETED(evidence-collection); audit shows no regulatory-auto-escalation; advance-timer 404."
+        diagnosis_hint: "Seeded definition has no timer on risk-evaluation, and its timeout edge (timeout-risk-evaluation) targets risk-evaluation-timeout -> severity-routing -> findings-sign-off, not regulatory-auto-escalation. regulatory-auto-escalation is reachable only from post-remediation-check (remediation_status == 'unresolved'). Definition does not implement the scenario's 21-day SLA path."
+      - id: EO-002
+        verdict: FAIL
+        evidence: "No POST /compliance/regulatory-notice event with reason sla_breach_30_days in audit or timeline."
+      - id: EO-003
+        verdict: FAIL
+        evidence: "Instance ACTIVE (not COMPLETED / end-closed) at end of run; cancelled by cleanup."
+
+  - id: vortex/production-order-above-threshold
+    verdict: FAIL
+    branch: n/a (flat steps)
+    detail: >
+      Step 1 (actor-vortex-anna): POST /instances 'Production Order Release' order_value_eur 15000 -> 201 aaa76d89-...; capacity-review PENDING role-production-manager.
+      Step 2 (sabine): claim -> 409 'caller does not hold the assigned role'; complete (no claim) -> 200, current_nodes [budget-approval].
+      Step 3 (stefan): complete budget-approval {budget_decision approve, cost_centre CC-PROD-2026} -> 200, current_nodes [assign-line]. ~3s later instance status ERROR,
+      error_detail service_task_retries_exhausted at node assign-line, request_build_error; timeline: INSTANCE_STARTED, TASK_COMPLETED(capacity-review), TASK_COMPLETED(budget-approval), EXECUTION_ERROR.
+    expected_outcomes:
+      - id: EO-001
+        verdict: PASS
+        evidence: "After capacity-review completed with capacity_decision approve, GET /tasks?instance_id shows budget-approval PENDING assignee_ref role-controller type ROLE (routed via budget-gate, not directly to assign-line), order_value_eur 15000 > 10000. Caveat: stefan cannot see it in /tasks/inbox or claim it (D2)."
+      - id: EO-002
+        verdict: FAIL
+        evidence: "Instance status ERROR at assign-line, not COMPLETED/end-released."
+      - id: EO-003
+        verdict: FAIL
+        evidence: "assign-line service task failed (request_build_error) before execution; no assign-line executed event in timeline."
+      - id: EO-004
+        verdict: FAIL
+        evidence: "notify-planner never reached; instance stuck at assign-line."
+
+  - id: vortex/supplier-quality-deviation-critical
+    verdict: FAIL
+    branch: n/a (flat steps)
+    detail: >
+      Step 1 (actor-vortex-nina): POST /instances 'Supplier Quality Deviation' batch_ref B-2026-05 -> 201 fddc986c-...; ~2s later status ERROR at node quarantine-batch
+      (service_task_retries_exhausted, request_build_error). No tasks created (GET /tasks?instance_id -> count 0); timeline INSTANCE_STARTED, EXECUTION_ERROR. Steps 2-3 have no task to act on.
+    expected_outcomes:
+      - id: EO-001
+        verdict: FAIL
+        evidence: "quarantine-batch service task failed instead of executing; no severity-classification task was created."
+      - id: EO-002
+        verdict: FAIL
+        evidence: "No 8D corrective-action sub-process / task assigned to role-procurement-manager; instance ERROR before classification."
+      - id: EO-003
+        verdict: FAIL
+        evidence: "Instance ERROR, never COMPLETED / end-closed."
+      - id: EO-004
+        verdict: FAIL
+        evidence: "Audit/timeline contains no TASK_COMPLETED for quarantine-batch and no TASK_CREATED for severity-classification; ordering cannot be shown."
+
+  - id: vortex/supplier-quality-deviation-false-positive
+    verdict: FAIL
+    branch: n/a (flat steps)
+    detail: >
+      Step 1 (actor-vortex-nina): POST /instances sim-dev-fp-001 -> 201 89ed6272-...; ~3s later ERROR at quarantine-batch (request_build_error); no tasks. Step 2 not drivable.
+    expected_outcomes:
+      - id: EO-001
+        verdict: FAIL
+        evidence: "quarantine-batch did not execute (ERROR)."
+      - id: EO-002
+        verdict: FAIL
+        evidence: "release-quarantine never reached."
+      - id: EO-003
+        verdict: FAIL
+        evidence: "Not COMPLETED / end-false-positive."
+
+  - id: vortex/entity-list-filter-and-page
+    verdict: BLOCKED
+    classification: PRECONDITION_NOT_MET (+ UNBUILT_FEATURE on the frontend leg)
+    detail: >
+      Preconditions system_seeded (batches from several suppliers) and quarantined Nordmetall batches (>1 page) are false: GET /entities/definitions as vortex-admin-user and as
+      actor-vortex-karl -> items:[]; POST /entities/query entity_type production_batch -> items:[] for both. The named pipeline_test
+      web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts exists but is written against BilimBaga's 'tag' entity as admin-user in the default realm (see its header), is not
+      written against Vortex batches/karl/anna, and the scenario carries the NOTE (ISS-0526) forward-reference marker; it was not run (would not exercise this scenario and would
+      require a different realm/tenant). Not substituted with an API-only path for the GUI steps.
+    expected_outcomes:
+      - {id: EO-001, verdict: BLOCKED}
+      - {id: EO-002, verdict: BLOCKED}
+      - {id: EO-003, verdict: BLOCKED}
+      - {id: EO-004, verdict: BLOCKED}
+      - {id: EO-005, verdict: BLOCKED}
+    known_open: [ISS-0897 (vortex entity-type seeding follow-up), ISS-0526-note]
+
+new_defects:
+  - id: D1
+    severity: BLOCKER
+    title: "Seeded meridian/vortex service-task endpoints fail with request_build_error, sending every instance to ERROR at its first service task"
+    evidence: >
+      Loan Origination kyc-aml-check ('POST /kyc/screen'), Supplier Quality Deviation quarantine-batch ('POST /mes/batches/{batch_ref}/quarantine'),
+      Production Order Release assign-line ('POST /mes/orders/{order_id}/assign'): instance status ERROR within ~3s, error_detail.error_type service_task_retries_exhausted,
+      details.last_failure_kind request_build_error, reason 'service task failed (request_build_error): not retriable' (5 of 6 instances). Endpoint attributes are method+relative path
+      (and unresolved {placeholders}), no absolute URL / no stub target, so lib/letflow/engine/service_task.ex cannot build the request (see url_template handling ~line 193).
+    impact: "No meridian/vortex scenario can reach completion; EOs on end nodes, service-task audit, routing after the first service task are all unverifiable."
+    suggested_owner: "ELIXIR-DEV / whoever owns scripts/seed_{meridian,vortex}_definition.sh payloads (ISS-0897) -- give seeded service tasks a resolvable target (mock/stub service in QA or absolute endpoint)."
+  - id: D2
+    severity: MAJOR
+    title: "Role groups referenced by seeded meridian/vortex HUMAN_TASKs do not exist; actors cannot see or claim their tasks"
+    evidence: "GET /identity/roles and /identity/groups in both tenants list only the six platform roles. Tasks carry assignee_type ROLE / assignee_ref role-credit-manager etc.; actor-meridian-ben, -miriam, actor-vortex-sabine GET /tasks/inbox -> count 0; claim -> 409 'caller does not hold the assigned role'."
+    impact: "Analogous to the swiftroute persona-actor Part B (scripts/seed_swiftroute_persona_actors.sh) but no equivalent exists for meridian/vortex. Scenario actors cannot do their steps as themselves."
+  - id: D3
+    severity: MAJOR
+    title: "Regulatory Compliance Review seed does not implement the 21-day SLA -> BaFin regulatory-auto-escalation path"
+    evidence: "risk-evaluation node attributes {role: role-risk-manager} only (no timer duration); advance-timer -> 404; timeout-risk-evaluation edge -> risk-evaluation-timeout -> severity-routing -> findings-sign-off; regulatory-auto-escalation only reachable from post-remediation-check unresolved."
+  - id: D4
+    severity: MINOR
+    title: "POST /tasks/:id/complete returns 500 internal-error when the owning instance is in ERROR status (should be a 4xx/409)"
+    evidence: "Loan Origination instance 3b4d6ca7 (ERROR): complete as actor-meridian-ben, actor-meridian-miriam and meridian-admin-user -> HTTP 500, traces d9064e20-f8ed-4814-bf67-759754b4d499, 6f6803e4-bc43-4f9d-8a5a-0af8b86b1856, 13b05c3f-7d3b-475d-8bb7-6828c2cc2a71."
+  - id: D5
+    severity: MAJOR (possible, security-adjacent; needs ORCH/SECURITY-REVIEWER triage -- may be by design)
+    title: "Task claim enforces ROLE assignment but task complete does not"
+    evidence: "actor-meridian-claudia, actor-vortex-sabine, actor-vortex-stefan (TASK_WORKER, not members of the assigned role) each completed a ROLE-assigned PENDING task with HTTP 200 without claiming; the same actors get 409 'caller does not hold the assigned role' on claim."
+  - id: D6
+    severity: MAJOR
+    title: "Vortex entity types/batches not seeded; vortex-entity-list scenario has no data or matching pipeline_test"
+    evidence: "GET /entities/definitions -> items:[] (admin and karl); POST /entities/query production_batch -> items:[]. Already flagged as ISS-0912's possible follow-up."
+recommended_actions:
+  - "Route D1 (BLOCKER) first: without a resolvable service-task target no meridian/vortex process can complete on QA."
+  - "D2: add meridian/vortex persona-role seeding analogous to seed_swiftroute_persona_actors.sh (role groups + actor memberships)."
+  - "D3: revise the Regulatory Compliance Review definition (timer on risk-evaluation, timeout edge to regulatory-auto-escalation) or the scenario."
+  - "Re-run the 7 scenarios after D1/D2 (and D3 for bafin) land."

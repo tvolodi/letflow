@@ -381,6 +381,7 @@ defmodule Letflow.Engine do
   alias Letflow.Repository.Attachments
   alias Letflow.Scheduler
   alias Letflow.Scheduler.Timer
+  alias Letflow.ServiceCatalog
   alias Letflow.ServiceCatalog.PinLookup
   alias Letflow.TenantProvisioning
 
@@ -565,7 +566,8 @@ defmodule Letflow.Engine do
              graph,
              instance_id,
              new_instance_state.variables,
-             now
+             now,
+             %{pin_source: {:pins, pins}, tenant_id: tenant_id}
            ) do
       persist(
         instance_id,
@@ -597,9 +599,17 @@ defmodule Letflow.Engine do
          graph,
          instance_id,
          variables,
-         now
+         now,
+         catalog_ctx
        ) do
-    case prepare_service_task_dispatch(pending_events, graph, instance_id, variables, now) do
+    case prepare_service_task_dispatch(
+           pending_events,
+           graph,
+           instance_id,
+           variables,
+           now,
+           catalog_ctx
+         ) do
       {:ok, prepared} ->
         {:ok, prepared}
 
@@ -608,6 +618,9 @@ defmodule Letflow.Engine do
 
       {:empty_url_error, node_id, _variables} ->
         {:error, {:activation_failed, {:service_task_url_rendered_empty, node_id}}}
+
+      {:catalog_resolution_error, node_id, reason, _variables} ->
+        {:error, {:activation_failed, {:service_task_catalog_unresolved, node_id, reason}}}
     end
   end
 
@@ -849,19 +862,49 @@ defmodule Letflow.Engine do
           Graph.t(),
           instance_id :: Ecto.UUID.t(),
           variables :: map(),
-          now :: DateTime.t()
+          now :: DateTime.t(),
+          catalog_dispatch_ctx()
         ) ::
           {:ok, [prepared_service_task_dispatch()]}
           | {:error, {:graph_structure_invalid, {:unknown_node_id, String.t()}}}
           | {:error,
              {:config_parse_failed, node_id :: String.t(), ServiceTask.config_parse_error()}}
           | {:empty_url_error, node_id :: String.t(), variables :: map()}
+          | {:catalog_resolution_error, node_id :: String.t(), catalog_resolution_reason(),
+             variables :: map()}
   @type prepared_service_task_dispatch :: %{
           token_id: String.t(),
           node_id: String.t(),
           arm_attrs: map()
         }
-  defp prepare_service_task_dispatch(pending_events, graph, instance_id, variables, now) do
+  # ISS-0917 (design D2) -- where the instance's effective pins come from and
+  # which tenant's visibility applies when a `route_kind: :catalog_service`
+  # node is activated. `{:pins, list}` (create/2: already in hand) or
+  # `{:reconstruct, instance_id, prefix}` (every other site: read lazily from
+  # the instance's event log, at most once per call). `tenant_id` is either
+  # the resolved id or `{:schema_prefix, prefix}` (completion hop: derived
+  # lazily, only if a catalog node is actually activated). Never caller input.
+  @typep catalog_pin_source ::
+           {:pins, [PinResolver.pinned_version() | PinResolver.effective_pin()]}
+           | {:reconstruct, instance_id :: Ecto.UUID.t(), prefix :: String.t() | nil}
+  @typep catalog_dispatch_ctx :: %{
+           pin_source: catalog_pin_source(),
+           tenant_id: Ecto.UUID.t() | {:schema_prefix, String.t()}
+         }
+  @typep catalog_resolution_reason ::
+           {:pin_missing, :catalog_entry, String.t()}
+           | :pin_has_no_identity
+           | :pins_unavailable
+           | :version_not_found
+           | {:required_auth_unsupported, :API_KEY | :OAUTH2 | :MUTUAL_TLS}
+  defp prepare_service_task_dispatch(
+         pending_events,
+         graph,
+         instance_id,
+         variables,
+         now,
+         catalog_ctx
+       ) do
     dispatch_requests =
       Enum.filter(
         pending_events,
@@ -869,30 +912,35 @@ defmodule Letflow.Engine do
       )
 
     dispatch_requests
-    |> Enum.reduce_while({:ok, []}, fn {:service_task_dispatch_requested, token_id, node_id},
-                                       {:ok, acc} ->
+    |> Enum.reduce_while({:ok, [], catalog_ctx}, fn {:service_task_dispatch_requested, token_id,
+                                                     node_id},
+                                                    {:ok, acc, ctx} ->
       case Enum.find(graph.nodes, &(&1.id == node_id)) do
         nil ->
           {:halt, {:error, {:graph_structure_invalid, {:unknown_node_id, node_id}}}}
 
         node ->
-          case resolve_service_task_arm_attrs(node, node_id, instance_id, variables, now) do
-            {:ok, arm_attrs} ->
+          case resolve_service_task_arm_attrs(node, node_id, instance_id, variables, now, ctx) do
+            {:ok, arm_attrs, ctx} ->
               {:cont,
-               {:ok, [%{token_id: token_id, node_id: node_id, arm_attrs: arm_attrs} | acc]}}
+               {:ok, [%{token_id: token_id, node_id: node_id, arm_attrs: arm_attrs} | acc], ctx}}
 
             {:error, reason} ->
               {:halt, {:error, reason}}
 
             {:empty_url_error, ^node_id} ->
               {:halt, {:empty_url_error, node_id, variables}}
+
+            {:catalog_resolution_error, ^node_id, reason} ->
+              {:halt, {:catalog_resolution_error, node_id, reason, variables}}
           end
       end
     end)
     |> case do
-      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:ok, acc, _ctx} -> {:ok, Enum.reverse(acc)}
       {:error, reason} -> {:error, reason}
       {:empty_url_error, node_id, variables} -> {:empty_url_error, node_id, variables}
+      {:catalog_resolution_error, _node_id, _reason, _variables} = error -> error
     end
   end
 
@@ -901,27 +949,130 @@ defmodule Letflow.Engine do
   # validators are expected to have already caught -- folds into
   # {:error, {:config_parse_failed, node_id, reason}}, aborting the whole
   # hop-chain's Multi (same "abort, don't half-commit" contract
-  # prepare_timer_arms/4's own errors already have). A route_kind:
-  # :catalog_service config reaches step 4 (validate_rendered_url/1) with
-  # rendered_url: nil -- deliberately, not silently -- see design doc §2.2
-  # step 3 for the full rationale (no real service_catalog exists yet, so a
-  # :catalog_service row can never be usefully dispatched today regardless
-  # of which layer rejects it first).
-  defp resolve_service_task_arm_attrs(node, node_id, instance_id, variables, now) do
+  # prepare_timer_arms/4's own errors already have).
+  #
+  # ISS-0917 (design D2): a route_kind: :catalog_service node is resolved HERE,
+  # at activation, from the instance's OWN effective pin for config.service_id
+  # (never from the live current catalog row -- INV-PD-1):
+  #   1. obtain the pins (create/2: in hand; elsewhere: reconstructed lazily),
+  #   2. PinResolver.pin_for/3 -> the pin, else {:pin_missing, ...},
+  #   3. resolve the pinned version by version_id, or by (service_id, version)
+  #      for a rebound pin (ServiceCatalog.resolve_pinned_version/3),
+  #   4. required_auth != :NONE fails closed (no request is built),
+  #   5. render the pinned endpoint_url with the same {{variables.KEY}}
+  #      renderer an inline url_template uses and freeze it (plus audit keys)
+  #      in config_snapshot, so ServiceTaskDispatcher only ever sees a frozen
+  #      rendered_url and never calls the catalog.
+  # Every failure is a typed tuple; none falls back to the live row.
+  defp resolve_service_task_arm_attrs(node, node_id, instance_id, variables, now, ctx) do
     case ServiceTask.parse_config_from_node_attributes(node) do
       {:error, reason} ->
         {:error, {:config_parse_failed, node_id, reason}}
 
       {:ok, %ServiceTask.Config{route_kind: :inline_url} = config} ->
         rendered_url = render_service_task_url(config.url_template, variables)
-        finish_service_task_arm_attrs(config, node_id, instance_id, rendered_url, now)
+
+        with {:ok, arm_attrs} <-
+               finish_service_task_arm_attrs(config, node_id, instance_id, rendered_url, now) do
+          {:ok, arm_attrs, ctx}
+        end
 
       {:ok, %ServiceTask.Config{route_kind: :catalog_service} = config} ->
-        finish_service_task_arm_attrs(config, node_id, instance_id, nil, now)
+        case resolve_catalog_version(config, ctx) do
+          {:ok, resolved, ctx} ->
+            rendered_url = render_service_task_url(resolved.endpoint_url, variables)
+
+            with {:ok, arm_attrs} <-
+                   finish_service_task_arm_attrs(
+                     config,
+                     node_id,
+                     instance_id,
+                     rendered_url,
+                     now,
+                     resolved
+                   ) do
+              {:ok, arm_attrs, ctx}
+            end
+
+          {:error, reason} ->
+            {:catalog_resolution_error, node_id, reason}
+        end
     end
   end
 
-  defp finish_service_task_arm_attrs(config, node_id, instance_id, rendered_url, now) do
+  # ISS-0917 -- steps 1-4 of the pipeline above. Returns the (possibly
+  # memoised) ctx so a hop chain reconstructs pins / derives the tenant id at
+  # most once.
+  @spec resolve_catalog_version(ServiceTask.Config.t(), catalog_dispatch_ctx()) ::
+          {:ok, ServiceCatalog.resolved_service_version(), catalog_dispatch_ctx()}
+          | {:error, catalog_resolution_reason()}
+  defp resolve_catalog_version(%ServiceTask.Config{service_id: service_id}, ctx) do
+    with {:ok, pins, tenant_id, ctx} <- catalog_pins_and_tenant(ctx),
+         {:ok, pin} <- PinResolver.pin_for(pins, :catalog_entry, service_id),
+         {:ok, identity} <- catalog_pin_identity(pin),
+         {:ok, resolved} <- fetch_pinned_version(service_id, identity, tenant_id),
+         :ok <- check_catalog_auth_supported(resolved) do
+      {:ok, resolved, ctx}
+    end
+  end
+
+  defp catalog_pins_and_tenant(%{pin_source: pin_source, tenant_id: tenant_id} = ctx) do
+    with {:ok, pins, pin_source} <- catalog_pins(pin_source),
+         {:ok, tenant_id} <- catalog_tenant_id(tenant_id) do
+      {:ok, pins, tenant_id, %{ctx | pin_source: pin_source, tenant_id: tenant_id}}
+    end
+  end
+
+  defp catalog_pins({:pins, pins} = source) when is_list(pins), do: {:ok, pins, source}
+
+  defp catalog_pins({:reconstruct, instance_id, prefix}) do
+    case PinResolver.reconstruct_effective_pins(instance_id, prefix: prefix) do
+      {:ok, pins} -> {:ok, pins, {:pins, pins}}
+      _error -> {:error, :pins_unavailable}
+    end
+  end
+
+  defp catalog_tenant_id({:schema_prefix, prefix}) do
+    case TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      {:ok, tenant_id} -> {:ok, tenant_id}
+      _error -> {:error, :pins_unavailable}
+    end
+  end
+
+  defp catalog_tenant_id(tenant_id) when is_binary(tenant_id), do: {:ok, tenant_id}
+
+  defp catalog_pin_identity(%{resolved_id: id}) when is_binary(id) and id != "",
+    do: {:ok, {:version_id, id}}
+
+  defp catalog_pin_identity(%{version: version}) when is_binary(version) and version != "",
+    do: {:ok, {:version, version}}
+
+  defp catalog_pin_identity(_pin), do: {:error, :pin_has_no_identity}
+
+  defp fetch_pinned_version(service_id, identity, tenant_id) do
+    case ServiceCatalog.resolve_pinned_version(service_id, identity, tenant_id) do
+      {:ok, resolved} -> {:ok, resolved}
+      {:error, :not_found} -> {:error, :version_not_found}
+    end
+  end
+
+  # http_transport/3 implements no authentication and no per-tenant secret
+  # reference is wired into the dispatcher (INV-4), so a service declaring
+  # required_auth != :NONE fails closed rather than receiving an
+  # unauthenticated request.
+  defp check_catalog_auth_supported(%{required_auth: :NONE}), do: :ok
+
+  defp check_catalog_auth_supported(%{required_auth: auth}),
+    do: {:error, {:required_auth_unsupported, auth}}
+
+  defp finish_service_task_arm_attrs(
+         config,
+         node_id,
+         instance_id,
+         rendered_url,
+         now,
+         catalog_version \\ nil
+       ) do
     case ServiceTask.validate_rendered_url(rendered_url) do
       {:error, :empty_rendered_url} ->
         {:empty_url_error, node_id}
@@ -930,7 +1081,7 @@ defmodule Letflow.Engine do
         arm_attrs = %{
           instance_id: instance_id,
           node_id: node_id,
-          config_snapshot: config_snapshot_map(config, rendered_url),
+          config_snapshot: config_snapshot_map(config, rendered_url, catalog_version),
           attempt_index: 0,
           next_attempt_at: now,
           created_at: now
@@ -945,9 +1096,20 @@ defmodule Letflow.Engine do
   # ServiceTaskDispatcher's own config_from_snapshot/1 reads back
   # (service_task_dispatcher.ex:630-648). String-keyed, matching
   # ServiceTaskDispatch.config_snapshot()'s own @type.
-  @spec config_snapshot_map(ServiceTask.Config.t(), rendered_url :: String.t() | nil) :: map()
-  defp config_snapshot_map(%ServiceTask.Config{} = config, rendered_url) do
-    %{
+  #
+  # ISS-0917 -- for a catalog row (`catalog_version` non-nil) "rendered_url"
+  # is the rendered PINNED endpoint_url, "timeout_ms" is min(node, catalog)
+  # (the service's declared bound can only tighten the author's), and three
+  # audit keys are added. `catalog_retry_policy` is audit-only, deliberately
+  # not interpreted (retry stays the node's retry_limit). The inline path
+  # (`catalog_version` nil) gets no extra keys at all.
+  @spec config_snapshot_map(
+          ServiceTask.Config.t(),
+          rendered_url :: String.t() | nil,
+          ServiceCatalog.resolved_service_version() | nil
+        ) :: map()
+  defp config_snapshot_map(%ServiceTask.Config{} = config, rendered_url, catalog_version) do
+    base = %{
       "route_kind" => to_string(config.route_kind),
       "url_template" => config.url_template,
       "service_id" => config.service_id,
@@ -958,6 +1120,19 @@ defmodule Letflow.Engine do
       "retry_limit" => config.retry_limit,
       "rendered_url" => rendered_url
     }
+
+    case catalog_version do
+      nil ->
+        base
+
+      %{} = resolved ->
+        Map.merge(base, %{
+          "timeout_ms" => min(config.timeout_ms, resolved.timeout_ms),
+          "catalog_version_id" => resolved.version_id,
+          "catalog_version" => resolved.version,
+          "catalog_retry_policy" => resolved.retry_policy
+        })
+    end
   end
 
   # REQ-215 design doc §2.3 -- the minimal inline {{variables.KEY}} template
@@ -1017,6 +1192,34 @@ defmodule Letflow.Engine do
     }
 
     ServiceTask.build_empty_url_error_attrs(context)
+  end
+
+  # ISS-0917 -- sibling of build_service_task_empty_url_error/5 for a catalog
+  # SERVICE_TASK whose pinned version could not be resolved at activation.
+  @spec build_service_task_catalog_unresolved_error(
+          instance_id :: Ecto.UUID.t(),
+          node_id :: String.t(),
+          reason :: term(),
+          variables :: map(),
+          actor_id :: Ecto.UUID.t() | nil,
+          idempotency_key :: String.t()
+        ) :: standalone_error_attrs()
+  defp build_service_task_catalog_unresolved_error(
+         instance_id,
+         node_id,
+         reason,
+         variables,
+         actor_id,
+         idempotency_key
+       ) do
+    ServiceTask.build_catalog_unresolved_error_attrs(%{
+      instance_id: instance_id,
+      node_id: node_id,
+      reason: reason,
+      actor_id: actor_id,
+      idempotency_key: idempotency_key,
+      variables: variables
+    })
   end
 
   # REQ-215 design doc §2.5 -- wires prepare_service_task_dispatch/5's own
@@ -2483,7 +2686,8 @@ defmodule Letflow.Engine do
              graph,
              timer.instance_id,
              advanced_state.variables,
-             now
+             now,
+             %{pin_source: {:reconstruct, timer.instance_id, prefix}, tenant_id: tenant_id}
            ),
          {:ok, sub_process_outcome} <-
            prepare_sub_process_children_for_completion(
@@ -2704,7 +2908,8 @@ defmodule Letflow.Engine do
              graph,
              timer.instance_id,
              advanced_state.variables,
-             now
+             now,
+             %{pin_source: {:reconstruct, timer.instance_id, prefix}, tenant_id: tenant_id}
            ),
          {:ok, sub_process_outcome} <-
            prepare_sub_process_children_for_completion(
@@ -2865,14 +3070,25 @@ defmodule Letflow.Engine do
   # :empty_url_error here folds into a typed error that rolls back this
   # whole attempt the same way, rather than routing into
   # Letflow.Engine.set_instance_error/2.
+  #
+  # ISS-0917 -- a {:catalog_resolution_error, ...} outcome folds into the same
+  # kind of typed error (never raised), with the same scope boundary.
   defp prepare_service_task_dispatch_abort_on_empty_url(
          pending_events,
          graph,
          instance_id,
          variables,
-         now
+         now,
+         catalog_ctx
        ) do
-    case prepare_service_task_dispatch(pending_events, graph, instance_id, variables, now) do
+    case prepare_service_task_dispatch(
+           pending_events,
+           graph,
+           instance_id,
+           variables,
+           now,
+           catalog_ctx
+         ) do
       {:ok, prepared} ->
         {:ok, prepared}
 
@@ -2881,6 +3097,9 @@ defmodule Letflow.Engine do
 
       {:empty_url_error, node_id, _variables} ->
         {:error, {:service_task_url_rendered_empty_not_supported_for_timer_fire, node_id}}
+
+      {:catalog_resolution_error, node_id, reason, _variables} ->
+        {:error, {:service_task_catalog_unresolved_not_supported_for_timer_fire, node_id, reason}}
     end
   end
 
@@ -3108,7 +3327,8 @@ defmodule Letflow.Engine do
              graph,
              dispatch.instance_id,
              advanced_state.variables,
-             now
+             now,
+             %{pin_source: {:reconstruct, dispatch.instance_id, prefix}, tenant_id: tenant_id}
            ),
          {:ok, sub_process_outcome} <-
            prepare_sub_process_children_for_completion(
@@ -3522,7 +3742,8 @@ defmodule Letflow.Engine do
                      advanced_state.variables,
                      completed_at,
                      actor_id,
-                     idempotency_key
+                     idempotency_key,
+                     prefix
                    ) do
               case prepare_sub_process_children_for_completion(
                      advanced_state,
@@ -3546,8 +3767,14 @@ defmodule Letflow.Engine do
                   {:error, reason}
               end
             else
-              {:error, {:empty_url_error, error_args}} -> {:ok, {:execution_error, error_args}}
-              {:error, reason} -> {:error, reason}
+              {:error, {:empty_url_error, error_args}} ->
+                {:ok, {:execution_error, error_args}}
+
+              {:error, {:catalog_resolution_error, error_args}} ->
+                {:ok, {:execution_error, error_args}}
+
+              {:error, reason} ->
+                {:error, reason}
             end
 
           {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
@@ -3608,20 +3835,43 @@ defmodule Letflow.Engine do
          variables,
          now,
          actor_id,
-         idempotency_key
+         idempotency_key,
+         prefix
        ) do
+    # ISS-0917 -- pins are reconstructed lazily (only if a catalog node is
+    # activated) under the row lock this hop already holds; tenant_id is
+    # derived from the schema prefix, never from caller input (INV-PD-7).
+    catalog_ctx = %{
+      pin_source: {:reconstruct, projection.instance_id, prefix},
+      tenant_id: {:schema_prefix, prefix}
+    }
+
     case prepare_service_task_dispatch(
            pending_events,
            graph,
            projection.instance_id,
            variables,
-           now
+           now,
+           catalog_ctx
          ) do
       {:ok, prepared} ->
         {:ok, prepared}
 
       {:error, reason} ->
         {:error, reason}
+
+      {:catalog_resolution_error, node_id, reason, variables} ->
+        error_args =
+          build_service_task_catalog_unresolved_error(
+            projection.instance_id,
+            node_id,
+            reason,
+            variables,
+            actor_id,
+            idempotency_key
+          )
+
+        {:error, {:catalog_resolution_error, error_args}}
 
       {:empty_url_error, node_id, variables} ->
         error_args =

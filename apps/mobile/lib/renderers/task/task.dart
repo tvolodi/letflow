@@ -13,6 +13,8 @@ library;
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
+
+import '../../i18n/i18n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/api_client.dart' show PostCapableHttpGateway;
@@ -579,7 +581,7 @@ class _TaskDetailBodyState extends State<_TaskDetailBody> {
                 widget.onClaimConflict?.call();
               }
             },
-            child: const Text('Claim'),
+            child: Text(tr('task.claim.action')),
           ),
         _ClaimOutcomeBanner(outcome: widget.controller.lastClaimOutcome),
         if (formId != null)
@@ -604,20 +606,20 @@ class _ClaimOutcomeBanner extends StatelessWidget {
     return switch (outcome) {
       null => const SizedBox.shrink(),
       TaskClaimSuccess() => const SizedBox.shrink(),
-      TaskClaimNoLongerAvailable() => const Text(
-        'This task is no longer available.',
+      TaskClaimNoLongerAvailable() => Text(
+        tr('task.claim.noLongerAvailable'),
         key: taskClaimNoLongerAvailableKey,
       ),
-      TaskClaimForbidden() => const Text(
-        "You don't have permission to claim this task.",
+      TaskClaimForbidden() => Text(
+        tr('task.claim.forbidden'),
         key: taskClaimForbiddenKey,
       ),
-      TaskClaimNetworkUnavailable() => const Text(
-        'No network connection.',
+      TaskClaimNetworkUnavailable() => Text(
+        tr('task.claim.networkUnavailable'),
         key: taskClaimNetworkUnavailableKey,
       ),
-      TaskClaimOtherFailure() => const Text(
-        'Something went wrong.',
+      TaskClaimOtherFailure() => Text(
+        tr('task.claim.otherFailure'),
         key: taskClaimOtherFailureKey,
       ),
     };
@@ -747,7 +749,7 @@ class _TaskInboxBodyState extends State<_TaskInboxBody> {
               final outcome = await widget.controller.claim(item.id);
               setState(() => _rowOutcomes[item.id] = outcome);
             },
-            child: const Text('Claim'),
+            child: Text(tr('task.claim.action')),
           ),
           subtitle: _ClaimOutcomeBanner(outcome: _rowOutcomes[item.id]),
         );

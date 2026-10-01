@@ -33,6 +33,7 @@ import '../definitions/sembast_pinned_form_cache_repository.dart'
     show openProductionPinnedFormCache;
 import '../definitions/tenant_home_screen.dart'
     show definitionCacheHolderProvider;
+import '../i18n/i18n.dart';
 import 'bootstrap_models.dart';
 import 'error_screens.dart';
 
@@ -109,12 +110,14 @@ class _TenantSlugEntryScreenState extends ConsumerState<TenantSlugEntryScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Enter your organization address'),
+              Text(tr('bootstrap.slugEntry.prompt')),
               TextField(
                 key: const Key('tenant-slug-field'),
                 controller: _controller,
                 enabled: !isLoading,
-                decoration: const InputDecoration(hintText: 'acme'),
+                decoration: InputDecoration(
+                  hintText: tr('bootstrap.slugEntry.hint'),
+                ),
                 onSubmitted: (_) => _submit(),
               ),
               const SizedBox(height: 16),
@@ -126,9 +129,11 @@ class _TenantSlugEntryScreenState extends ConsumerState<TenantSlugEntryScreen> {
                 // `WidgetTester.pumpAndSettle()` from ever settling in the
                 // widget tests that drive this screen through a real
                 // bootstrap attempt (AC7).
-                child: isLoading
-                    ? const Text('Signing in…')
-                    : const Text('Continue'),
+                child: Text(
+                  isLoading
+                      ? tr('bootstrap.slugEntry.signingIn')
+                      : tr('bootstrap.slugEntry.continueAction'),
+                ),
               ),
             ],
           ),
@@ -159,6 +164,7 @@ Future<BootstrapResult?> runTenantBootstrap(
   DefinitionCacheOpener? cacheOpener,
   ActivePinnedFormCacheHolder? pinnedFormCache,
   PinnedFormCacheOpener? pinnedFormCacheOpener,
+  ActiveTenantLocaleHolder? tenantLocale,
 }) async {
   final TenantConfig config;
   try {
@@ -212,6 +218,10 @@ Future<BootstrapResult?> runTenantBootstrap(
   // REQ-425 design §5.2 — the refresh coordinator needs `clientId` alongside
   // `currentRealmUrl` to build a refresh_token grant's `TokenRequest`.
   activeRealm.clientId = config.clientId;
+  // REQ-429 (MOB-7) design §4.4 — tier (a)'s "tenant default" role
+  // (`resolveFormattingLocale`'s `tenantDefaultLocale` parameter), set
+  // alongside the realm/client-id pointers above.
+  tenantLocale?.defaultLocale = config.defaultLocale;
 
   // REQ-423 design §7.3 — persisted at the same point the active-realm
   // pointer itself is set, so `attemptSessionResume` can reach this
@@ -359,6 +369,7 @@ Future<BootstrapResult?> switchTenant(
   DefinitionCacheOpener? cacheOpener,
   ActivePinnedFormCacheHolder? pinnedFormCache,
   PinnedFormCacheOpener? pinnedFormCacheOpener,
+  ActiveTenantLocaleHolder? tenantLocale,
 }) async {
   final previousRealmUrl = activeRealm.currentRealmUrl;
   if (previousRealmUrl != null) {
@@ -393,6 +404,7 @@ Future<BootstrapResult?> switchTenant(
     cacheOpener: cacheOpener,
     pinnedFormCache: pinnedFormCache,
     pinnedFormCacheOpener: pinnedFormCacheOpener,
+    tenantLocale: tenantLocale,
   );
 }
 
@@ -422,6 +434,7 @@ final Future<BootstrapResult?> Function(
   DefinitionCacheOpener? cacheOpener,
   ActivePinnedFormCacheHolder? pinnedFormCache,
   PinnedFormCacheOpener? pinnedFormCacheOpener,
+  ActiveTenantLocaleHolder? tenantLocale,
 })
 _switchTenantTopLevel = switchTenant;
 
@@ -486,13 +499,19 @@ class BootstrapController extends ChangeNotifier {
     this.appAuthAdapter = const RealAppAuthAdapter(),
     this.cacheOpener,
     this.pinnedFormCacheOpener,
-  });
+    ActiveTenantLocaleHolder? tenantLocale,
+  }) : tenantLocale = tenantLocale ?? ActiveTenantLocaleHolder();
 
   final HttpGateway client;
   final TenantTokenStore tokenStore;
   final ActiveRealmHolder activeRealm;
   final ActiveDefinitionCacheHolder definitionCache;
   final ActivePinnedFormCacheHolder pinnedFormCache;
+
+  /// Tier (a)'s "tenant default" (REQ-429 design §4.4) — set from
+  /// `TenantConfig.defaultLocale` by [runTenantBootstrap]/[switchTenant]
+  /// below. Defaults to a fresh, unset holder when not supplied.
+  final ActiveTenantLocaleHolder tenantLocale;
 
   /// Defaults to [openProductionDefinitionCache] when null (tests inject a
   /// fake opener so `flutter test` never touches `path_provider`'s
@@ -526,6 +545,7 @@ class BootstrapController extends ChangeNotifier {
       cacheOpener: cacheOpener,
       pinnedFormCache: pinnedFormCache,
       pinnedFormCacheOpener: pinnedFormCacheOpener,
+      tenantLocale: tenantLocale,
     );
 
     if (result == null) {
@@ -572,6 +592,7 @@ class BootstrapController extends ChangeNotifier {
       cacheOpener: cacheOpener,
       pinnedFormCache: pinnedFormCache,
       pinnedFormCacheOpener: pinnedFormCacheOpener,
+      tenantLocale: tenantLocale,
     );
 
     if (result == null) {
@@ -673,6 +694,26 @@ final activeRealmHolderProvider = Provider<ActiveRealmHolder>((ref) {
   return ActiveRealmHolder();
 });
 
+/// REQ-429 (MOB-7) design §4.4 — tier (a)'s "tenant default" holder, set by
+/// [runTenantBootstrap]/[switchTenant] from `TenantConfig.defaultLocale`.
+final activeTenantLocaleHolderProvider = Provider<ActiveTenantLocaleHolder>((
+  ref,
+) {
+  return ActiveTenantLocaleHolder();
+});
+
+/// Resolved once per read from the active tenant's default locale (if any)
+/// plus the device's own reported locales — the same "resolved once per
+/// session" shape as the SPA's `useSessionLocaleStore` (design §4.4). Every
+/// call site that formats a date or number reads this provider rather than
+/// constructing a bare, locale-less `DateFormat`/`NumberFormat`.
+final formattingLocaleProvider = Provider<String>((ref) {
+  final tenantLocale = ref.watch(activeTenantLocaleHolderProvider);
+  return resolveFormattingLocale(
+    tenantDefaultLocale: tenantLocale.defaultLocale,
+  );
+});
+
 final Provider<ApiClient> apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient.create(
     tokenStore: ref.watch(tenantTokenStoreProvider),
@@ -699,6 +740,7 @@ final ChangeNotifierProvider<BootstrapController> bootstrapControllerProvider =
       activeRealm: ref.watch(activeRealmHolderProvider),
       definitionCache: ref.watch(definitionCacheHolderProvider),
       pinnedFormCache: ref.watch(pinnedFormCacheHolderProvider),
+      tenantLocale: ref.watch(activeTenantLocaleHolderProvider),
     );
   },
 );

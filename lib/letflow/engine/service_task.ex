@@ -12,11 +12,13 @@ defmodule Letflow.Engine.ServiceTask do
 
   The actual outbound HTTP transport is INJECTABLE (`transport_fun/0`, a
   function value the caller supplies) -- this module wires no concrete HTTP
-  client. The `service_catalog` lookup `route_kind: :catalog_service` needs
-  to resolve a `service_id` to a URL template is also INJECTABLE
-  (`catalog_lookup_fun/0`) -- no concrete, DB-backed catalog exists in this
-  codebase yet (the same gap `Letflow.Definitions.ServiceScopeValidator`'s
-  own moduledoc names for its own `ServiceCatalog` dependency).
+  client. The `service_catalog` lookup `route_kind: :catalog_service`
+  originally needed was modelled as INJECTABLE (`catalog_lookup_fun/0`);
+  that seam is superseded by activation-time resolution in `Letflow.Engine`
+  (ISS-0917), which resolves the instance's pinned catalog version via
+  `Letflow.ServiceCatalog.resolve_pinned_version/3` and freezes the rendered
+  URL into the dispatch row. `catalog_lookup_fun/0` is no longer consumed by
+  the dispatcher and is kept only as a documented historical type.
 
   Every `decide_failure/3` `:give_up` outcome (whether from exhausted retries
   or an immediately non-retriable failure) is handed to
@@ -122,10 +124,11 @@ defmodule Letflow.Engine.ServiceTask do
              raw_outcome())
 
   @typedoc """
-  Resolves `route_kind: :catalog_service`'s `service_id` to a real URL
-  template. **No concrete implementation exists in this codebase yet** —
-  belongs to a future S6 `service_catalog` adapter. This module's own
-  functions never call this type — it is a documented contract only.
+  Historical contract: resolves `route_kind: :catalog_service`'s `service_id`
+  to a URL template. **Superseded by activation-time resolution in
+  `Letflow.Engine` (ISS-0917)** -- no longer consumed by the dispatcher.
+  This module's own functions never call this type; it is kept (not
+  deleted) as a documented contract only.
   """
   @type catalog_lookup_fun ::
           (service_id :: String.t(), tenant_id :: Ecto.UUID.t() ->
@@ -150,6 +153,15 @@ defmodule Letflow.Engine.ServiceTask do
           required(:idempotency_key) => String.t(),
           required(:variables) => map(),
           optional(:details) => map()
+        }
+
+  @type catalog_unresolved_context :: %{
+          required(:instance_id) => Ecto.UUID.t(),
+          required(:node_id) => String.t(),
+          required(:actor_id) => Ecto.UUID.t() | nil,
+          required(:idempotency_key) => String.t(),
+          required(:variables) => map(),
+          required(:reason) => term()
         }
 
   @type service_task_give_up_context :: %{
@@ -326,6 +338,54 @@ defmodule Letflow.Engine.ServiceTask do
       idempotency_key: Map.fetch!(context, :idempotency_key)
     }
   end
+
+  @doc """
+  ISS-0917 -- builds the `Letflow.Engine.standalone_error_attrs()` shape for a
+  catalog-referencing SERVICE_TASK whose pinned `service_catalog` version
+  could not be resolved at activation. `reason` is one of the closed
+  `Letflow.Engine` catalog-resolution reasons; only its atom CLASS is
+  persisted in `details`, and `reason` text is a fixed sentence per class --
+  never an interpolation of variables, headers, URLs or the service id.
+  Pure, same contract as `build_empty_url_error_attrs/1`.
+  """
+  @spec build_catalog_unresolved_error_attrs(catalog_unresolved_context()) ::
+          Letflow.Engine.standalone_error_attrs()
+  def build_catalog_unresolved_error_attrs(%{} = context) do
+    reason_class = catalog_reason_class(Map.fetch!(context, :reason))
+
+    %{
+      instance_id: Map.fetch!(context, :instance_id),
+      error_type: :service_task_catalog_unresolved,
+      affected: {:node, Map.fetch!(context, :node_id)},
+      reason: catalog_reason_sentence(reason_class),
+      variables: Map.fetch!(context, :variables),
+      details: %{reason: reason_class},
+      actor_id: Map.fetch!(context, :actor_id),
+      idempotency_key: Map.fetch!(context, :idempotency_key)
+    }
+  end
+
+  defp catalog_reason_class({class, _detail}) when is_atom(class), do: class
+  defp catalog_reason_class({class, _kind, _ref}) when is_atom(class), do: class
+  defp catalog_reason_class(class) when is_atom(class), do: class
+
+  defp catalog_reason_sentence(:pin_missing),
+    do: "service task catalog service has no pin recorded for this instance"
+
+  defp catalog_reason_sentence(:pin_has_no_identity),
+    do: "service task catalog pin carries no version identity"
+
+  defp catalog_reason_sentence(:pins_unavailable),
+    do: "service task catalog pins could not be read for this instance"
+
+  defp catalog_reason_sentence(:version_not_found),
+    do: "service task catalog service version could not be resolved"
+
+  defp catalog_reason_sentence(:required_auth_unsupported),
+    do: "service task catalog service requires authentication, which is not supported"
+
+  defp catalog_reason_sentence(_other),
+    do: "service task catalog service could not be resolved"
 
   # ===========================================================================
   # classify_failure_kind/1 (AC2, AC3, AC5) — design doc §5.2

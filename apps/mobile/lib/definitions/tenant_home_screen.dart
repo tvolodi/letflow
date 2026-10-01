@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../bootstrap/navigation_bootstrap.dart' show apiClientProvider;
+import '../i18n/i18n.dart';
 import 'definitions.dart';
 
 // ── §8.2 `DefinitionHomeController` ────────────────────────────────────────
@@ -96,15 +97,15 @@ class _TenantHomeScreenState extends ConsumerState<TenantHomeScreen> {
 
     return Scaffold(
       key: const Key('tenant-home-screen'),
-      appBar: AppBar(title: const Text('Definitions')),
+      appBar: AppBar(title: Text(tr('home.appBarTitle'))),
       // Deliberately no `CircularProgressIndicator`/`LinearProgressIndicator`
       // or any other loading-indicator widget anywhere in this build
       // method — not gated behind a flag, simply never constructed
       // (design §8.3).
       body: entries.isEmpty
-          ? const Center(
-              key: Key('tenant-home-empty'),
-              child: Text('No definitions yet'),
+          ? Center(
+              key: const Key('tenant-home-empty'),
+              child: Text(tr('home.emptyMessage')),
             )
           : ListView.builder(
               key: const Key('tenant-home-list'),

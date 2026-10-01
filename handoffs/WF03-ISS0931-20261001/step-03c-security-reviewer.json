@@ -1,0 +1,52 @@
+{
+  "run_id": "WF03-ISS0931-20261001",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "result": {
+    "status": "PASS",
+    "scope": "No lib/ or migration change. In scope only via INV-4 (secret handling) and admin-API role/group grants from shell scripts.",
+    "invariants": {
+      "INV-1": "NOT-APPLICABLE: no tenant-scoped schema/table/migration/query touched; scripts call the admin API, whose tenant is derived server-side from the token (no tenant id supplied by the script), so cross-tenant writes are not expressible.",
+      "INV-2": "NOT-APPLICABLE",
+      "INV-3": "NOT-APPLICABLE",
+      "INV-5": "NOT-APPLICABLE",
+      "INV-6": "NOT-APPLICABLE",
+      "INV-7": "NOT-APPLICABLE (no SQL)",
+      "INV-4": "PASS: QA_AUTH_TOKEN read from env only, never echoed, no set -x/xtrace, not written to files; verification hints print the literal $QA_AUTH_TOKEN. No hardcoded secrets.",
+      "INV-8": "PASS: every curl/jq failure path exits 1 with stderr message; add_group_member checks status explicitly."
+    },
+    "checks": {
+      "injection": "Usernames/roles are hardcoded constants in the scripts; jq uses --arg for matching; JSON bodies interpolate only constants and server-returned UUIDs. No external input flows into curl/jq.",
+      "least_privilege": "Personas get only TASK_WORKER plus mapped process_routing_role groups; no PLATFORM_ADMIN or other platform-role grant anywhere. Role kind fixed to process_routing_role. Exact-username lookup prevents wrong-user grant via search prefix match.",
+      "tenant_scoping": "Single tenant per token; scripts take no tenant parameter.",
+      "default_url": "QA_URL defaults to https://qa.bizdala.com (swiftroute precedent, accepted).",
+      "uat_runner_md": "Doc-only addition; no privilege or secret implications."
+    },
+    "issues_non_blocking": [
+      "Bearer token is passed in curl argv (visible in process list on shared hosts); same as swiftroute precedent.",
+      "QA_URL override is not forced to https; operator-controlled, acceptable."
+    ],
+    "summary": "SECURITY-REVIEWER step for WF03-ISS0931-20261001 (PASS); full verdict detail in result.details."
+  },
+  "handoff_id": "28dafb66-5f81-4e20-a3ca-f3a6df267838",
+  "file": "handoffs/WF03-ISS0931-20261001/step-03c-security-reviewer.json",
+  "created_at": "2026-10-01T13:00:00Z",
+  "started_at": "2026-10-01T13:00:00Z",
+  "completed_at": "2026-10-01T13:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "task": {
+    "description": "WF-03 run WF03-ISS0931-20261001 (step-03c-security-reviewer.json): SECURITY-REVIEWER step for issue ISS-0931 (queue Q-914 / GH #2065): meridian/vortex seeded tasks reference role groups that do not exist in either tenant; add persona-actor and role seed scripts. Dispatched by ORCH; see docs/issues/ISS-0931.yaml and lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md for scope. Role performed: SECURITY-REVIEWER.",
+    "acceptance_criteria": [
+      "Meridian and vortex role-* sets referenced by the qa fixture definitions are seeded by the new scripts",
+      "Drift-guard test test/scripts/persona_actor_seed_drift_test.exs passes and is mutation-sensitive",
+      "No lib/ code change; nothing run against QA"
+    ]
+  },
+  "context": {
+    "requirement_text": "Issue ISS-0931 (queue Q-914, GH #2065): meridian/vortex seeded tasks reference role groups (role-credit-manager, role-controller, ...) that do not exist in either tenant, so actors get an empty inbox and 409 on claim. Needs a meridian/vortex equivalent of scripts/seed_swiftroute_persona_actors.sh.",
+    "branch_name": "feature/WF03-ISS0931-20261001"
+  }
+}

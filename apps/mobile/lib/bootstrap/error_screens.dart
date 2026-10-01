@@ -6,6 +6,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../i18n/i18n.dart';
+
 const Key tenantNotFoundScreenKey = Key('tenant-not-found-screen');
 const Key networkUnavailableScreenKey = Key('network-unavailable-screen');
 const Key oidcFailureScreenKey = Key('oidc-failure-screen');
@@ -28,15 +30,12 @@ class TenantNotFoundScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Tenant not found'),
-            const Text(
-              "We couldn't find a tenant for that address. Check the "
-              'address and try again.',
-            ),
+            Text(tr('bootstrap.error.tenantNotFound.title')),
+            Text(tr('bootstrap.error.tenantNotFound.body')),
             if (onBackToEntry != null)
               TextButton(
                 onPressed: onBackToEntry,
-                child: const Text('Back to sign in'),
+                child: Text(tr('bootstrap.error.backToSignIn')),
               ),
           ],
         ),
@@ -58,13 +57,10 @@ class NetworkUnavailableScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Network unavailable'),
-            const Text(
-              "We couldn't reach Letflow. Check your connection and try "
-              'again.',
-            ),
+            Text(tr('bootstrap.error.networkUnavailable.title')),
+            Text(tr('bootstrap.error.networkUnavailable.body')),
             if (onRetry != null)
-              TextButton(onPressed: onRetry, child: const Text('Retry')),
+              TextButton(onPressed: onRetry, child: Text(tr('bootstrap.error.retry'))),
           ],
         ),
       ),
@@ -85,12 +81,10 @@ class OidcFailureScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Sign-in failed'),
-            const Text(
-              'Something went wrong while signing in. Please try again.',
-            ),
+            Text(tr('bootstrap.error.oidcFailure.title')),
+            Text(tr('bootstrap.error.oidcFailure.body')),
             if (onRetry != null)
-              TextButton(onPressed: onRetry, child: const Text('Retry')),
+              TextButton(onPressed: onRetry, child: Text(tr('bootstrap.error.retry'))),
           ],
         ),
       ),
@@ -111,13 +105,10 @@ class SecureStorageUnavailableScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Secure storage unavailable'),
-            const Text(
-              'This device cannot securely store your sign-in. Please try '
-              'again.',
-            ),
+            Text(tr('bootstrap.error.secureStorageUnavailable.title')),
+            Text(tr('bootstrap.error.secureStorageUnavailable.body')),
             if (onRetry != null)
-              TextButton(onPressed: onRetry, child: const Text('Retry')),
+              TextButton(onPressed: onRetry, child: Text(tr('bootstrap.error.retry'))),
           ],
         ),
       ),

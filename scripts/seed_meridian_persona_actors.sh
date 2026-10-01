@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# seed_meridian_persona_actors.sh
+#
+# Provisions the letflow-side (Part B) of the Meridian persona actors (ISS-0931):
+#   - Creates process-routing role groups + tenant_role bindings for every role
+#     referenced by the Meridian QA definitions (8 roles)
+#   - Adds each persona actor to TASK_WORKER (implicit) and to its role groups
+#
+# Prerequisites:
+#   - curl and jq installed
+#   - Part A done: Keycloak accounts actor-meridian-* exist and have synced into
+#     letflow's users table (ai-dala-infra). Missing actor => abort naming it.
+#   - QA_AUTH_TOKEN: Bearer token for a PLATFORM_ADMIN user in the meridian tenant
+#       (GroupsManage + RolesManage + UsersManage).
+#   - QA_URL: base URL (default: https://qa.bizdala.com)
+#   - Run AFTER scripts/seed_meridian_definition.sh.
+#
+# Usage:
+#   QA_AUTH_TOKEN="<token>" bash scripts/seed_meridian_persona_actors.sh
+#
+# Assumption: the persona -> role mapping comes from the scenario `actors:` blocks
+# (test/fixtures/uat/scenarios/meridian/*.yaml) and
+# test/fixtures/simulation/meridian/org_structure.yaml; thomas -> role-cro and
+# eva -> role-ceo are inferred from org structure, not stated verbatim. Role groups
+# are the authoritative part; a BA may amend the PERSONAS table only.
+# TASK_WORKER is implicit for every persona and never listed below.
+#
+# Design: lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md
+
+set -euo pipefail
+
+ROLES=(
+  "role-credit-manager"
+  "role-risk-manager"
+  "role-compliance-officer"
+  "role-credit-director"
+  "role-committee-member"
+  "role-loan-ops"
+  "role-cro"
+  "role-ceo"
+)
+PERSONAS=(
+  "actor-meridian-ben|role-credit-manager"
+  "actor-meridian-miriam|role-risk-manager"
+  "actor-meridian-claudia|role-compliance-officer"
+  "actor-meridian-julia|role-credit-director,role-committee-member"
+  "actor-meridian-thomas|role-committee-member,role-cro"
+  "actor-meridian-eva|role-committee-member,role-ceo"
+  "actor-meridian-marcus|role-loan-ops"
+  "actor-meridian-lars|"
+  "actor-meridian-sophie|"
+  "actor-meridian-oliver|"
+)
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib/seed_persona_actors_base.sh"
+
+persona_require_env
+persona_run meridian

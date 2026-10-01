@@ -1,0 +1,46 @@
+{
+  "handoff_id": "a62675f3-9a3f-48c4-8884-df5d2526a169",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-Q926-20261001/step-03b-security-reviewer.json",
+  "created_at": "2026-10-01T18:50:43Z",
+  "started_at": "2026-10-01T18:50:43Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/engine/service_task.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "handoffs/WF03-Q926-20261001/step-03-elixir-dev.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 3b: hard security gate on the ISS-0926 implementation (commit range origin/main..HEAD on feature/WF03-Q926-20261001; implementation commit 883f43d6). Claim: status IN_PROGRESS only; flip to COMPLETED on finishing. Review against docs/agents/instructions/security-invariants.md INV-1..INV-8 and the design lib/letflow/design/iss0926-service-task-body-template-rendering.md. This change renders instance variable values (user/tenant-influenced) into an outbound HTTP request body and persists it in config_snapshot. Specifically attempt to break it: (a) JSON injection - variable values with quote, backslash, newlines, U+2028/9, control chars, nested maps/lists, a value that itself contains '{{variables.x}}' (no re-expansion/recursion?), keys containing odd characters, placeholder not inside a JSON string, placeholder in a JSON key position, escaped-quote edge cases in the placeholder-position scan (e.g. \\\\\\\" sequences), huge values/oversize cap, invalid UTF-8 binary value; (b) information leakage - do rendered_body/error paths/log lines/audit events/persisted errors expose variable VALUES or secrets beyond what rendered_url already exposes? is rendered_body readable by other tenants or via an API response (grep API serializers for config_snapshot) ; (c) SSRF/URL path unchanged and still validated; (d) tenant isolation - nothing new reads across tenants, no new route; (e) legacy-row fallback (dispatcher resolve_dispatch_body) cannot be driven to send an unrendered placeholder template or attacker-influenced raw template; (f) catalog path: body_template origin on a catalog node - can a template be author-controlled such that it overrides a catalog-pinned service's declared contract; (g) error-handling fail-closed on every wired site. You may write small throwaway scripts in the session scratchpad (not in the repo) to exercise ServiceTask.render_body_template/2 (pure; mix run --no-start). Do not modify any lib/ or test/ file: return FAIL with numbered findings and severities (BLOCKER/MAJOR/MINOR) or PASS. Only this handoff is modified; commit it only, push origin HEAD. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "INV-1..INV-8 each stated pass/not-applicable with evidence",
+      "Injection attempts listed with observed results",
+      "Leakage review stated",
+      "Legacy fallback and catalog path reviewed",
+      "No file modified except this handoff"
+    ]
+  }
+}

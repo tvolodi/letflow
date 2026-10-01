@@ -1,15 +1,45 @@
 {
-  "agent": "RELEASE-VALIDATOR",
-  "run": "WF03-ISS0931-20261001",
-  "verdict": "PASS",
-  "checks": {
-    "drift_test": "mix test test/scripts/persona_actor_seed_drift_test.exs: 16 passed",
-    "bash_n": "all three scripts OK",
-    "meridian_roles": "8 roles in fixtures equal 8 ROLES in script",
-    "vortex_roles": "4 roles in fixtures equal 4 ROLES in script",
-    "persona_mapping": "all persona rows reference seeded roles only",
-    "lib_diff": "only a docs design md under lib/letflow/design; no code changes",
-    "qa_untouched": "nothing run against QA; scripts only reference QA_URL at runtime"
+  "handoff_id": "270bb29c-a58c-4fd1-af4b-28f9054d17eb",
+  "run_id": "WF03-ISS0931-20261001",
+  "workflow_id": "WF-03",
+  "step": "04d",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0931-20261001/step-04d-release-validator.json",
+  "created_at": "2026-10-01T13:00:00Z",
+  "started_at": "2026-10-01T13:00:00Z",
+  "completed_at": "2026-10-01T13:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "task": {
+    "description": "WF-03 run WF03-ISS0931-20261001 (step-04d-release-validator.json): RELEASE-VALIDATOR step for issue ISS-0931 (queue Q-914 / GH #2065): meridian/vortex seeded tasks reference role groups that do not exist in either tenant; add persona-actor and role seed scripts. Dispatched by ORCH; see docs/issues/ISS-0931.yaml and lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md for scope. Role performed: RELEASE-VALIDATOR.",
+    "acceptance_criteria": [
+      "Meridian and vortex role-* sets referenced by the qa fixture definitions are seeded by the new scripts",
+      "Drift-guard test test/scripts/persona_actor_seed_drift_test.exs passes and is mutation-sensitive",
+      "No lib/ code change; nothing run against QA"
+    ]
   },
-  "notes": "Full suite not run per instruction; CI is the gate. Scripts need executable bit set by ORCH via git update-index."
+  "context": {
+    "requirement_text": "Issue ISS-0931 (queue Q-914, GH #2065): meridian/vortex seeded tasks reference role groups (role-credit-manager, role-controller, ...) that do not exist in either tenant, so actors get an empty inbox and 409 on claim. Needs a meridian/vortex equivalent of scripts/seed_swiftroute_persona_actors.sh.",
+    "branch_name": "feature/WF03-ISS0931-20261001"
+  },
+  "result": {
+    "details": {
+      "agent": "RELEASE-VALIDATOR",
+      "run": "WF03-ISS0931-20261001",
+      "verdict": "PASS",
+      "checks": {
+        "drift_test": "mix test test/scripts/persona_actor_seed_drift_test.exs: 16 passed",
+        "bash_n": "all three scripts OK",
+        "meridian_roles": "8 roles in fixtures equal 8 ROLES in script",
+        "vortex_roles": "4 roles in fixtures equal 4 ROLES in script",
+        "persona_mapping": "all persona rows reference seeded roles only",
+        "lib_diff": "only a docs design md under lib/letflow/design; no code changes",
+        "qa_untouched": "nothing run against QA; scripts only reference QA_URL at runtime"
+      },
+      "notes": "Full suite not run per instruction; CI is the gate. Scripts need executable bit set by ORCH via git update-index."
+    },
+    "status": "PASS",
+    "summary": "RELEASE-VALIDATOR step for WF03-ISS0931-20261001 (PASS); full verdict detail in result.details."
+  }
 }

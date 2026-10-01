@@ -1,16 +1,52 @@
 {
-  "agent": "REVIEWER",
-  "run": "WF03-ISS0931-20261001",
-  "verdict": "PASS",
-  "checks": {
-    "bash_n": "ok for lib, meridian, vortex (and swiftroute)",
-    "scope": "only the 4 designed files changed; swiftroute script and lib/ untouched; test file is TEST-DESIGNER's next step",
-    "tables": "ROLES (8 meridian, 4 vortex, no procurement) and PERSONAS match design section 4; format matches section 3 parser contract",
-    "bash_correctness": "set -euo pipefail in callers; source path uses BASH_SOURCE dirname (cwd-independent); lookup_user_id exact match; users resolved before any membership write; idempotent via find/upsert/200-201",
-    "decisions_antipatterns": "no conflict with decision records; no OTP/type-safety surface"
+  "handoff_id": "d1b68ead-72f8-4e6e-8167-c44dfc1512cf",
+  "run_id": "WF03-ISS0931-20261001",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0931-20261001/step-03d-reviewer.json",
+  "created_at": "2026-10-01T13:00:00Z",
+  "started_at": "2026-10-01T13:00:00Z",
+  "completed_at": "2026-10-01T13:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "task": {
+    "description": "WF-03 run WF03-ISS0931-20261001 (step-03d-reviewer.json): REVIEWER step for issue ISS-0931 (queue Q-914 / GH #2065): meridian/vortex seeded tasks reference role groups that do not exist in either tenant; add persona-actor and role seed scripts. Dispatched by ORCH; see docs/issues/ISS-0931.yaml and lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md for scope. Role performed: REVIEWER.",
+    "acceptance_criteria": [
+      "Meridian and vortex role-* sets referenced by the qa fixture definitions are seeded by the new scripts",
+      "Drift-guard test test/scripts/persona_actor_seed_drift_test.exs passes and is mutation-sensitive",
+      "No lib/ code change; nothing run against QA"
+    ]
   },
-  "issues": [
-    {"severity": "nit", "note": "grep|head -1 under pipefail can SIGPIPE on large lists; same as swiftroute, non-blocking"},
-    {"severity": "info", "note": "design section 7 asks to grep docs/ for seed_swiftroute_persona_actors preflight listings; not part of this diff, ELIXIR-DEV/DOC-UPDATER to confirm"}
-  ]
+  "context": {
+    "requirement_text": "Issue ISS-0931 (queue Q-914, GH #2065): meridian/vortex seeded tasks reference role groups (role-credit-manager, role-controller, ...) that do not exist in either tenant, so actors get an empty inbox and 409 on claim. Needs a meridian/vortex equivalent of scripts/seed_swiftroute_persona_actors.sh.",
+    "branch_name": "feature/WF03-ISS0931-20261001"
+  },
+  "result": {
+    "details": {
+      "agent": "REVIEWER",
+      "run": "WF03-ISS0931-20261001",
+      "verdict": "PASS",
+      "checks": {
+        "bash_n": "ok for lib, meridian, vortex (and swiftroute)",
+        "scope": "only the 4 designed files changed; swiftroute script and lib/ untouched; test file is TEST-DESIGNER's next step",
+        "tables": "ROLES (8 meridian, 4 vortex, no procurement) and PERSONAS match design section 4; format matches section 3 parser contract",
+        "bash_correctness": "set -euo pipefail in callers; source path uses BASH_SOURCE dirname (cwd-independent); lookup_user_id exact match; users resolved before any membership write; idempotent via find/upsert/200-201",
+        "decisions_antipatterns": "no conflict with decision records; no OTP/type-safety surface"
+      },
+      "issues": [
+        {
+          "severity": "nit",
+          "note": "grep|head -1 under pipefail can SIGPIPE on large lists; same as swiftroute, non-blocking"
+        },
+        {
+          "severity": "info",
+          "note": "design section 7 asks to grep docs/ for seed_swiftroute_persona_actors preflight listings; not part of this diff, ELIXIR-DEV/DOC-UPDATER to confirm"
+        }
+      ]
+    },
+    "status": "PASS",
+    "summary": "REVIEWER step for WF03-ISS0931-20261001 (PASS); full verdict detail in result.details."
+  }
 }

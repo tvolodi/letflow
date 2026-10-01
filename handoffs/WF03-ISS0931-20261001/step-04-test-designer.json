@@ -1,27 +1,134 @@
 {
-  "step": 4,
-  "agent": "TEST-DESIGNER",
-  "run": "WF03-ISS0931-20261001",
-  "status": "complete",
-  "artifacts_out": [
-    "test/scripts/persona_actor_seed_drift_test.exs",
-    "test/specs/ISS-0931.md"
-  ],
+  "step": "04",
+  "status": "COMPLETED",
   "result": {
     "summary": "16 tests, all pass on branch (mix test with --warnings-as-errors: Result 16 passed, exit 0). Pre-fix (main plus only the new test, throwaway worktree): 16/16 fail. mix letflow.check.test could not run here: test_parallel ecto.create failed for partition 1 (environment DB issue, not the test); a forced warnings-as-errors single-file run was used instead, with zero 'default values for the optional arguments' hits. Worktrees removed.",
-    "pass_counts": {"branch": "16/16", "pre_fix_main_plus_test_only": "0/16"},
+    "pass_counts": {
+      "branch": "16/16",
+      "pre_fix_main_plus_test_only": "0/16"
+    },
     "mutants_real_files": [
-      {"id": "M1", "mutation": "delete role-loan-ops from meridian ROLES", "failed": 2, "passed": 14, "failing": ["meridian ROLES equals fixtures", "meridian persona roles seeded"]},
-      {"id": "M2", "mutation": "add role-procurement-manager to vortex ROLES", "failed": 3, "passed": 13, "failing": ["vortex ROLES equals fixtures", "vortex persona roles seeded", "vortex sources lib/procurement pin"]},
-      {"id": "M3", "mutation": "vortex karl references role-qa-lead", "failed": 1, "passed": 15, "failing": ["vortex persona roles seeded"]},
-      {"id": "M4", "mutation": "actor-meridian-ben in vortex PERSONAS", "failed": 1, "passed": 15, "failing": ["vortex persona roles seeded"]},
-      {"id": "M5", "mutation": "drop role-cro from all meridian personas", "failed": 1, "passed": 15, "failing": ["meridian persona roles seeded"]},
-      {"id": "M7", "mutation": "unclosed if appended to vortex script", "failed": 1, "passed": 15, "failing": ["vortex bash -n"]},
-      {"id": "M8", "mutation": "meridian ROLES opener renamed ROLE=(", "failed": 4, "passed": 12, "failing": ["meridian ROLES equals fixtures", "meridian persona roles seeded", "in-memory M1", "in-memory M5"]},
-      {"id": "M9", "mutation": "unclosed if appended to shared lib", "failed": 2, "passed": 14, "failing": ["meridian bash -n", "vortex bash -n"]},
-      {"id": "M10", "mutation": "remove source line from vortex script", "failed": 1, "passed": 15, "failing": ["vortex sources lib and persona_run"]}
+      {
+        "id": "M1",
+        "mutation": "delete role-loan-ops from meridian ROLES",
+        "failed": 2,
+        "passed": 14,
+        "failing": [
+          "meridian ROLES equals fixtures",
+          "meridian persona roles seeded"
+        ]
+      },
+      {
+        "id": "M2",
+        "mutation": "add role-procurement-manager to vortex ROLES",
+        "failed": 3,
+        "passed": 13,
+        "failing": [
+          "vortex ROLES equals fixtures",
+          "vortex persona roles seeded",
+          "vortex sources lib/procurement pin"
+        ]
+      },
+      {
+        "id": "M3",
+        "mutation": "vortex karl references role-qa-lead",
+        "failed": 1,
+        "passed": 15,
+        "failing": [
+          "vortex persona roles seeded"
+        ]
+      },
+      {
+        "id": "M4",
+        "mutation": "actor-meridian-ben in vortex PERSONAS",
+        "failed": 1,
+        "passed": 15,
+        "failing": [
+          "vortex persona roles seeded"
+        ]
+      },
+      {
+        "id": "M5",
+        "mutation": "drop role-cro from all meridian personas",
+        "failed": 1,
+        "passed": 15,
+        "failing": [
+          "meridian persona roles seeded"
+        ]
+      },
+      {
+        "id": "M7",
+        "mutation": "unclosed if appended to vortex script",
+        "failed": 1,
+        "passed": 15,
+        "failing": [
+          "vortex bash -n"
+        ]
+      },
+      {
+        "id": "M8",
+        "mutation": "meridian ROLES opener renamed ROLE=(",
+        "failed": 4,
+        "passed": 12,
+        "failing": [
+          "meridian ROLES equals fixtures",
+          "meridian persona roles seeded",
+          "in-memory M1",
+          "in-memory M5"
+        ]
+      },
+      {
+        "id": "M9",
+        "mutation": "unclosed if appended to shared lib",
+        "failed": 2,
+        "passed": 14,
+        "failing": [
+          "meridian bash -n",
+          "vortex bash -n"
+        ]
+      },
+      {
+        "id": "M10",
+        "mutation": "remove source line from vortex script",
+        "failed": 1,
+        "passed": 15,
+        "failing": [
+          "vortex sources lib and persona_run"
+        ]
+      }
     ],
     "mutant_M6": "fixture-side mutation (extra role node in a temp fixture JSON) is covered by an in-memory test, M6, which asserts the guard reports it; not a repo-file mutant",
-    "revert_verification": "worktrees removed and pruned; main checkout never mutated"
+    "revert_verification": "worktrees removed and pruned; main checkout never mutated",
+    "details": {
+      "agent": "TEST-DESIGNER",
+      "run": "WF03-ISS0931-20261001",
+      "artifacts_out": [
+        "test/scripts/persona_actor_seed_drift_test.exs",
+        "test/specs/ISS-0931.md"
+      ]
+    },
+    "status": "PASS"
+  },
+  "handoff_id": "2603c181-f98e-4002-a7f8-a9b98df34cc6",
+  "run_id": "WF03-ISS0931-20261001",
+  "workflow_id": "WF-03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0931-20261001/step-04-test-designer.json",
+  "created_at": "2026-10-01T13:00:00Z",
+  "started_at": "2026-10-01T13:00:00Z",
+  "completed_at": "2026-10-01T13:00:00Z",
+  "priority": "NORMAL",
+  "task": {
+    "description": "WF-03 run WF03-ISS0931-20261001 (step-04-test-designer.json): TEST-DESIGNER step for issue ISS-0931 (queue Q-914 / GH #2065): meridian/vortex seeded tasks reference role groups that do not exist in either tenant; add persona-actor and role seed scripts. Dispatched by ORCH; see docs/issues/ISS-0931.yaml and lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md for scope. Role performed: TEST-DESIGNER.",
+    "acceptance_criteria": [
+      "Meridian and vortex role-* sets referenced by the qa fixture definitions are seeded by the new scripts",
+      "Drift-guard test test/scripts/persona_actor_seed_drift_test.exs passes and is mutation-sensitive",
+      "No lib/ code change; nothing run against QA"
+    ]
+  },
+  "context": {
+    "requirement_text": "Issue ISS-0931 (queue Q-914, GH #2065): meridian/vortex seeded tasks reference role groups (role-credit-manager, role-controller, ...) that do not exist in either tenant, so actors get an empty inbox and 409 on claim. Needs a meridian/vortex equivalent of scripts/seed_swiftroute_persona_actors.sh.",
+    "branch_name": "feature/WF03-ISS0931-20261001"
   }
 }

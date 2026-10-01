@@ -1,0 +1,45 @@
+{
+  "handoff_id": "f7a39391-43a3-4bcb-81c7-fbb33030c595",
+  "run_id": "WF03-ISS0917-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b-r2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0917-20261001/step-02b-code-design-validator-r2.json",
+  "created_at": "2026-10-01T12:28:25Z",
+  "started_at": "2026-10-01T12:28:25Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0917": "id: ISS-0917\ntitle: \"Catalog SERVICE_TASK cannot execute: ServiceTaskDispatcher.catalog_lookup_stub/2 is an unconditional {:error,:not_registered}; POST /tasks/:id/complete returns 500 when the next node is a catalog-only SERVICE_TASK\"\ndiscovered_by: RELEASE-VALIDATOR\ndiscovered_in_run: WF02-REQ432-20260930 (filed by ORCH)\ndiscovered_at: \"2026-09-30T20:50:51Z\"\nseverity: MAJOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by WF02-REQ432-20260930 (REQ-432 live pipeline run,\n  test/reports/report-20260930-WF02-REQ432-20260930.yaml; step-02b-rework1-frontend-\n  dev.json). A process whose SERVICE_TASK references a service_id (catalog_entry pin) cannot\n  ever execute: Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2\n  (lib/letflow/engine/service_task_dispatcher.ex ~411-416) returns {:error,:not_registered}\n  unconditionally, so activation renders an empty URL. Measured live: completing the\n  preceding human task hops synchronously into the SERVICE_TASK, the engine persists only\n  EXECUTION_ERROR (affected node n3, error_type service_task_url_rendered_empty, no\n  TASK_COMPLETED for the completed task) and POST /api/v1/tasks/:id/complete answers HTTP\n  500 (probably needs a non-500 mapping for {:instance_execution_error,_,_} in\n  lib/letflow/routers/tasks.ex). Independent of service retirement. Consequence: scenario\n  platform-instance-pin-survives-catalog-change EO-001/EO-004 'the in-flight step completes\n  without error' cannot be met on success; REQ-432's pipeline spec accepts the measured\n  outcome (B) as a documented limitation. Needed: resolve service_id through the instance's\n  PINNED service_catalog version (Letflow.Engine.PinResolver / ServiceCatalog lookup) in the\n  dispatcher, then tighten the REQ-432 spec step 03 to require success. SCOPE GAP already\n  noted in design docs lib/letflow/design/req373-service-catalog-version-lifecycle.md and\n  lib/letflow/design/req432-rebind-pins-publish-retire-ui.md (M5). Owner ELIXIR-DEV (via\n  CODE-DESIGNER). Severity MAJOR.\n  NOTE (added by ORCH at close-out of the cancelled duplicate run WF02-REQ432-20260930): the\n  REQ-432 implementation that actually landed on main is PR #2055 (5d7ca7bf), not this run's\n  branch. Its spec (web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change\n  .pipeline.e2e.spec.ts, header 'Scope note (deliberately not exercised): SERVICE_TASK dispatch')\n  never drives a token onto the SERVICE_TASK node, so on main the scenario's 'the in-flight step\n  completes without error' (EO-001/EO-004 step 3) is unverified; the evidence of this stub's effect\n  is the duplicate run's live finding (archived on remote branch feature/WF02-REQ432-20260930,\n  handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json and step-05-release-validator.json).\nsource_reports:\n  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json\n  - test/reports/report-20260930-WF02-REQ432-20260930.yaml\naffected_files:\n  - lib/letflow/engine/service_task_dispatcher.ex\n  - lib/letflow/routers/tasks.ex\nqueue_ref: Q-907  # queue allocated issue_ref ISS-0907, which collides with an existing local file; local filename kept as ISS-0917 (next free on origin/main) and GH-2057 retitled to match\ngithub_ref: GH-2057\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md",
+      "handoffs/WF03-ISS0917-20261001/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0917-20261001/step-02-code-designer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0917-20261001",
+    "queue_task_id": 907,
+    "github_issue": 2057
+  },
+  "task": {
+    "description": "WF-03 Step 2b RE-VALIDATION (attempt 2 of the design gate). Your predecessor's FAIL verdict is in handoffs/WF03-ISS0917-20261001/step-02b-code-design-validator.json (5 blocking issues + non-blocking items + OQ rulings); CODE-DESIGNER reworked lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md (rework summary in handoffs/WF03-ISS0917-20261001/step-02-code-designer.json result.summary). Independently re-verify each of the 5 blocking issues is actually fixed in the file (read the file, do not trust the summary), that the OQ rulings were applied as ruled, that the rework introduced no NEW problem (re-check any new facts it cites against code: e.g. jwtSubject helper and the shipment-attach-delivery-note idiom exist; SERVICE_TASK_MOCK_TRAP_PATH design coherence; section 3.3a/T10/T11; tasks.ex line refs), and that no implementation code is in the doc and no deferral language remains. Also run a final completeness pass: could a weak model implement ELIXIR-DEV, TEST-DESIGNER and the FRONTEND e2e step from this doc without guessing? Verdict PASS/FAIL with numbered blocking issues. Complete your handoff per HANDOFF_PROTOCOL.md section 3. Modify only your handoff; do not commit.",
+    "acceptance_criteria": [
+      "Each of the 5 prior blocking issues verified fixed or re-raised",
+      "No new blocking issue",
+      "No file other than the handoff modified"
+    ]
+  }
+}

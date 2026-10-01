@@ -16,11 +16,11 @@ Verified on this branch (HEAD 5fa01c94) by reading the code, not by trusting the
 
 | Claim | Verified at | Result |
 |---|---|---|
-| Failure is at activation, not at the stub | `lib/letflow/engine.ex:906-907` (`:catalog_service` arm calls `finish_service_task_arm_attrs/5` with `rendered_url` = `nil`), `engine.ex:911-914` (`validate_rendered_url(nil)` -> `{:empty_url_error, node_id}`) | CONFIRMED |
-| create/2 turns it into `{:activation_failed, {:service_task_url_rendered_empty, node_id}}` | `engine.ex:582-599` | CONFIRMED |
-| completion hop turns it into an `EXECUTION_ERROR` via the tagged tuple channel | `engine.ex:3586-3620` (`prepare_service_task_dispatch_for_completion/7`), `engine.ex:3531` | CONFIRMED |
+| Failure is at activation, not at the stub | `resolve_service_task_arm_attrs/5` (def `engine.ex:910`; its `:catalog_service` arm calls `finish_service_task_arm_attrs/5` with `rendered_url` = `nil`; pre-merge :906-907), then `validate_rendered_url(nil)` in `finish_service_task_arm_attrs/5` (def `engine.ex:924`; pre-merge :911-914) returns `{:empty_url_error, node_id}` | CONFIRMED |
+| create/2 turns it into `{:activation_failed, {:service_task_url_rendered_empty, node_id}}` | `prepare_service_task_dispatch_for_create` handling in `start_instance` (def :595, call :563; was 582-599 pre-merge) | CONFIRMED |
+| completion hop turns it into an `EXECUTION_ERROR` via the tagged tuple channel | `prepare_service_task_dispatch_for_completion/7` (def `engine.ex:3604`) and its call in the completion hop (`engine.ex:3518`) | CONFIRMED |
 | The stub is unreachable today | `service_task_dispatcher.ex:411-416` (definition), `service_task_dispatcher.ex:763-766` (only call site, poll-time branch on a `:catalog_service` snapshot row) | CONFIRMED -- activation never inserts such a row |
-| Snapshot carries no pinned version id | `engine.ex:936-948` (`config_snapshot_map/2`: route_kind, url_template, service_id, method, body_template, headers, timeout_ms, retry_limit, rendered_url) | CONFIRMED |
+| Snapshot carries no pinned version id | `config_snapshot_map/2` (def :949; was 936-948 pre-merge) (: route_kind, url_template, service_id, method, body_template, headers, timeout_ms, retry_limit, rendered_url) | CONFIRMED |
 | `PinLookup.catalog_lookup/1` is untenanted and refuses RETIRED | `lib/letflow/service_catalog/pin_lookup.ex:57-68` | CONFIRMED (this is a START-time resolver; it must NOT be reused for dispatch -- see D1) |
 | `PinResolver.pin_for/3` is pure; `reconstruct_effective_pins/2` honours INSTANCE_PINS_REBOUND | `pin_resolver.ex:766-773`, `pin_resolver.ex:636-668`, `merge_effective_pins/3` `pin_resolver.ex:545-602` | CONFIRMED |
 | 500 comes from the req085 5.5.1 catch-all row | `lib/letflow/design/req085-task-routes-write.md:555`; router catch-all `lib/letflow/routers/tasks.ex:367-369` (branch) | CONFIRMED |
@@ -35,19 +35,25 @@ Verified on this branch (HEAD 5fa01c94) by reading the code, not by trusting the
    insufficient: after a rebind the only identity left is `(service_id, version)`. The
    resolver in D1 takes either identity. Without this, REQ-432's "rebind long-running case
    onto v2" would leave the case unable to dispatch.
-2. **Five call sites, not four.** The diagnosis lists create, completion hop and "timer sites
-   2463, 2684, 3088". Actually: create (`engine.ex:550`), completion hop (`engine.ex:3500`),
-   timer-fire (`engine.ex:2463`), escalation-timer-fire (`engine.ex:2684`) and
-   `advance_after_service_task_outcome` -- the poller re-entry after ANOTHER SERVICE_TASK
-   resolves (`engine.ex:3088`, a SERVICE_TASK -> SERVICE_TASK chain). All five call
-   `prepare_service_task_dispatch/5` (`engine.ex:851`) either directly or through a wrapper.
-3. **PR #2087 is already merged to `origin/main`** (commit 0b1931d3, merged 2026-10-01T12:10:16Z)
-   but is NOT in this branch (`git merge-base --is-ancestor` negative). On `origin/main`
-   `routers/tasks.ex` `handle_complete_result/2` already has three 403 clauses
-   (`:assigned_to_other_user`, `:assignee_group_not_member`, `:assignee_role_not_held`)
-   inserted immediately before the catch-all (main:378-402). **ELIXIR-DEV must start from
-   `origin/main` merged into this branch** (ORCH action, see D8). All `routers/tasks.ex` line
-   numbers in this doc are branch line numbers; anchor by function name, not by line.
+2. **Five call sites, not four** (independently confirmed by CODE-DESIGN-VALIDATOR). The
+   diagnosis lists create, completion hop and "timer sites". Actually: create
+   (`prepare_service_task_dispatch_for_create`, def `engine.ex:595`, call `engine.ex:563`),
+   completion hop (`prepare_service_task_dispatch_for_completion`, def `engine.ex:3604`, call
+   `engine.ex:3518`), timer-fire (`engine.ex:2481`), escalation-timer-fire (`engine.ex:2702`)
+   and the service-task outcome advance -- the poller re-entry after ANOTHER SERVICE_TASK
+   resolves (`engine.ex:3106`, a SERVICE_TASK -> SERVICE_TASK chain). The last three go through
+   `prepare_service_task_dispatch_abort_on_empty_url` (def `engine.ex:2868`). All five reach
+   `prepare_service_task_dispatch/5` (def `engine.ex:864`).
+3. **PR #2087 is already merged and IS an ancestor of this branch's HEAD** (commit 0b1931d3,
+   merged 2026-10-01T12:10:16Z; the origin/main merge commit 85177b39 brought it in; validator
+   re-verified with `git merge-base --is-ancestor`). `routers/tasks.ex`
+   `handle_complete_result/2` therefore already has three 403 clauses
+   (`:assigned_to_other_user`, `:assignee_group_not_member`, `:assignee_role_not_held`) at
+   `routers/tasks.ex:378-388`, with the catch-all at ~402. D4's new clause goes between them
+   (after line 388, before the catch-all). No ORCH merge action is required for #2087. Line
+   numbers for `engine.ex` in this doc were refreshed after that merge (they had shifted
+   +13..+18); every normative reference is anchored by function name first, line second --
+   if the lines drift again, the function name governs.
 4. **ISS-0933 is a different error tuple.** ISS-0933 ("complete on an instance in ERROR
    returns 500") concerns `{:instance_not_active, status}` returned BEFORE any transition,
    not `{:instance_execution_error, _, _}` which is returned AFTER the Multi commits. The two
@@ -157,8 +163,8 @@ Verified on this branch (HEAD 5fa01c94) by reading the code, not by trusting the
 
 ### 3.1 Where
 
-`resolve_service_task_arm_attrs/5` (`engine.ex:897-909`), called from
-`prepare_service_task_dispatch/5` (`engine.ex:851`). The `:inline_url` arm is unchanged. The
+`resolve_service_task_arm_attrs/5` (def `engine.ex:910`), called from
+`prepare_service_task_dispatch/5` (def `engine.ex:864`). The `:inline_url` arm is unchanged. The
 `:catalog_service` arm stops passing `nil` and instead runs the pipeline below. Resolution at
 activation (not at poll time) is deliberate: (a) the engine already freezes the rendered URL at
 INSERT (`service_task_dispatcher.ex` moduledoc OQ-3 "freeze-at-INSERT / never-re-render"),
@@ -191,18 +197,32 @@ poll-time retry loop against a deterministic failure.
 
 | Call site | Pin source | Tenant id |
 |---|---|---|
-| `start_instance` -> `prepare_service_task_dispatch_for_create` (`engine.ex:550`) | `{:pins, pins}` -- the merged own+inherited pin list already bound in the `with` chain (`engine.ex:535`). No event-log read (the INSTANCE_STARTED event is not yet written) | the `tenant_id` already in `start_instance/6` arguments |
-| completion hop (`engine.ex:3500` via `prepare_service_task_dispatch_for_completion/7`) | `{:reconstruct, projection.instance_id, prefix}` -> `PinResolver.reconstruct_effective_pins/2` | `TenantProvisioning.tenant_id_for_schema_name(prefix)` (already used at the other sites; must not come from caller input) |
-| timer-fire (`engine.ex:2463`) | `{:reconstruct, timer.instance_id, prefix}` | same derivation (already in the surrounding `with`) |
-| escalation-timer-fire (`engine.ex:2684`) | `{:reconstruct, timer.instance_id, prefix}` | same |
-| service-task outcome advance (`engine.ex:3088`) | `{:reconstruct, dispatch.instance_id, prefix}` | same |
+| `start_instance` -> `prepare_service_task_dispatch_for_create` (call `engine.ex:563`) | `{:pins, pins}` -- the merged own+inherited pin list already bound in the `with` chain of `start_instance`. No event-log read (the INSTANCE_STARTED event is not yet written) | the `tenant_id` already in `start_instance/6` arguments |
+| completion hop (`prepare_service_task_dispatch_for_completion/7`, call `engine.ex:3518`) | `{:reconstruct, projection.instance_id, prefix}` -> `PinResolver.reconstruct_effective_pins/2` | `TenantProvisioning.tenant_id_for_schema_name(prefix)` -- a NEW call at this site (the three abort-wrapper sites already bind `tenant_id` in their `with`); must not come from caller input. Failure mapping in 3.3a |
+| timer-fire (call `engine.ex:2481`) | `{:reconstruct, timer.instance_id, prefix}` | already bound as `tenant_id` in the surrounding `with` (`engine.ex:2477`) |
+| escalation-timer-fire (call `engine.ex:2702`) | `{:reconstruct, timer.instance_id, prefix}` | already bound (`engine.ex:2698`) |
+| service-task outcome advance (`do_persist_service_task_advance`, call `engine.ex:3106`) | `{:reconstruct, dispatch.instance_id, prefix}` | already bound (`engine.ex:3102`) |
+
+### 3.3a `tenant_id_for_schema_name/1` failure at the completion hop (decided)
+
+If `TenantProvisioning.tenant_id_for_schema_name(prefix)` returns an error at the completion
+hop, the result is the `:pins_unavailable`-class typed error: the hop returns the same
+`{:catalog_resolution_error, node_id, :pins_unavailable, variables}` outcome (instance ERROR via
+the sibling channel of 3.6), never a raise and never a fall-back to the live row. It is only
+evaluated lazily, i.e. only when at least one requested dispatch node is `:catalog_service`;
+inline-only hops perform no tenant-id lookup. (In practice the prefix was already resolved by
+the caller's earlier validation, so this is a defensive branch; it must still be tested at unit
+level with an unknown prefix if the harness allows, otherwise covered by the typed-return shape.)
 
 Reconstruction is **lazy and at most once per `prepare_service_task_dispatch` call**: it runs
 only if at least one requested dispatch node parses to `route_kind: :catalog_service`. An
 inline-only (or no-SERVICE_TASK) hop chain performs zero additional reads -- its behaviour and
 cost are byte-identical to today. The completion hop already holds the instance row lock (M2),
-so the read sees every committed `INSTANCE_PINS_REBOUND` and cannot race a concurrent rebind
-(`rebind_pins/3` takes the same instance lock -- verify, OQ-4).
+so the read sees every committed `INSTANCE_PINS_REBOUND` and cannot race a concurrent rebind.
+Verified fact: `PinRebind.rebind_pins/3` locks the projection row `FOR UPDATE NOWAIT`
+(`lock_projection_nowait`, `lib/letflow/engine/pin_rebind.ex:340`) -- the same row lock the
+completion hop holds -- so a rebind and a completion hop cannot interleave (a concurrent rebind
+fails fast with the existing lock-contention error rather than blocking).
 
 ### 3.4 Pipeline for one `:catalog_service` node (normative order)
 
@@ -251,8 +271,8 @@ existing readers are unaffected.
 | Site | `{:catalog_resolution_error, node_id, reason, variables}` becomes |
 |---|---|
 | create | `{:error, {:activation_failed, {:service_task_catalog_unresolved, node_id, reason}}}` -- nothing persisted for the instance (snapshot orphan row behaviour unchanged, see `engine_test.exs` comment at 1243-1246) |
-| completion hop | `{:ok, {:execution_error, error_args}}` through the existing `{:error, {:empty_url_error, error_args}}`-style channel: a **sibling** channel `{:error, {:catalog_resolution_error, error_args}}` handled at `engine.ex:3531` next to the empty-url one. `error_args.error_type = :service_task_catalog_unresolved` (the `error_type` union is open: `execution_error.ex:99-107`); `affected = {:node, node_id}`; `reason` a fixed sentence per reason class (no interpolation of variables, headers or URLs); `details = %{reason: <atom class>}` only; `variables` as the existing empty-url builder does. Instance goes to ERROR, no `service_task_dispatches` row, no TASK_COMPLETED -- identical shape to today's failure but now ONLY for genuine resolution failures |
-| timer-fire, escalation-timer-fire, service-outcome advance | `{:error, {:service_task_catalog_unresolved_not_supported_for_timer_fire, node_id, reason}}` -- same "roll back this attempt, no ExecutionError wiring on these paths" scope boundary as the existing `_abort_on_empty_url` wrapper (`engine.ex:2842-2867`). Not widened here (OQ-5) |
+| completion hop | `{:ok, {:execution_error, error_args}}` through the existing `{:error, {:empty_url_error, error_args}}`-style channel: a **sibling** channel `{:error, {:catalog_resolution_error, error_args}}` handled next to the empty-url one in the completion-hop `case` (anchor: the `{:error, {:empty_url_error, error_args}}` clause near `engine.ex:3545`). `error_args.error_type = :service_task_catalog_unresolved` (the `error_type` union is open: `execution_error.ex:99-107`); `affected = {:node, node_id}`; `reason` a fixed sentence per reason class (no interpolation of variables, headers or URLs); `details = %{reason: <atom class>}` only; `variables` as the existing empty-url builder does. Instance goes to ERROR, no `service_task_dispatches` row, no TASK_COMPLETED -- identical shape to today's failure but now ONLY for genuine resolution failures |
+| timer-fire, escalation-timer-fire, service-outcome advance | `{:error, {:service_task_catalog_unresolved_not_supported_for_timer_fire, node_id, reason}}` -- same "roll back this attempt, no ExecutionError wiring on these paths" scope boundary as the existing `_abort_on_empty_url` wrapper (`prepare_service_task_dispatch_abort_on_empty_url`, def `engine.ex:2868`). Not widened here (OQ-5, DECIDED); the typed tuple is always returned, never raised, and is covered at minimum by T8a (mandatory) |
 
 A new builder `ServiceTask.build_catalog_unresolved_error_attrs/1` (pure, beside
 `build_empty_url_error_attrs/1`, `service_task.ex:315`) produces the `standalone_error_attrs()`;
@@ -307,6 +327,7 @@ Storing it in the snapshot is audit-only and costs nothing.
 | `test/letflow/engine/service_task_dispatcher_test.exs` ~201-212 (`describe "catalog_lookup_stub/2"`) | asserts the stub's unconditional error | Delete the describe block. Do NOT replace it with a `function_exported?`/grep-shaped "stub is gone" assertion (`docs/anti-patterns.md`, "A grep-shaped acceptance criterion can be tripped by the module's own moduledoc"); the behaviour tests in the next row prove the stub's effect is gone |
 | same file ~216-300 (`describe "route_kind: :catalog_service is routed to catalog_lookup_stub/2..."`) | proves a `:catalog_service` row gives up without HTTP | Replace with: (a) row with allowed https `rendered_url` and SSRF gate ON -> dispatch goes through the gate (blocked/unresolvable host -> `:request_build_error`/network class, never the old unconditional give-up); (b) gate OFF (existing `:service_task_ssrf_validation_enabled` seam) + local test server -> `{:advance, decoded_body}`; (c) `rendered_url` nil/empty -> give up with zero requests (the live-listener "nothing ever connects" technique at ~32-76 is reusable); (d) a blocked-range URL (e.g. 169.254.169.254) is rejected before any `:httpc` call (INV-STD-1 for catalog rows) |
 | `test/letflow/engine_pin_resolver_catalog_test.exs:127-131` comment | says catalog SERVICE_TASK "always fails validate_rendered_url/1 today" | Update the comment only (the HUMAN_TASK-first fixture remains valid and becomes the basis of the new engine tests) |
+| `test/letflow/engine/service_task_test.exs:279` | asserts the `ServiceTask` moduledoc contains the term `catalog_lookup_fun` | **UNCHANGED.** OQ-6 is decided as KEEP (section 4.3): the `catalog_lookup_fun()` type and the moduledoc wording stay (annotated as superseded), so this test keeps passing and must not be edited or removed |
 
 Tests that do NOT change: `service_task_wiring_test.exs:500,539` and
 `service_task_routing_test.exs:231` use an INLINE `{{variables.missing}}` template (verified),
@@ -319,10 +340,10 @@ so they keep passing.
 | `service_task_dispatcher.ex` moduledoc lines 24-43 ("`route_kind: :catalog_service` -- stub only"), 36-43 BLOCKER paragraph, 50-52 and 77-84 mentions | Rewrite: catalog resolution happens at activation in `Letflow.Engine`; this module dispatches the frozen `rendered_url` for both route kinds |
 | `service_task_dispatcher.ex:755-766` inline comment | Remove/replace |
 | `lib/letflow/design/service_task_dispatcher.md` section 5.3 and **INV-STD-8** (line 798) and AC row 3 (line 927) | INV-STD-8 is superseded: restate as "a `:catalog_service` row is dispatched only from a URL frozen at activation from the instance's pinned catalog version; a row without a usable `rendered_url` gives up as `:request_build_error` with zero transport calls". Add a dated "superseded by ISS-0917" note rather than silently rewriting history |
-| `lib/letflow/design/service_task.md` line ~96 (table row deferring the real lookup to S6) and `service_task.ex:17,130-132` (`catalog_lookup_fun()` type, "no concrete DB-backed catalog exists") | Update/annotate: the type is now unused by the dispatcher; keep or delete the type (OQ-6 -- delete only if no remaining reference) |
+| `lib/letflow/design/service_task.md` line ~96 (table row deferring the real lookup to S6) and `service_task.ex:17,130-132` (`catalog_lookup_fun()` type, "no concrete DB-backed catalog exists") | Annotate only (OQ-6 DECIDED: KEEP). The `catalog_lookup_fun()` type and the moduledoc wording that mentions `catalog_lookup_fun` stay (`service_task_test.exs:279` pins the term); add a sentence "superseded by activation-time resolution in `Letflow.Engine` (ISS-0917); no longer consumed by the dispatcher". Update the `service_task.md` line ~96 table row and the `service_task.ex:17,130-132` "no concrete DB-backed catalog exists" claim to say the same. Do not delete the type |
 | `lib/letflow/design/req373-service-catalog-version-lifecycle.md` (~32-45, 92, 233) and `req432-rebind-pins-publish-retire-ui.md` (M5) | Add a one-line pointer: "dispatch scope gap closed by ISS-0917 (`iss0917-...md`)" |
 | `lib/letflow/service_catalog/pin_lookup.ex` moduledoc, `lib/letflow/service_catalog.ex:~109-113`, `entry.ex:~56`, `pin_resolver.ex` moduledoc "SCOPE GAP -- service_catalog (S6)" section | Sentences saying dispatch is not built must be corrected |
-| `engine.ex` comment `engine.ex:886-896` ("A route_kind: :catalog_service config reaches step 4 with rendered_url: nil -- deliberately") | Replace with the D2 pipeline description. The anti-pattern "A grep-shaped acceptance criterion can be tripped by the module's own moduledoc" applies: do not word new docs so that a grep for the removed stub name fails |
+| `engine.ex` comment above `resolve_service_task_arm_attrs` (~`engine.ex:895-909`) ("A route_kind: :catalog_service config reaches step 4 with rendered_url: nil -- deliberately") | Replace with the D2 pipeline description. The anti-pattern "A grep-shaped acceptance criterion can be tripped by the module's own moduledoc" applies: do not word new docs so that a grep for the removed stub name fails |
 | `docs/migration/decisions/0027-...md` ("What this record does not decide", sec. 7 point 2, SECURITY-REVIEWER sign-off point 3) | Records are historical and are NOT edited. DOC-UPDATER adds nothing there; the trigger condition ("once the stub is replaced") is handled in section 7 item 4 of this design |
 | `docs/issues/ISS-0917.yaml` | Standard close-out by DOC-UPDATER/ISSUE-FIXER |
 
@@ -375,8 +396,10 @@ Scope of the clause: **all** `error_type` values of the tuple, not only `service
 share the identical cause class "committed, instance now ERROR"). Narrowing to service-task
 types would give one tuple shape two different statuses for no principled reason. Consequence:
 those paths also move 500 -> 409; they have no router-level tests today, so no existing test
-breaks. Flagged for REVIEWER as an intentional, bounded widening (OQ-1 asks whether
-`variable_schema_rejected` should instead be 422).
+breaks. Flagged for REVIEWER as an intentional, bounded widening. OQ-1 is DECIDED: uniform
+409 for every `error_type`; 422 for `variable_schema_rejected` is rejected (422 means the
+request body is bad, whereas here the request was valid and stored instance state is parked in
+ERROR). REVIEWER may split it later.
 
 ### 5.3 REVIEWER sign-off required -- amendment to req085 5.5.1
 
@@ -440,8 +463,10 @@ PASS after the fix. TEST-RUNNER must record the pre-fix failure.
 | T5 | Missing pin: instance whose recorded pins lack the catalog pin (build via an injected `pin_lookup` / crafted INSTANCE_STARTED payload, per the existing `const_pin_lookup` idiom at `engine_test.exs:1220`), live ACTIVE entry exists | typed error `{:pin_missing, :catalog_entry, service_id}` class; zero dispatch rows; **mutant: replacing the error with a live-row lookup must make this test fail** (AC-5) |
 | T6 | Tenant isolation: entry `scope: :tenant` owned by tenant A; an instance in tenant B whose pin references it (injected pin_lookup) | outcome identical (same reason atom, same shape) to a pin referencing a non-existent service_id (AC-6). **Mutant: removing the visibility check must make this fail** |
 | T7 | `required_auth: :API_KEY` entry | typed error `{:required_auth_unsupported, :API_KEY}` class; zero rows; no transport call (AC-7) |
-| T8 | Chained sites: (a) SERVICE_TASK(inline) -> SERVICE_TASK(catalog) resolved through `advance_after_service_task_outcome` (forces the `:reconstruct` path with pins from the event log); (b) TIMER -> SERVICE_TASK(catalog) through the timer-fire site | row created with the pinned endpoint in each (section 3.3 table rows 3-5). Where a site's harness is disproportionate, TEST-DESIGNER documents which site is covered by T1's completion-hop path only and why |
+| T8 | Chained sites: **(a) MANDATORY:** SERVICE_TASK(inline) -> SERVICE_TASK(catalog) resolved through the service-task outcome advance (`do_persist_service_task_advance`; forces the `:reconstruct` path with pins from the event log); **(b) SHOULD:** TIMER -> SERVICE_TASK(catalog) through the timer-fire site, plus the escalation-timer site if the existing harness reaches it | (a) row created with the pinned endpoint, and a variant with an unresolvable pin returns the documented typed tuple `{:service_task_catalog_unresolved_not_supported_for_timer_fire, node_id, reason}` without raising and without a row (covers OQ-5's three non-hop sites). (b) same assertions at the timer site. T8a may not be waived; if (b) proves disproportionate, TEST-DESIGNER records which site is covered only by T8a and why |
 | T9 | Regression: inline SERVICE_TASK snapshot has NO `catalog_*` keys and identical other keys | AC-12 |
+| T10 | Timeout merge (OQ-2 DECIDED: `min`): (a) node `timeout_ms` smaller than catalog `timeout_ms` -> snapshot `"timeout_ms"` equals the node value; (b) catalog smaller than node -> equals the catalog value | assert both directions in the snapshot of the created dispatch row |
+| T11 | Completion hop with `tenant_id_for_schema_name/1` failing (section 3.3a), where the harness can inject an unknown prefix | typed `:pins_unavailable`-class outcome, no raise, no row |
 
 `test/letflow/service_catalog_resolve_pinned_version_test.exs` (new; resolver unit matrix,
 section 2.3/2.5): live current ACTIVE by `version_id`; live RETIRED current by `version_id`; archived
@@ -463,8 +488,17 @@ service; deleted live row -> `:not_found`; unknown version -> `:not_found`. Also
   and does NOT contain the node id's variables, any variable value, the service_id, or the URL.
 - **R3:** a different catch-all member (for example a forced `{:graph_structure_invalid, _}`
   where the harness allows, otherwise left to the existing unit coverage) still maps to 500.
-- Because PR #2087 is merged on main, R1/R2 must use an actor that passes
-  `Tasks.authorize_completion/3` (unassigned HUMAN_TASK is permissive; or assign to the actor).
+- **Authorization for R1/R2 (corrected).** PR #2087 is on this branch, so
+  `POST /tasks/:id/complete` enforces `Tasks.authorize_completion/3`. A HUMAN_TASK is NOT
+  unassigned: CHK-09 requires `attributes.role` on every HUMAN_TASK, so the fixture graph's
+  `"role" => "approver"` yields `assignee_type "ROLE"` / `assignee_ref "approver"`
+  (`resolve_assignee/1`). The calling actor must hold that role. Use the existing idiom in
+  `test/letflow/routers/tasks_test.exs` (see the "REQ-085 AC1" test, ~lines 1298-1335, and the
+  helpers `insert_group_member!/3` ~136 and `insert_role!/3` ~150): `insert_user!` the caller,
+  `insert_group!` an approvers group, `insert_group_member!(tenant, group.id, caller.id)`,
+  `insert_role!(tenant, "approver", group.id)`, then build the request with
+  `roles: ["PLATFORM_ADMIN"]` and `user_id: caller.id`. R1 and R2 use the catalog-graph fixture
+  with its HUMAN_TASK role set to `"approver"` so the same wiring applies.
 
 ### 6.4 e2e pipeline spec -- `web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts` (FRONTEND-DEV)
 
@@ -485,15 +519,25 @@ Decision:
 1. **State addition.** Add `pinDispatchCaseId` (a *second* in-flight case, started in step 02
    from the same definition via the existing `startInstanceViaGui`, so it pins v1 exactly like
    the long-running case). Add it to the cleanup list.
-2. **Controllable endpoints (ISS-0930 precedent).** Read `process.env.SERVICE_TASK_MOCK_BASE_URL`
-   with the same default the QA seed uses (httpbin.org family, see `docs/issues/ISS-0930.yaml`
-   residual_risk and `lib/letflow/design/iss0930-seed-service-task-endpoints.md`). In step 01
-   register v1 with `endpoint_url = <mock>/anything/shared-connection/v1` (2xx + JSON object
-   body, which `classify_failure_kind/1` requires); in step 03 publish v2 with
-   `endpoint_url = <mock>/status/503` (a deliberate trap: if the dispatch wrongly used the live
-   v2 it would fail/retry and the case would not advance). The URL values are not asserted
-   anywhere else in the spec today (verified: only lines 178 and 275 set them), so changing
-   them is safe. Both must be https and public.
+2. **Controllable endpoints (ISS-0930 precedent).** Let `base` = `process.env.SERVICE_TASK_MOCK_BASE_URL`
+   with default `https://httpbin.org/anything` (the same default the QA seed uses; see
+   `lib/letflow/design/iss0930-seed-service-task-endpoints.md` ~line 148 and
+   `docs/issues/ISS-0930.yaml`).
+   - **v1 endpoint** (step 01 registration) = `base + '/shared-connection/v1'`, i.e. by default
+     `https://httpbin.org/anything/shared-connection/v1` (httpbin `/anything` answers 200 with a
+     JSON object body, which `classify_failure_kind/1` requires).
+   - **v2 trap endpoint** (step 03 publish) = `new URL(base).origin + trapPath`, where `trapPath`
+     = `process.env.SERVICE_TASK_MOCK_TRAP_PATH` with default `/status/503`; by default
+     `https://httpbin.org/status/503`. It MUST be built from the ORIGIN, not from `base + path`:
+     `https://httpbin.org/anything/status/503` is answered 200 by httpbin `/anything`, so the trap
+     would succeed and the spec could not distinguish v1 from v2.
+   - **Non-httpbin mock.** If the operator's `SERVICE_TASK_MOCK_BASE_URL` points at a mock that is
+     not httpbin-compatible, the operator sets `SERVICE_TASK_MOCK_TRAP_PATH` to any path on the
+     same origin that answers a non-2xx status (and the v1 path must answer 2xx JSON object). If
+     no such trap path exists, the operator sets `E2E_SKIP_SERVICE_TASK_POLL=1` (item 4), which
+     disables only the COMPLETED-poll assertion; the unconditional assertions (item 5) still run.
+   The URL values are not asserted anywhere else in the spec today (only lines 178 and 275 set
+   them), so changing them is safe. Both must be https and public (UrlValidator).
 3. **New step "04b" (placed after step 04 and before step 05, so existing step numbers and
    the 05-07 rebind flow are untouched):** via API, find the pending task of
    `pinDispatchCaseId` (`GET /api/v1/tasks?instance_id=...&status=...`, router
@@ -506,21 +550,43 @@ Decision:
    (c) `GET .../history` contains no `EXECUTION_ERROR` event.
    Because v2's endpoint is a failing trap, reaching COMPLETED proves the dispatch used v1's
    pinned endpoint (this is the e2e's substitute for observing `rendered_url` directly).
-4. **Honest limits to state in the spec header (replace the "Scope note"):** (b) depends on the
-   poller running in the target environment and on outbound access to the mock host. If the
-   target cannot satisfy that, the spec must NOT silently weaken: it fails the step when the
-   poller is expected (`assertServiceReadiness` already gates the environment), and the
-   endpoint-identity assertion remains covered at the ExUnit level (T1/T2). If the
-   mock host/poller is unavailable the (b)-(c) assertions are the only part allowed to be
-   skipped via an explicit, loudly-logged `test.skip` keyed on an env var, never an empty
-   assertion (OQ-7 asks the orchestrator whether the e2e environment runs the poller).
-5. Assertions (a) and (c)'s "no EXECUTION_ERROR at the moment of completion" need no network
-   and no poller and are unconditional.
-6. Authorization: PR #2087 (merged) makes the completing actor subject to
-   `Tasks.authorize_completion/3`. The fixture's HUMAN_TASK attrs are `assignee_type: 'user',
-   assignee_ref: 'admin-user'` (spec line 204); the completing token must be that user, or the
-   fixture assignee adjusted (FRONTEND-DEV verifies against `Tasks.authorize_completion/3`;
-   do not weaken the check).
+4. **Honest limits and the skip switch (OQ-7 DECIDED).** The COMPLETED-poll assertion (3b) is
+   **ENFORCED by default**. It is skipped only when the environment variable
+   `E2E_SKIP_SERVICE_TASK_POLL` equals `1`; when skipped the spec prints a loud
+   `console.warn` naming the variable and the lost coverage, and adds a Playwright test
+   annotation (`test.info().annotations.push({ type: 'skipped-assertion', description: ... })`)
+   so the skip is visible in the report. The spec header ("Scope note" replacement) documents:
+   the dispatcher poller defaults ON outside test config (`start_service_task_dispatcher`;
+   only `config/test.exs` sets false) and ran on QA (ISS-0930 recorded a real dispatch row
+   advancing); the target needs outbound HTTPS to a public mock host (loopback and
+   `example.test` are blocked/unresolvable under UrlValidator). The endpoint-identity proof at
+   the data level stays in ExUnit T1/T2. No empty assertion is ever substituted.
+5. Unconditional assertions (no network, no poller): (a) HTTP 200 and `instance_status`
+   `active`; (c-immediate) `GET .../history` right after completion contains no
+   `EXECUTION_ERROR` event and contains `TASK_COMPLETED`.
+6. **Completing identity (prescribed fixture change, not deferred).** Measured problem: the
+   current fixture HUMAN_TASK is `attributes: { role: 'admin-user', assignee_type: 'user',
+   assignee_ref: 'admin-user' }` (spec line 204). `resolve_assignee/1` stores `assignee_type`
+   verbatim and reads the ref from `attributes.role`; `Tasks.apply_completion_authz/3`
+   (`routers/tasks.ex:540-565`) has clauses only for `nil`, `'USER'`, `'GROUP'`, `'ROLE'`
+   (uppercase), so a lowercase `'user'` task matches no clause (FunctionClauseError -> 500), and
+   even uppercase would compare the literal `'admin-user'` with the caller's UUID actor id.
+   Required change, following the idiom of
+   `web/tests/e2e/pipelines/shipment-attach-delivery-note*.pipeline.e2e.spec.ts` (HUMAN_TASK node
+   built with `role` = the user's JWT subject, `assignee_type: 'user'` documentary, and the
+   completing token being that same user):
+   - import `jwtSubject` from `../pipeline` (already exported; the shipment spec imports it);
+   - in the setup step that stores `pl.state.adminToken`, also store
+     `adminSub = jwtSubject(adminToken)` in the pipeline state;
+   - set the HUMAN_TASK attributes to `{ role: adminSub, assignee_type: 'USER', assignee_ref: adminSub }`
+     (`role` is what the engine actually reads for the ref; `assignee_type` is the UPPERCASE
+     `'USER'` so the stored task matches the `'USER'` authorization clause, whose comparison is
+     against the caller's actor id = the token `sub`);
+   - complete the task in step 04b with the SAME `adminToken`.
+   The `Tasks.authorize_completion/3` check is not weakened. The sibling specs that use
+   lowercase `assignee_type` with a literal ref (attachment-cross-tenant,
+   platform-definition-promotion-approved / -conflict-rejected / -rollback) have the same latent
+   defect; that is OUT of scope here and is filed as a separate issue by ORCH.
 
 ### 6.5 Scenario `test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml`
 
@@ -599,10 +665,10 @@ whose URL is tenant-authored for `scope: :tenant` entries).
 used (`entry.ex:93-117`, `version.ex:22-36`); `service_task_dispatches.config_snapshot` is a
 `:map` (jsonb) column and gains keys only. No new index is required: both new reads are by
 primary key (`service_catalog.service_id`, `service_catalog_versions.version_id`) except the
-rebound `(service_id, version)` lookup on the archive -- **verify** that
-`service_catalog_versions` has a unique index covering `(service_id, version)`
-(`check_publishable_version/2` queries it); if the table lacks one the lookup is still correct
-(tiny table), and adding an index is explicitly deferred (OQ-8), not part of this fix.
+rebound `(service_id, version)` lookup on the archive, which is served by the existing unique
+index on `service_catalog_versions(service_id, version)` created in
+`priv/repo/migrations/20260921000004` (line 91; confirmed by CODE-DESIGN-VALIDATOR). No index
+is added.
 
 ---
 
@@ -613,8 +679,8 @@ rebound `(service_id, version)` lookup on the archive -- **verify** that
 | File | Change |
 |---|---|
 | `lib/letflow/service_catalog.ex` | add `resolve_pinned_version/3`; extract shared visibility predicate used by `get_for_tenant/2` |
-| `lib/letflow/engine.ex` | D2: `resolve_service_task_arm_attrs`, `prepare_service_task_dispatch` (/6), `config_snapshot_map` optional audit arg, wrappers at the five call sites, new error channel at the completion hop and the `_abort_` wrapper, comment at 886-896 |
-| `lib/letflow/engine/service_task.ex` | `build_catalog_unresolved_error_attrs/1`; annotate/remove `catalog_lookup_fun()` type (OQ-6) |
+| `lib/letflow/engine.ex` | D2: `resolve_service_task_arm_attrs`, `prepare_service_task_dispatch` (/6), `config_snapshot_map` optional audit arg, wrappers at the five call sites, new error channel at the completion hop and the `_abort_` wrapper, the `:catalog_service` explanatory comment above `resolve_service_task_arm_attrs` (~`engine.ex:895-909`) |
+| `lib/letflow/engine/service_task.ex` | `build_catalog_unresolved_error_attrs/1`; annotate (do NOT remove) the `catalog_lookup_fun()` type and moduledoc wording as superseded (OQ-6 DECIDED: keep) |
 | `lib/letflow/engine/service_task_dispatcher.ex` | delete stub, snapshot-driven `:catalog_service` arm, moduledoc |
 | `lib/letflow/routers/tasks.ex` | D4 clause + catch-all comment edit (only if D4 approved) |
 | `lib/letflow/design/req085-task-routes-write.md` | 5.5.1 amendment (section 5.3) |
@@ -629,13 +695,12 @@ read-only), `lib/letflow/engine/transition.ex`, `http_transport/3`.
 
 ### 9.2 Coordination
 
-- **PR #2087 (ISS-0942) -- MERGED on origin/main (0b1931d3), not in this branch.** It rewrote
-  `Routers.Tasks.handle_complete/3` (calls `Tasks.authorize_completion/3`), added three 403
-  clauses immediately before the catch-all (the exact insertion point of D4's clause), and edited
-  doc-comment hunks in `engine.ex` (moduledoc ~120-135, ~1931; no overlap with activation code).
-  **ORCH action:** merge/rebase `origin/main` into `feature/WF03-ISS0917-20261001` BEFORE
-  dispatching ELIXIR-DEV (branch line numbers in this doc shift in `routers/tasks.ex` and
-  `engine.ex` comments only). The D4 clause goes AFTER the three 403 clauses.
+- **PR #2087 (ISS-0942) -- MERGED and already an ancestor of this branch (0b1931d3).** It
+  rewrote `Routers.Tasks.handle_complete/3` (calls `Tasks.authorize_completion/3`) and added
+  three 403 clauses at `routers/tasks.ex:378-388`, immediately before the catch-all (~402).
+  D4's clause goes AFTER those three 403 clauses and BEFORE the catch-all. No merge action is
+  needed for #2087; ELIXIR-DEV should still `git fetch` and merge `origin/main` immediately
+  before its final push (hot-file merge races), but nothing is required up front.
 - **PR #2089 (ISS-0918, open)** touches `instances.ex`, `routers/instances.ex`,
   `routers/admin_services.ex`, tests, `docs/issues/ISS-0918.yaml`. No file overlap with this
   design (`gh pr diff 2089 --name-only`). Semantic overlap only on `retry_policy` surfacing:
@@ -676,13 +741,19 @@ read-only), `lib/letflow/engine/transition.ex`, `http_transport/3`.
 
 | ID | Question | Default if unanswered |
 |---|---|---|
-| OQ-1 | Should `variable_schema_rejected` (a data-validation cause) map to 422 rather than the uniform 409 for `{:instance_execution_error, _, _}`? | Uniform 409; REVIEWER may split |
-| OQ-2 | Is `min(node timeout_ms, catalog timeout_ms)` the desired merge, versus catalog-wins? | `min` (conservative; bounded by both parties) |
-| OQ-3 | Should `ServiceCatalog.delete/1` be blocked while non-terminal instances are pinned to the service (today it checks only ACTIVE definitions)? Out of scope here; a deleted entry makes pinned instances ERROR with `:version_not_found` | File a follow-up issue; not part of this fix |
-| OQ-4 | Confirm `PinRebind.rebind_pins/3` takes the same instance row lock the completion hop holds (so reconstruct-in-hop cannot race a rebind) | If it does not, the worst case is dispatching the pre-rebind version for one hop -- still a valid pin; ELIXIR-DEV verifies and notes |
-| OQ-5 | Timer-fire / escalation / service-outcome sites do not route catalog errors into ExecutionError (they roll back the attempt). Should they? | No -- same scope boundary as the existing empty-URL wrapper; separate issue if desired |
-| OQ-6 | Delete the now-unused `ServiceTask.catalog_lookup_fun()` type or keep it? | Delete if no remaining reference after the stub is removed; otherwise keep with a note |
-| OQ-7 | Does the e2e target environment run the SERVICE_TASK dispatcher poller (`:start_service_task_dispatcher`) and have outbound HTTPS to the mock host? Determines whether step 04b's COMPLETED assertion is enforceable or must be the loud-skip variant | ORCH confirms before FRONTEND-DEV starts |
-| OQ-8 | Is there a unique index on `service_catalog_versions (service_id, version)`? Needed only for efficiency of rebound lookups | Not added by this fix |
-| OQ-9 | Child instances started by SUB_PROCESS do not call `prepare_service_task_dispatch` from `sub_process.ex` (grep-verified: no SERVICE_TASK handling there); a child whose first node after START is a SERVICE_TASK is unchanged by this fix | Out of scope; unchanged pre-existing behaviour |
-| OQ-10 | `PinLookup.catalog_lookup/1` is untenanted (diagnosis side-finding). Not changed here | ORCH files a separate issue |
+Status: OQ-1, OQ-2, OQ-4..OQ-8 are DECIDED/answered (rulings of CODE-DESIGN-VALIDATOR round 1,
+adopted); OQ-3, OQ-9, OQ-10 are accepted out-of-scope items with the follow-up owner named. None
+blocks ELIXIR-DEV.
+
+| ID | Item | Status / ruling |
+|---|---|---|
+| OQ-1 | `{:instance_execution_error, _, _}` status for every `error_type` | **DECIDED:** uniform 409 (section 5.2). 422 for `variable_schema_rejected` rejected. REVIEWER may split later |
+| OQ-2 | Timeout merge | **DECIDED:** `min(node timeout_ms, catalog timeout_ms)`; test T10 asserts both directions |
+| OQ-3 | `ServiceCatalog.delete/1` is not blocked while non-terminal instances are pinned to the service (it checks only ACTIVE definitions); a deleted entry makes pinned instances ERROR with `:version_not_found` | Accepted, out of scope; ORCH files a follow-up issue |
+| OQ-4 | Rebind vs completion hop race | **ANSWERED (fact):** `PinRebind.rebind_pins/3` locks the projection `FOR UPDATE NOWAIT` (`pin_rebind.ex:340`), the same row lock the completion hop holds (section 3.3). No race |
+| OQ-5 | Timer-fire / escalation / service-outcome sites do not route catalog errors into ExecutionError | **DECIDED:** no -- same scope boundary as the existing empty-URL wrapper; they return the documented typed tuple (never raise); T8a (mandatory) covers it |
+| OQ-6 | `ServiceTask.catalog_lookup_fun()` type and moduledoc wording | **DECIDED: KEEP**, annotate as superseded by activation-time resolution (ISS-0917); `service_task_test.exs:279` is unchanged (section 4.2/4.3) |
+| OQ-7 | e2e COMPLETED assertion enforceability | **DECIDED:** assertion ENFORCED by default; skipped only when `E2E_SKIP_SERVICE_TASK_POLL=1` (loud warning + annotation); poller is on by default outside test config and ran on QA (ISS-0930); target needs outbound HTTPS to a public mock host (section 6.4 items 2, 4) |
+| OQ-8 | Unique index on `service_catalog_versions(service_id, version)` | **ANSWERED (fact):** exists (`priv/repo/migrations/20260921000004`, line 91); nothing to add (section 8) |
+| OQ-9 | SUB_PROCESS child instances do not call `prepare_service_task_dispatch` from `sub_process.ex` (grep-verified); a child whose first node after START is a SERVICE_TASK is unchanged | Out of scope; unchanged pre-existing behaviour |
+| OQ-10 | `PinLookup.catalog_lookup/1` is untenanted (diagnosis side-finding), not changed here | Out of scope; ORCH files a separate issue |

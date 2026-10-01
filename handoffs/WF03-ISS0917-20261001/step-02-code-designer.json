@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0917-20261001/step-02-code-designer.json",
   "created_at": "2026-10-01T12:13:53Z",
   "started_at": "2026-10-01T12:13:53Z",
-  "completed_at": "2026-10-01T12:20:37Z",
-  "status": "PENDING",
+  "completed_at": "2026-10-01T12:28:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -53,24 +53,19 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Design written to lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md (no implementation code, no fenced code blocks). Key decisions: D1 new ServiceCatalog.resolve_pinned_version(service_id, {:version_id,id}|{:version,v}, tenant_id) -> {:ok, map}|{:error,:not_found}; live row (incl RETIRED current) else service_catalog_versions; visibility inherited from the live row via a predicate shared with get_for_tenant/2; invisible==not found. NEW FINDING: rebound pins (INSTANCE_PINS_REBOUND) have resolved_id nil, so resolution must also work by (service_id, version). D2 resolve at activation in Engine for :catalog_service: create uses in-scope pins, other 4 sites (completion hop, timer, escalation timer, service-outcome advance - 5 sites total, diagnosis said 4) lazily use PinResolver.reconstruct_effective_pins; render endpoint_url via render_service_task_url, freeze rendered_url + catalog_version_id/version/retry_policy(audit only) in config_snapshot; timeout=min(node,catalog); typed errors (pin_missing, version_not_found, pins_unavailable, required_auth_unsupported) with NO live-row fallback; new error_type :service_task_catalog_unresolved. D3 delete catalog_lookup_stub/2, dispatcher :catalog_service arm becomes snapshot-driven sharing http_transport + SSRF gate; enumerated tests (engine_test.exs:1232-1247 flip, dispatcher_test 201-300 replace) and doc claims to change. D4 include a dedicated clause {:instance_execution_error,error_type,_} -> 409 naming only error_type; explicit amendment to req085 5.5.1, REVIEWER sign-off required, fallback = drop D4; ISS-0933 (different tuple) untouched. D5 fail-first plan T1-T9 + resolver matrix + router R1-R3 + e2e (second in-flight case, new step 04b completing HUMAN_TASK, v1 endpoint=mock 2xx, v2=trap /status/503, SERVICE_TASK_MOCK_BASE_URL precedent; scenario yaml header comment only). D6 required_auth != NONE out of scope and fails closed; SSRF gate unchanged; decision-0027 INV-9 trigger flagged for SECURITY-REVIEWER (registration-time URL check absent). D7 no migration. D8 owned files; PR #2087 is already MERGED on origin/main (not in branch) - ORCH must merge origin/main before ELIXIR-DEV; PR #2089 no file overlap. 10 open questions listed (OQ-1..10).",
+    "summary": "Rework iteration 1 applied in place to lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md (no implementation code, no fenced blocks). Blocking: (1) e2e trap URL now v1=<base>/shared-connection/v1 (base default https://httpbin.org/anything), v2 trap=new URL(base).origin + SERVICE_TASK_MOCK_TRAP_PATH (default /status/503); non-httpbin mock -> override trap path or E2E_SKIP_SERVICE_TASK_POLL=1. (2) Concrete e2e fixture change: jwtSubject(adminToken) -> HUMAN_TASK role/assignee_ref = sub, assignee_type 'USER', cites shipment-attach-delivery-note idiom and Tasks.apply_completion_authz/3 (tasks.ex:540-565); sibling-spec latent defect out of scope (ORCH files). (3) R1/R2 corrected: role 'approver' -> ROLE assignee; insert_user!/insert_group!/insert_group_member!/insert_role! idiom at test/letflow/routers/tasks_test.exs ~1298-1335 (helpers ~136/150). (4) OQ-6 decided KEEP catalog_lookup_fun type + moduledoc, annotate as superseded; service_task_test.exs:279 added to inventory as unchanged. (5) Deferral language removed: env var E2E_SKIP_SERVICE_TASK_POLL=1 named with polarity (enforced by default, loud warn + annotation); OQ-7 decided; OQ-4 and OQ-8 replaced by verified facts (pin_rebind.ex:340 lock; unique index migration 20260921000004:91); D7 'verify' dropped. Non-blocking: 0.1(3)/9.2 fixed (PR #2087 is an ancestor; 403 clauses tasks.ex:378-388, D4 clause between them and catch-all ~402); engine line numbers refreshed and anchored by function name; new 3.3a states tenant_id_for_schema_name failure at completion hop -> :pins_unavailable typed error, never raise; T8a made MANDATORY; OQ-1 (uniform 409, 422 rejected) and OQ-2 (min both directions, new test T10) DECIDED; added T11 for 3.3a.",
     "artifacts_out": [
       "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md"
     ],
     "issues": [
       {
         "severity": "MINOR",
-        "description": "Handoff premise stale: PR #2087 is already merged to origin/main (0b1931d3) but not in branch feature/WF03-ISS0917-20261001; routers/tasks.ex and engine.ex comment line numbers differ. ORCH should merge origin/main before dispatching ELIXIR-DEV.",
+        "description": "Sibling pipeline specs (attachment-cross-tenant, platform-definition-promotion-*) use lowercase assignee_type with a literal ref: latent defect under ISS-0942 authorization; ORCH to file separate issue (not fixed here).",
         "affected_requirement": null
       },
       {
         "severity": "MINOR",
-        "description": "Diagnosis corrections: rebound pins carry resolved_id nil (resolver must support (service_id, version)); five (not four) prepare_service_task_dispatch call sites; ISS-0933 concerns {:instance_not_active,_}, a different tuple from {:instance_execution_error,_,_}.",
-        "affected_requirement": null
-      },
-      {
-        "severity": "MINOR",
-        "description": "Decision 0027 anticipated this change: registration-time SSRF check on POST /service-catalog absent; design relies on dispatch-time UrlValidator gate; SECURITY-REVIEWER must decide if a follow-up issue is needed. Also file follow-ups: required_auth support, PinLookup.catalog_lookup untenanted, ServiceCatalog.delete vs pinned instances.",
+        "description": "Follow-ups for ORCH: required_auth support, registration-time URL/SSRF check (decision 0027 trigger, SECURITY-REVIEWER decides), PinLookup.catalog_lookup untenanted, ServiceCatalog.delete vs pinned instances.",
         "affected_requirement": null
       }
     ],

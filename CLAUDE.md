@@ -75,7 +75,7 @@ Routing logic, gates, rework/escalation rules, stage-gate enforcement:
 
 **Default `AGENT_ID`:** if none is stated, default to `ORCH`. `ORCH`
 may act directly instead of routing through the full chain only when a
-change passes all six checks of the sizing rule in
+change passes all seven checks of the sizing rule in
 `docs/agents/ORCHESTRATOR.md` §10 — run that checklist rather than
 judging by feel. Anything else goes through the full workflow; there is
 no human backstop to catch a skipped validator.

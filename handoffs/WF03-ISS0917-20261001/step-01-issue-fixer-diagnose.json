@@ -1,0 +1,50 @@
+{
+  "handoff_id": "fbe8dfad-b418-4660-9c90-184472550f92",
+  "run_id": "WF03-ISS0917-20261001",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0917-20261001/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-10-01T12:09:19Z",
+  "started_at": "2026-10-01T12:09:19Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0917": "id: ISS-0917\ntitle: \"Catalog SERVICE_TASK cannot execute: ServiceTaskDispatcher.catalog_lookup_stub/2 is an unconditional {:error,:not_registered}; POST /tasks/:id/complete returns 500 when the next node is a catalog-only SERVICE_TASK\"\ndiscovered_by: RELEASE-VALIDATOR\ndiscovered_in_run: WF02-REQ432-20260930 (filed by ORCH)\ndiscovered_at: \"2026-09-30T20:50:51Z\"\nseverity: MAJOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by WF02-REQ432-20260930 (REQ-432 live pipeline run,\n  test/reports/report-20260930-WF02-REQ432-20260930.yaml; step-02b-rework1-frontend-\n  dev.json). A process whose SERVICE_TASK references a service_id (catalog_entry pin) cannot\n  ever execute: Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2\n  (lib/letflow/engine/service_task_dispatcher.ex ~411-416) returns {:error,:not_registered}\n  unconditionally, so activation renders an empty URL. Measured live: completing the\n  preceding human task hops synchronously into the SERVICE_TASK, the engine persists only\n  EXECUTION_ERROR (affected node n3, error_type service_task_url_rendered_empty, no\n  TASK_COMPLETED for the completed task) and POST /api/v1/tasks/:id/complete answers HTTP\n  500 (probably needs a non-500 mapping for {:instance_execution_error,_,_} in\n  lib/letflow/routers/tasks.ex). Independent of service retirement. Consequence: scenario\n  platform-instance-pin-survives-catalog-change EO-001/EO-004 'the in-flight step completes\n  without error' cannot be met on success; REQ-432's pipeline spec accepts the measured\n  outcome (B) as a documented limitation. Needed: resolve service_id through the instance's\n  PINNED service_catalog version (Letflow.Engine.PinResolver / ServiceCatalog lookup) in the\n  dispatcher, then tighten the REQ-432 spec step 03 to require success. SCOPE GAP already\n  noted in design docs lib/letflow/design/req373-service-catalog-version-lifecycle.md and\n  lib/letflow/design/req432-rebind-pins-publish-retire-ui.md (M5). Owner ELIXIR-DEV (via\n  CODE-DESIGNER). Severity MAJOR.\n  NOTE (added by ORCH at close-out of the cancelled duplicate run WF02-REQ432-20260930): the\n  REQ-432 implementation that actually landed on main is PR #2055 (5d7ca7bf), not this run's\n  branch. Its spec (web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change\n  .pipeline.e2e.spec.ts, header 'Scope note (deliberately not exercised): SERVICE_TASK dispatch')\n  never drives a token onto the SERVICE_TASK node, so on main the scenario's 'the in-flight step\n  completes without error' (EO-001/EO-004 step 3) is unverified; the evidence of this stub's effect\n  is the duplicate run's live finding (archived on remote branch feature/WF02-REQ432-20260930,\n  handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json and step-05-release-validator.json).\nsource_reports:\n  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json\n  - test/reports/report-20260930-WF02-REQ432-20260930.yaml\naffected_files:\n  - lib/letflow/engine/service_task_dispatcher.ex\n  - lib/letflow/routers/tasks.ex\nqueue_ref: Q-907  # queue allocated issue_ref ISS-0907, which collides with an existing local file; local filename kept as ISS-0917 (next free on origin/main) and GH-2057 retitled to match\ngithub_ref: GH-2057\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0917.yaml",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "lib/letflow/design/req432-rebind-pins-publish-retire-ui.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0917-20261001",
+    "queue_task_id": 907,
+    "github_issue": 2057
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup in docs/issues/*.yaml for resolved entries about SERVICE_TASK dispatch / catalog_lookup / pin resolution / instance_execution_error 500) + Step 1 (diagnose), combined. Work in the main checkout C:/Users/tvolo/dev/ai-dala/letflow-3 on branch feature/WF03-ISS0917-20261001 (already created and pushed; do not switch branches). DEFECT per context.source_text.ISS-0917. DO NOT trust the report's prose: reproduce (write a throwaway scratch test or run existing ones; MIX_ENV=test mix test works here, Postgres is up, see docs/anti-patterns.md for env notes). Determine and report with file:line evidence: (1) exactly how ServiceTaskDispatcher.catalog_lookup_stub/2 is called (~line 705) and what inputs (tenant_id? instance? pinned catalog version id? service_id) are available at that point; (2) the service catalog data model: lib/letflow/ service_catalog modules, Letflow.Engine.PinResolver, how an instance pins a service_catalog version / catalog_entry, what a looked-up entry must yield (url template? method? headers? auth? retry_policy?) so that the dispatcher can run it, and how the non-catalog (inline URL) SERVICE_TASK path already works so the fix can reuse it; (3) the REQ-373 / REQ-432 design docs (lib/letflow/design/req373-service-catalog-version-lifecycle.md, req432-rebind-pins-publish-retire-ui.md M5) statements about this scope gap; (4) POST /api/v1/tasks/:id/complete in lib/letflow/routers/tasks.ex: what error tuple reaches the router and the status mapping today; read lib/letflow/design/req085*.md section 5 (the row mapping {:instance_execution_error,_,_} to 500) and any decision record in docs/migration/decisions/ that bears on it, and state whether 500 is a deliberate decision or an unreviewed default, and what mapping would be right when the cause is a SERVICE_TASK execution failure (note: after a fix the happy path should succeed with 2xx; the question is whether a failing service task should still 500). NOTE open PR #2087 (fix/ISS-0942, assignee-authorization on POST /tasks/:id/complete) and PR #2089 (ISS-0918, service retry_policy) touch nearby files - run `gh pr diff 2087 --name-only` / 2089 and report overlap risk with lib/letflow/routers/tasks.ex and service_task_dispatcher.ex. (5) which existing tests cover the dispatcher/catalog and the REQ-432 pipeline spec (find under test/ and web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts; also scenario platform-instance-pin-survives-catalog-change EO-001/EO-004) and what 'step 03' currently asserts. (6) tenant-data-path notes: where tenant scoping applies to catalog lookups (SECURITY-REVIEWER will gate this). Put the diagnosis in result.summary (root cause, affected files, what a fix must change, risks, whether a migration is needed, severity confirmation). Do NOT implement the fix and do NOT leave any lib/ or test/ changes behind: `git status --porcelain lib/ test/ web/` must be empty when you finish (scratch repro must be deleted). Commit nothing except your handoff file edits; ORCH commits. Complete the handoff per HANDOFF_PROTOCOL.md section 3 (status COMPLETED, result.status PASS, next_action 'Route to CODE-DESIGNER for fix design').",
+    "acceptance_criteria": [
+      "Root cause stated with file:line evidence and a real reproduction output quoted",
+      "Step 0.5 registry lookup outcome stated",
+      "The 500 mapping decision (req085 section 5 / decision records) analysed with a recommendation",
+      "Overlap with open PRs 2087/2089 reported",
+      "No lib/ test/ web/ changes left behind"
+    ]
+  }
+}

@@ -4295,3 +4295,48 @@ deferred check exists. ISS-0942's own fix (`lib/letflow/tasks.ex`'s
 additionally corrected both stale prose sources — `Letflow.Engine`'s moduledoc and
 `lib/letflow/design/req048-task-completion.md` §12 — in place, so the record now says what
 actually exists rather than what was once merely planned.
+
+## Generalizing an existing template-rendering function to a new field without re-checking the new field's own output-format escaping needs (2026-10-01, SECURITY-REVIEWER/REVIEWER, ISS-0926/PR #2113)
+
+**What happened.** ISS-0926's own diagnosis and first design pass (correctly) framed the
+fix as "apply the same `{{variables.KEY}}` renderer REQ-215 already built for
+`url_template`, to `body_template` too" — same regex, same `render_service_task_value/1`
+value-coercion, same `nil`-passthrough. That framing is right about the *template syntax*
+(no new placeholder grammar, no new parsing) but silently carried over an assumption that
+only held for the first field: `url_template`'s rendered output is spliced into a URL,
+which has no delimiter character a plain string substitution can break; `body_template`'s
+rendered output is spliced between an existing pair of `"` characters inside hand-authored
+JSON text, where an unescaped `"` or control character in the substituted *value* closes
+the JSON string early and lets the rest of the attacker-influenced value be interpreted as
+new JSON structure — forging sibling keys or shadowing an existing key via a duplicate.
+REQ-215's own design doc had already named this gap in its own Open Question 2 ("left
+exactly as REQ-214 shipped it (raw)... flagged rather than silently rendered or silently
+left broken") and this fix's own OQ-2 flagged it again — so the risk was twice written
+down in prose — but the first implementation pass still shipped the plain, unescaped
+`render_service_task_template/2` applied directly to `body_template`, and it took
+SECURITY-REVIEWER's gate catching it mid-review (not CODE-DESIGN-VALIDATOR, which had
+already PASSed the design with OQ-2 merely "flagged," and not the design author, who
+flagged the exact mechanism but didn't treat it as blocking) to turn the flagged risk into
+an actual required fix (`json_string_escape/1`, `render_service_task_body_template/2`).
+
+This is a recognizable shape, not a one-off: "field B's output format is a sibling of
+field A's, so the renderer/validator/serializer that already works for A can just be
+reused or extended to B" is true about the *mechanism* far more often than it is true
+about the *safety properties* of the surrounding context each field's output lands in. A
+URL, a JSON string literal, a shell argument, an HTML attribute, and a SQL string literal
+are all "just a string" at the type level, but each has its own escaping/quoting contract,
+and a renderer built to satisfy one of them carries no evidence it satisfies any of the
+others — the fact that it compiles, passes existing tests, and "looks like" the same kind
+of substitution is not evidence either way.
+
+**Correct alternative.** When a design or fix proposes reusing an existing
+rendering/escaping/serialization function for a new field, check the new field's own
+embedding context specifically — what delimiter or structural character would let a
+substituted value escape the intended "just data" position — rather than accepting "it's
+the same `{{variables.KEY}}` syntax" as proof the reuse is safe. If a design doc's own Open
+Questions section already names this exact risk for the field being newly activated (as
+REQ-215's OQ-2 did here), treat that as a required pre-merge check for SECURITY-REVIEWER,
+not an optional note CODE-DESIGN-VALIDATOR can wave through with "flagged, not resolved."
+ISS-0926's own design doc §7 did mark SECURITY-REVIEWER as a judgment call rather than an
+auto-skip for exactly this reason — the lesson is to let a design doc's own named risk
+raise, not lower, the bar for whether the security gate runs.

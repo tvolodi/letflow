@@ -116,7 +116,11 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
   # Guards: each returns :ok | {:error, term}
   # ---------------------------------------------------------------------------------
 
-  defp check_t1(doc), do: ok_if(doc["version"] == "1.2", {:version, doc["version"]})
+  # ISS-0926 bumped the shipped fixture to "1.3" (body_template added to
+  # regulatory-auto-escalation, new node remediation-unresolved-escalation
+  # split out from e10's own inbound meaning -- see that fix's own design
+  # doc §4.5).
+  defp check_t1(doc), do: ok_if(doc["version"] == "1.3", {:version, doc["version"]})
 
   defp check_t2(doc),
     do:
@@ -171,6 +175,11 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
         :legacy_timeout_node_or_e4
       )
 
+  # ISS-0926 split the former shared node into two: regulatory-auto-escalation
+  # now carries exactly one inbound edge (the 21-day SLA-breach timer path)
+  # and a static body_template reporting reason sla_breach_30_days;
+  # remediation-unresolved-escalation (check_t8b/1 below) carries the other
+  # (e10, remediation_unresolved).
   defp check_t8(doc) do
     inbound = doc |> in_edges("regulatory-auto-escalation") |> Enum.map(& &1["id"]) |> Enum.sort()
 
@@ -178,10 +187,33 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
       doc |> out_edges("regulatory-auto-escalation") |> Enum.map(&{&1["id"], &1["target"]})
 
     n = node(doc, "regulatory-auto-escalation") || %{}
+    body_template = (n["attributes"] || %{})["body_template"]
 
     ok_if(
-      inbound == ["e10", "timeout-risk-evaluation"] and outbound == [{"e5", "end-closed"}] and
-        not Map.has_key?(n["attributes"] || %{}, "body_template"),
+      inbound == ["timeout-risk-evaluation"] and outbound == [{"e5", "end-closed"}] and
+        is_binary(body_template) and String.contains?(body_template, "sla_breach_30_days"),
+      {inbound, outbound, n["attributes"]}
+    )
+  end
+
+  defp check_t8b(doc) do
+    inbound =
+      doc
+      |> in_edges("remediation-unresolved-escalation")
+      |> Enum.map(& &1["id"])
+      |> Enum.sort()
+
+    outbound =
+      doc
+      |> out_edges("remediation-unresolved-escalation")
+      |> Enum.map(&{&1["id"], &1["target"]})
+
+    n = node(doc, "remediation-unresolved-escalation") || %{}
+    body_template = (n["attributes"] || %{})["body_template"]
+
+    ok_if(
+      inbound == ["e10"] and outbound == [{"e18", "end-closed"}] and
+        is_binary(body_template) and String.contains?(body_template, "remediation_unresolved"),
       {inbound, outbound, n["attributes"]}
     )
   end
@@ -264,8 +296,12 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
       assert check_t7(json_doc()) == :ok
     end
 
-    test "T8 regulatory-auto-escalation: two inbound edges, e5 -> end-closed, no body_template" do
+    test "T8 regulatory-auto-escalation: one inbound edge (timeout-risk-evaluation), e5 -> end-closed, body_template reports sla_breach_30_days" do
       assert check_t8(json_doc()) == :ok
+    end
+
+    test "T8b remediation-unresolved-escalation: one inbound edge (e10), e18 -> end-closed, body_template reports remediation_unresolved" do
+      assert check_t8b(json_doc()) == :ok
     end
 
     test "T9 escalation_timer_fired at risk-evaluation lands on regulatory-auto-escalation" do
@@ -368,15 +404,40 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
       assert {:error, _} = check_t4(m)
     end
 
-    test "M9 literal body_template added to regulatory-auto-escalation -> T8 red" do
+    test "M9 regulatory-auto-escalation's body_template reports the WRONG reason -> T8 red" do
+      # ISS-0926: the node legitimately carries a body_template now (reason
+      # sla_breach_30_days); this mutant proves check_t8/1 actually inspects
+      # its *content*, not merely its presence -- a reason mix-up (e.g. the
+      # remediation-unresolved-escalation's own reason bleeding onto the
+      # wrong node) is exactly the regulatory-filing-correctness defect class
+      # this split exists to prevent.
       m =
         map_node(
           json_doc(),
           "regulatory-auto-escalation",
-          &put_in(&1, ["attributes", "body_template"], ~s({"reason":"sla_breach_30_days"}))
+          &put_in(
+            &1,
+            ["attributes", "body_template"],
+            ~s({"reason":"remediation_unresolved","review_id":"{{variables.review_id}}"})
+          )
         )
 
       assert {:error, _} = check_t8(m)
+    end
+
+    test "M9b remediation-unresolved-escalation's body_template reports the WRONG reason -> T8b red" do
+      m =
+        map_node(
+          json_doc(),
+          "remediation-unresolved-escalation",
+          &put_in(
+            &1,
+            ["attributes", "body_template"],
+            ~s({"reason":"sla_breach_30_days","review_id":"{{variables.review_id}}"})
+          )
+        )
+
+      assert {:error, _} = check_t8b(m)
     end
 
     test "M10 JSON new but YAML reverted to the old shape -> T12 red" do

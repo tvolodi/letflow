@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0950-20261001/step-02b-code-design-validator.json",
   "created_at": "2026-10-01T14:57:00Z",
   "started_at": "2026-10-01T14:57:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T14:58:16Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -43,7 +43,42 @@
       "No file outside handoffs/ modified (git status --porcelain lib/ test/ web/ shows only the design file as untracked/committed)"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "FAIL",
+    "summary": "Read lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md directly and re-derived (a)-(g) against the real code. One BLOCKER (a false behavioural claim that makes a specified test row unbuildable as written); everything else verified. (a) VERIFIED: endpoint_url enters only via Entry.insert_changeset (entry.ex:142-158, cast at 144) and Entry.publish_changeset (entry.ex:183-215, cast at 185-198), called solely from ServiceCatalog.register (service_catalog.ex:239) and apply_publish (service_catalog.ex:406), whose only caller is AdminServices (admin_services.ex:225, 304). update_scope_changeset casts only scope/owner (entry.ex:167); retire_changeset uses change/2 on status/timestamps (entry.ex:230); archive_current_version copies the stored value (service_catalog.ex:364-376). grep of endpoint_url in lib/ hits only entry, service_catalog, admin_services, services (read-only), version, dispatcher, engine; no seeds/mix task write it (priv/modules/exam/generate_pack.exs only mentions service_catalog_entries). (b) VERIFIED: url_validator.ex check_host/2 (100-109) is the only place the non-IP branch calls resolve_and_check; check_scheme (97), check_ip_literal (113-130), blocked_ipv4?/ipv6? (150-174) are private and shareable, so validate_syntactic/1 needs only a split of the non-IP branch; validate/1,2 (39-50) and the dispatcher call site are untouched by the design. URI.parse run live: scheme is lower-cased (HTTPS://example.test/x -> scheme \"https\"), userinfo trick yields host 127.0.0.1, 'https://' and 'https:///x' yield host \"\" (blocked by 102), so A-UPPER, R-USERINFO, R-NOHOST rows are correct. (c) VERIFIED: engine placeholder syntax is ~r/\\{\\{\\s*variables\\.([a-zA-Z0-9_]+)\\s*\\}\\}/ (engine.ex:1153) and the catalog arm renders resolved.endpoint_url through it (engine.ex:980-984); the head/tail policy (D3) is mechanical and unambiguous: head ends at first / ? # after first '://', braces in head reject, tail free; walked every matrix row (R-TPL-*, A-TPL-*) through it and all classify as stated, including edge no-slash and IPv6-bracket hosts. Consistent with ISS-0917 dispatch (frozen rendered_url still passes INV-9 at http_transport). (d) VERIFIED for the mechanism: Ecto cast records no change when the value equals data, so validate_change would skip an unchanged legacy URL on publish_changeset (base struct is the current row, service_catalog.ex:405-406); get_field is the correct choice; the transaction rollback claim (D7) holds (do_publish rolls back on {:error,changeset}, service_catalog.ex:341-345, archive insert at 340 precedes apply_publish). BUT see BLOCKER 1 for a consequence of the same get_field semantics that the design states wrongly. (e) VERIFIED, with findings: the engine resolves the pinned version from the LIVE row by version_id: engine.ex:1044-1045 builds {:version_id, id}; fetch_pinned_version (1052) -> ServiceCatalog.resolve_pinned_version -> locate_pinned_version (service_catalog.ex:563-567): if entry.version_id == uuid -> resolved_from_entry (603-613) which reads entry.endpoint_url from the live row. A raw update of endpoint_url on the live row that leaves version_id intact therefore feeds '{{variables.absent}}' to render_service_task_url (engine.ex:983) and preserves the test's assertions (url_rendered_empty, no dispatch row, projection :error). Pin resolved_id is the version_id (not the endpoint), so seeding via register_with!(%{}) then update_all before start_with_task! is sound. Test file already imports Ecto.Query, aliases Entry and uses Repo (lines 26, 40, 62-63). Minor inaccuracy: the design cites 'precedent of raw writes in service_catalog_test.exs' as Repo.update_all, but that file's precedent is Repo.query/Repo.query! raw SQL (service_catalog_test.exs:182-248, 634, 853, 888); no existing update_all on endpoint_url in test/. Either is valid and bypasses changesets; the citation should be corrected. (f) VERIFIED: admin_services.ex:235-236 (register) and 314-315 (publish) map any %Ecto.Changeset{} to Response.unprocessable(conn, \"validation failed\"); Response.unprocessable -> Error.unprocessable(detail) status 422 (api/response.ex:179, api/error.ex:293-300); no router change needed, no field/URL leakage. (g) acceptance criteria of step-02 handoff: file exists with signatures/specs and prose only (a short Repo.update_all fragment and :erlang.trace call names appear as test-setup guidance, not function bodies - acceptable); no-DNS decided and justified (D2 + U-NODNS); template policy incl. fixture (D3, section 5); files-to-change / tests-to-adjust exact (sections 4-5); dispatch gate stated unchanged (section 1); matrix covers both write paths and all classes. Decision 0027 and INV-9 respected (no pack-install code, dispatch gate unchanged). No lib/ test/ web/ changes: git status --porcelain lib/ test/ web/ is empty. FAIL reason: BLOCKER 1 only.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "Design section 7 case R-MISSING ('nil/absent endpoint_url yields only the validate_required error (no second error from the new step)') and D5's parenthetical ('they supply endpoint_url in every publish body anyway; validate_required already demands it') are wrong for the ABSENT-key case on publish/3. Ecto validate_required and get_field read the effective value (changes over data); publish_changeset's base struct is the current row (service_catalog.ex:405-406), so a publish_attrs map WITHOUT the endpoint_url key (handle_publish uses maybe_put, admin_services.ex:297, so an omitted body field produces exactly that) leaves endpoint_url = the stored value, validate_required passes, and under D5 the new step then validates the STORED value: good legacy value -> publish succeeds keeping the old URL (pre-existing behaviour), bad legacy value -> a new endpoint_url_not_allowed error. Only explicit nil or empty/whitespace string yields the validate_required error (cast turns it into a nil change). A builder following R-MISSING literally will write a P-absent assertion that fails and must guess intent. CODE-DESIGNER must (1) restate R-MISSING per write path: register with absent/nil/'' -> required error only; publish with explicit nil or '' -> required error only; publish with the key ABSENT -> state the exact intended outcome (accepts keeping current URL if it passes the check, or errors on a bad stored URL per D5), and add it as its own matrix row; (2) correct D5's parenthetical (drop or qualify the 'validate_required already demands it' claim) and state explicitly whether making endpoint_url mandatory in the publish body is in or out of scope (it is out of scope if unchanged; say so).",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Section 5 cites 'precedent of raw writes in service_catalog_test.exs (e.g. Repo.update_all...)'; the actual precedent in that file is raw SQL via Repo.query/Repo.query! (lines 182-248, 634, 853, 888). Correct the citation or just state Repo.update_all on Entry bypasses changesets and is the recommended seed form. Not blocking by itself.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "U-NODNS(b) lists trace patterns as '{:inet, :gethostbyname, 1..2}' and '{:inet_res, :resolve, :_}': a range is not a valid trace_pattern arity (use separate gethostbyname/1 and /2 patterns or :_ ), and the pattern targets only :local calls in modules that must already be loaded. Tighten wording when reworking; the stated fallback to part (a) keeps it implementable.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Section 4 items 3 and 5 are conditional/optional ('may be skipped', 'skip if the project convention forbids') and the e2e CI check says 'verify ... no edit planned'. They are docs-only and carry explicit fallbacks so they are not deferral of an acceptance criterion, but a weak builder would benefit from a binary instruction (do / do not edit decision 0027; do / do not add the @doc sentences).",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER (rework iteration 1 of 3): fix BLOCKER 1 (R-MISSING / D5 absent-key semantics on publish) and fold in the three MINORs; then re-run CODE-DESIGN-VALIDATOR. All other design elements (D1-D4, D6, D7, template policy, fixture change, 422 mapping) were verified correct and need not change."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

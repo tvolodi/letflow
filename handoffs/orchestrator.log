@@ -2625,3 +2625,4 @@
 2026-10-01T14:54:09Z | DISPATCH | WF03-ISS0950-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
 2026-10-01T14:57:00Z | PASS | WF03-ISS0950-20261001 | step-02-code-designer | CODE-DESIGNER -> ORCH | PASS -- design lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md
 2026-10-01T14:57:00Z | DISPATCH | WF03-ISS0950-20261001 | step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-10-01T14:59:02Z | FAIL | WF03-ISS0950-20261001 | step-02b-code-design-validator | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- 1 BLOCKER (publish absent-key semantics wrong in design)+3 MINOR; rework 1 to CODE-DESIGNER

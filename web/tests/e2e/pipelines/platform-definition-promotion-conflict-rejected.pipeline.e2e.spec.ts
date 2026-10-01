@@ -112,6 +112,7 @@ import {
   resolveTenantContext,
   authHeaders,
   jwtSubject,
+  resolveLocalUserId,
   shot,
 } from '../pipeline'
 import { assertServiceReadiness, resolveCredential } from '../helpers'
@@ -188,7 +189,7 @@ test.describe('Pipeline: platform-definition-promotion-conflict-rejected (PW-01)
           name: processKey,
           version,
           description: `platform-definition-promotion-conflict-rejected fixture ${processKey}@${version}`,
-          graph: graphFor(fixtureId, label, jwtSubject(adminToken)),
+          graph: graphFor(fixtureId, label, await resolveLocalUserId(request, API_BASE_URL, adminToken, 'admin-user')),
         },
       })
       pl.gate(createResp.ok(), `create ${version} failed: ${createResp.status()} ${await createResp.text()}`)

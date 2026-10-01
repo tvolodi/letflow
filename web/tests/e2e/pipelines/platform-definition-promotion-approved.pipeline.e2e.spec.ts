@@ -70,7 +70,7 @@ import {
   navigateSpa,
   resolveTenantContext,
   authHeaders,
-  jwtSubject,
+  resolveLocalUserId,
   shot,
 } from '../pipeline'
 import { assertServiceReadiness, resolveCredential } from '../helpers'
@@ -116,6 +116,7 @@ test.describe('Pipeline: platform-definition-promotion-approved (PW-01)', () => 
 
     // ── Step 01: create + activate the source definition (API) ──────────────
     await pl.step('01: create and activate source definition', async (s) => {
+      const adminLocalId = await resolveLocalUserId(request, API_BASE_URL, s.adminToken, 'admin-user')
       const createResp = await request.post(`${API_BASE_URL}/api/v1/definitions`, {
         headers: authHeaders(s.adminToken),
         data: {
@@ -135,7 +136,7 @@ test.describe('Pipeline: platform-definition-promotion-approved (PW-01)', () => 
                 id: 'n2',
                 node_type: 'HUMAN_TASK',
                 label: `Review ${fixtureId}`,
-                attributes: { role: jwtSubject(s.adminToken), assignee_type: 'USER', assignee_ref: jwtSubject(s.adminToken) },
+                attributes: { role: adminLocalId, assignee_type: 'USER', assignee_ref: adminLocalId },
               },
               { id: 'n3', node_type: 'END', label: 'End', attributes: null },
             ],

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0923-20261001/step-04b-test-design-validator.json",
   "created_at": "2026-10-01T16:54:45Z",
   "started_at": "2026-10-01T16:54:45Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-01T17:02:43Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,5 +40,19 @@
   "task": {
     "description": "Work in C:/Users/tvolo/dev/ai-dala/letflow-3 on the already checked-out branch feature/WF03-ISS0923-20261001 (do not switch branches; do not touch main or other branches/PRs). Shared machine: scoped `mix test <files>` only, never the full suite; use MIX_TEST_PARTITION=<unique> for tests that commit catalog rows. Do not commit (ORCH commits); do not leave mutants in the tree. WF-03 Step 4b: hard gate on TEST-DESIGNER. Verify test/letflow/service_catalog_delete_pinned_instances_test.exs and test/specs/ISS-0923.md: every AC-1..AC-14 of the design (section 10) has a runnable, non-vacuous test; fixtures isolated/self-sufficient (cleanup of committed catalog rows); no skipped tests. You MUST independently APPLY at least two of the reported mutants (e.g. m2 only-:active and m5 skip-version-deletion, plus m6 or m7) in a THROWAWAY git worktree of the branch (never mutate the main checkout), run the test file there with MIX_ENV=test and a unique MIX_TEST_PARTITION (e.g. 9232), and reproduce the reported pass counts; also independently reproduce the pre-fix failure (origin/main + only the new test file in a throwaway worktree: reported 8/24 pass). Remove worktrees afterwards. Then run the test file once on the branch checkout and quote the count. Edit nothing but this handoff. Fill this handoff file's result (status PASS/FAIL, summary with quoted real output, issues, next_action) and set top-level status COMPLETED with real UTC completed_at (`date -u`)."
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "TEST-DESIGN-VALIDATOR PASS. Coverage re-derived from the test source (not the spec): AC-1 (engine + direct rows + active->completed), AC-2 (engine, :completed, :cancelled), AC-3 (:error), AC-4 (3-tenant sole-holder loop, 2-tenant union, scope :tenant), AC-5 (longer id, shorter id, text-only mention), AC-6 (defs-first then instance error), AC-7 (ghost id with referencing instances), AC-8 (50/51 boundary, 30+30 cross-tenant global smallest-50), AC-9 (key set), AC-10 (delete+re-register+publish+{:version,'1'} resolves to reborn endpoint; never-published), AC-11 (row lock held by Task, waits on pg_stat_activity Lock, asserts :not_found AND version row still present), AC-12 (type suffix/title/status/instance_ids/truncated/no id in detail/key allowlist), AC-13 (defs 409, 204, 404, 403), AC-14 (iterates Ecto.Enum.values(InstanceProjection,:status) vs terminal?/1 with sanity asserts that both kinds exist). All assertions are specific (ids, counts, row counts), none vacuous. Fixtures: each test registers its own uniquely-named service with on_exit cleanup of Entry+Version rows, uses TenantFixture.provisioned_tenant! (own schema), no cross-test ordering dependence, no @tag :skip/skip, no TODO, no secrets/connection strings (grep clean; example.test URLs only). MY OWN MEASUREMENTS (throwaway git worktrees of the branch / origin/main, deps and _build copied by robocopy, never linked; MIX_ENV=test MIX_TEST_PARTITION=9232): (1) PRE-FIX origin/main ce431622 + only the new test file: 'Result: 8/24 passed / Failed: 16 tests' (e.g. 'assert version_count(entry.service_id) == 0 left: 1', 'match (=) failed ... right: :ok') - reproduces reported 8/24; the discriminating cause is behavioural, not UndefinedFunctionError. (2) Unmutated branch worktree: 24 passed. (3) Mutants applied by me to lib/ in the branch worktree: m2 (terminal? reject -> filter == :active) 'Result: 21/24 passed, Failed: 3 tests' (AC-3 :error, AC-14 drift, AC-4 two tenants); m5 (delete_entry without Version delete_all) 'Result: 20/24 passed, Failed: 4' (AC-2 completed, AC-2 cancelled, AC-10, engine AC-1/2); m7 (router clause removed) 'Result: 23/24 passed, Failed: 1' (AC-12); m4 (Enum.take(1) on list_registrations) 'Result: 21/24 passed, Failed: 3' (AC-4 three tenants, AC-8 cross-tenant, AC-4 two tenants). All four match TEST-DESIGNER's reported counts exactly. After each mutant: git checkout -- lib and 'git status --porcelain lib test' empty (quoted empty each time). Both worktrees removed; 'git worktree list' shows only the main checkout. FINAL on branch checkout: MIX_ENV=test MIX_TEST_PARTITION=9232 mix test test/letflow/service_catalog_delete_pinned_instances_test.exs -> 'Result: 24 passed'; 'git status --porcelain lib test' empty afterwards (main checkout never mutated). Not independently re-run: m1, m3, m6 (reported counts not verified by me; the four applied mutants cover status filter, tenant loop, version deletion and router mapping).",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Test file moduledoc/spec require an isolated MIX_TEST_PARTITION because shared letflow_test can hold stale tenant_template_build_* registrations that make delete/1 raise 42P01; the test does not isolate itself from that. This is documented, and is an environment property of delete/1 iterating every registration (pre-existing design), not a test defect. CI uses a clean DB."
+      },
+      {
+        "severity": "MINOR",
+        "description": "AC-14 test re-registers the entry in the loop after each terminal-status success; cleanup relies on the on_exit registered by register!/0 which covers the same service_id, so it is sound."
+      }
+    ],
+    "next_action": "Proceed to WF-03 TEST-RUNNER / next step. ORCH to commit this handoff. No rework required."
+  }
 }

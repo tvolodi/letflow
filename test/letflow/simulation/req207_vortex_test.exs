@@ -155,6 +155,35 @@ defmodule Letflow.Simulation.Req207VortexTest do
   basis REQ-315/317/319/320 were -- not silenced by deletion or by a blind move
   into `allowed_ids` without re-checking Signals 3''/5 first.
 
+  ## ISS-0935 lands, 2026-10-01 (eighteenth route -- re-derived, not waved through)
+
+  ISS-0935 ("Seed Vortex production_batch/shipment_manifest entity types")
+  lands real code on `Letflow.Routers.Entities`: a new
+  `Letflow.Entities.Restrictions.import_restrictions/2` context function and
+  an eighteenth route, `POST /entities/restrictions/import`, gated by a new,
+  distinct `Letflow.Api.Authorization` permission atom
+  `:EntitiesRestrictionsManage` (not `:EntitiesRecordsWrite` or
+  `:EntitiesRecordsImport`) -- confirmed live via `__authz_routes__/0`, not
+  trusted from the requirement text or PR description. Re-derived the same
+  way REQ-315/317/319/320/394 were: this scenario's six `:gui` steps are
+  list/filter x2/sort/page/field-redaction reads over individual entity
+  records' `field_values`, all exclusively through `POST /entities/query`
+  (REQ-311's route) -- none of them imports a restriction, manages a
+  restriction, or touches `Letflow.Entities.Restrictions` in any way. The new
+  route is a one-time, seed-time admin operation (bulk-loading field-level
+  restriction rules ahead of a tenant's entity-record traffic), not a route
+  the scenario's own `:gui` steps, or the fixture behind them, ever call --
+  confirmed by reading `test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml`
+  and the simulation fixture driving this describe block, neither of which
+  references `/restrictions/import` or `Letflow.Entities.Restrictions`
+  anywhere. So, exactly like REQ-315/317/319/320/394 before it, ISS-0935
+  closes no gap this scenario was waiting on. Signal 3'' below was updated to
+  assert the real, now-eighteen-route set by equality (never membership, so
+  a nineteenth route or a dropped one lands back here too), and the
+  disposition itself is UNCHANGED: still `BLOCKED_ON_DEPENDENCY`, still on
+  S8's GUI-step harness (Signal 5), still nothing under `lib/` left for this
+  scenario to wait on.
+
   Full reasoning and the complete re-derivation history live in that describe
   block's own comments; `test/specs/REQ-310.md` states the test cases.
 
@@ -2050,7 +2079,18 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # so this equality assertion reflects the router's real, live
           # surface; its DEPARTURE would fire this tripwire same as any
           # other row's.
-          {"POST", "/records/:entity_type/import", :EntitiesRecordsImport}
+          {"POST", "/records/:entity_type/import", :EntitiesRecordsImport},
+          # ISS-0935's eighteenth row (2026-10-01) -- a one-time, seed-time
+          # admin route for bulk-loading field-level restriction rules,
+          # gated by its own DISTINCT :EntitiesRestrictionsManage permission
+          # (not :EntitiesRecordsWrite or :EntitiesRecordsImport). Re-derived
+          # (moduledoc above) and found to close no gap this scenario's six
+          # :gui steps were waiting on -- none of them imports or manages a
+          # restriction; all six still read through POST /entities/query
+          # above. Included here so this equality assertion reflects the
+          # router's real, live surface; its DEPARTURE would fire this
+          # tripwire same as any other row's.
+          {"POST", "/restrictions/import", :EntitiesRestrictionsManage}
         ])
 
       actual_routes = MapSet.new(Letflow.Routers.Entities.__authz_routes__())
@@ -2059,16 +2099,17 @@ defmodule Letflow.Simulation.Req207VortexTest do
              "Letflow.Routers.Entities must serve exactly REQ-310's nine routes plus " <>
                "REQ-311's POST /query, REQ-315's POST /query/aggregate, REQ-317's four " <>
                "record-attachment routes, REQ-319's POST /records/:entity_type/export, " <>
-               "and REQ-320's POST /records/:entity_type/import. " <>
+               "REQ-320's POST /records/:entity_type/import, and ISS-0935's " <>
+               "POST /restrictions/import. " <>
                "Unexpected: #{inspect(MapSet.to_list(MapSet.difference(actual_routes, expected_routes)))}; " <>
                "missing: #{inspect(MapSet.to_list(MapSet.difference(expected_routes, actual_routes)))}. " <>
-               "An EIGHTEENTH route, or a MISSING one, means this router's surface changed " <>
+               "A NINETEENTH route, or a MISSING one, means this router's surface changed " <>
                "again and this scenario's disposition must be re-derived once more -- " <>
                "see the banner at the top of this test. In particular, {\"POST\", \"/query\", " <>
                ":EntitiesQuery} going MISSING would mean the record read path was reverted, " <>
                "which would move the blocker back to S10 from S8."
 
-      assert MapSet.size(actual_routes) == 17
+      assert MapSet.size(actual_routes) == 18
 
       # POSITIVE now, where the previous round refuted it. The record read
       # route exists, and it carries the read permission REQ-309 minted for it.

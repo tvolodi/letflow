@@ -1,0 +1,25 @@
+{
+  "name": "shipment_manifest",
+  "display_name": "Shipment Manifest",
+  "description": "Seed content for ISS-0935 (GH-2069) / the `vortex/entity-list-filter-and-page` UAT scenario -- backs EO-004. See lib/letflow/design/iss0935-vortex-entity-seed.md section 2 for the full rationale. A second, distinct Vortex entity type (outbound shipment paperwork) that the scenario's quality-manager actor (actor-vortex-karl) has no operational reason to touch, making this type's restriction business rationale self-evident. Restricted tenant-wide via an entity_type_restrictions row (design section 2.2, seeded alongside this definition) with no user_entity_type_grants row for Karl -- his absence from that table is his denial, per REQ-394's existing TypeAccess mechanism; this definition and its restriction are the only new surface, TypeAccess itself is unmodified. A minimal, realistic field list -- this type's own fields are never exercised by the scenario (step 5 only checks that the list looks empty), so a small shape is correct, not under-specified.",
+  "fields": [
+    {
+      "name": "manifest_ref",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "destination",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "shipped_at",
+      "type": "date",
+      "queried": true,
+      "required": false
+    }
+  ]
+}

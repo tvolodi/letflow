@@ -1,0 +1,46 @@
+{
+  "name": "production_batch",
+  "display_name": "Production Batch",
+  "description": "Seed content for ISS-0935 (GH-2069) / the `vortex/entity-list-filter-and-page` UAT scenario -- backs EO-001 through EO-005. See lib/letflow/design/iss0935-vortex-entity-seed.md section 1 for the full field-by-field rationale. batch_ref is :string, queried true, required true -- the batch's own business identifier (e.g. B-2026-0147), giving every sample record a human-legible key for UAT evidence. supplier is :string (not :enum -- an open supplier list is the more realistic domain shape), queried true, required true -- step 1's `supplier: Nordmetall` filter target. status is :enum with values pending_review/quarantined/released/rejected, queried true, required true -- step 1's `status: quarantined` filter target; the other three values exist so the sample set can include non-quarantined batches that the filter must correctly exclude. deviation_raised_at is :date (not :datetime -- no time-of-day precision is needed and REQ-301's recorded UTC-truncation caveat for :datetime is avoided entirely), queried true, required false -- step 2's oldest-first sort target; optional because a batch with no deviation yet may have no raised-at date. cost_figure is :decimal (precision 12, scale 2), queried false, required false -- the cost-approver-only figure (EO-002); queried: false is deliberate but NOT the access-control mechanism -- the real guarantee is the entity_field_restrictions/user_entity_grants row pair seeded alongside this definition (design section 1.2/1.3), which replaces the value with FieldGrants' sentinel rather than ever exposing it to a caller without a grant. internal_notes is :string, queried false, required false -- EO-003's field: a detail Vortex records on each batch but has never made searchable; queried: false is the entire mechanism here, since Allowlist.resolve/2 rejects any filter clause naming this field by name.",
+  "fields": [
+    {
+      "name": "batch_ref",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "supplier",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "status",
+      "type": "enum",
+      "enum_values": ["pending_review", "quarantined", "released", "rejected"],
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "deviation_raised_at",
+      "type": "date",
+      "queried": true,
+      "required": false
+    },
+    {
+      "name": "cost_figure",
+      "type": "decimal",
+      "decimal_precision": 12,
+      "decimal_scale": 2,
+      "queried": false,
+      "required": false
+    },
+    {
+      "name": "internal_notes",
+      "type": "string",
+      "queried": false,
+      "required": false
+    }
+  ]
+}

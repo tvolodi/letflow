@@ -260,10 +260,11 @@ defmodule Letflow.Routers.EntitiesTest do
     # ELEVEN to FIFTEEN (the four record-attachment routes); REQ-319 and
     # REQ-320 -- the export/import pair, landed concurrently -- together
     # raise it from FIFTEEN to SEVENTEEN (POST /records/:entity_type/export
-    # and POST /records/:entity_type/import). The count is asserted
-    # explicitly so appending an eighteenth route without updating design
-    # §1's table fails here rather than silently.
-    test "__authz_routes__/0 returns exactly the seventeen designed routes, with their designed policy keys" do
+    # and POST /records/:entity_type/import); ISS-0935 raises it from
+    # SEVENTEEN to EIGHTEEN (POST /restrictions/import). The count is
+    # asserted explicitly so appending a nineteenth route without updating
+    # design §1's table fails here rather than silently.
+    test "__authz_routes__/0 returns exactly the eighteen designed routes, with their designed policy keys" do
       expected = [
         {"POST", "/definitions/:name/activate", :EntitiesDefinitionsWrite},
         {"POST", "/definitions", :EntitiesDefinitionsWrite},
@@ -275,6 +276,7 @@ defmodule Letflow.Routers.EntitiesTest do
         {"PUT", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
         {"DELETE", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
         {"POST", "/records/:entity_type/import", :EntitiesRecordsImport},
+        {"POST", "/restrictions/import", :EntitiesRestrictionsManage},
         {"POST", "/query", :EntitiesQuery},
         {"POST", "/query/aggregate", :EntitiesAggregate},
         {"POST", "/records/:entity_type/:record_id/attachments", :EntitiesAttachmentsManage},
@@ -288,7 +290,7 @@ defmodule Letflow.Routers.EntitiesTest do
 
       actual = Letflow.Routers.Entities.__authz_routes__()
 
-      assert length(actual) == 17
+      assert length(actual) == 18
       assert Enum.sort(actual) == Enum.sort(expected)
       assert {"POST", "/records/:entity_type/import", :EntitiesRecordsImport} in actual
       assert {"POST", "/query", :EntitiesQuery} in actual
@@ -2704,6 +2706,172 @@ defmodule Letflow.Routers.EntitiesTest do
       def_conn = request(:get, "/api/v1/entities/definitions/active/restricted_type", ctx)
       assert def_conn.status == 200
       assert body_of(def_conn)["name"] == "restricted_type"
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # ISS-0935 -- POST /entities/restrictions/import
+  # ═══════════════════════════════════════════════════════════════════════
+
+  defp import_restrictions(ctx, body, opts \\ []),
+    do: request(:post, "/api/v1/entities/restrictions/import", ctx, body, opts)
+
+  describe "ISS-0935 AC6 -- POST /entities/restrictions/import happy path" do
+    test "200 with per-table inserted counts, and the rows are really there" do
+      ctx = tenant_ctx("iss0935-restrictions-ok")
+      anna = insert_user!(ctx)
+
+      conn =
+        import_restrictions(ctx, %{
+          "field_restrictions" => [
+            %{"entity_type" => "production_batch", "field_name" => "cost_figure"}
+          ],
+          "field_grants" => [
+            %{
+              "user_id" => anna.id,
+              "entity_type" => "production_batch",
+              "field_name" => "cost_figure"
+            }
+          ],
+          "type_restrictions" => [%{"entity_type" => "shipment_manifest"}],
+          "type_grants" => []
+        })
+
+      assert conn.status == 200
+
+      assert body_of(conn)["inserted"] == %{
+               "field_restrictions" => 1,
+               "field_grants" => 1,
+               "type_restrictions" => 1,
+               "type_grants" => 0
+             }
+
+      assert Repo.aggregate("entity_field_restrictions", :count, prefix: ctx.schema_name) == 1
+      assert Repo.aggregate("user_entity_grants", :count, prefix: ctx.schema_name) == 1
+      assert Repo.aggregate("entity_type_restrictions", :count, prefix: ctx.schema_name) == 1
+      assert Repo.aggregate("user_entity_type_grants", :count, prefix: ctx.schema_name) == 0
+    end
+
+    test "a second, byte-identical call reports all-zero counts" do
+      ctx = tenant_ctx("iss0935-restrictions-idem")
+      body = %{"type_restrictions" => [%{"entity_type" => "shipment_manifest"}]}
+
+      assert body_of(import_restrictions(ctx, body))["inserted"]["type_restrictions"] == 1
+      assert body_of(import_restrictions(ctx, body))["inserted"]["type_restrictions"] == 0
+    end
+
+    test "an absent key for a table inserts nothing for that table, not an error" do
+      ctx = tenant_ctx("iss0935-restrictions-absent")
+
+      conn = import_restrictions(ctx, %{"type_restrictions" => [%{"entity_type" => "widget"}]})
+
+      assert conn.status == 200
+
+      assert body_of(conn)["inserted"] == %{
+               "field_restrictions" => 0,
+               "field_grants" => 0,
+               "type_restrictions" => 1,
+               "type_grants" => 0
+             }
+    end
+  end
+
+  describe "ISS-0935 AC6 -- 403 without :EntitiesRestrictionsManage" do
+    test "a caller without the permission is denied, and nothing is written" do
+      ctx = tenant_ctx("iss0935-restrictions-403", ["TASK_WORKER"])
+
+      conn =
+        import_restrictions(ctx, %{
+          "type_restrictions" => [%{"entity_type" => "shipment_manifest"}]
+        })
+
+      assert conn.status == 403
+      assert Repo.aggregate("entity_type_restrictions", :count, prefix: ctx.schema_name) == 0
+    end
+
+    test "a PLATFORM_ADMIN caller (holds every permission) succeeds against the same body" do
+      ctx = tenant_ctx("iss0935-restrictions-403-control", ["PLATFORM_ADMIN"])
+
+      conn =
+        import_restrictions(ctx, %{
+          "type_restrictions" => [%{"entity_type" => "shipment_manifest"}]
+        })
+
+      assert conn.status == 200
+    end
+  end
+
+  describe "ISS-0935 AC6 -- 422 on an invalid row" do
+    test "an empty entity_type is rejected with 422, and nothing is written" do
+      ctx = tenant_ctx("iss0935-restrictions-422")
+
+      conn =
+        import_restrictions(ctx, %{
+          "field_restrictions" => [%{"entity_type" => "", "field_name" => "cost_figure"}]
+        })
+
+      assert conn.status == 422
+      assert Repo.aggregate("entity_field_restrictions", :count, prefix: ctx.schema_name) == 0
+    end
+
+    test "a user_id that does not resolve to a user in this tenant is rejected with 422" do
+      ctx = tenant_ctx("iss0935-restrictions-422-user")
+
+      conn =
+        import_restrictions(ctx, %{
+          "field_grants" => [
+            %{
+              "user_id" => Ecto.UUID.generate(),
+              "entity_type" => "production_batch",
+              "field_name" => "cost_figure"
+            }
+          ]
+        })
+
+      assert conn.status == 422
+      assert Repo.aggregate("user_entity_grants", :count, prefix: ctx.schema_name) == 0
+    end
+
+    # Cross-tenant user_id injection -- SECURITY-REVIEWER's checklist (design
+    # §7), exercised end-to-end through the real HTTP route this time (the
+    # unit-level equivalent lives in
+    # test/letflow/entities/restrictions_test.exs). A caller in tenant A,
+    # holding :EntitiesRestrictionsManage legitimately in A, must not be able
+    # to plant a grant row for a REAL user_id that only exists in tenant B.
+    test "a user_id belonging to a different tenant is rejected with 422, not silently accepted" do
+      ctx_a = tenant_ctx("iss0935-restrictions-xtenant-a")
+      ctx_b = tenant_ctx("iss0935-restrictions-xtenant-b")
+
+      body = %{
+        "field_grants" => [
+          %{
+            "user_id" => ctx_b.user_id,
+            "entity_type" => "production_batch",
+            "field_name" => "cost_figure"
+          }
+        ]
+      }
+
+      conn = import_restrictions(ctx_a, body)
+      assert conn.status == 422
+      assert Repo.aggregate("user_entity_grants", :count, prefix: ctx_a.schema_name) == 0
+
+      # The same body is genuinely valid against its OWN tenant -- proving
+      # this is a real cross-tenant rejection, not a row that would fail
+      # validation anywhere.
+      assert import_restrictions(ctx_b, body).status == 200
+      assert Repo.aggregate("user_entity_grants", :count, prefix: ctx_b.schema_name) == 1
+    end
+  end
+
+  describe "ISS-0935 -- 400 on a malformed (non-object) JSON body" do
+    test "a JSON array body is rejected with 400" do
+      ctx = tenant_ctx("iss0935-restrictions-400")
+
+      conn =
+        request(:post, "/api/v1/entities/restrictions/import", ctx, ["not", "an", "object"])
+
+      assert conn.status == 400
     end
   end
 end

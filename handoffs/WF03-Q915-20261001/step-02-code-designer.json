@@ -1,0 +1,84 @@
+{
+  "handoff_id": "4a828ce7-331e-4b33-bf1d-66027dd8ba9c",
+  "run_id": "WF03-Q915-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-Q915-20261001/step-02-code-designer.json",
+  "created_at": "2026-10-01T15:29:45Z",
+  "started_at": null,
+  "completed_at": "2026-10-01T15:34:44Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0932": "id: ISS-0932 (queue Q-915, GH-2066); title: D3: Regulatory Compliance Review definition lacks the 21-day timer path to BaFin escalation; severity MAJOR; discovered_by UAT-RUNNER (ISS-0912 QA re-run 2026-10-01). Symptom: POST /instances/:id/advance-timer on risk-evaluation returns 404; regulatory-auto-escalation only reachable from the post-remediation-check unresolved branch. Evidence test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml (D3). Scenario test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml. Definition fixture test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json. ORCH findings (verify): risk-evaluation is HUMAN_TASK with only {role}; no pending timer exists so advance-timer 404s (Scheduler.resolve_advance_target picks the single pending timer, 400 if >1, 404 if none); edge timeout-risk-evaluation goes risk-evaluation->risk-evaluation-timeout->severity-routing->findings-sign-off, never regulatory-auto-escalation; HUMAN_TASK escalation_timer_duration only reassigns role; a :TIMER node (duration_iso8601) is the engine's routable timer. Required outcome: after evidence-collection completes a pending P21D timer exists, advance-timer fires it, flow runs regulatory-auto-escalation (SERVICE_TASK POST .../compliance/regulatory-notice) -> end-closed, instance COMPLETED; normal path (risk manager completes risk-evaluation -> severity-routing ...) must keep working with no dangling timer trouble. Consider whether reason 'sla_breach_30_days' must be in the service-task body. No QA data/DB changes; repo fixtures/definitions/tests/docs only; bump fixture version if appropriate."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-Q915-20261001/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0932.yaml",
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json",
+      "test/fixtures/simulation/meridian/process_policy_binding.yaml",
+      "test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml",
+      "test/letflow/engine_catalog_service_task_test.exs",
+      "test/letflow/scripts/seed_swiftroute_definition_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2",
+    "branch_name": "feature/WF03-Q915-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2 fix design for ISS-0932/Q-915. Design doc only at lib/letflow/design/q915-regulatory-review-21day-timer-path.md (no implementation code beyond definition-shape tables/JSON-shape descriptions). Start from ISSUE-FIXER's recommended shape A (read its handoff result.summary in full) and VERIFY it yourself against the engine: (a) all callers/tests that complete risk-evaluation on the normal path and whether they set variables.highest_severity (conditioning e3 must not break them; consider alternatives such as keeping e3 as the sole default and routing the timeout edge differently if the engine requires), (b) what the stale pending escalation timer does after normal completion, (c) body_template semantics for the regulatory-notice reason 'sla_breach_30_days' vs the e10 inbound path, (d) version bump 1.1->1.2, description fix, parity edits to test/fixtures/simulation/meridian/process_policy_binding.yaml and test/fixtures/uat/process-definition-aliases/proc-meridian-regulatory-compliance-review.yaml if relevant, (e) exact regression test design (graph validation test + Transition-level tests + one DB-backed engine test where the fixture JSON is loaded, evidence-collection completed, escalation timer fired via the same path advance-timer uses, assert regulatory-auto-escalation executed and instance COMPLETED at end-closed, service task stubbed per existing engine test pattern), with named mutation targets that must fail it (old shape). You can spawn no one else and must not self-review.",
+    "acceptance_criteria": [
+      "Design chooses the least risky shape with justification and addresses (a)-(e)",
+      "Exact node/edge/attribute changes listed precisely",
+      "Regression tests specified with file names, fail-first on old fixture, and mutation targets",
+      "List of files to edit and files confirmed unaffected",
+      "States lib/ unchanged or justifies any lib change",
+      "No implementation code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/q915-regulatory-review-21day-timer-path.md. Chosen shape A-prime = ISSUE-FIXER shape A with ONE change: edge e3 gets the constant condition 'true' instead of an OR-chain over severities. Verified by executing Graph.validate_* and Transition.transition/3 against the real fixture modified per the design (scratch script, not committed): graph/node-attr/edge-condition validation all valid; complete_task with highest_severity unset still goes to severity-routing (identical to today), whereas the OR-chain variant silently files a BaFin notice; escalation_timer_fired goes to regulatory-auto-escalation for any variables (escalation path skips conditioned edges). Changes: fixture version 1.1->1.2, description fix, risk-evaluation attrs {role, escalation_timer_duration P21D, escalation_role role-ceo}, e3 condition 'true', timeout-risk-evaluation retargeted to regulatory-auto-escalation (sole non-conditioned edge), delete node risk-evaluation-timeout and edge e4; parity edit to test/fixtures/simulation/meridian/process_policy_binding.yaml; seed_meridian_definition.sh header comment only; alias YAML and scenario files unchanged. lib/ and authz unchanged. Corrections to the diagnosis: (1) stale escalation timer does NOT fail with unknown_token_id here: the token row is the same across sequential hops and nothing compares timer.node_id to the token's current node, so a stale timer firing after day 21 acts on whatever HUMAN_TASK the token is then at (e.g. cancels findings-sign-off, or auto-archives from ceo-override) or errors/retries on non-HUMAN_TASK nodes; pre-existing engine defect shared by all escalation definitions, out of scope, follow-up issue to be filed by ORCH. (2) body_template is NOT rendered by the engine (only the URL is; engine.ex:1141-1147), so a static reason would also be sent on the e10 path; decision: do not add body_template; scenario EO-002 (reason payload) stays open, follow-up issue to be filed by ORCH; EO-001 and EO-003 are the acceptance signals. Tests specified: test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs (T1-T12, pure graph/Transition/YAML parity) and test/letflow/engine/regulatory_review_timer_path_test.exs (DB-backed E1: complete evidence-collection, Scheduler.resolve_advance_target(nil) + fire_timer, assert dispatch row, stub service outcome via advance_after_service_task_outcome, assert COMPLETED at end-closed; E2 normal path), with fail-first expectations on the old fixture and mutation table M1-M10. No implementation code in the doc. Not self-reviewed.",
+    "artifacts_out": [
+      "lib/letflow/design/q915-regulatory-review-21day-timer-path.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Handoff started_at was null on receipt; left null per HANDOFF_PROTOCOL 1.2 (ORCH to follow the two-step dispatch procedure next time).",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MAJOR",
+        "description": "Latent pre-existing engine defect (corrects ISSUE-FIXER's unknown_token_id claim): a stale HUMAN_TASK escalation timer is not cancelled when the task completes and, if the instance is still active at fire time, runs {:escalation_timer_fired} against the token's CURRENT node (engine.ex find_token_for_timer matches token_id only; no timer.node_id check). Not fixed here (lib unchanged, justified in design section 3); ORCH should file a separate follow-up issue.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "SERVICE_TASK body_template is not rendered (engine.ex 1141-1147), so the BaFin notice cannot carry a per-path reason; scenario EO-002 stays unmet after this fix by design (design section 4). ORCH should file a follow-up issue; UAT-RUNNER should treat EO-001/EO-003 as the ISS-0932 acceptance signals.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Design E1 steps 6-7 rely on Engine.advance_after_service_task_outcome/4 driving END to :completed (code read, not executed with a DB). If it does not for a reason unrelated to the fixture, tester records a finding rather than weakening E1.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q915-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for hard-gate review of lib/letflow/design/q915-regulatory-review-21day-timer-path.md; on PASS, route to TEST-DESIGNER (two test files + test/specs/ISS-0932.md) then ELIXIR-DEV/fixture edit per design section 8. ORCH to file the two follow-up issues (stale escalation timer; body_template rendering)."
+  }
+}

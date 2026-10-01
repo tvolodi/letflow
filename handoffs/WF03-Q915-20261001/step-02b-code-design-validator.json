@@ -1,0 +1,73 @@
+{
+  "handoff_id": "7e473cfe-79d2-44d3-90ee-dd5f9d351290",
+  "run_id": "WF03-Q915-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q915-20261001/step-02b-code-design-validator.json",
+  "created_at": "2026-10-01T15:35:01Z",
+  "started_at": null,
+  "completed_at": "2026-10-01T15:36:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0932": "id: ISS-0932 (queue Q-915, GH-2066); title: D3: Regulatory Compliance Review definition lacks the 21-day timer path to BaFin escalation; severity MAJOR; discovered_by UAT-RUNNER (ISS-0912 QA re-run 2026-10-01). Symptom: POST /instances/:id/advance-timer on risk-evaluation returns 404; regulatory-auto-escalation only reachable from the post-remediation-check unresolved branch. Evidence test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml (D3). Scenario test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml. Definition fixture test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json. ORCH findings (verify): risk-evaluation is HUMAN_TASK with only {role}; no pending timer exists so advance-timer 404s (Scheduler.resolve_advance_target picks the single pending timer, 400 if >1, 404 if none); edge timeout-risk-evaluation goes risk-evaluation->risk-evaluation-timeout->severity-routing->findings-sign-off, never regulatory-auto-escalation; HUMAN_TASK escalation_timer_duration only reassigns role; a :TIMER node (duration_iso8601) is the engine's routable timer. Required outcome: after evidence-collection completes a pending P21D timer exists, advance-timer fires it, flow runs regulatory-auto-escalation (SERVICE_TASK POST .../compliance/regulatory-notice) -> end-closed, instance COMPLETED; normal path (risk manager completes risk-evaluation -> severity-routing ...) must keep working with no dangling timer trouble. Consider whether reason 'sla_breach_30_days' must be in the service-task body. No QA data/DB changes; repo fixtures/definitions/tests/docs only; bump fixture version if appropriate."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/q915-regulatory-review-21day-timer-path.md",
+      "handoffs/WF03-Q915-20261001/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-Q915-20261001/step-02-code-designer.json",
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2",
+    "branch_name": "feature/WF03-Q915-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2b hard gate on CODE-DESIGNER's design for ISS-0932/Q-915. Independently verify the design: re-run its scratch validation yourself (Graph.validate_* and Transition.transition/3 against the real fixture modified per the design), confirm engine claims by reading code (escalation-fired path takes first non-conditioned edge; constant-true condition on e3 accepted by CHK-17/CHK-19; stale-timer and body_template claims), check the test specs are runnable, fail-first on the old fixture, and mutation targets meaningful; check no implementation code in the design and that every issue requirement (timer exists after evidence-collection, advance-timer fires it, regulatory-auto-escalation -> end-closed COMPLETED, normal path intact) is covered. You can spawn no one else and must not self-review; modify nothing except your handoff.",
+    "acceptance_criteria": [
+      "Design covers every required outcome",
+      "Independent re-execution of the claimed validations reported with results",
+      "Tests are runnable and discriminating",
+      "No implementation code, no lib change unless justified",
+      "Explicit PASS/FAIL with issues list"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independent verification of lib/letflow/design/q915-regulatory-review-21day-timer-path.md. Re-executed a scratch script (not committed) applying the design to the real fixture: Graph.validate_graph / validate_node_attributes / validate_edge_conditions all valid with no violations; Transition.transition/3 complete_task -> severity-routing for vars %{}, low, critical (so e3 constant-true does not change normal-path behaviour and does not silently escalate); escalation_timer_fired -> regulatory-auto-escalation for all three variable sets. Code reads confirmed: really_conditioned?/1 (transition.ex:566), advance_off_completed_node (conditioned first, then first non-conditioned default) and dispatch_escalation_timer_fired (skips conditioned, takes first default) so e3 is skipped on the timer path; dispatch_human_task arms :escalation_timer_armed when escalation_timer_duration is non-empty binary and engine.ex:696/716 consumes it; resolve_advance_target(nil) returns single pending timer / :no_pending_timer; router calls resolve_advance_target then fire_timer; fire_timer/2 and advance_after_service_task_outcome/4 signatures match the E1 steps; helpers named in the test spec exist in engine_catalog_service_task_test.exs. Current fixture matches the design's 'old' column (v1.1, risk-evaluation role-only, e4 and risk-evaluation-timeout present, YAML has same nodes/edges). All issue outcomes covered (timer exists after evidence-collection, advance-timer fires it, regulatory-auto-escalation -> end-closed COMPLETED via E1, normal path via T10/T11/E2). Tests are runnable (pure Transition + DB harness cited), fail-first expectations are consistent with the old shape, and mutations M1-M10 map to discriminating assertions. No implementation code in the design (tables/prose only); lib/ unchanged and justified. Not run: the two specified test files do not exist yet (design-only gate); E1 DB steps verified by code reading, not execution.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "started_at is null on this handoff (ORCH dispatch); left null per HANDOFF_PROTOCOL 1.2.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Scenario EO-002 (reason sla_breach_30_days in payload) intentionally remains unmet; design defers to a follow-up issue ORCH must file (body_template not rendered). Stale-escalation-timer defect likewise needs ORCH-filed follow-up. Accepted as out of scope.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "E1 step 7 (END -> :completed via advance_after_service_task_outcome) is code-read only; implementer should record any unrelated finding rather than weaken E1, as the design already states.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q915-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: proceed to WF-03 test/implementation steps per the design; file the two follow-up issues (stale HUMAN_TASK escalation timer; SERVICE_TASK body_template not rendered / EO-002)."
+  }
+}

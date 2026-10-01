@@ -18,4 +18,27 @@ affected_files:
   - lib/letflow/routers/admin_services.ex
 queue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950
 github_ref: GH-2095
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0950-20261001
+resolved_at: "2026-10-01T15:41:53Z"
+regression_tests:
+  - test/letflow/service_catalog/endpoint_url_validation_test.exs
+resolution_note: >
+  Register/publish-time syntactic endpoint_url validation added in Letflow.ServiceCatalog /
+  Routers.AdminServices; dispatch-time INV-9 gate remains the binding control. Gates in run
+  WF03-ISS0950-20261001: RELEASE-VALIDATOR PASS (step 04d). GitHub issue GH-2095 is closed by
+  ORCH after the merge lands, not by this run; the close comment cites the regression test above.
+followup_notes:
+  # Notes only; deliberately NOT filed as separate issue files (per step-05 handoff).
+  - severity: MINOR
+    note: >
+      0.0.0.0/8 appears to be missing from UrlValidator blocked_ipv4? (pre-existing):
+      https://0/ passes both register-time validation and the dispatch gate.
+  - severity: MINOR
+    note: >
+      UrlValidator.validate(url, :no_dns) footgun: the :no_dns mode skips resolution-based
+      checks, so callers can silently get a weaker validation than the dispatch gate applies.
+  - severity: MINOR
+    note: >
+      Webhooks router possibly lacks a {:error, :target_url_not_allowed} clause for
+      UrlValidator failures (unverified; flagged by review, not reproduced in this run).

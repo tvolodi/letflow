@@ -205,6 +205,12 @@ defmodule Letflow.ServiceCatalog do
   a typed atom distinguishable from an ordinary validation failure
   (mirrors `Letflow.Dlq`/`Letflow.Definitions.SolutionPack`'s own
   typed-error-atom convention), never a silent overwrite.
+
+  `endpoint_url` must pass `Letflow.ServiceCatalog.Entry.check_endpoint_url/1`
+  (ISS-0950: https, no private/loopback/link-local IP-literal host, no template
+  placeholder before the path); otherwise the changeset carries an
+  `:endpoint_url` error. Advisory fast feedback -- the dispatch-time INV-9 gate
+  remains binding.
   """
   @spec register(register_attrs()) ::
           {:ok, Entry.t()}
@@ -323,6 +329,11 @@ defmodule Letflow.ServiceCatalog do
   `publish/3` cannot disturb an already-recorded pin because there is no
   code path connecting the two subsystems at all, not because `publish/3`
   takes special care to avoid one.
+
+  The effective `endpoint_url` (including an inherited stored value when the key
+  is omitted) must pass `Letflow.ServiceCatalog.Entry.check_endpoint_url/1`
+  (ISS-0950); a failure returns `{:error, %Ecto.Changeset{}}` and rolls back the
+  archive insert. Advisory -- the dispatch-time INV-9 gate remains binding.
   """
   @spec publish(service_id :: String.t(), version :: String.t(), publish_attrs()) ::
           {:ok, Entry.t()}

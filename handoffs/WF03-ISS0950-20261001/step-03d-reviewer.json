@@ -1,0 +1,81 @@
+{
+  "handoff_id": "17efb7d5-15ec-495f-ae6f-f94c68749959",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0950-20261001/step-03d-reviewer.json",
+  "created_at": "2026-10-01T15:13:31Z",
+  "started_at": "2026-10-01T15:13:31Z",
+  "completed_at": "2026-10-01T15:14:08Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md",
+      "lib/letflow/webhooks/url_validator.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog.ex",
+      "handoffs/WF03-ISS0950-20261001/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0950-20261001/step-03c-security-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 3d REVIEWER gate. Review the implementation on branch feature/WF03-ISS0950-20261001 (git diff origin/main...HEAD -- lib/ test/) for idiomatic Elixir/Ecto, scope creep (only what the validated design lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md requires), decision-record consistency (0027, and anything on UrlValidator/INV-9), no supervision-tree impact, correct @spec/@doc, no duplicated blocklist, validate/1,2 behaviour unchanged. Look specifically at SECURITY-REVIEWER's MINOR 3 (validate(url, :no_dns) now returns :ok for hostnames -- a public footgun on the existing function; decide whether it needs a guard so only validate_syntactic/1 reaches the :no_dns branch, and if you rate it MAJOR say how, otherwise MINOR). Read handoffs/WF03-ISS0950-20261001/step-03-elixir-dev.json and step-03c-security-reviewer.json. Complete PASS/FAIL per HANDOFF_PROTOCOL.md (set status COMPLETED and write the result block yourself). Do not commit; leave lib/ test/ web/ unmodified.",
+    "acceptance_criteria": [
+      "Idiom, scope-creep, decision-consistency each answered with file:line evidence",
+      "MINOR-3 disposition stated",
+      "Verdict PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REVIEWER verdict PASS. Idiom: check_endpoint_url/1 (entry.ex:~258) uses with/else, binary matching, pure no-DNS; validate_endpoint_url/1 private changeset helper uses get_field so an inherited stored URL on publish is checked, skips nil and already-errored (no duplicate); wired into both changesets (entry.ex:156, 219). Has @spec/@doc/@moduledoc paragraph. Scope: only entry.ex, service_catalog.ex (doc-only), url_validator.ex, one test seeded as legacy data; router untouched as the design specifies (changeset clause already exists admin_services.ex:235/263/314); no new behaviour/macro/plumbing. Decisions: 0027 consistent (dispatch INV-9 gate stays binding, advisory only); blocklist not duplicated (validate_syntactic reuses check_ip_literal via check_host); validate/1,2 behaviour unchanged for function resolvers; no supervision-tree impact (pure functions, no process). No new type-safety gap requiring an issue beyond MINOR-3 below.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "SECURITY MINOR-3 disposition: rated MINOR, not MAJOR. url_validator.ex:129 `:not_an_ip when dns_resolver == :no_dns -> :ok` is reachable via public validate/2 (url_validator.ex:48-55) with the literal atom :no_dns, which validate/2's @spec (dns_resolver() = function) excludes, so Dialyzer flags any such caller; no caller passes it (grep: only url_validator.ex:70); previously a non-function crashed (fail-closed), now fails open for hostnames only (IP-literal blocklist and scheme still enforced). Not exploitable: needs a deliberate atom, and the dispatch gate calls validate with a real resolver. Recommended optional hardening for a follow-up (ELIXIR-DEV, type-safety): add `when is_function(dns_resolver, 1)` to validate/2, or route validate_syntactic through a private check_host_syntactic/1 so :no_dns never enters check_host's resolver parameter and the widened private @spec union goes away. Not blocking.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Design doc says no router change; affected_files in ISS-0950 lists routers/admin_services.ex. Consistent with design (changeset clauses already exist); noted only so TEST-DESIGNER covers the HTTP 422 path as the design's router-level assertions require.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Pre-existing shared-blocklist gaps (0.0.0.0/8, 100.64.0.0/10, multicast) already recorded by SECURITY-REVIEWER and the design; not for this change.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0950-20261001",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

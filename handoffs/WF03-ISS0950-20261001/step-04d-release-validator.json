@@ -1,0 +1,75 @@
+{
+  "handoff_id": "d17b7ea6-51a6-43e2-a26c-f46fb877c18f",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "04d",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0950-20261001/step-04d-release-validator.json",
+  "created_at": "2026-10-01T15:39:12Z",
+  "started_at": "2026-10-01T15:39:12Z",
+  "completed_at": "2026-10-01T15:41:24Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0950.yaml",
+      "lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md",
+      "test/reports/report-20261001-WF03-ISS0950-20261001.yaml",
+      "handoffs/WF03-ISS0950-20261001/step-04c-test-runner.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 4d RELEASE-VALIDATOR. Independently re-derive that ISS-0950's fix is real (do not trust prior reports). On branch feature/WF03-ISS0950-20261001 (main checkout; do not switch; never git checkout/reset): (1) re-run MIX_ENV=test mix test test/letflow/service_catalog/endpoint_url_validation_test.exs test/letflow/webhooks/url_validator_test.exs test/letflow/routers/admin_services_test.exs test/letflow/routers/admin_services_publish_retire_test.exs test/letflow/engine_catalog_service_task_test.exs and quote output; (2) do a live behavioural reproduction of the issue's symptoms via a scratch script or the router test harness: POST /admin/services with http://127.0.0.1/x, https://169.254.169.254/, https://10.0.0.5/, ftp://x, not a url => 422 now; a good https://example.test/path/{{variables.id}} => 201; publish with a bad URL => 422 and no archive row; (3) git diff origin/main...HEAD -- lib/ confirms ServiceTaskDispatcher and validate/1,2 behaviour unchanged and the diff matches the validated design with no scope creep; (4) check every acceptance point of the issue yaml docs/issues/ISS-0950.yaml (https scheme, host not private/loopback literal at register/publish time; dispatch gate stays binding). Mutants are not needed from you. Do not modify lib/ or test/. Write the result block yourself, COMPLETED, PASS/FAIL. Do not commit.",
+    "acceptance_criteria": [
+      "Tests re-run, real output quoted",
+      "Live repro of each symptom class quoted",
+      "Diff scope verified",
+      "Verdict PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived, not copied from TEST-RUNNER. (1) Re-ran MIX_ENV=test mix test on the 5 named files: 'Result: 96 passed', zero failures, no compiler warnings other than pre-existing TenantSchemaReaper log lines. (2) Live repro through the real AdminServices router with a scratch ExUnit file outside the repo (scratchpad/rv_live_test.exs, not committed): POST / with http://127.0.0.1/x, https://169.254.169.254/, https://10.0.0.5/, ftp://x, 'not a url' each -> 422 'validation failed', no service_catalog row created; good https://example.test/path/{{variables.id}} -> 201 echoed verbatim; POST /:id/versions with https://10.0.0.5/, http://x/, 'not a url' each -> 422, service_catalog_versions archive rows = 0, live row's endpoint_url unchanged; a good publish afterwards -> 201. (3) git diff origin/main...HEAD -- lib/: only service_catalog.ex (docs only, +11), service_catalog/entry.ex (check_endpoint_url/1 + validate_endpoint_url/1 wired into register and publish changesets), webhooks/url_validator.ex (new validate_syntactic/1 and a :no_dns clause in check_host/2) and the design doc. ServiceTaskDispatcher and routers/admin_services.ex are NOT in the diff; validate/1,2 bodies unchanged (the new check_host clause only fires for :no_dns, which validate/1,2 never pass). Diff matches the design; no scope creep. The one existing-test edit (engine_catalog_service_task_test.exs) seeds the legacy templated-host row via Repo.update_all because register now rejects it - justified, engine behaviour under test unchanged. (4) Issue acceptance points: https-only scheme enforced at register and publish; private/loopback/link-local IP-literal hosts rejected at register and publish (incl. effective inherited URL on publish, rollback leaves no archive row); dispatch-time INV-9 gate untouched and still binding. Not run per handoff constraint (scoped tests only): scripts/test_parallel.sh full suite and mix letflow.check.test - ORCH/CI should cover these before merge.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Full-suite scripts/test_parallel.sh and mix letflow.check.test not run by this validator (handoff said scoped tests only); the dead-default-arg check is therefore left to CI/ORCH.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Test runs emit 'Could not create schema migrations table' error log lines at startup (parallel DB setup noise); tests still pass. Pre-existing, unrelated to the diff.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: proceed to commit/push/merge gate; run mix letflow.check.test and CI as final checks."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

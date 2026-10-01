@@ -45,6 +45,12 @@ defmodule Letflow.ServiceCatalog.Entry do
   test against and is authoritative; these changeset checks never replace
   it.
 
+  `endpoint_url` additionally gets a syntactic SSRF pre-flight (ISS-0950,
+  `check_endpoint_url/1`): https scheme, no template placeholder in the
+  scheme/authority, and no private/loopback/link-local IP-literal host. It is
+  fast feedback only -- the INV-9 dispatch gate
+  (`Letflow.Engine.ServiceTaskDispatcher`, with real DNS) stays authoritative.
+
   ## REQ-373 — version/status lifecycle (design
   ## `lib/letflow/design/req373-service-catalog-version-lifecycle.md` §1/§3.3)
 
@@ -89,6 +95,8 @@ defmodule Letflow.ServiceCatalog.Entry do
 
   use Ecto.Schema
   import Ecto.Changeset
+
+  alias Letflow.Webhooks.UrlValidator
 
   @primary_key {:service_id, :string, autogenerate: false}
   schema "service_catalog" do
@@ -145,6 +153,7 @@ defmodule Letflow.ServiceCatalog.Entry do
     |> validate_required([:service_id, :endpoint_url, :required_auth, :timeout_ms, :scope])
     |> validate_length(:service_id, max: 255)
     |> validate_length(:endpoint_url, max: 2048)
+    |> validate_endpoint_url()
     |> validate_number(:timeout_ms,
       greater_than_or_equal_to: 1,
       less_than_or_equal_to: 3_600_000
@@ -207,6 +216,7 @@ defmodule Letflow.ServiceCatalog.Entry do
     ])
     |> validate_length(:version, max: 255)
     |> validate_length(:endpoint_url, max: 2048)
+    |> validate_endpoint_url()
     |> validate_number(:timeout_ms,
       greater_than_or_equal_to: 1,
       less_than_or_equal_to: 3_600_000
@@ -229,5 +239,71 @@ defmodule Letflow.ServiceCatalog.Entry do
     entry
     |> change(status: :RETIRED, retired_at: now, updated_at: now)
     |> validate_required([:status, :retired_at, :updated_at])
+  end
+
+  @endpoint_url_message "must be an https URL whose host is not a private, loopback or link-local address; template placeholders are allowed only after the host"
+
+  @doc """
+  Advisory, pure, no-DNS check of a catalog `endpoint_url` template (ISS-0950).
+
+  Takes the *head* (scheme + `://` + authority, up to the first `/`, `?` or `#`
+  after the first `"://"`), rejects it if it contains a template brace (a
+  placeholder in scheme/userinfo/host/port could steer the request target), and
+  otherwise runs `Letflow.Webhooks.UrlValidator.validate_syntactic/1` on it. The
+  path/query/fragment tail is not inspected. The dispatch-time INV-9 gate
+  (`UrlValidator.validate/2` with real DNS) is binding; this is fast feedback.
+  """
+  @spec check_endpoint_url(endpoint_url :: String.t()) ::
+          :ok | {:error, :endpoint_url_not_allowed}
+  def check_endpoint_url(endpoint_url) when is_binary(endpoint_url) do
+    with {:ok, head} <- endpoint_head(endpoint_url),
+         false <- String.contains?(head, ["{", "}"]),
+         :ok <- UrlValidator.validate_syntactic(head) do
+      :ok
+    else
+      _ -> {:error, :endpoint_url_not_allowed}
+    end
+  end
+
+  @spec endpoint_head(String.t()) :: {:ok, String.t()} | :error
+  defp endpoint_head(url) do
+    case :binary.match(url, "://") do
+      {pos, 3} ->
+        after_sep = pos + 3
+        rest = binary_part(url, after_sep, byte_size(url) - after_sep)
+
+        case :binary.match(rest, ["/", "?", "#"]) do
+          {idx, _} -> {:ok, binary_part(url, 0, after_sep + idx)}
+          :nomatch -> {:ok, url}
+        end
+
+      :nomatch ->
+        :error
+    end
+  end
+
+  # Reads the effective value (get_field), not just the change: cast records no
+  # change when a publish re-uses the stored URL, and validate_change would then
+  # skip it. Skipped for nil (validate_required already errors) and when the
+  # field already carries an error (e.g. length), to avoid a duplicate.
+  @spec validate_endpoint_url(Ecto.Changeset.t()) :: Ecto.Changeset.t()
+  defp validate_endpoint_url(changeset) do
+    value = get_field(changeset, :endpoint_url)
+
+    cond do
+      is_nil(value) ->
+        changeset
+
+      Keyword.has_key?(changeset.errors, :endpoint_url) ->
+        changeset
+
+      check_endpoint_url(value) == :ok ->
+        changeset
+
+      true ->
+        add_error(changeset, :endpoint_url, @endpoint_url_message,
+          validation: :endpoint_url_not_allowed
+        )
+    end
   end
 end

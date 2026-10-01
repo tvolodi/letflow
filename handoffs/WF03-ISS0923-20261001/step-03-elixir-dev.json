@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0923-20261001/step-03-elixir-dev.json",
   "created_at": "2026-10-01T16:41:06Z",
   "started_at": "2026-10-01T16:41:06Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-01T16:42:32Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,5 +40,10 @@
   "task": {
     "description": "Work in C:/Users/tvolo/dev/ai-dala/letflow-3 on the already checked-out branch feature/WF03-ISS0923-20261001 (do not switch branches; do not touch main or other branches/PRs). Shared machine: scoped `mix test <files>` only, never the full suite; use MIX_TEST_PARTITION=<unique> for tests that commit catalog rows. Do not commit (ORCH commits); do not leave mutants in the tree. WF-03 Step 3: implement the validated design lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md exactly (second guard in ServiceCatalog.delete/1; transactional versions-then-entry delete; new Error.service_referenced_by_active_instances/1; new clause in Routers.AdminServices.handle_delete; @spec/@doc). Do NOT write the regression test suite (TEST-DESIGNER's job in Step 4) but you MUST run mix compile --warnings-as-errors (and mix format on touched files) and the existing scoped tests test/letflow/service_catalog_test.exs and the admin services router test file(s) that exist (find via grep), with MIX_TEST_PARTITION set to a unique value (e.g. 9231), quoting the results. Validator minor notes to honour: word the @doc as 'closes the window for every start that begins after the retire commits; only a start already in flight at retire time can still slip through' rather than 'certainty'. Doc updates in the design's doc-update list (req373 design doc stale delete/1 union) are DOC-UPDATER's later, skip. Return the list of changed files and the exact public signatures in result.summary. Fill this handoff file's result (status PASS/FAIL, summary with quoted real output, issues, next_action) and set top-level status COMPLETED with real UTC completed_at (`date -u`)."
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented design iss0923 exactly. Changed files: lib/letflow/service_catalog.ex, lib/letflow/api/error.ex, lib/letflow/routers/admin_services.ex. Public signatures: ServiceCatalog.delete(service_id :: String.t()) :: :ok | {:error, :not_found} | {:error, {:referenced_by_active_definitions, [String.t()]}} | {:error, {:referenced_by_active_instances, instance_refs()}}; @type instance_refs :: %{instance_ids: [Ecto.UUID.t()], truncated: boolean()}; Letflow.Api.Error.service_referenced_by_active_instances(%{instance_ids: [String.t()], truncated: boolean()}) :: t() (409, type .../service-referenced-by-active-instances, extensions string keys instance_ids/truncated, fixed detail). Router: new handle_delete clause for {:error, {:referenced_by_active_instances, refs}} after definitions clause; moduledoc updated. Impl: private referencing_non_terminal_instances/1 (every registration, per-tenant LIMIT 51 ordered by instance_id, concat, sort, take 50, truncated flag), reuses @service_task_reference_fragment on snapshot graph with bound service_id; status list derived at runtime from Ecto.Enum.values + InstanceProjection.terminal?/1 (no second copy); delete_entry now Repo.transaction deleting Version rows then Entry, rescue Ecto.StaleEntryError -> {:error, :not_found} wraps the transaction (rollback), changeset error -> rollback(:not_found). @doc worded per validator note ('closes the window for every start that begins after the retire commits; only a start already in flight at retire time can still slip through'). Verification: `MIX_ENV=test MIX_TEST_PARTITION=9231 mix compile --warnings-as-errors` -> clean (no warnings). `mix format --check-formatted` on 3 files -> FORMAT_OK. `MIX_ENV=test MIX_TEST_PARTITION=9231 mix test test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs test/letflow/routers/admin_services_publish_retire_test.exs test/letflow/service_catalog_resolve_pinned_version_test.exs` -> 'Result: 80 passed'. Note: MIX_TEST_PARTITION requires MIX_ENV=test (config raises under dev). No regression tests written (TEST-DESIGNER Step 4); the new instance guard query is not yet exercised by an instance fixture. No commit; no mutants left; no doc-list updates (DOC-UPDATER).",
+    "issues": [],
+    "next_action": "SECURITY-REVIEWER (tenant data path), then REVIEWER, then TEST-DESIGNER (Step 4)"
+  }
 }

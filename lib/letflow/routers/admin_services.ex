@@ -93,8 +93,10 @@ defmodule Letflow.Routers.AdminServices do
 
   ## 409 problem-details bodies (REQ-066, design §11)
 
-  Two new `Letflow.Api.Error` constructors,
-  `service_referenced_by_active_definitions/1` (delete-blocked) and
+  Three `Letflow.Api.Error` constructors,
+  `service_referenced_by_active_definitions/1` (delete-blocked by ACTIVE
+  definitions), `service_referenced_by_active_instances/1` (delete-blocked by
+  non-terminal pinned instances, ISS-0923) and
   `service_scope_narrowing_conflict/1` (narrow-blocked), modeled on the
   existing `Error.promotion_conflict/2`'s real RFC 9457 extensions-map
   shape. A duplicate `service_id` on register maps to plain
@@ -284,6 +286,9 @@ defmodule Letflow.Routers.AdminServices do
           conn,
           Error.service_referenced_by_active_definitions(definition_ids)
         )
+
+      {:error, {:referenced_by_active_instances, refs}} ->
+        Response.send_problem(conn, Error.service_referenced_by_active_instances(refs))
     end
   end
 

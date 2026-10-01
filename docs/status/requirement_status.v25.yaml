@@ -478,3 +478,64 @@ history:
       REQ-294 all confirmed status: done). letflow-queue task 867
       (GH#1884) still needs release_lock(status=done) -- not called from
       here; DOC-UPDATER does not call the queue.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T21:37:43Z"
+    note: >
+      ISS-0926 resolved (SERVICE_TASK body_template not rendered by the
+      engine -- UAT EO-002 reason sla_breach_30_days unmet). PR #2113, branch
+      fix/ISS-0926-service-task-body-template-rendering, commit cc698812,
+      already merged to main (confirmed ancestor via git merge-base
+      --is-ancestor). Root cause: Letflow.Engine rendered only the
+      SERVICE_TASK url_template ({{variables.KEY}} substitution);
+      body_template was parsed/stored but never rendered -- sent raw to the
+      HTTP body, so regulatory-notice reasons never actually reached the
+      compliance endpoint. The shared node regulatory-auto-escalation was
+      also reachable via two edges needing different static reasons, which a
+      single body_template couldn't express. Design:
+      lib/letflow/design/iss0926-service-task-body-template-rendering.md,
+      CODE-DESIGN-VALIDATOR PASSed, and explicitly overrode the design's own
+      "SECURITY-REVIEWER not required" self-assessment to make it a required
+      hard gate (JSON-injection-adjacent risk on unescaped substitution).
+      Fix: renamed render_service_task_url/2 ->
+      render_service_task_template/2 (byte-identical, url_template only);
+      added render_service_task_body_template/2 + json_string_escape/1
+      (Jason.encode!/1, strip outer quotes) for body_template only;
+      config_snapshot gained a "rendered_body" key mirroring the existing
+      rendered_url/url_template pairing; ServiceTaskDispatcher now sends
+      config_snapshot["rendered_body"]. QA fixture split the shared
+      regulatory-auto-escalation node (id preserved, load-bearing for
+      EO-001's audit-trail check) into two nodes: the original keeps its one
+      remaining inbound edge (sla_breach_30_days), and a new sibling
+      remediation-unresolved-escalation (reason remediation_unresolved) takes
+      over edge e10, with new edge e18 to end-closed. SECURITY-REVIEWER:
+      FAILed first pass with a concrete, reproduced proof-of-concept -- an
+      adversarial review_id containing a literal quote could inject arbitrary
+      JSON fields or a duplicate "reason" key, letting a fabricated reason
+      potentially override the legitimate one sent to the BaFin compliance
+      endpoint; fixed via the escaping helper, re-reviewed and PASSed with an
+      exhaustive 9-adversarial-value check. REVIEWER PASSed, fixed a mix
+      format violation directly, added a docs/anti-patterns.md entry on
+      generalizing a template-rendering function to a new field without
+      re-checking its own escaping needs. TEST-RUNNER: full suite clean,
+      5319/5319. RELEASE-VALIDATOR: exhaustive independent re-verification --
+      hand-traced the escaping logic, confirmed the URL-path renderer
+      byte-identical to pre-change via direct diff, ran 6 own NEW adversarial
+      cases beyond SECURITY-REVIEWER's 9, ran a mutation test reverting the
+      escaping helper that correctly reproduced the vulnerability via 5
+      failing regression tests, confirmed the fixture graph structurally
+      sound, confirmed the EO-001 audit-event test untouched and passing,
+      re-ran the full engine test subset fresh (1089/1089), ran two
+      independent full-suite runs via scripts/test_parallel.sh (N=8 and N=3)
+      whose only failures were the known too_many_connections host-contention
+      issue, unrelated (confirmed via grep, zero overlap). mix
+      letflow.check.test hit the already-documented ISS-0939
+      report_partition_failures/1 hang bug (unrelated, known); killed per
+      established mitigation. Verdict: PASS. docs/issues/ISS-0926.yaml set to
+      status: resolved in this same commit. This is an ISSUE closure, not a
+      REQ -- docs/requirements.yaml untouched. queue_ref Q-926/github_ref
+      GH-2106 are this issue's own metadata fields from filing; this issue
+      was discovered by CODE-DESIGNER during WF03-Q915-20261001, not claimed
+      via get_next_task, so no live letflow-queue task is tied to issue_ref
+      ISS-0926 to release.

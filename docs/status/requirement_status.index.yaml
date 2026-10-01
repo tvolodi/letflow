@@ -5826,10 +5826,11 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 11
+    entries: 12
     note: >
-      Incremented to 11 by DOC-UPDATER's own ISS-0942 done-event append
-      (fix/ISS-0942-task-complete-authorization-gap, 2026-10-01T10:15:00Z)
+      Incremented to 12 by DOC-UPDATER's own ISS-0944 done-event append
+      (fix/ISS-0944-task-complete-instance-not-active-mapping,
+      2026-10-01T14:50:32Z)
       -- `grep -c "^  - req:" docs/status/requirement_status.v25.yaml` =
       11 on-disk entries; 358 lines / 21559 bytes, well under the
       1200-line/120000-byte roll ceiling, no roll triggered.

@@ -20,4 +20,32 @@ affected_files:
   - lib/letflow/engine.ex
 queue_ref: Q-916  # queue allocated issue_ref ISS-0916, which collides with an existing local file (a different, unrelated ServicesPage click-handler bug); local filename kept as ISS-0944 (next free on origin/main) and GH-2067 retitled to match
 github_ref: GH-2067
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0944-task-complete-instance-not-active-mapping
+resolved_at: "2026-10-01T14:50:32Z"
+resolution: >
+  Root cause: handle_complete_result/2 in lib/letflow/routers/tasks.ex had no
+  case clause for {:error, {:instance_not_active, status}} -- a documented,
+  correctly-returned member of Engine.complete_task/3's own error union when
+  the owning instance isn't :active -- so it fell through to the generic
+  catch-all and returned HTTP 500 instead of a proper 4xx. Fix: one new
+  clause mirroring the existing {:task_not_pending, _} precedent in the same
+  handler, mapping to Response.conflict(conn, "instance is #{status}") (409),
+  with a single clause correctly covering all three possible status values
+  (:completed/:cancelled/:error) via the unbound status variable --
+  independently confirmed by RELEASE-VALIDATOR's own adversarial tests for
+  the two status values beyond the originally-reported :error case.
+  {:instance_execution_error, _, _} (a separate, still-open issue, ISS-0917)
+  deliberately left untouched. PR #2090, branch
+  fix/ISS-0944-task-complete-instance-not-active-mapping, commit bf5d4be3.
+  Full gate chain ALL PASSed: CODE-DESIGN-VALIDATOR, ELIXIR-DEV
+  implementation, REVIEWER, TEST-RUNNER (full suite clean after correctly
+  diagnosing a host connection-budget sizing issue), and RELEASE-VALIDATOR
+  (exhaustive independent re-verification -- its own mutation test proving
+  the regression guard is non-vacuous, removing the new clause reproduced
+  the original 500, confirming the regression test is load-bearing; its own
+  adversarial tests confirming the single new clause correctly covers all
+  three instance statuses, not just the reported :error case; two
+  independent full-suite runs, including mix letflow.check.test). This is
+  an ISSUE closure, not a REQ -- docs/requirements.yaml untouched.
+  letflow-queue task 916 to be released as done after merge.

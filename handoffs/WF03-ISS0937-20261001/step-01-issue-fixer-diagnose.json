@@ -1,0 +1,46 @@
+{
+  "handoff_id": "f1a4f962-83ec-4967-9dad-2cad799d4a69",
+  "run_id": "WF03-ISS0937-20261001",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0937-20261001/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-10-01T00:26:14Z",
+  "started_at": "2026-10-01T00:26:14Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0937": "id: ISS-0937\ntitle: \"Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01\"\ndiscovered_by: ELIXIR-DEV\ndiscovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)\ndiscovered_at: \"2026-10-01T00:21:56Z\"\nseverity: MAJOR\ndescription: >\n  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest\n  parity failure extra=[\"events_y2026m09\"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in\n  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not\n  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.\n  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.\naffected_files:\n  - test/letflow/events/ (partition maintenance / retention tests)\n  - test/letflow/tenants/ (tenant template parity test)\nqueue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937\ngithub_ref: GH-2077\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0937.yaml",
+      "test/letflow/tenants/",
+      "test/letflow/events/",
+      "lib/letflow/events/",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937",
+    "branch_name": "feature/WF03-ISS0937-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup in docs/issues/*.yaml for resolved entries about partitions, events_y*, retention, month-boundary/clock-dependent tests, TenantTemplateTest parity) + Step 1 (diagnose), combined. DEFECT: backend CI went red at the UTC month boundary 2026-09-30 -> 2026-10-01. PR #2076 runs: GitHub Actions run 36793410900 (backend job started 2026-10-01T00:06Z) failed with ~12 failures in PartitionMaintenanceTest / RetentionOperationsTest / EventRetentionTest ({:error, :partition_not_eligible}); an earlier run failed TenantTemplateTest parity with extra=[events_y2026m09] (that earlier run's logs: use `gh run list --branch feature/WF03-ISS0930-20261001` + `gh run view <id> --log-failed`; strip noise with grep -E 'test/.*exs:[0-9]+|tests, |failures|extra|partition_not_eligible' - the logs are huge, never dump them whole). Main's own CI runs: 36795709173 (commit ed40c2fa) and 36795979277 (commit 590c923f) were still running at dispatch; poll them (`gh run view <id> --json status,conclusion,jobs`) and report whether main is currently RED or GREEN with the failing test names if red. NOTE a pull_request run on a docs-only chore branch at 2026-10-01T00:22Z had its backend job succeed in 52s - check whether backend gate is path-filtered/skipped for docs-only changes (so its success proves nothing) before using it as evidence. TASK: determine the TRUE root cause with evidence, not hypothesis. Read the failing tests and the code they exercise (partition maintenance/retention/events partition creation, tenant template build, Letflow.Tenants / TenantProvisioning partition creation; find the modules by grep for 'events_y', 'partition_not_eligible', 'PartitionMaintenance', 'EventRetention', 'RetentionOperations', 'TenantTemplate'). Determine for each failing test: how does it derive 'now' / current month (DateTime.utc_now, Date.utc_today, a clock option/injection, a migration that creates events_yYYYmMM partitions for a fixed window, a template fixture?), and why does a month rollover break it. Decide whether the fix belongs in (a) tests (make them clock-independent / derive from the same clock source), (b) the production partition-creation code (e.g. the template/migration pre-creates partitions relative to build time so the parity comparison differs; or partitions for the new current month are not being created/eligible), or (c) both; state which, and why. Distinguish a real production defect (e.g. next-month partition not created in time at a real month boundary -> inserts failing in prod) from a test-only brittleness. REPRODUCE: locally with a controllable clock if feasible. The worktree has no deps/_build: you may run `mix deps.get`/compile there, or reuse the main checkout's compiled artifacts by setting MIX_BUILD_PATH / copying deps (do NOT modify the main checkout's tree, never switch branches there). A local Postgres for this workspace is configured via .env (LETFLOW_DB_PORT, 5482; already copied to the worktree; do not print secrets); start it with `docker compose up -d` in the WORKTREE only if not already reachable (check with a quick connect first). Today's real UTC date is already 2026-10-01 so the failing tests should reproduce for real right now: run the failing test files (mix test test/letflow/... --seed 0 etc.) and quote real failure output. Then, if feasible, reproduce the PASSING case by faking the clock back to September (e.g. `faketime`/libfaketime isn't available on Windows - instead look for an injectable clock/`:now` option or Application env the code already supports; if none exists, say so and prove the dependency by reading the code and by a small mix run that calls the partition-eligibility function with a September timestamp vs an October one). Do NOT implement the fix. Work ONLY in the worktree in context.worktree (never the main checkout C:/Users/tvolo/dev/ai-dala/letflow-4; do not switch branches anywhere). Do not commit; ORCH commits. Do not edit any file except this handoff. Fill result in this handoff file; set status IN_PROGRESS at claim, then COMPLETED/FAILED with result.status PASS/FAIL. result.summary MUST contain: registry lookup result; root cause with file:line citations; for each of the 4 test groups the clock source and why it breaks; main's CI state (run ids, conclusions, failing tests); whether it is test-only or production-affecting and why; recommended fix location and concrete change list (files, approach: e.g. an injectable clock / derive expectations from the same function the code uses / freeze via Application env); whether a fail-first regression test is feasible (it must be able to FAIL on pre-fix code under a simulated month-boundary clock regardless of the real date - say how), and the owned_modules the fix will write (put them in result.owned_modules too). next_action: 'Route to CODE-DESIGNER for fix design'.",
+    "acceptance_criteria": [
+      "Registry lookup result stated",
+      "Root cause named with file:line citations and real failure output quoted",
+      "Main CI state (red/green) stated with run ids",
+      "Test-only vs production defect decided with reasoning",
+      "Fix location and concrete change list decided",
+      "Fail-first regression approach under a simulated clock stated",
+      "owned_modules listed",
+      "No files modified other than this handoff"
+    ]
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "284e267e-f735-46dd-a0dc-793628320938",
+  "run_id": "WF03-ISS0937-20261001",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0937-20261001/step-04b-test-design-validator.json",
+  "created_at": "2026-10-01T01:18:30Z",
+  "started_at": "2026-10-01T01:18:30Z",
+  "completed_at": "2026-10-01T01:22:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0937": "id: ISS-0937\ntitle: \"Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01\"\ndiscovered_by: ELIXIR-DEV\ndiscovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)\ndiscovered_at: \"2026-10-01T00:21:56Z\"\nseverity: MAJOR\ndescription: >\n  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest\n  parity failure extra=[\"events_y2026m09\"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in\n  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not\n  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.\n  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.\naffected_files:\n  - test/letflow/events/ (partition maintenance / retention tests)\n  - test/letflow/tenants/ (tenant template parity test)\nqueue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937\ngithub_ref: GH-2077\nstatus: open\n"
+    },
+    "related_handoff_ids": [
+      "bf3d02c3-985f-4024-8789-348ec83c1273"
+    ],
+    "artifacts_in": [
+      "test/support/partition_clock_test.exs",
+      "test/support/tenant_template_test.exs",
+      "test/specs/ISS-0937.md",
+      "lib/letflow/design/iss0937-month-boundary-test-clock.md",
+      "handoffs/WF03-ISS0937-20261001/step-04-test-designer.json"
+    ],
+    "owned_modules": [
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs",
+      "test/support/partition_clock.ex (new)",
+      "test/support/tenant_template_test.exs (new parity regression test)"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937",
+    "branch_name": "feature/WF03-ISS0937-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4b TEST-DESIGN-VALIDATOR gate for ISS-0937. Validate the regression tests (test/support/partition_clock_test.exs, the new ISS-0937 describe in test/support/tenant_template_test.exs, spec test/specs/ISS-0937.md) against the design lib/letflow/design/iss0937-month-boundary-test-clock.md section 3 and docs/issues/ISS-0937.yaml. Check: every design-specified test exists and asserts what the design says; tests never read the real date; no skipped tests; fixtures isolated; guard tests (real drift still reported) are real. MANDATORY per WF-03 'code under test does not exist' rule: INDEPENDENTLY APPLY at least TWO of TEST-DESIGNER's reported mutants yourself in a THROWAWAY git worktree (e.g. ../letflow-4-wf03-iss0937-val from the branch HEAD; copy deps from ../letflow-4/deps; .env copy for DB) - M3 (filter reference side only, the original bug) and M1 (ignore N / legacy offset) - and run the test files, confirming your failure counts match the handoff step-04 (M3 -> 6/23 failing, M1 -> 3/23) or reporting the discrepancy; also run the pre-fix check yourself for the parity tests against origin/main's test/support/tenant_template.ex. Remove the throwaway worktree afterwards (git worktree remove --force) and confirm `git status --porcelain` in the branch worktree C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937 is clean except your handoff. Also note: TEST-DESIGNER reported one unexplained first-run failure in `mix letflow.check.test` that passed on re-run - assess whether any of the new/changed tests could be that flake (e.g. concurrent schema creation, shared tenant_template), and say so. Modify nothing but this handoff. Set IN_PROGRESS at claim then COMPLETED/FAILED, result.status PASS/FAIL; next_action 'Route to TEST-RUNNER' on PASS.",
+    "acceptance_criteria": [
+      "Design-specified tests present",
+      "Two mutants independently applied with matching counts",
+      "Pre-fix check independently run",
+      "Throwaway worktree removed",
+      "Flake assessment"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. (1) Design section 3 coverage: all 5 designed partition_clock tests present (+ shift_months test) and all 6 designed parity tests (+ missing-direction guard); each asserts what the design says. No Date.utc_today/utc_now/skip/TODO/secrets in the new tests (grep: only a moduledoc mention); parity tests use fixed literal table names and unique iss0937_{ref,cand}_<n> schemas dropped in on_exit; tenant_template_test is async:false. Guard tests are real: non-partition extra, missing non-partition, invalid names, fixed events_default extra all assert on exact message text. (2) Independent mutants in throwaway detached worktree (deps/_build/.env copied, no links), baseline 23 passed: M3 (candidate side unfiltered = original bug) -> 6 failed/23 (17 passed) matching handoff; M1 (d = today, ignores N) -> 3 failed/23 (20 passed: boundary dates, eligible-every-day, legacy-regression) matching handoff. Each mutant reverted via git checkout; status porcelain empty and rerun 23 passed. (3) Pre-fix check: origin/main test/support/tenant_template.ex with branch tests: tenant_template_test 13/17 pass, 4 fail with extra=[events_y2026m09], extra=[events_archive_y2026m09], extra=[events_y2026m11], extra=[events_y2026m09, widgets_extra]; consistent with handoff 10/23 total (the 6 partition_clock tests need the new module). (4) Throwaway worktree removed (worktree remove --force + prune); branch worktree git status --porcelain shows only this handoff. (5) Flake assessment: cannot reproduce or identify the first-run failure. New tests are unlikely to be the cause: the parity describe lives in an async:false file so it never overlaps other sync tests in its VM; schema names are unique per call and only exist briefly; the only schema-enumerating readers (partition_maintenance_test pg_namespace joins, sandbox_pool_test) are keyed on specific schema names, not a global listing; partition_clock_test is pure. Residual risk: System.unique_integer is per-VM, so a collision across partition VMs is theoretically possible but the file runs in one partition. More plausible candidates are pre-existing known-flaky suites (e.g. lua_wallclock_race, midnight/clock-sensitive tests, shared Postgres pool); not attributed. Recommend TEST-RUNNER record the first failing test if it recurs.",
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": "Route to TEST-RUNNER"
+  }
+}

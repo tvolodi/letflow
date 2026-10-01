@@ -48,7 +48,8 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
   days) would force every eligibility-dependent fixture to seed events with
   a `created_at` over a year in the past, which still works but adds no
   coverage over a much shorter, equally-real override — `eligible?/2`'s
-  logic (`today >= last_day(month) + min_partition_age_days`) is exercised
+  logic (`today >= first_day_of_next_month + min_partition_age_days`, i.e.
+  `last_day + 1 + min_partition_age_days`) is exercised
   identically either way. Every override uses
   `with_event_retention_override/2` below, which restores the previous
   config in an `after` block unconditionally (including on test failure) —
@@ -67,6 +68,10 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
   alias Letflow.EventStore.PartitionMaintenance
   alias Letflow.EventStore.RetentionPolicy
   alias Letflow.TenantFixture
+  alias Letflow.Test.PartitionClock
+
+  # Single source for the override value and the PartitionClock argument.
+  @override_age_days 1
 
   # ===========================================================================
   # Tenant / schema fixtures — mirrors event_store_test.exs's own
@@ -231,10 +236,12 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     NaiveDateTime.new!(year, month, 15, 12, 0, 0) |> DateTime.from_naive!("Etc/UTC")
   end
 
-  # A month that is always eligible once min_partition_age_days is
-  # overridden down to 1 (see this file's moduledoc) -- last calendar
-  # month, regardless of which day "today" happens to be.
-  defp eligible_past_month, do: shift_months(current_month(), -1)
+  # The latest month eligible once min_partition_age_days is overridden down
+  # to @override_age_days (see this file's moduledoc). NOT simply "last
+  # calendar month": that is ineligible on the 1st of every month. See
+  # Letflow.Test.PartitionClock.eligible_past_month/2 for the rule (ISS-0937).
+  defp eligible_past_month,
+    do: PartitionClock.eligible_past_month(Date.utc_today(), @override_age_days)
 
   # Directly creates a month partition attached to `events`, matching
   # priv/repo/migrations/20260922000002_create_events_p_initial_partitions.exs's
@@ -458,7 +465,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     test "issues zero per-row DELETE/row-scoped INSERT when nothing needs reconciling" do
       %{schema_name: schema_name} = provisioned_tenant()
 
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         {year, month} = eligible_past_month()
         partition = create_events_month_partition!(schema_name, year, month)
 
@@ -486,7 +493,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     test "a concurrent write to a different, live partition completes while retirement runs" do
       %{schema_name: schema_name} = provisioned_tenant()
 
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         {year, month} = eligible_past_month()
         create_events_month_partition!(schema_name, year, month)
 
@@ -521,7 +528,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     test "resumed from :detached_standalone (stopped after DETACH, before ATTACH)" do
       %{schema_name: schema_name} = provisioned_tenant()
 
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         {year, month} = eligible_past_month()
         partition = create_events_month_partition!(schema_name, year, month)
 
@@ -558,7 +565,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     test "idempotent no-op resumed from :already_retired, no ATTACH/DETACH re-issued" do
       %{schema_name: schema_name} = provisioned_tenant()
 
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         {year, month} = eligible_past_month()
         partition = create_events_month_partition!(schema_name, year, month)
 
@@ -589,7 +596,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     test "resumed from :pending_detach, a genuinely interrupted DETACH CONCURRENTLY" do
       %{schema_name: schema_name} = provisioned_tenant()
 
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         {year, month} = eligible_past_month()
         partition = create_events_month_partition!(schema_name, year, month)
 
@@ -691,7 +698,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     test "a keep_forever row's count across events UNION events_archive is unchanged" do
       %{schema_name: schema_name} = provisioned_tenant()
 
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         {year, month} = eligible_past_month()
         create_events_month_partition!(schema_name, year, month)
 
@@ -730,7 +737,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       with_event_retention_override(
-        [min_partition_age_days: 1, reconciliation_batch_size: 3],
+        [min_partition_age_days: @override_age_days, reconciliation_batch_size: 3],
         fn ->
           {year, month} = eligible_past_month()
           partition = create_events_month_partition!(schema_name, year, month)
@@ -775,7 +782,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     test "an instance spanning two months returns every event, in order, after the older month retires" do
       %{schema_name: schema_name} = provisioned_tenant()
 
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         {old_year, old_month} = eligible_past_month()
         create_events_month_partition!(schema_name, old_year, old_month)
 
@@ -816,7 +823,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     test "stays attached as DEFAULT after retirement, and a far-future write still lands there" do
       %{schema_name: schema_name} = provisioned_tenant()
 
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         {year, month} = eligible_past_month()
         create_events_month_partition!(schema_name, year, month)
 
@@ -853,7 +860,7 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     test "every retired row has a non-null archived_at, never exposed on the Event struct" do
       %{schema_name: schema_name} = provisioned_tenant()
 
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         {year, month} = eligible_past_month()
         partition = create_events_month_partition!(schema_name, year, month)
 

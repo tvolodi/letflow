@@ -502,6 +502,101 @@ defmodule Letflow.Test.TenantTemplateTest do
     end
   end
 
+  describe "ISS-0937 -- dynamic month partition tables are ignored on both sides of the table-set dimension" do
+    # Regression for the parity half of ISS-0937. The migration that creates
+    # events_yYYYYmMM runs at RUN time, so a template built in month N and a
+    # reference replayed in month N+1 hold different dynamic partition tables.
+    # check_table_set/2 used to filter them only from the `missing` side, so
+    # the stale month showed up as `extra`. These tests hand-build two schemas
+    # with FIXED table names (no wall-clock) and call the real public
+    # assert_clone_parity!/3 restricted to dimension #1, so they fail on every
+    # real date against the pre-fix code.
+
+    test "stale dynamic partition on the candidate side is not reported as extra" do
+      {ref, cand} =
+        build_schemas!(
+          ["shared_t", "events_y2026m10", "events_y2026m11"],
+          ["shared_t", "events_y2026m09", "events_y2026m10"]
+        )
+
+      assert :ok = TenantTemplate.assert_clone_parity!(ref, cand, dimensions: [1])
+    end
+
+    test "dynamic partition only on the reference side is not reported as missing" do
+      {ref, cand} =
+        build_schemas!(
+          ["shared_t", "events_y2026m09", "events_y2026m10"],
+          ["shared_t", "events_y2026m10", "events_y2026m11"]
+        )
+
+      assert :ok = TenantTemplate.assert_clone_parity!(ref, cand, dimensions: [1])
+    end
+
+    test "events_archive dynamic partitions are ignored on both sides" do
+      {ref, cand} =
+        build_schemas!(
+          ["shared_t", "events_archive_y2026m10"],
+          ["shared_t", "events_archive_y2026m09"]
+        )
+
+      assert :ok = TenantTemplate.assert_clone_parity!(ref, cand, dimensions: [1])
+    end
+
+    test "a non-partition extra table still raises" do
+      {ref, cand} =
+        build_schemas!(
+          ["shared_t", "events_y2026m10"],
+          ["shared_t", "events_y2026m09", "widgets_extra"]
+        )
+
+      error =
+        assert_raise ExUnit.AssertionError, fn ->
+          TenantTemplate.assert_clone_parity!(ref, cand, dimensions: [1])
+        end
+
+      assert error.message =~ ~s(table set: extra=["widgets_extra"])
+      refute error.message =~ "events_y2026m09"
+    end
+
+    test "a genuinely missing non-partition table still raises" do
+      {ref, cand} =
+        build_schemas!(["shared_t", "widgets_missing"], ["shared_t"])
+
+      error =
+        assert_raise ExUnit.AssertionError, fn ->
+          TenantTemplate.assert_clone_parity!(ref, cand, dimensions: [1])
+        end
+
+      assert error.message =~ ~s(table set: missing=["widgets_missing"])
+    end
+
+    test "names that are not valid month partitions are not ignored" do
+      for bad <- ["events_y2026m13", "events_y26m09", "eventsx_y2026m09", "events_extra"] do
+        {ref, cand} = build_schemas!(["shared_t"], ["shared_t", bad])
+
+        error =
+          assert_raise ExUnit.AssertionError, fn ->
+            TenantTemplate.assert_clone_parity!(ref, cand, dimensions: [1])
+          end
+
+        assert error.message =~ bad
+      end
+    end
+
+    test "a fixed partition-management table extra on the candidate side is still reported" do
+      # Pins the dynamic-only decision: events_default is date-independent, so
+      # it stays in the comparison on the extra direction.
+      {ref, cand} = build_schemas!(["shared_t"], ["shared_t", "events_default"])
+
+      error =
+        assert_raise ExUnit.AssertionError, fn ->
+          TenantTemplate.assert_clone_parity!(ref, cand, dimensions: [1])
+        end
+
+      assert error.message =~ ~s(table set: extra=["events_default"])
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Helpers -- deliberately independent of Letflow.TenantFixture/
   # Letflow.Test.TenantTemplate's own private machinery: this test proves the
@@ -522,6 +617,29 @@ defmodule Letflow.Test.TenantTemplateTest do
       :disabled
     )
     |> Repo.insert!()
+  end
+
+  # ISS-0937: builds two throwaway schemas with unique names, each holding
+  # the given plain (empty, one-column) tables, and drops both on exit.
+  defp build_schemas!(ref_tables, cand_tables) do
+    suffix = System.unique_integer([:positive])
+    ref = "iss0937_ref_#{suffix}"
+    cand = "iss0937_cand_#{suffix}"
+
+    on_exit(fn ->
+      drop_schema_if_exists(ref)
+      drop_schema_if_exists(cand)
+    end)
+
+    for {schema, tables} <- [{ref, ref_tables}, {cand, cand_tables}] do
+      Repo.query!(~s(CREATE SCHEMA "#{schema}"))
+
+      for table <- tables do
+        Repo.query!(~s|CREATE TABLE "#{schema}"."#{table}" (id integer)|)
+      end
+    end
+
+    {ref, cand}
   end
 
   defp clone_schema_name(tenant_id) do

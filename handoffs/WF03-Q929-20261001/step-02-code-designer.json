@@ -1,0 +1,77 @@
+{
+  "handoff_id": "8e3b1f52-6a7c-4d19-b0e4-2c5d9a7f1b36",
+  "run_id": "WF03-Q929-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-Q929-20261001/step-02-code-designer.json",
+  "created_at": "2026-10-02T06:45:00Z",
+  "started_at": null,
+  "completed_at": "2026-10-02T07:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0929": "queue Q-929 / GH #2115: vortex/supplier-quality-deviation-critical goes to ERROR SUB_PROCESS_DEFINITION_NOT_FOUND on severity=critical. Design the fix per ISSUE-FIXER diagnosis (new 8D child fixture, parent fixture v1.2 with definition_name, seed script updates, persona-actor seed + drift test flips, alias file, simulation parity, tests) and RESOLVE EMPIRICALLY whether the parent advances through SERVICE_TASK close-deviation to end-closed after the child completes."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-Q929-20261001/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0929.yaml",
+      "lib/letflow/design/q915-regulatory-review-21day-timer-path.md",
+      "lib/letflow/engine/sub_process.ex",
+      "test/letflow/engine/regulatory_review_timer_path_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-a5c794b4cbceb277a",
+    "branch_name": "feature/WF03-Q929-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2 fix design for ISS-0929/Q-929. Design doc only at lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md. Resolve the SERVICE_TASK-after-SUB_PROCESS question empirically with a throwaway probe test (deleted afterwards).",
+    "acceptance_criteria": [
+      "Diagnosis edit list covered: child fixture, parent fixture v1.2, seed scripts, persona seed + drift test flips, alias file, simulation parity, tests",
+      "Open question resolved empirically with quoted output",
+      "lib/ change (if any) specified minimally with function-level behavior and security-reviewer scope statement",
+      "Scope boundaries stated (no QA data change)",
+      "No implementation code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md. EMPIRICAL RESULT: a throwaway DB-backed probe (deleted; git status clean of it) loaded the real parent fixture with definition_name='8D Corrective Action' plus a START->HUMAN_TASK(role-procurement-manager)->END child. Sub-process spawn works (child ACTIVE at corrective-action-8d). After the child task was completed the observed output was: 'parent after child complete: {:active, [\"close-deviation\"]}', 'parent dispatches: [{\"quarantine-batch\", \"advanced\"}]', 'parent tokens: [{\"close-deviation\", :active}]' -- i.e. NO service_task_dispatches row for close-deviation, the parent is stuck ACTIVE and can never reach end-closed/COMPLETED. The suspected defect is CONFIRMED: SubProcess.build_completion_multi_from_merge discards pending events (_pending_events and _more_pending) so SERVICE_TASK/TIMER/escalation arms after a SUB_PROCESS are never persisted. Fixture-only fix is insufficient. DESIGN: (1) fixtures: new test/fixtures/qa/vortex_8d_corrective_action_definition.json (not *_process_definition.json, to dodge TC-0930-01), parent v1.1->1.2 with definition_name attribute; (2) seed_vortex_definition.sh seeds 8D before parent + header; seed_vortex_persona_actors.sh adds role-procurement-manager (5 roles) and felix mapping; (3) drift test: add child fixture, count 4->5, remove refute, rewrite M2 to inverse (missing_in_script); (4) alias sidecar proc-vortex-8d-corrective-action.yaml; simulation yaml parity optional, no sim binding exists; (5) MINIMAL lib change: keep both pending-event lists in build_completion_multi_from_merge, pass to build_completion_write_steps, which appends timer-arm and service-task-dispatch Multi steps after token reconciliation via ONE new @doc false public Engine.append_pending_event_arms_multi/7 wrapping the existing private prepare_timer_arms/prepare_service_task_dispatch_abort_on_empty_url/build_*_multi helpers; errors map to existing activation_failed ExecutionError channel. No authz/tenant-derivation change (tenant id from schema prefix as complete_task does), so SECURITY-REVIEWER may be skipped on that basis only; REVIEWER required. (6) tests: pure fixture test F1-F7 and DB-backed sub_process_service_task_after_test E1-E6 (E1/E6 fail on unfixed tree) with mutation targets. Known out-of-scope gap: a second SUB_PROCESS directly after a completed SUB_PROCESS is still not spawned (ORCH to file follow-up). No QA data change. Not self-reviewed.",
+    "artifacts_out": [
+      "lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md"
+    ],
+    "owned_modules": [],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "Confirmed engine defect: Letflow.Engine.SubProcess.build_completion_multi_from_merge discards pending events, so a SERVICE_TASK, TIMER or escalation HUMAN_TASK directly after a SUB_PROCESS never gets its dispatch/timer row and the parent is stuck ACTIVE. Requires the minimal lib change in design section 3; ELIXIR-DEV must write fail-first E1 first.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Out of scope, follow-up for ORCH: a second SUB_PROCESS directly after a completed SUB_PROCESS (pending {:sub_process_start,...} in the cascade) is still not spawned.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Handoff started_at was null on receipt; left null per HANDOFF_PROTOCOL 1.2. Post-fix COMPLETED outcome is not observed yet; asserted by E1/E6 for ELIXIR-DEV to run.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q929-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for hard-gate review of lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md; on PASS route to TEST-DESIGNER then ELIXIR-DEV (lib fix in sub_process.ex/engine.ex plus fixture/seed edits per design sections 3-7). REVIEWER required; SECURITY-REVIEWER may be skipped only if no authz/tenant path is touched. ORCH to file the second-SUB_PROCESS follow-up issue."
+  }
+}

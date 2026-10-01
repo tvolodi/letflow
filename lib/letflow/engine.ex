@@ -3180,6 +3180,72 @@ defmodule Letflow.Engine do
     end
   end
 
+  # ISS-0929 -- public entry point for Letflow.Engine.SubProcess's completion
+  # path, which (unlike complete_task/3) previously discarded the hop chain's
+  # pending events, so a TIMER / escalation HUMAN_TASK / SERVICE_TASK reached
+  # right after a SUB_PROCESS never got its timers/dispatch rows. Resolves the
+  # events eagerly (so a failure can be routed as a typed error by the caller)
+  # and appends the resulting Scheduler / ServiceTaskDispatch Multi steps to
+  # `multi`. Every token_id in `pending_events` must already be a persisted
+  # TokenRecord id (identity id_map), same as complete_task/3. Tenant id is
+  # derived from the schema prefix (INV-PD-7), never from caller input.
+  @doc false
+  @spec append_pending_event_arms_multi(
+          Multi.t(),
+          [Transition.pending_event()],
+          Graph.t(),
+          instance_id :: Ecto.UUID.t(),
+          variables :: map(),
+          now :: DateTime.t(),
+          prefix :: String.t()
+        ) :: {:ok, Multi.t()} | {:error, term()}
+  def append_pending_event_arms_multi(
+        multi,
+        pending_events,
+        graph,
+        instance_id,
+        variables,
+        now,
+        prefix
+      ) do
+    catalog_ctx = %{
+      pin_source: {:reconstruct, instance_id, prefix},
+      tenant_id: {:schema_prefix, prefix}
+    }
+
+    with {:ok, prepared_timers} <- prepare_timer_arms(pending_events, graph, instance_id, now),
+         {:ok, prepared_dispatches} <-
+           prepare_service_task_dispatch_abort_on_empty_url(
+             pending_events,
+             graph,
+             instance_id,
+             variables,
+             now,
+             catalog_ctx
+           ),
+         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      timer_id_map = Map.new(prepared_timers, fn {token_id, _attrs} -> {token_id, token_id} end)
+
+      dispatch_id_map =
+        Map.new(prepared_dispatches, fn %{token_id: token_id} -> {token_id, token_id} end)
+
+      arms_multi =
+        Multi.new()
+        |> then(&build_timer_arms_multi(&1, prepared_timers, timer_id_map, prefix))
+        |> then(
+          &build_service_task_dispatch_multi(
+            &1,
+            prepared_dispatches,
+            dispatch_id_map,
+            tenant_id,
+            prefix
+          )
+        )
+
+      {:ok, Multi.append(multi, arms_multi)}
+    end
+  end
+
   # =========================================================================
   # advance_after_service_task_outcome/4 (REQ-215, design doc §3) -- the
   # SERVICE_TASK dispatcher poller's re-entry into the engine's own

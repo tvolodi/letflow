@@ -1,0 +1,51 @@
+{
+  "handoff_id": "17efb7d5-15ec-495f-ae6f-f94c68749959",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0950-20261001/step-03d-reviewer.json",
+  "created_at": "2026-10-01T15:13:31Z",
+  "started_at": "2026-10-01T15:13:31Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md",
+      "lib/letflow/webhooks/url_validator.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog.ex",
+      "handoffs/WF03-ISS0950-20261001/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0950-20261001/step-03c-security-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 3d REVIEWER gate. Review the implementation on branch feature/WF03-ISS0950-20261001 (git diff origin/main...HEAD -- lib/ test/) for idiomatic Elixir/Ecto, scope creep (only what the validated design lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md requires), decision-record consistency (0027, and anything on UrlValidator/INV-9), no supervision-tree impact, correct @spec/@doc, no duplicated blocklist, validate/1,2 behaviour unchanged. Look specifically at SECURITY-REVIEWER's MINOR 3 (validate(url, :no_dns) now returns :ok for hostnames -- a public footgun on the existing function; decide whether it needs a guard so only validate_syntactic/1 reaches the :no_dns branch, and if you rate it MAJOR say how, otherwise MINOR). Read handoffs/WF03-ISS0950-20261001/step-03-elixir-dev.json and step-03c-security-reviewer.json. Complete PASS/FAIL per HANDOFF_PROTOCOL.md (set status COMPLETED and write the result block yourself). Do not commit; leave lib/ test/ web/ unmodified.",
+    "acceptance_criteria": [
+      "Idiom, scope-creep, decision-consistency each answered with file:line evidence",
+      "MINOR-3 disposition stated",
+      "Verdict PASS/FAIL"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

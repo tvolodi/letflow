@@ -144,4 +144,181 @@ defmodule Letflow.Webhooks.UrlValidatorTest do
     assert {:error, :target_url_not_allowed} =
              UrlValidator.validate("https://timeout.example.com/hook", resolver)
   end
+
+  # ---------------------------------------------------------------------------
+  # ISS-0950 -- validate_syntactic/1 (no-DNS variant used for write-time feedback)
+  # See test/specs/ISS-0950.md.
+  # ---------------------------------------------------------------------------
+
+  describe "validate_syntactic/1" do
+    @non_https_or_malformed [
+      "http://example.test/x",
+      "ftp://example.test/x",
+      "example.test/x",
+      "not a url",
+      "",
+      "https://",
+      "https:///x"
+    ]
+
+    @blocked_ip_literals [
+      "https://127.0.0.1/x",
+      "https://127.255.255.254/x",
+      "https://10.0.0.5/x",
+      "https://172.16.0.1/x",
+      "https://172.31.255.255/x",
+      "https://192.168.1.1/x",
+      "https://169.254.0.1/x",
+      "https://169.254.169.254/latest/meta-data",
+      "https://[::1]/x",
+      "https://[fc00::1]/x",
+      "https://[fd00::1]/x",
+      "https://[fe80::1]/x",
+      "https://[::ffff:127.0.0.1]/x",
+      "https://[::ffff:10.0.0.1]/x",
+      "https://[::ffff:169.254.169.254]/x",
+      "https://[::127.0.0.1]/x",
+      "https://good.example@127.0.0.1/x"
+    ]
+
+    @allowed_urls [
+      "https://example.test/x",
+      "https://example.test:8443/x",
+      "https://203.0.113.10/x",
+      "https://172.32.0.1/x",
+      "https://172.15.255.255/x",
+      "HTTPS://example.test/x"
+    ]
+
+    test "U-SCHEME/U-HOSTNIL: non-https, schemeless, empty and host-less URLs are rejected" do
+      for url <- @non_https_or_malformed do
+        assert {:error, :target_url_not_allowed} = UrlValidator.validate_syntactic(url),
+               "expected #{inspect(url)} to be rejected"
+      end
+    end
+
+    test "U-BLOCKLIST: every blocked IP-literal range is rejected" do
+      for url <- @blocked_ip_literals do
+        assert {:error, :target_url_not_allowed} = UrlValidator.validate_syntactic(url),
+               "expected #{inspect(url)} to be rejected"
+      end
+    end
+
+    test "U-BLOCKLIST: cloud metadata 169.254.169.254 is rejected by name" do
+      assert {:error, :target_url_not_allowed} =
+               UrlValidator.validate_syntactic("https://169.254.169.254/latest/meta-data")
+    end
+
+    test "hostnames, ports, public IP literals and range-edge-outside addresses are accepted" do
+      for url <- @allowed_urls do
+        assert :ok = UrlValidator.validate_syntactic(url), "expected #{inspect(url)} accepted"
+      end
+    end
+
+    test "U-PARITY: for every scheme/IP-literal case, validate_syntactic/1 == validate/1 (blocklist is shared, not copied)" do
+      # validate/1 short-circuits on IP literals before any DNS call, so this is
+      # safe. Hostname-only URLs are deliberately excluded (that is the one
+      # intended difference).
+      parity_cases =
+        @non_https_or_malformed ++
+          @blocked_ip_literals ++
+          ["https://203.0.113.10/x", "https://172.32.0.1/x", "https://172.15.255.255/x"]
+
+      for url <- parity_cases do
+        assert UrlValidator.validate_syntactic(url) == UrlValidator.validate(url),
+               "validate_syntactic/1 and validate/1 disagree for #{inspect(url)}"
+      end
+    end
+
+    test "U-NODNS (a): a hostname that fails real resolution is accepted syntactically but refused by validate/2" do
+      assert :ok = UrlValidator.validate_syntactic("https://example.test/x")
+
+      assert {:error, :target_url_not_allowed} =
+               UrlValidator.validate("https://example.test/x", fn _ -> {:error, :nxdomain} end)
+    end
+
+    test "localhost is accepted by design (a hostname is never resolved here; the dispatch gate stops it after resolution)" do
+      # Documented on purpose (design OQ-2): do not "fix" by special-casing names.
+      assert :ok = UrlValidator.validate_syntactic("https://localhost/x")
+    end
+
+    test "U-NODNS (b): validate_syntactic/1 never reaches :inet / :inet_res (call trace)" do
+      Code.ensure_loaded!(:inet)
+      Code.ensure_loaded!(:inet_res)
+
+      # A process cannot receive its own trace messages, so a separate tracer
+      # process forwards them to the test process.
+      test_pid = self()
+
+      tracer =
+        spawn(fn ->
+          forward = fn forward ->
+            receive do
+              msg ->
+                send(test_pid, msg)
+                forward.(forward)
+            end
+          end
+
+          forward.(forward)
+        end)
+
+      on_exit(fn ->
+        Process.exit(tracer, :kill)
+        :erlang.trace_pattern({:inet, :getaddrs, 2}, false, [:local])
+        :erlang.trace_pattern({:inet, :gethostbyname, 1}, false, [:local])
+        :erlang.trace_pattern({:inet, :gethostbyname, 2}, false, [:local])
+        :erlang.trace_pattern({:inet_res, :_, :_}, false, [:local])
+      end)
+
+      for pattern <- [
+            {:inet, :getaddrs, 2},
+            {:inet, :gethostbyname, 1},
+            {:inet, :gethostbyname, 2},
+            {:inet_res, :_, :_}
+          ] do
+        assert is_integer(:erlang.trace_pattern(pattern, true, [:local]))
+      end
+
+      :erlang.trace(self(), true, [:call, {:tracer, tracer}])
+
+      for url <- [
+            "https://example.test/x",
+            "https://localhost/x",
+            "https://internal.corp/x"
+          ] do
+        assert :ok = UrlValidator.validate_syntactic(url)
+      end
+
+      :erlang.trace(self(), false, [:call])
+
+      refute_receive {:trace, _, :call, {:inet, _, _}}, 100
+      refute_receive {:trace, _, :call, {:inet_res, _, _}}, 100
+
+      # Sanity: the trace harness works -- the real resolver DOES hit :inet, so
+      # the refutes above are not vacuous.
+      :erlang.trace(self(), true, [:call, {:tracer, tracer}])
+      _ = UrlValidator.default_resolver(~c"localhost")
+      :erlang.trace(self(), false, [:call])
+
+      assert_receive {:trace, _, :call, {:inet, :getaddrs, _}}, 1_000
+    end
+
+    test "validate/1,2 are unchanged: hostname still goes through the resolver" do
+      parent = self()
+
+      resolver = fn host ->
+        send(parent, {:resolved, host})
+        {:ok, [{:inet, {203, 0, 113, 10}, []}]}
+      end
+
+      assert :ok = UrlValidator.validate("https://example.test/x", resolver)
+      assert_received {:resolved, ~c"example.test"}
+
+      assert {:error, :target_url_not_allowed} =
+               UrlValidator.validate("https://example.test/x", fn _ ->
+                 {:ok, [{:inet, {10, 0, 0, 1}, []}]}
+               end)
+    end
+  end
 end

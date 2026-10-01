@@ -12,7 +12,7 @@ defmodule Letflow.EnginePinResolverCatalogTest do
   schema/migration) and `test/letflow/engine/pin_resolver_test.exs` (which
   covers `PinResolver`'s pure functions against hand-rolled `const_lookup`
   stubs, never a real `Repo`-backed `Lookup`) -- this file is the one place
-  `Letflow.ServiceCatalog.PinLookup.build/0` (the REAL, non-default `Lookup`)
+  `Letflow.ServiceCatalog.PinLookup.build/1` (the REAL, non-default `Lookup`)
   is exercised against real Postgres, both alone (AC3, AC4) and wired all the
   way through `Engine.create/2`'s own real call site with zero
   caller-supplied `pin_lookup` override (AC2, AC5) -- the only way to prove
@@ -213,7 +213,7 @@ defmodule Letflow.EnginePinResolverCatalogTest do
   # ---------------------------------------------------------------------------------
 
   describe "REQ-373 AC3: a fresh resolve/4 after a publish picks up the newly published version" do
-    test "PinResolver.resolve/4 + PinLookup.build/0 returns the post-publish version/version_id, source: :resolved" do
+    test "PinResolver.resolve/4 + PinLookup.build/1 returns the post-publish version/version_id, source: :resolved" do
       entry = register!()
 
       assert {:ok, updated} =
@@ -224,7 +224,7 @@ defmodule Letflow.EnginePinResolverCatalogTest do
                })
 
       graph = graph_with_service_task(entry.service_id)
-      lookup = PinLookup.build()
+      lookup = PinLookup.build(Ecto.UUID.generate())
 
       assert {:ok, pins, _json_schema} =
                PinResolver.resolve(graph, definition_stub(), lookup, [])
@@ -249,7 +249,7 @@ defmodule Letflow.EnginePinResolverCatalogTest do
     test "resolve/4 against a retired ref returns {:error, {:unresolved_catalog_ref, ref}}, while pin_for/3 over the pin captured BEFORE retirement still returns {:ok, pin} AFTER retirement" do
       entry = register!()
       graph = graph_with_service_task(entry.service_id)
-      lookup = PinLookup.build()
+      lookup = PinLookup.build(Ecto.UUID.generate())
 
       # Capture the pin exactly as an INSTANCE_STARTED event would have
       # recorded it, BEFORE any retire happens.
@@ -349,7 +349,7 @@ defmodule Letflow.EnginePinResolverCatalogTest do
         active_definition!(schema_name, graph_human_task_then_service_task(entry.service_id))
 
       # Deliberately NO :pin_lookup key in attrs -- this is exactly the
-      # fallback Map.get(attrs, :pin_lookup, PinLookup.build()) call site the
+      # fallback Map.get(attrs, :pin_lookup, PinLookup.build(Ecto.UUID.generate())) call site the
       # design changed. Before this wiring, ANY registered service_id would
       # still fail with {:error, {:unresolved_catalog_ref, ref}}, since
       # PinResolver.default_lookup/0's catalog_lookup never reads any table at
@@ -381,6 +381,37 @@ defmodule Letflow.EnginePinResolverCatalogTest do
 
       assert {:error, {:unresolved_catalog_ref, ^unregistered_service_id}} =
                Engine.create(base_attrs(definition), prefix: schema_name)
+    end
+  end
+
+  describe "ISS-0922: start-time catalog lookup is tenant-scoped" do
+    test "a :tenant-scoped service is resolvable by its owner but not_found for another tenant (unit + Engine.create)" do
+      %{tenant_id: owner_id, schema_name: owner_schema} = provisioned_tenant()
+      %{tenant_id: other_id, schema_name: other_schema} = provisioned_tenant()
+
+      entry = register!(%{scope: :tenant, owner_tenant_id: owner_id})
+
+      assert {:ok, %{resolved_id: resolved_id}} =
+               PinLookup.catalog_lookup(entry.service_id, owner_id)
+
+      assert resolved_id == entry.version_id
+      assert {:error, :not_found} = PinLookup.catalog_lookup(entry.service_id, other_id)
+
+      graph = graph_human_task_then_service_task(entry.service_id)
+      owner_def = active_definition!(owner_schema, graph)
+      other_def = active_definition!(other_schema, graph)
+
+      assert {:ok, _result} = Engine.create(base_attrs(owner_def), prefix: owner_schema)
+
+      assert {:error, {:unresolved_catalog_ref, service_id}} =
+               Engine.create(base_attrs(other_def), prefix: other_schema)
+
+      assert service_id == entry.service_id
+    end
+
+    test "a :global service stays visible to every tenant" do
+      entry = register!()
+      assert {:ok, _} = PinLookup.catalog_lookup(entry.service_id, Ecto.UUID.generate())
     end
   end
 end

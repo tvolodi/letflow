@@ -14,7 +14,9 @@ defmodule Letflow.ServiceCatalog.PinLookup do
   remains open, not silently expanded into this requirement's scope.
 
   **START-time only.** This lookup answers "what is the current ACTIVE
-  version of this service today" (untenanted, refuses RETIRED). It is NOT
+  version of this service today, as visible to THIS tenant" (refuses RETIRED).
+  Tenant-scoped since ISS-0922: a `:tenant`-scoped service owned by another
+  tenant is `{:error, :not_found}`, identical to a missing service. It is NOT
   used for SERVICE_TASK dispatch: since ISS-0917, `Letflow.Engine` resolves
   an instance's PINNED version at activation through
   `Letflow.ServiceCatalog.resolve_pinned_version/3`.
@@ -26,21 +28,21 @@ defmodule Letflow.ServiceCatalog.PinLookup do
   """
 
   alias Letflow.Engine.PinResolver
-  alias Letflow.Repo
+  alias Letflow.ServiceCatalog
   alias Letflow.ServiceCatalog.Entry
 
   @doc """
-  Constructs a `PinResolver.Lookup.t()` whose `module_lookup`/
+  Constructs a tenant-scoped `PinResolver.Lookup.t()` whose `module_lookup`/
   `variable_schema_lookup` fields are copied verbatim from
   `PinResolver.default_lookup/0`'s own result (guaranteeing byte-identical
   behavior for both, with zero risk of drift between the two
   implementations) and whose `catalog_lookup` field is this module's own
-  `catalog_lookup/1`. Performs no `Repo` call itself -- only constructs
+  `catalog_lookup/2` closed over `tenant_id`. Performs no `Repo` call itself -- only constructs
   closures; all I/O happens when `PinResolver.resolve/4` later invokes one.
   """
-  @spec build() :: PinResolver.Lookup.t()
-  def build do
-    %{PinResolver.default_lookup() | catalog_lookup: &catalog_lookup/1}
+  @spec build(tenant_id :: Ecto.UUID.t()) :: PinResolver.Lookup.t()
+  def build(tenant_id) when is_binary(tenant_id) do
+    %{PinResolver.default_lookup() | catalog_lookup: &catalog_lookup(&1, tenant_id)}
   end
 
   @doc """
@@ -58,17 +60,19 @@ defmodule Letflow.ServiceCatalog.PinLookup do
       (`Letflow.ServiceCatalog.retire/1`'s own `@doc`), implemented at the
       one place `PinResolver.resolve/4` actually calls into.
   """
-  @spec catalog_lookup(service_id :: String.t()) ::
+  @spec catalog_lookup(service_id :: String.t(), tenant_id :: Ecto.UUID.t()) ::
           {:ok, %{resolved_id: String.t(), version: String.t()}} | {:error, :not_found}
-  def catalog_lookup(service_id) when is_binary(service_id) do
-    case Repo.get(Entry, service_id) do
-      nil ->
-        {:error, :not_found}
-
-      %Entry{status: :ACTIVE, version_id: version_id, version: version} ->
+  def catalog_lookup(service_id, tenant_id) when is_binary(service_id) and is_binary(tenant_id) do
+    # Same SVC-01 visibility rule as resolve_pinned_version/3 (ISS-0922):
+    # invisible and missing are the identical {:error, :not_found}.
+    case ServiceCatalog.get_for_tenant(service_id, tenant_id) do
+      {:ok, %Entry{status: :ACTIVE, version_id: version_id, version: version}} ->
         {:ok, %{resolved_id: version_id, version: version}}
 
-      %Entry{status: :RETIRED} ->
+      {:ok, %Entry{status: :RETIRED}} ->
+        {:error, :not_found}
+
+      {:error, :not_found} ->
         {:error, :not_found}
     end
   end

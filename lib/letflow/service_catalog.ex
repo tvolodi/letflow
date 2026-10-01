@@ -111,7 +111,7 @@ defmodule Letflow.ServiceCatalog do
        never "give me version N of X." (SERVICE_TASK dispatch does ask for a
        specific pinned version, via `resolve_pinned_version/3`, ISS-0917.) Composite-keying `service_catalog`
        buys nothing at the one call site this whole requirement exists to
-       wire up (`Letflow.ServiceCatalog.PinLookup.catalog_lookup/1`): under
+       wire up (`Letflow.ServiceCatalog.PinLookup.catalog_lookup/2`): under
        either schema shape, resolving a fresh reference means "find the row
        for this `service_id` whose status is ACTIVE."
     2. Blast radius on `service_id`-as-sole-key is severe and needless:
@@ -151,7 +151,7 @@ defmodule Letflow.ServiceCatalog do
   service_catalog (S6) and PLC-01 (unscoped) are not built" section names
   `module_ref` resolution against PLC-01 as unscoped to any stage; PLC-01
   does not exist in this codebase and this requirement does not build it —
-  `Letflow.ServiceCatalog.PinLookup.build/0`'s `module_lookup` stays a
+  `Letflow.ServiceCatalog.PinLookup.build/1`'s `module_lookup` stays a
   permanent `{:error, :not_found}` stub, copied verbatim from
   `PinResolver.default_lookup/0`.
   """
@@ -205,6 +205,12 @@ defmodule Letflow.ServiceCatalog do
   a typed atom distinguishable from an ordinary validation failure
   (mirrors `Letflow.Dlq`/`Letflow.Definitions.SolutionPack`'s own
   typed-error-atom convention), never a silent overwrite.
+
+  `endpoint_url` must pass `Letflow.ServiceCatalog.Entry.check_endpoint_url/1`
+  (ISS-0950: https, no private/loopback/link-local IP-literal host, no template
+  placeholder before the path); otherwise the changeset carries an
+  `:endpoint_url` error. Advisory fast feedback -- the dispatch-time INV-9 gate
+  remains binding.
   """
   @spec register(register_attrs()) ::
           {:ok, Entry.t()}
@@ -323,6 +329,11 @@ defmodule Letflow.ServiceCatalog do
   `publish/3` cannot disturb an already-recorded pin because there is no
   code path connecting the two subsystems at all, not because `publish/3`
   takes special care to avoid one.
+
+  The effective `endpoint_url` (including an inherited stored value when the key
+  is omitted) must pass `Letflow.ServiceCatalog.Entry.check_endpoint_url/1`
+  (ISS-0950); a failure returns `{:error, %Ecto.Changeset{}}` and rolls back the
+  archive insert. Advisory -- the dispatch-time INV-9 gate remains binding.
   """
   @spec publish(service_id :: String.t(), version :: String.t(), publish_attrs()) ::
           {:ok, Entry.t()}
@@ -430,7 +441,7 @@ defmodule Letflow.ServiceCatalog do
   fresh `Letflow.Engine.PinResolver.resolve/4` call against a `service_id`
   with no ACTIVE row (because its only row was just retired and nothing has
   published since) gets `{:error, :not_found}` from
-  `Letflow.ServiceCatalog.PinLookup.catalog_lookup/1`, which `resolve/4`
+  `Letflow.ServiceCatalog.PinLookup.catalog_lookup/2`, which `resolve/4`
   turns into `{:error, {:unresolved_catalog_ref, ref}}` — the **existing**
   error variant, no new one added. This schema enforces "at most one ACTIVE
   row per `service_id`" as a structural invariant — there is only ever one

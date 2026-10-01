@@ -1,0 +1,64 @@
+{
+  "handoff_id": "e6403d86-8f4d-4ba3-8be4-a59ed4451aea",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "04b-r2",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0950-20261001/step-04b-r2-test-design-validator.json",
+  "created_at": "2026-10-01T15:28:51Z",
+  "started_at": "2026-10-01T15:28:51Z",
+  "completed_at": "2026-10-01T15:31:12Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/service_catalog/endpoint_url_validation_test.exs",
+      "test/specs/ISS-0950.md",
+      "handoffs/WF03-ISS0950-20261001/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0950-20261001/step-04-test-designer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 4b re-validation (iteration 2). The prior FAIL (R-LEN vacuous, de-dup clause mutant survived) is in handoffs/WF03-ISS0950-20261001/step-04b-test-design-validator.json. TEST-DESIGNER's rework: R-LEN register test now uses an over-length AND statically-bad URL asserting exactly one :endpoint_url error with validation :length, plus a new R-LEN (publish) test. Independently verify in a THROWAWAY git worktree outside the repo: remove the Keyword.has_key?(changeset.errors, :endpoint_url) de-dup clause in Entry.validate_endpoint_url and confirm the R-LEN tests fail (their report: baseline 20/20, mutant 18/20 on endpoint_url_validation_test.exs); also re-run one earlier mutant (m4 or m7) to confirm nothing regressed and re-check the rest of the matrix still holds. Remove worktrees, verify git worktree list shows only the main checkout and git status --porcelain lib/ test/ unchanged. Never git checkout/reset in the main checkout; no full suite. Write the result block yourself, COMPLETED, PASS/FAIL. Do not commit.",
+    "acceptance_criteria": [
+      "De-dup mutant independently re-applied, killed, counts quoted",
+      "One prior mutant re-run",
+      "Worktree removed; lib/ test/ unchanged",
+      "Verdict PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read the reworked R-LEN register test (endpoint_url_validation_test.exs L181-193: 'http://example.test/' padded to 2049 chars, asserts check_endpoint_url == {:error,:endpoint_url_not_allowed} precondition, exactly one :endpoint_url error with validation :length) and the new R-LEN (publish) test (L316-330, same URL, exactly one length error, version_count == 0). Independently measured in a throwaway git worktree of 57a833c0 outside the repo (deps/_build copied), 4 test files, baseline 'Result: 71 passed'. De-dup mutant (removed the Keyword.has_key?(changeset.errors, :endpoint_url) cond clause in Entry.validate_endpoint_url): 69/71 passed, 2 failed = both R-LEN tests (register and publish) -> KILLED (previously survived at 70/70). Regression re-runs: m4 (get_change instead of get_field) 69/71, failing P-SAME-URL and P-ABSENT(b) -> killed; m1 (accept http scheme in UrlValidator.check_scheme) 59/71, 12 failed -> killed. Worktree mutations reverted with git checkout -- lib/ inside the worktree after each run; worktree removed and pruned; git worktree list shows only the main checkout; git status --porcelain lib/ test/ in the main checkout is empty; scoped re-run of endpoint_url_validation_test.exs in main checkout 'Result: 20 passed' (matches TEST-DESIGNER's baseline 20/20). No skips, no full suite, nothing committed, main checkout never checked out or reset.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Advance WF-03 past step 4b to TEST-RUNNER (next step per workflow)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1249,6 +1249,7 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
       instance_id = result.instance_id
 
       assert [dispatch] = dispatches_for(schema_name, instance_id)
+
       assert dispatch.config_snapshot["rendered_body"] ==
                ~s({"reason":"remediation_unresolved","review_id":""})
 
@@ -1319,7 +1320,9 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
 
       assert {:ok, result} =
                Engine.create(
-                 base_attrs(definition, %{initial_variables: %{"review_id" => adversarial_review_id}}),
+                 base_attrs(definition, %{
+                   initial_variables: %{"review_id" => adversarial_review_id}
+                 }),
                  prefix: schema_name
                )
 

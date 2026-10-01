@@ -1092,7 +1092,8 @@ defmodule Letflow.Engine do
         arm_attrs = %{
           instance_id: instance_id,
           node_id: node_id,
-          config_snapshot: config_snapshot_map(config, rendered_url, rendered_body, catalog_version),
+          config_snapshot:
+            config_snapshot_map(config, rendered_url, rendered_body, catalog_version),
           attempt_index: 0,
           next_attempt_at: now,
           created_at: now

@@ -1,0 +1,46 @@
+{
+  "handoff_id": "c8b2068c-6198-4c45-b5bf-de70b0feb5c9",
+  "run_id": "WF03-Q928-20261001",
+  "workflow_id": "WF-03",
+  "step": "04d",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-Q928-20261001/step-04d-release-validator.json",
+  "created_at": "2026-10-01T21:34:53Z",
+  "started_at": "2026-10-01T21:34:53Z",
+  "completed_at": "2026-10-01T21:46:39Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0928": "id: ISS-0928 (queue Q-928, GH-2114, local file docs/issues/ISS-0928.yaml exists ONLY on open PR #2129 branch origin/pr2129 -- view with git show origin/pr2129:docs/issues/ISS-0928.yaml; do not touch PR #2129). Title: Meridian Loan Origination: SERVICE_TASK kyc-aml-check inside PARALLEL_GATEWAY fork never dispatched; instance stalls ACTIVE (UAT WF05-FULL3-20261001 F1). Severity MAJOR. Symptom: meridian Loan Origination v1.1 on QA: after credit-memo-review (ben) and risk-assessment (miriam) complete, current_nodes=[kyc-aml-check]; instance ACTIVE >6.5min (past 300s timeout_ms) with no task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row; endpoint answers 200 directly; top-level service tasks complete in 2-6s. Suspect SERVICE_TASK activation inside PARALLEL_GATEWAY fork branch (cf. ISS-0398 walk_to_gateway, resolved): likely no service_task_dispatches row armed on the fork/join walk path (Letflow.Engine fork activation / arm_service_task_dispatch call sites / TaskActivation). ALSO: kyc-routing has no unconditional edge and the stub endpoint returns no kyc_status, so the token may stall at kyc-routing even once dispatched -- assess whether fixture/process-definition issue (test/fixtures/qa/ meridian loan origination definition); handle or file separately. Acceptance: SERVICE_TASK nodes on a PARALLEL_GATEWAY branch are dispatched and recorded; meridian loan-origination scenarios reach committee/L1 routing and complete; regression test fail-first reproducing the stall at engine level. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml (on PR #2129 branch origin/pr2129 only). Q-926 (body_template rendering) is DONE and merged on main -- build on it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0928-parallel-fork-service-task-Q928"
+  },
+  "task": {
+    "description": "WF-03 release validation: independently re-derive that ISS-0928 acceptance holds at HEAD: re-run scoped tests yourself (service_task_wiring_test.exs, meridian_loan_origination_fixture_test.exs), confirm via reading that the fork-branch SERVICE_TASK is dispatched and a no-matching-edge now yields EXECUTION_ERROR+DLQ and instance :error, confirm lint (mix letflow.lint_handoffs OK) and docs/issues/ISS-0928.yaml. Scoped only. Edit only your handoff; legal status COMPLETED, result.status PASS/FAIL, real completed_at (use date -u).",
+    "acceptance_criteria": [
+      "Tests re-run independently",
+      "Acceptance mapped",
+      "lib/ unchanged by this step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran scoped tests: mix test service_task_wiring_test.exs + meridian_loan_origination_fixture_test.exs -> 'Result: 39 passed' (exit 0). mix letflow.lint_handoffs: OK, 0 new violations. docs/issues/ISS-0928.yaml present, status resolved. lib/ unchanged by this step (git status --short lib empty). Not run (scoped-only instruction): scripts/test_parallel.sh and mix letflow.check.test (the latter started, would run full suite, stopped).",
+    "acceptance_mapping": {
+      "fork-branch SERVICE_TASK dispatched": "Test T2/T3 in service_task_wiring_test.exs (fork branch SERVICE_TASK, join fires, instance completes with default edge); diagnosis in ISS-0928 shows dispatch was always armed; passes.",
+      "no_matching_edge yields EXECUTION_ERROR + DLQ + instance :error": "engine.ex persist_service_task_no_matching_edge (ExecutionError.append_multi, error_type :no_matching_gateway_edge) at both error shapes in persist_service_task_advance; T1/T2 assert EXECUTION_ERROR, DLQ row, :error status; T5 no residue.",
+      "silent swallow removed": "service_task_dispatcher.ex catch-all arm logs ids/tag only and audits; T6/T6b pass.",
+      "fixture fix": "meridian fixture gains default edge e9-default; fixture test passes."
+    },
+    "notes": "Follow-up (documented in issue): other non-no_matching_edge re-entry failures still leave instance ACTIVE (now logged+audited)."
+  }
+}

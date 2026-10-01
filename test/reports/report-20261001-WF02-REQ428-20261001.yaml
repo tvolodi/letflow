@@ -1,0 +1,214 @@
+agent: TEST-RUNNER
+run_id: WF02-REQ428-20261001
+date: 2026-10-01
+branch: feature/WF02-REQ428-20261001
+workflow: WF-02 (REQ-428) Step 4 — Test run
+
+context: >
+  REQ-428's diff touches apps/mobile/ (task inbox/claim/complete renderers,
+  process-instance read-only renderer) plus docs/requirements.yaml,
+  docs/status/requirement_status.v25.yaml, handoffs/, and the REQ-428
+  design/spec docs -- no lib/letflow/ or priv/repo/migrations/ files. Full
+  ExUnit suite run per Unblock-Everything; flutter analyze + flutter test
+  run per the WF-02 dispatch instructions because apps/mobile/ is touched.
+
+host_memory_check:
+  before_run: "Get-CimInstance Win32_OperatingSystem: FreePhysicalMemory ~6.08GB
+    (6208312 KB) of 33389048 KB total -- consistent with the ~6.0GB reading
+    already recorded in the handoff, not tighter -- so TEST_PARALLEL_N=2 was
+    used as instructed rather than full nproc parallelism."
+
+concurrent_session_note: >
+  Mid-run (while partitions were still executing), a concurrent ORCH session
+  sharing this working directory checked the repo out from
+  feature/WF02-REQ428-20261001 to main at 2026-10-01T07:12:01+05:00 (see git
+  reflog), then on to a short-lived chore/orch-drain-mode branch and back to
+  main. This happened AFTER scripts/test_parallel.sh's single pre-compile
+  step (which ran at the start, well before 07:12) and after per-partition
+  _build seeding, so the compiled .beam files actually exercised by both
+  partitions were built from this branch's source, not main's -- the result
+  below is valid for this branch. TEST-RUNNER checked out back to
+  feature/WF02-REQ428-20261001 before writing this report and committing
+  (per the global sibling-session policy: decide and document, don't ask).
+  No destructive action was taken on the shared repo.
+
+exunit:
+  command: "TEST_PARALLEL_N=2 scripts/test_parallel.sh"
+  partition_count: 2
+  partition_count_source: "env override (TEST_PARALLEL_N=2), per handoff's
+    pre-run memory reading (~6GB free, not comfortably above the 4GB floor)"
+  postgres_port: 5472 (from untracked .env: LETFLOW_DB_PORT not set there,
+    but LETFLOW_KEYCLOAK_PORT=8093 is; actual pg port used was whatever
+    config/test.exs + docker-compose resolve -- containers were already
+    running: letflow-postgres-1, letflow-keycloak-1)
+  combined_result: "5104/5118 passed (5110 tests, 8 properties, 14 failures)"
+  per_partition:
+    - {partition: 1, tests: 2393, properties: 6, failures: 6, exit: 2}
+    - {partition: 2, tests: 2717, properties: 2, failures: 8, exit: 2}
+  failures:
+    - test: "A9: every indexed volume's declared entries: count equals what
+        is actually on disk (Letflow.Docs.RequirementStatusInvariantsTest)"
+      location: "test/docs/requirement_status_invariants_test.exs:716"
+      assertion_output: >
+        A9 -- a volume's declared entries: count has drifted from what is on
+        disk. mismatches: [{"docs/status/requirement_status.v25.yaml", 6, 7}]
+      attribution:
+        structural_test_applied: true
+        evidence_form: "(a) -- the failing test's target file
+          (docs/status/requirement_status.v25.yaml) appears directly in
+          `git diff --name-only main...HEAD` for this branch."
+        root_cause: >
+          This branch's own ORCH commit ("chore(WF02-REQ428-20261001):
+          dispatch Step 00 git setup" lineage) appended a REQ-428 `started`
+          history entry to docs/status/requirement_status.v25.yaml (at:
+          2026-10-01T01:18:43Z, bringing on-disk entries from 6 to 7) without
+          incrementing docs/status/requirement_status.index.yaml's volume-25
+          `entries:` field (still 6) -- same HOW-TO-APPEND step 6 / A9
+          invariant violation pattern as the REQ-294 run's report
+          (test/reports/report-20260930-WF02-REQ294-20260930.yaml).
+        pre_existing: false
+        responsible_agent: "ORCH (authored the drifting history entry) /
+          DOC-UPDATER (owns the requirement-status index invariant) --
+          increment docs/status/requirement_status.index.yaml's volume 25
+          `entries:` field from 6 to 7."
+      not_fixed_by_test_runner: >
+        Out of TEST-RUNNER's owned scope
+        (test/letflow/process_instance_test.exs and
+        test/support/data_case.ex); this is a docs/status metadata drift,
+        not test or application code, and TEST-RUNNER does not patch around
+        a real failure to make the suite look green.
+    - test: "the template itself is faithful to a genuine migration build two
+        concurrent reference-schema builds do not collide
+        (Letflow.Test.TenantTemplateTest)"
+      location: "test/support/tenant_template_test.exs:108"
+      assertion_output: >
+        TENANT_TEMPLATE_PARITY reference=tenant_template_build_207da3bf...
+        candidate=tenant_template -- table set: extra=["events_y2026m09"]
+      attribution:
+        structural_test_applied: true
+        evidence_form: "(a) -- test/support/tenant_template.ex and
+          test/support/tenant_template_test.exs do not appear in
+          `git diff --name-only main...HEAD` for this branch (diff is
+          apps/mobile/ + docs/requirements.yaml +
+          docs/status/requirement_status.v25.yaml + handoffs/ +
+          lib/letflow/design/req428-*.md + test/specs/REQ-428.md only)."
+        pre_existing: true
+    - test: "retire_oldest_eligible_month/1 -- happy path, a schema with no
+        eligible month for the chosen month is recorded skipped, not failed
+        (Letflow.EventStore.RetentionOperationsTest)"
+      location: "test/letflow/event_store/retention_operations_test.exs:341"
+      assertion_output: "right: {:error, :no_eligible_month} (expected {:ok, retirement})"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- test/letflow/event_store/retention_operations_test.exs and its lib source are absent from this branch's diff.", pre_existing: true}
+    - test: "retire_oldest_eligible_month/1 -- happy path, inserts a running
+        row immediately... (Letflow.EventStore.RetentionOperationsTest)"
+      location: "test/letflow/event_store/retention_operations_test.exs:303"
+      assertion_output: "right: {:error, :no_eligible_month} (expected {:ok, retirement})"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- same file, absent from diff.", pre_existing: true}
+    - test: "retirement_status/1 found case: returns the retirement plus
+        every outcome row, ordered by tenant_id
+        (Letflow.EventStore.RetentionOperationsTest)"
+      location: "test/letflow/event_store/retention_operations_test.exs:404"
+      assertion_output: "right: {:error, :no_eligible_month} (expected {:ok, retirement})"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- same file, absent from diff.", pre_existing: true}
+    - test: "permission gate -- PLATFORM_ADMIN caller POST /retirements (AC1)
+        returns 202... (Letflow.Routers.EventRetentionTest)"
+      location: "test/letflow/routers/event_retention_test.exs:197"
+      assertion_output: "left: 409, right: 202 (status code mismatch)"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- test/letflow/routers/event_retention_test.exs and lib/letflow/routers/event_retention.ex are absent from this branch's diff (the only routers/ touched by REQ-428 would be tasks.ex/instances.ex, neither of which this branch's diff shows either -- REQ-428's diff is apps/mobile/ Dart only).", pre_existing: true}
+    - test: "EO-002 -- keep_forever count identical before/after retirement
+        (Letflow.EventStore.PartitionMaintenanceTest)"
+      location: "test/letflow/event_store/partition_maintenance_test.exs:691"
+      assertion_output: "right: {:error, :partition_not_eligible} (expected {:ok, %{protected_rows_relocated: 1, resumed_from: :not_started}})"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- test/letflow/event_store/partition_maintenance_test.exs and lib/letflow/event_store/partition_maintenance.ex are absent from this branch's diff.", pre_existing: true}
+    - test: "AC2/EO-001 -- whole-partition DDL only, issues zero per-row
+        DELETE/row-scoped INSERT when nothing needs reconciling
+        (Letflow.EventStore.PartitionMaintenanceTest)"
+      location: "test/letflow/event_store/partition_maintenance_test.exs:458"
+      assertion_output: "match failed on retired_partition/protected_rows_relocated/resumed_from shape"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- same file, absent from diff.", pre_existing: true}
+    - test: "correction (b) -- archived_at real and non-null, excluded from
+        read/2 (Letflow.EventStore.PartitionMaintenanceTest)"
+      location: "test/letflow/event_store/partition_maintenance_test.exs:853"
+      assertion_output: "right: {:error, :partition_not_eligible} (expected {:ok, %{resumed_from: :not_started}})"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- same file, absent from diff.", pre_existing: true}
+    - test: "AC2/EO-001 -- whole-partition DDL only, a concurrent write to a
+        different, live partition completes while retirement runs
+        (Letflow.EventStore.PartitionMaintenanceTest)"
+      location: "test/letflow/event_store/partition_maintenance_test.exs:486"
+      assertion_output: "right: {:error, :partition_not_eligible} (expected {:ok, %{resumed_from: :not_started}})"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- same file, absent from diff.", pre_existing: true}
+    - test: "EO-003 -- replay after retirement, no gap, no error, an instance
+        spanning two months returns every event in order after the older
+        month retires (Letflow.EventStore.PartitionMaintenanceTest)"
+      location: "test/letflow/event_store/partition_maintenance_test.exs:775"
+      assertion_output: "right: {:error, :partition_not_eligible} (expected {:ok, %{resumed_from: :not_started}})"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- same file, absent from diff.", pre_existing: true}
+    - test: "§4.4b -- events_archive_default reconciliation, batched,
+        pre-accumulated rows are swept in more than one batch
+        (Letflow.EventStore.PartitionMaintenanceTest)"
+      location: "test/letflow/event_store/partition_maintenance_test.exs:729"
+      assertion_output: "match failed on retired_partition/default_partition_rows_reconciled/resumed_from shape"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- same file, absent from diff.", pre_existing: true}
+    - test: "crash-recovery / idempotent resume, idempotent no-op resumed
+        from :already_retired, no ATTACH/DETACH re-issued
+        (Letflow.EventStore.PartitionMaintenanceTest)"
+      location: "test/letflow/event_store/partition_maintenance_test.exs:558"
+      assertion_output: "right: {:error, :partition_not_eligible} (expected {:ok, %{resumed_from: :not_started}})"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- same file, absent from diff.", pre_existing: true}
+    - test: "correction (a) -- events_default self-heals, stays attached as
+        DEFAULT after retirement, and a far-future write still lands there
+        (Letflow.EventStore.PartitionMaintenanceTest)"
+      location: "test/letflow/event_store/partition_maintenance_test.exs:816"
+      assertion_output: "right: {:error, :partition_not_eligible} (expected {:ok, %{resumed_from: :not_started}})"
+      attribution: {structural_test_applied: true, evidence_form: "(a) -- same file, absent from diff.", pre_existing: true}
+  observed_pattern_note: >
+    13 of the 14 failures (everything except the A9 docs-invariant one)
+    cluster in event-retention/partition-maintenance code and consistently
+    return :no_eligible_month / :partition_not_eligible where an :ok was
+    expected. This looks consistent with month-boundary-sensitive fixtures
+    (today is 2026-10-01, a month rollover) but that causal claim is NOT
+    relied on for the pre-existing attribution above -- the attribution
+    rests solely on diff-membership (route 1), which is sufficient and
+    independently verified per-file via
+    `git diff --name-only main...HEAD`. The month-boundary read is offered
+    only as a lead for whoever files/investigates these, not as evidence
+    this run is required to produce.
+
+flutter:
+  commands:
+    - "flutter analyze"
+    - "flutter test"
+  cwd: apps/mobile
+  analyze_result: "No issues found! (ran in 4.3s)"
+  test_result: "All tests passed! (261/261, numbered +0..+261, final line '00:09 +261: All tests passed!')"
+
+overall_status: FAIL
+
+reasoning: >
+  Flutter analyze/test are fully green (261/261, no analyzer issues) --
+  REQ-428's own diff shows no defect. The ExUnit suite has 14 failures; 13
+  are structurally pre-existing (route 1: their files and dependencies are
+  absent from `git diff --name-only main...HEAD`, which contains only
+  apps/mobile/, docs/requirements.yaml,
+  docs/status/requirement_status.v25.yaml, handoffs/, and REQ-428's own
+  design/spec docs). The 14th (A9 requirement-status invariant) IS
+  attributable to this branch: its target file
+  (docs/status/requirement_status.v25.yaml) is directly in the diff, and
+  this branch's own ORCH commit appended a history entry without bumping
+  the matching index `entries:` count -- the same defect class as the
+  REQ-294 run. This is a real, branch-introduced metadata defect, so this
+  cannot be routed to RELEASE-VALIDATOR as-is.
+
+next_action: >
+  Route back to ORCH / DOC-UPDATER to increment
+  docs/status/requirement_status.index.yaml's volume 25 `entries:` field
+  from 6 to 7 (matching the REQ-428 `started` history entry already
+  appended at 2026-10-01T01:18:43Z), then re-run
+  test/docs/requirement_status_invariants_test.exs (or the full suite) to
+  confirm A9 passes before routing to RELEASE-VALIDATOR. The 13 other
+  failures (event-retention/partition-maintenance, tenant-template parity)
+  are pre-existing per route 1 above and should be filed/forwarded, not
+  fixed on this branch.
+
+artifacts_out:
+  - "test/reports/report-20261001-WF02-REQ428-20261001.yaml"

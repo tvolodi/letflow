@@ -1,0 +1,51 @@
+{
+  "handoff_id": "c5b2d1e1-0001-4000-8000-000000000003",
+  "run_id": "WF02-REQ430-20261001",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ430-20261001/step-01b-code-design-validator.json",
+  "created_at": "2026-10-01T15:10:00Z",
+  "started_at": "2026-10-01T15:10:00Z",
+  "completed_at": "2026-10-01T15:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-430"],
+    "related_handoff_ids": ["handoffs/WF02-REQ430-20261001/step-01-code-designer.json"],
+    "artifacts_in": [
+      "lib/letflow/design/req430-mobile-scope-boundary.md",
+      "handoffs/WF02-REQ430-20261001/step-01-code-designer.json"
+    ],
+    "owned_modules": ["apps/mobile/test/guards/", "docs/mobile/architecture.md", "docs/migration/stage-9-mobile.md"]
+  },
+  "task": {
+    "description": "WF-02 Step 1b design gate on CODE-DESIGNER's REQ-430 (MOB-8 v1 scope boundary + S9 close-out) design artefact. Read lib/letflow/design/req430-mobile-scope-boundary.md directly. For each of the 5 acceptance criteria, verify a corresponding concrete design element with no TBD/deferral language, fully specified checker signatures including violation/error shape, a precise and independently-verified heuristic for Checker B against real sembast call sites, self-consistency of the proposed architecture.md/stage-9-mobile.md text against actual docs/requirements.yaml data and the real apps/mobile/test/ tree, absence of real implementation code, and genuineness of open questions.",
+    "acceptance_criteria": [
+      "the scope guard fails each of its self-test fixtures (pubspec w/ firebase_messaging; pubspec w/ workmanager; a Dart file writing a request method/url/body map to a store) and passes on the real tree, quoted",
+      "git grep -n -i -E 'outbox|pending_writes|write_queue|offline_queue' -- apps/mobile returns no hits, quoted",
+      "docs/mobile/architecture.md §4 names, for each of MOB-1..MOB-8, the REQ id(s) that delivered it, and lists offline writes, push invalidation and the on-device form builder as deferred",
+      "docs/migration/stage-9-mobile.md lists each of the three phase gates with the test file(s) that demonstrate it and every deferred item with its reason",
+      "cd apps/mobile && flutter analyze && flutter test && flutter build apk --debug all pass, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req430-mobile-scope-boundary.md directly (not CODE-DESIGNER's handoff summary). All 5 acceptance criteria map to concrete, unambiguous design elements. AC1: Checker A (checkV1ScopeDependencies(List<String>) -> List<ScopeDependencyViolation> {packageName, reason}) over an exact+substring forbidden list with per-entry inclusion/exclusion reasoning (firebase_messaging/onesignal_flutter/flutter_fcm/workmanager/android_alarm_manager_plus/background_fetch/flutter_background_service vs. explicitly-not-forbidden firebase_core/flutter_local_notifications/connectivity_plus); Checker B (checkNoPersistedOutgoingRequests({required Map<String,String> libFiles}) -> List<OutgoingRequestPersistenceViolation> {file, approxLine, matchedKeys}) with a precise step-by-step regex contract (find .record(...).put(, scan a bounded window, require >=2 of method/url/body/request as quoted-map-key or named-arg tokens) and explicit documented false-negative (renamed fields, cross-statement assembly) and false-positive (coincidental field name) boundaries. Four self-test fixtures specified exactly (firebase_messaging pubspec, workmanager pubspec, method/url/body map-literal fixture, real-tree pass), matching the precedent files' self-test convention. AC2: design states the git grep already run during design returned zero hits -- independently re-ran it myself: zero hits, exit 1, confirmed. AC3/AC4: verbatim replacement markdown given for both docs. Independently verified: (a) docs/mobile/architecture.md's actual current section 4 spans exactly lines 92-120 as the design claims, ending at the same 'distinction is not arbitrary... stands unchanged' paragraph; (b) docs/migration/stage-9-mobile.md's actual last section is 'REVIEWER sign-off' ending '...the stage is no longer docs-only,' matching the design's claimed insertion point exactly; (c) spot-checked all 14 REQ-id-to-MOB mappings (not just 3) against docs/requirements.yaml's actual titles/status for REQ-417..430 plus REQ-294/282/385 -- every mapping is accurate, including REQ-294 (status: done, despite its own title's stale '(...dormant)' parenthetical) correctly attributed to MOB-1/MOB-4; (d) checked every one of the 18 test files cited across the M-1/M-2/M-3 phase-gate table and the deferred-items table actually exist on disk -- all present, none missing; (e) opened forbidden_dependencies_guard_test.dart and token_storage_boundary_guard_test.dart (the two precedent files the design builds on) and confirmed the design's reused helper names/shapes (extractPubspecYamlDependencyNames, extractPubspecLockPackageNames, _readRealLibFiles, _relativeTo) match the real precedent code exactly. AC5: explicitly deferred to MOBILE-DEV/TEST-RUNNER at implementation time, correctly not fabricated by the design (design docs contain no implementation code to run). Checker B's heuristic was independently verified against the real store-write call sites rather than taking the design's claim on faith: read apps/mobile/lib/definitions/sembast_cache_repository.dart, sembast_pinned_form_cache_repository.dart, definitions.dart, and pinned_form_cache.dart -- the two real .put() call sites are `.put(_db, cursor)` (an int, no map literal) and `.put(_db, entry.toStoredJson())`/`.put(txn, entry.toStoredJson())` (toStoredJson() bodies use keys type/id/version/name/status/raw and form_id/form_version/form_schema respectively -- no overlap with method/url/body/request). Confirmed this holds under EITHER of OQ-2's two window-computation choices (true enclosing-block scan vs. fixed 400-char window): in both cases the window around each real .put( call-site contains zero of the forbidden key tokens, so the real-tree self-test (AC1's fixture (d)) passes identically regardless of which implementation choice MOBILE-DEV makes -- OQ-2 is confirmed non-blocking, not just asserted so. No implementation code is present: both checker bodies are specified as signature + prose + regex contract only (no executable Dart statements beyond the forbidden-list const data, which is pure data, not logic, and the fixture (c) snippet, which is explicitly illustrative self-test fixture content, not guard implementation) -- verified git status shows no new file under apps/mobile/test/guards/ was created, confirming no implementation leaked into the tree. Open questions OQ-1 (helper code-sharing mechanism), OQ-3 (forbidden-list non-exhaustiveness), and OQ-4 (no current collision) are genuinely open and have no behavioral effect on any acceptance criterion; OQ-2 is genuinely open and was independently confirmed non-blocking per the real-tree verification above. None requires ORCH/REVIEWER sign-off before MOBILE-DEV proceeds -- all four are legitimate implementation-time choices, not disguised ambiguity.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ430-20261001",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ430-20261001",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to MOBILE-DEV (2b-mobile)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

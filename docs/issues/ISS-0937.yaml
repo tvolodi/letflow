@@ -1,18 +1,24 @@
 id: ISS-0937
-title: "Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01"
-discovered_by: ELIXIR-DEV
-discovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)
-discovered_at: "2026-10-01T00:21:56Z"
-severity: MAJOR
+title: "mix letflow.check.test: Letflow.EventStore.{PartitionMaintenanceTest,RetentionOperationsTest} / Routers.EventRetentionTest fail non-deterministically (order-dependent) across repeated runs at varying partition counts"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ427-20261001
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MINOR
 description: >
-  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest
-  parity failure extra=["events_y2026m09"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in
-  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not
-  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.
-  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.
-affected_files:
-  - test/letflow/events/ (partition maintenance / retention tests)
-  - test/letflow/tenants/ (tenant template parity test)
-queue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937
-github_ref: GH-2077
+  While independently re-verifying REQ-427 (apps/mobile/ form renderer -- unrelated
+  to EventStore/retention code), RELEASE-VALIDATOR ran the backend full suite via
+  mix letflow.check.test three times against an isolated Postgres container (N=16,
+  8, 4 partitions) and got a DIFFERENT set of failures each time, confined entirely
+  to Letflow.EventStore.PartitionMaintenanceTest, Letflow.EventStore.
+  RetentionOperationsTest, and Letflow.Routers.EventRetentionTest (REQ-377 area).
+  REQ-427's diff touches none of these files or their dependencies -- confirmed via
+  git diff --name-only against the files in question. The varying failure set across
+  otherwise-identical runs indicates order-dependence/shared-state leakage (e.g.
+  partition/retention fixtures not isolated per test, or a shared clock/table state),
+  not a REQ-427 regression. Not fixed as part of REQ-427's run; filed for ISSUE-FIXER
+  to diagnose root cause.
+source_reports:
+  - test/reports/report-2026-10-01-WF02-REQ427-20261001.yaml
+related:
+  - REQ-377
 status: open

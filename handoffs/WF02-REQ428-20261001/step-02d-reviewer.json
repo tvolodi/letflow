@@ -1,0 +1,56 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000006",
+  "run_id": "WF02-REQ428-20261001",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ428-20261001/step-02d-reviewer.json",
+  "created_at": "2026-10-01T03:40:00Z",
+  "started_at": "2026-10-01T03:40:00Z",
+  "completed_at": "2026-10-01T03:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-428"],
+    "requirement_text": {
+      "REQ-428": "Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex): GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task form is resolved through REQ-424's pinned resolver and rendered by REQ-427's form renderer; never the active version. Process-instance renderer: read-only view of GET /api/v1/instances/:id and /api/v1/instances/:id/timeline (lib/letflow/routers/instances.ex) -- status, current step, timeline. No cancel/rebind/advance actions (not in MOB-4). All screens use REQ-426's six-state wrapper; claim/complete errors (409 already claimed, 403, 422) map to its states."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ428-20261001/step-02b-mobile-dev.json",
+      "handoffs/WF02-REQ428-20261001/step-02c-security-reviewer.json",
+      "lib/letflow/design/req428-task-and-instance-renderer.md",
+      ".claude/agents/reviewer.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": ["apps/mobile/"]
+  },
+  "task": {
+    "description": "Hard gate per WF-02 Step 2d. Read git diff main...HEAD on this branch (feature/WF02-REQ428-20261001). Check against .claude/agents/reviewer.md's four questions (idiomatic vs. crutch, supervision, type-safety gaps, scope creep) and docs/anti-patterns.md. Pay particular attention to: (1) MOBILE-DEV's self-reported deviation that TaskInboxController.client is typed PostCapableHttpGateway rather than the design doc's bare HttpGateway -- confirm this is a sound interface-typing correction (claim needs POST capability) and not an undocumented scope change; (2) the claim that renderer_state.dart's rendererStateForError already has a ConflictError arm, contradicting the design doc's OQ-3 -- confirm by reading the actual source; (3) that TaskClaimOutcome is deliberately kept outside RendererState (mirroring REQ-427's precedent for submit outcomes) rather than being a crutch; (4) zero cancel/rebind/reconstruct/advance-timer code exists anywhere in the new process.dart. FAIL if a genuine crutch, broken invariant, or scope creep is found; otherwise PASS with any non-blocking notes recorded.",
+    "acceptance_criteria": [
+      "Diff matches the approved design (req428-task-and-instance-renderer.md) with no undocumented scope expansion",
+      "No crutch/anti-pattern introduced (check docs/anti-patterns.md)",
+      "TaskClaimOutcome / RendererState separation is sound, not a workaround",
+      "No cancel/rebind/advance/reconstruct action present anywhere in the new instance-screen code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Idiom review of git diff main...HEAD (apps/mobile/lib/renderers/task/task.dart, apps/mobile/lib/renderers/process/process.dart, + tests) against req428-task-and-instance-renderer.md and reviewer.md's four questions. (1) Idiomatic vs. crutch: no gen_statem/supervision concerns (Dart/Flutter, not Elixir/OTP) -- controllers follow the existing ChangeNotifier + RendererState<T> idiom (ListRendererController/FormRendererController precedent) with no hand-rolled state-machine-via-case substituting for an existing framework piece. (2) Supervision: N/A for this diff -- no process/isolation concerns; InstanceDetailController correctly keeps detailState/timelineState as two INDEPENDENT RendererState instances per design S4.4.1, verified in process.dart (lines ~149-328) -- a timeline-only 429 does not collapse the already-loaded header, matching the project's general 'don't collapse independent failure domains into one shared state' principle. (3) Type-safety: TaskStatus.fromWire/InstanceStatus.fromWire return nullable enums and an unrecognized wire value folds the WHOLE page/item to RendererStaleVersion(UnknownFieldType) rather than throwing -- already as typed as reasonably achievable short of making the wire format itself a closed type (not this diff's call); no new type-safety gap worth filing. (4) Scope creep: none found -- no new abstraction, behaviour, or registry mechanism beyond what S2/S3/S4/S6 of the design call for; TaskClaimOutcome is the only new sealed hierarchy and the design (S3.3/S5) explicitly justifies it as mirroring REQ-427's already-shipped FormSubmitOutcome precedent, not an ad hoc workaround. Verified the three flagged specifics directly against source rather than trusting MOBILE-DEV's self-report: (a) task.dart line 127, TaskInboxController.client is PostCapableHttpGateway with an inline comment explaining claim()'s shared POST-capable claimTask() function requires it and ApiClient already satisfies the interface -- a sound interface-typing correction, not an undocumented capability expansion (inbox fetch itself still issues only GET, confirmed by reading _fetchPage). (b) renderer_state.dart line 149: `ConflictError() => RendererFetchFailure(cause: error),` IS present in rendererStateForError's switch -- OQ-3's premise (a possible missing arm) does not hold against the shipped file; MOBILE-DEV's claim that no fix was needed there is correct and the gap was already closed before REQ-428 (OQ-3 remains worth closing out as a doc note in a future requirement/decision update, non-blocking). (c) TaskClaimOutcome (task.dart line 352) and lastClaimOutcome (line 415-416) are kept outside RendererState<TaskDetail> entirely, exactly mirroring REQ-427's FormSubmitOutcome precedent for the same stated reason (a claim-action failure must not discard the already-loaded TaskDetail) -- sound separation, not a crutch. (d) grep for cancel/rebind/reconstruct/advance across both new files and their tests: zero calls to any such route; the only matches are the InstanceStatus.cancelled status value (a legitimate terminal-state enum member, not an action) and explanatory doc comments restating the non-goal. No crutch, broken invariant, or scope creep found. Non-blocking notes only: OQ-1 (pinned_form_resolver.dart's stale design-doc citation) and OQ-5 (no backpressure variant on TaskClaimOutcome) remain open per the design doc's own deferral to a future requirement -- neither blocks this gate.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ428-20261001",
+      "commit_sha_list": ["da8ed671028139d54b57cb07a66c5f25843a74fb"],
+      "remote_branch": "origin/feature/WF02-REQ428-20261001",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

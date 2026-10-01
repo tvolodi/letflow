@@ -835,3 +835,32 @@ Future<TenantConfig> fetchTenantConfig(
   }
   return TenantConfig.fromJson(response.data as Map<String, dynamic>);
 }
+
+/// Builds a multipart request body for `POST /instances/:id/attachments`
+/// (REQ-212's `handle_upload_attachment/2` contract, REQ-427 §1.3/§6.3) —
+/// the one place outside this directory that needs a `dio` multipart type
+/// constructed, kept here (not in `lib/renderers/form/`) so every
+/// `package:dio` import in this codebase stays inside `lib/api/`
+/// (`test/guards/single_api_client_guard_test.dart`, REQ-425 design §4).
+/// Returned as `Object` (the exact type `HttpGateway.post`'s own `data`
+/// parameter already accepts) so a caller outside `lib/api/` never needs to
+/// import `package:dio` itself just to pass this value through.
+///
+/// [partName] is the multipart field name the server's own
+/// `conn.body_params["file"]` lookup expects — always `"file"` for the real
+/// attachment-upload route; parameterized only so a test fixture can prove
+/// the wrong part name is rejected without duplicating this function.
+Object buildFileUploadFormData({
+  required List<int> bytes,
+  required String fileName,
+  required String contentType,
+  String partName = 'file',
+}) {
+  return FormData.fromMap({
+    partName: MultipartFile.fromBytes(
+      bytes,
+      filename: fileName,
+      contentType: DioMediaType.parse(contentType),
+    ),
+  });
+}

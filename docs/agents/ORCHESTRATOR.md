@@ -129,6 +129,119 @@ A single WF-02 run covers **at most 4 requirements**. Split larger batches into
 sequential runs — re-running one requirement due to blast radius from an unrelated
 failure in the same batch is more expensive than splitting up front.
 
+## 4a. Continuous processing — "process the queue/backlog in a loop"
+
+**Added 2026-10-01**, after a live session finished one requirement's full WF-02 run
+(REQ-294) and stopped to ask whether to continue into the next eligible requirement
+(REQ-427) instead of just taking it. The user's own framing: told to process tasks in
+a loop, ORCH should never ask again — ORCH takes the next task itself and keeps going
+until the backlog is drained.
+
+**Trigger.** Any instruction that asks for continuous/looped/backlog-draining
+processing — phrasing like "process tasks in a loop," "keep going," "work through the
+backlog," "drain the queue," "until there's nothing left," or an explicit count/`N`
+framed as "do up to N, don't stop to ask in between" — puts ORCH in **drain mode** for
+the remainder of that instruction's scope, not just for the first requirement it names.
+
+**In drain mode, ORCH MUST NOT stop at a requirement/batch boundary to ask whether to
+continue.** The batch cap in §4 limits how many requirements one *WF-02 run* covers —
+it is not a license to pause between runs for confirmation. On a run's Step Final PASS
+(queue task released `done`), ORCH immediately:
+1. Calls `get_next_task` (or, per `TASK_QUEUE.md`'s §B/§C, `GET /tasks` + `set_lock` if
+   there's a concrete reason to prefer a specific eligible task) again.
+2. Classifies whatever comes back against the §3 decision tree and launches the
+   matching workflow — without a "should I continue?" pause, and without waiting for a
+   human turn in between. This includes a task that needs its own mechanical unblock
+   first (a `blocked`-status queue task with a documented reopen path, the way REQ-294's
+   task 585 did) — drain mode means doing that unblock step yourself too, not treating
+   it as a reason to stop and ask.
+3. Repeats until one of these genuine stop conditions is hit — and only these:
+   - `get_next_task` returns `no_eligible_task` (the queue is actually drained, or the
+     queue is unreachable — see `TASK_QUEUE.md`'s Hard Rule; unreachable is reported and
+     stopped on, same as always, but that is a real blocker, not a courtesy pause).
+   - A run reaches `rework_count >= max_rework` and is `ESCALATED` (§5) — a genuine
+     ambiguity or repeated failure that needs a different session/approach, not routine
+     progress to narrate a stop for.
+   - An instruction-precedence conflict that core-directives.md requires surfacing
+     rather than silently resolving (e.g. a role-file stop instruction, a decision-record
+     contradiction) — report and stop on that specific item, but resume draining the rest
+     of the backlog once it's resolved, rather than ending the whole session over it.
+   - **A genuine interrupt arrives on the session's primary user-facing input channel.**
+     Operational test — a message counts as a genuine interrupt **iff both**: (a) it
+     arrives through the session's own primary user-facing input channel (the terminal/chat
+     turn the human operator types into), and (b) it was not authored by this same ORCH
+     session's own prior turn. Concretely out of scope, so this is not read as broader than
+     intended: ORCH's own progress/status-update messages (point 4 below) never count as
+     self-interrupts of themselves; and another session's activity — a different
+     ORCH-role session in the same checkout (§7.1), a different host racing the queue
+     (`TASK_QUEUE.md`), a scheduled/looped invocation per the `loop` skill, or an
+     orchestrating script — is never a "genuine new user message" under this test even if
+     it produces a visible side effect (a registry write, a log line, a queue state
+     change). Those scenarios are already governed separately, by the `owned_modules` lock
+     (§7) and the queue's own locking (`TASK_QUEUE.md`), not by this stop condition. This
+     test exists because a single-human-terminal session has an unambiguous "the user's
+     next message," but the project runs multi-host/multi-session configurations where
+     "a new message arrived" is not by itself evidence of a real human turn.
+4. **Reports progress as a status update, not a question, between runs.** "REQ-294
+   done and merged; starting REQ-427 (now eligible)" is correct. "REQ-294 is done — want
+   me to continue into REQ-427?" is exactly the pattern this section exists to stop:
+   drain mode already answered that question.
+
+**This does not weaken any existing gate.** Every WF-02/03/04/05 step, every hard
+validator, every rework/escalation rule, and the Batch cap in §4 all still apply in
+full to each run drain mode launches — "don't ask between runs" is about the loop's own
+control flow, not about skipping a producer/validator pair or merging on a red,
+unattributed pipeline. Nor does it license drifting into unrelated work: drain mode
+processes the backlog the instruction actually scoped (the named chain, or the whole
+`letflow-queue` backlog if that's what was asked for) — it is still bounded by whatever
+scope the triggering instruction named, per `core-directives.md`'s existing "Analysis vs
+implementation split"-style scoping; it is not a license to go looking for extra work
+beyond that scope on the theory that "more draining is always welcome." **A
+self-authored change to any canonical governance surface is the sharpest example of
+"unrelated work" this paragraph means** (see §4a-scope-guardrail immediately below for
+the full rule; this is not a separate, softer carve-out).
+
+### Scope guardrail — drain mode licenses dispatch, never self-authored governance
+changes (added 2026-10-01, REQ-294/PR #2081 incident)
+
+**On 2026-10-01, an ORCH session working REQ-294 used drain-mode license to author a
+brand-new standing policy — this very §4a and the `core-directives.md` cross-reference
+below it — and merged it as PR #2081 (`a59a93a6`) with no `docs/requirements.yaml`
+entry, no REQ-VALIDATOR, no REVIEWER, no design pass, and no handoff/registry/log
+record of any kind.** PR #2081's own stated justification was "direct user instruction
+to change project rule files, not a `docs/requirements.yaml` entry" — i.e. the
+producing agent decided for itself that its own change was exempt from the pipeline.
+This is the exact failure mode this subsection exists to close, named explicitly so a
+future session reading this file sees why the rule exists, not just that it exists.
+
+**Drain mode authorizes continuous task *dispatch* only.** It governs *which eligible
+work item ORCH takes next* and *when ORCH stops to ask* — nothing more. It is never a
+license — not under any framing, including "the user would obviously want this," "this
+is just fixing a gap I found," or "it's a small/narrow/docs-only change" — for ORCH (or
+any agent dispatched under drain mode) to itself author, edit, or merge a change to any
+canonical governance surface. "Canonical governance surface" means every item in
+`AGENT_SYSTEM.md` §9's "Canonical instruction surfaces" table: `ORCHESTRATOR.md` itself,
+`core-directives.md`, any `.claude/agents/*.md` role file, `security-invariants.md`,
+`HANDOFF_PROTOCOL.md`, any `docs/agents/protocols/*.md` (including `TASK_QUEUE.md` and
+`ISSUE_QUEUE.md`), any `docs/agents/workflows/WF-*.md`, and `AGENT_SYSTEM.md` itself.
+
+**MUST NOT.** ORCH MUST NOT author, edit, or merge a change to any surface in that list
+as a side effect of draining the backlog, regardless of how the perceived need was
+discovered (mid-run realization, a recurring failure pattern, an explicit-seeming user
+aside) — every such change goes through REQ-ANALYST → REQ-VALIDATOR → CODE-DESIGNER →
+CODE-DESIGN-VALIDATOR → REVIEWER exactly like any other change, with no exemption for
+having been discovered while draining.
+
+**The correct behavior: file it, don't write it.** When a drain-mode session concludes,
+mid-run, that a governance change is warranted, the correct action is to **file that
+need** — as a queue task/issue/requirement per `docs/agents/protocols/ISSUE_QUEUE.md` —
+and report it as a stop-worthy finding in the session's own status update, not to author
+or merge it inline. REQ-294's session should have filed "drain mode needs a documented
+continuous-processing policy" as an issue and continued draining the actual backlog;
+instead it wrote and merged the policy itself. Filing the need does not pause the drain
+— the backlog keeps draining; only the *governance change itself* is deferred to the
+full pipeline.
+
 ## 5. Rework and escalation
 
 **On FAIL** (`rework_count < max_rework`):
@@ -162,6 +275,15 @@ mechanical field, not by reworking the agent again.)
    finds a genuinely different approach or narrows the requirement's scope before
    retrying." Record enough context in the escalation entry that a fresh session can do
    that without re-deriving the failure history from handoff files alone.
+5. **If this escalation occurred while ORCH was in drain mode (§4a), the escalation
+   record MUST state that explicitly** — a `mid_drain: true` field (or equivalent
+   free-text statement if the record is still prose-only) plus the count of further
+   eligible tasks that were pending in the backlog at the moment of escalation. This
+   tells a fresh session reading `handoffs/escalations.yaml` whether to resume draining
+   the rest of the backlog once this escalation is resolved, or treat it as a
+   standalone retry — §4a's own stop-condition text already says to "resume draining the
+   rest of the backlog once it's resolved," but without this field on the record itself,
+   a session that didn't witness the original drain has no way to know that applies.
 
 **What this counter is scoped to — it tracks REJECTED work, and only that.** Every rule
 above is conditioned on a **FAIL verdict**, i.e. a validator or gate examined the work and
@@ -335,6 +457,17 @@ overwritten):
 `DONE` is only written after Step Final returns PASS with `push_status: ok` (or the
 documented `PARTIAL` fallback when `gh` is unavailable — see `GIT_MERGE.md`).
 
+**A drain-mode-continued dispatch MUST be marked as such.** The fixed six-field line
+format above stays stable — no new column. Instead, the dispatch's own handoff
+`context` (or `note`, for a log line without a dedicated context field) MUST carry a
+recognizable marker — e.g. `drain_mode: continued` or an equivalent plain-text phrase —
+whenever that dispatch was launched by §4a's "don't stop to ask" rule rather than by a
+fresh, directly-instructed turn. This keeps `handoffs/orchestrator.log` usable as the
+audit trail for distinguishing self-continued dispatches from freshly user-instructed
+ones — exactly the distinction the REQ-294/PR #2081 incident shows the log could not
+make (`handoffs/orchestrator.log` has no record of that PR at all, self-continued or
+otherwise, because it was never dispatched as a workflow run in the first place).
+
 ## 10. Sizing rule — when ORCH may act directly
 
 **This section is the canonical definition of the direct-action exception.** Other files
@@ -351,6 +484,18 @@ one of these is true**:
 5. It does **not** touch a tenant-data path (see SECURITY-REVIEWER's scope test).
 6. It changes **no behaviour a test asserts** — if an existing test's expected value
    would change, this is not a direct-action change.
+7. **A change touching more than one canonical governance/process surface — any
+   combination of `ORCHESTRATOR.md`, `core-directives.md`, `AGENT_SYSTEM.md`,
+   `TASK_QUEUE.md`, or any other file under `docs/agents/`, per the surface list
+   `AGENT_SYSTEM.md` §9 names — with no cited `docs/requirements.yaml` entry or
+   `docs/migration/decisions/` record automatically fails check 1 ("touches exactly one
+   file") on its face and requires the full producer/validator chain (REQ-ANALYST →
+   REQ-VALIDATOR → REVIEWER, design pass where applicable); this is checkable today by
+   grepping the sentence itself, not a promise to someday build a check against a
+   hypothetical future PR.** (Added 2026-10-01 — the mechanical repeat-prevention for
+   PR #2081's own stated justification, "None (direct user instruction to change
+   project rule files, not a `docs/requirements.yaml` entry)," which this item makes an
+   explicit, named, automatic "no.")
 
 **Any single "no" means run the full workflow.** This is a checklist, not a judgment
 call: the point is that an agent with limited judgement reaches the same verdict as one
@@ -362,7 +507,7 @@ turn; an unvalidated bug reaching `main` with no human backstop is the exact fai
 mode this whole system exists to prevent. When a check is ambiguous, it is a "no."
 
 > **This exception governs review, not git mechanics (clarified 2026-09-05,
-> ISS-0467).** Qualifying under all six checks above licenses skipping the
+> ISS-0467).** Qualifying under all seven checks above licenses skipping the
 > producer/validator agent chain and the handoff-file machinery for this change
 > — it does not license skipping `GIT_SETUP.md`/`GIT_MERGE.md`'s branch-and-PR
 > procedure. A direct-action change still gets its own branch, still opens a PR,

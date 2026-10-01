@@ -26,4 +26,57 @@ affected_files:
   - test/support/tenant_template.ex
 queue_ref: Q-910  # queue allocated issue_ref ISS-0910, which collides with an existing local file; local filename kept as ISS-0920 (next free on origin/main) and GH-2060 retitled to match
 github_ref: GH-2060
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0917-test-parallel-template-contention (PR #2061)
+resolved_at: "2026-10-01T02:30:00Z"
+resolution: >
+  NOTE on filename history: this fix was developed on a branch that drafted its
+  own copy of this issue as docs/issues/ISS-0917.yaml, started from an older
+  base before this exact issue had been forwarded/renumbered to ISS-0920 on
+  main (see this file's own queue_ref/github_ref comment above -- Q-910/GH-2060
+  match exactly). That duplicate draft file was removed at close-out rather
+  than kept as a second record of the same issue; this entry (ISS-0920) is the
+  sole and canonical closure record.
+
+  Root cause: N simultaneous `mix test` partitions (scripts/test_parallel.sh)
+  all launching full migration replays (`ensure_template!` in
+  test/support/tenant_template.ex) with no stagger between them, causing a
+  Postgres server-side CPU/IO burst that exceeded Ecto's 15s connection-checkout
+  timeout under high N (observed at N=16: 11/16 partitions aborted), leaving
+  partitions stuck/aborted and orphaned erl.exe/beam.smp processes behind on
+  the host. Compounding the symptom: the aggregator's own reporting logic
+  could not distinguish "partition failed" from "partition never reported,"
+  so it printed a misleadingly-clean summary (1553 tests/0 failures) even
+  though only 5 of 16 partitions had actually reported.
+
+  Fix, in scripts/test_parallel.sh (reusing the existing Step 1.7 idiom):
+    1. A capped-concurrency admission-control stagger limiting concurrent
+       in-flight template builds to 4 regardless of total partition count N.
+    2. A `reporting_count == N` structural invariant that hard-fails loudly
+       when fewer than N partitions report, instead of silently printing a
+       partial-but-clean-looking summary.
+    3. Process-group-scoped partition launch with a watchdog timeout and an
+       extended EXIT trap, so timed-out/killed partitions' full process tree
+       gets reaped -- eliminating orphaned erl.exe/beam.smp processes.
+
+  Full gate chain, all PASS: CODE-DESIGN-VALIDATOR; ELIXIR-DEV implementation;
+  REVIEWER (built a standalone process-tree harness to independently verify
+  the kill/reap logic); TEST-RUNNER (N=8 clean 5079/5079; N=16 all 16
+  partitions reported, admission cap correctly logging 4-concurrent, no
+  orphans -- filed two non-blocking follow-ups, ISS-0938 and ISS-0919, now
+  renumbered from their original draft ids ISS-0918/ISS-0919 to resolve a
+  separate main-side numbering collision discovered at close-out); and
+  RELEASE-VALIDATOR, who independently re-read the diff, built a real
+  fake-mix harness proving the reporting-count hard-fail works, ran a clean
+  mutation-kill test proving the admission-control stagger is load-bearing
+  (peak concurrent builds 4 unmodified vs 12 with the gate removed), and
+  additionally captured a REAL natural reproduction: a genuine
+  too_many_connections exhaustion killed a partition mid-run during
+  verification, and the new reporting-count invariant correctly caught it
+  and exited nonzero with a clear diagnostic -- filed as the separate,
+  pre-existing, untouched-by-this-PR ISS-0939 (report_partition_failures/1
+  hang in mix letflow.check.test, discovered incidentally during that same
+  verification session; also renumbered from its original draft id
+  ISS-0920 to resolve the same collision).
+
+  None of ISS-0938, ISS-0919, or ISS-0939 block this closure.

@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a2af3c1e-551d-4336-805f-d63f25e1b673",
+  "run_id": "WF03-ISS0937-20261001",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0937-20261001/step-05-issue-fixer-close.json",
+  "created_at": "2026-10-01T01:42:23Z",
+  "started_at": "2026-10-01T01:42:23Z",
+  "completed_at": "2026-10-01T01:42:47Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0937": "id: ISS-0937\ntitle: \"Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01\"\ndiscovered_by: ELIXIR-DEV\ndiscovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)\ndiscovered_at: \"2026-10-01T00:21:56Z\"\nseverity: MAJOR\ndescription: >\n  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest\n  parity failure extra=[\"events_y2026m09\"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in\n  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not\n  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.\n  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.\naffected_files:\n  - test/letflow/events/ (partition maintenance / retention tests)\n  - test/letflow/tenants/ (tenant template parity test)\nqueue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937\ngithub_ref: GH-2077\nstatus: open\n"
+    },
+    "related_handoff_ids": [
+      "77c3bf93-95a7-41f8-9e69-d94dd0ccaa95"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0937.yaml",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "handoffs/WF03-ISS0937-20261001/step-04c-test-runner.json"
+    ],
+    "owned_modules": [
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs",
+      "test/support/partition_clock.ex (new)",
+      "test/support/tenant_template_test.exs (new parity regression test)"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937",
+    "branch_name": "feature/WF03-ISS0937-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 5 CLOSE ISSUE for ISS-0937. Edit docs/issues/ISS-0937.yaml: status: resolved, resolved_in_run: WF03-ISS0937-20261001, resolved_at: <real UTC from `date -u +%FT%TZ`>; add a short `resolution:` note (root cause: two test-side month-boundary dependencies - eligible_past_month used last month as always-eligible, which fails on the 1st with min_partition_age_days=1 because eligibility requires today >= 1st of next month + N days; and check_table_set/2 flagged a stale dynamic events_yYYYYmMM partition as extra when the template was built in a different UTC month; production lib/ was correct and unchanged), `regression_tests:` [test/support/partition_clock_test.exs, test/support/tenant_template_test.exs (ISS-0937 describe)], and `main_ci_evidence:` main CI runs 36795709173 (ed40c2fa) and 36795979277 (590c923f) both completed FAILURE on the same 12 tests (8 PartitionMaintenanceTest, 3 RetentionOperationsTest, 1 EventRetentionTest) on 2026-10-01 (green before: 36785684070). Keep existing keys (queue_ref Q-920, github_ref GH-2077); check the Issue status vocabulary in docs/agents/protocols/ISSUE_QUEUE.md so `resolved` uses exactly the right key pair, and verify with `mix letflow.lint_issues` or the repo's issue lint task if one exists (run it, quote result). IMPORTANT: do NOT run `gh issue close` in this step and do NOT call the queue - the PR is not merged yet; ORCH will close GH#2077 with the evidence comment after the merge lands and release the queue lock. Also propose, inside your handoff result.summary only (do not edit docs/anti-patterns.md), nothing else. Modify nothing but docs/issues/ISS-0937.yaml and this handoff. Set IN_PROGRESS at claim then COMPLETED/FAILED, result.status PASS/FAIL; next_action 'Route to Step Final'.",
+    "acceptance_criteria": [
+      "Local record resolved with correct key pair and real timestamp",
+      "No premature GH close",
+      "Lint result quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Closed docs/issues/ISS-0937.yaml: status: resolved, resolved_in_run: WF03-ISS0937-20261001, resolved_at 2026-10-01T01:42:37Z (resolved/resolved_in_run/resolved_at is the correct pair per ISSUE_QUEUE.md; verdict_* is for no_defect only). Added resolution (two test-side month-boundary dependencies: eligible_past_month fails on the 1st with min_partition_age_days=1; check_table_set/2 flagged stale events_yYYYYmMM as extra across UTC months; lib/ unchanged), regression_tests (partition_clock_test.exs, tenant_template_test.exs ISS-0937 describe), main_ci_evidence (runs 36795709173, 36795979277 FAILURE on same 12 tests; green before 36785684070). queue_ref Q-920 and github_ref GH-2077 kept. Lint: `mix letflow.check_issue_refs` -> 'letflow.check_issue_refs -- 535 file(s) under docs/issues/ OK -- every cross-reference is prefixed and well-formed.' (no letflow.lint_issues task exists). YAML parses; status=resolved. No gh close, no queue call. Anti-pattern proposal (for ORCH/DOC-UPDATER, not applied): tests must not derive fixtures from the real wall-clock UTC month/day (e.g. 'last month is always eligible', or asserting a dynamic partition set built at a different time); inject a clock via test/support/partition_clock.ex and run suites near month boundaries.",
+    "files_modified": [
+      "docs/issues/ISS-0937.yaml"
+    ]
+  }
+}

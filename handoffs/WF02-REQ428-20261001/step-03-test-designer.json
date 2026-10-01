@@ -1,0 +1,62 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000007",
+  "run_id": "WF02-REQ428-20261001",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ428-20261001/step-03-test-designer.json",
+  "created_at": "2026-10-01T04:05:00Z",
+  "started_at": "2026-10-01T04:05:00Z",
+  "completed_at": "2026-10-01T04:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-428"],
+    "requirement_text": {
+      "REQ-428": "Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex): GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task form is resolved through REQ-424's pinned resolver and rendered by REQ-427's form renderer; never the active version. Process-instance renderer: read-only view of GET /api/v1/instances/:id and /api/v1/instances/:id/timeline (lib/letflow/routers/instances.ex) -- status, current step, timeline. No cancel/rebind/advance actions (not in MOB-4). All screens use REQ-426's six-state wrapper; claim/complete errors (409 already claimed, 403, 422) map to its states."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ428-20261001/step-02b-mobile-dev.json",
+      "apps/mobile/test/renderers/task/task_inbox_claim_complete_test.dart",
+      "apps/mobile/test/renderers/task/task_pinned_version_test.dart",
+      "apps/mobile/test/renderers/task/task_claim_conflict_test.dart",
+      "apps/mobile/test/renderers/process/process_instance_test.dart",
+      "apps/mobile/test/guards/renderer_state_wrapper_guard_test.dart"
+    ],
+    "owned_modules": ["apps/mobile/", "test/specs/"]
+  },
+  "task": {
+    "description": "This is a mobile-only run (apps/mobile/ only, no lib/letflow/ or web/ change) -- per WF-02 Step 3's own scope note, Dart tests under apps/mobile/test/ are written by MOBILE-DEV in the mobile step, same as the REQ-425/427 precedent (see handoffs/WF02-REQ425-20260929/step-03-test-designer.json for the established pattern: TEST-DESIGNER independently verifies MOBILE-DEV's existing Dart tests against each decomposed acceptance criterion rather than writing new Dart test files from scratch). Apply the ISS-0880 lesson explicitly: decompose EVERY multi-clause acceptance criterion into its individual clauses and confirm each clause has its own test that would fail if that specific clause were violated -- not one test covering the AC's gestalt. In particular AC1 has at least 4 sub-clauses (list inbox / claim / open / complete-with-form-values-in-body) and AC4 has at least 3 (status rendered / timeline entries rendered / no cancel-rebind-advance action exposed) -- each needs its own traceable test, named explicitly in your spec. Read the actual test files in artifacts_in (not MOBILE-DEV's handoff summary) and verify genuine coverage; write any missing test yourself if a real gap is found (do not rubber-stamp). Write test/specs/REQ-428.md documenting the full clause-by-clause mapping. Re-run, from apps/mobile/: flutter analyze && flutter test yourself and quote the real output.",
+    "acceptance_criteria": [
+      "a test lists the inbox from a fake GET /api/v1/tasks/inbox, claims a task (asserting POST /api/v1/tasks/:id/claim), opens it, and completes it (asserting POST /api/v1/tasks/:id/complete with the form values in the body)",
+      "a test asserts opening a task pinned to form_version 1 while version 2 is cached renders version 1's fields (through REQ-424's resolver), not version 2's",
+      "a test asserts a 409 on claim renders a state telling the user the task is no longer available and refreshes the inbox, not a crash",
+      "a test asserts the process-instance screen renders status and timeline entries from fake /instances/:id and /instances/:id/timeline responses and exposes no cancel, rebind or advance action",
+      "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently verified MOBILE-DEV's existing Dart tests against every decomposed clause of REQ-428's 4 functional ACs plus AC5. Read the actual test bodies in artifacts_in (not the handoff summary): task_inbox_claim_complete_test.dart (AC1, 4 clauses: list/claim/open/complete-with-body, each a separately-failing assertion block backed by FakePostCapableHttpGateway's StateError-on-unconfigured-path behavior), task_pinned_version_test.dart (AC2, 4 clauses incl. disjoint-field-set version1-vs-version2 and zero-network-calls-on-cache-hit), task_claim_conflict_test.dart (AC3, 3 clauses: non-crash state / inbox content survives / inbox refreshed, plus 403/network-unavailable breadth), process_instance_test.dart (AC4, 3 clauses: status rendered / timeline rendered / no POST at all in process.dart as the structural proof of no cancel-rebind-advance, plus current-step derivation and independent detail/timeline failure). Cross-checked the six-state-wrapper requirement-text clause via renderer_state_wrapper_guard_test.dart's existing task/process probe entries (file is actually at apps/mobile/test/renderers/, not test/guards/ as this handoff's artifacts_in lists it -- a path-naming slip in the handoff, not a missing file; recorded as a housekeeping note in the spec). No genuine coverage gap found; wrote zero new test files. Re-ran flutter analyze (No issues found!) and flutter test (261 tests, All tests passed!) myself from apps/mobile/.",
+    "artifacts_out": [
+      "test/specs/REQ-428.md"
+    ],
+    "issues": [
+      "Step 3 handoff's artifacts_in lists apps/mobile/test/guards/renderer_state_wrapper_guard_test.dart; the real file is at apps/mobile/test/renderers/renderer_state_wrapper_guard_test.dart. Not a missing-test gap -- confirmed the file exists, is collected by flutter test, and already covers REQ-428's task/process renderers. Flagging only so a future handoff author fixes the path."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ428-20261001",
+      "commit_sha_list": ["c23c878f571725c7b6d9eb328a7b2778d8d42de6"],
+      "remote_branch": "origin/feature/WF02-REQ428-20261001",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

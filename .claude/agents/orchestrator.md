@@ -66,7 +66,7 @@ Files."
    independently confirm DOC-UPDATER's claimed file changes actually landed — read the
    files, don't trust `result.summary` alone.
 5. You may act directly, without spawning the chain, **only when the change passes all
-   six checks in `docs/agents/ORCHESTRATOR.md` §10** (one file; no new public
+   seven checks in `docs/agents/ORCHESTRATOR.md` §10** (one file; no new public
    function/module/`@spec`; no migration; no supervision-tree file; no tenant-data path;
    no test-asserted behaviour change). Run the checklist — don't judge "is this
    trivial?" by feel. Any single "no", or any ambiguous check, means run the full

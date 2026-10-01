@@ -1,0 +1,24 @@
+id: ISS-0938
+title: "mix letflow.check.test: Letflow.EventStore.{PartitionMaintenanceTest,RetentionOperationsTest} / Routers.EventRetentionTest fail non-deterministically (order-dependent) across repeated runs at varying partition counts"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ427-20261001
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MINOR
+description: >
+  While independently re-verifying REQ-427 (apps/mobile/ form renderer -- unrelated
+  to EventStore/retention code), RELEASE-VALIDATOR ran the backend full suite via
+  mix letflow.check.test three times against an isolated Postgres container (N=16,
+  8, 4 partitions) and got a DIFFERENT set of failures each time, confined entirely
+  to Letflow.EventStore.PartitionMaintenanceTest, Letflow.EventStore.
+  RetentionOperationsTest, and Letflow.Routers.EventRetentionTest (REQ-377 area).
+  REQ-427's diff touches none of these files or their dependencies -- confirmed via
+  git diff --name-only against the files in question. The varying failure set across
+  otherwise-identical runs indicates order-dependence/shared-state leakage (e.g.
+  partition/retention fixtures not isolated per test, or a shared clock/table state),
+  not a REQ-427 regression. Not fixed as part of REQ-427's run; filed for ISSUE-FIXER
+  to diagnose root cause.
+source_reports:
+  - test/reports/report-2026-10-01-WF02-REQ427-20261001.yaml
+related:
+  - REQ-377
+status: open

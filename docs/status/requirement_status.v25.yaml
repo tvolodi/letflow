@@ -119,3 +119,193 @@ history:
       231/231 passed. Backend suite 5082 passed / 0 failures via ORCH's own
       serial mix test run, after two RELEASE-VALIDATOR attempts were blocked
       by host memory exhaustion. status: done in docs/requirements.yaml.
+  - req: REQ-427
+    event: started
+    agent: ORCH
+    at: "2026-09-30T21:47:05Z"
+    note: >
+      WF-02 run WF02-REQ427-20261001. Eligible now that REQ-294 and REQ-426
+      are both done (depends_on satisfied). Verified GH#1881 (letflow-queue
+      task 864) is OPEN with no blocking labels -- no mechanical reopen
+      needed this time, unlike REQ-294. Branch feature/WF02-REQ427-20261001
+      created from freshly-pulled origin/main (93cdc0fd) and pushed.
+      status: in_progress in docs/requirements.yaml.
+  - req: REQ-427
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T00:49:05Z"
+    note: >
+      apps/mobile/lib/renderers/form/form.dart (now the real form renderer,
+      no longer a placeholder) plus buildFileUploadFormData in
+      api_client.dart, composing REQ-294's Dart Expr evaluator and REQ-426's
+      six-state renderer wrapper. One TEST-DESIGN-VALIDATOR rework cycle:
+      AC4 (network-unavailable submit writes nothing) was vacuous as first
+      written (no assertion could actually fail); fixed with a counting
+      repository spy asserting zero writes. Full gate chain:
+      CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS (out of scope --
+      no tenant-data path touched), REVIEWER PASS, TEST-DESIGN-VALIDATOR
+      PASS after the AC4 rework, TEST-RUNNER PARTIAL (an ORCH bookkeeping
+      gap, not a code defect; fixed), RELEASE-VALIDATOR PASS via an
+      independent re-run -- mobile suite 252/252, backend full suite
+      5079/5079 on an isolated DB, all 7 acceptance criteria independently
+      confirmed. ISS-0937 filed during this run for flaky
+      EventStore/retention tests, unrelated to REQ-427 and not a blocker.
+      status: done in docs/requirements.yaml. Design doc
+      lib/letflow/design/req427-form-renderer.md's OQ-1/OQ-6 field-type
+      reconciliation applied to docs/mobile/requirements.md's MOB-4 entry in
+      this same commit (never papered over, per this requirement's own
+      instruction). letflow-queue task 864 (GH#1881) still needs
+      release_lock(status=done) -- not called from here; DOC-UPDATER does
+      not call the queue.
+  - req: REQ-428
+    event: started
+    agent: ORCH
+    at: "2026-10-01T01:18:43Z"
+    note: >
+      WF-02 run WF02-REQ428-20261001. Eligible now that REQ-424 and REQ-427
+      are both done (depends_on satisfied). Queue task 865 (GH#1882) was
+      already locked under agent_id "orch" from a prior check this session;
+      re-confirmed via POST /tasks/865/lock (same-agent recovery, 200) rather
+      than assuming the lock was still valid. Noted but not yet actioned:
+      REQ-429's impl_order comment (866, GH#1883) points at a queue task that
+      does not exist on the live service (GET /tasks/866 -> 404, and task 866
+      is absent from the full GET /tasks listing even though task 867/REQ-430
+      cites it as a dependency) -- register_task was apparently never
+      actually run for REQ-429 despite the comment claiming it was; to
+      reconcile before REQ-429 can be locked/worked. Branch
+      feature/WF02-REQ428-20261001 created from freshly-pulled origin/main
+      and pushed by MOBILE-DEV (Step 00), commit 0335d144d94277cc0f1b25a0fd6723e4593ce8cd.
+      status: in_progress in docs/requirements.yaml. Routing to CODE-DESIGNER
+      next.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T02:35:00Z"
+    note: >
+      ISS-0920 resolved (scripts/test_parallel.sh at high N aborts most
+      partitions on a 15s tenant-template DB connection timeout and leaves
+      orphan erl.exe/beam.smp processes). PR #2061, branch
+      fix/ISS-0917-test-parallel-template-contention, commit TBD-at-merge.
+      Root cause: N simultaneous partitions all launching full migration
+      replays (ensure_template!) with no stagger, causing a Postgres
+      server-side CPU/IO burst that exceeded Ecto's 15s connection-checkout
+      timeout at high N, leaving partitions stuck/aborted and orphaned
+      processes behind, while the aggregator's own reporting logic could not
+      distinguish "partition failed" from "partition never reported" and
+      printed a misleadingly-clean summary. Fix: (1) capped-concurrency
+      admission-control stagger limiting concurrent in-flight template
+      builds to 4 regardless of N (reusing the existing Step 1.7 idiom); (2)
+      a reporting_count == N structural invariant that hard-fails loudly
+      when fewer than N partitions report; (3) process-group-scoped
+      partition launch with a watchdog timeout and extended EXIT trap so
+      timed-out/killed partitions' full process tree gets reaped, eliminating
+      orphans. Full gate chain: CODE-DESIGN-VALIDATOR, ELIXIR-DEV
+      implementation, REVIEWER PASS (built a standalone process-tree harness
+      to independently verify kill/reap logic), TEST-RUNNER PASS (N=8 clean
+      5079/5079; N=16 all 16 partitions reported, admission cap correctly
+      logging 4-concurrent, no orphans), and RELEASE-VALIDATOR PASS via
+      independent diff read, a real fake-mix harness proving the
+      reporting-count hard-fail works, a clean mutation-kill test proving the
+      admission-control stagger is load-bearing (peak concurrent builds 4
+      unmodified vs 12 with the gate removed), and a REAL natural
+      reproduction -- a genuine too_many_connections exhaustion killed a
+      partition mid-run and the reporting-count invariant correctly caught it
+      and exited nonzero with a clear diagnostic.
+
+      Filename history: this issue was drafted on its branch as
+      docs/issues/ISS-0917.yaml, under an older base commit where that
+      number was still free; main independently forwarded/renumbered this
+      exact issue to ISS-0920 (queue_ref Q-910/GH-2060) in the interim via
+      commit 854b6baa. The branch's duplicate ISS-0917.yaml draft was
+      removed at this close-out rather than kept as a second record;
+      ISS-0920 is the sole, canonical closure record and carries the full
+      resolution. Two non-blocking follow-ups were filed during this work
+      and renumbered for the same reason (their original draft ids,
+      ISS-0918 and ISS-0920, each collided with unrelated issues already on
+      main -- ISS-0918 collided TWICE, since its first renumbering target
+      ISS-0938 was separately claimed on main by REQ-427's RELEASE-VALIDATOR
+      in the interim): docs/issues/ISS-0940.yaml (pre-existing
+      tenant_template schema staleness, events_y2026m09, in a long-lived
+      shared dev Postgres container -- also worth a joint look alongside
+      main's own existing ISS-0937 and ISS-0938, related-looking signals
+      from different PRs/runs, not confirmed same root cause) and
+      docs/issues/ISS-0939.yaml (mix letflow.check.test's
+      report_partition_failures/1 hangs indefinitely on large/malformed
+      partition logs -- pre-existing, untouched by this PR).
+      docs/issues/ISS-0919.yaml (PartitionMaintenanceTest order-dependency)
+      kept its original number, which was already free on main. None of
+      ISS-0940, ISS-0919, or ISS-0939 block this closure. This is an ISSUE
+      closure, not a REQ -- docs/requirements.yaml untouched. letflow-queue
+      task 910 released as done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T07:12:21Z"
+    note: >
+      ISS-0935 resolved (Vortex tenant had no entity types/batches seeded at
+      all, blocking the vortex-entity-list-filter-and-page UAT scenario's
+      data precondition). PR #2084, branch fix/ISS-0935-vortex-entity-seed,
+      commit e977ab15. Fix: two new entity-type definitions
+      (production_batch with a cost_figure field restricted to a
+      cost-approver persona and a non-searchable internal_notes field;
+      shipment_manifest, a second type fully restricted from the
+      quality-manager persona), 83+10 sample records, and -- because no
+      existing mechanism could write the necessary field/type restriction
+      rows against a remote QA instance -- a brand-new POST
+      /entities/restrictions/import admin route gated by a new
+      :EntitiesRestrictionsManage permission, backed by a new
+      Letflow.Entities.Restrictions.import_restrictions/2 context module,
+      plus a new seed script scripts/seed_vortex_entities.sh. Full gate
+      chain: CODE-DESIGN-VALIDATOR 2-attempt cycle (1st attempt caught a
+      real missing-write-mechanism gap, resolved via the new admin route),
+      ELIXIR-DEV implementation, SECURITY-REVIEWER mandatory hard-gate PASS
+      (new route/permission/tenant-table write path -- traced cross-tenant
+      user_id rejection with a genuine two-tenant cross-tenant-injection
+      test, judged the deliberate missing-revoke-path limitation acceptable
+      for this narrowly-scoped seed-only tool), REVIEWER 2 passes (full
+      review plus a narrow re-check after the tripwire fix), TEST-RUNNER 2
+      full runs (careful per-failure classification after an earlier
+      misattribution was caught and corrected), and RELEASE-VALIDATOR 2
+      passes -- the first FAILed on a real regression it alone caught: the
+      PR's new route wasn't registered in
+      test/letflow/simulation/req207_vortex_test.exs's route-tripwire test,
+      fixed by ELIXIR-DEV, the second re-check confirmed the fix.
+      docs/issues/ISS-0526.yaml (the separate Playwright-spec gap for this
+      same scenario) remains open and unresolved -- this fix only closes
+      the DATA-seeding half of the original blocker; the scenario cannot
+      run end-to-end until ISS-0526 also lands. The new seed script was NOT
+      run against live QA (no credentials in this sandbox) -- documented
+      operational follow-up, same precedent as
+      ISS-0897/ISS-0886/ISS-0892. docs/issues/ISS-0935.yaml set to status:
+      resolved in this same commit. This is an ISSUE closure, not a REQ --
+      docs/requirements.yaml untouched. letflow-queue task 918 to be
+      released as done after merge.
+  - req: REQ-428
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T09:45:00Z"
+    note: >
+      apps/mobile/lib/renderers/task/task.dart and
+      apps/mobile/lib/renderers/process/process.dart implementing the task
+      inbox/claim/complete flow and read-only process-instance screen,
+      composed over REQ-424's pinned resolver, REQ-427's form renderer, and
+      REQ-426's six-state wrapper. Full gate chain: CODE-DESIGN-VALIDATOR
+      PASS, SECURITY-REVIEWER PASS (out of scope), REVIEWER PASS,
+      TEST-DESIGN-VALIDATOR PASS, TEST-RUNNER rework 1 of 3 (A9
+      requirement-status index entries: count fixed by ORCH, then PASS),
+      RELEASE-VALIDATOR PASS with all 6 acceptance criteria independently
+      verified and the 261-vs-252 flutter test-count discrepancy resolved as
+      a benign sibling-session race during discovery (not a regression). AC5
+      (live emulator check) genuinely DEFERRED to UAT-RUNNER -- no
+      adb/emulator available in this execution context. status: done in
+      docs/requirements.yaml. docs/mobile/requirements.md's MOB-4 entry
+      checked and found to already cover this requirement's task/
+      process-instance renderer addition generically -- its intro paragraph
+      already names "process-instance, and task-inbox renderers" and its own
+      acceptance-criteria bullet "The task renderer supports inbox, claim,
+      and complete against the task API" already covers the inbox/claim/
+      complete flow; no edit made. README.md not touched -- this requirement
+      did not alter any documented current-behavior section there (no ASCII
+      state diagram or Running-it change). letflow-queue task 865 (GH#1882)
+      still needs release_lock(status=done) -- not called from here;
+      DOC-UPDATER does not call the queue.

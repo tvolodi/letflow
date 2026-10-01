@@ -1,0 +1,70 @@
+id: ISS-0940
+title: "Stray events_y2026m09 partition table in the shared tenant_template schema causes a parity mismatch in Letflow.Test.TenantTemplateTest's concurrent-build self-check, on the long-lived letflow-1-postgres-1 dev container"
+discovered_by: TEST-RUNNER
+discovered_in_run: PR #2061 (ISS-0920 test_parallel.sh contention/aggregator/orphan-process fix) disambiguation pass
+# NOTE (added by DOC-UPDATER at ISS-0920/PR #2061 close-out, 2026-10-01): originally
+# drafted on this branch as ISS-0918, renumbered once to ISS-0938 (collided with an
+# unrelated already-merged issue, History tab actor_id gap), then renumbered again to
+# ISS-0940 at final merge -- in the interim, ISS-0938 had ALSO been independently
+# claimed on main by RELEASE-VALIDATOR's WF02-REQ427-20261001 filing (order-dependent
+# PartitionMaintenanceTest/RetentionOperationsTest/EventRetentionTest failures). That
+# main-side ISS-0938 is kept as-is; this issue takes the next free number, ISS-0940.
+# Also cross-references main's existing ISS-0937 (Backend CI red: TenantTemplateTest
+# parity, extra=["events_y2026m09"], plus PartitionMaintenance/RetentionOperations/
+# EventRetention failures, now itself revised to describe the same order-dependence
+# pattern as ISS-0938) and ISS-0919 (this branch's own PartitionMaintenanceTest
+# order-dependency filing) -- all four issues (ISS-0937, ISS-0938, ISS-0919, ISS-0940)
+# look like facets of the same underlying EventStore partition/retention test-isolation
+# gap, surfacing from different PRs/runs; worth a joint look, not folded together here
+# since no single filer has independently confirmed they share one literal root cause.
+discovered_at: "2026-10-01T00:05:30Z"
+severity: MINOR
+owner: null  # no clear single owner yet -- environmental cleanup, not an app-code bug; triage can route to ELIXIR-DEV or a host-maintenance task
+description: >
+  Found while disambiguating a 22-failure result from an explicit
+  TEST_PARALLEL_N=16 oversubscription run of PR #2061 (ISS-0920 fix), run
+  against this host's long-lived `letflow-1-postgres-1` container (up 3+
+  weeks at the time, port 5463). To separate "pool-size artifact of the
+  safety TEST_CONNECTION_HEADROOM I applied" from "real regression," the 6
+  distinct failing test files were re-run in isolation via a single plain
+  `mix test` (no test_parallel.sh, no partitioning, default unconstrained
+  pool size). Result: 82/91 passed, 9 failed -- of the original 22, only one
+  test reproduced under normal pool conditions:
+
+  `Letflow.Test.TenantTemplateTest` "the template itself is faithful to a
+  genuine migration build / two concurrent reference-schema builds do not
+  collide" (test/support/tenant_template_test.exs:108) fails both in the
+  N=16 run and this isolated re-run with the same signal:
+
+    TENANT_TEMPLATE_PARITY reference=tenant_template_build_<hash>
+    candidate=tenant_template
+      [diff #1] table set: extra=["events_y2026m09"]
+
+  i.e. the live `tenant_template` schema in this container already has an
+  `events_y2026m09` partition table that a freshly-built independent
+  reference schema does not. This looks like leftover state accumulated
+  across real calendar months on this specific shared dev/test Postgres
+  instance (one of several containers that stay up for weeks on this host
+  per `docker ps`), not a code defect: `test/support/tenant_template.ex`'s
+  self-check (`assert_template_parity_against_independent_reference!/1`,
+  around line 671/677) is doing exactly what it's supposed to by catching
+  the drift. Not filed as a blocker on PR #2061 or on ISS-0920: the PR's own
+  claimed fix (template-build admission control, orphan-process cleanup)
+  showed no sign of recurring in either run (16/16 partitions reported
+  cleanly, admission cap logged correctly, no orphan erl/beam.smp
+  processes) -- this is a separate, pre-existing environmental-hygiene gap.
+
+  Fix direction: either (a) a reaper/cleanup step that drops
+  calendar-month-dated partition tables from the live `tenant_template`
+  schema once they fall outside whatever window the real app schema
+  rotation logic expects, run periodically or at container start, or (b)
+  recreating/resetting this specific long-lived container's `tenant_template`
+  schema from a clean migration baseline. Needs someone familiar with the
+  tenant/event-partition lifecycle (see `Letflow.EventStore` partition
+  maintenance code and its own monthly-rotation logic) to decide which.
+affected_files:
+  - test/support/tenant_template.ex
+  - test/support/tenant_template_test.exs
+queue_ref: null  # discovered incidentally by TEST-RUNNER mid-task, not queue-originated
+github_ref: null  # not yet mirrored to GitHub
+status: open

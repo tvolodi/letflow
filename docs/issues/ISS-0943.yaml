@@ -1,0 +1,50 @@
+id: ISS-0943
+title: "Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)
+discovered_at: "2026-10-01T00:21:56Z"
+severity: MAJOR
+description: >
+  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest
+  parity failure extra=["events_y2026m09"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in
+  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not
+  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.
+  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.
+affected_files:
+  - test/letflow/events/ (partition maintenance / retention tests)
+  - test/letflow/tenants/ (tenant template parity test)
+queue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937
+github_ref: GH-2077
+status: resolved
+resolved_in_run: WF03-ISS0937-20261001
+resolved_at: "2026-10-01T01:42:37Z"
+resolution: >
+  Root cause: two test-side UTC month-boundary dependencies; production lib/ was correct
+  and unchanged. (1) eligible_past_month treated last month as always-eligible, which fails
+  on the 1st with min_partition_age_days=1 because eligibility requires today >= 1st of
+  next month + N days. (2) check_table_set/2 flagged a stale dynamic events_yYYYYmMM
+  partition as extra when the tenant template was built in a different UTC month. Tests
+  and test support were made clock-independent (test/support/partition_clock.ex,
+  test/support/tenant_template.ex, and the partition maintenance / retention tests).
+regression_tests:
+  - test/support/partition_clock_test.exs
+  - test/support/tenant_template_test.exs (ISS-0937 describe)
+main_ci_evidence: >
+  Hypothesis confirmed on main: CI runs 36795709173 (ed40c2fa) and 36795979277 (590c923f)
+  both completed FAILURE on the same 12 tests (8 PartitionMaintenanceTest, 3
+  RetentionOperationsTest, 1 EventRetentionTest) on 2026-10-01; last green run before the
+  rollover was 36785684070. GitHub issue GH-2077 is closed by ORCH after the merge lands,
+  not by this run.
+renumbered_from: ISS-0937  # filed as ISS-0937 in PR #2078; the filename/id was overwritten on main by PR #2079 (sibling session filed a different issue, a duplicate of ISS-0938, under the same number). queue_ref Q-920 / GH-2077 is the stable link.
+# RENUMBERED AGAIN 2026-10-01 during rebase onto origin/main: this branch's own "ISS-0939"
+# filing collided with a different, already-merged main filing (RELEASE-VALIDATOR's
+# letflow.check.test hang bug) that took the same number first. Moved to ISS-0942, the
+# next free number on main at rebase time.
+# RENUMBERED A THIRD TIME 2026-10-01, same day, before this PR's own merge: ISS-0942 was
+# independently claimed by a concurrent open PR (#2087, fix/ISS-0942-task-complete-
+# authorization-gap) not yet on main at the time of the prior renumbering. Checked across
+# main AND every open PR's changed files this time (not just main) before picking ISS-0943
+# as the next truly free number. queue_ref Q-920 / GH-2077 remain the stable links across
+# all three renumberings.
+related:
+  - ISS-0938  # same failing test files on 2026-10-01 (REQ-427 RELEASE-VALIDATOR run); likely same root cause, verify after this fix merges

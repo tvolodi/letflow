@@ -1,0 +1,60 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000003",
+  "run_id": "WF02-REQ428-20261001",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ428-20261001/step-01b-code-design-validator.json",
+  "created_at": "2026-10-01T02:05:00Z",
+  "started_at": "2026-10-01T02:05:00Z",
+  "completed_at": "2026-10-01T02:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-428"],
+    "requirement_text": {
+      "REQ-428": "Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex): GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task form is resolved through REQ-424's pinned resolver and rendered by REQ-427's form renderer; never the active version. Process-instance renderer: read-only view of GET /api/v1/instances/:id and /api/v1/instances/:id/timeline (lib/letflow/routers/instances.ex) -- status, current step, timeline. No cancel/rebind/advance actions (not in MOB-4). All screens use REQ-426's six-state wrapper; claim/complete errors (409 already claimed, 403, 422) map to its states."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req428-task-and-instance-renderer.md",
+      "handoffs/WF02-REQ428-20261001/step-01-code-designer.json",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/routers/instances.ex",
+      "apps/mobile/lib/definitions/pinned_form_resolver.dart",
+      "apps/mobile/lib/renderers/form/",
+      "apps/mobile/lib/renderers/renderer_state.dart"
+    ],
+    "owned_modules": ["apps/mobile/"]
+  },
+  "task": {
+    "description": "Hard gate per WF-02 Step 1b. Read lib/letflow/design/req428-task-and-instance-renderer.md directly (not CODE-DESIGNER's handoff summary). For each of this run's 6 acceptance criteria (listed below), verify it maps to a concrete design element with no TBD/deferral language, fully specified Dart signatures (name, inputs, outputs, error shapes as sealed/tagged types, not left implicit), cross-module dependencies listed, and NO .dart implementation code bodies (signatures/type shapes only). CODE-DESIGNER flagged 5 open questions including that REQ-424's own design doc does not exist under lib/letflow/design/ (confirmed independently: only req427-form-renderer.md and an unrelated iss0427 doc exist there) -- verify the design nonetheless fully specifies the pinned-resolution contract by reading the real apps/mobile/lib/definitions/pinned_form_resolver.dart source instead, and that this substitution is sound, not a gap. Also verify the claimed non-goal (no cancel/rebind/advance anywhere in the design) actually holds by reading the design doc's instance-screen section in full.",
+    "acceptance_criteria": [
+      "a test lists the inbox from a fake GET /api/v1/tasks/inbox, claims a task (asserting POST /api/v1/tasks/:id/claim), opens it, and completes it (asserting POST /api/v1/tasks/:id/complete with the form values in the body)",
+      "a test asserts opening a task pinned to form_version 1 while version 2 is cached renders version 1's fields (through REQ-424's resolver), not version 2's",
+      "a test asserts a 409 on claim renders a state telling the user the task is no longer available and refreshes the inbox, not a crash",
+      "a test asserts the process-instance screen renders status and timeline entries from fake /instances/:id and /instances/:id/timeline responses and exposes no cancel, rebind or advance action",
+      "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted",
+      "live: against the local docker compose stack on emulator-5554, an already-authenticated session lists the seeded inbox -- evidence referenced in the report (this AC is about the eventual implementation/test-run evidence, not the design doc itself -- confirm the design doesn't preclude it, nothing more)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req428-task-and-instance-renderer.md in full (not CODE-DESIGNER's handoff summary) and independently verified it against the real source files it cites. AC1-AC6 each map to a concrete design element: AC1 -> TaskInboxController/TaskDetailController (sec 2-3) + claimTask()/FormRendererController.submit() for claim/complete; AC2 -> sec 3.6's unbroken TaskDetail.formId/formVersion -> PinnedFormResolver.resolve data flow (INV-4); AC3 -> TaskClaimOutcome sealed type's TaskClaimNoLongerAvailable variant + refreshAfterClaimConflict() (sec 3.2/3.3); AC4 -> InstanceDetailController (sec 4) with the cancel/rebind/reconstruct/advance-timer non-goal stated at three layers (scope/controller/widget); AC5 -> sec 5's full six-state-wrapper table covering every screen; AC6 -> every code block in the doc is a signature/sealed-class/type shape, no real Dart statement or control-flow body anywhere (confirmed by direct read, e.g. claimTask()'s body is comments only). No TBD/deferral language on any required design element -- the doc's 5 open questions (OQ-1..OQ-5) are explicitly-flagged non-blocking items per WF-02's own 'open questions listed explicitly, not silently resolved' criterion, not deferrals of ACs. Signatures are fully specified with named fields and error shapes (TaskClaimOutcome's 5 variants, TaskDetail's 14 fields, InstanceDetail's 9 fields, TimelineEntry's 10 fields). Cross-module dependencies are listed in sec 7. Independently verified against source, not CODE-DESIGNER's claims: (a) lib/letflow/design/ confirmed by directory listing to contain no req424*/pinned-form* file, matching OQ-1's claim and validating the doc's substitution of the shipped apps/mobile/lib/definitions/pinned_form_resolver.dart as authority instead -- sound, not a gap, since resolve({taskId, formId, formVersion}) -> PinnedFormResolution (PinnedFormResolved | PinnedFormUnavailable) matches the design's sec 0/3.6 citation exactly; (b) tasks.ex's task_list_item_map/2 (11 keys) and task_detail_map/3 (+3 = 14 keys) match TaskInboxItem/TaskDetail's field lists exactly; handle_claim_result's 5 distinct 409-producing clauses (task_not_pending, assigned_to_other_user, assignee_group_not_member, assignee_role_not_held, not_claimable) match the design's 'five distinct 409 clauses' claim; (c) instances.ex's instance_map/1 (9 keys) and timeline_item_map/1 (10 keys) match InstanceDetail/TimelineEntry exactly, and the four write routes (cancel/rebind-pins/reconstruct/advance-timer) exist but are confirmed absent from every type/method in the design's sec 4 and sec 6.3 widget composition; (d) api_error.dart's ConflictError is confirmed a bare marker (no fields), matching the design's claim and justifying claimTask()'s separate TaskClaimOutcome mapping rather than passing 409 through RendererState. One inaccuracy found and worth flagging for a future correction, but non-blocking: OQ-3 asserts renderer_state.dart's rendererStateForError switch has no ConflictError arm -- on direct read it does (line 149: ConflictError() => RendererFetchFailure(cause: error)), so OQ-3's premise is factually wrong. This does not fail any of the five gate checks because (1) the design itself already hedges OQ-3 as 'more likely a transcription gap... than a real compile failure', (2) claim's 409 handling never routes through rendererStateForError at all by this design's own INV-1 (TaskClaimOutcome is deliberately a separate, narrower type for exactly this reason), so no AC's resolution depends on OQ-3's accuracy, and (3) renderer_state.dart is outside this requirement's build surface (apps/mobile/lib/renderers/task/ and .../process/ only). Recommend DOC-UPDATER/CODE-DESIGNER correct or drop OQ-3 at the next opportunity, not a rework trigger now.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ428-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to MOBILE-DEV (2b-mobile)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

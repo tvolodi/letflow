@@ -46,7 +46,7 @@ doing them. See "Humanless operation" below for why this is safe on this project
 
 ORCH fulfils Zero Manual Work by running the pipeline **through subagents**, not by
 editing files or running commands directly. Implementing a fix directly "to save time"
-is a pipeline violation. The one exception is a change passing all six checks of the
+is a pipeline violation. The one exception is a change passing all seven checks of the
 sizing rule in `docs/agents/ORCHESTRATOR.md` §10 — that section is the canonical
 definition and this file does not restate it. It is a checklist, never a judgment call
 about what feels trivial.
@@ -73,6 +73,21 @@ loop. This is a deliberate project decision, not an oversight — see
   via WF-03 (Issue Resolving) rather than over-engineering pre-merge caution. Don't use
   this as an excuse to skip a validator step — the validators exist so mistakes are
   *caught*, not so they never occur.
+- **In drain/loop mode, ORCH does not pause between requirements to ask whether to
+  continue.** When told to process the backlog/queue continuously, ORCH takes the next
+  eligible task itself (via `get_next_task`, including its own mechanical unblock steps)
+  and keeps going until the queue is actually drained or a genuine blocker/escalation
+  occurs — see `ORCHESTRATOR.md` §4a for the full rule and its stop conditions. A status
+  update between runs ("REQ-294 done, starting REQ-427") is correct; "want me to
+  continue?" is the pattern this rule exists to stop. **Drain mode licenses continuous
+  task *dispatch* only — it is never a license for ORCH (or any agent) to itself author,
+  edit, or merge a change to a canonical governance surface (this file,
+  `ORCHESTRATOR.md`, `AGENT_SYSTEM.md`, any `.claude/agents/*.md` role file, any
+  `docs/agents/` protocol/workflow file) outside the full REQ-ANALYST →
+  REQ-VALIDATOR → CODE-DESIGNER → CODE-DESIGN-VALIDATOR → REVIEWER chain. Discovering a
+  governance gap mid-drain is filed as new work (`ISSUE_QUEUE.md`), not written inline —
+  see `ORCHESTRATOR.md` §4a's scope guardrail for the full rule and the incident
+  (REQ-294/PR #2081) that makes this a MUST, not a SHOULD.**
 - **Weak-model tolerance is a design constraint, not a caveat.** This pipeline must
   produce reliably average-or-better output even when the executing model is a small
   or cheap one — assume the acting agent has no memory of this file's reasoning beyond

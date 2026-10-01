@@ -1,0 +1,94 @@
+run_id: WF02-REQ427-20261001
+agent: TEST-RUNNER
+date: 2026-10-01
+branch: feature/WF02-REQ427-20261001
+workflow_step: WF-02 Step 4 (full suite per Unblock-Everything rule; this requirement touches apps/mobile/ only)
+
+preflight:
+  free_memory_kb: 6260392
+  total_memory_kb: 33389048
+  free_memory_gb_approx: 5.97
+  memory_decision: ">4GB free -> full parallelism, no TEST_PARALLEL_N override"
+  orphaned_erl_beam_processes: "none found (tasklist | grep -i -E 'erl|beam' returned no rows) -- nothing to kill"
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already Running; no LETFLOW_DB_PORT override in .env, default port 5462 in effect"
+  branch_diff_scope: >
+    git diff --name-only main...HEAD:
+    apps/mobile/lib/api/api_client.dart, apps/mobile/lib/renderers/form/form.dart,
+    apps/mobile/test/renderers/form/form_expression_unevaluable_test.dart,
+    apps/mobile/test/renderers/form/form_field_types_test.dart,
+    apps/mobile/test/renderers/form/form_offline_population_test.dart,
+    apps/mobile/test/renderers/form/form_submit_test.dart,
+    apps/mobile/test/renderers/renderer_state_wrapper_guard_test.dart,
+    apps/mobile/test/support/counting_pinned_form_cache_repository.dart,
+    docs/requirements.yaml, docs/status/requirement_status.v25.yaml,
+    lib/letflow/design/req427-form-renderer.md
+    -- no lib/letflow/ runtime code or priv/repo/migrations/ touched.
+
+mobile:
+  commands: "flutter analyze && flutter test  (run from apps/mobile/)"
+  analyze_result: "No issues found! (ran in 3.2s)"
+  test_result: "All tests passed!"
+  test_count: 252
+  pass: 252
+  fail: 0
+
+backend:
+  tool: scripts/test_parallel.sh
+  partition_count_n: 16
+  partition_count_source: nproc
+  test_pool_size: 5
+  combined_totals: "5071 tests, 8 properties, 1 failures (5078/5079 passed)"
+  pass: 5078
+  fail: 1
+  partitions:
+    - {n: 1, tests: 286, properties: 1, failures: 1, exit: 2}
+    - {n: 2, tests: 280, properties: 0, failures: 0, exit: 0}
+    - {n: 3, tests: 269, properties: 0, failures: 0, exit: 0}
+    - {n: 4, tests: 490, properties: 0, failures: 0, exit: 0}
+    - {n: 5, tests: 233, properties: 0, failures: 0, exit: 0}
+    - {n: 6, tests: 268, properties: 0, failures: 0, exit: 0}
+    - {n: 7, tests: 384, properties: 0, failures: 0, exit: 0}
+    - {n: 8, tests: 431, properties: 0, failures: 0, exit: 0}
+    - {n: 9, tests: 222, properties: 0, failures: 0, exit: 0}
+    - {n: 10, tests: 328, properties: 0, failures: 0, exit: 0}
+    - {n: 11, tests: 398, properties: 0, failures: 0, exit: 0}
+    - {n: 12, tests: 283, properties: 2, failures: 0, exit: 0}
+    - {n: 13, tests: 320, properties: 4, failures: 0, exit: 0}
+    - {n: 14, tests: 274, properties: 0, failures: 0, exit: 0}
+    - {n: 15, tests: 368, properties: 0, failures: 0, exit: 0}
+    - {n: 16, tests: 237, properties: 1, failures: 0, exit: 0}
+
+failures:
+  - test: "A9: every indexed volume's declared entries: count equals what is actually on disk (Letflow.Docs.RequirementStatusInvariantsTest)"
+    location: "test/docs/requirement_status_invariants_test.exs:716"
+    partition: 1
+    assertion_detail: >
+      mismatches == [{"docs/status/requirement_status.v25.yaml", 4, 5}]
+      i.e. requirement_status.index.yaml declares volume 25 (requirement_status.v25.yaml)
+      at entries: 4, but the file on disk actually has 5 history entries.
+    attribution: "(a) -- module/data touched by this branch's own diff"
+    attribution_evidence: >
+      git diff --name-only main...HEAD includes docs/status/requirement_status.v25.yaml
+      directly. Commit 7b3bdfcf ("chore(WF02-REQ427-20261001): start run, flip status
+      in_progress") on this branch appended an in_progress history entry to
+      requirement_status.v25.yaml (bringing it to 5 entries) but did not bump the
+      `entries:` count for volume 25 in docs/status/requirement_status.index.yaml
+      (still reads entries: 4, at line ~5829), violating HOW-TO-APPEND step 6.
+      This is a real, branch-caused doc-bookkeeping bug, not a pre-existing/external
+      flake -- confirmed directly from this branch's own commit content, not by
+      count-matching against a prior report.
+    disposition: "NOT fixed by TEST-RUNNER (docs/status/*.yaml bookkeeping is DOC-UPDATER's ownership, not test code/app code). Routing: DOC-UPDATER (or whoever next appends/edits requirement_status.index.yaml) must bump volume 25's entries: from 4 to 5 to match the 5 history entries now in requirement_status.v25.yaml."
+
+unattributed_failures: []
+
+overall: PARTIAL
+verdict_reason: >
+  Mobile suite (the actual scope of this requirement): 252/252 pass, flutter analyze clean.
+  Backend suite (full-suite Unblock-Everything check): 5078/5079 pass. The 1 failure is
+  structurally attributed to this branch's own status-file commit (case a), not to the
+  mobile changes under test, and not an unexplained/unattributed failure. It still blocks
+  a clean FULL PASS and must be fixed (index entries: count) before/alongside merge.
+
+artifacts_out:
+  - test/reports/report-2026-10-01-WF02-REQ427-20261001.yaml
+  - /tmp/letflow_test_parallel.HClUDc/partition-1.log (preserved by test_parallel.sh due to exit_code=1)

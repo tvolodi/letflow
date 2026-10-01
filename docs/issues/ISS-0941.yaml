@@ -1,0 +1,87 @@
+id: ISS-0941
+title: "Stale 'Tenant Template Build (throwaway)' tenants/tenant_schemas rows outlive their dropped Postgres schema on the shared letflow-postgres-1 dev container, causing a wide unrelated-looking failure spread (ServiceCatalogTest, RoleBackfillTest, TaskAssigneeTypeBackfillTest, ApiPipelineIntegrationTest, PlatformMigrationsTest, ServiceCatalogReaperTest, MigrationReplayBootTest) in any full-suite run that iterates 'every tenant'"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ428-20261001
+discovered_at: "2026-10-01T11:22:00Z"
+severity: MAJOR
+description: >
+  Resuming the stalled WF02-REQ428-20261001 run, a full `mix test` came back
+  5074/5121 passed, 47 failed -- across modules with zero relation to REQ-428
+  (confirmed: `git diff --name-only bd92eb05..HEAD -- lib/ priv/ test/` shows
+  this branch touches ONLY a design doc and test report/spec files; REQ-428's
+  real implementation is apps/mobile/, a separate toolchain). 35 of the 47
+  failures were in Letflow.ServiceCatalogTest, Letflow.Identity.
+  RoleBackfillTest, Letflow.Engine.TaskAssigneeTypeBackfillTest,
+  Letflow.Plugs.ApiPipelineIntegrationTest, Letflow.Routers.
+  PlatformMigrationsTest, Letflow.ServiceCatalogReaperTest, and
+  Letflow.TenantProvisioning.MigrationReplayBootTest -- none covered by
+  ISS-0937/ISS-0938/ISS-0919 (which are specifically EventStore partition/
+  retention order-dependence; the remaining 12 failures matched that pattern
+  exactly and are unaffected by this issue).
+
+  Root cause isolated by direct query against letflow-postgres-1's
+  letflow_test database: two `tenant_schemas` rows (and their parent
+  `tenants` rows, both named "Tenant Template Build (throwaway)",
+  provisioned_at 2026-10-01T00:47:57Z/58Z -- hours before this run, from an
+  earlier interrupted session on this shared long-lived container) pointed
+  at schemas `tenant_template_build_f655ecf55b46fd6b9c7d9e88fc8ef239` and
+  `tenant_template_build_9afdf1de86072d6fe147f00d6ab2d134` that no longer
+  existed in `information_schema.schemata` -- the schema had been dropped
+  (or never fully committed) but the bookkeeping rows survived. test/support/
+  tenant_schema_reaper.ex's sweep_orphans/2 detects this exact shape at every
+  suite boundary ("skipping tenant_schemas row ... with malformed
+  schema_name") but deliberately does not auto-delete it -- by design,
+  per its own moduledoc, since it cannot distinguish a genuinely in-progress
+  concurrent build from a truly abandoned one from the row alone. Any test
+  that lists "every tenant" (the four backfill/reaper suites above) or seeds
+  against `tenants`/`tenant_schemas` without filtering (ServiceCatalogTest's
+  ACTIVE-definition scans, PlatformMigrationsTest, ApiPipelineIntegrationTest)
+  then hits `Postgrex.Error undefined_table` or an unexpected extra tenant in
+  its result set. Confirmed as the sole cause: deleting both orphan rows
+  (`DELETE FROM tenant_schemas WHERE id IN (...)`; `DELETE FROM tenants WHERE
+  id IN (...)`) and rerunning the exact same 8 files produced 142/142 passed,
+  zero failures, no other change.
+
+  This is the same category of host-state contamination as ISS-0940 (stray
+  state surviving in the shared long-lived container across sessions/runs)
+  but a distinct mechanism (orphaned throwaway-tenant bookkeeping rows vs. a
+  stray partition table), and distinct from ISS-0921's "zombie BEAM
+  processes hold open connections" mechanism (docs/anti-patterns.md) -- no
+  erl.exe processes were present when this was diagnosed (`Get-Process erl`
+  returned none), so this is pure leftover row state, not a live connection
+  leak.
+reproduction: >
+  On letflow-postgres-1 (dev container, port 5462): `docker exec
+  letflow-postgres-1 psql -U letflow -d letflow_test -c "SELECT id,
+  tenant_id, schema_name, provisioned_at FROM tenant_schemas WHERE
+  schema_name LIKE 'tenant_template_build%';"` -- if a row's schema_name is
+  absent from `information_schema.schemata` (cross-check with `SELECT
+  schema_name FROM information_schema.schemata WHERE schema_name LIKE
+  'tenant_template_build%';`), that row is orphaned and will produce this
+  failure spread in any subsequent full-suite or targeted run touching
+  those test files.
+suggested_fix: >
+  For ISSUE-FIXER/ELIXIR-DEV: tenant_schema_reaper.ex's sweep_orphans/2
+  already has the detection logic (the "malformed schema_name" warning) --
+  it needs a second, stricter sweep that cross-checks each flagged row's
+  schema_name against information_schema.schemata directly (not just
+  pattern-matching the name) and deletes the bookkeeping row (tenant_schemas
+  + its tenants row, when display_name matches the throwaway-fixture naming
+  convention) when the schema is confirmed absent, rather than only warning.
+  Needs care around the concurrent-build case the current conservative
+  design protects against (ISS-0414's own history) -- a schema genuinely
+  mid-CREATE should not be treated as orphaned.
+workaround_applied: >
+  Manually deleted the two confirmed-orphaned rows during WF02-REQ428-20261001
+  (see description above) so this run's `mix test` result could be trusted;
+  not a code fix, will recur on this container until ISSUE-FIXER lands the
+  suggested_fix.
+source_reports:
+  - scratch/req428_full_test_run.log
+  - scratch/req428_isolated_rerun.log
+  - scratch/req428_isolated_rerun2.log
+related:
+  - ISS-0940
+  - ISS-0921
+  - ISS-0414
+status: open

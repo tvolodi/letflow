@@ -300,6 +300,7 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsImport
           | :EntitiesAttachmentsManage
           | :EntitiesAttachmentsRead
+          | :EntitiesRestrictionsManage
           | :PublicReadHandlesIssue
           | :HelpRead
           | :MembershipsRead
@@ -351,6 +352,7 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsImport
           | :EntitiesAttachmentsManage
           | :EntitiesAttachmentsRead
+          | :EntitiesRestrictionsManage
           | :PublicReadHandlesIssue
           | :HelpRead
           | :MembershipsRead
@@ -403,7 +405,8 @@ defmodule Letflow.Api.Authorization do
     :HelpRead,
     :MembershipsRead,
     :ModulesManage,
-    :MyModulesRead
+    :MyModulesRead,
+    :EntitiesRestrictionsManage
   ]
 
   @doc "All six `Role` values, R-Co's exact names plus ISS-0646's `CANDIDATE`. See `roles_from_strings/1` for untrusted-input conversion."
@@ -411,7 +414,7 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All thirty-four core `Permission` values — R-Co's fourteen, plus REQ-075's
+  All thirty-five core `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -422,7 +425,13 @@ defmodule Letflow.Api.Authorization do
   `:EntitiesRecordsImport`), plus REQ-317's `:EntitiesAttachmentsManage`/
   `:EntitiesAttachmentsRead`, plus REQ-352's `:PublicReadHandlesIssue`, plus
   REQ-366's `:HelpRead`, plus REQ-384's `:MembershipsRead`, plus REQ-401's
-  `:ModulesManage`, plus REQ-403's `:MyModulesRead`.
+  `:ModulesManage`, plus REQ-403's `:MyModulesRead`, plus ISS-0935's
+  `:EntitiesRestrictionsManage` (the new `POST /entities/restrictions/import`
+  bulk write path for `entity_field_restrictions`/`user_entity_grants`/
+  `entity_type_restrictions`/`user_entity_type_grants` — a distinct
+  permission from `:EntitiesDefinitionsWrite`, per
+  `lib/letflow/design/iss0935-vortex-entity-seed.md` §1.3's own
+  justification for not reusing it).
 
   The stated core count is asserted against `length(core_permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -803,6 +812,13 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/entities/records/:entity_type/import"),
     do: :EntitiesRecordsImport
 
+  # ISS-0935 — bulk-import write route for the four restriction/grant
+  # tables (design `lib/letflow/design/iss0935-vortex-entity-seed.md` §1.3).
+  # A NEW, distinct atom — not a reuse of `:EntitiesDefinitionsWrite` — see
+  # that design doc's §1.3 for the full "why a new permission" reasoning.
+  def endpoint_policy_key("POST", "/entities/restrictions/import"),
+    do: :EntitiesRestrictionsManage
+
   # REQ-317 — record-attachment routes (Letflow.Routers.Entities), per
   # design `lib/letflow/design/req313-entity-record-attachments.md` §3's
   # route table and §4's permission vocabulary. Two NEW atoms
@@ -1026,6 +1042,7 @@ defmodule Letflow.Api.Authorization do
   # §4, same shape as :AttachmentsManage/:AttachmentsRead above.
   def required_permission(:EntitiesAttachmentsManage), do: :EntitiesAttachmentsManage
   def required_permission(:EntitiesAttachmentsRead), do: :EntitiesAttachmentsRead
+  def required_permission(:EntitiesRestrictionsManage), do: :EntitiesRestrictionsManage
 
   # REQ-352 — identity clause (policy-key name == permission name), same
   # shape as Entities*/ExamSession* above.

@@ -32,8 +32,12 @@ defmodule Letflow.Routers.EventRetentionTest do
   alias Letflow.EventStore.RetentionOperations
   alias Letflow.Repo
   alias Letflow.TenantFixture
+  alias Letflow.Test.PartitionClock
 
   @opts Letflow.Routers.EventRetention.init([])
+
+  # Single source for the override value and the PartitionClock argument.
+  @override_age_days 1
 
   defp build_conn(method, path, fields) do
     roles = Keyword.get(fields, :roles, [])
@@ -68,10 +72,11 @@ defmodule Letflow.Routers.EventRetentionTest do
     {div(total, 12), rem(total, 12) + 1}
   end
 
-  defp eligible_past_month do
-    today = Date.utc_today()
-    shift_months({today.year, today.month}, -1)
-  end
+  # Latest month eligible under the `min_partition_age_days: @override_age_days`
+  # override. Last calendar month is NOT eligible on the 1st of a month; see
+  # Letflow.Test.PartitionClock (ISS-0937).
+  defp eligible_past_month,
+    do: PartitionClock.eligible_past_month(Date.utc_today(), @override_age_days)
 
   defp month_bounds_str(year, month) do
     from = "#{year}-#{pad2(month)}-01"
@@ -195,7 +200,7 @@ defmodule Letflow.Routers.EventRetentionTest do
     end
 
     test "POST /retirements (AC1) returns 202 with the retirement record; GET status (AC1) reaches completed with the outcome table" do
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         # template: :replay -- the default :clone template may be sourced
         # from a "tenant_template" schema snapshot predating REQ-376's
         # `events` -> `events_p` partitioned-table swap; this test needs

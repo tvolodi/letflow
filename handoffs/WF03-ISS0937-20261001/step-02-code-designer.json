@@ -1,0 +1,74 @@
+{
+  "handoff_id": "05595b1a-975c-4961-8435-5e2a96a0c1e6",
+  "run_id": "WF03-ISS0937-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0937-20261001/step-02-code-designer.json",
+  "created_at": "2026-10-01T00:31:15Z",
+  "started_at": "2026-10-01T00:31:15Z",
+  "completed_at": "2026-10-01T00:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0937": "id: ISS-0937\ntitle: \"Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01\"\ndiscovered_by: ELIXIR-DEV\ndiscovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)\ndiscovered_at: \"2026-10-01T00:21:56Z\"\nseverity: MAJOR\ndescription: >\n  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest\n  parity failure extra=[\"events_y2026m09\"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in\n  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not\n  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.\n  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.\naffected_files:\n  - test/letflow/events/ (partition maintenance / retention tests)\n  - test/letflow/tenants/ (tenant template parity test)\nqueue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937\ngithub_ref: GH-2077\nstatus: open\n"
+    },
+    "related_handoff_ids": [
+      "f1a4f962-83ec-4967-9dad-2cad799d4a69"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0937-20261001/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0937.yaml",
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs",
+      "lib/letflow/event_store/partition_maintenance.ex",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs",
+      "test/support/partition_clock.ex (new)",
+      "test/support/tenant_template_test.exs (new parity regression test)"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937",
+    "branch_name": "feature/WF03-ISS0937-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2 FIX DESIGN for ISS-0937 (month-boundary CI failures). Read the ISSUE-FIXER diagnosis in result.summary of step-01-issue-fixer-diagnose.json (root causes A: tests use 'last month' as always-eligible with min_partition_age_days=1, but eligibility requires today >= 1st of next month + N days, so fails on the 1st of each month; B: tenant template parity check_table_set/2 flags a stale dynamic events_yYYYYmMM partition as 'extra'). Verify the cited lines yourself in the worktree. Produce a design doc at lib/letflow/design/iss0937-month-boundary-test-clock.md (design only, no implementation code beyond signatures/pseudocode; the ONLY file you may write besides this handoff). Constraints: fix is tests/test-support only unless you find evidence in the code that contradicts the diagnosis (then say so); lib/ production code and migrations unchanged. Design must specify: (1) one shared pure helper (module, function name, @spec) that computes an always-eligible past month from an injected `today` and min age, used by all three retention test files, with exact offset rule and why; (2) the check_table_set/2 change so dynamic events_yYYYYmMM partition tables are ignored on BOTH sides (what precisely is filtered, regex/prefix, and that a non-partition extra table still raises); decide on the optional fingerprint change (recommend: do not, with reason); (3) fail-first regression tests that fail on pre-fix code independent of the real date: eligibility test iterating `today` over >=24 months incl. every 1st/2nd, and a parity unit test with two hand-built schemas; say exact file paths, test names, and what each asserts; (4) the comment corrections; (5) the audit for other tests/support using current_month() - 1 or similar clock-sensitive derivations (grep test/ for shift_months, current_month, Date.utc_today, DateTime.utc_now with partitions/retention) listing every site that needs change or confirming none; (6) final owned_modules. Check docs/anti-patterns.md and add a proposed anti-pattern entry text (do not write to that file; put proposed text in the design doc). Set status IN_PROGRESS at claim then COMPLETED/FAILED as normal. next_action 'Route to CODE-DESIGN-VALIDATOR'.",
+    "acceptance_criteria": [
+      "Every diagnosis cause has a concrete change",
+      "Helper signature and @spec given",
+      "Fail-first tests specified independent of real date",
+      "All clock-sensitive sites audited",
+      "No implementation code, no lib/ changes",
+      "owned_modules final"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0937-month-boundary-test-clock.md. Diagnosis verified; test-only fix. Helper Letflow.Test.PartitionClock.eligible_past_month(today, min_age) = shift_months(month_of(today - N days), -1). check_table_set/2 filters dynamic events(_archive)_yYYYYmMM on both sides via new dynamic-only predicate in tenant_fixture.ex (fixed tables stay compared); fingerprint unchanged. Fail-first tests: new test/support/partition_clock_test.exs (48-month pure oracle + source scan) and ISS-0937 describe in existing test/support/tenant_template_test.exs (hand-built schemas). Audit: 3 eligibility sites only. Proposed anti-pattern text included in doc section 9.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0937-month-boundary-test-clock.md"
+    ],
+    "owned_modules": [
+      "test/support/partition_clock.ex (new)",
+      "test/support/partition_clock_test.exs (new)",
+      "test/support/tenant_template.ex",
+      "test/support/tenant_template_test.exs (existing, add describe)",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  }
+}

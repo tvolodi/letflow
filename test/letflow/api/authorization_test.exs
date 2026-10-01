@@ -66,10 +66,11 @@ defmodule Letflow.Api.AuthorizationTest do
       :HelpRead,
       :MembershipsRead,
       :ModulesManage,
-      :MyModulesRead
+      :MyModulesRead,
+      :EntitiesRestrictionsManage
     ]
 
-    test "core_permissions/0 returns the closed core list through REQ-403's :MyModulesRead, no Catalog atoms" do
+    test "core_permissions/0 returns the closed core list through ISS-0935's :EntitiesRestrictionsManage, no Catalog atoms" do
       assert Authorization.core_permissions() == @core_permissions
     end
 
@@ -2128,7 +2129,8 @@ defmodule Letflow.Api.AuthorizationTest do
       assert Enum.sort(Map.keys(@pre_req401_allowed)) == Enum.sort(Authorization.roles())
 
       assert Authorization.core_permissions() ==
-               @pre_req401_permissions ++ [:ModulesManage, :MyModulesRead]
+               @pre_req401_permissions ++
+                 [:ModulesManage, :MyModulesRead, :EntitiesRestrictionsManage]
 
       pair_count = length(Authorization.roles()) * length(@pre_req401_permissions)
       assert pair_count == 192

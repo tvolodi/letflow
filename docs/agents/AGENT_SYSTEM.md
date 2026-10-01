@@ -98,7 +98,7 @@ Agents communicate through handoff files under `handoffs/<RUN-ID>/`. Full schema
 timestamp rules, and completion mechanics: `docs/agents/shared/HANDOFF_PROTOCOL.md`.
 
 ORCH may act directly, without spawning a subagent or writing a handoff file, only when
-a change passes all six checks of `docs/agents/ORCHESTRATOR.md` §10's sizing rule — that
+a change passes all seven checks of `docs/agents/ORCHESTRATOR.md` §10's sizing rule — that
 section is the canonical definition and this file does not restate the test. The
 handoff-file machinery exists for multi-step work where independent validation actually
 matters; forcing it onto a one-line typo fix would be ceremony without benefit.

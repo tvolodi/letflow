@@ -126,6 +126,41 @@ stale-version, validation-error, 429-backpressure.**
 
 - The form renderer supports every platform field type: text, number, boolean,
   date, datetime, select, multi-select, reference, file, computed, hidden.
+  **Corrected 2026-10-01 by `REQ-427` (do not re-widen without re-checking the
+  SPA source).** This eleven-name list was aspirational prose, not the wire
+  format, and `REQ-427`'s design
+  (`lib/letflow/design/req427-form-renderer.md` §1) found it does not match
+  what the SPA actually implements. The real wire-level authority
+  (`TaskFormField.type` in `web/src/types/forms.ts`, via
+  `formSchemaParser.ts`'s `normalizeType`) is a **7-member closed union**:
+  `text, number, boolean, date, select, computed, hidden`. Reconciling the
+  eleven names against that union:
+  - `datetime` is not a distinct type — it is `type: string` with
+    `format: date-time`, a format modifier on the `date`/`text` family, not
+    a sibling type.
+  - `computed` and `hidden` are not members of the type union either — they
+    are orthogonal boolean/expression flags (`field.computed`,
+    `field.visibleWhen`) settable on a field of any of the other types, not
+    renderer "kinds" in their own right.
+  - **`multi-select` and `reference` are unimplemented: no wire form exists
+    anywhere in this codebase** — not in `TaskFormField`, not in
+    `fieldRegistry`, not in any backend route. There is nothing for the
+    mobile renderer to mirror; a `form_schema` naming either routes to the
+    stale-version state, by the same "unknown field type is stale-version,
+    never a skipped field" rule `REQ-427` applies to any other unrecognized
+    type. This is a genuine capability gap, left visible here deliberately
+    rather than silently dropped from the list (see `docs/anti-patterns.md`'s
+    "never papered over" rule) — closing it is unscoped future work, not
+    something either the SPA or the mobile tier does today.
+  - **`file` is the one addition in the other direction: a mobile-tier-only
+    type with no SPA counterpart**, added by `REQ-427` because this
+    requirement's own acceptance criteria assigned it concrete behavior
+    (uploads via the API client, `POST /instances/:id/attachments`) that
+    neither the SPA nor the closed `x-ui.widget` vocabulary provides. A
+    `form_schema` authored with `"type": "file"` renders a real upload
+    control on mobile today but has no SPA-side parity yet — flagged as an
+    open question in `REQ-427`'s design (OQ-2), not a decided cross-platform
+    convention.
 - The list renderer supports filtering and keyset pagination.
 - The task renderer supports inbox, claim, and complete against the task API.
 - A forced `429` produces a retry-after countdown, not a crash.

@@ -106,7 +106,14 @@ implementations record 0020 D1a's argument requires. It powers
 `computed` and `visible_when` evaluation against cached form data with
 no server reachable, the offline-population case that motivated D1a;
 it does not make forms submittable offline (MOB-8 is unchanged) and
-does not extend the grammar itself. S9's three backend gaps
+does not extend the grammar itself. `REQ-427` (MOB-4 part 2) replaced
+the form renderer placeholder with the real renderer, composing
+REQ-294's evaluator and REQ-426's six-state wrapper over the SPA's
+actual 7-type field union (`text, number, boolean, date, select,
+computed, hidden`) plus one mobile-only addition, `file`; see
+[`docs/mobile/requirements.md`](docs/mobile/requirements.md)'s MOB-4
+entry for the full reconciliation against MOB-4's original,
+now-corrected eleven-name list. S9's three backend gaps
 closed earlier (`REQ-124`/`125`/`126`) and
 `REQ-418` added the mobile tier's own PKCE-S256 Keycloak client
 (`letflow-mobile`) plus its `client_id` on

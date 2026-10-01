@@ -22,8 +22,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:letflow/definitions/pinned_form_cache.dart';
+import 'package:letflow/definitions/pinned_form_resolver.dart';
+import 'package:letflow/expr/expr.dart' show kStaticCapabilities;
+import 'package:letflow/renderers/form/form.dart';
 import 'package:letflow/renderers/list/list.dart';
+import 'package:letflow/renderers/process/process.dart';
 import 'package:letflow/renderers/renderer_state_view.dart';
+import 'package:letflow/renderers/task/task.dart';
 
 import '../support/fake_post_capable_http_gateway.dart';
 
@@ -44,9 +50,29 @@ final List<_RendererProbe> _probes = [
     definition: const {'entity_type': 'widgets'},
     findStateView: () => find.byType(RendererStateView<ListPage>),
   ),
-  // REQ-427 appends a 'form' entry here (buildFormRenderer +
-  // find.byType(RendererStateView<ItsFormPageType>)).
-  // REQ-428 appends 'process' and 'task' entries the same way.
+  (
+    definitionType: 'form',
+    builder: buildFormRenderer,
+    definition: const {
+      'task_id': 'task-1',
+      'form_id': 'F',
+      'form_version': '1',
+      'instance_id': 'instance-1',
+    },
+    findStateView: () => find.byType(RendererStateView<FormViewModel>),
+  ),
+  (
+    definitionType: 'task',
+    builder: buildTaskRenderer,
+    definition: const {'task_id': 'task-1'},
+    findStateView: () => find.byType(RendererStateView<TaskDetail>),
+  ),
+  (
+    definitionType: 'process',
+    builder: buildProcessRenderer,
+    definition: const {'instance_id': 'instance-1'},
+    findStateView: () => find.byType(RendererStateView<InstanceDetail>),
+  ),
 ];
 
 void main() {
@@ -63,6 +89,10 @@ void main() {
         // fetch outcome.
         final gateway = FakePostCapableHttpGateway()
           ..getResponses['/api/v1/entities/definitions/active/widgets'] =
+              ScriptedResponse.hang()
+          ..getResponses['/api/v1/tasks/task-1'] = ScriptedResponse.hang()
+          ..getResponses['/api/v1/instances/instance-1'] = ScriptedResponse.hang()
+          ..getResponses['/api/v1/instances/instance-1/timeline'] =
               ScriptedResponse.hang();
 
         await tester.pumpWidget(
@@ -72,6 +102,30 @@ void main() {
                 (ref, entityType) => ListRendererController(
                   client: gateway,
                   entityType: entityType,
+                ),
+              ),
+              formRendererControllerProvider.overrideWith(
+                (ref, params) => FormRendererController(
+                  client: gateway,
+                  pinnedFormResolver: PinnedFormResolver(
+                    repository: InMemoryPinnedFormCacheRepository(),
+                    client: gateway,
+                  ),
+                  manifestCapabilities: kStaticCapabilities.toList(),
+                  taskId: params.taskId,
+                  formId: params.formId,
+                  formVersion: params.formVersion,
+                  instanceId: params.instanceId,
+                ),
+              ),
+              taskDetailControllerProvider.overrideWith(
+                (ref, taskId) =>
+                    TaskDetailController(client: gateway, taskId: taskId),
+              ),
+              instanceDetailControllerProvider.overrideWith(
+                (ref, instanceId) => InstanceDetailController(
+                  client: gateway,
+                  instanceId: instanceId,
                 ),
               ),
             ],

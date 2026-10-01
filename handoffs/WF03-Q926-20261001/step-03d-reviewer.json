@@ -1,0 +1,48 @@
+{
+  "handoff_id": "1ce2875d-f2f1-465d-b5b8-3110846dacde",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-Q926-20261001/step-03d-reviewer.json",
+  "created_at": "2026-10-01T18:52:37Z",
+  "started_at": "2026-10-01T18:52:37Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "handoffs/WF03-Q926-20261001/step-03-elixir-dev.json",
+      "handoffs/WF03-Q926-20261001/step-03b-security-reviewer.json",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 3d: hard REVIEWER gate (OTP idiom, supervision integrity, scope creep, decision-record consistency) on the ISS-0926 implementation, range origin/main..HEAD on feature/WF03-Q926-20261001. Claim: IN_PROGRESS only, flip COMPLETED on finishing. Compare diff to the validated design lib/letflow/design/iss0926-service-task-body-template-rendering.md: every deviation, every addition not in the design (scope creep), any behavioural change to the URL renderer, idiomatic Elixir (with/case, no needless rescue, @spec present and accurate, no dead code, consistent with neighbouring conventions in engine.ex), duplicated logic that should reuse existing helpers, all error-outcome sites wired consistently, docs/moduledoc accuracy (stale comment 'body_template rendering is out of scope' removed?), supervision tree untouched (Letflow.InstanceSupervisor stays empty, no processes added), consistency with docs/migration/decisions/*.md and docs/anti-patterns.md. Also confirm test updates by ELIXIR-DEV are legitimate (not weakening assertions) and that the fixture v1.3 matches the design. SECURITY-REVIEWER already PASSed (step-03b). Do not modify code: return FAIL with numbered findings or PASS. Modify only this handoff; commit it only; push origin HEAD. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "Diff vs design deviations enumerated",
+      "Scope-creep check stated",
+      "URL renderer unchanged confirmed from diff",
+      "Supervision/OTP check stated",
+      "Test edits judged not weakening",
+      "No file modified except this handoff"
+    ]
+  }
+}

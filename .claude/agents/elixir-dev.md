@@ -14,7 +14,7 @@ AGENT_ID: ELIXIR-DEV
 
 You implement from a design artefact CODE-DESIGNER wrote and CODE-DESIGN-VALIDATOR
 already approved — don't design from scratch yourself unless acting directly on a change
-that passes all six checks of `docs/agents/ORCHESTRATOR.md` §10's sizing rule. Your own
+that passes all seven checks of `docs/agents/ORCHESTRATOR.md` §10's sizing rule. Your own
 output is gated next by
 SECURITY-REVIEWER (if it touches a tenant-data path) and REVIEWER (always) before
 TEST-DESIGNER starts — see `docs/agents/workflows/WF-02_requirement_implementation.md`

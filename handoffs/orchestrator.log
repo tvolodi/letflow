@@ -2577,3 +2577,17 @@
 2026-09-30T23:49:27Z | DISPATCH | WF03-ISS0930-20261001 | step-final-git-merge-elixir-dev | ORCH -> ELIXIR-DEV | PENDING
 2026-10-01T00:22:06Z | PASS | WF03-ISS0930-20261001 | step-final | ELIXIR-DEV -> ORCH | PASS -- PR #2076 squash-merged ed40c2fa via --admin (backend red on unrelated month-boundary tests; filed ISS-0937/Q-920/GH#2077); ORCH verified merge state and fix files on main
 2026-10-01T00:22:06Z | RUN_DONE | WF03-ISS0930-20261001 | ORCH | DONE -- ISS-0930/Q-913/GH#2064 resolved; QA re-seeded + verified; queue task 913 release_lock(done) OK
+2026-10-01T00:00:00Z | DISPATCH | ADHOC-20261001-001 | requirement-drain-mode | ORCH -> REQ-ANALYST | PENDING
+2026-10-01T00:05:00Z | PASS | ADHOC-20261001-001 | requirement-drain-mode | REQ-ANALYST -> ORCH | PASS -- drafted requirement-drain-mode.md (drain-mode governance fix for PR #2081/a59a93a6)
+2026-10-01T00:10:00Z | DISPATCH | ADHOC-20261001-001 | req-validator-verdict | ORCH -> REQ-VALIDATOR | PENDING
+2026-10-01T00:20:00Z | PASS | ADHOC-20261001-001 | req-validator-verdict | REQ-VALIDATOR -> ORCH | PASS-WITH-REVISIONS -- AC 5 rewritten, file #6 (ADR) added, routed back for CODE-DESIGNER
+2026-10-01T00:25:00Z | DISPATCH | ADHOC-20261001-001 | design-drain-mode | ORCH -> CODE-DESIGNER | PENDING
+2026-10-01T00:45:00Z | PASS | ADHOC-20261001-001 | design-drain-mode | CODE-DESIGNER -> ORCH | PASS -- design-drain-mode.md, 7 files/blocks mapped to every AC
+2026-10-01T00:50:00Z | DISPATCH | ADHOC-20261001-001 | code-design-validator-verdict | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-10-01T01:10:00Z | PASS | ADHOC-20261001-001 | code-design-validator-verdict | CODE-DESIGN-VALIDATOR -> ORCH | PASS -- all ACs covered, no implementation code, guardrail text unambiguous, no gate weakened
+2026-10-01T01:15:00Z | DISPATCH | ADHOC-20261001-001 | implementation | ORCH -> DOC-UPDATER | PENDING
+2026-10-01T02:00:00Z | PASS | ADHOC-20261001-001 | implementation | DOC-UPDATER -> ORCH | PASS -- 7 edits applied (ORCHESTRATOR.md Sec4a/Sec5/Sec9/Sec10, core-directives.md, TASK_QUEUE.md, new 0041-*.md ADR), commit 20c2f7bb pushed
+2026-10-01T02:10:00Z | DISPATCH | ADHOC-20261001-001 | reviewer-signoff | ORCH -> REVIEWER | PENDING
+2026-10-01T02:50:00Z | PASS | ADHOC-20261001-001 | reviewer-signoff | REVIEWER -> ORCH | PASS-WITH-FINDINGS -- commit 6d3156c4; 3 mechanical MUST-FIX items (registry/log bookkeeping, stale "six checks" refs, anti-patterns entry) before merge
+2026-10-01T03:08:56Z | DISPATCH | ADHOC-20261001-001 | followup-fixes | ORCH -> DOC-UPDATER | PENDING
+2026-10-01T03:19:09Z | RUN_DONE | ADHOC-20261001-001 | ORCH | DONE -- PR #2082 (145ce7a4) squash-merged to main, corrective re-run of PR #2081/a59a93a6 drain-mode self-authored-governance-change incident through full REQ-ANALYST -> REQ-VALIDATOR -> CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> implement -> REVIEWER (1 rework round, PASS-WITH-FINDINGS -> PASS) pipeline. ORCH independently re-verified diff scope (9/16 files matched exactly what design specified) before opening PR and confirmed all 3 CI gates green before merge. Branch chore/adhoc-drain-mode-review-20261001 deleted on merge.

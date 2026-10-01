@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-Q926-20261001/step-02r1-code-designer-rework.json",
   "created_at": "2026-10-01T18:30:50Z",
   "started_at": "2026-10-01T18:30:50Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T18:34:08Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,5 +40,10 @@
       "No implementation code",
       "Only design doc + this handoff modified"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design reworked: all 3 MAJOR and 4 MINOR validator issues addressed in lib/letflow/design/iss0926-service-task-body-template-rendering.md. (1) Single Jason option escape: :javascript_safe, verified in deps/jason 1.4.5 (jason.ex:105-113, encode.ex:58,283-302,374): escapes U+2028/2029, controls (uppercase hex), quote, backslash; does NOT escape / < > & or DEL; tests T-R6, T-R7a-e. (2) Verified sub_process.ex:877-911 discards pending events (_more_pending); no service-task dispatch reference in sub_process.ex; new section 3.6 states the e10 notice is not dispatched today, scoped out (ORCH to file follow-up), fixture split kept as graph-level only. (3) T14 specified concretely: new helper remediation_exit_nodes/2, token at remediation-subprocess with non-nil waiting_child_instance_id, {:sub_process_completed,\"tok-1\"} then {:advance_token,\"tok-1\"}, expected post-remediation-check then regulatory-remediation-escalation (or findings-sign-off), labelled graph-routing only. (4) config_snapshot type: no change. (5) body_render_reason_class/1 named, spec, sole caller, six sentences listed, T-R19/T-R20. (6) Placeholder scan fully specified (original template, backslash handling, Regex.scan return: :index joined by byte offset), T-R21. (7) Duplicate mutant removed; M10 retained. No implementation code. Not run: no tests (design only).",
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (re-gate)"
   }
 }

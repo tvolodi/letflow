@@ -5,6 +5,9 @@ Type: lib change (MINOR, `ELIXIR-DEV`) plus fixture split (JSON + YAML parity) p
 No migration, no supervision files, no new dependency.
 Issue: `docs/issues/ISS-0926.yaml` (queue Q-926, GH-2106). Diagnosis:
 `handoffs/WF03-Q926-20261001/step-01-issue-fixer-diagnose.json`.
+Rework iteration 1 (2026-10-01): addresses CODE-DESIGN-VALIDATOR issues 1-7 (Jason option,
+sub-process dispatch gap 3.6, concrete T14, typespec, reason-class function, placeholder scan,
+duplicate mutant).
 Design author: CODE-DESIGNER. Not self-reviewed; CODE-DESIGN-VALIDATOR gates this file.
 Tenant-data path (instance variables flow into an outbound HTTP body): SECURITY-REVIEWER
 gate applies (INV-2, INV-8).
@@ -159,8 +162,15 @@ unchanged. The `@spec` of `resolve_service_task_arm_attrs/6` return widens by
 A new tagged tuple `{:body_render_error, node_id, reason, variables}` leaves
 `prepare_service_task_dispatch/6` (extend its `@spec` at `engine.ex:860-874`, the `reduce_while`
 at `:915-936`, and the final `case` at `:939-944`) and is folded at each existing site exactly
-where `{:catalog_resolution_error, ...}` is folded. `reason` is reduced to its atom class before
-it leaves the pure layer (section 2.6). The engine-side `catalog_resolution_reason` typep gets a
+where `{:catalog_resolution_error, ...}` is folded. `reason` in that tuple is the ATOM CLASS, not
+the full reason. The reduction is done by the public pure function
+`ServiceTask.body_render_reason_class/1` (section 2.6), called in exactly one place:
+`Engine.prepare_service_task_dispatch/6`, at the point where it converts the
+`{:body_render_error, node_id, full_reason}` it received from `resolve_service_task_arm_attrs`
+(which carries the FULL `ServiceTask.body_render_reason()`, including `{:missing_variable, key}`)
+into the 4-tuple above. Everything downstream of that point (create fold, completion fold,
+timer fold, `build_body_render_error_attrs/1`, tests I-6/I-7/I-8) sees only the class atom.
+The engine-side `catalog_resolution_reason` typep gets a
 sibling `body_render_reason` (alias of `ServiceTask.body_render_reason()`).
 
 | Site (anchor) | Folds to |
@@ -212,15 +222,34 @@ typed error. No raising: `Jason.encode!/1` must NOT be used (INV-8); use the tup
 
 ### 2.3 JSON string escaping
 
-Escape the stringified value by encoding it with `Jason.encode(string, escape: :javascript_safe)`
-and removing exactly the first and last character (the surrounding quotes). This guarantees:
+Chosen option (exactly one): `Jason.encode(string, escape: :javascript_safe)`, then remove
+exactly the first and last byte of the result (the surrounding `"` characters). Not
+`:json`, not `:html_safe`, not `:unicode_safe`.
 
-- `"` becomes `\"`, `\` becomes `\\`.
-- Control characters U+0000 through U+001F become `\n`, `\r`, `\t`, `\b`, `\f` or `\u00XX`.
-- U+2028 and U+2029 are escaped (` `, ` `); `/` becomes `\/` (valid JSON, decodes to
-  the same character).
-- Non-ASCII text is emitted as UTF-8 unchanged.
-- DEL (U+007F) is valid unescaped JSON and is left as is.
+Verified against the pinned dependency: `mix.lock` pins `jason` 1.4.5; the option list is
+documented at `deps/jason/lib/jason.ex:105-113` and `:javascript_safe` is wired to
+`escape_javascript/1` at `deps/jason/lib/encode.ex:58`. The byte table is built at
+`encode.ex:283-302`: the `:javascript_safe` path escapes the same single-byte set as `:json`
+(`ranges` = U+0000..U+001F plus the seven characters backspace, tab, newline, form feed, carriage return, double quote and backslash; `/` and `<` are
+only in the separate `html_ranges` list used by `:html_safe`) and additionally the two
+codepoints U+2028 and U+2029 (`surogate_escapes`, `encode.ex:285`, applied in
+`escape_javascript/4` from `:374`). Exact guarantees, and nothing beyond them:
+
+- `"` becomes backslash + `"` (two characters), and a backslash becomes two backslashes.
+- Control characters U+0000 through U+001F: the five U+0008, U+0009, U+000A, U+000C, U+000D
+  become `\b`, `\t`, `\n`, `\f`, `\r`; every other one becomes `\u00XX` with UPPERCASE hex
+  (format `~4.16.0B`, `encode.ex:292`), for example NUL is `\u0000`, U+001F is `\u001F`.
+- U+2028 becomes the six ASCII characters backslash, `u`, `2`, `0`, `2`, `8` (written `\u2028` in prose; the test must assert the six-character form, never the raw codepoint); U+2029 likewise with `2029`.
+- `/` is NOT escaped (it stays `/`). No expectation anywhere may contain backslash followed by `/`.
+- `<`, `>`, `&` are NOT escaped.
+- DEL (U+007F) is NOT escaped (the byte table covers 0x00..0x7F and DEL is a pass-through).
+- All other non-ASCII text (emoji, Cyrillic, CJK, and so on) is emitted as UTF-8 unchanged.
+- An invalid UTF-8 byte makes `Jason.encode/2` return `{:error, %Jason.EncodeError{}}`
+  (`error({:invalid_byte, ...})` in `escape_javascript/4`). Section 2.2 rejects invalid UTF-8
+  with `String.valid?/1` before this step, so this is not reachable from `stringify_value/1`;
+  if it ever occurs it must map to `{:error, :invalid_utf8}` (never raise).
+
+Every guarantee above has its own test row in 6.1 (T-R6, T-R7a to T-R7e).
 
 The escaped text replaces the placeholder in place. Template text outside placeholders is copied
 verbatim (it is author-controlled and trusted).
@@ -234,12 +263,34 @@ third party, and substituting it unquoted is exactly the injection the per-value
 cannot protect. A typed activation failure is visible and fail-closed, consistent with the
 empty-URL and catalog-unresolved errors.
 
-Detection (specified as an algorithm, no code): a single left-to-right scan of the template
-tracking `in_string`. Outside a string, a `"` toggles `in_string` on. Inside a string, a
-backslash consumes the next character (so `\"` does not close the string) and an unescaped `"`
-toggles it off. A match of the placeholder regex found while `in_string` is false returns the
-error. A match found while `in_string` is true is substituted per 2.2/2.3. The scan is
-linear and allocation-bounded; no recursion on input.
+Detection (specified as an algorithm, no code). The scan runs over the ORIGINAL template text
+(never over partly substituted text), once, left to right, by a character loop (not by
+regex), and it is the only place that decides position. Placeholders themselves are
+recognised by the section 1.2 regex, `Regex.scan/3` with `return: :index`, run over the same
+original template, giving a list of `{start_byte, length}` spans; the scan and the span list
+are joined by byte offset: for every span, `in_string` is evaluated as of the first byte of
+that span.
+
+State: `in_string` (starts false) and `escaped` (starts false). For each character of the
+original template, in order:
+
+1. Inside a string and `escaped` is true: clear `escaped`; nothing else.
+2. Inside a string and the character is a backslash: set `escaped`.
+3. Inside a string and the character is `"`: set `in_string` false (string closed).
+4. Outside a string and the character is `"`: set `in_string` true.
+5. A backslash OUTSIDE a string is ignored (no `escaped` flag; it is not valid JSON there and
+   the section 2.5 decode check will reject the template).
+6. Any other character: no state change.
+
+Because a placeholder (`{{`, `variables.`, key, `}}`) contains no `"` and no backslash, the
+state cannot change while inside a span, so evaluating `in_string` at the span's first byte
+is exact. A placeholder in a span with `in_string` false returns
+`{:error, :placeholder_outside_string}` (the FIRST such span in template order wins; this
+whole-template check runs before any substitution and before any variable is looked up).
+All spans inside strings are then substituted per 2.2/2.3. Nested JSON needs no extra state:
+braces and brackets never affect quote state. A template whose quotes never close is not
+caught here; it is caught by the 2.5 decode check (`:rendered_body_not_json`). Complexity is
+linear in template size; the loop is iterative.
 
 ### 2.5 Decodability and size
 
@@ -268,7 +319,34 @@ content-type, exactly as today; out of scope.)
         | :unsupported_value_type
         | :rendered_body_not_json
         | :rendered_body_too_large
+
+@type body_render_reason_class ::
+        :placeholder_outside_string
+        | :missing_variable
+        | :invalid_utf8
+        | :unsupported_value_type
+        | :rendered_body_not_json
+        | :rendered_body_too_large
+
+@spec body_render_reason_class(body_render_reason()) :: body_render_reason_class()
 ```
+
+`ServiceTask.body_render_reason_class/1` is public and pure: identity for the five bare atoms,
+`{:missing_variable, _key}` becomes `:missing_variable`. Sole caller: section 1.7
+(`Engine.prepare_service_task_dispatch/6`). `body_render_error_context.reason` is typed
+`body_render_reason_class()`.
+
+The six fixed `reason` sentences (one per class, returned by `build_body_render_error_attrs/1`;
+no interpolation of any kind):
+
+| Class | `reason` sentence |
+|---|---|
+| `:placeholder_outside_string` | `service task body template could not be rendered: placeholder outside a JSON string` |
+| `:missing_variable` | `service task body template could not be rendered: referenced variable is not set` |
+| `:invalid_utf8` | `service task body template could not be rendered: variable value is not valid UTF-8` |
+| `:unsupported_value_type` | `service task body template could not be rendered: variable value type is not supported` |
+| `:rendered_body_not_json` | `service task body template could not be rendered: result is not valid JSON` |
+| `:rendered_body_too_large` | `service task body template could not be rendered: result exceeds the size limit` |
 
 `{:missing_variable, key}` carries only the author-written template key name (not a value).
 Nothing in any error ever contains a variable value or any part of a rendered body.
@@ -304,8 +382,10 @@ Instance start input for this process (scenario step 1): `review_id`, `review_ty
 `portfolio_ref`, `review_period`, `initiator_actor_id`. `review_id` is already relied on by four
 other nodes of this fixture (`evidence-collection-timeout`, `cro-sign-off-timeout`,
 `archive-review`, `reopen-review` endpoints) and by `regulatory_review_timer_path_test.exs:79`.
-It is present on BOTH inbound paths (timer path and the remediation path, since the remediation
-sub-process only adds variables). Neither `remediation_status` nor any reason variable exists on
+It is present in the instance variables on BOTH inbound GRAPH paths (timer path and the
+remediation path, since the remediation sub-process merge only adds variables to the parent's
+seed variables). Whether a SERVICE_TASK reached via the remediation path is actually dispatched
+is a separate, pre-existing question answered "no" in section 3.6. Neither `remediation_status` nor any reason variable exists on
 the timer path, and there is no set-variable node type (`graph.ex` node types: START, END,
 HUMAN_TASK, SERVICE_TASK, EXCLUSIVE_GATEWAY, PARALLEL_GATEWAY, TIMER, SUB_PROCESS), so the reason
 must be a literal per node; hence the split.
@@ -346,6 +426,10 @@ Graph validation: the new node has an `endpoint` (CHK-10), a default `timeout_ms
 change. `end-closed` gains a third inbound edge, which END nodes allow (it already has `e5` and
 `e16`). Verified by the existing T3 (`validate_graph`, `validate_node_attributes`,
 `validate_edge_conditions` all clean), which the implementer must run.
+
+Scope of the split, stated plainly: it is a graph-level and fixture-level correctness
+measure. It guarantees that no static `sla_breach_30_days` reason is ever attached to a node
+reachable from `e10`. It does NOT make the e10 notice get sent: see 3.6.
 
 ### 3.3 Files that reference the fixture shape and what each needs
 
@@ -408,6 +492,39 @@ this fix to build outbound-request auditing):
    `decoded_body.json.reason`. Until then UAT-RUNNER should expect EO-002 to stay open or be
    judged on that event. The ported scenario file itself must not be edited here.
 
+### 3.6 Known pre-existing gap, OUT OF SCOPE: no SERVICE_TASK dispatch after sub-process completion
+
+Verified by reading `lib/letflow/engine/sub_process.ex`: after a child sub-process completes,
+`build_completion_multi_from_merge` (`:867-912`) calls `Engine.advance_until_stable/4`
+(`:877`) and matches `{:ok, final_instance_state, _more_pending}` at `:894`: the
+pending-event list is bound to `_more_pending` and discarded, and only `final_instance_state`
+is passed to `build_completion_write_steps/12` (`:949`). A grep of `sub_process.ex` for
+`prepare_service_task_dispatch` / `service_task_dispatch` finds nothing. The engine's only
+callers of `prepare_service_task_dispatch/6` are the create fold (`engine.ex:605`), the
+timer/outcome wrapper (`:3082`) and the task-completion hop (`:3847`); none runs for the
+sub-process completion hop. Consequence: a token that reaches a SERVICE_TASK through
+`remediation-subprocess` -> `post-remediation-check` -> `e10` ->
+`regulatory-remediation-escalation` is moved onto that node but NO `service_task_dispatches`
+row is created, so no request (and no notice) is sent today, with or without this fix. The
+same pre-existing defect applies to any SERVICE_TASK placed after a SUB_PROCESS in any
+definition; it is not specific to the Meridian fixture.
+
+Decision: this is a separate defect, NOT fixed or worked around by ISS-0926, and this design
+does not pretend to fix it. Follow-up for ORCH to file as a new issue: "SubProcess completion
+hop discards pending events from advance_until_stable, so SERVICE_TASK (and any other
+pending-event consumer) reached after a sub-process completes is never dispatched".
+Consequences for this design:
+
+- No claim anywhere in this design, its tests or its fixture notes says the remediation-path
+  notice is delivered. The e10 fixture work (3.2 items 3-5) is graph-routing and fixture
+  shape only.
+- The T14 test (6.3) asserts graph routing only and is labelled so.
+- The body-rendering fix itself (sections 1, 2) is fully exercised on the paths that DO
+  dispatch: create, task-completion hop, and timer/outcome advance (the 21-day timer path
+  through `regulatory-auto-escalation`, which is what EO-001/EO-002 observe).
+- When the follow-up issue is fixed, the already-split node will start dispatching with its own
+  `remediation_unresolved` reason and needs no further fixture change.
+
 ## 4. Public surface
 
 No migration (`config_snapshot` is an existing `:map` column; a new string key is schemaless,
@@ -421,16 +538,17 @@ New / changed functions:
 |---|---|---|---|
 | `Letflow.Engine.ServiceTask` | `render_body_template/2` | public, pure, no DB/Logger/clock | `@spec render_body_template(template :: String.t() \| nil, variables :: map()) :: {:ok, String.t() \| nil} \| {:error, body_render_reason()}` |
 | `Letflow.Engine.ServiceTask` | `body_has_placeholders?/1` | public, pure | `@spec body_has_placeholders?(template :: String.t() \| nil) :: boolean()` (same regex as 1.2) |
+| `Letflow.Engine.ServiceTask` | `body_render_reason_class/1` | public, pure | `@spec body_render_reason_class(body_render_reason()) :: body_render_reason_class()` (section 2.6; sole caller `Engine.prepare_service_task_dispatch/6`) |
 | `Letflow.Engine.ServiceTask` | `build_body_render_error_attrs/1` | public, pure | `@spec build_body_render_error_attrs(body_render_error_context()) :: Letflow.Engine.standalone_error_attrs()` |
-| `Letflow.Engine.ServiceTask` | `stringify_value/1`, `escape_json_string/1`, scan helper | private `defp` | return `{:ok, String.t()} \| {:error, body_render_reason()}` |
-| `Letflow.Engine.ServiceTask` | `@type body_render_reason`, `@type body_render_error_context` (`instance_id`, `node_id`, `actor_id`, `idempotency_key`, `variables`, `reason`; same shape as `catalog_unresolved_context`) | types | section 2.6 |
+| `Letflow.Engine.ServiceTask` | `stringify_value/1`, `escape_json_string/1`, placeholder-position scan (2.4) | private `defp` | return `{:ok, String.t()} \| {:error, body_render_reason()}` (scan returns `:ok` or `{:error, :placeholder_outside_string}`) |
+| `Letflow.Engine.ServiceTask` | `@type body_render_reason`, `@type body_render_reason_class`, `@type body_render_error_context` (`instance_id`, `node_id`, `actor_id`, `idempotency_key`, `variables`, `reason`; same shape as `catalog_unresolved_context`) | types | section 2.6 |
 | `Letflow.Engine.ServiceTask` | `@max_rendered_body_bytes 65_536` | module attribute | not configurable |
 | `Letflow.Engine` | `finish_service_task_arm_attrs/7` (was /6) | private | section 1.6 |
 | `Letflow.Engine` | `config_snapshot_map/4` (was /3) | private | section 1.6 |
 | `Letflow.Engine` | `resolve_service_task_arm_attrs/6`, `prepare_service_task_dispatch/6`, `prepare_service_task_dispatch_for_create/6`, `prepare_service_task_dispatch_for_completion/8`, `prepare_service_task_dispatch_abort_on_empty_url/6` | private | return types widened by the `body_render_error` outcome (section 1.7); a new private `build_service_task_body_render_error/6` thin wrapper beside `build_service_task_catalog_unresolved_error/6` |
 | `Letflow.Engine.ServiceTaskDispatcher` | `resolve_dispatch_body/1` | private | section 1.4 |
 | `Letflow.Engine.ServiceTaskDispatcher` | `do_attempt_dispatch/2` | private, edited at the two `rendered_body =` lines | no spec change |
-| `Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch` | `@type config_snapshot` | type | add `optional("rendered_body") => String.t() \| nil` |
+| `Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch` | `@type config_snapshot` | type | NO type change. The existing type (`service_task_dispatcher.ex:163-165`, `%{required(String.t()) => String.t() \| non_neg_integer() \| map() \| nil}`) already admits a `"rendered_body"` key with a `String.t() \| nil` value |
 
 `transport_fun` type and `http_transport/3` signatures are unchanged (they already take
 `rendered_body :: String.t() | nil`).
@@ -476,8 +594,12 @@ All through `ServiceTask.render_body_template/2`:
 | T-R3 | `{"r":"{{variables.reason}}"}` with plain string | `{:ok, ~s({"r":"..."})}`; result decodes |
 | T-R4 | value contains `"`; and the injection `x","admin":true` | placeholder text escaped; decoded map has exactly the intended keys, `"admin"` absent |
 | T-R5 | value contains backslash and a trailing backslash | `\\`, decodes back to the original value |
-| T-R6 | value contains newline, tab, CR, NUL | escaped, decodes back to the original value |
-| T-R7 | value contains U+2028 and U+2029, emoji, non-Latin text | U+2028/9 escaped in the raw string; decodes back identically |
+| T-R6 | value contains newline, tab, CR, backspace, form feed, NUL and U+001F | raw output contains the two-character short forms for newline, tab, CR, backspace, form feed, and the six-character uppercase-hex forms for NUL (`\u0000`) and U+001F (`\u001F`); no raw control byte remains; decodes back to the original value |
+| T-R7a | value contains U+2028 and U+2029 | raw output contains the six ASCII characters `\u2028` and `\u2029`, and neither raw codepoint; decodes back identically |
+| T-R7b | value contains `/` (for example `a/b`) | raw output contains `a/b` unchanged; it contains no backslash immediately before the slash (`:javascript_safe` does NOT escape `/`); decodes back identically |
+| T-R7c | value contains DEL (U+007F) | raw output contains the DEL byte unchanged; decodes back identically |
+| T-R7d | value contains `<`, `>`, `&` | raw output contains them unchanged |
+| T-R7e | value contains emoji and non-Latin text (Cyrillic, CJK) | raw output contains the same UTF-8 bytes unchanged; decodes back identically |
 | T-R8 | map and list values | rendered as one string whose content is the compact JSON text; decoded result has a string, not a nested object |
 | T-R9 | integer, float, `true`, `false` | `"42"`, `"1.5"`, `"true"`, `"false"` inside the string |
 | T-R10 | `nil` value with key present; and key absent | empty string inside the quotes; `{:error, {:missing_variable, "k"}}` |
@@ -489,7 +611,9 @@ All through `ServiceTask.render_body_template/2`:
 | T-R16 | invalid UTF-8 binary value; unsupported term (tuple) | `{:error, :invalid_utf8}`; `{:error, :unsupported_value_type}`; never raises |
 | T-R17 | `body_has_placeholders?/1`: nil, static, `{{variables.x}}`, `{{ variables.x }}`, `{{other}}` | false, false, true, true, false |
 | T-R18 | error terms never contain the variable value (assert on `inspect/1` of every error for a secret-looking value) | no substring match |
-| T-R19 | `build_body_render_error_attrs/1` | `error_type: :service_task_body_render_failed`, `details == %{reason: class}`, no value in `reason` text |
+| T-R19 | `build_body_render_error_attrs/1` for each of the six classes | `error_type: :service_task_body_render_failed`, `details == %{reason: class}`, and `reason` equals the exact sentence in the 2.6 table; no value in `reason` text |
+| T-R20 | `body_render_reason_class/1` | each bare atom maps to itself; `{:missing_variable, "k"}` maps to `:missing_variable` |
+| T-R21 | placeholder scan edge cases: backslash outside a string before a placeholder; a template with two placeholders, first inside and second outside a string; nested JSON (`{"a":{"b":["{{variables.x}}"]}}`) | backslash outside string ignored by the scan (the 2.5 decode check decides); the second placeholder yields `:placeholder_outside_string` with NO value lookup for the first (use a value that raises if stringified); nested placeholder is inside a string and substitutes |
 
 ### 6.2 Integration (need Postgres; may be unrunnable on the shared dev machine, so state it)
 
@@ -517,9 +641,15 @@ DB-backed: all below. Add to `test/letflow/engine/service_task_wiring_test.exs` 
 - T1 version `"1.3"`.
 - T8 (rewritten): `regulatory-auto-escalation` inbound exactly `["timeout-risk-evaluation"]`, outbound `[{"e5","end-closed"}]`, `body_template` decodes to a map whose `reason` is `"sla_breach_30_days"` and whose `review_id` is the placeholder `{{variables.review_id}}`; `regulatory-remediation-escalation` exists, is SERVICE_TASK, inbound exactly `["e10"]`, outbound `[{"e18","end-closed"}]`, template reason `"remediation_unresolved"`, same endpoint URL as the timer-path node.
 - New T13: both templates pass `ServiceTask.render_body_template/2` with `%{"review_id" => "r-1"}` and decode to the expected maps (proves the shipped templates are renderable, quotes balanced, placeholders inside strings).
-- T9 unchanged (timer fire lands on `regulatory-auto-escalation`). New T14: from `post-remediation-check` with `remediation_status == "unresolved"` the token lands on `regulatory-remediation-escalation` (drive `token_node/3`-style helper as T9/T10 do).
+- T9 unchanged (timer fire lands on `regulatory-auto-escalation`). New T14 (GRAPH-ROUTING / FIXTURE-SHAPE ONLY; it does NOT prove the remediation notice is dispatched, which it is not today, see 3.6). Pure, no DB, uses only `Transition.transition/3` and the already-imported `InstanceState` / `Token` structs. The existing `token_node/3` cannot be reused because it hard-codes start node `"risk-evaluation"` and a token without `waiting_child_instance_id`; add ONE new private helper to the test module:
+
+  `@spec remediation_exit_nodes(doc :: map(), variables :: map()) :: {:ok, after_subprocess :: [String.t()], after_gateway :: [String.t()]} | {:error, term()}`
+
+  Specification of the helper (no body here): build an `InstanceState` with `instance_id: "inst-q926"`, `status: :active`, `variables: variables`, `pending_task_nodes: []`, and exactly one token `%Token{node_id: "remediation-subprocess", token_id: "tok-1", waiting_child_instance_id: "child-1"}` (the `waiting_child_instance_id` MUST be non-nil, otherwise `dispatch_sub_process_completion/4` returns `{:token_not_waiting_on_child, ...}`, `transition.ex:623`). Step 1: `Transition.transition(graph!(doc), state, {:sub_process_completed, "tok-1"})` must return `{:ok, s1, _}`; `after_subprocess` is the list of `node_id`s of `s1.tokens`. Step 2: `Transition.transition(graph!(doc), s1, {:advance_token, "tok-1"})` (a token parked on an EXCLUSIVE_GATEWAY is moved off it by `:advance_token`, the same event the engine's `advance_until_stable` uses) must return `{:ok, s2, _}`; `after_gateway` is the list of `node_id`s of `s2.tokens`. Any non-`{:ok, ...}` result is returned as `{:error, result}`.
+
+  Assertions: with `variables = %{"remediation_status" => "unresolved", "review_id" => "r-1"}` the result is `{:ok, ["post-remediation-check"], ["regulatory-remediation-escalation"]}`; with `remediation_status == "resolved"` it is `{:ok, ["post-remediation-check"], ["findings-sign-off"]}` (guards that the `e9` branch is untouched). Expected values are read-only facts of the fixture graph: `e8` goes from `remediation-subprocess` to `post-remediation-check`, `e10` carries `variables.remediation_status == 'unresolved'`, `e9` carries `== 'resolved'`. If ELIXIR-DEV or TEST-DESIGNER finds step 2 does not land as stated (for example a token id change), the sole fallback allowed is to read the token id from `s1.tokens` instead of hard-coding `"tok-1"`, not to weaken the assertion.
 - T3 (validation clean), T7, T12 (JSON/YAML parity: node ids, edge ids) must pass with the new node and edge in BOTH files.
-- Replace M9 with: M9a "body_template removed from `regulatory-auto-escalation` -> T8 red"; M9b "reason on the remediation node changed to `sla_breach_30_days` -> T8 red" (the exact defect: a wrong reason on a regulatory filing); M9c "e10 retargeted back to `regulatory-auto-escalation` -> T8, T14 red"; M9d "YAML not updated -> T12 red".
+- Replace M9 with: M9a "body_template removed from `regulatory-auto-escalation` -> T8 red"; M9b "reason on the remediation node changed to `sla_breach_30_days` -> T8 red" (the exact defect: a wrong reason on a regulatory filing); M9c "e10 retargeted back to `regulatory-auto-escalation` -> T8, T14 red". The existing mutant M10 (`test ... "M10 JSON new but YAML reverted to the old shape -> T12 red"`) is RETAINED and adapted to the new node and edge ids; no duplicate mutant is added.
 - Engine E1 (DB, existing): add an assertion that the dispatch row for the timer path has `config_snapshot["rendered_body"]` decoding to `reason == "sla_breach_30_days"` and `review_id == "sim-q915-001"`.
 
 ### 6.4 Regression test that fails pre-fix
@@ -545,8 +675,9 @@ not claim them green.
 |---|---|
 | Design doc exists at the required path | this file |
 | Rendering location, frozen snapshot, dispatcher change, catalog path, legacy rows | 1.1, 1.4, 1.5, 1.6 |
-| Injection and escaping rules concrete and testable | section 2, tests T-R1 to T-R19, I-4 |
-| Fixture split with version bump and full list of affected files and tests | 3.2, 3.3, 6.3 |
+| Injection and escaping rules concrete and testable | section 2, tests T-R1 to T-R21 (T-R6, T-R7a to T-R7e pin each Jason guarantee), I-4 |
+| Fixture split with version bump and full list of affected files and tests | 3.2, 3.3, 6.3 (T14 graph-routing only) |
+| Remediation-path dispatch gap stated and scoped out | 3.6 |
 | EO-002 observability gap stated with follow-up recommendation | 3.5 |
 | `@spec`s and visibility listed, no implementation code | section 4 |
 | Decision-record consistency | section 5 |

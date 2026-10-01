@@ -1,0 +1,60 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000003",
+  "run_id": "WF02-REQ428-20261001",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ428-20261001/step-01b-code-design-validator.json",
+  "created_at": "2026-10-01T02:05:00Z",
+  "started_at": "2026-10-01T02:05:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-428"],
+    "requirement_text": {
+      "REQ-428": "Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex): GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task form is resolved through REQ-424's pinned resolver and rendered by REQ-427's form renderer; never the active version. Process-instance renderer: read-only view of GET /api/v1/instances/:id and /api/v1/instances/:id/timeline (lib/letflow/routers/instances.ex) -- status, current step, timeline. No cancel/rebind/advance actions (not in MOB-4). All screens use REQ-426's six-state wrapper; claim/complete errors (409 already claimed, 403, 422) map to its states."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req428-task-and-instance-renderer.md",
+      "handoffs/WF02-REQ428-20261001/step-01-code-designer.json",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/routers/instances.ex",
+      "apps/mobile/lib/definitions/pinned_form_resolver.dart",
+      "apps/mobile/lib/renderers/form/",
+      "apps/mobile/lib/renderers/renderer_state.dart"
+    ],
+    "owned_modules": ["apps/mobile/"]
+  },
+  "task": {
+    "description": "Hard gate per WF-02 Step 1b. Read lib/letflow/design/req428-task-and-instance-renderer.md directly (not CODE-DESIGNER's handoff summary). For each of this run's 6 acceptance criteria (listed below), verify it maps to a concrete design element with no TBD/deferral language, fully specified Dart signatures (name, inputs, outputs, error shapes as sealed/tagged types, not left implicit), cross-module dependencies listed, and NO .dart implementation code bodies (signatures/type shapes only). CODE-DESIGNER flagged 5 open questions including that REQ-424's own design doc does not exist under lib/letflow/design/ (confirmed independently: only req427-form-renderer.md and an unrelated iss0427 doc exist there) -- verify the design nonetheless fully specifies the pinned-resolution contract by reading the real apps/mobile/lib/definitions/pinned_form_resolver.dart source instead, and that this substitution is sound, not a gap. Also verify the claimed non-goal (no cancel/rebind/advance anywhere in the design) actually holds by reading the design doc's instance-screen section in full.",
+    "acceptance_criteria": [
+      "a test lists the inbox from a fake GET /api/v1/tasks/inbox, claims a task (asserting POST /api/v1/tasks/:id/claim), opens it, and completes it (asserting POST /api/v1/tasks/:id/complete with the form values in the body)",
+      "a test asserts opening a task pinned to form_version 1 while version 2 is cached renders version 1's fields (through REQ-424's resolver), not version 2's",
+      "a test asserts a 409 on claim renders a state telling the user the task is no longer available and refreshes the inbox, not a crash",
+      "a test asserts the process-instance screen renders status and timeline entries from fake /instances/:id and /instances/:id/timeline responses and exposes no cancel, rebind or advance action",
+      "`cd apps/mobile && flutter analyze && flutter test` pass, real output quoted",
+      "live: against the local docker compose stack on emulator-5554, an already-authenticated session lists the seeded inbox -- evidence referenced in the report (this AC is about the eventual implementation/test-run evidence, not the design doc itself -- confirm the design doesn't preclude it, nothing more)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,47 @@
+{
+  "handoff_id": "6cc4ecf1-fcf0-4aca-9570-8020c69b7a95",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "04d",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-Q926-20261001/step-04d-release-validator.json",
+  "created_at": "2026-10-01T20:02:21Z",
+  "started_at": "2026-10-01T20:02:21Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0926.yaml",
+      "test/specs/ISS-0926.md",
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "handoffs/WF03-Q926-20261001/step-04c-test-runner.json",
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 4d: independently re-verify ISS-0926 before it is closed (branch feature/WF03-Q926-20261001 HEAD). Claim: IN_PROGRESS only; flip COMPLETED on finishing. Do NOT trust TEST-RUNNER's report (step-04c FAILED only on a handoff status enum in step-02, which ORCH has since corrected; test results claimed green). Re-derive yourself: acceptance (ISS-0926: body_template rendered with instance variables and sent as the request body; Meridian regulatory-auto-escalation posts reason sla_breach_30_days by the inbound timer path while e10 has its own body; regression test fail-first; injection-safe; MINOR) against the code and the fixture JSON (v1.3) directly; run mix compile --warnings-as-errors, mix format --check-formatted, the six ISS-0926 test files (list in test/specs/ISS-0926.md / step-04 handoff) against a throwaway Postgres container (private network/unused host port; NOT shared dev 5462; leave q929-pg alone; remove yours), and mix letflow.lint_handoffs. Also check: git diff origin/main..HEAD touches nothing outside the owned scope (no migration, no supervision files, no other runs' files), docs/issues/ISS-0926.yaml still open (ISSUE-FIXER closes it next), and list what DOC-UPDATER-class stale docs remain (REVIEWER noted: design assigns service_task.md:421, service_task_dispatcher.md docs, plus nits: engine.ex config_snapshot_map comment 'one derived key', dispatcher docs mention rendered_url freezing only). Report PASS/FAIL with quoted outputs; also state the EO-002 residual gap (engine writes no outbound audit event; reason visible only in SERVICE_TASK_COMPLETED payload decoded_body for echoing endpoints) and the e10/sub_process.ex pending-events gap as follow-ups. Modify only this handoff; commit it only; push origin HEAD. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "Acceptance re-derived from code and fixture",
+      "compile/format/six test files/lint quoted from own runs",
+      "Diff scope check stated",
+      "Stale-docs list stated",
+      "Follow-up gaps stated",
+      "No file modified except this handoff"
+    ]
+  }
+}

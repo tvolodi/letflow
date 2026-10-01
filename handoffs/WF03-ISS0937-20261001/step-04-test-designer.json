@@ -1,0 +1,51 @@
+{
+  "handoff_id": "bf3d02c3-985f-4024-8789-348ec83c1273",
+  "run_id": "WF03-ISS0937-20261001",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0937-20261001/step-04-test-designer.json",
+  "created_at": "2026-10-01T00:42:15Z",
+  "started_at": "2026-10-01T00:42:15Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0937": "id: ISS-0937\ntitle: \"Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01\"\ndiscovered_by: ELIXIR-DEV\ndiscovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)\ndiscovered_at: \"2026-10-01T00:21:56Z\"\nseverity: MAJOR\ndescription: >\n  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest\n  parity failure extra=[\"events_y2026m09\"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in\n  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not\n  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.\n  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.\naffected_files:\n  - test/letflow/events/ (partition maintenance / retention tests)\n  - test/letflow/tenants/ (tenant template parity test)\nqueue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937\ngithub_ref: GH-2077\nstatus: open\n"
+    },
+    "related_handoff_ids": [
+      "63aa85f4-fc6a-43fe-88ad-e088627a26af"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0937-month-boundary-test-clock.md",
+      "test/support/partition_clock.ex",
+      "test/support/tenant_template.ex",
+      "test/support/tenant_template_test.exs",
+      "handoffs/WF03-ISS0937-20261001/step-03d-reviewer.json"
+    ],
+    "owned_modules": [
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs",
+      "test/support/partition_clock.ex (new)",
+      "test/support/tenant_template_test.exs (new parity regression test)"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937",
+    "branch_name": "feature/WF03-ISS0937-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4 REGRESSION TESTS for ISS-0937. Write the fail-first regression tests exactly as specified in lib/letflow/design/iss0937-month-boundary-test-clock.md section 3 (read it fully): (a) new test/support/partition_clock_test.exs (pure oracle iterating today over >=24 (design says 48) months incl. every 1st/2nd and boundary dates; independent oracle for eligibility mirroring lib/letflow/event_store/partition_maintenance.ex's rule; source-scan test for the old derivation if designed) and (b) a new `ISS-0937` describe in the existing test/support/tenant_template_test.exs (hand-built schemas with fixed names, e.g. reference with events_y2026m10 vs candidate with events_y2026m09, calling the real check_table_set/assert_clone_parity! path as designed; a genuinely extra non-partition table must still raise; fixed partition tables still compared). Tests must not read the real date. Do NOT modify the already-implemented fix files except to expose something strictly needed (state it if so). FAIL-FIRST PROOF REQUIRED (WF-03 Step 4): in a THROWAWAY git worktree (e.g. ../letflow-4-wf03-iss0937-prefix created from origin/main, with this branch's NEW test files copied in plus only the minimal stub needed to compile - for partition_clock_test the pre-fix state has no PartitionClock module or the old -1 derivation: per WF-03 'code under test does not exist' section you MUST additionally MUTATE the shipped logic and record which tests fail per mutant: at minimum mutant 1 = offset -1 instead of -(N-day-aware) (old derivation: shift_months(month_of(today), -1)), mutant 2 = filter regex loosened to hide any events_* table / or filter applied only to missing side (the original bug). For the parity tests run them against origin/main's tenant_template.ex (pre-fix) and record they FAIL there with real output, then PASS on the branch. Apply mutants only in the throwaway worktree (deps can be copied from ../letflow-4/deps or junctioned), remove the throwaway worktree afterwards (git worktree remove --force), and confirm `git status --porcelain` of the branch worktree shows only your new/changed test files. Then run on the branch: mix format --check-formatted on the new files, mix compile --warnings-as-errors, and mix test for the new/changed test files plus the three retention files and tenant_template/tenant_fixture tests; quote pass counts. Do not commit; ORCH commits. Record in the handoff result.summary: per-test pre-fix fail output/post-fix pass, mutant table with pass/fail counts, and the final owned_modules. Set IN_PROGRESS at claim then COMPLETED/FAILED, result.status PASS/FAIL; next_action 'Route to TEST-DESIGN-VALIDATOR'.",
+    "acceptance_criteria": [
+      "Regression tests per design written",
+      "Fail-first proven against pre-fix code with real output",
+      "Mutants applied and recorded in throwaway worktree, removed",
+      "Passing on branch with counts"
+    ]
+  }
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0923-20261001/step-04-test-designer.json",
   "created_at": "2026-10-01T16:44:09Z",
   "started_at": "2026-10-01T16:44:09Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-01T16:54:09Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,5 +40,10 @@
   "task": {
     "description": "Work in C:/Users/tvolo/dev/ai-dala/letflow-3 on the already checked-out branch feature/WF03-ISS0923-20261001 (do not switch branches; do not touch main or other branches/PRs). Shared machine: scoped `mix test <files>` only, never the full suite; use MIX_TEST_PARTITION=<unique> for tests that commit catalog rows. Do not commit (ORCH commits); do not leave mutants in the tree. WF-03 Step 4: write the regression tests for ISS-0923 covering ALL of AC-1..AC-14 of the design (section 10 of lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md) plus the design's fail-first set and 7 mutants. Place tests in the existing test files where natural (test/letflow/service_catalog_test.exs, test/letflow/routers/admin_services_test.exs) or a new test/letflow/service_catalog_delete_pinned_instances_test.exs; follow fixtures in test/letflow/engine_catalog_service_task_test.exs; tests that commit catalog rows must run under a unique MIX_TEST_PARTITION with MIX_ENV=test (shared letflow_test DB has stale tenant_template_build_* registrations that raise 42P01 in delete/1 -- see step-01 result). AC-8 seam: insert minimal instance_projections + instance_definition_snapshots rows with Repo.insert! (NOT insert_all: started_at/updated_at are NOT NULL without DB default; snapshot needs a shared process_definitions row for its FK). FAIL-FIRST (mandatory, WF-03): prove the new tests FAIL against pre-fix code behaviourally (not merely missing-function): create a throwaway git worktree of origin main (git worktree add <scratchpad dir>/wt-pre main-ish ref origin/main, copy only the test files in, run them there, quote failures), then remove the worktree. MUTANTS only in a throwaway worktree of the feature branch (never mutate the main checkout): apply each of the design's mutants, run the tests, record which fail for each; then remove the worktree. Do not use git checkout -- in the main checkout. Quote real pass counts for the green run on the branch (), run  on test files. Do not commit; ORCH commits. Report test file paths in result. Fill this handoff file's result (status PASS/FAIL, summary with quoted real output, issues, next_action) and set top-level status COMPLETED with real UTC completed_at (`date -u`)."
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/letflow/service_catalog_delete_pinned_instances_test.exs (24 tests; covers AC-1..AC-14 incl. router AC-12/13) and test/specs/ISS-0923.md. GREEN on branch: `MIX_ENV=test MIX_TEST_PARTITION=9231 mix test <new file> test/letflow/service_catalog_test.exs` -> `Result: 68 passed` (new file alone: `Result: 24 passed`); 0 occurrences of 'default values for the optional arguments', no warnings. FAIL-FIRST against origin/main (ce431622) + only the new test file in a throwaway worktree (removed): `Result: 8/24 passed, Failed: 16 tests`; failures are behavioural (delete returned :ok instead of {:error,{:referenced_by_active_instances,_}}, archive rows survived, router gave 204 not 409). Passing pre-fix = regression guards (AC-5 x3, AC-7, AC-11, never-published, AC-13 x2). MUTANTS (throwaway worktree of the branch, removed; main checkout untouched, `git status --porcelain lib/ test/` shows only the new untracked test file): m1 drop status filter 19/24 (5 fail); m2 only :active 21/24 (3 fail); m3 LIKE match 22/24 (2 fail); m4 first tenant only 21/24 (3 fail); m5 skip version deletion 20/24 (4 fail); m6 swapped guard order 21/24 (3 fail); m7 router clause removed 23/24 (1 fail: AC-12). All 7 killed. Seams: Repo.insert! projection+snapshot rows, shared draft process_definitions row; AC-1/2 also drive real Engine.create/cancel_instance. AC-11 waits on pg_stat_activity Lock wait (no fixed sleep). NOT RUN: `mix letflow.check.test` (runs the full suite; forbidden on this shared machine); instead the file has no helper default args and the scoped run showed no warnings. Run with MIX_TEST_PARTITION; the shared letflow_test DB would raise 42P01 in delete/1. Not committed.",
+    "issues": [],
+    "next_action": "ORCH commits; route to TEST-DESIGN-VALIDATOR (it should re-apply a mutant itself, e.g. m4 or m6)."
+  }
 }

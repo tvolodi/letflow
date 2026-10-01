@@ -330,3 +330,32 @@ export function createPipeline<TState extends object>(
 
   return runner
 }
+
+/**
+ * ISS-0936 (Q-936): the id `Letflow.Tasks.apply_completion_authz/3` compares a
+ * USER-assigned task's `assignee_ref` against is the caller's LOCAL `users.id`
+ * (`auth_context.user_id`, set by the JIT provisioning step), NOT the Keycloak
+ * JWT `sub` (that is stored in `users.external_id`). A spec that seeds
+ * `assignee_ref: jwtSubject(token)` therefore 403s "task is assigned to a
+ * different user" on completion. This resolves the real local id by exact
+ * username via `GET /api/v1/identity/users` (the call itself provisions the
+ * caller on first use).
+ */
+export async function resolveLocalUserId(
+  request: APIRequestContext,
+  apiBaseUrl: string,
+  token: string,
+  username: string,
+): Promise<string> {
+  const response = await request.get(
+    `${apiBaseUrl}/api/v1/identity/users?search=${encodeURIComponent(username)}`,
+    { headers: authHeaders(token) },
+  )
+  if (!response.ok()) {
+    throw new Error(`user lookup for ${username} failed (${response.status()}): ${await response.text()}`)
+  }
+  const body = await response.json() as { items?: Array<{ id: string; username: string }> }
+  const match = (body.items ?? []).find((u) => u.username === username)
+  if (!match) throw new Error(`user ${username} not found via /api/v1/identity/users`)
+  return match.id
+}

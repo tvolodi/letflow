@@ -389,6 +389,7 @@ defmodule Letflow.Routers.AdminServices do
       "response_schema" => entry.response_schema,
       "required_auth" => Atom.to_string(entry.required_auth),
       "timeout_ms" => entry.timeout_ms,
+      "retry_policy" => entry.retry_policy,
       "scope" => Atom.to_string(entry.scope),
       "owner_tenant_id" => entry.owner_tenant_id,
       "version" => entry.version,

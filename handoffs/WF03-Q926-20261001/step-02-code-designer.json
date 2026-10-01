@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-Q926-20261001/step-02-code-designer.json",
   "created_at": "2026-10-01T18:18:12Z",
   "started_at": "2026-10-01T18:18:12Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T18:25:31Z",
+  "status": "PASS",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -49,5 +49,13 @@
       "Decision-record consistency stated",
       "Test plan and owned_modules listed"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written: lib/letflow/design/iss0926-service-task-body-template-rendering.md. Decisions: render body_template at activation via new pure ServiceTask.render_body_template/2 (option A per-value JSON-string escaping, Jason escape :javascript_safe, placeholders only inside quoted strings, else typed :placeholder_outside_string), freeze as config_snapshot[rendered_body] (no migration; map column); dispatcher sends rendered_body; legacy snapshots: static template sent as-is, templated template fails closed as request_build_error. Missing variable key = typed error, nil = empty string; 64 KiB cap; decode validation when placeholders present; new body_render_error tuple mirrors catalog_resolution_error at all sites. Catalog path covered by the same shared step (body_template is a node attribute). Fixture v1.3: keep regulatory-auto-escalation (timer, sla_breach_30_days), new regulatory-remediation-escalation (e10, remediation_unresolved), new edge e18; affected files/tests listed. EO-002: cannot be literal (no outbound audit); observable via SERVICE_TASK_COMPLETED decoded_body.json.reason with httpbin echo; follow-up issue recommended. No new decision record. Test plan T-R1..19, I-1..13, fixture T8/T13/T14/M9a-d; owned_modules listed. Nothing run (docs only).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   }
 }

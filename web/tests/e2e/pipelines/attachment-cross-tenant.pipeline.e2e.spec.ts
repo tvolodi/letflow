@@ -496,7 +496,7 @@ test.describe('Pipeline: attachment-cross-tenant-probe (PW-09)', () => {
                 id: 'n2',
                 node_type: 'HUMAN_TASK',
                 label: 'Shipment Approval',
-                attributes: { role: 'admin-user', assignee_type: 'user', assignee_ref: s.swiftrouteSlug + '-admin' },
+                attributes: { role: jwtSubject(s.dispatcherToken), assignee_type: 'USER', assignee_ref: jwtSubject(s.dispatcherToken) },
               },
               { id: 'n3', node_type: 'END', label: 'End', attributes: null },
             ],

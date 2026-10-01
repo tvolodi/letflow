@@ -56,6 +56,7 @@ import {
   loginWithToken,
   navigateSpa,
   authHeaders,
+  jwtSubject,
   shot,
 } from '../pipeline'
 import { assertServiceReadiness, resolveCredential } from '../helpers'
@@ -80,7 +81,7 @@ interface RollbackPipelineState {
   newCaseInstanceId: string
 }
 
-function graphFor(fixtureId: string, version: string) {
+function graphFor(fixtureId: string, version: string, adminSub: string) {
   return {
     nodes: [
       { id: 'n1', node_type: 'START', label: 'Start', attributes: null },
@@ -88,7 +89,7 @@ function graphFor(fixtureId: string, version: string) {
         id: 'n2',
         node_type: 'HUMAN_TASK',
         label: `Review ${fixtureId} ${version}`,
-        attributes: { role: 'admin-user', assignee_type: 'user', assignee_ref: 'admin-user' },
+        attributes: { role: adminSub, assignee_type: 'USER', assignee_ref: adminSub },
       },
       { id: 'n3', node_type: 'END', label: 'End', attributes: null },
     ],
@@ -136,7 +137,7 @@ test.describe('Pipeline: platform-definition-promotion-rollback (PW-01)', () => 
     await pl.step('pre: create and activate version 1, then version 2', async (s) => {
       const v1Resp = await request.post(`${API_BASE_URL}/api/v1/definitions`, {
         headers: authHeaders(s.adminToken),
-        data: { name: processKey, version: '1.0.0', description: 'rollback pipeline fixture v1', graph: graphFor(fixtureId, '1.0.0') },
+        data: { name: processKey, version: '1.0.0', description: 'rollback pipeline fixture v1', graph: graphFor(fixtureId, '1.0.0', jwtSubject(s.adminToken)) },
       })
       pl.gate(v1Resp.ok(), `v1 create failed: ${v1Resp.status()} ${await v1Resp.text()}`)
       const v1 = await v1Resp.json() as { id: string }
@@ -146,7 +147,7 @@ test.describe('Pipeline: platform-definition-promotion-rollback (PW-01)', () => 
 
       const v2Resp = await request.post(`${API_BASE_URL}/api/v1/definitions`, {
         headers: authHeaders(s.adminToken),
-        data: { name: processKey, version: '2.0.0', description: 'rollback pipeline fixture v2', graph: graphFor(fixtureId, '2.0.0') },
+        data: { name: processKey, version: '2.0.0', description: 'rollback pipeline fixture v2', graph: graphFor(fixtureId, '2.0.0', jwtSubject(s.adminToken)) },
       })
       pl.gate(v2Resp.ok(), `v2 create failed: ${v2Resp.status()} ${await v2Resp.text()}`)
       const v2 = await v2Resp.json() as { id: string }

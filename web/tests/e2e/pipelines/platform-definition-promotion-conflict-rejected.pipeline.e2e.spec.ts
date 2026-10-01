@@ -132,7 +132,7 @@ interface ConflictPipelineState {
   planDigest: string
 }
 
-function graphFor(fixtureId: string, label: string) {
+function graphFor(fixtureId: string, label: string, adminSub: string) {
   return {
     nodes: [
       { id: 'n1', node_type: 'START', label: 'Start', attributes: null },
@@ -147,7 +147,7 @@ function graphFor(fixtureId: string, label: string) {
         // discovered during this spec's own authoring). Always fold the
         // fixtureId into the label so every run's diff content is unique.
         label: `${label} ${fixtureId}`,
-        attributes: { role: 'admin-user', assignee_type: 'user', assignee_ref: 'admin-user' },
+        attributes: { role: adminSub, assignee_type: 'USER', assignee_ref: adminSub },
       },
       { id: 'n3', node_type: 'END', label: 'End', attributes: null },
     ],
@@ -188,7 +188,7 @@ test.describe('Pipeline: platform-definition-promotion-conflict-rejected (PW-01)
           name: processKey,
           version,
           description: `platform-definition-promotion-conflict-rejected fixture ${processKey}@${version}`,
-          graph: graphFor(fixtureId, label),
+          graph: graphFor(fixtureId, label, jwtSubject(adminToken)),
         },
       })
       pl.gate(createResp.ok(), `create ${version} failed: ${createResp.status()} ${await createResp.text()}`)

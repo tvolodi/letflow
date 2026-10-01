@@ -970,17 +970,26 @@ defmodule Letflow.Engine do
         {:error, {:config_parse_failed, node_id, reason}}
 
       {:ok, %ServiceTask.Config{route_kind: :inline_url} = config} ->
-        rendered_url = render_service_task_url(config.url_template, variables)
+        rendered_url = render_service_task_template(config.url_template, variables)
+        rendered_body = render_service_task_body_template(config.body_template, variables)
 
         with {:ok, arm_attrs} <-
-               finish_service_task_arm_attrs(config, node_id, instance_id, rendered_url, now) do
+               finish_service_task_arm_attrs(
+                 config,
+                 node_id,
+                 instance_id,
+                 rendered_url,
+                 rendered_body,
+                 now
+               ) do
           {:ok, arm_attrs, ctx}
         end
 
       {:ok, %ServiceTask.Config{route_kind: :catalog_service} = config} ->
         case resolve_catalog_version(config, ctx) do
           {:ok, resolved, ctx} ->
-            rendered_url = render_service_task_url(resolved.endpoint_url, variables)
+            rendered_url = render_service_task_template(resolved.endpoint_url, variables)
+            rendered_body = render_service_task_body_template(config.body_template, variables)
 
             with {:ok, arm_attrs} <-
                    finish_service_task_arm_attrs(
@@ -988,6 +997,7 @@ defmodule Letflow.Engine do
                      node_id,
                      instance_id,
                      rendered_url,
+                     rendered_body,
                      now,
                      resolved
                    ) do
@@ -1070,6 +1080,7 @@ defmodule Letflow.Engine do
          node_id,
          instance_id,
          rendered_url,
+         rendered_body,
          now,
          catalog_version \\ nil
        ) do
@@ -1081,7 +1092,8 @@ defmodule Letflow.Engine do
         arm_attrs = %{
           instance_id: instance_id,
           node_id: node_id,
-          config_snapshot: config_snapshot_map(config, rendered_url, catalog_version),
+          config_snapshot:
+            config_snapshot_map(config, rendered_url, rendered_body, catalog_version),
           attempt_index: 0,
           next_attempt_at: now,
           created_at: now
@@ -1092,7 +1104,8 @@ defmodule Letflow.Engine do
   end
 
   # design doc §2.2 -- plain map projection of ServiceTask.Config.t() plus
-  # the one derived key "rendered_url", matching exactly the field set
+  # the derived keys "rendered_url" and "rendered_body" (ISS-0926 added the
+  # latter, mirroring the former), matching exactly the field set
   # ServiceTaskDispatcher's own config_from_snapshot/1 reads back
   # (service_task_dispatcher.ex:630-648). String-keyed, matching
   # ServiceTaskDispatch.config_snapshot()'s own @type.
@@ -1106,9 +1119,15 @@ defmodule Letflow.Engine do
   @spec config_snapshot_map(
           ServiceTask.Config.t(),
           rendered_url :: String.t() | nil,
+          rendered_body :: String.t() | nil,
           ServiceCatalog.resolved_service_version() | nil
         ) :: map()
-  defp config_snapshot_map(%ServiceTask.Config{} = config, rendered_url, catalog_version) do
+  defp config_snapshot_map(
+         %ServiceTask.Config{} = config,
+         rendered_url,
+         rendered_body,
+         catalog_version
+       ) do
     base = %{
       "route_kind" => to_string(config.route_kind),
       "url_template" => config.url_template,
@@ -1118,7 +1137,8 @@ defmodule Letflow.Engine do
       "headers" => config.headers,
       "timeout_ms" => config.timeout_ms,
       "retry_limit" => config.retry_limit,
-      "rendered_url" => rendered_url
+      "rendered_url" => rendered_url,
+      "rendered_body" => rendered_body
     }
 
     case catalog_version do
@@ -1137,22 +1157,63 @@ defmodule Letflow.Engine do
 
   # REQ-215 design doc §2.3 -- the minimal inline {{variables.KEY}} template
   # renderer. Scoped to exactly the {{variables.KEY}} syntax the R-Co design
-  # doc names (src/design/ext-01-service-task-node.md:20, {{variables.order_id}}), and
-  # to url_template only (body_template rendering is out of this
-  # requirement's own scope, §7 Open Question 2). No existing rendering
-  # mechanism was found anywhere in this codebase to reuse (§0.1) -- this
-  # function is deliberately new, deliberately minimal, and is NOT the
-  # intended long-term shape for template rendering in this codebase: a
-  # future requirement needing richer syntax (nested paths, escaping,
-  # body_template rendering) should replace this function with a real one.
-  @spec render_service_task_url(template :: String.t() | nil, variables :: map()) ::
+  # doc names (src/design/ext-01-service-task-node.md:20, {{variables.order_id}}).
+  # Used for url_template only -- a URL has no JSON-string-literal quoting to
+  # protect, so substitution stays plain (this IS the pre-ISS-0926 behavior;
+  # it is a separate, lower-severity risk class and intentionally untouched
+  # by the SECURITY-REVIEWER fix below). No existing rendering mechanism was
+  # found anywhere in this codebase to reuse (§0.1) -- this function is
+  # deliberately new, deliberately minimal, and is NOT the intended long-term
+  # shape for template rendering in this codebase: a future requirement
+  # needing richer syntax (nested paths, escaping, conditionals) should
+  # replace this function with a real one.
+  @spec render_service_task_template(template :: String.t() | nil, variables :: map()) ::
           String.t() | nil
-  defp render_service_task_url(nil, _variables), do: nil
+  defp render_service_task_template(nil, _variables), do: nil
 
-  defp render_service_task_url(template, variables) when is_binary(template) do
+  defp render_service_task_template(template, variables) when is_binary(template) do
     Regex.replace(~r/\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}/, template, fn _match, key ->
       variables |> Map.get(key) |> render_service_task_value()
     end)
+  end
+
+  # SECURITY-REVIEWER fail on PR #2113 (ISS-0926 follow-up) -- body_template
+  # splices its substituted values into a JSON-string-literal position inside
+  # the fixture's raw JSON text (e.g. `"review_id":"{{variables.review_id}}"`).
+  # Unlike url_template above, an unescaped substitution here lets a `"` in
+  # the variable's value close the surrounding JSON string early and inject
+  # sibling keys, or forge a duplicate key that shadows a legitimate field
+  # (proof: a `review_id` of `x","reviewer_override":"approved_by_attacker",
+  # "notes":"n` renders a `"reviewer_override"` key that was never in the
+  # template; a value like `x","reason":"all_clear` produces a duplicate
+  # `"reason"` key whose resolution is parser-dependent). This sibling
+  # function is identical to render_service_task_template/2 except every
+  # substituted value is JSON-string-escaped (json_string_escape/1) before
+  # splicing, so a `"` or control character in the value can never terminate
+  # the enclosing JSON string. variables.body_template stays a plain string
+  # (ServiceTask.parse_config_from_node_attributes/1 reads it as-is off node
+  # attributes, matching §0.1's existing "no new syntax" scope) -- escaping
+  # individual substituted values, not switching to map-then-Jason.encode!/1,
+  # is the natural fix for that representation.
+  @spec render_service_task_body_template(template :: String.t() | nil, variables :: map()) ::
+          String.t() | nil
+  defp render_service_task_body_template(nil, _variables), do: nil
+
+  defp render_service_task_body_template(template, variables) when is_binary(template) do
+    Regex.replace(~r/\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}/, template, fn _match, key ->
+      variables |> Map.get(key) |> render_service_task_value() |> json_string_escape()
+    end)
+  end
+
+  # JSON-string-content escaping (quotes, backslashes, control characters)
+  # for a value about to be spliced between a JSON template's own existing
+  # quotes -- equivalent to Jason.encode!/1'ing the raw string and stripping
+  # the outer quote pair it adds, so the result is safe to place INSIDE an
+  # already-quoted JSON string literal (not a standalone JSON string itself).
+  @spec json_string_escape(String.t()) :: String.t()
+  defp json_string_escape(value) when is_binary(value) do
+    encoded = Jason.encode!(value)
+    String.slice(encoded, 1, String.length(encoded) - 2)
   end
 
   defp render_service_task_value(nil), do: ""

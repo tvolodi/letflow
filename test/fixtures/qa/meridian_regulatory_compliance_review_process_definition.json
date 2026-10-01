@@ -1,7 +1,7 @@
 {
   "name": "Regulatory Compliance Review",
-  "version": "1.2",
-  "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates within 21 days. If risk-evaluation is still open when its P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice and closes. Critical findings spawn a remediation sub-process. Exercises: HUMAN_TASK escalation timer, conditional sub-process, DLQ path. Edge e3 carries the constant condition 'true' on purpose: it always wins on normal task completion but is skipped by the escalation-timer path, which follows the single non-conditioned edge timeout-risk-evaluation.",
+  "version": "1.3",
+  "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates within 21 days. If risk-evaluation is still open when its P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice and closes. Critical findings spawn a remediation sub-process. Exercises: HUMAN_TASK escalation timer, conditional sub-process, DLQ path. Edge e3 carries the constant condition 'true' on purpose: it always wins on normal task completion but is skipped by the escalation-timer path, which follows the single non-conditioned edge timeout-risk-evaluation. The 21-day SLA-breach path and the remediation-unresolved path file distinct BaFin regulatory-notice reasons (sla_breach_30_days on regulatory-auto-escalation via timeout-risk-evaluation; remediation_unresolved on the new node remediation-unresolved-escalation via e10) -- the two inbound meanings of the former shared node are now split into two nodes because edges carry no variable-assignment mechanism.",
   "graph": {
     "nodes": [
       {
@@ -39,7 +39,18 @@
         "attributes": {
           "endpoint": "https://httpbin.org/anything/compliance/regulatory-notice",
           "method": "POST",
-          "timeout_ms": 300000
+          "timeout_ms": 300000,
+          "body_template": "{\"reason\":\"sla_breach_30_days\",\"review_id\":\"{{variables.review_id}}\"}"
+        }
+      },
+      {
+        "id": "remediation-unresolved-escalation",
+        "node_type": "SERVICE_TASK",
+        "attributes": {
+          "endpoint": "https://httpbin.org/anything/compliance/regulatory-notice",
+          "method": "POST",
+          "timeout_ms": 300000,
+          "body_template": "{\"reason\":\"remediation_unresolved\",\"review_id\":\"{{variables.review_id}}\"}"
         }
       },
       {
@@ -116,7 +127,7 @@
       { "id": "e7",                        "source": "severity-routing",       "target": "findings-sign-off",      "condition": "variables.highest_severity == 'none' || variables.highest_severity == 'low' || variables.highest_severity == 'medium' || variables.highest_severity == 'high'" },
       { "id": "e8",                        "source": "remediation-subprocess", "target": "post-remediation-check" },
       { "id": "e9",                        "source": "post-remediation-check", "target": "findings-sign-off",      "condition": "variables.remediation_status == 'resolved'" },
-      { "id": "e10",                       "source": "post-remediation-check", "target": "regulatory-auto-escalation", "condition": "variables.remediation_status == 'unresolved'" },
+      { "id": "e10",                       "source": "post-remediation-check", "target": "remediation-unresolved-escalation", "condition": "variables.remediation_status == 'unresolved'" },
       { "id": "e11",                       "source": "findings-sign-off",      "target": "archive-review",         "condition": "variables.cro_decision == 'sign_off'" },
       { "id": "e12",                       "source": "findings-sign-off",      "target": "reopen-review",          "condition": "variables.cro_decision == 'reject_and_reopen'" },
       { "id": "timeout-findings-sign-off", "source": "findings-sign-off",      "target": "cro-sign-off-timeout" },
@@ -125,7 +136,8 @@
       { "id": "e15",                       "source": "ceo-override",           "target": "reopen-review",          "condition": "variables.ceo_decision == 'reject_and_reopen'" },
       { "id": "fallback-ceo-override",     "source": "ceo-override",           "target": "archive-review" },
       { "id": "e16",                       "source": "archive-review",         "target": "end-closed" },
-      { "id": "e17",                       "source": "reopen-review",          "target": "end-reopened" }
+      { "id": "e17",                       "source": "reopen-review",          "target": "end-reopened" },
+      { "id": "e18",                       "source": "remediation-unresolved-escalation", "target": "end-closed" }
     ]
   }
 }

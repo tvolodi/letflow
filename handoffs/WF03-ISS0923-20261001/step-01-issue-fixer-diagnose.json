@@ -1,0 +1,30 @@
+{
+  "handoff_id": "a3c1f0d2-9b7e-4c55-8a10-923000000001",
+  "run_id": "WF03-ISS0923-20261001",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0923-20261001/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-10-01T16:25:00Z",
+  "started_at": "2026-10-01T16:25:00Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {"docs/issues/ISS-0923.yaml": "ServiceCatalog.delete/1 only checks ACTIVE process definitions (referencing_active_definitions). After ISS-0917 (PR #2100, on main) a pinned catalog SERVICE_TASK resolves its endpoint from the live service_catalog row or service_catalog_versions; deleting the entry makes pinned in-flight instances go ERROR with service_task_catalog_unresolved/:version_not_found. Decide: block delete while non-terminal instances pin the service, or document. MINOR. Owner ELIXIR-DEV via CODE-DESIGNER. SECURITY-REVIEWER applies (tenant data path)."},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0923.yaml","lib/letflow/service_catalog.ex","lib/letflow/engine/service_task_dispatcher.ex","docs/issues/ISS-0917.yaml","handoffs/WF03-ISS0917-20261001/","docs/agents/instructions/security-invariants.md","docs/anti-patterns.md"],
+    "owned_modules": ["lib/letflow/service_catalog.ex","test/"],
+    "branch_name": "feature/WF03-ISS0923-20261001",
+    "queue_task_id": 923,
+    "github_issue": 2097
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup in docs/issues/*.yaml) + Step 1 (diagnose), combined. Work in the main checkout C:/Users/tvolo/dev/ai-dala/letflow-3 on the already-checked-out branch feature/WF03-ISS0923-20261001; do not switch branches. Shared machine: scoped mix tests only, never the full suite. Reproduce against real code (MIX_ENV=test, Postgres up): delete a catalog entry that a non-terminal instance is pinned to and show the instance's service task go ERROR. Determine specifically HOW a pin is queryable: how is the instance's service_catalog version pin recorded (instance projection / pins / process_definition version snapshot), which table(s) and which schema (per-tenant schema vs public; ServiceCatalog.delete/1 is cross-tenant -- see how referencing_active_definitions/2 iterates tenant schemas), what the non-terminal instance statuses are, and whether a cheap tenant-safe query exists. Also check the version-row handling on delete (does delete cascade service_catalog_versions?). Report file:line evidence, the recommended option (block with a typed error like {:error, {:referenced_by_active_instances, ids}} vs document), and its HTTP mapping in the admin router(s) that call delete/1. Do NOT implement the fix and do not edit lib/ or test/. Write your diagnosis into this handoff's result.summary (JSON file) and set status COMPLETED. Do not commit; ORCH commits."
+  },
+  "result": null
+}

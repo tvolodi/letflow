@@ -108,10 +108,10 @@ import {
   navigateSpa,
   authHeaders,
   extractIdFromUrl,
-  jwtSubject,
+  resolveLocalUserId,
   shot,
 } from '../pipeline'
-import { assertServiceReadiness } from '../helpers'
+import { assertServiceReadiness, resolveCredential } from '../helpers'
 import { typeIntoTestIdInput } from '../type-into-input'
 
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
@@ -181,7 +181,9 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
     test.setTimeout(300_000)
     await assertServiceReadiness(request, API_BASE_URL)
 
-    const adminToken = await getKeycloakToken(request)
+    const adminToken = await getKeycloakToken(
+      request, 'admin-user', resolveCredential('UAT_QA_ADMIN_PASSWORD', 'admin-pass'),
+    )
     await loginWithToken(page, adminToken)
 
     const fixtureId = randomUUID().slice(0, 8)
@@ -191,7 +193,7 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
 
     const pl = createPipeline<PinSurvivesPipelineState>('platform-instance-pin-survives-catalog-change', { page, request })
     pl.state.adminToken = adminToken
-    pl.state.adminSub = jwtSubject(adminToken)
+    pl.state.adminSub = await resolveLocalUserId(request, API_BASE_URL, adminToken, 'admin-user')
     pl.state.serviceId = serviceId
     pl.state.definitionName = definitionName
     pl.state.rebindReason = rebindReason
@@ -241,7 +243,7 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
                 label: 'Hold before shared connection',
                 // ISS-0917 6.4 item 6: `role` is what the engine reads for the assignee ref;
                 // UPPERCASE 'USER' matches Tasks.apply_completion_authz/3's USER clause, which
-                // compares against the caller's actor id (= token `sub`).
+                // compares against the caller's actor id (= the LOCAL users.id, ISS-0936 -- NOT the token `sub`).
                 attributes: { role: s.adminSub, assignee_type: 'USER', assignee_ref: s.adminSub },
               },
               {
@@ -377,7 +379,7 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
       const taskId = tasksBody.items?.[0]?.id ?? ''
       pl.gate(!!taskId, 'a pending HUMAN_TASK must exist for the pin-dispatch case')
 
-      // Same admin token the HUMAN_TASK was assigned to (assignee_ref = its `sub`).
+      // Same admin token the HUMAN_TASK was assigned to (assignee_ref = its local users.id).
       const completeResp = await request.post(`${API_BASE_URL}/api/v1/tasks/${taskId}/complete`, {
         headers: { ...authHeaders(s.adminToken), 'Content-Type': 'application/json' },
         data: { output_variables: {} },

@@ -46,7 +46,7 @@ doing them. See "Humanless operation" below for why this is safe on this project
 
 ORCH fulfils Zero Manual Work by running the pipeline **through subagents**, not by
 editing files or running commands directly. Implementing a fix directly "to save time"
-is a pipeline violation. The one exception is a change passing all six checks of the
+is a pipeline violation. The one exception is a change passing all seven checks of the
 sizing rule in `docs/agents/ORCHESTRATOR.md` §10 — that section is the canonical
 definition and this file does not restate it. It is a checklist, never a judgment call
 about what feels trivial.

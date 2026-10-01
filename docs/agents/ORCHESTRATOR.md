@@ -507,7 +507,7 @@ turn; an unvalidated bug reaching `main` with no human backstop is the exact fai
 mode this whole system exists to prevent. When a check is ambiguous, it is a "no."
 
 > **This exception governs review, not git mechanics (clarified 2026-09-05,
-> ISS-0467).** Qualifying under all six checks above licenses skipping the
+> ISS-0467).** Qualifying under all seven checks above licenses skipping the
 > producer/validator agent chain and the handoff-file machinery for this change
 > — it does not license skipping `GIT_SETUP.md`/`GIT_MERGE.md`'s branch-and-PR
 > procedure. A direct-action change still gets its own branch, still opens a PR,

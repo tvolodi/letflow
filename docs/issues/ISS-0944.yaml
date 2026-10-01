@@ -1,0 +1,23 @@
+id: ISS-0944
+title: "D4: POST /tasks/:id/complete returns 500 instead of 4xx when the instance is in ERROR status"
+discovered_by: UAT-RUNNER
+discovered_in_run: ISS-0912 re-run, filed by ORCH
+discovered_at: "2026-10-01T12:10:34Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  Found by UAT-RUNNER in ISS-0912's re-run; see
+  test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml. When the owning
+  process instance is in ERROR status, POST /tasks/:id/complete returns HTTP
+  500 instead of a proper 4xx (conflict). Needed: map the
+  instance-in-error-status case to a real 4xx client error response (likely
+  409, matching this codebase's existing instance-execution-error mapping
+  convention) instead of letting it fall through to an unhandled 500.
+source_reports:
+  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml
+affected_files:
+  - lib/letflow/routers/tasks.ex
+  - lib/letflow/engine.ex
+queue_ref: Q-916  # queue allocated issue_ref ISS-0916, which collides with an existing local file (a different, unrelated ServicesPage click-handler bug); local filename kept as ISS-0944 (next free on origin/main) and GH-2067 retitled to match
+github_ref: GH-2067
+status: open

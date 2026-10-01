@@ -1,0 +1,49 @@
+{
+  "handoff_id": "8138ef67-3b5b-4504-bad9-96a0d30afbad",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q926-20261001/step-02b-code-design-validator.json",
+  "created_at": "2026-10-01T18:26:05Z",
+  "started_at": "2026-10-01T18:26:05Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "handoffs/WF03-Q926-20261001/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0926.yaml",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 2b: hard gate on CODE-DESIGNER's design for ISS-0926. Branch feature/WF03-Q926-20261001 (checked out; do not switch). Claim: status IN_PROGRESS only. Validate lib/letflow/design/iss0926-service-task-body-template-rendering.md against the ISS-0926 acceptance (body_template rendered with instance variables and sent as request body; Meridian regulatory-auto-escalation posts reason by inbound path; regression test; MINOR; SECURITY applies) and the step-01 diagnosis. INDEPENDENTLY verify against the actual code (do not trust the design's citations): engine.ex activation path ~960-1100 and every site where the catalog-unresolved error outcome is handled (the design says to wire a new {:body_render_error,..} at each - confirm the list is complete), service_task.ex Config/parse, dispatcher ~719/741 and the legacy-row fallback logic, that rendered_body can actually be frozen in config_snapshot without schema change, the Jason escape option claimed (escape: :javascript_safe exists in the pinned Jason version in deps/), that a placeholder-outside-string detection rule is implementable unambiguously (check the rule handles escaped quotes in the template and nested JSON), that review_id is truly set on BOTH inbound paths (read the fixture and how instances are started), that the fixture split passes graph validation (node/edge/ condition rules in lib/letflow/definitions/graph.ex), that every file/test affected by the fixture change is listed (grep tests for regulatory-auto-escalation, risk-evaluation, e10, 1.2, node counts, qa_fixture_service_task_endpoints_test, persona/seed drift tests, process_policy_binding.yaml), and decision-record consistency (docs/migration/decisions). Check no implementation code beyond signatures/specs, no ambiguity that a weak model would resolve differently, test plan covers each AC with a fail-first regression. Do not edit the design: return FAIL with numbered concrete issues if anything is wrong or ambiguous (BLOCKER/MAJOR/MINOR); PASS otherwise. Modify only this handoff (set result.status PASS/FAIL, result.summary, completed_at via a real clock read), commit that file only and push origin HEAD. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "Every acceptance criterion mapped to design section",
+      "Claims independently verified against code (list what was checked)",
+      "Catalog/error-site list verified complete",
+      "Escaping rule verified implementable and unambiguous",
+      "Fixture-affected file list verified complete",
+      "No implementation code in design",
+      "No file modified except this handoff"
+    ]
+  }
+}

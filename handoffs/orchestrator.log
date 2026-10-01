@@ -2683,3 +2683,4 @@
 2026-10-01T18:54:13Z | DISPATCH | WF03-Q926-20261001 | step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
 2026-10-01T19:48:17Z | DISPATCH | WF03-Q926-20261001 | step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
 2026-10-01T19:56:39Z | DISPATCH | WF03-Q926-20261001 | step-04c-test-runner | ORCH -> TEST-RUNNER | PENDING
+2026-10-01T20:02:19Z | INFO | WF03-Q926-20261001 | step-04c-test-runner | ORCH | step-04c FAILED on lint only (step-02 handoff top-level status PASS, illegal); ORCH corrected it to COMPLETED mechanically, mix letflow.lint_handoffs rerun: OK 0 new violations; compile/format/188+96+133 tests were green. Not counted as rework (no code/test rejection); RELEASE-VALIDATOR re-derives independently.

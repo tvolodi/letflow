@@ -93,13 +93,42 @@ already shipped; Letflow's is not.
 
 v1 is **online-first with a read-through definition cache.**
 
-Explicitly **out** of v1, and recorded as deferred rather than forgotten:
+### Scope table (added 2026-10-01, `REQ-430`)
 
-- Offline **writes** — no optimistic write queue. This is the important one:
-  offline writes require a conflict model the platform does not have and does
-  not currently need.
-- Push-based cache invalidation.
-- An on-device form builder.
+| Requirement | Scope | Delivered by |
+|---|---|---|
+| `MOB-1` — generic definition-interpreter shell | done | `REQ-419` (scaffold), `REQ-294` (Dart `Letflow.Engine.Expr` evaluator) |
+| `MOB-2` — tenant bootstrap | done | `REQ-418` (OIDC `client_id` disclosure), `REQ-421` (bootstrap sequence), `REQ-282` (per-tenant branding) |
+| `MOB-3` — offline definition cache, delta sync, version pinning | done | `REQ-423` (cache + delta sync), `REQ-424` (pinned form version resolution) |
+| `MOB-4` — generic renderers, six mandatory states | done | `REQ-426` (state framework + list renderer), `REQ-427` (form renderer), `REQ-428` (task + process-instance renderer) |
+| `MOB-5` — on-device security | done | `REQ-422` |
+| `MOB-6` — API client | done | `REQ-425` |
+| `MOB-7` — i18n | done | `REQ-429` |
+| `MOB-8` — v1 scope boundary (this section's own gate) | done | `REQ-430` |
+
+`REQ-385` confirmed no code change was needed for a related backend question
+under `REQ-126`'s frozen-at-creation architecture — noted here as context,
+not as a delivering REQ for any MOB-N row. `REQ-417` (`MOBILE-DEV` role
+reactivation) and `REQ-420` (CI mobile gate) are infrastructure/process
+requirements, not MOB-N deliverables, and are intentionally absent from the
+table above.
+
+### Explicitly out of v1 (deferred, not forgotten)
+
+- **Offline writes** — no optimistic write queue. This is the important one:
+  offline writes require a conflict model the platform does not have and
+  does not currently need. **Guarded statically by `REQ-430`'s**
+  `apps/mobile/test/guards/v1_scope_boundary_guard_test.dart`, which fails
+  the build if a `.dart` file under `lib/` persists a store write shaped
+  like an outgoing HTTP request (method/url/body).
+- **Push-based cache invalidation.** **Guarded statically by the same
+  `REQ-430` guard**, which fails the build on a push/messaging dependency
+  (`firebase_messaging` or equivalent) in `pubspec.yaml`/`pubspec.lock`.
+- **An on-device form builder.** No dependency or code-shape signature
+  exists to statically guard against a feature with no implementation
+  surface to scan; this exclusion is enforced by requirement scope
+  (MOB-1..MOB-8 define the entire build surface; a form builder is not
+  among them) rather than a static check.
 
 Keeping these out is what makes the tier *additive*. Each of them, added, would
 pull a new subsystem into the backend rather than a new screen into the app.

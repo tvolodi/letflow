@@ -1,0 +1,60 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-00000000000b",
+  "run_id": "WF02-REQ430-20261001",
+  "workflow_id": "WF-02",
+  "step": "05-release-validator",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ430-20261001/step-05-release-validator.json",
+  "created_at": "2026-10-01T17:24:22Z",
+  "started_at": "2026-10-01T17:24:22Z",
+  "completed_at": "2026-10-01T17:24:22Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-430"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ430-20261001/step-04-test-runner.json",
+      "handoffs/WF02-REQ430-20261001/step-04-test-runner-recheck1.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/mobile/architecture.md",
+      "docs/migration/stage-9-mobile.md",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v25.yaml",
+      "apps/mobile/test/guards/v1_scope_boundary_guard_test.dart",
+      "lib/letflow/design/req430-mobile-scope-boundary.md",
+      "test/reports/report-20261001-WF02-REQ430-20261001.yaml"
+    ]
+  },
+  "task": {
+    "description": "Independently re-verify REQ-430's five acceptance criteria and the backend status-invariant test the prior TEST-RUNNER recheck fixed, re-running every command myself rather than trusting any prior agent's report.",
+    "acceptance_criteria": [
+      "AC1: scope guard self-test fixtures fail as designed and pass on real tree, quoted",
+      "AC2: git grep for outbox/pending_writes/write_queue/offline_queue under apps/mobile returns no hits, quoted",
+      "AC3: docs/mobile/architecture.md section 4 names delivering REQ ids for MOB-1..MOB-8 and lists the three deferrals",
+      "AC4: docs/migration/stage-9-mobile.md lists the three phase gates with demonstrating test files and every deferred item with its reason; cited test files spot-checked to exist",
+      "AC5: flutter analyze && flutter test && flutter build apk --debug all pass, real output quoted",
+      "Backend: mix test test/docs/requirement_status_invariants_test.exs passes, and volume-25 entries arithmetic is correct on disk right now"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All 5 REQ-430 acceptance criteria and the backend status-invariant check independently re-verified with real command output, not by reading any prior agent's report.\n\nAC1 -- `cd apps/mobile && flutter test test/guards/v1_scope_boundary_guard_test.dart`: 5 tests, all passed -- 'real pubspec.yaml/pubspec.lock and lib/ tree have zero v1-scope-boundary violations', 'self-test: checker fires on a pubspec containing firebase_messaging', 'self-test: checker fires on a pubspec containing workmanager', 'self-test: checker fires on a Dart file writing a request method/url/body map to a store', 'self-test: a definition-cache-shaped .put() with unrelated keys fires zero violations'.\n\nAC2 -- `git grep -n -i -E 'outbox|pending_writes|write_queue|offline_queue' -- apps/mobile` exited 1 (no matches). Confirmed no hits.\n\nAC3 -- read docs/mobile/architecture.md section 4 in full (lines 92-150). Scope table (line 96) names a delivering REQ id for each of MOB-1..MOB-8 (REQ-430 itself for MOB-8). 'Explicitly out of v1' subsection (line 116) lists offline writes, push-based cache invalidation, and the on-device form builder as deferred, each with its reason and (for the first two) the guard file that enforces it statically.\n\nAC4 -- read docs/migration/stage-9-mobile.md lines 83-123. Phase-gate table (line 96) lists M-1, M-2, M-3 each with a comma-separated list of demonstrating test files; deferred table lists iOS build/runtime checks (no Xcode on Windows host) and interactive OIDC login (requires live human-browser round trip, deferred to UAT-RUNNER) with reasons. Spot-checked 5 cited files for existence on disk: apps/mobile/test/auth/authenticate_with_tenant_test.dart, apps/mobile/test/definitions/sembast_cache_repository_test.dart, apps/mobile/test/renderers/renderer_state_view_ac2_backpressure_countdown_test.dart, apps/mobile/test/guards/token_storage_boundary_guard_test.dart, apps/mobile/test/renderers/task/task_claim_conflict_test.dart -- all EXIST.\n\nAC5 -- ran all three commands myself in apps/mobile, full real output: `flutter analyze` -> 'No issues found! (ran in 44.6s)'. `flutter test` -> 301 tests run, 'All tests passed!', 0 failures. `flutter build apk --debug` -> 'Running Gradle task assembleDebug... 7,3s' then 'Built build\\app\\outputs\\flutter-apk\\app-debug.apk'. All three green.\n\nBackend recheck -- `mix test test/docs/requirement_status_invariants_test.exs` -> 'Result: 25 passed' (seed 819793), 0 failures, confirming the prior TEST-RUNNER recheck's fix held. Independently counted docs/status/requirement_status.v25.yaml's actual on-disk top-level `- req:` list entries: 14 (confirmed against the file's own 5-field-per-entry schema comment at its head, lines 22-28, to rule out miscounting nested `req:` mentions inside notes -- raw grep -c 'req:' returned 18 due to in-note references, but the schema-anchored `^- req:` / `^  - req:` count is 14). docs/status/requirement_status.index.yaml line 5829 declares volume 25 `entries: 14`. Arithmetic is correct on disk right now.\n\nNo discrepancies found between any artefact's claims and the real current state of code/tests/docs.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ430-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "not_pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER (Step 6)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

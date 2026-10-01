@@ -1,0 +1,62 @@
+{
+  "handoff_id": "b4a1c0d0-0001-4000-8000-000000000002",
+  "run_id": "WF02-REQ430-20261001",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ430-20261001/step-01-code-designer.json",
+  "created_at": "2026-10-01T14:21:36Z",
+  "started_at": "2026-10-01T14:21:36Z",
+  "completed_at": "2026-10-01T14:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-430"],
+    "requirement_text": {
+      "REQ-430": "MOB-8 in docs/mobile/requirements.md: v1 is online-first with a read-through definition cache; offline writes, push-based cache invalidation and an on-device form builder are out of v1 and recorded as deferred (architecture.md §4). Its own text calls it \"a gate\": an offline cache grows a write queue one reasonable commit at a time. BUILDS: 1. A static guard in apps/mobile/test/guards/ that fails if pubspec.yaml gains a push/messaging dependency (firebase_messaging or equivalent), a background-task/workmanager package, or if any file under apps/mobile/lib persists an outgoing request (a store write whose payload is a request body/method/url), with self-tests. 2. Reconcile docs/mobile/architecture.md §4's scope table with the shipped feature set, listing each MOB requirement's delivering REQ id, and marking the three exclusions as deferred. 3. Record in docs/migration/stage-9-mobile.md which build-order phase gates (build-order.md \"Phasing\": M-1 two tenants + secure tokens; M-2 airplane-mode + pinned versions never substitute; M-3 all six states incl. forced 429) are demonstrated and by which tests, and which parts are DEFERRED (iOS build and runtime checks -- Windows host; interactive login -- UAT-RUNNER) with reasons. Stage REVIEWER sign-off and status flips stay with REVIEWER and DOC-UPDATER."
+    },
+    "related_handoff_ids": ["handoffs/WF02-REQ430-20261001/step-00-git-setup.json"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ430-20261001/step-00-git-setup.json",
+      "docs/mobile/architecture.md",
+      "docs/mobile/requirements.md",
+      "docs/mobile/build-order.md",
+      "docs/migration/stage-9-mobile.md",
+      "apps/mobile/test/guards/forbidden_dependencies_guard_test.dart",
+      "apps/mobile/test/guards/token_storage_boundary_guard_test.dart",
+      "apps/mobile/pubspec.yaml",
+      "apps/mobile/lib/definitions/sembast_cache_repository.dart",
+      "apps/mobile/lib/definitions/sembast_pinned_form_cache_repository.dart"
+    ],
+    "owned_modules": ["apps/mobile/test/guards/", "docs/mobile/architecture.md", "docs/migration/stage-9-mobile.md"]
+  },
+  "task": {
+    "description": "Write lib/letflow/design/req430-mobile-scope-boundary.md per REQ-430's full text: (1) design a new static guard apps/mobile/test/guards/v1_scope_boundary_guard_test.dart following the established pattern (forbidden_dependencies_guard_test.dart for pubspec scanning, token_storage_boundary_guard_test.dart for lib/-tree scanning) with a precise forbidden push/background-task package list and reasoning, and a precise regex/heuristic contract for detecting a persisted outgoing-request shape (method/url/body) in a store write, with documented false-negative/false-positive boundaries; (2) specify the exact replacement markdown for docs/mobile/architecture.md §4's scope table naming each MOB-1..MOB-8's delivering REQ id(s) and the three deferred exclusions; (3) specify the exact new section markdown for docs/migration/stage-9-mobile.md citing real existing test files (grepped from the actual apps/mobile/test/ tree) demonstrating each of build-order.md's M-1/M-2/M-3 phase gates, and the two deferred items (iOS build/runtime -- Windows host; interactive OIDC login -- UAT-RUNNER) with reasons; (4) list open questions rather than silently resolving ambiguity. No implementation code -- signatures/@spec-shapes and doc-edit content only.",
+    "acceptance_criteria": [
+      "the scope guard fails each of its self-test fixtures (a pubspec with firebase_messaging; a pubspec with workmanager; a Dart file writing a request method/url/body map to a store) and passes on the real tree, quoted",
+      "git grep -n -i -E 'outbox|pending_writes|write_queue|offline_queue' -- apps/mobile returns no hits, quoted",
+      "docs/mobile/architecture.md §4 names, for each of MOB-1..MOB-8, the REQ id(s) that delivered it, and lists offline writes, push invalidation and the on-device form builder as deferred",
+      "docs/migration/stage-9-mobile.md lists each of the three phase gates with the test file(s) that demonstrate it and every deferred item with its reason",
+      "cd apps/mobile && flutter analyze && flutter test && flutter build apk --debug all pass, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req430-mobile-scope-boundary.md. §1 designs apps/mobile/test/guards/v1_scope_boundary_guard_test.dart: Checker A (checkV1ScopeDependencies) scans pubspec.yaml/pubspec.lock dependency names via the existing extraction helpers against an exact+substring forbidden list (firebase_messaging, onesignal_flutter, flutter_fcm, workmanager, android_alarm_manager_plus, background_fetch, flutter_background_service, plus substrings), with explicit reasoning for exclusions (firebase_core, flutter_local_notifications, connectivity_plus are NOT forbidden). Checker B (checkNoPersistedOutgoingRequests) is a regex-based heuristic: find `.record(...).put(` call-sites, scan a bounded window (smallest enclosing block or fixed char window -- left as OQ-2) for 2-or-more of the key tokens method/url/body/request as quoted-map-keys or named-args, flag OutgoingRequestPersistenceViolation; documented false-negative boundaries (renamed fields, cross-statement assembly) and false-positive boundary (a legitimately-named definition field), verified against both real sembast repositories' actual stored shapes (neither uses these key names). Four self-test fixtures specified per AC1 (firebase_messaging pubspec, workmanager pubspec, method/url/body map literal, real tree). §2 gives the exact replacement markdown for architecture.md §4 with a scope table mapping all 8 MOB-N rows to their delivering REQ ids (cross-checked against docs/requirements.yaml's REQ-417..430 entries) plus the three deferred exclusions, each now tied to which guard checker enforces it. §3 gives the exact new stage-9-mobile.md section citing real test files from the actual `find apps/mobile/test -type f` listing run this session (auth/bootstrap tests for M-1, definitions/pinned-form/task-pinned-version tests for M-2, renderer-state/backpressure/claim-conflict/the new guard itself for M-3) and both deferred items with reasons (Windows host has no iOS toolchain; interactive OIDC login needs UAT-RUNNER). §4 lists 4 open questions (OQ-1 helper code-sharing mechanism, OQ-2 window-computation choice, OQ-3 forbidden-list non-exhaustiveness, OQ-4 no collision with current deps -- informational). Verified during design: `git grep -n -i -E 'outbox|pending_writes|write_queue|offline_queue' -- apps/mobile` returns zero hits today (exit 1), consistent with AC2 and with no write-queue code existing yet. No implementation code (.dart bodies) written anywhere in the design doc -- only fixture source snippets shown as illustrative string content for self-test fixtures, and the architecture.md/stage-9-mobile.md markdown is doc-edit content, not application code, per this agent's own instructions.",
+    "artifacts_out": ["lib/letflow/design/req430-mobile-scope-boundary.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ430-20261001",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ430-20261001",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

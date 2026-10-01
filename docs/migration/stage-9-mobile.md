@@ -92,3 +92,31 @@ RELEASE-VALIDATOR independently re-verified all 8 acceptance criteria,
 including the live-Keycloak integration test against a real container. This
 is the first real mobile-tier code to land — the stage is no longer
 docs-only.
+
+## Phase-gate evidence and deferrals (`REQ-430`, 2026-10-01)
+
+Per [`../mobile/build-order.md`](../mobile/build-order.md)'s "Phasing"
+table, each of the three post-M-0 phase gates is demonstrated by real
+`flutter test` coverage, cited here by file:
+
+| Phase | Gate | Demonstrated by |
+|---|---|---|
+| **M-1** | A build authenticates two distinct tenants and stores tokens securely | `apps/mobile/test/auth/authenticate_with_tenant_test.dart`, `apps/mobile/test/auth/tenant_token_store_test.dart`, `apps/mobile/test/auth/audience_scoping_test.dart`, `apps/mobile/test/bootstrap/bootstrap_sequence_test.dart`, `apps/mobile/test/bootstrap/tenant_switch_test.dart`, `apps/mobile/test/guards/token_storage_boundary_guard_test.dart` |
+| **M-2** | Airplane-mode launch renders cached definitions; pinned versions never substitute | `apps/mobile/test/definitions/definition_sync_service_test.dart`, `apps/mobile/test/definitions/sembast_cache_repository_test.dart`, `apps/mobile/test/definitions/active_definition_cache_holder_test.dart`, `apps/mobile/test/definitions/pinned_form_resolver_test.dart`, `apps/mobile/test/definitions/sembast_pinned_form_cache_repository_test.dart`, `apps/mobile/test/renderers/task/task_pinned_version_test.dart` |
+| **M-3** | All six renderer states demonstrable, including a forced `429` | `apps/mobile/test/renderers/renderer_state_view_ac1_test.dart` (loading/fetch-failure/permission-denied/stale-version/validation-error), `apps/mobile/test/renderers/renderer_state_view_ac2_backpressure_countdown_test.dart` (forced 429), `apps/mobile/test/renderers/form/form_expression_unevaluable_test.dart`, `apps/mobile/test/renderers/task/task_claim_conflict_test.dart`, `apps/mobile/test/guards/v1_scope_boundary_guard_test.dart` (the MOB-8 gate itself) |
+
+### Deferred, with reasons
+
+| Item | Reason deferred |
+|---|---|
+| iOS build and iOS-runtime checks (`flutter build ios`, device/simulator verification) | This host is Windows; no iOS toolchain (Xcode) is available to build or run an iOS target. All iOS-specific configuration (`ios/Runner/Info.plist` ATS settings, etc.) is reviewed statically (`apps/mobile/test/guards/ios_ats_guard_test.dart`) but never built or run. |
+| Interactive OIDC login against a real Keycloak realm (an actual browser-based Authorization-Code+PKCE round trip, not the `fake_app_auth_adapter.dart`-substituted flow `flutter test` exercises) | Requires a live instance and a real human-equivalent browser interaction; out of reach for `flutter test`'s unit/widget harness. Exercised instead by `UAT-RUNNER` against a real running instance, matching the project's stated division between `TEST-RUNNER`'s `flutter test` coverage and `UAT-RUNNER`'s scenario-based live checks. |
+
+`flutter analyze`, `flutter test`, and `flutter build apk --debug` are all
+run and their real output recorded by `TEST-RUNNER`/`MOBILE-DEV` at
+implementation time (REQ-430 AC5); this section records *which* gates map
+to *which* test files, not the run output itself.
+
+Stage REVIEWER sign-off and the stage/requirement status flips remain with
+`REVIEWER` and `DOC-UPDATER`, per this stage file's existing convention —
+not duplicated here.

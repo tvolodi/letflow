@@ -2686,3 +2686,4 @@
 2026-10-01T20:02:19Z | INFO | WF03-Q926-20261001 | step-04c-test-runner | ORCH | step-04c FAILED on lint only (step-02 handoff top-level status PASS, illegal); ORCH corrected it to COMPLETED mechanically, mix letflow.lint_handoffs rerun: OK 0 new violations; compile/format/188+96+133 tests were green. Not counted as rework (no code/test rejection); RELEASE-VALIDATOR re-derives independently.
 2026-10-01T20:02:21Z | DISPATCH | WF03-Q926-20261001 | step-04d-release-validator | ORCH -> RELEASE-VALIDATOR | PENDING
 2026-10-01T20:06:54Z | INFO | WF03-Q926-20261001 | follow-ups | ORCH | filed ISS-0953 (queue label ISS-0934, Q-934, GH-2122) and ISS-0954 (queue label ISS-0935, Q-935, GH-2123); queue labels collide with existing local ISS-0934/0935 so local numbers differ
+2026-10-01T20:09:10Z | DISPATCH | WF03-Q926-20261001 | step-05a-doc-updater | ORCH -> DOC-UPDATER | PENDING

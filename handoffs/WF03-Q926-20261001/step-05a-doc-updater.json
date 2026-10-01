@@ -1,0 +1,43 @@
+{
+  "handoff_id": "53ecaed9-c02b-49df-8a0a-e715061a44c6",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "05a",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-Q926-20261001/step-05a-doc-updater.json",
+  "created_at": "2026-10-01T20:09:10Z",
+  "started_at": "2026-10-01T20:09:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "lib/letflow/design/service_task.md",
+      "lib/letflow/design/service_task_dispatcher.md",
+      "handoffs/WF03-Q926-20261001/step-04d-release-validator.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 5a: update documentation made stale by the ISS-0926 fix (branch feature/WF03-Q926-20261001; claim IN_PROGRESS only, flip COMPLETED on finishing). No requirement status flip applies (issue run, requirement_ids empty). Update ONLY what the shipped behaviour (design lib/letflow/design/iss0926-service-task-body-template-rendering.md, implementation in lib/letflow/engine/service_task.ex, engine.ex, service_task_dispatcher.ex) makes false: (1) lib/letflow/design/service_task.md ~line 421 ('body_template passed through as-is (rendering out of scope)') -> state activation-time rendering, frozen snapshot rendered_body, JSON-string escaping, error classes; (2) lib/letflow/design/service_task_dispatcher.md (~164, 225, 297) mention rendered_body freezing and the legacy-row fallback; (3) any docs/ page describing SERVICE_TASK body_template or the Meridian regulatory review fixture shape (grep docs/ for body_template, regulatory-auto-escalation, risk-evaluation-timeout) - update to fixture v1.3 (regulatory-auto-escalation timer path with reason sla_breach_30_days; regulatory-remediation-escalation on e10; known gaps ISS-0953 audit of outbound request and ISS-0954 sub-process pending-events); (4) the two comment/doc nits in lib/: engine.ex comment above config_snapshot_map ('the one derived key rendered_url' -> two derived keys) and the dispatcher @moduledoc/doc mentioning only rendered_url freezing, and ServiceTask moduledoc/Config.body_template doc mention of render_body_template/2 - these are comment/doc-only edits in lib/, no code change; run mix format --check-formatted and mix compile --warnings-as-errors on touched files afterwards. Do NOT edit canonical governance docs (docs/agents/**, CLAUDE.md, ORCHESTRATOR.md etc.). Do NOT touch docs/issues/ISS-0926.yaml (ISSUE-FIXER does) or the status history. Verify each change by reading the file after the edit. Commit only files you changed plus this handoff; push origin HEAD. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "Each stale doc listed updated and re-read",
+      "Comment-only lib edits compile and format clean (quoted)",
+      "No governance files touched",
+      "Committed and pushed"
+    ]
+  }
+}

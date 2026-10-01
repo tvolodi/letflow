@@ -1,0 +1,44 @@
+{
+  "handoff_id": "a3c1f0d2-9b7e-4c55-8a10-923000000009",
+  "run_id": "WF03-ISS0923-20261001",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0923-20261001/step-04-test-designer.json",
+  "created_at": "2026-10-01T16:44:09Z",
+  "started_at": "2026-10-01T16:44:09Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0923.yaml": "ServiceCatalog.delete/1 does not block deletion while non-terminal instances are pinned to the service (MINOR). Design chose BLOCK."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0923.yaml",
+      "lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md",
+      "handoffs/WF03-ISS0923-20261001/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/service_catalog.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/api/error.ex",
+      "test/"
+    ],
+    "branch_name": "feature/WF03-ISS0923-20261001",
+    "queue_task_id": 923,
+    "github_issue": 2097
+  },
+  "task": {
+    "description": "Work in C:/Users/tvolo/dev/ai-dala/letflow-3 on the already checked-out branch feature/WF03-ISS0923-20261001 (do not switch branches; do not touch main or other branches/PRs). Shared machine: scoped `mix test <files>` only, never the full suite; use MIX_TEST_PARTITION=<unique> for tests that commit catalog rows. Do not commit (ORCH commits); do not leave mutants in the tree. WF-03 Step 4: write the regression tests for ISS-0923 covering ALL of AC-1..AC-14 of the design (section 10 of lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md) plus the design's fail-first set and 7 mutants. Place tests in the existing test files where natural (test/letflow/service_catalog_test.exs, test/letflow/routers/admin_services_test.exs) or a new test/letflow/service_catalog_delete_pinned_instances_test.exs; follow fixtures in test/letflow/engine_catalog_service_task_test.exs; tests that commit catalog rows must run under a unique MIX_TEST_PARTITION with MIX_ENV=test (shared letflow_test DB has stale tenant_template_build_* registrations that raise 42P01 in delete/1 -- see step-01 result). AC-8 seam: insert minimal instance_projections + instance_definition_snapshots rows with Repo.insert! (NOT insert_all: started_at/updated_at are NOT NULL without DB default; snapshot needs a shared process_definitions row for its FK). FAIL-FIRST (mandatory, WF-03): prove the new tests FAIL against pre-fix code behaviourally (not merely missing-function): create a throwaway git worktree of origin main (git worktree add <scratchpad dir>/wt-pre main-ish ref origin/main, copy only the test files in, run them there, quote failures), then remove the worktree. MUTANTS only in a throwaway worktree of the feature branch (never mutate the main checkout): apply each of the design's mutants, run the tests, record which fail for each; then remove the worktree. Do not use git checkout -- in the main checkout. Quote real pass counts for the green run on the branch (), run  on test files. Do not commit; ORCH commits. Report test file paths in result. Fill this handoff file's result (status PASS/FAIL, summary with quoted real output, issues, next_action) and set top-level status COMPLETED with real UTC completed_at (`date -u`)."
+  },
+  "result": null
+}

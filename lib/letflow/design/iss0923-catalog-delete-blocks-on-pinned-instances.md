@@ -34,7 +34,7 @@ tenant data path) -> REVIEWER -> TEST-DESIGNER -> TEST-RUNNER.
 | D-B | Error shape `{:error, {:referenced_by_active_instances, instance_refs()}}` with a capped, flat id list plus a `truncated` flag; no tenant ids, no totals | 3 |
 | D-C | `:error` instances BLOCK (non-terminal == `not InstanceProjection.terminal?/1`) | 4 |
 | D-D | Order: not_found, then active-definitions guard, then instances guard | 5 |
-| D-E | TOCTOU between guard and delete: ACCEPTED, no lock; documented in `@doc` | 6 |
+| D-E | TOCTOU between guard and delete (real mechanism: `Engine.create/2` plain-reads the catalog row at start via `PinLookup`): ACCEPTED, no lock, no engine change; documented in `@doc`; retire-first advised | 6 |
 | D-F | Orphaned `service_catalog_versions` rows: IN SCOPE; deleted atomically with the entry in one transaction | 7 |
 | D-G | HTTP: new 409 problem type `service-referenced-by-active-instances`; mandatory `handle_delete` clause | 8 |
 | D-H | `@spec`/`@doc` changes | 9 |
@@ -84,13 +84,15 @@ Per tenant schema (prefix taken ONLY from `TenantProvisioning.list_registrations
   fragment attribute for both queries (one definition of "references the service", not two).
   Equality on the extracted text, never `LIKE`/substring (a different service id that merely
   contains this one must not match).
-- Select: `instance_id` only; ordered by `instance_id` ascending for determinism; per-tenant
-  `LIMIT` of `cap + 1` (cap defined in section 3).
+- Select: `instance_id` only; ordered by `instance_id` ascending; per-tenant `LIMIT` of
+  `cap + 1` (cap defined in section 3). The per-tenant ORDER BY only makes each tenant's
+  contribution the tenant's smallest `cap + 1` ids; the DETERMINISTIC global selection is
+  defined by the post-aggregation sort below.
 - Binding: `service_id` bound as a query parameter. No interpolation of schema name or
   service id into SQL text (INV-7).
-- No new index and no migration. `idx_proj_status` (migration `20260816120003`) is a partial
-  index; ACTIVE rows are index-assisted, ERROR rows are scanned. Cost is per-tenant-loop,
-  the same stated and accepted cost as REQ-191 design OQ-2.
+- No new index and no migration. `idx_proj_status` (migration `20260816120003:49-53`) is a
+  partial index (`where status = 'ACTIVE'`); ACTIVE rows are index-assisted, ERROR rows are
+  scanned. Cost is per-tenant-loop, the same stated and accepted cost as REQ-191 design OQ-2.
 
 Why a snapshot-graph match is a valid proxy for "pinned to the service": `PinResolver`
 extracts `("SERVICE_TASK", "service_id") -> :catalog_entry` refs from the graph at start, so
@@ -100,8 +102,16 @@ reached still blocks) errs on the safe side. The authoritative pin (event-source
 `INSTANCE_STARTED.pinned_versions`) is deliberately NOT queried: events have no jsonb index
 and no projection column carries pins.
 
-Cross-tenant iteration: reduce across registrations and STOP querying further tenants as soon
-as the accumulated id count exceeds the cap (early exit bounds work on a large deployment).
+Cross-tenant aggregation (normative, deterministic): query EVERY registration (no early exit;
+same full loop the definitions guard runs, each tenant bounded by its `LIMIT cap + 1`), concatenate
+all returned ids, THEN sort the combined list ascending (plain string order of the UUID text;
+`TenantProvisioning.list_registrations/0` is `Repo.all(Registration)` with no ORDER BY, so tenant
+order is unspecified and MUST NOT influence the result), THEN take the first `cap`. `truncated` is
+true iff the combined list had more than `cap` entries. Because every tenant contributes its own
+smallest `cap + 1` ids, the result is exactly the globally smallest `cap` ids regardless of
+registration order, so truncation is stable across calls (given unchanged data). An early exit
+across tenants is deliberately NOT used: it would make the selected ids depend on the
+unspecified tenant order.
 
 ---
 
@@ -113,8 +123,8 @@ as the accumulated id count exceeds the cap (early exit bounds work on a large d
 with exactly two keys:
 
 - `instance_ids :: [Ecto.UUID.t()]` -- at most `@max_reported_instance_ids` entries (cap = 50,
-  a module attribute in `Letflow.ServiceCatalog`), collected tenant by tenant in
-  `list_registrations/0` order, ids ascending within a tenant.
+  a module attribute in `Letflow.ServiceCatalog`), the globally smallest ids in ascending
+  order, per the post-aggregation sort in section 2.1 (independent of tenant order).
 - `truncated :: boolean()` -- true when more than the cap exist.
 
 Named type: `instance_refs() :: %{instance_ids: [Ecto.UUID.t()], truncated: boolean()}`,
@@ -181,33 +191,84 @@ documented in `@doc`.
 
 ---
 
-## 6. D-E -- TOCTOU between guard and delete: ACCEPTED, DOCUMENTED, NO LOCK
+## 6. D-E -- TOCTOU between guard and delete: ACCEPTED, DOCUMENTED, NO LOCK, RETIRE-FIRST ADVISED
 
-Window: after guard 3 returns empty and before the transaction deletes the entry, an
-instance referencing the service could be created. Preconditions for it: a definition
-referencing the service must be (or become) ACTIVE inside that window -- guard 2 just
-reported none ACTIVE, so this needs a concurrent definition activation (or activation of an
-already-published definition) AND a concurrent `Engine.create/2`, both within the few
-milliseconds of one request. Outcome if it happens: that instance goes to ERROR on its next
-resolution, which is exactly today's behaviour for the whole class, i.e. a strict
-improvement over no guard. It is the same accepted window the existing definitions guard has
-(see the comment above `delete_entry/1` about the per-tenant loop window).
+### 6.1 The real mechanism (re-derived from code, not assumed)
 
-Why no lock/transaction around the checks:
-- The data being protected lives in N tenant schemas; a row lock on the public
-  `service_catalog` entry would not be taken by `Engine.create/2` (which does not read the
-  entry at start; resolution happens later through `resolve_pinned_version/3`), so locking
-  the entry would not serialize the racing writer. A real fix would require the engine to
-  take a shared lock on the catalog row at start, which is an engine change out of scope for
-  a MINOR admin-delete guard and would add a hot-path cost to every instance start.
-- `pg_advisory_xact_lock` keyed on the service id around both sides would need the same
-  engine cooperation.
+`Engine.create/2` (`engine.ex:450-461`) resolves the ACTIVE definition, then `start_instance/6`
+(`engine.ex:532-589`) runs, in this order: (R) `PinResolver.resolve/4` with `pin_lookup/2`
+(`engine.ex:1278-1281`, default `PinLookup.build()`), whose `catalog_lookup/1`
+(`service_catalog/pin_lookup.ex:63-73`) does a plain, lock-free `Repo.get(Entry, service_id)` and
+answers `{:error, :not_found}` for a missing row AND for a `:RETIRED` row (its moduledoc :16-20:
+START-time lookup); (S) `create_snapshot/3` (`engine.ex:1318`, own committed transaction);
+(A) `activate` plus dispatch preparation; (P) `persist/14`, which commits the projection row.
+Steps R, S, P are three separate commits/reads with no enclosing transaction and no lock on the
+`service_catalog` entry. `delete/1`'s guard 3 (join of projection and snapshot) can only see an
+instance once BOTH S and P are committed.
 
-`delete/1`'s `@doc` MUST state: the check is advisory against concurrently starting
-instances; callers needing certainty retire the entry (blocks new publishes/starts of new
-versions without breaking pins) before deleting. The existing concurrent-delete-of-same-row
-handling (`Ecto.StaleEntryError` mapped to `{:error, :not_found}`) must be preserved; see
-section 7.
+Two interleavings of a concurrent `Engine.create/2` (C) against `delete/1` (D, guard 3 then
+the delete transaction that commits the entry removal):
+
+1. C reads the entry (R) before D's delete commits, and C's projection (P) is not yet committed when
+   D's guard 3 runs. Guard 3 sees nothing, D deletes, C finishes and commits an instance whose
+   pins name the now-deleted service. That is the ISS-0923 failure the guard exists to prevent:
+   at the next pinned resolution (`resolve_pinned_version/3`, which treats the live row as
+   the visibility authority) the instance goes to ERROR with `service_task_catalog_unresolved` /
+   `:version_not_found`. Preconditions: C resolved its definition while that definition was ACTIVE
+   (or the definition is activated after guard 2 ran), AND the whole R..P span of C overlaps the
+   interval between D's guard-3 query and D's commit. R..P is a few queries wide, so the window is
+   narrow but real; it is wider than a single statement.
+2. D's delete commits before C's R: `catalog_lookup/1` returns `{:error, :not_found}`, `create/2`
+   fails at start with the PinResolver error, and NO snapshot or instance row is written (R precedes
+   S). This is the correct, harmless outcome and needs no design change.
+
+(A race where C's R precedes D's commit and C's S/P commit before D's guard 3 is simply caught by guard 3:
+the instance is visible and blocks the delete.)
+
+Net effect of the fix versus today: interleaving 1 is the only residual hole, and it degrades to
+exactly today's behaviour (a pinned instance on a deleted service goes to ERROR, visible, retryable
+only by recreating the service), whereas today EVERY delete with an in-flight instance produces it.
+
+### 6.2 Options considered and cost reasoning
+
+- Lock in `delete/1` only (FOR UPDATE on the entry, guard 3 inside the delete transaction):
+  USELESS alone. `catalog_lookup/1` is a plain read, and a plain `SELECT` does not block on
+  `FOR UPDATE`, so C is never serialized with D.
+- FOR SHARE in `PinLookup.catalog_lookup/1` paired with FOR UPDATE in `delete/1`: only effective if C holds
+  the share lock until P commits. `catalog_lookup/1` runs outside any transaction, so the lock would be
+  released at statement end. Making it hold requires wrapping R..P (including `create_snapshot/3`,
+  which opens its own transaction, and `persist/14`) in one transaction, or taking the share lock inside
+  `persist/14`'s Multi and re-validating there. Both are changes to the engine's instance-start hot path
+  (every `Engine.create/2`, for every service-task definition, takes a row lock on a public shared
+  table row, and the lock couples tenant instance starts to a platform-admin write). That is a
+  cross-module engine change with its own risk and REVIEWER/SECURITY surface, disproportionate to a
+  MINOR admin-delete guard, and `Engine`/`PinLookup` are not in this issue's owned modules.
+- `pg_advisory_xact_lock` on the service id on both sides: same requirement for engine cooperation.
+- Re-checking in `persist/14`: same engine change.
+
+DECISION: accept interleaving 1, document it, and advise retire-first. No lock; no change to `Engine`
+or `PinLookup`.
+
+### 6.3 Why retire-first is the sound closure (and its honest limits)
+
+`retire/1` flips the entry to `:RETIRED`, and `catalog_lookup/1` then answers `:not_found`, so any
+`Engine.create/2` whose R runs after the retire commits is rejected at start (same as interleaving 2).
+Pinned resolution of existing instances keeps working (ISS-0917: the live row is the visibility
+authority and RETIRED still resolves pins). A create whose R ran BEFORE the retire commit can still complete
+within the following milliseconds; such an instance is committed before any subsequent `delete/1` call
+of a sequential operator workflow reaches guard 3, so guard 3 sees it and blocks. Therefore the
+sequence "retire, then delete (a separate, later request)" has no residual window for any start that
+begins after the retire; the only thing it cannot cover is a delete issued truly concurrently with the
+retire. Retire-first is advice, not enforced: `delete/1` does NOT require the entry to be RETIRED (that
+would change its contract and break existing tests), and the ERROR-instance behaviour of interleaving 1 remains
+for callers that do not retire first.
+
+`delete/1`'s `@doc` MUST state the above plainly: the instance check is best-effort against instances
+whose start overlaps the delete (a start already past the catalog read can commit after the check);
+callers needing certainty retire the entry first and delete afterwards. The existing
+concurrent-delete-of-same-row handling (`Ecto.StaleEntryError` mapped to `{:error, :not_found}`) must be
+preserved; see section 7. A stronger guarantee (engine-side lock or re-validation at persist) is recorded as
+a follow-up in section 12, not proposed here.
 
 ---
 
@@ -219,7 +280,9 @@ transaction as the entry row. Not filed as a follow-up, for two concrete reasons
 1. Correctness trap on re-register: after delete, `service_catalog_versions` rows for
    `(service_id, version)` survive. If the same `service_id` is registered again, a new
    incarnation could publish a version string that collides with a surviving archive row (the
-   unique index `idx_service_catalog_versions_service_id_version` on the entry side is
+   unique index `idx_service_catalog_versions_service_id_version`, defined on the
+   `service_catalog_versions` table (migration `20260921000004:91-93`; `Entry` only references it through a
+   `unique_constraint`), is
    checked by `check_publishable_version/2`, which counts archived versions), producing
    confusing publish rejections; and a `{:version, v}` pin lookup (rebind path) on the new
    incarnation could resolve to the PREVIOUS incarnation's archived endpoint (wrong service
@@ -237,7 +300,7 @@ Specified behaviour:
   `Ecto.StaleEntryError` / delete error maps to `{:error, :not_found}` exactly as today and
   the whole transaction rolls back (archive rows stay, so a retry or the winning concurrent
   delete handles them). The concurrent-delete test at `test/letflow/service_catalog_test.exs`
-  ~:429-460 must keep passing unchanged. The implementer must decide where the rescue sits
+  :427-453 must keep passing unchanged. The implementer must decide where the rescue sits
   (around the transaction call), but must not let the exception escape `delete/1`.
 - Order within the transaction: versions first, entry second, so a failure never leaves a
   live entry without its archive rows.
@@ -278,6 +341,12 @@ Only caller of `delete/1` in `lib/` is `Letflow.Routers.AdminServices.handle_del
    `referenced_by_active_instances` -> 409; see `iss0923-...md`". Also a one-line note under
    `iss0917-...md` OQ-3 row marking it closed by ISS-0923. DOC-UPDATER may do these; they are
    doc-only.
+5. Stale-text doc-update item: `lib/letflow/design/req373-service-catalog-version-lifecycle.md` section
+   around lines 350-363 lists `delete/1`'s contract as `{:error, {:referenced_by_active_definitions, ids}}` /
+   `{:error, :not_found}` / `:ok` (:352-353) and states that `delete/1` is unchanged and that archive rows are
+   accepted as orphaned after a delete (:359-361). Add a pointer there: "superseded by ISS-0923: `delete/1`
+   additionally returns `{:error, {:referenced_by_active_instances, instance_refs()}}` and now deletes the
+   service's `service_catalog_versions` rows atomically; see `iss0923-...md`". Doc-only; DOC-UPDATER.
 
 ---
 
@@ -293,8 +362,13 @@ NON-TERMINAL instance (`:active` or `:error`, i.e. not `terminal?/1`) whose froz
 snapshot has a SERVICE_TASK referencing the service, because deleting the live row would make
 those instances' pinned catalog resolution fail; (c) precedence of the two guards and that
 only the first failing guard is reported; (d) the returned list is capped at 50 ids with a
-`truncated` flag and carries no tenant identity; (e) the check is advisory against
-concurrently starting instances (section 6) and retire is the safe alternative; (f) on
+`truncated` flag and carries no tenant identity; (e) the instance check is best-effort against
+instances whose start overlaps the delete: `Engine.create/2` reads the live catalog row at start through
+`PinLookup.catalog_lookup/1` (plain read, no lock) and commits its snapshot and projection later, so a start
+already past that read can commit after the check and its instance would then fail pinned resolution (ERROR);
+conversely a start whose read happens after the delete commits is rejected at start with no instance. Retire
+the entry first (PinLookup refuses RETIRED at start, pinned resolution of existing instances keeps working)
+and delete afterwards for certainty (section 6.3); (f) on
 success the service's archived versions are deleted with it, atomically; (g) the escape hatch:
 cancel or complete the listed instances.
 
@@ -316,12 +390,12 @@ the same fragment and tenant loop. `lib/letflow/design/iss0917-...md` is NOT rew
 | AC-3 | An instance in `:error` status referencing S blocks deletion exactly like `:active` (D-C) |
 | AC-4 | A non-terminal instance in a DIFFERENT provisioned tenant than any other fixture is detected (loop covers every registration, not only the first tenant); a `scope: :tenant` service pinned by an instance in its owning tenant is also detected |
 | AC-5 | An instance referencing a DIFFERENT service id (including one that has S as a substring) does not block deletion of S (equality match, not substring/`LIKE`) |
-| AC-6 | When an ACTIVE definition still references S, `delete(S)` returns `{:error, {:referenced_by_active_definitions, ids}}` exactly as before (precedence, D-D); existing assertions at `test/letflow/service_catalog_test.exs` ~:384 and ~:471 unchanged and passing |
+| AC-6 | When an ACTIVE definition still references S, `delete(S)` returns `{:error, {:referenced_by_active_definitions, ids}}` exactly as before (precedence, D-D); existing assertion at `test/letflow/service_catalog_test.exs:384-385` (describe AC6, test at :377) unchanged and passing; the success cases at :392-396 and :400-412 also unchanged. (:471 is the `update_scope` narrowing test, NOT a delete assertion, and is out of this fix) |
 | AC-7 | `delete("nonexistent")` still returns `{:error, :not_found}` (unchanged), and runs before any guard |
-| AC-8 | Result bound: with more than 50 referencing non-terminal instances, `instance_ids` has exactly 50 entries and `truncated` is true; with 50 or fewer, `truncated` is false and every id is present |
+| AC-8 | Result bound: with more than 50 referencing non-terminal instances, `instance_ids` has exactly 50 entries and `truncated` is true; with 50 or fewer, `truncated` is false and every id is present; `instance_ids` is always ascending and, when truncated, is the globally smallest 50 (seam: section 10.2, direct row insert) |
 | AC-9 | The returned map contains no key other than `instance_ids` and `truncated` (no tenant id, no status, no counts) |
 | AC-10 | After a successful delete, re-registering the same `service_id` and publishing a version string that the previous incarnation had archived is NOT rejected on account of stale archive rows, and a `{:version, v}` pin lookup does not resolve to the previous incarnation's endpoint (orphan fix, D-F) |
-| AC-11 | Concurrent deletion of the same row still yields a benign `{:error, :not_found}` (existing test ~:429-460 unchanged and passing), and an `Entry` stale-error rolls the version-row deletion back |
+| AC-11 | Concurrent deletion of the same row still yields a benign `{:error, :not_found}` (existing test at `test/letflow/service_catalog_test.exs:427-453` unchanged and passing), and an `Entry` stale-error rolls the version-row deletion back |
 | AC-12 | HTTP: `DELETE /api/v1/admin/services/:service_id` for the AC-1 fixture returns 409; body `type` ends with `service-referenced-by-active-instances`, `title` "Service Referenced By Active Instances", `status` 409, `detail` contains no instance id, extensions `instance_ids` (list) and `truncated` (boolean) only |
 | AC-13 | HTTP: the AC-6 case still returns 409 with type `service-referenced-by-active-definitions`; 404 and 204 paths unchanged; a non-PLATFORM_ADMIN caller still gets 403 |
 | AC-14 | The status list used by the guard equals the set of statuses for which `InstanceProjection.terminal?/1` is false (guards against drift if a status is added) |
@@ -338,11 +412,23 @@ the same fragment and tenant loop. `lib/letflow/design/iss0917-...md` is NOT rew
   create; `:completed`/`:cancelled` by completing/cancelling through the engine; `:error` by
   driving the pinned resolution failure or by direct projection status update inside the
   committed-row test (documented as a fixture shortcut).
-- For AC-8 (cap): a 51-instance fixture is heavy through `Engine.create/2`. Preferred seam:
-  insert minimal projection + snapshot rows directly into the tenant schema via the same
-  `prefix:` the production query uses, or make the cap a compile-time module attribute that a
-  test reads through a documented, public, read-only accessor rather than overriding config
-  (ELIXIR-DEV chooses; TEST-DESIGNER must not rely on an undocumented private).
+- For AC-8 (cap), FIXED seam (no production accessor is added; the cap stays a private module
+  attribute and the test asserts the literal 50): insert rows DIRECTLY into the tenant schema with the
+  same `prefix:` the production query uses, via `Repo.insert_all/3` (or `Repo.insert!/2`) of 51 pairs.
+  Prerequisites and minimal rows: (1) one real `process_definitions` row in that tenant schema (the
+  snapshot has `foreign_key_constraint` `instance_definition_snapshots_definition_id_fkey` on
+  `definition_id`; `instance_projections.definition_id` has no FK) -- one definition row is shared by all 51
+  pairs; (2) per pair, one `instance_projections` row with `instance_id` (fresh `Ecto.UUID.generate/0`),
+  `status` `"ACTIVE"`, `definition_id`, `last_event_seq` 0 (other columns default or nullable), and one
+  `instance_definition_snapshots` row with the SAME `instance_id`, `definition_id`, `definition_name`,
+  `definition_ver` (non-empty strings), and `graph` = a minimal map with a `nodes` list containing one
+  node `%{"node_type" => "SERVICE_TASK", "attributes" => %{"service_id" => S}}` (`snapshotted_at` has
+  a DB default). Do not go through `Engine.create/2` for this test. Cleanup: delete those rows by
+  `instance_id` (and the definition row) in `on_exit`.
+  For AC-8 also assert determinism: the returned 50 ids equal the 50 smallest of the 51 inserted ids, ascending.
+  Assertions on WHICH ids are returned must be limited to this single-tenant, fully known fixture; a
+  multi-tenant truncation test may assert only that the result is the globally smallest 50 of the
+  union (tenant order is unspecified).
 - Router tests: `test/letflow/routers/admin_services_test.exs` (helpers around lines 94-100
   clean up `Entry` rows; the new tests must also clean `Version` rows and any instance rows,
   see `admin_services_publish_retire_test.exs:90-91` idiom).
@@ -385,8 +471,10 @@ the same fragment and tenant loop. `lib/letflow/design/iss0917-...md` is NOT rew
 
 - `update_scope/2` narrowing has the same blind spot (only other tenants' ACTIVE definitions,
   not their running instances). NOT in this fix; ORCH should file a follow-up issue.
-- Engine-side shared lock on the catalog row at instance start (to close the TOCTOU
-  fully): not proposed; would be its own requirement.
+- Engine-side closure of the TOCTOU (a share lock held across `Engine.create/2`'s catalog read through
+  `persist/14`, or re-validation of the pinned service inside `persist/14`'s Multi, paired with a lock in
+  `delete/1`): not proposed; changes the instance-start hot path (section 6.2); ORCH should file it as a
+  follow-up issue only if the residual window proves to matter.
 - A "force delete ignoring ERROR instances" option: not proposed.
 - `retire` already preserves pinned resolution and is the documented safe alternative.
 - The shared-DB `42P01` hazard from stale `tenant_template_build_*` registrations: environmental,

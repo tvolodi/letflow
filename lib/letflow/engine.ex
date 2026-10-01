@@ -971,7 +971,7 @@ defmodule Letflow.Engine do
 
       {:ok, %ServiceTask.Config{route_kind: :inline_url} = config} ->
         rendered_url = render_service_task_template(config.url_template, variables)
-        rendered_body = render_service_task_template(config.body_template, variables)
+        rendered_body = render_service_task_body_template(config.body_template, variables)
 
         with {:ok, arm_attrs} <-
                finish_service_task_arm_attrs(
@@ -989,7 +989,7 @@ defmodule Letflow.Engine do
         case resolve_catalog_version(config, ctx) do
           {:ok, resolved, ctx} ->
             rendered_url = render_service_task_template(resolved.endpoint_url, variables)
-            rendered_body = render_service_task_template(config.body_template, variables)
+            rendered_body = render_service_task_body_template(config.body_template, variables)
 
             with {:ok, arm_attrs} <-
                    finish_service_task_arm_attrs(
@@ -1157,13 +1157,15 @@ defmodule Letflow.Engine do
   # REQ-215 design doc §2.3 -- the minimal inline {{variables.KEY}} template
   # renderer. Scoped to exactly the {{variables.KEY}} syntax the R-Co design
   # doc names (src/design/ext-01-service-task-node.md:20, {{variables.order_id}}).
-  # ISS-0926 extended this same function from url_template-only to also cover
-  # body_template -- no new syntax, no escaping, just which Config field gets
-  # run through it. No existing rendering mechanism was found anywhere in this
-  # codebase to reuse (§0.1) -- this function is deliberately new, deliberately
-  # minimal, and is NOT the intended long-term shape for template rendering in
-  # this codebase: a future requirement needing richer syntax (nested paths,
-  # escaping, conditionals) should replace this function with a real one.
+  # Used for url_template only -- a URL has no JSON-string-literal quoting to
+  # protect, so substitution stays plain (this IS the pre-ISS-0926 behavior;
+  # it is a separate, lower-severity risk class and intentionally untouched
+  # by the SECURITY-REVIEWER fix below). No existing rendering mechanism was
+  # found anywhere in this codebase to reuse (§0.1) -- this function is
+  # deliberately new, deliberately minimal, and is NOT the intended long-term
+  # shape for template rendering in this codebase: a future requirement
+  # needing richer syntax (nested paths, escaping, conditionals) should
+  # replace this function with a real one.
   @spec render_service_task_template(template :: String.t() | nil, variables :: map()) ::
           String.t() | nil
   defp render_service_task_template(nil, _variables), do: nil
@@ -1172,6 +1174,45 @@ defmodule Letflow.Engine do
     Regex.replace(~r/\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}/, template, fn _match, key ->
       variables |> Map.get(key) |> render_service_task_value()
     end)
+  end
+
+  # SECURITY-REVIEWER fail on PR #2113 (ISS-0926 follow-up) -- body_template
+  # splices its substituted values into a JSON-string-literal position inside
+  # the fixture's raw JSON text (e.g. `"review_id":"{{variables.review_id}}"`).
+  # Unlike url_template above, an unescaped substitution here lets a `"` in
+  # the variable's value close the surrounding JSON string early and inject
+  # sibling keys, or forge a duplicate key that shadows a legitimate field
+  # (proof: a `review_id` of `x","reviewer_override":"approved_by_attacker",
+  # "notes":"n` renders a `"reviewer_override"` key that was never in the
+  # template; a value like `x","reason":"all_clear` produces a duplicate
+  # `"reason"` key whose resolution is parser-dependent). This sibling
+  # function is identical to render_service_task_template/2 except every
+  # substituted value is JSON-string-escaped (json_string_escape/1) before
+  # splicing, so a `"` or control character in the value can never terminate
+  # the enclosing JSON string. variables.body_template stays a plain string
+  # (ServiceTask.parse_config_from_node_attributes/1 reads it as-is off node
+  # attributes, matching §0.1's existing "no new syntax" scope) -- escaping
+  # individual substituted values, not switching to map-then-Jason.encode!/1,
+  # is the natural fix for that representation.
+  @spec render_service_task_body_template(template :: String.t() | nil, variables :: map()) ::
+          String.t() | nil
+  defp render_service_task_body_template(nil, _variables), do: nil
+
+  defp render_service_task_body_template(template, variables) when is_binary(template) do
+    Regex.replace(~r/\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}/, template, fn _match, key ->
+      variables |> Map.get(key) |> render_service_task_value() |> json_string_escape()
+    end)
+  end
+
+  # JSON-string-content escaping (quotes, backslashes, control characters)
+  # for a value about to be spliced between a JSON template's own existing
+  # quotes -- equivalent to Jason.encode!/1'ing the raw string and stripping
+  # the outer quote pair it adds, so the result is safe to place INSIDE an
+  # already-quoted JSON string literal (not a standalone JSON string itself).
+  @spec json_string_escape(String.t()) :: String.t()
+  defp json_string_escape(value) when is_binary(value) do
+    encoded = Jason.encode!(value)
+    String.slice(encoded, 1, String.length(encoded) - 2)
   end
 
   defp render_service_task_value(nil), do: ""

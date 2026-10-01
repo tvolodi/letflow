@@ -1,0 +1,50 @@
+{
+  "handoff_id": "5fe7f3d3-25fe-4ecf-9027-585bb127f81b",
+  "run_id": "WF03-ISS0937-20261001",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0937-20261001/step-03-elixir-dev.json",
+  "created_at": "2026-10-01T00:34:54Z",
+  "started_at": "2026-10-01T00:34:54Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0937": "id: ISS-0937\ntitle: \"Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01\"\ndiscovered_by: ELIXIR-DEV\ndiscovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)\ndiscovered_at: \"2026-10-01T00:21:56Z\"\nseverity: MAJOR\ndescription: >\n  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest\n  parity failure extra=[\"events_y2026m09\"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in\n  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not\n  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.\n  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.\naffected_files:\n  - test/letflow/events/ (partition maintenance / retention tests)\n  - test/letflow/tenants/ (tenant template parity test)\nqueue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937\ngithub_ref: GH-2077\nstatus: open\n"
+    },
+    "related_handoff_ids": [
+      "6d02a08d-5cdd-4721-881d-2850edb317c7"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0937-month-boundary-test-clock.md",
+      "handoffs/WF03-ISS0937-20261001/step-02b-code-design-validator.json",
+      "test/support/tenant_template.ex",
+      "test/support/tenant_fixture.ex"
+    ],
+    "owned_modules": [
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs",
+      "test/support/partition_clock.ex (new)",
+      "test/support/tenant_template_test.exs (new parity regression test)"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937",
+    "branch_name": "feature/WF03-ISS0937-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 3 IMPLEMENT for ISS-0937, per the validated design lib/letflow/design/iss0937-month-boundary-test-clock.md (read it fully, and the four non-blocking notes in step-02b-code-design-validator.json result). Implement ONLY the fix side (test-support + the existing retention tests); the NEW regression tests (partition_clock_test.exs and the new ISS-0937 describe in test/support/tenant_template_test.exs) are written by TEST-DESIGNER in Step 4, so do not write them. Scope: (1) new test/support/partition_clock.ex (Letflow.Test.PartitionClock.eligible_past_month/2 with @spec as designed); (2) the three retention test files (test/letflow/event_store/partition_maintenance_test.exs, retention_operations_test.exs, test/letflow/routers/event_retention_test.exs): delegate their eligible_past_month wrappers to the helper, keep zero-arity wrappers, single @override_age_days attribute, read Date.utc_today() once per wrapper call, correct the wrong comments/moduledoc (partition_maintenance_test.exs ~234-237 and ~51); (3) test/support/tenant_fixture.ex: add req376_dynamic_partition_table?/1 (single regex, year 4 digits, month 01-12, events and events_archive); (4) test/support/tenant_template.ex check_table_set/2: ignore dynamic partition tables on BOTH sides, fixed four partition tables remain compared, non-partition extra tables still raise. NO change to lib/, priv/repo/migrations/, or fingerprint. Verify with real runs in the worktree (reuse or build deps; local Postgres via .env on port 5482; the local letflow_test DB holds a stale September tenant_template schema - that is fine/expected, and part of what the parity filter must tolerate): run mix format --check-formatted on changed files, mix compile --warnings-as-errors, and mix test on the three retention test files plus test/support/tenant_template_test.exs and any test that uses check_table_set. Today's real date 2026-10-01 is the 1st, so the retention tests must now PASS for real - quote the output (pass counts). Run `mix letflow.check` pieces that are cheap if available (credo/format) and report. Do not commit; ORCH commits. Modify only the owned files and this handoff. owned_modules (put in context result): test/support/partition_clock.ex, test/support/tenant_fixture.ex, test/support/tenant_template.ex, the three retention test files. Set IN_PROGRESS at claim then COMPLETED/FAILED with result.status PASS/FAIL, include git diff --stat in result.summary. next_action 'Route to SECURITY-REVIEWER'.",
+    "acceptance_criteria": [
+      "Helper and filter implemented per design",
+      "Retention tests pass on 2026-10-01 with real output",
+      "Format and compile clean",
+      "No lib/ or migration change"
+    ]
+  }
+}

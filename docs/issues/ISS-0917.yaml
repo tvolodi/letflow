@@ -41,4 +41,13 @@ affected_files:
   - lib/letflow/routers/tasks.ex
 queue_ref: Q-907  # queue allocated issue_ref ISS-0907, which collides with an existing local file; local filename kept as ISS-0917 (next free on origin/main) and GH-2057 retitled to match
 github_ref: GH-2057
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0917-20261001
+resolved_at: "2026-10-01T14:14:58Z"
+resolution_note: >
+  Root cause was at ACTIVATION (Engine.resolve_service_task_arm_attrs passed rendered_url nil for :catalog_service), not the
+  dispatcher stub as filed. Fixed by resolving the instance PINNED service_catalog version at activation (ServiceCatalog.resolve_pinned_version/3)
+  at all five prepare_service_task_dispatch call sites; stub deleted; POST /tasks/:id/complete maps {:instance_execution_error,_,_} to 409 (req085 5.5.1 amended,
+  REVIEWER-approved). Regression tests: test/letflow/engine_catalog_service_task_test.exs, test/letflow/service_catalog_resolve_pinned_version_test.exs,
+  test/letflow/routers/tasks_test.exs (R1-R3); e2e step 04b in the REQ-432 pipeline spec. Follow-ups: ISS-0950, ISS-0922, ISS-0923, ISS-0924; ISS-0933 is
+  effectively delivered by the 409 mapping (to be closed/re-scoped separately).

@@ -526,3 +526,5 @@ isn't a field patch is POST").
   or by `PinResolver`. If a future requirement wants "publish version N+1 must be
   numerically greater than N," that is a new constraint, not implied by anything
   here.
+
+> **ISS-0917 note:** the SERVICE_TASK dispatch scope gap noted in this design is closed by `lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md` (`Letflow.ServiceCatalog.resolve_pinned_version/3`, activation-time resolution in `Letflow.Engine`).

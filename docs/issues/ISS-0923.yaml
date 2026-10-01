@@ -1,0 +1,18 @@
+id: ISS-0923
+title: "ServiceCatalog.delete/1 does not block deletion while non-terminal instances are pinned to the service"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T14:06:29Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  Found in WF03-ISS0917-20261001 (design OQ-3). ServiceCatalog.delete/1 only checks ACTIVE process
+  definitions. After ISS-0917 a pinned catalog SERVICE_TASK resolves its endpoint from the live row or
+  service_catalog_versions; deleting the entry makes pinned in-flight instances go ERROR with
+  service_task_catalog_unresolved/:version_not_found. Decide: block delete while non-terminal
+  instances pin the service, or document. Severity MINOR. Owner ELIXIR-DEV (via CODE-DESIGNER).
+affected_files:
+  - lib/letflow/service_catalog.ex
+queue_ref: Q-923
+github_ref: GH-2097
+status: open

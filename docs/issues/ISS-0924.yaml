@@ -1,0 +1,19 @@
+id: ISS-0924
+title: "Pipeline e2e specs seed HUMAN_TASK with lowercase assignee_type 'user' and literal assignee_ref: fails task-complete authorization (ISS-0942)"
+discovered_by: CODE-DESIGN-VALIDATOR
+discovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T14:06:29Z"
+severity: MINOR
+owner: "FRONTEND-DEV"
+description: >
+  Found by CODE-DESIGN-VALIDATOR in WF03-ISS0917-20261001. Sibling pipeline specs (attachment-cross-
+  tenant, platform-definition-promotion-approved, -conflict-rejected, -rollback) use assignee_type
+  'user' (lowercase) with a literal ref; Letflow.Tasks.apply_completion_authz/3 only has clauses
+  nil/USER/GROUP/ROLE, so completing such a task would fail wherever those specs complete a task. Use
+  uppercase USER with the admin token's JWT sub (see platform-instance-pin-survives-catalog-change
+  spec, ISS-0917). Severity MINOR. Owner FRONTEND-DEV.
+affected_files:
+  - web/tests/e2e/pipelines/
+queue_ref: Q-924
+github_ref: GH-2098
+status: open

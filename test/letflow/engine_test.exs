@@ -1225,17 +1225,17 @@ defmodule Letflow.EngineTest do
             const_pin_lookup({:ok, %{resolved_id: "sid", version: "1.0.0"}}, {:error, :not_found})
         })
 
-      # REQ-215 (lib/letflow/design/req215-service-task-engine-wiring.md
-      # §2.2 step 3) gave :SERVICE_TASK a real dispatch clause -- this fixture's
-      # own graph_start_service_task_end/1 sets BOTH "endpoint" and
-      # "service_id", so ServiceTask.parse_config_from_node_attributes/1
-      # resolves route_kind: :catalog_service (service_id takes precedence),
-      # which always reaches validate_rendered_url/1 with rendered_url: nil
-      # (no real service_catalog exists yet, S6, unbuilt) -- a deliberate
-      # design decision (§2.2 step 3), not a bug: the activation failure this
-      # test now asserts is :service_task_url_rendered_empty, not the old
-      # :node_type_not_yet_implemented stub.
-      assert {:error, {:activation_failed, {:service_task_url_rendered_empty, "svc"}}} =
+      # This fixture's own graph_start_service_task_end/1 sets BOTH "endpoint"
+      # and "service_id", so ServiceTask.parse_config_from_node_attributes/1
+      # resolves route_kind: :catalog_service (service_id takes precedence).
+      # ISS-0917: a catalog node is now resolved at activation from the
+      # instance's own pin. The const pin_lookup above pins resolved_id "sid"
+      # (not a UUID, and no such catalog row exists), so resolution fails
+      # with the typed, non-disclosing :version_not_found -- never the old
+      # :service_task_url_rendered_empty, and never a fall-back to the live
+      # catalog row.
+      assert {:error,
+              {:activation_failed, {:service_task_catalog_unresolved, "svc", :version_not_found}}} =
                Engine.create(attrs, prefix: schema_name)
 
       assert projection_count(schema_name) == 0

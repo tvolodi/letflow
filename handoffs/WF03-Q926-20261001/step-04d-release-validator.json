@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-Q926-20261001/step-04d-release-validator.json",
   "created_at": "2026-10-01T20:02:21Z",
   "started_at": "2026-10-01T20:02:21Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T20:05:48Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -43,5 +43,35 @@
       "Follow-up gaps stated",
       "No file modified except this handoff"
     ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "Independent re-verification of ISS-0926 at branch HEAD 42f54e3b (base 6d2e2548; origin/main has since moved to 5d0a7013). Environment: throwaway postgres:17 container rv926-pg on 127.0.0.1:51926 (LETFLOW_DB_PORT=51926), removed afterwards; shared 5462 and q929-pg untouched.",
+    "own_runs": {
+      "compile": "MIX_ENV=test mix compile --warnings-as-errors --force -> 'Compiling 315 files (.ex) / Generated letflow app', exit 0",
+      "format": "mix format --check-formatted -> exit 0, no output",
+      "six_files": "mix test (service_task_body_render, service_task_wiring, service_task_dispatcher, engine_catalog_service_task, regulatory_review_timer_path_fixture, regulatory_review_timer_path) -> 'Result: 188 passed (1 property, 187 tests)', run twice, 188 both times",
+      "lint": "mix letflow.lint_handoffs -> 'OK -- 0 new violations across 3281 handoff files under \"handoffs\" (25 pre-existing grandfathered, traced to ISS-0190)', exit 0",
+      "check_test_substitute": "Full mix letflow.check.test (runs the whole scripts/test_parallel.sh suite) NOT run, because the dispatch restricted this shared machine to scoped tests. Scoped substitute: the six files run with --warnings-as-errors, output grepped for 'default values for the optional arguments' -> 0 matches. That run exits 1 only because of one warning 'ExUnit.Case.register_test/4 is deprecated. Use register_test/6 instead' raised by the StreamData `property` macro at service_task_body_render_test.exs:167; 5 other test files already use `property`, so this is a dependency-level deprecation, not the ISS-0069 dead-default pattern, and CI does not run tests with --warnings-as-errors. Full-suite check.test remains for CI."
+    },
+    "acceptance_rederived": {
+      "body_rendered_and_sent": "Engine.ex:1130 calls render_body_or_error and freezes config_snapshot['rendered_body'] (engine.ex:1193); dispatcher resolve_dispatch_body/1 (service_task_dispatcher.ex ~786) sends the frozen rendered_body on both the inline_url and catalog_service branches; the raw body_template is no longer sent. Pure ServiceTask.render_body_template/2 (service_task.ex:499): placeholders accepted only inside a JSON string (byte scan), values escaped, missing variable gives a typed error, result decode-checked and size-capped.",
+      "legacy_rows": "Key absent plus static template is sent verbatim; key absent plus templated body fails closed as :request_build_error with no outbound request.",
+      "meridian": "Fixture v1.3: regulatory-auto-escalation body_template {reason:sla_breach_30_days, review_id:{{variables.review_id}}}, reached only by timeout-risk-evaluation (timer path), then e5 to end-closed. e10 now targets the new node regulatory-remediation-escalation (reason remediation_unresolved), then e18 to end-closed. Distinct literal reasons per path confirmed in the JSON.",
+      "fail_first": "test/specs/ISS-0926.md records pre-fix 122/188 passed, 66 red, against base 6d2e2548 and 29/29 mutants killed. I did not re-run the pre-fix worktree; I confirmed the branch side (188 green) myself.",
+      "injection_safe": "Escaping and structure tests (T-R4..T-R7f incl. property, I-4a/I-4b wire test) are part of the 188 green."
+    },
+    "diff_scope": "git diff origin/main...HEAD (merge-base, 29 files): lib/letflow/engine.ex, engine/service_task.ex, engine/service_task_dispatcher.ex, the design doc, seed script comment, fixture JSON, process_policy_binding.yaml, six test files plus test/specs ISS-0926/ISS-0932, and this run's handoffs plus registry.json/orchestrator.log. No migration, no supervisor or application.ex file, no other run's files. (Note: the plain two-dot diff origin/main..HEAD shows deletions of REQ-430 files only because origin/main moved ahead; not a branch change.) docs/issues/ISS-0926.yaml untouched and still 'status: open'.",
+    "stale_docs": [
+      "lib/letflow/design/service_task.md:421 still says body_template is 'Passed through as-is (rendering is out of scope, section 1)'",
+      "lib/letflow/design/service_task_dispatcher.md lines ~164/225/297 describe only rendered_url freezing and the raw body_template in config_snapshot; no rendered_body key or resolve_dispatch_body legacy fallback",
+      "engine.ex config_snapshot_map comment (~line 1160) says 'the one derived key rendered_url' but there are now two derived keys (rendered_url, rendered_body)",
+      "Minor: ServiceTask moduledoc and Config.body_template doc do not mention render_body_template/2"
+    ],
+    "follow_up_gaps": [
+      "EO-002 residual: the engine writes no outbound audit event for the SERVICE_TASK request, so sla_breach_30_days is visible only in the SERVICE_TASK_COMPLETED payload decoded_body, and only for endpoints that echo the request (httpbin does); EO-002 as literally worded stays unmet without an outbound-request audit event.",
+      "e10/sub_process.ex pending-events gap: SubProcess completion discards pending events, so the remediation-path notice node regulatory-remediation-escalation is routed (T14 graph-routing test) but its dispatch is not proven; pre-existing (design 3.6)."
+    ],
+    "files_modified": "Only this handoff (not committed by me beyond this file)."
   }
 }

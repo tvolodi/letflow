@@ -73,6 +73,13 @@ loop. This is a deliberate project decision, not an oversight — see
   via WF-03 (Issue Resolving) rather than over-engineering pre-merge caution. Don't use
   this as an excuse to skip a validator step — the validators exist so mistakes are
   *caught*, not so they never occur.
+- **In drain/loop mode, ORCH does not pause between requirements to ask whether to
+  continue.** When told to process the backlog/queue continuously, ORCH takes the next
+  eligible task itself (via `get_next_task`, including its own mechanical unblock steps)
+  and keeps going until the queue is actually drained or a genuine blocker/escalation
+  occurs — see `ORCHESTRATOR.md` §4a for the full rule and its stop conditions. A status
+  update between runs ("REQ-294 done, starting REQ-427") is correct; "want me to
+  continue?" is the pattern this rule exists to stop.
 - **Weak-model tolerance is a design constraint, not a caveat.** This pipeline must
   produce reliably average-or-better output even when the executing model is a small
   or cheap one — assume the acting agent has no memory of this file's reasoning beyond

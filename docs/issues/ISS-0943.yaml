@@ -1,4 +1,4 @@
-id: ISS-0942
+id: ISS-0943
 title: "Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01"
 discovered_by: ELIXIR-DEV
 discovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)
@@ -39,7 +39,12 @@ renumbered_from: ISS-0937  # filed as ISS-0937 in PR #2078; the filename/id was 
 # RENUMBERED AGAIN 2026-10-01 during rebase onto origin/main: this branch's own "ISS-0939"
 # filing collided with a different, already-merged main filing (RELEASE-VALIDATOR's
 # letflow.check.test hang bug) that took the same number first. Moved to ISS-0942, the
-# next free number on main at rebase time. queue_ref Q-920 / GH-2077 remain the stable
-# links across both renumberings.
+# next free number on main at rebase time.
+# RENUMBERED A THIRD TIME 2026-10-01, same day, before this PR's own merge: ISS-0942 was
+# independently claimed by a concurrent open PR (#2087, fix/ISS-0942-task-complete-
+# authorization-gap) not yet on main at the time of the prior renumbering. Checked across
+# main AND every open PR's changed files this time (not just main) before picking ISS-0943
+# as the next truly free number. queue_ref Q-920 / GH-2077 remain the stable links across
+# all three renumberings.
 related:
   - ISS-0938  # same failing test files on 2026-10-01 (REQ-427 RELEASE-VALIDATOR run); likely same root cause, verify after this fix merges

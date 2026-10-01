@@ -15,4 +15,13 @@ affected_files:
   - lib/letflow/service_catalog.ex
 queue_ref: Q-923
 github_ref: GH-2097
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0923-20261001
+resolved_at: "2026-10-01T17:07:05Z"
+resolution: >
+  Design chose BLOCK (lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md).
+  ServiceCatalog.delete/1 in lib/letflow/service_catalog.ex now refuses deletion while non-terminal
+  instances are pinned to the service. Regression coverage:
+  test/letflow/service_catalog_delete_pinned_instances_test.exs (24 tests).
+  Follow-ups (not fixed here): (1) update_scope/2 has the same blind spot for running instances;
+  (2) engine-side lock / atomic start for the create-vs-delete race window.

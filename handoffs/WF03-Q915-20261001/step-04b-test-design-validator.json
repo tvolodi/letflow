@@ -1,0 +1,50 @@
+{
+  "handoff_id": "40b28ce4-a5d8-471c-b024-cf952fd90f48",
+  "run_id": "WF03-Q915-20261001",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q915-20261001/step-04b-test-design-validator.json",
+  "created_at": "2026-10-01T16:20:18Z",
+  "started_at": "2026-10-01T16:20:30Z",
+  "completed_at": "2026-10-01T16:23:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0932": "id: ISS-0932 (queue Q-915, GH-2066); title: D3: Regulatory Compliance Review definition lacks the 21-day timer path to BaFin escalation; severity MAJOR; discovered_by UAT-RUNNER (ISS-0912 QA re-run 2026-10-01). Symptom: POST /instances/:id/advance-timer on risk-evaluation returns 404; regulatory-auto-escalation only reachable from the post-remediation-check unresolved branch. Evidence test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml (D3). Scenario test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml. Definition fixture test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json. ORCH findings (verify): risk-evaluation is HUMAN_TASK with only {role}; no pending timer exists so advance-timer 404s (Scheduler.resolve_advance_target picks the single pending timer, 400 if >1, 404 if none); edge timeout-risk-evaluation goes risk-evaluation->risk-evaluation-timeout->severity-routing->findings-sign-off, never regulatory-auto-escalation; HUMAN_TASK escalation_timer_duration only reassigns role; a :TIMER node (duration_iso8601) is the engine's routable timer. Required outcome: after evidence-collection completes a pending P21D timer exists, advance-timer fires it, flow runs regulatory-auto-escalation (SERVICE_TASK POST .../compliance/regulatory-notice) -> end-closed, instance COMPLETED; normal path (risk manager completes risk-evaluation -> severity-routing ...) must keep working with no dangling timer trouble. Consider whether reason 'sla_breach_30_days' must be in the service-task body. No QA data/DB changes; repo fixtures/definitions/tests/docs only; bump fixture version if appropriate."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs",
+      "test/letflow/engine/regulatory_review_timer_path_test.exs",
+      "test/specs/ISS-0932.md",
+      "lib/letflow/design/q915-regulatory-review-21day-timer-path.md",
+      "handoffs/WF03-Q915-20261001/step-04-test-designer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2",
+    "branch_name": "feature/WF03-Q915-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4b hard gate on TEST-DESIGNER. Independently: (1) reproduce fail-first yourself in a throwaway git worktree of HEAD (old v1.1 fixture) copying in only the two new test files, record which fail (expect E1 :no_pending_timer); (2) APPLY at least two mutants yourself (preferably in a throwaway worktree) against the real fixture (e.g. drop escalation_timer_duration; retarget timeout-risk-evaluation back to severity-routing) and record failing counts; (3) confirm the tests pass on the fixed tree; (4) confirm every issue outcome (timer pending after evidence-collection, advance-timer path resolves it, regulatory-auto-escalation executed, COMPLETED, normal path intact) is asserted, no skipped/vacuous tests, isolated fixtures; (5) check the E1 deviation (token node_id) is sensible and COMPLETED + event sequence is still discriminating. Any mutant must be reverted and verified (git status clean of unintended files). Modify nothing but your handoff. You can spawn no one else and must not self-review.",
+    "acceptance_criteria": [
+      "Fail-first independently reproduced with counts",
+      "At least 2 mutants independently applied with counts",
+      "Fixed tree green",
+      "Coverage of every outcome, no vacuous tests",
+      "Tree left clean (quote git status)",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. (1) Fail-first reproduced by me in a throwaway worktree of HEAD 731c380b (old v1.1 fixture, only the 2 new test files): 11 of 24 failed (T1,T2,T4,T5,T6,T7,T8,T9,M8,M10, and E1 with {:error,:no_pending_timer}); 13 green (T3,T10,T11,T12,E2,M1-M7,M9), matching the spec. (2) Mutants applied by me with jq to the real fixture in the worktree: drop escalation_timer_duration = 6 red (T3,T4,T12,M8,E1,E2); retarget timeout-risk-evaluation to severity-routing = 6 red (T5,T8,T9,T12,M4,E1); P30D = 3 red (T4,T12,E1); unmutated copy = 0 red. (3) Fixed tree in main checkout: mix test of both files rc=0, 0 failures (24 tests). (4) Coverage: timer pending after evidence-collection, resolve_advance_target resolves it (~21d), fire_timer -> regulatory-auto-escalation dispatch with correct rendered_url, COMPLETED, no EXECUTION_ERROR, no pending timers, E2 normal path to findings-sign-off; no @tag :skip/TODO, fixtures isolated (per-test tenant, unique keys), no secrets. (5) E1 token node_id deviation is sensible (END not persisted as a token position); discriminating via exact event sequence INSTANCE_STARTED,TASK_COMPLETED,TIMER_FIRED,SERVICE_TASK_COMPLETED and status :completed. Note: E2 deliberately does not assert the leftover pending timer (known separate engine defect). Cleanup: worktree removed and pruned; git status --porcelain lib/ test/ scripts/ shows only the intended ISS-0932 changes (3 modified fixtures/seed script, 4 new untracked files), no mutant residue; both test files re-run green (rc=0) afterwards.",
+    "issues": [],
+    "route_back": null
+  }
+}

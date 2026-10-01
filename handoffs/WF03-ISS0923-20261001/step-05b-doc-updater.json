@@ -1,0 +1,44 @@
+{
+  "handoff_id": "a3c1f0d2-9b7e-4c55-8a10-923000000014",
+  "run_id": "WF03-ISS0923-20261001",
+  "workflow_id": "WF-03",
+  "step": "05b",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0923-20261001/step-05b-doc-updater.json",
+  "created_at": "2026-10-01T17:06:52Z",
+  "started_at": "2026-10-01T17:06:52Z",
+  "completed_at": "2026-10-01T17:07:20Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0923.yaml": "ServiceCatalog.delete/1 does not block deletion while non-terminal instances are pinned to the service (MINOR). Design chose BLOCK."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0923.yaml",
+      "lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md",
+      "handoffs/WF03-ISS0923-20261001/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/service_catalog.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/api/error.ex",
+      "test/"
+    ],
+    "branch_name": "feature/WF03-ISS0923-20261001",
+    "queue_task_id": 923,
+    "github_issue": 2097
+  },
+  "task": {
+    "description": "Work in C:/Users/tvolo/dev/ai-dala/letflow-3 on the already checked-out branch feature/WF03-ISS0923-20261001 (do not switch branches; do not touch main or other branches/PRs). Shared machine: scoped `mix test <files>` only, never the full suite; use MIX_TEST_PARTITION=<unique> for tests that commit catalog rows. Do not commit (ORCH commits); do not leave mutants in the tree. WF-03 doc follow-ups from the validated design (section 8 doc-update list of lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md): update the stale delete/1 return-union text in lib/letflow/design/req373-service-catalog-version-lifecycle.md (~lines 350-363), the pointer in the req192 routes design doc, and iss0917 design OQ-3 to say it is resolved by ISS-0923; and add the new 409 type service-referenced-by-active-instances wherever service-referenced-by-active-definitions is documented (grep docs/ for it). Doc-only edits; do NOT touch lib/letflow/*.ex code, docs/requirements.yaml, or docs/issues/. Verify each claimed edit landed (quote the grep). Edit only docs and this handoff. Fill this handoff file's result (status PASS/FAIL, summary with quoted real output, issues, next_action) and set top-level status COMPLETED with real UTC completed_at (`date -u`)."
+  },
+  "result": {"status":"PASS","summary":"3 doc edits landed, verified by grep: req192-service-catalog-routes.md:447 new delete-result row for {:error,{:referenced_by_active_instances,instance_refs}} -> 409 service-referenced-by-active-instances; iss0917-catalog-service-task-pinned-dispatch.md:752 OQ-3 row marked RESOLVED by ISS-0923; req373-service-catalog-version-lifecycle.md:350 superseded-by-ISS-0923 note on delete/1 return union and orphaned archive rows. Grep of docs/ for service-referenced-by-active-definitions found no other doc occurrence (only design md files), so no further place to add the new 409 type; the only non-design hit for the new type is lib/letflow/api/error.ex:457 (code, untouched). admin_services.ex moduledoc extension (design 8.3) is code and out of DOC-UPDATER scope.","artifacts_out":["lib/letflow/design/req192-service-catalog-routes.md","lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md","lib/letflow/design/req373-service-catalog-version-lifecycle.md","handoffs/WF03-ISS0923-20261001/step-05b-doc-updater.json"],"issues":[],"next_action":"ORCH commits."}
+}

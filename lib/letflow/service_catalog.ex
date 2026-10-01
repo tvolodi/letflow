@@ -111,7 +111,7 @@ defmodule Letflow.ServiceCatalog do
        never "give me version N of X." (SERVICE_TASK dispatch does ask for a
        specific pinned version, via `resolve_pinned_version/3`, ISS-0917.) Composite-keying `service_catalog`
        buys nothing at the one call site this whole requirement exists to
-       wire up (`Letflow.ServiceCatalog.PinLookup.catalog_lookup/1`): under
+       wire up (`Letflow.ServiceCatalog.PinLookup.catalog_lookup/2`): under
        either schema shape, resolving a fresh reference means "find the row
        for this `service_id` whose status is ACTIVE."
     2. Blast radius on `service_id`-as-sole-key is severe and needless:
@@ -151,15 +151,17 @@ defmodule Letflow.ServiceCatalog do
   service_catalog (S6) and PLC-01 (unscoped) are not built" section names
   `module_ref` resolution against PLC-01 as unscoped to any stage; PLC-01
   does not exist in this codebase and this requirement does not build it —
-  `Letflow.ServiceCatalog.PinLookup.build/0`'s `module_lookup` stays a
+  `Letflow.ServiceCatalog.PinLookup.build/1`'s `module_lookup` stays a
   permanent `{:error, :not_found}` stub, copied verbatim from
   `PinResolver.default_lookup/0`.
   """
 
   import Ecto.Query
 
+  alias Letflow.Definitions.InstanceDefinitionSnapshot
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.ServiceScopeValidator.Lookup
+  alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.ServiceCatalog.Entry
@@ -441,7 +443,7 @@ defmodule Letflow.ServiceCatalog do
   fresh `Letflow.Engine.PinResolver.resolve/4` call against a `service_id`
   with no ACTIVE row (because its only row was just retired and nothing has
   published since) gets `{:error, :not_found}` from
-  `Letflow.ServiceCatalog.PinLookup.catalog_lookup/1`, which `resolve/4`
+  `Letflow.ServiceCatalog.PinLookup.catalog_lookup/2`, which `resolve/4`
   turns into `{:error, {:unresolved_catalog_ref, ref}}` — the **existing**
   error variant, no new one added. This schema enforces "at most one ACTIVE
   row per `service_id`" as a structural invariant — there is only ever one
@@ -867,16 +869,53 @@ defmodule Letflow.ServiceCatalog do
   # delete/1 (design §3.5)
   # ===========================================================================
 
+  @typedoc """
+  Non-terminal instances pinned to a service (ISS-0923): at most
+  `@max_reported_instance_ids` opaque instance ids in ascending order, plus a
+  flag saying more exist. Carries no tenant identity, status, or counts.
+  """
+  @type instance_refs :: %{instance_ids: [Ecto.UUID.t()], truncated: boolean()}
+
+  # Cap on the instance ids reported by `delete/1`'s instance guard (ISS-0923 design D-B).
+  @max_reported_instance_ids 50
+
   @doc """
-  Deletes a `service_catalog` row, refused when any tenant's ACTIVE
-  `process_definitions` graph still references it (§4 below) — delete has no
-  "assigned tenant" exemption the way `update_scope/2`'s narrow does; every
-  tenant is checked. The error names every referencing definition id.
+  Deletes a `service_catalog` row, together with the service's archived
+  `service_catalog_versions` rows (one transaction: versions first, entry second).
+
+  Refused, in this order (only the first failing guard is reported; a caller who
+  clears the definition conflict and retries may then see the instance conflict):
+
+  1. when any tenant's ACTIVE `process_definitions` graph still references the
+     service (§4 below) — delete has no "assigned tenant" exemption the way
+     `update_scope/2`'s narrow does; every tenant is checked. The error names
+     every referencing definition id.
+  2. when any tenant has a NON-TERMINAL instance (`:active` or `:error`, i.e.
+     not `Letflow.EventStore.InstanceProjection.terminal?/1`) whose frozen
+     definition snapshot has a SERVICE_TASK referencing the service, because
+     deleting the live row would make those instances' pinned catalog
+     resolution fail (ISS-0923). The error carries at most 50 instance ids
+     (the globally smallest, ascending) and a `truncated` flag, and no tenant
+     identity. Cancel or complete the listed instances, or retire the entry
+     instead of deleting it.
+
+  The instance check is best-effort against instances whose start overlaps the
+  delete: `Engine.create/2` reads the live catalog row at start through
+  `PinLookup.catalog_lookup/1` (plain read, no lock) and commits its snapshot and
+  projection later, so a start already past that read can commit after the check
+  and its instance would then fail pinned resolution (ERROR); conversely a start
+  whose read happens after the delete commits is rejected at start with no
+  instance. Retiring the entry first closes the window for every start that begins
+  after the retire commits (`PinLookup` refuses RETIRED entries at start, while
+  pinned resolution of existing instances keeps working); only a start already in
+  flight at retire time can still slip through. Retire, then delete in a separate
+  later request.
   """
   @spec delete(service_id :: String.t()) ::
           :ok
           | {:error, :not_found}
           | {:error, {:referenced_by_active_definitions, [String.t()]}}
+          | {:error, {:referenced_by_active_instances, instance_refs()}}
   def delete(service_id) when is_binary(service_id) do
     case Repo.get(Entry, service_id) do
       nil ->
@@ -885,7 +924,7 @@ defmodule Letflow.ServiceCatalog do
       %Entry{} = entry ->
         case referencing_active_definitions(service_id, nil) do
           [] ->
-            delete_entry(entry)
+            delete_unless_instances_pinned(entry)
 
           conflicts ->
             definition_ids = Enum.flat_map(conflicts, & &1.definition_ids)
@@ -894,17 +933,37 @@ defmodule Letflow.ServiceCatalog do
     end
   end
 
-  # `entry` was fetched at the top of `delete/1`, but `referencing_active_definitions/2`
-  # runs a sequential per-tenant-schema query loop in between -- a real window in which a
+  defp delete_unless_instances_pinned(%Entry{service_id: service_id} = entry) do
+    case referencing_non_terminal_instances(service_id) do
+      %{instance_ids: []} -> delete_entry(entry)
+      refs -> {:error, {:referenced_by_active_instances, refs}}
+    end
+  end
+
+  # `entry` was fetched at the top of `delete/1`, but the guards run sequential
+  # per-tenant-schema query loops in between -- a real window in which a
   # concurrent caller can delete the same row first. `Entry` carries no optimistic-lock
   # field, so `Repo.delete/1` matches on primary key alone: if the row is already gone,
   # it raises `Ecto.StaleEntryError` rather than returning `{:error, changeset}`. Treat
   # that race as a benign not-found (consistent with `get_for_tenant/2`'s own not-found
-  # handling) instead of letting it crash the caller.
-  defp delete_entry(entry) do
-    case Repo.delete(entry) do
-      {:ok, _deleted} -> :ok
-      {:error, _changeset} -> {:error, :not_found}
+  # handling) instead of letting it crash the caller. The rescue wraps the transaction,
+  # so the raise rolls the archive-row deletion back with it.
+  #
+  # `service_catalog_versions` has no FK to `service_catalog` (migration
+  # 20260921000004), so the archive rows are deleted explicitly, first, in the same
+  # transaction: a failure never leaves a live entry without its archive rows.
+  defp delete_entry(%Entry{service_id: service_id} = entry) do
+    Repo.transaction(fn ->
+      Repo.delete_all(from(v in Version, where: v.service_id == ^service_id))
+
+      case Repo.delete(entry) do
+        {:ok, _deleted} -> :ok
+        {:error, _changeset} -> Repo.rollback(:not_found)
+      end
+    end)
+    |> case do
+      {:ok, :ok} -> :ok
+      {:error, :not_found} -> {:error, :not_found}
     end
   rescue
     Ecto.StaleEntryError -> {:error, :not_found}
@@ -932,6 +991,10 @@ defmodule Letflow.ServiceCatalog do
   # (`Letflow.TenantProvisioning.list_registrations/0`) rather than running
   # as a single same-schema `Ecto.Query`. Stated cost, not solved here
   # (design §7 OQ-2): no caching/indexing/async mechanism is proposed.
+  #
+  # ISS-0923: `delete/1` adds a second, instance-level guard
+  # (`referencing_non_terminal_instances/1`) that shares this fragment and the same
+  # every-registration tenant loop.
 
   @spec referencing_active_definitions(
           service_id :: String.t(),
@@ -966,6 +1029,48 @@ defmodule Letflow.ServiceCatalog do
       )
 
     Repo.all(query, prefix: schema_name)
+  end
+
+  # ISS-0923: a second, instance-level guard sharing `@service_task_reference_fragment`
+  # (pointed at the frozen snapshot graph) and the same every-registration tenant loop.
+  # No early exit across tenants: each tenant contributes its own smallest `cap + 1`
+  # ids, the combined list is sorted, then cut to `cap`, so the result is the globally
+  # smallest `cap` ids regardless of the (unspecified) registration order.
+  @spec referencing_non_terminal_instances(service_id :: String.t()) :: instance_refs()
+  defp referencing_non_terminal_instances(service_id) do
+    all_ids =
+      TenantProvisioning.list_registrations()
+      |> Enum.flat_map(fn registration ->
+        query_referencing_instances(service_id, registration.schema_name)
+      end)
+      |> Enum.sort()
+
+    %{
+      instance_ids: Enum.take(all_ids, @max_reported_instance_ids),
+      truncated: length(all_ids) > @max_reported_instance_ids
+    }
+  end
+
+  defp query_referencing_instances(service_id, schema_name) do
+    query =
+      from(p in InstanceProjection,
+        join: s in InstanceDefinitionSnapshot,
+        on: s.instance_id == p.instance_id,
+        where: p.status in ^non_terminal_statuses(),
+        where: fragment(@service_task_reference_fragment, s.graph, ^service_id),
+        order_by: [asc: p.instance_id],
+        limit: ^(@max_reported_instance_ids + 1),
+        select: p.instance_id
+      )
+
+    Repo.all(query, prefix: schema_name)
+  end
+
+  # One authoritative definition of terminality: `InstanceProjection.terminal?/1`.
+  defp non_terminal_statuses do
+    InstanceProjection
+    |> Ecto.Enum.values(:status)
+    |> Enum.reject(&InstanceProjection.terminal?/1)
   end
 
   # ===========================================================================

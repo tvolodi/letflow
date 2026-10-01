@@ -50,10 +50,16 @@ additional cases directly from `resolveUiLocale`'s source logic (reproduced abov
 invent independent ones. AC2(a)'s instruction to source expected values "from the SPA's
 own tests where they exist" is fully satisfiable for the formatting-locale resolver:
 `web/tests/unit/sessionLocale.test.ts` TC-1..TC-5 plus the inline "unsupported tenant
-default" case cover exactly the three named scenarios (unsupported tenant default,
-unsupported device list, no SPA case for `'pt-BR'` exact match specifically — that one
-case's expected value is derived directly from `PLATFORM_SUPPORTED_LOCALES` membership,
-not copied from an SPA test, since no SPA test exercises `'pt-BR'` by name).
+default" case cover two of the three named scenarios (unsupported tenant default,
+unsupported device list). The third, the `'pt-BR'` exact-match case, is also SPA-sourced:
+the same file's `'setTenantDefaultLocale re-resolves and updates locale (tested via a
+supplied tenant default -- AC6)'` test (lines ~79-83) calls
+`useSessionLocaleStore.getState().setTenantDefaultLocale('pt-BR')` and asserts both
+`useSessionLocaleStore.getState().locale` and `getSessionLocale()` equal `'pt-BR'` —
+that setter re-resolves through `resolveSessionLocale({ tenantDefaultLocale: 'pt-BR' })`
+internally, which returns `'pt-BR'` because it is an exact member of
+`PLATFORM_SUPPORTED_LOCALES`. That test is therefore the SPA-sourced expected value for
+this table case, not an independently derived one.
 
 ## 1. Existing mobile groundwork (surveyed, not to be duplicated)
 
@@ -319,7 +325,7 @@ green against the shipped tree, not merely present.
 | 1b: mobile UI-string locale list == ENTITIES_UI_LOCALES, parsed from entitiesMessages.ts | `ui_locale_test.dart` reads `web/src/i18n/entitiesMessages.ts` as text, regex-extracts the `ENTITIES_UI_LOCALES` array literal, and asserts it equals `kEntitiesUiLocales` (§4.2) |
 | 1c: both fallbacks assert to 'en' | Assertions on `kFormattingFallbackLocale == 'en'` (in `formatting_locale_test.dart`) and `kEntitiesUiFallbackLocale == 'en'` (in `ui_locale_test.dart`) |
 | 1d: ARB file count == ENTITIES_UI_LOCALES.length, one per entry | `ui_locale_test.dart` (or a dedicated case in it) lists `apps/mobile/lib/i18n/l10n/*.arb` (or wherever OQ-1 resolves them to) and asserts the set of `@@locale` values inside them equals `kEntitiesUiLocales` exactly, no more no less — §2's three files (`app_en.arb`, `app_ru.arb`, `app_kk.arb`) |
-| 2a: >=6 table cases for formatting-locale resolver vs resolveSessionLocale, incl. unsupported tenant default / unsupported device list / 'pt-BR' exact match, sourced from SPA tests where they exist | `formatting_locale_test.dart`'s table, built from `web/tests/unit/sessionLocale.test.ts`'s TC-1..TC-5 plus the inline "unsupported tenant default" case plus a `pt-BR` exact-match case (source noted in §0 as derived from the locale-set definition, not an SPA test, since none exercises it) — >= 6 rows total against `resolveFormattingLocale` (§4.1) |
+| 2a: >=6 table cases for formatting-locale resolver vs resolveSessionLocale, incl. unsupported tenant default / unsupported device list / 'pt-BR' exact match, sourced from SPA tests where they exist | `formatting_locale_test.dart`'s table, built from `web/tests/unit/sessionLocale.test.ts`'s TC-1..TC-5 plus the inline "unsupported tenant default" case, plus the `pt-BR` exact-match case sourced from that file's `setTenantDefaultLocale('pt-BR')` test (lines ~79-83, §0) — >= 6 rows total against `resolveFormattingLocale` (§4.1) |
 | 2b: separate table for UI-locale resolver vs resolveUiLocale's base-tag rule, with the two named examples | `ui_locale_test.dart`'s table against `resolveUiLocale` (§4.2), including `['ru-RU'] -> 'ru'` and `['de-DE'] -> 'en'` |
 | 3a: UI-locale-key hit resolves to that value | `localized_text_test.dart` case against `resolveLocalizedText` (§4.3), map branch step 1 |
 | 3b: fallback to 'en' key when UI-locale key absent | same, map branch step 2 |

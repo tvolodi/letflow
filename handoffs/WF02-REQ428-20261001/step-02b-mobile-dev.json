@@ -55,7 +55,10 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ428-20261001",
-      "commit_sha_list": ["ec3f8c97793f169927a902a643a37ebf192c789e"],
+      "commit_sha_list": [
+        "ec3f8c97793f169927a902a643a37ebf192c789e",
+        "089d90f5b88837f32cf794225f3b2ec3f57b5c7b"
+      ],
       "remote_branch": "origin/feature/WF02-REQ428-20261001",
       "push_status": "pushed",
       "pr_url": null,

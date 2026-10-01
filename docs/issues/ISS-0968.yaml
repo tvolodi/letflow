@@ -1,0 +1,32 @@
+id: ISS-0968
+title: "Tenant branding saved via PATCH is not served by host-based tenant-config on qa.bizdala.com; SPA shows default colour (UAT WF05-FULL3 tenant-branding-applied EO-003/EO-005)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001
+severity: MAJOR
+owner: "FRONTEND-DEV (SPA) / ai-dala-infra (QA host config)"
+description: >
+  PATCH /api/v1/tenant/settings persists, and GET /api/tenant-config?realm=<slug>
+  returns the saved colour, but ?host=<qa host> and the no-param call return the
+  default config, and web fetchTenantConfig uses ?host=<hostname> unless a realm
+  override is set -- so a normal SPA load never shows tenant branding.
+affected_files:
+  - web/src/theming/BrandingProvider.tsx
+  - web/src/main.tsx
+queue_ref: Q-937  # queue issue_ref ISS-0937 collides with an unrelated local issue; local number ISS-0968 (next free on origin/main and all open PRs)
+github_ref: GH-2125
+status: resolved
+resolved_in_run: fix/ISS-0968-branding-session-tenant
+resolved_at: "2026-10-02T08:30:00Z"
+resolution: >
+  Root cause (verified in code): lib/letflow/routers/tenant_config.ex deliberately has
+  NO host->tenant binding (moduledoc; owner REQ-076), so ?host= always returns the
+  default config. Backend left unchanged -- inventing a tenant_hostnames table would
+  re-decide a documented design decision. SPA fix: BrandingProvider re-fetches branding
+  by the SESSION's tenant slug (fetchTenantConfigForSlug, ?realm=<tenant_slug>) once a
+  session exists, falling back to the host lookup when signed out; main.tsx now nests
+  <BrandingProvider> inside <AuthProvider> so it can see the session. Test in
+  BrandingProvider.test.tsx; full npm run check passes. NOT run against QA (letflow-2
+  owns it): re-run platform/tenant-branding-applied there. Pre-login screens (login
+  page) still show default branding unless the URL/session carries ?realm=; a QA host
+  binding (ai-dala-infra) or a real host->tenant feature (REQ-076) would be needed for
+  that and is out of scope here.

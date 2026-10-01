@@ -130,8 +130,9 @@ defmodule Letflow.Routers.Instances do
   deciding what permission a pin rebind requires is a policy
   question belonging to
   **REQ-130/REQ-131**. Inventing a route-local permission check here was
-  explicitly ruled out. The route is authenticated and tenant-scoped but not
-  permission-gated; **REQ-131 is the closer.**
+  explicitly ruled out. The route was originally authenticated and
+  tenant-scoped only; it is now gated by the `:InstancesCancel` permission via
+  `authz_post` (see the route definition).
 
   ## Ordering guarantee
 
@@ -884,7 +885,15 @@ defmodule Letflow.Routers.Instances do
         page_size: page_size
       }
 
-      Instances.history(id, params, opts) |> render_page_result(conn, &history_item_map/1)
+      result = Instances.history(id, params, opts)
+
+      names =
+        case result do
+          {:ok, %{items: items}} -> Instances.actor_display_names(items, opts)
+          _error -> %{}
+        end
+
+      render_page_result(result, conn, &history_item_map(&1, names))
     else
       {:error, :invalid_instance_id} ->
         Response.unprocessable(conn, "instance_id is not a valid UUID")
@@ -900,9 +909,11 @@ defmodule Letflow.Routers.Instances do
     end
   end
 
-  defp history_item_map(event) do
+  defp history_item_map(event, display_names) do
     %{
       "event_id" => event.event_id,
+      "actor_id" => event.actor_id,
+      "actor_display_name" => Map.get(display_names, event.actor_id),
       "event_type" => event.event_type,
       "sequence_number" => event.sequence_number,
       "created_at" => DateTime.to_iso8601(event.created_at),

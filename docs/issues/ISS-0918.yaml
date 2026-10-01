@@ -27,4 +27,11 @@ affected_files:
   - lib/letflow/routers/admin_services.ex
 queue_ref: Q-908  # queue allocated issue_ref ISS-0908, which collides with an existing local file; local filename kept as ISS-0918 (next free on origin/main) and GH-2058 retitled to match
 github_ref: GH-2058
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0918-history-actor-retry-policy
+resolved_at: "2026-10-01T12:05:00Z"
+resolution: >
+  M1 history items now emit actor_id + actor_display_name (batched lookup via
+  Instances.actor_display_names/2); M2 service_record_json emits retry_policy
+  (max_retries has no backing column, not invented); M3 moduledoc corrected.
+  73 router tests pass.

@@ -129,6 +129,61 @@ A single WF-02 run covers **at most 4 requirements**. Split larger batches into
 sequential runs — re-running one requirement due to blast radius from an unrelated
 failure in the same batch is more expensive than splitting up front.
 
+## 4a. Continuous processing — "process the queue/backlog in a loop"
+
+**Added 2026-10-01**, after a live session finished one requirement's full WF-02 run
+(REQ-294) and stopped to ask whether to continue into the next eligible requirement
+(REQ-427) instead of just taking it. The user's own framing: told to process tasks in
+a loop, ORCH should never ask again — ORCH takes the next task itself and keeps going
+until the backlog is drained.
+
+**Trigger.** Any instruction that asks for continuous/looped/backlog-draining
+processing — phrasing like "process tasks in a loop," "keep going," "work through the
+backlog," "drain the queue," "until there's nothing left," or an explicit count/`N`
+framed as "do up to N, don't stop to ask in between" — puts ORCH in **drain mode** for
+the remainder of that instruction's scope, not just for the first requirement it names.
+
+**In drain mode, ORCH MUST NOT stop at a requirement/batch boundary to ask whether to
+continue.** The batch cap in §4 limits how many requirements one *WF-02 run* covers —
+it is not a license to pause between runs for confirmation. On a run's Step Final PASS
+(queue task released `done`), ORCH immediately:
+1. Calls `get_next_task` (or, per `TASK_QUEUE.md`'s §B/§C, `GET /tasks` + `set_lock` if
+   there's a concrete reason to prefer a specific eligible task) again.
+2. Classifies whatever comes back against the §3 decision tree and launches the
+   matching workflow — without a "should I continue?" pause, and without waiting for a
+   human turn in between. This includes a task that needs its own mechanical unblock
+   first (a `blocked`-status queue task with a documented reopen path, the way REQ-294's
+   task 585 did) — drain mode means doing that unblock step yourself too, not treating
+   it as a reason to stop and ask.
+3. Repeats until one of these genuine stop conditions is hit — and only these:
+   - `get_next_task` returns `no_eligible_task` (the queue is actually drained, or the
+     queue is unreachable — see `TASK_QUEUE.md`'s Hard Rule; unreachable is reported and
+     stopped on, same as always, but that is a real blocker, not a courtesy pause).
+   - A run reaches `rework_count >= max_rework` and is `ESCALATED` (§5) — a genuine
+     ambiguity or repeated failure that needs a different session/approach, not routine
+     progress to narrate a stop for.
+   - An instruction-precedence conflict that core-directives.md requires surfacing
+     rather than silently resolving (e.g. a role-file stop instruction, a decision-record
+     contradiction) — report and stop on that specific item, but resume draining the rest
+     of the backlog once it's resolved, rather than ending the whole session over it.
+   - The user's own next message changes the instruction (interrupts, redirects, or asks
+     a question) — a real human turn, not a self-generated one.
+4. **Reports progress as a status update, not a question, between runs.** "REQ-294
+   done and merged; starting REQ-427 (now eligible)" is correct. "REQ-294 is done — want
+   me to continue into REQ-427?" is exactly the pattern this section exists to stop:
+   drain mode already answered that question.
+
+**This does not weaken any existing gate.** Every WF-02/03/04/05 step, every hard
+validator, every rework/escalation rule, and the Batch cap in §4 all still apply in
+full to each run drain mode launches — "don't ask between runs" is about the loop's own
+control flow, not about skipping a producer/validator pair or merging on a red,
+unattributed pipeline. Nor does it license drifting into unrelated work: drain mode
+processes the backlog the instruction actually scoped (the named chain, or the whole
+`letflow-queue` backlog if that's what was asked for) — it is still bounded by whatever
+scope the triggering instruction named, per `core-directives.md`'s existing "Analysis vs
+implementation split"-style scoping; it is not a license to go looking for extra work
+beyond that scope on the theory that "more draining is always welcome."
+
 ## 5. Rework and escalation
 
 **On FAIL** (`rework_count < max_rework`):

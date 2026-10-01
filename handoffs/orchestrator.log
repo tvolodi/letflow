@@ -2650,3 +2650,23 @@
 2026-10-01T15:42:18Z | PASS | WF03-ISS0950-20261001 | step-05-issue-fixer-close | ISSUE-FIXER -> ORCH | PASS -- ISS-0950 resolved (local); GH close + release_lock deferred to parent post-merge
 2026-10-01T17:07:37Z | DISPATCH | WF03-ISS0923-20261001 | step-01..05b chain (see handoffs dir)|ORCH -> ISSUE-FIXER..DOC-UPDATER|COMPLETED
 2026-10-01T17:07:37Z | PASS | WF03-ISS0923-20261001 | step-05-issue-fixer|ISSUE-FIXER -> ORCH|PASS -- ISS-0923 resolved (local); design validator FAIL once (rework 1) then PASS; 24 tests, 129 scoped pass; GH close + release_lock deferred to parent post-merge
+2026-10-01T15:24:58Z | DISPATCH | WF03-Q915-20261001 | step-01-issue-fixer-diagnose | ORCH -> ISSUE-FIXER | PENDING
+2026-10-01T15:29:45Z | PASS | WF03-Q915-20261001 | step-01-issue-fixer-diagnose | ISSUE-FIXER -> ORCH | PASS -- no engine timer armed on risk-evaluation; recommended shape A (HUMAN_TASK escalation_timer_duration P21D + escalation_role, retarget fallback edge to regulatory-auto-escalation, conditioned e3, drop orphan node); zero lib change
+2026-10-01T15:29:45Z | DISPATCH | WF03-Q915-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-10-01T15:35:01Z | PASS | WF03-Q915-20261001 | step-02-code-designer | CODE-DESIGNER -> ORCH | PASS -- shape A-prime (e3 condition 'true'), no lib change; design lib/letflow/design/q915-regulatory-review-21day-timer-path.md
+2026-10-01T15:35:01Z | DISPATCH | WF03-Q915-20261001 | step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-10-01T15:36:32Z | PASS | WF03-Q915-20261001 | step-02b-code-design-validator | CODE-DESIGN-VALIDATOR -> ORCH | PASS -- independently re-executed validation; 3 minor issues logged
+2026-10-01T15:36:32Z | DISPATCH | WF03-Q915-20261001 | step-03-elixir-dev | ORCH -> ELIXIR-DEV | PENDING
+2026-10-01T15:38:04Z | PASS | WF03-Q915-20261001 | step-03-elixir-dev | ELIXIR-DEV -> ORCH | PASS -- fixture v1.2 + yaml parity + script comment; 52 existing tests pass
+2026-10-01T15:38:04Z | SKIP | WF03-Q915-20261001 | step-03c-security-reviewer | ORCH | SKIPPED -- fixture/test/docs-only change: no lib/, router, migration, secret, authz or response-shaping change; no tenant-data path touched (diagnosis + design both state lib/ and authz unchanged)
+2026-10-01T15:38:04Z | DISPATCH | WF03-Q915-20261001 | step-03d-reviewer | ORCH -> REVIEWER | PENDING
+2026-10-01T15:39:15Z | PASS | WF03-Q915-20261001 | step-03d-reviewer | REVIEWER -> ORCH | PASS
+2026-10-01T15:39:15Z | DISPATCH | WF03-Q915-20261001 | step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
+2026-10-01T16:20:18Z | PASS | WF03-Q915-20261001 | step-04-test-designer | TEST-DESIGNER -> ORCH | PASS -- 24 tests; fail-first 11/24 red on old fixture (E1 :no_pending_timer); mutants M1,M3,M4,M5,M7,M9 red
+2026-10-01T16:20:18Z | DISPATCH | WF03-Q915-20261001 | step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-10-01T16:23:11Z | PASS | WF03-Q915-20261001 | step-04b-test-design-validator | TEST-DESIGN-VALIDATOR -> ORCH | PASS -- independently reproduced fail-first 11/24 and 3 mutants (6/6/3 red)
+2026-10-01T16:23:11Z | DISPATCH | WF03-Q915-20261001 | step-04c-test-runner | ORCH -> TEST-RUNNER | PENDING
+2026-10-01T16:24:02Z | PASS | WF03-Q915-20261001 | step-04c-test-runner | TEST-RUNNER -> ORCH | PASS -- compile/format clean; scoped 80 passed 0 failures
+2026-10-01T16:24:02Z | DISPATCH | WF03-Q915-20261001 | step-04d-release-validator | ORCH -> RELEASE-VALIDATOR | PENDING
+2026-10-01T16:39:40Z | PASS | WF03-Q915-20261001 | step-04d-release-validator | RELEASE-VALIDATOR -> ORCH | PASS -- independent re-derivation, 60+16 tests pass, mix letflow.check.test exit 0, lib/ unchanged
+2026-10-01T16:40:41Z | INFO | WF03-Q915-20261001 | step-05-close-issue | ORCH | ISS-0932 resolved; follow-ups ISS-0925/Q-925/GH-2105 and ISS-0926/Q-926/GH-2106 filed (also an accidental probe task Q-927/GH-2107 created and closed)

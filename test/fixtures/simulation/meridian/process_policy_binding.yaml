@@ -4,8 +4,13 @@ name: Regulatory Compliance Review
 version: "1.0"
 description: >
   Periodic BaFin-mandated compliance review. Compliance Officer collects evidence;
-  Risk Manager evaluates. Critical findings spawn a remediation sub-process.
-  Exercises: timer boundary event, conditional sub-process, DLQ path.
+  Risk Manager evaluates within 21 days. If risk-evaluation is still open when its
+  P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice
+  and closes. Critical findings spawn a remediation sub-process.
+  Exercises: HUMAN_TASK escalation timer, conditional sub-process, DLQ path.
+  Edge e3 carries the constant condition 'true' on purpose: it always wins on normal
+  task completion but is skipped by the escalation-timer path, which follows the
+  single non-conditioned edge timeout-risk-evaluation.
 graph:
   nodes:
     - id: start
@@ -23,11 +28,8 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-risk-manager
-    - id: risk-evaluation-timeout
-      node_type: SERVICE_TASK
-      attributes:
-        endpoint: POST /internal/reviews/{review_id}/flag
-        timeout_ms: 300000
+        escalation_timer_duration: P21D
+        escalation_role: role-ceo
     - id: regulatory-auto-escalation
       node_type: SERVICE_TASK
       attributes:
@@ -83,13 +85,11 @@ graph:
     - id: e3
       source: risk-evaluation
       target: severity-routing
-    # on_timeout for risk-evaluation
+      condition: "true"
+    # escalation timer (P21D) fallback for risk-evaluation -> BaFin notice
     - id: timeout-risk-evaluation
       source: risk-evaluation
-      target: risk-evaluation-timeout
-    - id: e4
-      source: risk-evaluation-timeout
-      target: severity-routing
+      target: regulatory-auto-escalation
     - id: e5
       source: regulatory-auto-escalation
       target: end-closed

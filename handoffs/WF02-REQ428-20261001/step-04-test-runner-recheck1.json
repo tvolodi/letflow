@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ428-20261001/step-04-test-runner-recheck1.json",
   "created_at": "2026-10-01T07:40:00Z",
   "started_at": "2026-10-01T07:40:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T07:56:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -35,18 +35,20 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "A9 invariant test re-run in isolation: 25 passed, 0 failures -- confirms ORCH's index entries: 6->7 fix (commit b64bb665) resolved the drift. Full scripts/test_parallel.sh (TEST_PARALLEL_N=2, host free mem ~4.99GB): 5106/5118 passed, 12 failures, all 12 structurally pre-existing (Letflow.Routers.EventRetentionTest x1, Letflow.EventStore.RetentionOperationsTest x3, Letflow.EventStore.PartitionMaintenanceTest x8 -- none of their files/lib sources appear in `git diff --name-only main...HEAD`). Zero new failures vs the prior Step 4 run; the one failure that disappeared (Letflow.Test.TenantTemplateTest) is read as flaky, not a fix this branch made. flutter analyze: no issues. flutter test (apps/mobile/): 252/252 passed. Mid-run a sibling session checked this shared working directory out to another branch and back; confirmed via git reflog this happened after test_parallel.sh's pre-compile/seed steps (so results are valid for this branch), checked back out to feature/WF02-REQ428-20261001 before writing this report/committing.",
+    "artifacts_out": [
+      "test/reports/report-20261001-WF02-REQ428-20261001-recheck1.yaml"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ428-20261001",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ428-20261001",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to RELEASE-VALIDATOR"
   },
   "rework_count": 1,
   "max_rework": 3,

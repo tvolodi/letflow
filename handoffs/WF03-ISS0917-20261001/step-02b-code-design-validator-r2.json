@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0917-20261001/step-02b-code-design-validator-r2.json",
   "created_at": "2026-10-01T12:28:25Z",
   "started_at": "2026-10-01T12:28:25Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T12:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -41,5 +41,23 @@
       "No new blocking issue",
       "No file other than the handoff modified"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "VERDICT: PASS. All 5 prior blocking issues verified FIXED by reading the file; no new blocking issue.\n\nPRIOR BLOCKERS: (1) e2e trap URL fixed (sec 6.4 item 2): v1=base+'/shared-connection/v1' (default https://httpbin.org/anything); v2 trap=new URL(base).origin + SERVICE_TASK_MOCK_TRAP_PATH (default /status/503); non-httpbin mock handled via trap-path override or E2E_SKIP_SERVICE_TASK_POLL=1; coherent with ISS-0930 precedent (default confirmed in iss0930 design line ~148). (2) e2e completing identity prescribed concretely (item 6): jwtSubject imported from ../pipeline (exists, web/tests/e2e/pipeline.ts:75, exported), adminSub in state, HUMAN_TASK role/assignee_ref=sub, assignee_type 'USER' uppercase; verified against code: TaskActivation stores assignee_type verbatim, Letflow.Tasks.apply_completion_authz clauses are nil/USER/GROUP/ROLE only, so the lowercase fixture (spec line 204) would fail. Shipment spec idiom (role=user sub) exists; design correctly differs by using uppercase USER. (3) R1/R2 now use ROLE/approver idiom with insert_user!/insert_group!/insert_group_member!/insert_role! - helpers exist at test/letflow/routers/tasks_test.exs:113,128,136,150 and 'REQ-085 AC1' describe at 1298. (4) OQ-6 KEEP; service_task_test.exs:279 listed as UNCHANGED in 4.2. (5) Deferral language gone: env var E2E_SKIP_SERVICE_TASK_POLL=1 named with polarity, OQ-7 decided, OQ-4/OQ-8 are stated facts (pin_rebind.ex:340 lock_projection_nowait confirmed; unique index in migration 20260921000004 confirmed), D7 says 'Confirmed'. grep for TBD/TODO/verify/ORCH confirms: none (only 'deferred'/'defer' used in negated rationale).\n\nNEW FACTS RE-CHECKED: call-site lines 563/2481/2702/3106/3518 and tenant_id bindings at 2477/2698/3102 are exact; tasks.ex 403 clauses at 378-388 and catch-all after (clause ~402, comment block lists {:instance_execution_error,_,_} as design says); handle_list route params (status PENDING, instance_id) match item 3; instances routes /:id and /:id/history exist; start_service_task_dispatcher false only in config/test.exs:56; tenant_id_for_schema_name returns {:error,:invalid_schema_name} (3.3a/T11 coherent); section 3.3a/T10/T11 consistent with 3.4-3.6. No fenced code blocks in doc; no implementation code. Design file is already committed (git status shows only unrelated untracked workspace file); no file modified by this step except this handoff.\n\nCOMPLETENESS PASS: ELIXIR-DEV (signatures, pipeline order, snapshot keys, error tuples per site, file list), TEST-DESIGNER (T1-T11, resolver matrix, R1-R3, mutants, authz setup) and FRONTEND-DEV (state addition, env vars, step 04b assertions, fixture change, skip annotation) can implement without guessing.\n\nNON-BLOCKING (fix opportunistically, e.g. DOC-UPDATER/ELIXIR-DEV; do not re-gate): (a) sec 6.4 item 6 cites 'Tasks.apply_completion_authz/3 (routers/tasks.ex:540-565)' - actually Letflow.Tasks in lib/letflow/tasks.ex:540-565 (clauses verified there). (b) sec 12 retains a vestigial empty table header '| ID | Question | Default if unanswered |' above the status table; cosmetic. (c) sec 11 says 'T1-T9' though T10/T11 exist. (d) completion-hop empty_url clause is at engine.ex:3549 not ~3545 ('near' wording, function-anchored).",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design 6.4 item 6 attributes apply_completion_authz/3 to routers/tasks.ex:540-565; it lives in lib/letflow/tasks.ex:540-565.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Design sec 12 has a vestigial empty table header 'Default if unanswered'; sec 11 says T1-T9 though T10/T11 exist.",
+        "affected_requirement": null
+      }
+    ],
+    "next_action": "Route to ELIXIR-DEV (implementation); REVIEWER sign-off required for D4 / req085 5.5.1 amendment; SECURITY-REVIEWER mandatory."
   }
 }

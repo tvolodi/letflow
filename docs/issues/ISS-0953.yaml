@@ -1,0 +1,27 @@
+id: ISS-0953
+title: "Meridian/vortex persona seed scripts abort on personas without a Keycloak account, leaving every role group empty (UAT WF05-FULL3)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001
+severity: MAJOR
+owner: "ELIXIR-DEV / FRONTEND-DEV (scripts)"
+description: >
+  seed_meridian_persona_actors.sh (actor-meridian-oliver) and
+  seed_vortex_persona_actors.sh (actor-vortex-dirk, -max, -claudia) aborted in the
+  shared lookup step for personas with no Keycloak account on QA, after groups/roles
+  were created but BEFORE any membership was added, so every role-* group stayed empty
+  and every routed task was unclaimable (409 claim / 403 complete).
+affected_files:
+  - scripts/lib/seed_persona_actors_base.sh
+queue_ref: Q-932  # queue issue_ref ISS-0932 collides with an unrelated local issue; local number ISS-0953 (next free on origin/main and all open PRs)
+github_ref: GH-2118
+status: resolved
+resolved_in_run: fix/ISS-0953-persona-seed-skip-missing
+resolved_at: "2026-10-02T06:00:00Z"
+resolution: >
+  persona_run now resolves personas with lookup_user_id_optional: a persona with no
+  account is skipped with a warning (HTTP errors still abort), memberships are seeded
+  for every other persona, and the script reports the skipped personas and exits
+  non-zero at the end. Regression test persona_actor_seed_missing_account_test.exs
+  (stub curl; fails pre-fix). Not run against QA -- letflow-2 owns that environment.
+  The ai-dala-infra part (provision oliver/dirk/max/claudia in Keycloak) remains open
+  and is outside this repo; dirk -> role-ceo stays empty until that account exists.

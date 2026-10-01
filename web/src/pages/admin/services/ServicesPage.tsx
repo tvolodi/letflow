@@ -8,6 +8,7 @@ import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { Button } from '@/components/ui/Button'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
+import { deferClickState } from '@/utils/deferClickState'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import type { ApiError } from '@/types/api'
 
@@ -199,22 +200,22 @@ export default function ServicesPage() {
             header: 'Actions',
             accessor: (row: ServiceRecord) => (
               <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-                <Button variant="secondary" size="sm" onClick={() => openEditScope(row)}>
+                <Button variant="secondary" size="sm" onClick={() => deferClickState(() => openEditScope(row))}>
                   Edit scope
                 </Button>
                 {/* CUSTOM: REQ-432 — publish new version / retire row actions */}
-                <Button variant="secondary" size="sm" onClick={() => setPublishTarget(row)}>
+                <Button variant="secondary" size="sm" onClick={() => deferClickState(() => setPublishTarget(row))}>
                   Publish new version
                 </Button>
                 <Button
                   variant="secondary"
                   size="sm"
                   disabled={row.status === 'RETIRED'}
-                  onClick={() => setRetireTarget(row.service_id)}
+                  onClick={() => deferClickState(() => setRetireTarget(row.service_id))}
                 >
                   Retire
                 </Button>
-                <Button variant="danger" size="sm" onClick={() => setDeleteTarget(row.service_id)}>
+                <Button variant="danger" size="sm" onClick={() => deferClickState(() => setDeleteTarget(row.service_id))}>
                   Delete
                 </Button>
               </div>
@@ -231,7 +232,7 @@ export default function ServicesPage() {
         {/* CUSTOM: role-gate — Register button only for platform-admin */}
         {isPlatformAdmin && (
           <span style={{ marginLeft: 'auto' }}>
-            <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}>
+            <Button variant="primary" size="sm" onClick={() => deferClickState(() => setShowCreate(true))}>
               + Register service
             </Button>
           </span>
@@ -329,12 +330,12 @@ export default function ServicesPage() {
                 </div>
               )}
               <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-                <Button variant="secondary" size="sm" onClick={() => setShowCreate(false)}>Cancel</Button>
+                <Button variant="secondary" size="sm" onClick={() => deferClickState(() => setShowCreate(false))}>Cancel</Button>
                 <Button
                   variant="primary"
                   size="sm"
                   loading={createMutation.isPending}
-                  onClick={() => createFormRef.current?.requestSubmit()}
+                  onClick={() => deferClickState(() => createFormRef.current?.requestSubmit())}
                 >
                   {createMutation.isPending ? 'Registering…' : 'Register'}
                 </Button>
@@ -367,12 +368,12 @@ export default function ServicesPage() {
                 </div>
               )}
               <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-                <Button variant="secondary" size="sm" onClick={() => setEditTarget(null)}>Cancel</Button>
+                <Button variant="secondary" size="sm" onClick={() => deferClickState(() => setEditTarget(null))}>Cancel</Button>
                 <Button
                   variant="primary"
                   size="sm"
                   loading={updateScopeMutation.isPending}
-                  onClick={() => editFormRef.current?.requestSubmit()}
+                  onClick={() => deferClickState(() => editFormRef.current?.requestSubmit())}
                 >
                   {updateScopeMutation.isPending ? 'Saving…' : 'Save'}
                 </Button>
@@ -396,12 +397,12 @@ export default function ServicesPage() {
               </div>
             )}
             <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" size="sm" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="secondary" size="sm" onClick={() => deferClickState(() => setDeleteTarget(null))}>Cancel</Button>
               <Button
                 variant="danger"
                 size="sm"
                 loading={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate(deleteTarget)}
+                onClick={() => deferClickState(() => deleteMutation.mutate(deleteTarget))}
               >
                 {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
               </Button>
@@ -470,13 +471,13 @@ export default function ServicesPage() {
                 </div>
               )}
               <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-                <Button variant="secondary" size="sm" onClick={() => setPublishTarget(null)}>Cancel</Button>
+                <Button variant="secondary" size="sm" onClick={() => deferClickState(() => setPublishTarget(null))}>Cancel</Button>
                 <Button
                   variant="primary"
                   size="sm"
                   data-testid="publish-version-submit"
                   loading={publishMutation.isPending}
-                  onClick={() => publishFormRef.current?.requestSubmit()}
+                  onClick={() => deferClickState(() => publishFormRef.current?.requestSubmit())}
                 >
                   {publishMutation.isPending ? 'Publishing…' : 'Publish'}
                 </Button>
@@ -501,13 +502,13 @@ export default function ServicesPage() {
               </div>
             )}
             <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" size="sm" onClick={() => setRetireTarget(null)}>Cancel</Button>
+              <Button variant="secondary" size="sm" onClick={() => deferClickState(() => setRetireTarget(null))}>Cancel</Button>
               <Button
                 variant="danger"
                 size="sm"
                 data-testid="retire-confirm-submit"
                 loading={retireMutation.isPending}
-                onClick={() => retireMutation.mutate(retireTarget)}
+                onClick={() => deferClickState(() => retireMutation.mutate(retireTarget))}
               >
                 {retireMutation.isPending ? 'Retiring…' : 'Retire'}
               </Button>

@@ -1,0 +1,27 @@
+id: ISS-0951
+title: "Pipeline e2e specs seed HUMAN_TASK with lowercase assignee_type 'user' and literal assignee_ref: fails task-complete authorization"
+discovered_by: CODE-DESIGN-VALIDATOR
+discovered_in_run: WF03-ISS0917-20261001
+severity: MINOR
+owner: "FRONTEND-DEV"
+description: >
+  attachment-cross-tenant, platform-definition-promotion-approved, -conflict-rejected
+  and -rollback pipeline specs seeded HUMAN_TASK attributes with assignee_type 'user'
+  (lowercase) and a literal assignee_ref. Letflow.Tasks.apply_completion_authz/3 only
+  has clauses nil/USER/GROUP/ROLE, so completing such a task would fail. Use uppercase
+  USER with the admin token's JWT sub (as platform-instance-pin-survives-catalog-change
+  does, ISS-0917).
+affected_files:
+  - web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/platform-definition-promotion-approved.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/platform-definition-promotion-conflict-rejected.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts
+queue_ref: Q-924  # queue issue_ref ISS-0924 collides with a different local issue; local file numbered ISS-0951 (next free on origin/main and all open PRs)
+github_ref: GH-2098
+status: resolved
+resolved_in_run: fix/ISS-0951-pipeline-specs-uppercase-user-assignee
+resolved_at: "2026-10-01T15:00:00Z"
+resolution: >
+  All four specs now seed assignee_type 'USER' with role/assignee_ref =
+  jwtSubject(<admin token>). Playwright e2e specs were not executed here (need a live
+  stack); the changed files type-check clean for the touched symbols.

@@ -70,6 +70,7 @@ import {
   navigateSpa,
   resolveTenantContext,
   authHeaders,
+  jwtSubject,
   shot,
 } from '../pipeline'
 import { assertServiceReadiness, resolveCredential } from '../helpers'
@@ -134,7 +135,7 @@ test.describe('Pipeline: platform-definition-promotion-approved (PW-01)', () => 
                 id: 'n2',
                 node_type: 'HUMAN_TASK',
                 label: `Review ${fixtureId}`,
-                attributes: { role: 'admin-user', assignee_type: 'user', assignee_ref: 'admin-user' },
+                attributes: { role: jwtSubject(s.adminToken), assignee_type: 'USER', assignee_ref: jwtSubject(s.adminToken) },
               },
               { id: 'n3', node_type: 'END', label: 'End', attributes: null },
             ],

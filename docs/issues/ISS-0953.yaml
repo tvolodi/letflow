@@ -1,0 +1,15 @@
+id: ISS-0953
+title: "SERVICE_TASK outbound request is not audited; UAT EO-002 (regulatory notice payload reason) unobservable"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-Q926-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T20:06:54Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  The engine writes no audit event for the outbound SERVICE_TASK HTTP request or its body. After ISS-0926 the rendered reason (sla_breach_30_days) is visible only inside the SERVICE_TASK_COMPLETED payload decoded_body, and only for endpoints that echo the request (httpbin). Scenario regulatory-compliance-review-bafin.yaml EO-002 (verification method audit_event) stays unmet as worded. Options: audit an outbound-request event with a size-capped body (SECURITY-REVIEWER pass required), or have BA-MERIDIAN reword EO-002 to read the completed payload.
+  Found while fixing ISS-0926. Queue label is ISS-0934 (collides with an existing local file); local file is ISS-0953.
+related:
+  - ISS-0926
+queue_ref: Q-934
+github_ref: GH-2122
+status: open

@@ -1,0 +1,15 @@
+id: ISS-0954
+title: "Sub-process completion discards pending SERVICE_TASK dispatch events: nodes after a SUB_PROCESS never dispatch"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-Q926-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T20:06:54Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  lib/letflow/engine/sub_process.ex (~877-894) discards pending events (_more_pending) after a sub-process completes, so a SERVICE_TASK reached right after a sub-process creates no dispatch row. Concretely the meridian regulatory review e10 path (remediation-subprocess -> post-remediation-check -> regulatory-remediation-escalation) is routed but its notice is never sent. Pre-existing; out of ISS-0926 scope (design section 3.6). Fix: carry the pending service-task events through the sub-process completion hop and dispatch them, with a DB-backed regression test.
+  Found while fixing ISS-0926. Queue label is ISS-0935 (collides with an existing local file); local file is ISS-0954.
+related:
+  - ISS-0926
+queue_ref: Q-935
+github_ref: GH-2123
+status: open

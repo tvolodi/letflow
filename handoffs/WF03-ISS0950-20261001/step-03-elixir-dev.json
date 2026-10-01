@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0950-20261001/step-03-elixir-dev.json",
   "created_at": "2026-10-01T15:00:54Z",
   "started_at": "2026-10-01T15:00:54Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T15:11:39Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -48,7 +48,37 @@
       "mix compile --warnings-as-errors clean and scoped existing tests green (real output quoted)"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented design iss0950 exactly. url_validator.ex: added public validate_syntactic/1 (@spec; shares check_scheme/check_ip_literal/blocklist via a :no_dns mode on check_host; validate/1,2 and default_resolver untouched; moduledoc paragraph). entry.ex: alias UrlValidator, public check_endpoint_url/1 (head extraction at first / ? # after first ://, brace in head rejected, validate_syntactic on head only), private validate_endpoint_url/1 using get_field (runs on unchanged values; skipped for nil or existing :endpoint_url error), wired after validate_length in insert_changeset and publish_changeset, error message and validation: :endpoint_url_not_allowed per D4, moduledoc paragraph. service_catalog.ex: two @doc sentences only (register/1, publish/3). engine_catalog_service_task_test.exs: single fixture change (register_with!(%{}) then Repo.update_all seeding {{variables.absent}} with comment). No router, dispatcher, engine change. Verification: MIX_ENV=test mix compile --warnings-as-errors clean; mix format --check-formatted ok on touched files; scratch script (outside repo, not committed) confirmed all 21 REJECT and 11 ACCEPT URL classes from the design matrix via Entry.check_endpoint_url/1. Scoped tests (engine_catalog_service_task, service_catalog, url_validator, admin_services, admin_services_publish_retire, service_catalog_resolve_pinned_version, webhooks): 'Result: 141/147 passed'. The 6 failures are all in service_catalog_test.exs AC6 delete/1 and AC7 update_scope/2 referential-guard tests, failing with Postgrex 42P01 relation tenant_template_build_<hex>.process_definitions does not exist -- stale tenant_template_build_* tenant_schemas rows in the shared test DB (TenantSchemaReaper warnings list them); those paths never touch endpoint_url validation, so judged environmental, not caused by this change. The new regression matrix and U-NODNS tests are NOT written (TEST-DESIGNER). Docs item 4 (security-invariants.md INV-9 paragraph) not done; left for DOC-UPDATER. Not committed. Design-vs-code note: engine_catalog_service_task_test passed including the reseeded url_rendered_empty test.",
+    "artifacts_out": [
+      "lib/letflow/webhooks/url_validator.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog.ex",
+      "test/letflow/engine_catalog_service_task_test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "6 service_catalog_test.exs tests (AC6 delete/1, AC7 update_scope/2) fail in this shared test DB with 42P01 on stale tenant_template_build_* schemas; environmental, unrelated to ISS-0950, but TEST-RUNNER should confirm on a clean DB.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "started_at was set by ORCH at dispatch; not touched. docs/agents/instructions/security-invariants.md INV-9 update (design item 4) deferred to DOC-UPDATER.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data/SSRF path) then REVIEWER; then TEST-DESIGNER for the matrix. ORCH commits the 4 changed files."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

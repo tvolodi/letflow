@@ -20,6 +20,12 @@ defmodule Letflow.Webhooks.UrlValidator do
 
   Only `"https"` is permitted as URL scheme; `"http"` and all other schemes
   are rejected.
+
+  `validate_syntactic/1` (ISS-0950) is the no-DNS variant: same scheme check and
+  the same IP-literal blocklist, but a hostname is accepted without being
+  resolved. Its sole intended use is write-time fast feedback (e.g. the service
+  catalog's `endpoint_url`); it is never a substitute for `validate/1,2` before
+  a request is made.
   """
 
   import Bitwise
@@ -45,6 +51,23 @@ defmodule Letflow.Webhooks.UrlValidator do
 
     with :ok <- check_scheme(uri),
          :ok <- check_host(uri, dns_resolver) do
+      :ok
+    end
+  end
+
+  @doc """
+  Syntactic-only variant of `validate/2`: scheme must be `https`, host must be
+  present, and an IP-literal host is checked against the same blocklist. A
+  non-IP hostname returns `:ok` with no DNS resolution (this function cannot
+  reach `:inet`). Advisory write-time feedback only -- `validate/1,2` remains
+  the binding check immediately before any request.
+  """
+  @spec validate_syntactic(url :: String.t()) :: :ok | {:error, :target_url_not_allowed}
+  def validate_syntactic(url) do
+    uri = URI.parse(url)
+
+    with :ok <- check_scheme(uri),
+         :ok <- check_host(uri, :no_dns) do
       :ok
     end
   end
@@ -97,12 +120,13 @@ defmodule Letflow.Webhooks.UrlValidator do
   defp check_scheme(%URI{scheme: "https"}), do: :ok
   defp check_scheme(_), do: {:error, :target_url_not_allowed}
 
-  @spec check_host(URI.t(), dns_resolver()) :: :ok | {:error, :target_url_not_allowed}
+  @spec check_host(URI.t(), dns_resolver() | :no_dns) :: :ok | {:error, :target_url_not_allowed}
   defp check_host(%URI{host: nil}, _dns_resolver), do: {:error, :target_url_not_allowed}
   defp check_host(%URI{host: ""}, _dns_resolver), do: {:error, :target_url_not_allowed}
 
   defp check_host(%URI{host: host}, dns_resolver) do
     case check_ip_literal(host) do
+      :not_an_ip when dns_resolver == :no_dns -> :ok
       :not_an_ip -> resolve_and_check(String.to_charlist(host), dns_resolver)
       result -> result
     end

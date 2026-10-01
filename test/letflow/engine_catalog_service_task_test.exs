@@ -360,7 +360,13 @@ defmodule Letflow.EngineCatalogServiceTaskTest do
 
     test "an endpoint_url that renders to an empty string keeps the existing url_rendered_empty error (no row)" do
       tenant = tenant!()
-      entry = register_with!(%{endpoint_url: "{{variables.absent}}"})
+      entry = register_with!(%{})
+
+      # Seeded as legacy data on purpose: register/1 now rejects a templated host
+      # (ISS-0950), but such a row can still exist and the engine must stay robust.
+      Repo.update_all(from(e in Entry, where: e.service_id == ^entry.service_id),
+        set: [endpoint_url: "{{variables.absent}}"]
+      )
 
       {instance_id, task} =
         start_with_task!(tenant, graph_task_then_catalog(entry.service_id, 5_000), %{})

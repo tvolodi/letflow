@@ -1,0 +1,15 @@
+{
+  "agent": "RELEASE-VALIDATOR",
+  "run": "WF03-ISS0931-20261001",
+  "verdict": "PASS",
+  "checks": {
+    "drift_test": "mix test test/scripts/persona_actor_seed_drift_test.exs: 16 passed",
+    "bash_n": "all three scripts OK",
+    "meridian_roles": "8 roles in fixtures equal 8 ROLES in script",
+    "vortex_roles": "4 roles in fixtures equal 4 ROLES in script",
+    "persona_mapping": "all persona rows reference seeded roles only",
+    "lib_diff": "only a docs design md under lib/letflow/design; no code changes",
+    "qa_untouched": "nothing run against QA; scripts only reference QA_URL at runtime"
+  },
+  "notes": "Full suite not run per instruction; CI is the gate. Scripts need executable bit set by ORCH via git update-index."
+}

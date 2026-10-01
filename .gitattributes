@@ -43,3 +43,4 @@ handoffs/orchestrator.log merge=union
 
 # Shell scripts must stay LF or bash fails on CRLF checkouts (scripts/uat_preflight.sh).
 scripts/*.sh text eol=lf
+scripts/lib/*.sh text eol=lf

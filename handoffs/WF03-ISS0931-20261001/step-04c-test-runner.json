@@ -1,0 +1,23 @@
+{
+  "agent": "TEST-RUNNER",
+  "run_id": "WF03-ISS0931-20261001",
+  "step": "04c",
+  "branch": "feature/WF03-ISS0931-20261001",
+  "lib_diff": "none (scripts, one test file, docs only)",
+  "db": "letflow-2-postgres-1 on port 5472 (from .env), not the shared letflow-postgres-1; no data deleted",
+  "results": {
+    "new_test_file": {"cmd": "mix test test/scripts/persona_actor_seed_drift_test.exs", "result": "16 passed, 0 failed"},
+    "gate_run_1": {"cmd": "mix letflow.check.test (N=16)", "result": "ecto.migrate for partition 11 failed with a DBConnection pool timeout; no partition launched", "cause": "transient DB load (Postgres container briefly at 370 percent CPU); not reproducible on retry"},
+    "gate_run_2": {"cmd": "mix letflow.check.test (N=16)", "result": "partition 5 hit the 1800s timeout and was killed with no Result line; 36 failures across 26 files in the other 15 partitions"},
+    "gate_run_3": {"cmd": "mix letflow.check.test (N=16)", "result": "partition 10 died in its template build on a 15s checkout timeout; no further partitions admitted"},
+    "gate_run_4": {"cmd": "TEST_PARALLEL_N=8 mix letflow.check.test", "result": "partitions 5 and 8 hit the 1800s timeout with no Result line; partitions 1,7 clean; 7 failures in partitions 2,3,4,6; no combined pass total produced"}
+  },
+  "isolation_reruns": {
+    "gate_run_2_failing_files": "26 files re-run together: 213/224 passed, 11 failed, all in service_catalog_reaper_test, tenant_schema_reaper_test and tenant_template_test",
+    "after_sibling_quiesced": "those 3 files re-run: 28 passed, 0 failed",
+    "gate_run_4_failing_files": "4 files re-run: 62 passed, 0 failed"
+  },
+  "attribution": "Every failure that was re-runnable passed in isolation. The reaper and template tests assert on other mix test connections to the shared test DB. A sibling session's mix test --failed (erl pid 24752, started 18:09) was connected to letflow_test during the 11-failure re-run. A second sibling mix test (pid 39280, started 17:13) was also present. Failures differed from run to run, so they are load and race related. The partition 5 and 8 hangs could not be attributed to a specific test because the partition logs were cleaned up.",
+  "not_done": "No clean-main worktree comparison. Each gate run takes about 20 to 30 minutes and hits the same environmental limits. A hang in the new test is ruled out: it runs in 0.3s, spawns only bash -n, and passes in isolation.",
+  "verdict": "NEW TEST GREEN (16/16). Full-suite gate NOT GREEN and no combined pass total could be obtained. Failures re-runnable in isolation pass; the partition hangs are unattributed."
+}

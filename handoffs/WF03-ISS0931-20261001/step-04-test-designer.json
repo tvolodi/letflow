@@ -1,0 +1,27 @@
+{
+  "step": 4,
+  "agent": "TEST-DESIGNER",
+  "run": "WF03-ISS0931-20261001",
+  "status": "complete",
+  "artifacts_out": [
+    "test/scripts/persona_actor_seed_drift_test.exs",
+    "test/specs/ISS-0931.md"
+  ],
+  "result": {
+    "summary": "16 tests, all pass on branch (mix test with --warnings-as-errors: Result 16 passed, exit 0). Pre-fix (main plus only the new test, throwaway worktree): 16/16 fail. mix letflow.check.test could not run here: test_parallel ecto.create failed for partition 1 (environment DB issue, not the test); a forced warnings-as-errors single-file run was used instead, with zero 'default values for the optional arguments' hits. Worktrees removed.",
+    "pass_counts": {"branch": "16/16", "pre_fix_main_plus_test_only": "0/16"},
+    "mutants_real_files": [
+      {"id": "M1", "mutation": "delete role-loan-ops from meridian ROLES", "failed": 2, "passed": 14, "failing": ["meridian ROLES equals fixtures", "meridian persona roles seeded"]},
+      {"id": "M2", "mutation": "add role-procurement-manager to vortex ROLES", "failed": 3, "passed": 13, "failing": ["vortex ROLES equals fixtures", "vortex persona roles seeded", "vortex sources lib/procurement pin"]},
+      {"id": "M3", "mutation": "vortex karl references role-qa-lead", "failed": 1, "passed": 15, "failing": ["vortex persona roles seeded"]},
+      {"id": "M4", "mutation": "actor-meridian-ben in vortex PERSONAS", "failed": 1, "passed": 15, "failing": ["vortex persona roles seeded"]},
+      {"id": "M5", "mutation": "drop role-cro from all meridian personas", "failed": 1, "passed": 15, "failing": ["meridian persona roles seeded"]},
+      {"id": "M7", "mutation": "unclosed if appended to vortex script", "failed": 1, "passed": 15, "failing": ["vortex bash -n"]},
+      {"id": "M8", "mutation": "meridian ROLES opener renamed ROLE=(", "failed": 4, "passed": 12, "failing": ["meridian ROLES equals fixtures", "meridian persona roles seeded", "in-memory M1", "in-memory M5"]},
+      {"id": "M9", "mutation": "unclosed if appended to shared lib", "failed": 2, "passed": 14, "failing": ["meridian bash -n", "vortex bash -n"]},
+      {"id": "M10", "mutation": "remove source line from vortex script", "failed": 1, "passed": 15, "failing": ["vortex sources lib and persona_run"]}
+    ],
+    "mutant_M6": "fixture-side mutation (extra role node in a temp fixture JSON) is covered by an in-memory test, M6, which asserts the guard reports it; not a repo-file mutant",
+    "revert_verification": "worktrees removed and pruned; main checkout never mutated"
+  }
+}

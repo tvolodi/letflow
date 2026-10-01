@@ -1,0 +1,23 @@
+{
+  "step": "4b",
+  "agent": "TEST-DESIGN-VALIDATOR",
+  "run": "WF03-ISS0931-20261001",
+  "verdict": "PASS",
+  "branch_run": "mix test on real branch: Result 16 passed",
+  "mutants_applied_independently": [
+    {"id": "M1", "mutation": "delete role-loan-ops from meridian ROLES", "result": "14/16 passed, 2 failed"},
+    {"id": "M4", "mutation": "actor-meridian-ben in vortex PERSONAS", "result": "15/16 passed, 1 failed"},
+    {"id": "M9", "mutation": "unclosed if in shared lib", "result": "14/16 passed, 2 failed (bash -n)"},
+    {"id": "M10", "mutation": "remove source line from vortex script", "result": "15/16 passed, 1 failed"}
+  ],
+  "counts_match_designer_report": true,
+  "revert_verification": "mutants applied only in throwaway worktree (removed and pruned); worktree restored files re-ran 16 passed; main checkout git status unchanged",
+  "checks": {
+    "no_skip_tags": true,
+    "no_todo": true,
+    "hermetic": "pure file reads, tmp files with unique names and on_exit cleanup, no DB",
+    "bash_skip_convention": "bash_n returns skip only when no bash found (UAT_PF_BASH or find_executable); CI runs on ubuntu-latest where bash exists, so the guard is not vacuous there. Other 14 tests and M-tests are bash-independent.",
+    "no_secrets": true
+  },
+  "gaps": []
+}

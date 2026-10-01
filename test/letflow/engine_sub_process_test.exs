@@ -345,6 +345,45 @@ defmodule Letflow.EngineSubProcessTest do
     }
   end
 
+  # ISS-0945 regression (post release-validator FAIL) -- same shape as
+  # graph_parent_task_then_subprocess_then_gateway_then_service_task/1 above, but
+  # "svc"'s endpoint is a single placeholder referencing a variable that is never
+  # set, so it renders empty (mirrors
+  # test/letflow/engine/service_task_wiring_test.exs:538-566's own AC4
+  # unresolvable-endpoint precedent). This drives the
+  # prepare_service_task_dispatch_for_completion/8 call inside
+  # build_completion_multi_from_merge/12 into its {:error, {:empty_url_error, ...}}
+  # branch -- the branch whose idempotency_key argument was the actual bug.
+  defp graph_parent_task_then_subprocess_then_gateway_then_broken_service_task(
+         child_definition_name
+       ) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "gate", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "gater"}},
+        %{
+          "id" => "sp",
+          "node_type" => "SUB_PROCESS",
+          "attributes" => %{"definition_name" => child_definition_name}
+        },
+        %{"id" => "gw", "node_type" => "EXCLUSIVE_GATEWAY"},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{"endpoint" => "{{variables.missing}}", "timeout_ms" => 5000}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "gate"},
+        %{"id" => "e2", "source" => "gate", "target" => "sp"},
+        %{"id" => "e3", "source" => "sp", "target" => "gw"},
+        %{"id" => "e4", "source" => "gw", "target" => "svc", "is_default" => true},
+        %{"id" => "e5", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
   defp start_attrs(definition, overrides \\ %{}) do
     Map.merge(
       %{
@@ -1389,6 +1428,78 @@ defmodule Letflow.EngineSubProcessTest do
         Repo.all(Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch, prefix: schema_name)
 
       assert [%{node_id: "svc", status: "pending", attempt_index: 0}] = dispatch_rows
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0945 regression, filed by RELEASE-VALIDATOR against PR #2136: the two new
+  # ISS-0945 error branches in build_completion_multi_from_merge/12
+  # (lib/letflow/engine/sub_process.ex) passed the raw, caller-supplied
+  # `idempotency_key` into prepare_service_task_dispatch_for_completion/8 instead of
+  # the already-derived `error_idempotency_key` every other error branch in that same
+  # function uses. In the sub-process completion path the parent HUMAN_TASK's own
+  # TASK_COMPLETED event is unconditionally appended FIRST (under the raw
+  # idempotency_key), so by the time this branch tried to append its own
+  # EXECUTION_ERROR event under that SAME raw key, `ON CONFLICT (idempotency_key) DO
+  # NOTHING` silently no-op'd and a later read-back fetched the wrong (gate task's
+  # own TASK_COMPLETED) row, crashing
+  # Letflow.Engine.ExecutionError.land_execution_error_dlq_entry/3 with
+  # `** (KeyError) key "reason" not found`. Fixed by passing `error_idempotency_key`
+  # instead (matching every sibling error branch's own convention).
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0945 regression -- an unresolvable SERVICE_TASK reached immediately after sub-process completion routes to :error without crashing" do
+    test "sub-process completion cascades through a gateway onto a misconfigured SERVICE_TASK: instance lands cleanly in :error, no KeyError raise" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      child_def = active_definition!(schema_name, graph_child_immediate())
+
+      parent_def =
+        active_definition!(
+          schema_name,
+          graph_parent_task_then_subprocess_then_gateway_then_broken_service_task(child_def.name)
+        )
+
+      assert {:ok, created} = Engine.create(start_attrs(parent_def), prefix: schema_name)
+      gate_task = pending_task_for_instance!(schema_name, created.instance_id)
+
+      # Pre-fix: this call raised `** (KeyError) key "reason" not found` inside
+      # Letflow.Engine.ExecutionError.land_execution_error_dlq_entry/3, because the
+      # read-back fetched the gate task's own TASK_COMPLETED event (wrong row,
+      # fetched via the collided idempotency_key) instead of this branch's own
+      # EXECUTION_ERROR event. Post-fix: no raise -- complete_task/3's own return
+      # value here is {:ok, ...} with instance_status: :active, same as every other
+      # synchronous-sub-process-completion test in this file (e.g. the ISS-0392
+      # cascade test above, lines ~1095-1103): the hop chain's OWN transition
+      # (gate -> sp) is what complete_task/3's return value reflects -- it is the
+      # PRE-cascade snapshot, evaluated before the sub-process's synchronous
+      # completion (and this bug's own error branch, inside that cascade) runs. The
+      # cascade's real outcome is only observable in the persisted projection below.
+      assert {:ok, result} =
+               Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
+
+      assert result.instance_status == :active
+
+      # The instance reaches a real, persisted :error status -- not a crash, not a
+      # silently-parked :active instance.
+      final_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+      assert final_projection.status == :error
+      assert final_projection.error_detail["error_type"] == "service_task_url_rendered_empty"
+
+      # No SERVICE_TASK dispatch row was ever created for "svc".
+      dispatch_rows =
+        Repo.all(Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch, prefix: schema_name)
+
+      assert dispatch_rows == []
+
+      # Exactly one EXECUTION_ERROR event exists for this instance, and -- the
+      # actual bug -- it is a genuinely distinct row from the gate task's own
+      # TASK_COMPLETED event, each carrying its own idempotency_key.
+      error_events = execution_error_events(schema_name, created.instance_id)
+      assert length(error_events) == 1
+
+      [error_event] = error_events
+      assert error_event.payload["reason"]
     end
   end
 end

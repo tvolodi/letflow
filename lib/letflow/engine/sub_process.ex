@@ -908,6 +908,19 @@ defmodule Letflow.Engine.SubProcess do
               # own completed_at -- a single clock read, mirroring
               # dispatch_task_completion_hop_chain/7's own
               # "completed_at doubles as arrival timestamp" precedent.
+              #
+              # ISS-0945 fix (post release-validator FAIL): this call site
+              # passes `error_idempotency_key`, not the raw `idempotency_key`,
+              # for the same reason every other error branch in this function
+              # does (see the `:variable_schema_rejected` and
+              # `:variable_schema_lookup_failed` branches below, and the
+              # module comment at line 113): in the sub-process completion
+              # path the parent HUMAN_TASK's own TASK_COMPLETED event is
+              # already written under the raw `idempotency_key` earlier in
+              # this same transaction, so reusing it here would collide with
+              # that row on `event_idempotency`'s schema-wide-unique index --
+              # the insert would silently no-op and a later read-back would
+              # fetch the wrong (gate task's) event.
               completed_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
               case Letflow.Engine.prepare_service_task_dispatch_for_completion(
@@ -917,7 +930,7 @@ defmodule Letflow.Engine.SubProcess do
                      final_instance_state.variables,
                      completed_at,
                      actor_id,
-                     idempotency_key,
+                     error_idempotency_key,
                      prefix
                    ) do
                 {:error, {:empty_url_error, error_args}} ->

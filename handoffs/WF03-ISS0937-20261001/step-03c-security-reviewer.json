@@ -1,0 +1,50 @@
+{
+  "handoff_id": "ccf61813-b024-47d5-a67c-2514e3517cee",
+  "run_id": "WF03-ISS0937-20261001",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0937-20261001/step-03c-security-reviewer.json",
+  "created_at": "2026-10-01T00:40:22Z",
+  "started_at": "2026-10-01T00:40:22Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0937": "id: ISS-0937\ntitle: \"Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01\"\ndiscovered_by: ELIXIR-DEV\ndiscovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)\ndiscovered_at: \"2026-10-01T00:21:56Z\"\nseverity: MAJOR\ndescription: >\n  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest\n  parity failure extra=[\"events_y2026m09\"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in\n  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not\n  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.\n  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.\naffected_files:\n  - test/letflow/events/ (partition maintenance / retention tests)\n  - test/letflow/tenants/ (tenant template parity test)\nqueue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937\ngithub_ref: GH-2077\nstatus: open\n"
+    },
+    "related_handoff_ids": [
+      "5fe7f3d3-25fe-4ecf-9027-585bb127f81b"
+    ],
+    "artifacts_in": [
+      "test/support/tenant_template.ex",
+      "test/support/tenant_fixture.ex",
+      "test/support/partition_clock.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/design/iss0937-month-boundary-test-clock.md"
+    ],
+    "owned_modules": [
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs",
+      "test/support/partition_clock.ex (new)",
+      "test/support/tenant_template_test.exs (new parity regression test)"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937",
+    "branch_name": "feature/WF03-ISS0937-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 3c SECURITY-REVIEWER gate for ISS-0937. The change (git diff origin/main..HEAD, non-handoff files; commit just made by ORCH) touches only test/ support and tests: test/support/partition_clock.ex (new), test/support/tenant_fixture.ex, test/support/tenant_template.ex (check_table_set/2 now ignores dynamic events_yYYYYmMM partition tables on both sides), and three retention tests. No lib/, no migrations. Apply your scope test per docs/agents/instructions/security-invariants.md: state explicitly whether this touches a tenant-data path (tenant template/clone parity is a tenant-isolation verification harness - assess whether loosening check_table_set/2 could mask a real tenant-schema drift, RLS/ownership/privilege or isolation regression: verify the predicate cannot hide non-partition tables, that the fixed four partition tables and the RLS/owner/index/column parity checks on the fixed tables remain compared, and that dynamic-partition tables' own columns/indexes/RLS parity is still checked wherever the original code checked them, or if not, whether that is a loss of coverage that matters; read tenant_template.ex and its callers yourself). Verdict PASS/FAIL with findings by INV number if any. Modify nothing but this handoff. Set IN_PROGRESS at claim then COMPLETED/FAILED, result.status PASS/FAIL; next_action 'Route to REVIEWER' on PASS.",
+    "acceptance_criteria": [
+      "Scope test answered",
+      "Parity-loosening masking risk assessed",
+      "Verdict"
+    ]
+  }
+}

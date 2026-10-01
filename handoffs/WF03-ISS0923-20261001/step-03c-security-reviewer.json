@@ -1,0 +1,49 @@
+{
+  "handoff_id": "a3c1f0d2-9b7e-4c55-8a10-923000000007",
+  "run_id": "WF03-ISS0923-20261001",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0923-20261001/step-03c-security-reviewer.json",
+  "created_at": "2026-10-01T16:42:47Z",
+  "started_at": "2026-10-01T16:42:47Z",
+  "completed_at": "2026-10-01T16:43:22Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0923.yaml": "ServiceCatalog.delete/1 does not block deletion while non-terminal instances are pinned to the service (MINOR). Design chose BLOCK."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0923.yaml",
+      "lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md",
+      "handoffs/WF03-ISS0923-20261001/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/service_catalog.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/api/error.ex",
+      "test/"
+    ],
+    "branch_name": "feature/WF03-ISS0923-20261001",
+    "queue_task_id": 923,
+    "github_issue": 2097
+  },
+  "task": {
+    "description": "Work in C:/Users/tvolo/dev/ai-dala/letflow-3 on the already checked-out branch feature/WF03-ISS0923-20261001 (do not switch branches; do not touch main or other branches/PRs). Shared machine: scoped `mix test <files>` only, never the full suite; use MIX_TEST_PARTITION=<unique> for tests that commit catalog rows. Do not commit (ORCH commits); do not leave mutants in the tree. WF-03 Step 3c: hard security gate on the ELIXIR-DEV change (git diff main...HEAD -- lib/; handoff step-03-elixir-dev.json). Tenant data path: ServiceCatalog.delete/1 cross-tenant instance scan, new 409 error body in Error + AdminServices router. Gate against security-invariants.md INV-1..INV-9: verify no cross-tenant instance id leakage to the caller beyond the design's decision, SQL params bound (service_id never interpolated), authz on the DELETE route unchanged/intact, error detail carries no ids, schema-prefix usage safe, transaction semantics. Read-only; edit nothing but this handoff. Fill this handoff file's result (status PASS/FAIL, summary with quoted real output, issues, next_action) and set top-level status COMPLETED with real UTC completed_at (`date -u`)."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: IN scope (cross-tenant read over tenant-scoped instance tables, new 409 response shaping, DELETE route handler). Diff reviewed: git diff main...HEAD -- lib/ (service_catalog.ex, api/error.ex, routers/admin_services.ex, plus the design md). INV-1 APPLIES, PASS: (a) query_referencing_instances uses Repo.all(query, prefix: schema_name) with schema_name from TenantProvisioning.list_registrations() (server-held registry, no request input); (b) no migration in diff; (c) no tenant_id written. The cross-tenant read is by design on the PLATFORM_ADMIN-only admin surface (design 3.3, 11). INV-2 APPLIES, PASS: the error body comes from the explicit constructor Error.service_referenced_by_active_instances/1 and emits only instance_ids (opaque UUIDs, cap 50) and a truncated boolean; no tenant id, status, count, or business data; matches design D-B (instance ids are the same exposure class as the definition ids already returned). detail is the fixed sentence 'the service is pinned by one or more non-terminal process instances' with no interpolation (verified in diff). INV-3 N/A (no Lua/WASM). INV-4 N/A (no secret resolution; no logging added; grep of service_catalog.ex for Logger/Repo.query: no hits). INV-5 N/A for tenant visibility: admin route, 404 only means unknown service_id, not a tenant-scoped lookup. INV-6 satisfied by this handoff. INV-7 PASS: service_id is bound via the '?' placeholder with ^service_id in the static @service_task_reference_fragment; status list via ^non_terminal_statuses(), limit via ^; schema via prefix option, never concatenated; no Repo.query or raw SQL added. INV-8 PASS: the new tuple has a matching handle_delete clause (no CaseClauseError); changeset error maps to Repo.rollback(:not_found); rescue Ecto.StaleEntryError wraps Repo.transaction so the version-row deletion rolls back; no bare {:ok,_}= matches added. INV-9 N/A (no outbound HTTP). Authz: the admin_services.ex diff only adds a case clause and moduledoc text; the authz_delete \"/:service_id\", :AdminServicesManage declaration is untouched and authorization.ex is not modified. Transaction semantics: versions deleted first, then entry, in one Repo.transaction, so a failure never leaves a live entry without its archive rows. Guard order: definitions first, then instances (documented). Non-blocking observations: per-tenant LIMIT 51 bounds memory; the instance guard is documented as best-effort against in-flight starts. Read-only review; tests not run (not required); only this handoff edited.",
+    "issues": [],
+    "next_action": "REVIEWER (Step 3d), then TEST-DESIGNER (Step 4)"
+  }
+}

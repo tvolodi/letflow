@@ -1,0 +1,75 @@
+{
+  "handoff_id": "0ca56405-5024-4bb7-a989-fb596de3163e",
+  "run_id": "WF03-ISS0917-20261001",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0917-20261001/step-04-test-designer.json",
+  "created_at": "2026-10-01T13:17:31Z",
+  "started_at": "2026-10-01T13:17:31Z",
+  "completed_at": "2026-10-01T13:52:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0917": "id: ISS-0917\ntitle: \"Catalog SERVICE_TASK cannot execute: ServiceTaskDispatcher.catalog_lookup_stub/2 is an unconditional {:error,:not_registered}; POST /tasks/:id/complete returns 500 when the next node is a catalog-only SERVICE_TASK\"\ndiscovered_by: RELEASE-VALIDATOR\ndiscovered_in_run: WF02-REQ432-20260930 (filed by ORCH)\ndiscovered_at: \"2026-09-30T20:50:51Z\"\nseverity: MAJOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by WF02-REQ432-20260930 (REQ-432 live pipeline run,\n  test/reports/report-20260930-WF02-REQ432-20260930.yaml; step-02b-rework1-frontend-\n  dev.json). A process whose SERVICE_TASK references a service_id (catalog_entry pin) cannot\n  ever execute: Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2\n  (lib/letflow/engine/service_task_dispatcher.ex ~411-416) returns {:error,:not_registered}\n  unconditionally, so activation renders an empty URL. Measured live: completing the\n  preceding human task hops synchronously into the SERVICE_TASK, the engine persists only\n  EXECUTION_ERROR (affected node n3, error_type service_task_url_rendered_empty, no\n  TASK_COMPLETED for the completed task) and POST /api/v1/tasks/:id/complete answers HTTP\n  500 (probably needs a non-500 mapping for {:instance_execution_error,_,_} in\n  lib/letflow/routers/tasks.ex). Independent of service retirement. Consequence: scenario\n  platform-instance-pin-survives-catalog-change EO-001/EO-004 'the in-flight step completes\n  without error' cannot be met on success; REQ-432's pipeline spec accepts the measured\n  outcome (B) as a documented limitation. Needed: resolve service_id through the instance's\n  PINNED service_catalog version (Letflow.Engine.PinResolver / ServiceCatalog lookup) in the\n  dispatcher, then tighten the REQ-432 spec step 03 to require success. SCOPE GAP already\n  noted in design docs lib/letflow/design/req373-service-catalog-version-lifecycle.md and\n  lib/letflow/design/req432-rebind-pins-publish-retire-ui.md (M5). Owner ELIXIR-DEV (via\n  CODE-DESIGNER). Severity MAJOR.\n  NOTE (added by ORCH at close-out of the cancelled duplicate run WF02-REQ432-20260930): the\n  REQ-432 implementation that actually landed on main is PR #2055 (5d7ca7bf), not this run's\n  branch. Its spec (web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change\n  .pipeline.e2e.spec.ts, header 'Scope note (deliberately not exercised): SERVICE_TASK dispatch')\n  never drives a token onto the SERVICE_TASK node, so on main the scenario's 'the in-flight step\n  completes without error' (EO-001/EO-004 step 3) is unverified; the evidence of this stub's effect\n  is the duplicate run's live finding (archived on remote branch feature/WF02-REQ432-20260930,\n  handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json and step-05-release-validator.json).\nsource_reports:\n  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json\n  - test/reports/report-20260930-WF02-REQ432-20260930.yaml\naffected_files:\n  - lib/letflow/engine/service_task_dispatcher.ex\n  - lib/letflow/routers/tasks.ex\nqueue_ref: Q-907  # queue allocated issue_ref ISS-0907, which collides with an existing local file; local filename kept as ISS-0917 (next free on origin/main) and GH-2057 retitled to match\ngithub_ref: GH-2057\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md",
+      "handoffs/WF03-ISS0917-20261001/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0917-20261001/step-03d-reviewer.json",
+      "test/letflow/engine_pin_resolver_catalog_test.exs",
+      "test/letflow/routers/tasks_test.exs",
+      "test/letflow/service_catalog_test.exs",
+      "docs/anti-patterns.md",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": [
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0917-20261001",
+    "queue_task_id": 907,
+    "github_issue": 2057
+  },
+  "task": {
+    "description": "WF-03 Step 4: REGRESSION TESTS (ExUnit). Write the tests specified in design lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md section 6.2 (T1-T11 incl. MANDATORY T8a, resolver matrix) and 6.3 (router R1-R3) plus any extra test the design's test-inventory (section 4.2) calls new. The implementation is already on this branch (committed). Read the design fully, ELIXIR-DEV handoff step-03-elixir-dev.json, REVIEWER/SECURITY handoffs for context. Follow docs/agents/instructions/ test conventions and docs/anti-patterns.md (255-char ExUnit name limit; async rules INV-1/ISS-0481; test tenant fixtures; the shared test DB is also used concurrently by other workers on this machine, so keep tests isolated and use the existing tenant fixture helpers). Use existing fixtures (engine_pin_resolver_catalog_test.exs graph_human_task_then_service_task, routers/tasks_test.exs insert_user!/insert_group!/insert_role! idiom). Tests must assert real behaviour (no tautologies). FAIL-FIRST PROOF (WF-03 Step 4, mandatory, state explicitly in the test spec/handoff): the pre-fix code is origin/main (merge-base) - create a throwaway worktree (`git worktree add` in a sibling directory such as C:/Users/tvolo/dev/ai-dala/letflow-wt-iss0917-prefix at origin/main) with a REAL COPY (robocopy /E, never junction/symlink - see core-directives.md) of deps and _build, copy ONLY your new test files into it, run them with MIX_ENV=test mix test <files>, record which tests FAIL pre-fix and why (they should fail on behaviour, not on missing module where avoidable; where the pre-fix failure is 'function does not exist' for the new resolver unit tests, the WF-03 'non-existence' rule applies: you MUST additionally MUTATE the shipped logic and record which tests fail per mutant). MUTANTS (traps the fix exists to handle) in a throwaway worktree of THIS branch, never in the main checkout: (m1) resolver falls back to the live current row when the pinned version is superseded; (m2) resolver ignores tenant visibility (returns other tenant's tenant-scoped entry); (m3) rebound pins (resolved_id nil) not handled by (service_id, version); (m4) required_auth != NONE not failing closed; (m5) catalog timeout wins instead of min(); (m6) completion-hop/timer-site not reconstructing pins (uses only create-time pins) or skipping the typed error; (m7) router 409 clause removed/reordered after the catch-all; (m8) dispatcher catalog arm bypasses transport/SSRF gate. Record per-mutant failing-test counts and names. After finishing, remove the worktrees (`git worktree remove --force`, verify the real deps/_build in the main checkout are untouched: `ls deps | wc -l` unchanged) and verify `git status --porcelain lib/` is empty in the main checkout. Then run YOUR new test files in the main checkout (scoped; no full suite - limited memory, shared DB) and quote pass counts; DB-contention failures from other workers' tenant schemas are environmental: re-run once and report honestly. Commit nothing; leave new/changed test files uncommitted in the main checkout (ORCH commits). Do NOT modify lib/ and do NOT touch web/ (a FRONTEND-DEV step handles the e2e spec in parallel on the same checkout, disjoint paths). Complete your handoff per HANDOFF_PROTOCOL.md section 3 with artifacts_out and the fail-first + mutant tables in result.summary; next_action 'Route to TEST-DESIGN-VALIDATOR'.",
+    "acceptance_criteria": [
+      "Tests for T1-T11, resolver matrix, R1-R3 exist and pass post-fix (counts quoted)",
+      "Pre-fix failure of the new tests demonstrated on a throwaway worktree of origin/main",
+      "Mutants m1-m8 each recorded with failing tests",
+      "Worktrees removed; lib/ clean; real deps untouched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote ISS-0917 regression tests (all uncommitted; lib/ and web/ untouched). Files: test/letflow/engine_catalog_service_task_test.exs (T1-T11, 25 tests incl. mandatory T8a x3 and T8b x2), test/letflow/service_catalog_resolve_pinned_version_test.exs (resolver matrix, 15 tests), test/letflow/routers/tasks_test.exs (+R1-R3, 3 tests), spec test/specs/ISS-0917.md. Dispatcher tests of design 4.2 already exist from ELIXIR-DEV; verified via m8. POST-FIX (branch HEAD 07b288c9), MIX_ENV=test scoped: engine+resolver files 40/40 passed; routers/tasks_test.exs 75/75 passed; no 'default values for the optional arguments' warning in either log (helpers have no default args). mix letflow.check.test (full suite) NOT run per ORCH instruction (limited memory, shared DB). FAIL-FIRST (merge-base 0b1931d3, throwaway worktree, robocopy'd deps/_build): engine+resolver 36/40 fail (resolver: UndefinedFunctionError, non-existence rule -> mutants; engine: behavioural, completion hop returns {:instance_execution_error,:service_task_url_rendered_empty,{:node,\"svc\"}} as measured); the 4 passing are intentional regression guards. Router R1 fails pre-fix (500 vs 200), R2 fails pre-fix (500 vs 409), R3 guard passes both. MUTANTS (worktree of this branch, each reverted, lib clean after each): m1 live-row fallback 13/40 fail (T2,T4b,T4c,T8a x2,T8b x2 + 6 resolver); m2 no tenant visibility 4/40 (resolver other-tenant, scope-narrowed, get_for_tenant, T6); m3 rebound (service_id,version) disabled 5/40 (T4,T4b,T4c,T8a-unresolvable,T8b-unresolvable); m4 required_auth not failing closed 6/40 (T7 x4,T3b,T8a-auth); m5 catalog timeout wins 1/40 (T10 node-smaller); m6a completion hop without reconstructed pins 14/40; m6b timer/advance wrapper swallows typed error 3/40 (T8a x2,T8b); m7 router 409 clause after catch-all: R2 fails; m8 dispatcher catalog arm bypasses SSRF gate 2/46 in service_task_dispatcher_test.exs. All 9 killed. COVERAGE LIMITS: T11 failing branch (tenant_id_for_schema_name error at completion hop) is not reachable via public API (earlier hop steps use the same prefix); T11 is a lazy-evaluation control. Escalation-timer site not driven (shares the abort wrapper exercised by T8a/T8b, m6b). Environmental: m3 first run hit tenant_template duplicate-schema collision from a concurrent worker, re-run once clean. Cleanup: worktree removed and pruned, ls deps = 29 (unchanged), git status --porcelain lib/ empty. Note: design said router instance_status \"active\"; real response is \"ACTIVE\" (test asserts the real value).",
+    "artifacts_out": [
+      "test/letflow/engine_catalog_service_task_test.exs",
+      "test/letflow/service_catalog_resolve_pinned_version_test.exs",
+      "test/letflow/routers/tasks_test.exs",
+      "test/specs/ISS-0917.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "T11 failing branch and escalation-timer site not directly driven (harness-unreachable / shares covered wrapper); see test/specs/ISS-0917.md Coverage limits.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0917-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  }
+}

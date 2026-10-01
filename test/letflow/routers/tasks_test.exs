@@ -23,6 +23,7 @@ defmodule Letflow.Routers.TasksTest do
 
   import Plug.Test
   import Plug.Conn
+  import Ecto.Query, only: [from: 2]
 
   alias Letflow.Definitions
   alias Letflow.Engine
@@ -34,6 +35,8 @@ defmodule Letflow.Routers.TasksTest do
   alias Letflow.Identity.GroupMember
   alias Letflow.Identity.TenantRole
   alias Letflow.Identity.User
+  alias Letflow.ServiceCatalog.Entry, as: CatalogEntry
+  alias Letflow.ServiceCatalog.Version, as: CatalogVersion
   alias Letflow.TenantFixture
 
   @opts Letflow.Routers.Tasks.init([])
@@ -2221,6 +2224,164 @@ defmodule Letflow.Routers.TasksTest do
       row = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
       assert row.assignee_type == "ROLE"
       assert row.assignee_ref == "approver"
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0917 -- POST /tasks/:id/complete when the next node is a catalog
+  # SERVICE_TASK (R1-R3 of the ISS-0917 design, section 6.3). See
+  # test/specs/ISS-0917.md for rationale and the fail-first / mutant record.
+  # ══════════════════════════════════════════════════════════════════════
+
+  # START -> HUMAN_TASK(role approver) -> SERVICE_TASK(service_id) -> END
+  defp graph_human_task_then_catalog(service_id) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "task", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "approver"}},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{"service_id" => service_id, "timeout_ms" => 5_000}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "task"},
+        %{"id" => "e2", "source" => "task", "target" => "svc"},
+        %{"id" => "e3", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
+  # Registers a global catalog entry (cleaned up on exit) and returns it.
+  defp register_catalog_entry!(endpoint_url) do
+    service_id =
+      "iss0917-router-svc-" <> to_string(System.unique_integer([:positive, :monotonic]))
+
+    on_exit(fn ->
+      Repo.delete_all(from(v in CatalogVersion, where: v.service_id == ^service_id))
+      Repo.delete_all(from(e in CatalogEntry, where: e.service_id == ^service_id))
+    end)
+
+    assert {:ok, entry} =
+             Letflow.ServiceCatalog.register(%{
+               service_id: service_id,
+               endpoint_url: endpoint_url,
+               required_auth: :NONE,
+               timeout_ms: 5_000,
+               scope: :global
+             })
+
+    entry
+  end
+
+  # The caller must hold the HUMAN_TASK's "approver" role (ISS-0942 gate).
+  defp approver_caller!(tenant, label) do
+    caller = insert_user!(tenant, %{username: "iss0917-#{label}-caller"})
+    group = insert_group!(tenant, name: "iss0917-#{label}-approvers")
+    insert_group_member!(tenant, group.id, caller.id)
+    insert_role!(tenant, "approver", group.id)
+    caller
+  end
+
+  defp complete_request(tenant, task, caller, body) do
+    build_conn(:post, "/#{task.id}/complete", tenant,
+      roles: ["PLATFORM_ADMIN"],
+      user_id: caller.id,
+      body: body
+    )
+    |> dispatch()
+  end
+
+  describe "ISS-0917 R1: completing a task whose next node is a catalog SERVICE_TASK" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0917-r1")}
+
+    test "answers 200 with instance_status ACTIVE and the token parked at the SERVICE_TASK (pre-fix: 500)",
+         %{tenant: tenant} do
+      entry = register_catalog_entry!("https://example.test/iss0917/router")
+
+      {instance_id, task} =
+        start_instance_with_pending_task!(tenant, graph_human_task_then_catalog(entry.service_id))
+
+      caller = approver_caller!(tenant, "r1")
+      conn = complete_request(tenant, task, caller, %{"decision" => "approved"})
+
+      assert conn.status == 200
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["instance_id"] == instance_id
+      assert resp["instance_status"] == "ACTIVE"
+      assert resp["current_nodes"] == ["svc"]
+
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: tenant.schema_name)
+      assert projection.status == :active
+
+      assert [row] =
+               Repo.all(
+                 from(d in Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch,
+                   where: d.instance_id == ^instance_id
+                 ),
+                 prefix: tenant.schema_name
+               )
+
+      assert row.config_snapshot["rendered_url"] == "https://example.test/iss0917/router"
+    end
+  end
+
+  describe "ISS-0917 R2: {:instance_execution_error, _, _} maps to 409, naming only the error_type" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0917-r2")}
+
+    test "an unresolvable pin (rebound to a non-existent version) answers 409 and the body leaks neither variables, service id nor URL",
+         %{tenant: tenant} do
+      entry = register_catalog_entry!("https://example.test/iss0917/leak-check")
+
+      {instance_id, task} =
+        start_instance_with_pending_task!(tenant, graph_human_task_then_catalog(entry.service_id))
+
+      assert {:ok, %{changed: [_]}} =
+               Letflow.Engine.PinRebind.rebind_pins(
+                 instance_id,
+                 %{
+                   entries: [%{kind: :catalog_entry, ref: entry.service_id, version: "9.9.9"}],
+                   reason: "ISS-0917 R2",
+                   actor_id: Ecto.UUID.generate(),
+                   idempotency_key: unique_idempotency_key("iss0917-r2-rebind")
+                 },
+                 prefix: tenant.schema_name
+               )
+
+      caller = approver_caller!(tenant, "r2")
+      conn = complete_request(tenant, task, caller, %{"decision" => "zz-variable-value-zz"})
+
+      assert conn.status == 409
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["status"] == 409
+      assert resp["detail"] == "instance entered ERROR status: service_task_catalog_unresolved"
+
+      refute conn.resp_body =~ "zz-variable-value-zz"
+      refute conn.resp_body =~ entry.service_id
+      refute conn.resp_body =~ "example.test"
+      refute conn.resp_body =~ "svc"
+
+      # the instance really is parked in ERROR (the 409 is not masking a rollback)
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: tenant.schema_name)
+      assert projection.status == :error
+    end
+  end
+
+  describe "ISS-0917 R3: other complete_error() members still fall through to the 500 catch-all" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0917-r3")}
+
+    test "{:error, :snapshot_not_found} (instance definition snapshot removed) is still 500, not 409",
+         %{tenant: tenant} do
+      {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
+
+      Repo.delete_all(Letflow.Definitions.InstanceDefinitionSnapshot, prefix: tenant.schema_name)
+
+      caller = approver_caller!(tenant, "r3")
+      conn = complete_request(tenant, task, caller, %{})
+
+      assert conn.status == 500
     end
   end
 

@@ -43,6 +43,13 @@ defmodule Letflow.Engine.PinResolver do
   itself holds PIN-01 and PIN-03 at TESTED rather than RELEASED over this
   identical absence, tracked there as **ISS-0672/GH-306**.
 
+  UPDATE (REQ-373, ISS-0917): the `service_catalog` half of this gap is now
+  closed — `Letflow.ServiceCatalog.PinLookup` supplies a real START-time
+  `catalog_lookup`, and `Letflow.Engine` resolves a pinned version for
+  SERVICE_TASK dispatch at activation via
+  `Letflow.ServiceCatalog.resolve_pinned_version/3`. The PLC-01 half remains
+  open.
+
   This module implements the resolution/ordering/recording/inheritance
   MACHINERY against an injectable catalog and module lookup — the same
   pattern `Letflow.Definitions.ServiceScopeValidator` used for its identical

@@ -7,6 +7,15 @@
 # synthetic fixtures under test/fixtures/simulation/<company>/scenarios/ instead. Do
 # not edit the ported content below except to keep it byte-identical to a re-pull of
 # the same commit.
+#
+# ISS-0917 note: step 3 / EO-001 / EO-004 ("the in-flight step completes without error")
+# were previously UNVERIFIED because a catalog-referencing SERVICE_TASK could not execute
+# (catalog_lookup_stub/2 always failed; POST /tasks/:id/complete answered 500). They are now
+# verified by the pipeline spec's new step 04b (HTTP 200 on completing the in-flight task
+# after retire+publish, no EXECUTION_ERROR, and the case reaches COMPLETED via the PINNED v1
+# endpoint rather than the v2 trap endpoint) and by ExUnit T1/T2 in
+# test/letflow/engine_catalog_service_task_test.exs. See
+# lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md sections 6.4-6.5.
 ---
 id: platform-instance-pin-survives-catalog-change
 company_id: platform

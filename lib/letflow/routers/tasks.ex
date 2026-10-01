@@ -395,13 +395,25 @@ defmodule Letflow.Routers.Tasks do
     Response.forbidden(conn, "caller does not hold the assigned role")
   end
 
+  # ISS-0917 amendment to req085 design §5.5.1: complete_task/3 returns
+  # {:instance_execution_error, error_type, affected} AFTER its Multi has
+  # committed -- the instance is durably parked in ERROR for an operator
+  # (req061 §5.4), the request itself was valid and authorised. That is a
+  # resource-state conflict (409), not a platform malfunction (500). The
+  # detail names ONLY the error_type atom: `affected`, variables, reason text
+  # and details are never echoed (INV-2). Uniform for every error_type.
+  defp handle_complete_result({:error, {:instance_execution_error, error_type, _affected}}, conn)
+       when is_atom(error_type) do
+    Response.conflict(conn, "instance entered ERROR status: " <> Atom.to_string(error_type))
+  end
+
   # Catch-all: every other complete_error() member (:invalid_schema_name,
   # :instance_not_found, :snapshot_not_found,
   # {:graph_structure_invalid, _}, {:missing_token_record, _},
   # {:transition_failed, _}, {:new_token_during_resume_not_supported, _},
   # {:task_activation_failed, _}, {:event_append_failed, _},
   # :missing_actor_id, :missing_idempotency_key,
-  # {:instance_execution_error, _, _}, {:error, term()}) -- either
+  # {:error, term()}) -- either
   # structurally unreachable given this handler's own router-derived inputs,
   # or a genuine data-integrity/downstream failure this caller cannot fix by
   # retrying (design §5.5.1). complete_task/3's own catch-all already

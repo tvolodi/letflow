@@ -19,11 +19,12 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
 
   Two describe blocks below close the two real gaps TEST-DESIGNER found:
 
-  - "route_kind: :catalog_service is routed to catalog_lookup_stub/2, never
-    http_transport/3" -- proves structurally (via a real local
-    `Letflow.WebhookTestServer` listener at the row's own `rendered_url`
-    that would receive a connection if `:httpc.request/4` were ever called)
-    that a `:catalog_service` row never issues a real HTTP request.
+  - "route_kind: :catalog_service is dispatched from its frozen
+    rendered_url" (ISS-0917, replacing the retired lookup-stub tests) --
+    proves a `:catalog_service` row goes through the same transport and SSRF
+    gate as an inline row, and that a row without a usable `rendered_url`
+    never issues a real HTTP request (a live local
+    `Letflow.WebhookTestServer` listener would receive it).
   - "genuine :advance and genuine retriable outcomes via the
     :service_task_ssrf_validation_enabled test seam" -- uses the same
     seam `Letflow.Webhooks` established (`:webhook_ssrf_validation_enabled`)
@@ -198,41 +199,25 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # catalog_lookup_stub/2 -- design §5.3
+  # route_kind: :catalog_service is snapshot-driven (ISS-0917). The catalog is
+  # resolved at activation by Letflow.Engine; the dispatcher only ever sees the
+  # frozen config_snapshot["rendered_url"] and runs the same transport + SSRF
+  # gate as an inline row.
   # ---------------------------------------------------------------------------------
 
-  describe "catalog_lookup_stub/2" do
-    test "returns {:error, :not_registered} unconditionally" do
-      assert {:error, :not_registered} =
-               ServiceTaskDispatcher.catalog_lookup_stub("any-service", Ecto.UUID.generate())
-
-      assert {:error, :not_registered} =
-               ServiceTaskDispatcher.catalog_lookup_stub("", Ecto.UUID.generate())
+  describe "route_kind: :catalog_service is dispatched from its frozen rendered_url" do
+    defp catalog_snapshot(rendered_url) do
+      config_snapshot(%{
+        "route_kind" => "catalog_service",
+        "service_id" => "some-catalog-service",
+        "url_template" => nil,
+        "rendered_url" => rendered_url
+      })
     end
-  end
 
-  # ---------------------------------------------------------------------------------
-  # Defect 1 fix (TEST-DESIGNER finding, queue task 415): route_kind:
-  # :catalog_service must route to catalog_lookup_stub/2, never
-  # http_transport/3 -- proven structurally, not just by outcome shape.
-  # ---------------------------------------------------------------------------------
-
-  describe "route_kind: :catalog_service is routed to catalog_lookup_stub/2, never http_transport/3" do
-    test "gives up via {:error, :not_registered} without issuing any real HTTP request -- proven by a live local listener nothing ever connects to" do
-      # A real local Letflow.WebhookTestServer bound to 127.0.0.1 -- if
-      # do_attempt_dispatch/2 ever fell through to http_transport/3 for this
-      # row (the exact bug TEST-DESIGNER found empirically), the SSRF gate
-      # would normally block a 127.0.0.1 URL first, masking the question of
-      # whether a request was even attempted. Bypassing the gate here (the
-      # same :service_task_ssrf_validation_enabled seam Defect 2 adds) means
-      # a genuine connection would succeed and be observed by this test
-      # process via the {:webhook_test_server_request, _} message -- so its
-      # ABSENCE is real, structural proof that :httpc.request/4 was never
-      # reached for this row, not merely that the final outcome shape
-      # matches.
-      Application.put_env(:letflow, :service_task_ssrf_validation_enabled, false)
-      on_exit(fn -> Application.delete_env(:letflow, :service_task_ssrf_validation_enabled) end)
-
+    test "goes through the SSRF gate: a blocked URL gives up as request_build_error with zero requests" do
+      # Gate ON (default): a real local listener at 127.0.0.1 is a blocked
+      # range, so nothing may ever connect to it.
       %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
 
       %{schema_name: schema_name} = provisioned_tenant()
@@ -240,48 +225,7 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
 
       dispatch =
         insert_dispatch!(schema_name, instance_id, %{
-          config_snapshot:
-            config_snapshot(%{
-              "route_kind" => "catalog_service",
-              "service_id" => "some-catalog-service",
-              "url_template" => nil,
-              "rendered_url" => server_url
-            })
-        })
-
-      assert {:ok, {:give_up, error_attrs}} =
-               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
-
-      assert error_attrs.details.last_failure_kind == :request_build_error
-
-      reloaded = reload!(schema_name, dispatch.id)
-      assert reloaded.status == "given_up"
-      assert reloaded.last_failure_kind == "request_build_error"
-
-      # The structural proof: no request ever arrived at the live server,
-      # even though the SSRF gate was bypassed and the URL genuinely points
-      # at a real, connectable listener.
-      refute_receive {:webhook_test_server_request, _request}, 200
-    end
-
-    test "gives up immediately with an SSRF-allowed rendered_url, gate enabled -- never retries" do
-      %{schema_name: schema_name} = provisioned_tenant()
-      instance_id = insert_instance_projection!(schema_name, :active)
-
-      dispatch =
-        insert_dispatch!(schema_name, instance_id, %{
-          config_snapshot:
-            config_snapshot(%{
-              "route_kind" => "catalog_service",
-              "service_id" => "some-catalog-service",
-              "url_template" => nil,
-              # A real, SSRF-allowed public IP (unreachable from this test
-              # host, matching the codebase's established convention) --
-              # proves the give_up is NOT merely the SSRF gate rejecting
-              # this URL, since :catalog_service never reaches the gate at
-              # all (this URL is never even read).
-              "rendered_url" => "https://93.184.216.34/hook"
-            })
+          config_snapshot: catalog_snapshot(server_url)
         })
 
       assert {:ok, {:give_up, error_attrs}} =
@@ -293,6 +237,71 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
       reloaded = reload!(schema_name, dispatch.id)
       assert reloaded.status == "given_up"
       assert reloaded.attempt_index == 0
+
+      refute_receive {:webhook_test_server_request, _request}, 200
+    end
+
+    test "a cloud-metadata (link-local) URL is rejected before any transport call" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot: catalog_snapshot("https://169.254.169.254/latest/meta-data")
+        })
+
+      assert {:ok, {:give_up, error_attrs}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert error_attrs.details.last_failure_kind == :request_build_error
+      assert reload!(schema_name, dispatch.id).status == "given_up"
+    end
+
+    test "gate bypassed by the test seam: a real 2xx JSON response advances the row" do
+      Application.put_env(:letflow, :service_task_ssrf_validation_enabled, false)
+      on_exit(fn -> Application.delete_env(:letflow, :service_task_ssrf_validation_enabled) end)
+
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"result":"ok"}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot: catalog_snapshot(server_url)
+        })
+
+      assert {:ok, {:advance, %{"result" => "ok"}}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert reload!(schema_name, dispatch.id).status == "advanced"
+      assert_receive {:webhook_test_server_request, _request}, 1_000
+    end
+
+    for {label, unusable} <- [{"nil", nil}, {"empty", ""}, {"non-binary", 42}] do
+      test "a #{label} rendered_url gives up as request_build_error with zero requests" do
+        Application.put_env(:letflow, :service_task_ssrf_validation_enabled, false)
+        on_exit(fn -> Application.delete_env(:letflow, :service_task_ssrf_validation_enabled) end)
+
+        # Live listener nothing may ever connect to (gate bypassed, so a
+        # request would genuinely arrive if one were attempted).
+        %{url: _server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+        %{schema_name: schema_name} = provisioned_tenant()
+        instance_id = insert_instance_projection!(schema_name, :active)
+
+        dispatch =
+          insert_dispatch!(schema_name, instance_id, %{
+            config_snapshot: catalog_snapshot(unquote(Macro.escape(unusable)))
+          })
+
+        assert {:ok, {:give_up, error_attrs}} =
+                 ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+        assert error_attrs.details.last_failure_kind == :request_build_error
+        assert reload!(schema_name, dispatch.id).status == "given_up"
+        refute_receive {:webhook_test_server_request, _request}, 200
+      end
     end
   end
 

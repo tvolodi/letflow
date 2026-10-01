@@ -122,11 +122,11 @@ defmodule Letflow.EnginePinResolverCatalogTest do
   # SERVICE_TASK is deliberately reached only AFTER a genuine HUMAN_TASK stop
   # -- create/2's own activation loop never dispatches it in this same call
   # (HUMAN_TASK has no automatic outgoing traversal, matching engine_test.exs's
-  # own established idiom), so this fixture sidesteps REQ-215's own
-  # out-of-scope dispatch-layer limitation entirely (a route_kind:
-  # :catalog_service SERVICE_TASK always fails validate_rendered_url/1 today,
-  # per engine_test.exs:1073-1079's own documented finding) while still
-  # exercising real pin RESOLUTION -- PinResolver.resolve/4 walks every
+  # own established idiom), so this fixture keeps these tests focused on pin
+  # RESOLUTION and recording rather than on dispatch (ISS-0917 since made a
+  # route_kind: :catalog_service SERVICE_TASK dispatchable from its pinned
+  # version; see the ISS-0917 design for that coverage) while
+  # still exercising real pin RESOLUTION -- PinResolver.resolve/4 walks every
   # SERVICE_TASK node in the whole graph regardless of reachability
   # (pin_resolver.ex's collect_refs/3), so the pin is resolved and recorded
   # in the INSTANCE_STARTED event either way.

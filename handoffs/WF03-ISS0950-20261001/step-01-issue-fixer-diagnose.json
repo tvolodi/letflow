@@ -1,0 +1,56 @@
+{
+  "handoff_id": "ee78c7d1-732b-4025-af1d-434a9e4c8377",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0950-20261001/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-10-01T14:50:29Z",
+  "started_at": "2026-10-01T14:50:29Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0950.yaml",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup: docs/issues/*.yaml resolved entries about catalog endpoint_url / UrlValidator / INV-9 / service catalog registration) + Step 1 (diagnose), combined. Work in the main checkout C:/Users/tvolo/dev/ai-dala/letflow-3 on branch feature/WF03-ISS0950-20261001 (already created and pushed; do not switch branches; do not touch main or other sessions' branches). IMPORTANT: this issue's local file is docs/issues/ISS-0950.yaml (queue ref Q-921, GH #2095); docs/issues/ISS-0921.yaml is a DIFFERENT issue, ignore it. Reproduce against the real code (scratch test or iex-free mix run; MIX_ENV=test; Postgres is up; machine is shared so run only scoped tests, never the full suite): show that POST /service-catalog (and the publish path) accepts endpoint_url values like http://127.0.0.1/x, http://169.254.169.254/, https://10.0.0.5/, ftp://x, and non-URLs, and that only ServiceTaskDispatcher.http_transport/3 rejects them at dispatch (INV-9). Report with file:line evidence: (1) where endpoint_url enters (Letflow.ServiceCatalog register/publish/update/new-version functions, Routers.AdminServices handlers, any changeset), all write paths that can set endpoint_url (including solution-pack install per decision 0027 docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md); (2) the existing Letflow UrlValidator (name/location/API, what it checks, whether it does DNS or syntactic only, how the dispatcher gate calls it) so the fix can reuse it, not reinvent it; (3) how register/publish errors are shaped and mapped to HTTP (existing error tuples/status codes, tests asserting them) so a new validation error fits the convention; (4) what decision 0027 says about install-time vs register-time endpoint validation and whether any rule constrains the fix; (5) existing tests that would be affected (e.g. fixtures using http:// or example.test hosts in service-catalog tests) -- list them, because a stricter validator may break fixtures; (6) interplay with ISS-0917 (just merged, 2bc51bdd). Do NOT implement the fix. Complete the handoff with next_action Route to CODE-DESIGNER.",
+    "acceptance_criteria": [
+      "Root cause stated with file:line evidence and real reproduction output quoted",
+      "Step 0.5 registry lookup outcome stated",
+      "All endpoint_url write paths enumerated",
+      "Reusable UrlValidator API and dispatcher gate call identified",
+      "Decision 0027 constraints stated",
+      "Fixtures at risk listed",
+      "No lib/ test/ web/ changes left behind (git status --porcelain lib/ test/ web/ empty)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

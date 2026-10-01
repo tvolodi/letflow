@@ -1,0 +1,60 @@
+{
+  "handoff_id": "c3d9a7e1-5b24-4f08-a1e6-92f0d4b7c518",
+  "run_id": "WF03-ISS0931-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0931-20261001/step-02-code-designer.json",
+  "created_at": "2026-10-01T17:30:00Z",
+  "started_at": "2026-10-01T17:30:00Z",
+  "completed_at": "2026-10-01T17:50:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0931": "D2 meridian/vortex seeded tasks reference role groups that do not exist; needs meridian/vortex equivalent of scripts/seed_swiftroute_persona_actors.sh (queue Q-914, GH-2065)"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0931-20261001/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0931.yaml",
+      "scripts/seed_swiftroute_persona_actors.sh",
+      "lib/letflow/design/iss-0761-swiftroute-persona-actor-provisioning.md",
+      "test/fixtures/qa/"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2",
+    "branch_name": "feature/WF03-ISS0931-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2 fix design for ISS-0931. Design only; no scripts run against QA.",
+    "acceptance_criteria": [
+      "Script structure decision",
+      "Exact role and persona tables matching QA fixtures",
+      "Machine-parsable table format specified",
+      "Drift-guard test design with mutation targets",
+      "uat-runner.md doc note",
+      "No implementation code, no lib/ changes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md. Shared sourced lib scripts/lib/seed_persona_actors_base.sh (swiftroute script untouched) + two thin scripts declaring ROLES=( ... ) and PERSONAS=( \"user|role1,role2\" ) arrays one quoted entry per line, TASK_WORKER implicit. Meridian 8 roles, vortex 4; role-procurement-manager not seeded. Hardened lookup_user_id (exact username match); all actors resolved before any write. Drift test test/scripts/persona_actor_seed_drift_test.exs: roles-equal-fixtures (Jason walk for role keys), persona-roles subset/each role held/prefix check, bash -n on scripts and lib, lib-sourced + procurement-absent pins; mutations M1-M8 on in-memory copies. uat-runner.md precondition text drafted. No lib/ or migration change.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md"
+    ],
+    "owned_modules": [
+      "scripts/lib/seed_persona_actors_base.sh (new)",
+      "scripts/seed_meridian_persona_actors.sh (new)",
+      "scripts/seed_vortex_persona_actors.sh (new)",
+      "test/scripts/persona_actor_seed_drift_test.exs (new)",
+      ".claude/agents/uat-runner.md",
+      "docs/ preflight listing of seed scripts (if any)"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  }
+}

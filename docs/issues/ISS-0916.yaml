@@ -55,4 +55,11 @@ affected_files:
   - web/src/utils/deferClickState.ts
 queue_ref: Q-909  # registered retroactively by ORCH (close-out of cancelled duplicate run WF02-REQ432-20260930), which independently filed the same finding as queue task 909; queue's own issue_ref ISS-0909 collides with an existing local file and is NOT this record's id
 github_ref: GH-2059  # mirror created by the same registration; GH title retitled to ISS-0916
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0916-servicespage-deferclickstate
+resolved_at: "2026-10-01T13:30:00Z"
+resolution: >
+  All 16 onClick handlers in ServicesPage.tsx (row actions incl. Publish/Retire,
+  Create, dialog Cancel/confirm/submit buttons) now run via deferClickState.
+  Regression test ServicesPage.iss0916.test.tsx. Root cause still unidentified
+  (workaround, per ISS-0662 convention).

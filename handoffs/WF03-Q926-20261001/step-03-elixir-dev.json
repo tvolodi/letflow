@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-Q926-20261001/step-03-elixir-dev.json",
   "created_at": "2026-10-01T18:36:41Z",
   "started_at": "2026-10-01T18:36:41Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T18:50:18Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -46,5 +46,10 @@
       "DB availability stated honestly",
       "Committed and pushed"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented lib/letflow/design/iss0926-service-task-body-template-rendering.md. ServiceTask: render_body_template/2, body_has_placeholders?/1, body_render_reason_class/1, build_body_render_error_attrs/1, types, 64 KiB cap, Jason :javascript_safe per-value escaping, byte-scan placeholder-position check. Engine: body rendered once at activation (after URL validation; empty-URL wins) in finish_service_task_arm_attrs/7, frozen as config_snapshot[\"rendered_body\"]; {:body_render_error,...} wired at create (activation_failed), completion hop (execution_error, error_type service_task_body_render_failed), and timer/outcome sites (abort_on_empty_url). Class reduction only in prepare_service_task_dispatch. Dispatcher: resolve_dispatch_body/1 in both branches, legacy-row fallback fail-closed (request_build_error). URL renderer unchanged (comment only). Fixture v1.3: body_template on regulatory-auto-escalation, new regulatory-remediation-escalation, e10 retargeted, e18; YAML parity; seed header v1.3. Existing tests updated: fixture test T1/T8/M9->M9a-c, @inline_keys += rendered_body. New T13/T14 and new regression tests left to TEST-DESIGNER. Verification: mix compile --warnings-as-errors clean (forced full recompile); mix format --check-formatted clean on all touched .ex/.exs. DB: used throwaway postgres:16 container (q926-pg, port 5499 via LETFLOW_DB_PORT, removed afterwards; note a first accidental run hit the shared 5462 DB and only failed on schema_migrations creation). Scoped tests (8 files: fixture, qa endpoints, service_task, wiring, dispatcher, engine_catalog_service_task, regulatory_review_timer_path, persona_actor_seed_drift): 206/207 passed; the 1 failure was a DBConnection tcp-closed pool flake in wiring_test AC5 cancel race; wiring_test rerun alone: 23 passed. Spot-checked renderer: injection value escaped, missing var -> {:missing_variable,\"rid\"}, outside-string rejected, NUL/U+001F -> \u0000/\u001f uppercase hex.",
+    "next_action": "Route to SECURITY-REVIEWER"
   }
 }

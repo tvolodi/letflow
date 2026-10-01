@@ -164,6 +164,33 @@ defmodule Letflow.Engine.ServiceTask do
           required(:reason) => term()
         }
 
+  @typedoc "ISS-0926 -- why a SERVICE_TASK `body_template` could not be rendered."
+  @type body_render_reason ::
+          :placeholder_outside_string
+          | {:missing_variable, key :: String.t()}
+          | :invalid_utf8
+          | :unsupported_value_type
+          | :rendered_body_not_json
+          | :rendered_body_too_large
+
+  @typedoc "ISS-0926 -- `body_render_reason()` reduced to its atom class (no key, no value)."
+  @type body_render_reason_class ::
+          :placeholder_outside_string
+          | :missing_variable
+          | :invalid_utf8
+          | :unsupported_value_type
+          | :rendered_body_not_json
+          | :rendered_body_too_large
+
+  @type body_render_error_context :: %{
+          required(:instance_id) => Ecto.UUID.t(),
+          required(:node_id) => String.t(),
+          required(:actor_id) => Ecto.UUID.t() | nil,
+          required(:idempotency_key) => String.t(),
+          required(:variables) => map(),
+          required(:reason) => body_render_reason_class()
+        }
+
   @type service_task_give_up_context :: %{
           required(:instance_id) => Ecto.UUID.t(),
           required(:node_id) => String.t(),
@@ -179,6 +206,8 @@ defmodule Letflow.Engine.ServiceTask do
   @default_timeout_ms 30_000
   @default_retry_limit 3
   @default_method :POST
+  @max_rendered_body_bytes 65_536
+  @placeholder_regex ~r/\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}/
 
   # ===========================================================================
   # §4 parse_config_from_node_attributes/1 — design doc §5.1 field derivation
@@ -386,6 +415,195 @@ defmodule Letflow.Engine.ServiceTask do
 
   defp catalog_reason_sentence(_other),
     do: "service task catalog service could not be resolved"
+
+  @doc """
+  ISS-0926 -- builds the `Letflow.Engine.standalone_error_attrs()` shape for a
+  SERVICE_TASK whose `body_template` could not be rendered at activation.
+  Only the atom CLASS is persisted in `details`, and `reason` text is a fixed
+  sentence per class -- never an interpolation of a variable or body. Pure,
+  same contract as `build_empty_url_error_attrs/1`.
+  """
+  @spec build_body_render_error_attrs(body_render_error_context()) ::
+          Letflow.Engine.standalone_error_attrs()
+  def build_body_render_error_attrs(%{} = context) do
+    reason_class = Map.fetch!(context, :reason)
+
+    %{
+      instance_id: Map.fetch!(context, :instance_id),
+      error_type: :service_task_body_render_failed,
+      affected: {:node, Map.fetch!(context, :node_id)},
+      reason: body_render_reason_sentence(reason_class),
+      variables: Map.fetch!(context, :variables),
+      details: %{reason: reason_class},
+      actor_id: Map.fetch!(context, :actor_id),
+      idempotency_key: Map.fetch!(context, :idempotency_key)
+    }
+  end
+
+  defp body_render_reason_sentence(:placeholder_outside_string),
+    do: "service task body template could not be rendered: placeholder outside a JSON string"
+
+  defp body_render_reason_sentence(:missing_variable),
+    do: "service task body template could not be rendered: referenced variable is not set"
+
+  defp body_render_reason_sentence(:invalid_utf8),
+    do: "service task body template could not be rendered: variable value is not valid UTF-8"
+
+  defp body_render_reason_sentence(:unsupported_value_type),
+    do: "service task body template could not be rendered: variable value type is not supported"
+
+  defp body_render_reason_sentence(:rendered_body_not_json),
+    do: "service task body template could not be rendered: result is not valid JSON"
+
+  defp body_render_reason_sentence(:rendered_body_too_large),
+    do: "service task body template could not be rendered: result exceeds the size limit"
+
+  @doc """
+  ISS-0926 -- reduces a `body_render_reason()` to its atom class (drops the
+  `{:missing_variable, key}` key). Pure.
+  """
+  @spec body_render_reason_class(body_render_reason()) :: body_render_reason_class()
+  def body_render_reason_class({:missing_variable, _key}), do: :missing_variable
+  def body_render_reason_class(class) when is_atom(class), do: class
+
+  # ===========================================================================
+  # ISS-0926 render_body_template/2 -- activation-time body rendering
+  # ===========================================================================
+
+  @doc """
+  True when `template` contains at least one `{{variables.KEY}}` placeholder
+  (same regex as `render_body_template/2`). Pure.
+  """
+  @spec body_has_placeholders?(template :: String.t() | nil) :: boolean()
+  def body_has_placeholders?(template) when is_binary(template),
+    do: Regex.match?(@placeholder_regex, template)
+
+  def body_has_placeholders?(_other), do: false
+
+  @doc """
+  ISS-0926 -- renders a SERVICE_TASK `body_template` against the instance
+  `variables`. Pure: no Repo, no Logger, no clock.
+
+  Placeholders use the URL renderer's syntax (`{{variables.KEY}}`, flat key).
+  Each must sit inside a JSON string literal (else
+  `{:error, :placeholder_outside_string}`); its value is stringified and
+  JSON-string-escaped (`Jason` `:javascript_safe`, surrounding quotes
+  removed) so a value can never alter the JSON structure. An absent key is
+  `{:error, {:missing_variable, key}}`; a present `nil` renders as `""`. A
+  template with placeholders must render to valid JSON of at most 64 KiB. A
+  template with no placeholder is returned verbatim, unchecked. No error term
+  ever contains a variable value.
+  """
+  @spec render_body_template(template :: String.t() | nil, variables :: map()) ::
+          {:ok, String.t() | nil} | {:error, body_render_reason()}
+  def render_body_template(nil, _variables), do: {:ok, nil}
+
+  def render_body_template(template, variables) when is_binary(template) and is_map(variables) do
+    case Regex.scan(@placeholder_regex, template, return: :index) do
+      [] ->
+        {:ok, template}
+
+      matches ->
+        spans =
+          Enum.map(matches, fn [{start, len}, {key_start, key_len}] ->
+            {start, len, binary_part(template, key_start, key_len)}
+          end)
+
+        with :ok <- scan_placeholder_positions(template, 0, false, false, spans),
+             {:ok, rendered} <- substitute_placeholders(template, spans, variables, 0, []),
+             :ok <- check_rendered_json(rendered) do
+          check_rendered_size(rendered)
+        end
+    end
+  end
+
+  # Iterative byte scan over the ORIGINAL template (design section 2.4). The
+  # double quote and backslash are ASCII, and UTF-8 continuation bytes never
+  # equal them, so byte iteration is exact. A placeholder contains neither,
+  # so in_string is evaluated once, at the span's first byte.
+  defp scan_placeholder_positions(_bin, _offset, _in_string, _escaped, []), do: :ok
+
+  defp scan_placeholder_positions(bin, offset, in_string, escaped, [{offset, _len, _key} | rest]) do
+    if in_string do
+      scan_placeholder_positions(bin, offset, in_string, escaped, rest)
+    else
+      {:error, :placeholder_outside_string}
+    end
+  end
+
+  defp scan_placeholder_positions(<<char, rest::binary>>, offset, in_string, escaped, spans) do
+    {in_string, escaped} = scan_step(char, in_string, escaped)
+    scan_placeholder_positions(rest, offset + 1, in_string, escaped, spans)
+  end
+
+  defp scan_placeholder_positions(<<>>, _offset, _in_string, _escaped, _spans), do: :ok
+
+  defp scan_step(_char, true, true), do: {true, false}
+  defp scan_step(?\\, true, false), do: {true, true}
+  defp scan_step(?", true, false), do: {false, false}
+  defp scan_step(?", false, _escaped), do: {true, false}
+  defp scan_step(_char, in_string, escaped), do: {in_string, escaped}
+
+  defp substitute_placeholders(template, [], _variables, cursor, acc) do
+    tail = binary_part(template, cursor, byte_size(template) - cursor)
+    {:ok, IO.iodata_to_binary(Enum.reverse([tail | acc]))}
+  end
+
+  defp substitute_placeholders(template, [{start, len, key} | rest], variables, cursor, acc) do
+    with {:ok, value} <- fetch_variable(variables, key),
+         {:ok, text} <- stringify_value(value),
+         {:ok, escaped} <- escape_json_string(text) do
+      literal = binary_part(template, cursor, start - cursor)
+      substitute_placeholders(template, rest, variables, start + len, [escaped, literal | acc])
+    end
+  end
+
+  defp fetch_variable(variables, key) do
+    case Map.fetch(variables, key) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:error, {:missing_variable, key}}
+    end
+  end
+
+  defp stringify_value(value) when is_binary(value) do
+    if String.valid?(value), do: {:ok, value}, else: {:error, :invalid_utf8}
+  end
+
+  defp stringify_value(value) when is_integer(value), do: {:ok, Integer.to_string(value)}
+  defp stringify_value(value) when is_float(value), do: {:ok, Float.to_string(value)}
+  defp stringify_value(nil), do: {:ok, ""}
+  defp stringify_value(value) when is_atom(value), do: {:ok, Atom.to_string(value)}
+
+  defp stringify_value(value) when is_map(value) or is_list(value) do
+    case Jason.encode(value) do
+      {:ok, json} -> {:ok, json}
+      {:error, _reason} -> {:error, :unsupported_value_type}
+    end
+  rescue
+    _error -> {:error, :unsupported_value_type}
+  end
+
+  defp stringify_value(_other), do: {:error, :unsupported_value_type}
+
+  defp escape_json_string(text) do
+    case Jason.encode(text, escape: :javascript_safe) do
+      {:ok, quoted} -> {:ok, binary_part(quoted, 1, byte_size(quoted) - 2)}
+      {:error, _reason} -> {:error, :invalid_utf8}
+    end
+  end
+
+  defp check_rendered_json(rendered) do
+    case Jason.decode(rendered) do
+      {:ok, _decoded} -> :ok
+      {:error, _reason} -> {:error, :rendered_body_not_json}
+    end
+  end
+
+  defp check_rendered_size(rendered) do
+    if byte_size(rendered) <= @max_rendered_body_bytes,
+      do: {:ok, rendered},
+      else: {:error, :rendered_body_too_large}
+  end
 
   # ===========================================================================
   # classify_failure_kind/1 (AC2, AC3, AC5) — design doc §5.2

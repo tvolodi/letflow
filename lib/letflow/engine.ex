@@ -621,6 +621,9 @@ defmodule Letflow.Engine do
 
       {:catalog_resolution_error, node_id, reason, _variables} ->
         {:error, {:activation_failed, {:service_task_catalog_unresolved, node_id, reason}}}
+
+      {:body_render_error, node_id, reason_class, _variables} ->
+        {:error, {:activation_failed, {:service_task_body_render_failed, node_id, reason_class}}}
     end
   end
 
@@ -872,6 +875,8 @@ defmodule Letflow.Engine do
           | {:empty_url_error, node_id :: String.t(), variables :: map()}
           | {:catalog_resolution_error, node_id :: String.t(), catalog_resolution_reason(),
              variables :: map()}
+          | {:body_render_error, node_id :: String.t(), ServiceTask.body_render_reason_class(),
+             variables :: map()}
   @type prepared_service_task_dispatch :: %{
           token_id: String.t(),
           node_id: String.t(),
@@ -897,6 +902,9 @@ defmodule Letflow.Engine do
            | :pins_unavailable
            | :version_not_found
            | {:required_auth_unsupported, :API_KEY | :OAUTH2 | :MUTUAL_TLS}
+  # ISS-0926 -- sibling of catalog_resolution_reason for a body_template that
+  # could not be rendered at activation.
+  @typep body_render_reason :: ServiceTask.body_render_reason()
   defp prepare_service_task_dispatch(
          pending_events,
          graph,
@@ -933,6 +941,13 @@ defmodule Letflow.Engine do
 
             {:catalog_resolution_error, ^node_id, reason} ->
               {:halt, {:catalog_resolution_error, node_id, reason, variables}}
+
+            {:body_render_error, ^node_id, reason} ->
+              # Reduce to the atom class here, once: nothing downstream may see
+              # the {:missing_variable, key} detail (ISS-0926 design 1.7).
+              {:halt,
+               {:body_render_error, node_id, ServiceTask.body_render_reason_class(reason),
+                variables}}
           end
       end
     end)
@@ -941,6 +956,7 @@ defmodule Letflow.Engine do
       {:error, reason} -> {:error, reason}
       {:empty_url_error, node_id, variables} -> {:empty_url_error, node_id, variables}
       {:catalog_resolution_error, _node_id, _reason, _variables} = error -> error
+      {:body_render_error, _node_id, _reason_class, _variables} = error -> error
     end
   end
 
@@ -964,6 +980,19 @@ defmodule Letflow.Engine do
   #      in config_snapshot, so ServiceTaskDispatcher only ever sees a frozen
   #      rendered_url and never calls the catalog.
   # Every failure is a typed tuple; none falls back to the live row.
+  @spec resolve_service_task_arm_attrs(
+          Graph.Node.t(),
+          node_id :: String.t(),
+          instance_id :: Ecto.UUID.t(),
+          variables :: map(),
+          now :: DateTime.t(),
+          catalog_dispatch_ctx()
+        ) ::
+          {:ok, map(), catalog_dispatch_ctx()}
+          | {:error, {:config_parse_failed, String.t(), ServiceTask.config_parse_error()}}
+          | {:empty_url_error, String.t()}
+          | {:catalog_resolution_error, String.t(), catalog_resolution_reason()}
+          | {:body_render_error, String.t(), body_render_reason()}
   defp resolve_service_task_arm_attrs(node, node_id, instance_id, variables, now, ctx) do
     case ServiceTask.parse_config_from_node_attributes(node) do
       {:error, reason} ->
@@ -973,7 +1002,14 @@ defmodule Letflow.Engine do
         rendered_url = render_service_task_url(config.url_template, variables)
 
         with {:ok, arm_attrs} <-
-               finish_service_task_arm_attrs(config, node_id, instance_id, rendered_url, now) do
+               finish_service_task_arm_attrs(
+                 config,
+                 node_id,
+                 instance_id,
+                 rendered_url,
+                 variables,
+                 now
+               ) do
           {:ok, arm_attrs, ctx}
         end
 
@@ -988,6 +1024,7 @@ defmodule Letflow.Engine do
                      node_id,
                      instance_id,
                      rendered_url,
+                     variables,
                      now,
                      resolved
                    ) do
@@ -1065,29 +1102,57 @@ defmodule Letflow.Engine do
   defp check_catalog_auth_supported(%{required_auth: auth}),
     do: {:error, {:required_auth_unsupported, auth}}
 
+  # ISS-0926 -- after the URL passes validation (an empty-URL error wins), the
+  # body_template is rendered ONCE here from the same `variables` as the URL
+  # and frozen as config_snapshot["rendered_body"].
+  @spec finish_service_task_arm_attrs(
+          ServiceTask.Config.t(),
+          node_id :: String.t(),
+          instance_id :: Ecto.UUID.t(),
+          rendered_url :: String.t() | nil,
+          variables :: map(),
+          now :: DateTime.t(),
+          ServiceCatalog.resolved_service_version() | nil
+        ) ::
+          {:ok, map()}
+          | {:empty_url_error, node_id :: String.t()}
+          | {:body_render_error, node_id :: String.t(), ServiceTask.body_render_reason()}
   defp finish_service_task_arm_attrs(
          config,
          node_id,
          instance_id,
          rendered_url,
+         variables,
          now,
          catalog_version \\ nil
        ) do
+    with :ok <- validate_rendered_url_or_error(rendered_url, node_id),
+         {:ok, rendered_body} <- render_body_or_error(config, variables, node_id) do
+      arm_attrs = %{
+        instance_id: instance_id,
+        node_id: node_id,
+        config_snapshot:
+          config_snapshot_map(config, rendered_url, rendered_body, catalog_version),
+        attempt_index: 0,
+        next_attempt_at: now,
+        created_at: now
+      }
+
+      {:ok, arm_attrs}
+    end
+  end
+
+  defp validate_rendered_url_or_error(rendered_url, node_id) do
     case ServiceTask.validate_rendered_url(rendered_url) do
-      {:error, :empty_rendered_url} ->
-        {:empty_url_error, node_id}
+      :ok -> :ok
+      {:error, :empty_rendered_url} -> {:empty_url_error, node_id}
+    end
+  end
 
-      :ok ->
-        arm_attrs = %{
-          instance_id: instance_id,
-          node_id: node_id,
-          config_snapshot: config_snapshot_map(config, rendered_url, catalog_version),
-          attempt_index: 0,
-          next_attempt_at: now,
-          created_at: now
-        }
-
-        {:ok, arm_attrs}
+  defp render_body_or_error(config, variables, node_id) do
+    case ServiceTask.render_body_template(config.body_template, variables) do
+      {:ok, rendered_body} -> {:ok, rendered_body}
+      {:error, reason} -> {:body_render_error, node_id, reason}
     end
   end
 
@@ -1106,9 +1171,15 @@ defmodule Letflow.Engine do
   @spec config_snapshot_map(
           ServiceTask.Config.t(),
           rendered_url :: String.t() | nil,
+          rendered_body :: String.t() | nil,
           ServiceCatalog.resolved_service_version() | nil
         ) :: map()
-  defp config_snapshot_map(%ServiceTask.Config{} = config, rendered_url, catalog_version) do
+  defp config_snapshot_map(
+         %ServiceTask.Config{} = config,
+         rendered_url,
+         rendered_body,
+         catalog_version
+       ) do
     base = %{
       "route_kind" => to_string(config.route_kind),
       "url_template" => config.url_template,
@@ -1118,7 +1189,8 @@ defmodule Letflow.Engine do
       "headers" => config.headers,
       "timeout_ms" => config.timeout_ms,
       "retry_limit" => config.retry_limit,
-      "rendered_url" => rendered_url
+      "rendered_url" => rendered_url,
+      "rendered_body" => rendered_body
     }
 
     case catalog_version do
@@ -1138,13 +1210,13 @@ defmodule Letflow.Engine do
   # REQ-215 design doc §2.3 -- the minimal inline {{variables.KEY}} template
   # renderer. Scoped to exactly the {{variables.KEY}} syntax the R-Co design
   # doc names (src/design/ext-01-service-task-node.md:20, {{variables.order_id}}), and
-  # to url_template only (body_template rendering is out of this
-  # requirement's own scope, §7 Open Question 2). No existing rendering
+  # to url_template only. body_template rendering (ISS-0926) lives in
+  # Letflow.Engine.ServiceTask.render_body_template/2, a separate pure
+  # function, because its escaping and missing-variable rules differ; this
+  # URL renderer's behaviour is deliberately unchanged. No existing rendering
   # mechanism was found anywhere in this codebase to reuse (§0.1) -- this
   # function is deliberately new, deliberately minimal, and is NOT the
-  # intended long-term shape for template rendering in this codebase: a
-  # future requirement needing richer syntax (nested paths, escaping,
-  # body_template rendering) should replace this function with a real one.
+  # intended long-term shape for template rendering in this codebase.
   @spec render_service_task_url(template :: String.t() | nil, variables :: map()) ::
           String.t() | nil
   defp render_service_task_url(nil, _variables), do: nil
@@ -1216,6 +1288,35 @@ defmodule Letflow.Engine do
       instance_id: instance_id,
       node_id: node_id,
       reason: reason,
+      actor_id: actor_id,
+      idempotency_key: idempotency_key,
+      variables: variables
+    })
+  end
+
+  # ISS-0926 -- sibling of build_service_task_catalog_unresolved_error/6 for a
+  # SERVICE_TASK whose body_template could not be rendered at activation.
+  # `reason_class` is the atom class only (never the missing-variable key).
+  @spec build_service_task_body_render_error(
+          instance_id :: Ecto.UUID.t(),
+          node_id :: String.t(),
+          reason_class :: ServiceTask.body_render_reason_class(),
+          variables :: map(),
+          actor_id :: Ecto.UUID.t() | nil,
+          idempotency_key :: String.t()
+        ) :: standalone_error_attrs()
+  defp build_service_task_body_render_error(
+         instance_id,
+         node_id,
+         reason_class,
+         variables,
+         actor_id,
+         idempotency_key
+       ) do
+    ServiceTask.build_body_render_error_attrs(%{
+      instance_id: instance_id,
+      node_id: node_id,
+      reason: reason_class,
       actor_id: actor_id,
       idempotency_key: idempotency_key,
       variables: variables
@@ -3098,6 +3199,10 @@ defmodule Letflow.Engine do
 
       {:catalog_resolution_error, node_id, reason, _variables} ->
         {:error, {:service_task_catalog_unresolved_not_supported_for_timer_fire, node_id, reason}}
+
+      {:body_render_error, node_id, reason_class, _variables} ->
+        {:error,
+         {:service_task_body_render_failed_not_supported_for_timer_fire, node_id, reason_class}}
     end
   end
 
@@ -3771,6 +3876,9 @@ defmodule Letflow.Engine do
               {:error, {:catalog_resolution_error, error_args}} ->
                 {:ok, {:execution_error, error_args}}
 
+              {:error, {:body_render_error, error_args}} ->
+                {:ok, {:execution_error, error_args}}
+
               {:error, reason} ->
                 {:error, reason}
             end
@@ -3870,6 +3978,19 @@ defmodule Letflow.Engine do
           )
 
         {:error, {:catalog_resolution_error, error_args}}
+
+      {:body_render_error, node_id, reason_class, variables} ->
+        error_args =
+          build_service_task_body_render_error(
+            projection.instance_id,
+            node_id,
+            reason_class,
+            variables,
+            actor_id,
+            idempotency_key
+          )
+
+        {:error, {:body_render_error, error_args}}
 
       {:empty_url_error, node_id, variables} ->
         error_args =

@@ -304,7 +304,7 @@ defmodule Letflow.EngineCatalogServiceTaskTest do
   end
 
   @catalog_keys ~w(catalog_version_id catalog_version catalog_retry_policy)
-  @inline_keys ~w(route_kind url_template service_id method body_template headers timeout_ms retry_limit rendered_url)
+  @inline_keys ~w(route_kind url_template service_id method body_template headers timeout_ms retry_limit rendered_url rendered_body)
 
   # ---------------------------------------------------------------------------------
   # T1 -- the issue's measured scenario: complete the HUMAN_TASK, hop into a

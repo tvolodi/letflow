@@ -116,7 +116,7 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
   # Guards: each returns :ok | {:error, term}
   # ---------------------------------------------------------------------------------
 
-  defp check_t1(doc), do: ok_if(doc["version"] == "1.2", {:version, doc["version"]})
+  defp check_t1(doc), do: ok_if(doc["version"] == "1.3", {:version, doc["version"]})
 
   defp check_t2(doc),
     do:
@@ -171,18 +171,35 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
         :legacy_timeout_node_or_e4
       )
 
+  # ISS-0926: the timer-path node (EO-001) and the remediation-path node are split so
+  # each regulatory notice carries its own literal reason in a rendered body_template.
   defp check_t8(doc) do
-    inbound = doc |> in_edges("regulatory-auto-escalation") |> Enum.map(& &1["id"]) |> Enum.sort()
+    auto = node(doc, "regulatory-auto-escalation") || %{}
+    remed = node(doc, "regulatory-remediation-escalation") || %{}
 
-    outbound =
-      doc |> out_edges("regulatory-auto-escalation") |> Enum.map(&{&1["id"], &1["target"]})
+    in_ids = fn id -> doc |> in_edges(id) |> Enum.map(& &1["id"]) |> Enum.sort() end
+    out = fn id -> doc |> out_edges(id) |> Enum.map(&{&1["id"], &1["target"]}) end
 
-    n = node(doc, "regulatory-auto-escalation") || %{}
+    body = fn n ->
+      case get_in(n, ["attributes", "body_template"]) do
+        t when is_binary(t) -> Jason.decode(t)
+        _other -> :no_body
+      end
+    end
 
     ok_if(
-      inbound == ["e10", "timeout-risk-evaluation"] and outbound == [{"e5", "end-closed"}] and
-        not Map.has_key?(n["attributes"] || %{}, "body_template"),
-      {inbound, outbound, n["attributes"]}
+      in_ids.("regulatory-auto-escalation") == ["timeout-risk-evaluation"] and
+        out.("regulatory-auto-escalation") == [{"e5", "end-closed"}] and
+        body.(auto) ==
+          {:ok, %{"reason" => "sla_breach_30_days", "review_id" => "{{variables.review_id}}"}} and
+        remed["node_type"] == "SERVICE_TASK" and
+        in_ids.("regulatory-remediation-escalation") == ["e10"] and
+        out.("regulatory-remediation-escalation") == [{"e18", "end-closed"}] and
+        body.(remed) ==
+          {:ok, %{"reason" => "remediation_unresolved", "review_id" => "{{variables.review_id}}"}} and
+        get_in(remed, ["attributes", "endpoint"]) == get_in(auto, ["attributes", "endpoint"]),
+      {in_ids.("regulatory-auto-escalation"), out.("regulatory-auto-escalation"),
+       auto["attributes"], remed["attributes"]}
     )
   end
 
@@ -236,7 +253,7 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
   # ---------------------------------------------------------------------------------
 
   describe "ISS-0932 T1-T12: shipped fixture" do
-    test "T1 version is 1.2 (seed script only replaces an ACTIVE definition when strictly newer)" do
+    test "T1 version is 1.3 (seed script only replaces an ACTIVE definition when strictly newer)" do
       assert check_t1(json_doc()) == :ok
     end
 
@@ -264,7 +281,7 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
       assert check_t7(json_doc()) == :ok
     end
 
-    test "T8 regulatory-auto-escalation: two inbound edges, e5 -> end-closed, no body_template" do
+    test "T8 split regulatory notice nodes: distinct inbound edges, e5/e18 -> end-closed, literal reasons" do
       assert check_t8(json_doc()) == :ok
     end
 
@@ -368,14 +385,34 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
       assert {:error, _} = check_t4(m)
     end
 
-    test "M9 literal body_template added to regulatory-auto-escalation -> T8 red" do
+    test "M9a body_template removed from regulatory-auto-escalation -> T8 red" do
       m =
         map_node(
           json_doc(),
           "regulatory-auto-escalation",
-          &put_in(&1, ["attributes", "body_template"], ~s({"reason":"sla_breach_30_days"}))
+          &update_in(&1, ["attributes"], fn a -> Map.delete(a, "body_template") end)
         )
 
+      assert {:error, _} = check_t8(m)
+    end
+
+    test "M9b remediation node carries reason sla_breach_30_days -> T8 red" do
+      m =
+        map_node(
+          json_doc(),
+          "regulatory-remediation-escalation",
+          &put_in(
+            &1,
+            ["attributes", "body_template"],
+            ~s({"reason":"sla_breach_30_days","review_id":"{{variables.review_id}}"})
+          )
+        )
+
+      assert {:error, _} = check_t8(m)
+    end
+
+    test "M9c e10 retargeted back to regulatory-auto-escalation -> T8 red" do
+      m = map_edge(json_doc(), "e10", &Map.put(&1, "target", "regulatory-auto-escalation"))
       assert {:error, _} = check_t8(m)
     end
 

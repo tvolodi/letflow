@@ -1,7 +1,7 @@
 {
   "name": "Regulatory Compliance Review",
-  "version": "1.2",
-  "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates within 21 days. If risk-evaluation is still open when its P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice and closes. Critical findings spawn a remediation sub-process. Exercises: HUMAN_TASK escalation timer, conditional sub-process, DLQ path. Edge e3 carries the constant condition 'true' on purpose: it always wins on normal task completion but is skipped by the escalation-timer path, which follows the single non-conditioned edge timeout-risk-evaluation.",
+  "version": "1.3",
+  "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates within 21 days. If risk-evaluation is still open when its P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice (reason sla_breach_30_days) and closes; an unresolved remediation files its own, separate notice (reason remediation_unresolved) through a distinct node and closes. Critical findings spawn a remediation sub-process. Exercises: HUMAN_TASK escalation timer, conditional sub-process, DLQ path. Edge e3 carries the constant condition 'true' on purpose: it always wins on normal task completion but is skipped by the escalation-timer path, which follows the single non-conditioned edge timeout-risk-evaluation.",
   "graph": {
     "nodes": [
       {
@@ -39,7 +39,18 @@
         "attributes": {
           "endpoint": "https://httpbin.org/anything/compliance/regulatory-notice",
           "method": "POST",
-          "timeout_ms": 300000
+          "timeout_ms": 300000,
+          "body_template": "{\"reason\":\"sla_breach_30_days\",\"review_id\":\"{{variables.review_id}}\"}"
+        }
+      },
+      {
+        "id": "regulatory-remediation-escalation",
+        "node_type": "SERVICE_TASK",
+        "attributes": {
+          "endpoint": "https://httpbin.org/anything/compliance/regulatory-notice",
+          "method": "POST",
+          "timeout_ms": 300000,
+          "body_template": "{\"reason\":\"remediation_unresolved\",\"review_id\":\"{{variables.review_id}}\"}"
         }
       },
       {
@@ -116,7 +127,7 @@
       { "id": "e7",                        "source": "severity-routing",       "target": "findings-sign-off",      "condition": "variables.highest_severity == 'none' || variables.highest_severity == 'low' || variables.highest_severity == 'medium' || variables.highest_severity == 'high'" },
       { "id": "e8",                        "source": "remediation-subprocess", "target": "post-remediation-check" },
       { "id": "e9",                        "source": "post-remediation-check", "target": "findings-sign-off",      "condition": "variables.remediation_status == 'resolved'" },
-      { "id": "e10",                       "source": "post-remediation-check", "target": "regulatory-auto-escalation", "condition": "variables.remediation_status == 'unresolved'" },
+      { "id": "e10",                       "source": "post-remediation-check", "target": "regulatory-remediation-escalation", "condition": "variables.remediation_status == 'unresolved'" },
       { "id": "e11",                       "source": "findings-sign-off",      "target": "archive-review",         "condition": "variables.cro_decision == 'sign_off'" },
       { "id": "e12",                       "source": "findings-sign-off",      "target": "reopen-review",          "condition": "variables.cro_decision == 'reject_and_reopen'" },
       { "id": "timeout-findings-sign-off", "source": "findings-sign-off",      "target": "cro-sign-off-timeout" },
@@ -125,7 +136,8 @@
       { "id": "e15",                       "source": "ceo-override",           "target": "reopen-review",          "condition": "variables.ceo_decision == 'reject_and_reopen'" },
       { "id": "fallback-ceo-override",     "source": "ceo-override",           "target": "archive-review" },
       { "id": "e16",                       "source": "archive-review",         "target": "end-closed" },
-      { "id": "e17",                       "source": "reopen-review",          "target": "end-reopened" }
+      { "id": "e17",                       "source": "reopen-review",          "target": "end-reopened" },
+      { "id": "e18",                       "source": "regulatory-remediation-escalation", "target": "end-closed" }
     ]
   }
 }

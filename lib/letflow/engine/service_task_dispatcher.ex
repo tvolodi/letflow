@@ -716,16 +716,21 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
     case config_from_snapshot(row) do
       {:ok, %ServiceTask.Config{route_kind: :inline_url} = config} ->
         rendered_url = row.config_snapshot["rendered_url"]
-        rendered_body = row.config_snapshot["body_template"]
 
-        raw_outcome = http_transport(config, rendered_url, rendered_body)
+        case resolve_dispatch_body(row) do
+          {:ok, rendered_body} ->
+            raw_outcome = http_transport(config, rendered_url, rendered_body)
 
-        case ServiceTask.classify_failure_kind(raw_outcome) do
-          {:success, decoded_body} ->
-            handle_success(row, tenant_schema, decoded_body)
+            case ServiceTask.classify_failure_kind(raw_outcome) do
+              {:success, decoded_body} ->
+                handle_success(row, tenant_schema, decoded_body)
 
-          failure_kind ->
-            handle_failure(row, tenant_schema, config.retry_limit, failure_kind)
+              failure_kind ->
+                handle_failure(row, tenant_schema, config.retry_limit, failure_kind)
+            end
+
+          {:error, :unrenderable_legacy_body} ->
+            handle_failure(row, tenant_schema, config.retry_limit, :request_build_error)
         end
 
       # ISS-0917: a :catalog_service row is snapshot-driven exactly like an
@@ -738,16 +743,20 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
       {:ok, %ServiceTask.Config{route_kind: :catalog_service} = config} ->
         case row.config_snapshot["rendered_url"] do
           rendered_url when is_binary(rendered_url) and rendered_url != "" ->
-            rendered_body = row.config_snapshot["body_template"]
+            case resolve_dispatch_body(row) do
+              {:ok, rendered_body} ->
+                case ServiceTask.classify_failure_kind(
+                       http_transport(config, rendered_url, rendered_body)
+                     ) do
+                  {:success, decoded_body} ->
+                    handle_success(row, tenant_schema, decoded_body)
 
-            case ServiceTask.classify_failure_kind(
-                   http_transport(config, rendered_url, rendered_body)
-                 ) do
-              {:success, decoded_body} ->
-                handle_success(row, tenant_schema, decoded_body)
+                  failure_kind ->
+                    handle_failure(row, tenant_schema, config.retry_limit, failure_kind)
+                end
 
-              failure_kind ->
-                handle_failure(row, tenant_schema, config.retry_limit, failure_kind)
+              {:error, :unrenderable_legacy_body} ->
+                handle_failure(row, tenant_schema, config.retry_limit, :request_build_error)
             end
 
           _missing_or_unusable ->
@@ -771,6 +780,29 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
           row.config_snapshot["retry_limit"],
           :request_build_error
         )
+    end
+  end
+
+  # ISS-0926 -- resolves the body to send from the FROZEN snapshot; this
+  # module re-renders nothing (it has no instance variables). A new-format row
+  # carries "rendered_body" (string or nil) and is used as is. A legacy row
+  # (key absent, created before ISS-0926) falls back by key presence: no
+  # template -> no body; a static template (no placeholder) -> sent verbatim,
+  # exactly as before; a templated body can no longer be rendered, so it fails
+  # closed (no outbound request) rather than leaking literal placeholders.
+  @spec resolve_dispatch_body(ServiceTaskDispatch.t()) ::
+          {:ok, rendered_body :: String.t() | nil} | {:error, :unrenderable_legacy_body}
+  defp resolve_dispatch_body(%ServiceTaskDispatch{config_snapshot: snapshot}) do
+    case Map.fetch(snapshot, "rendered_body") do
+      {:ok, rendered_body} ->
+        {:ok, rendered_body}
+
+      :error ->
+        template = snapshot["body_template"]
+
+        if ServiceTask.body_has_placeholders?(template),
+          do: {:error, :unrenderable_legacy_body},
+          else: {:ok, template}
     end
   end
 

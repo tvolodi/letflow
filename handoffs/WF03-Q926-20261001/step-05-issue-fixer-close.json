@@ -1,0 +1,44 @@
+{
+  "handoff_id": "7d5354a1-1788-422b-8123-6d7260d7a6ca",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-Q926-20261001/step-05-issue-fixer-close.json",
+  "created_at": "2026-10-01T20:11:41Z",
+  "started_at": "2026-10-01T20:11:41Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0926.yaml",
+      "docs/issues/ISS-0932.yaml",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "handoffs/WF03-Q926-20261001/step-04d-release-validator.json",
+      "test/specs/ISS-0926.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 5: close ISS-0926 locally. Branch feature/WF03-Q926-20261001; claim IN_PROGRESS only, flip COMPLETED on finishing. Outcome supports status: resolved (root cause removed: body_template is now rendered at activation, frozen as rendered_body, sent by the dispatcher; regression test test/letflow/engine/service_task_body_render_test.exs + the others in test/specs/ISS-0926.md; RELEASE-VALIDATOR PASS step-04d). Read docs/agents/protocols/ISSUE_QUEUE.md 'Issue status vocabulary' to use the exact keys for resolved (resolved_in_run: WF03-Q926-20261001, resolved_at: real UTC clock read). Also add to the description or a resolution note (match the schema of recently resolved issues, e.g. docs/issues/ISS-0932.yaml on this branch) a short truthful resolution: body rendering shipped; fixture v1.3 splits regulatory-auto-escalation (timer, reason sla_breach_30_days) from regulatory-remediation-escalation (e10, remediation_unresolved); EO-002 as worded (audit_event) NOT met because the engine writes no outbound-request audit event -> follow-up ISS-0953 (Q-934/GH-2122); e10 notice not dispatched due to sub-process pending-events discard -> follow-up ISS-0954 (Q-935/GH-2123). Keep queue_ref Q-926 and github_ref GH-2106. Modify ONLY docs/issues/ISS-0926.yaml and this handoff. Do NOT run gh issue close and do NOT call release_lock - the parent session performs the GitHub close (with --comment citing the run id and regression test path) and the queue release after merge. Run mix letflow.check_issue_refs if it completes in reasonable time (it can take ~2 minutes). Commit those two files and push origin HEAD. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "ISS-0926.yaml status resolved with resolved_in_run and resolved_at (real clock)",
+      "Resolution note truthful incl. EO-002 caveat and follow-ups",
+      "Only the issue file and this handoff modified",
+      "No gh close and no release_lock performed"
+    ]
+  }
+}

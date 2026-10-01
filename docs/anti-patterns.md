@@ -4372,3 +4372,43 @@ underscore-prefixed binding (`_more_pending`, `_produces`, `_unused`) for a valu
 sibling implementation reads for real is a specific, greppable smell: before accepting it,
 grep the codebase for other callers of the same function and confirm none of them treat
 that position as meaningful.
+
+## A new error branch passed the raw, type-correct but collision-prone variable instead of the sibling-derived anti-collision one, because both compiled and both looked right in isolation (2026-10-01, ELIXIR-DEV/RELEASE-VALIDATOR/REVIEWER, ISS-0945/PR #2136 follow-up)
+
+**What happened.** The same `build_completion_multi_from_merge/12` fix above (the missing
+dispatch-prep call) introduced two new `:error` branches that call
+`prepare_service_task_dispatch_for_completion/8`. Every other error branch in that
+function passes `error_idempotency_key` — a value derived earlier in the function
+specifically so it cannot collide with the raw `idempotency_key` the parent HUMAN_TASK's
+own `TASK_COMPLETED` event already consumed earlier in the same transaction (see the
+function's own derivation comment). The two new branches passed the raw `idempotency_key`
+instead. Both variables are in scope at the call site, both are strings, both are
+individually valid arguments to the function being called — nothing about the call,
+read on its own, looks wrong, and nothing that exercises `prepare_service_task_dispatch_
+for_completion/8` in isolation (e.g. a unit test that doesn't also write a prior event
+under the same raw key in the same transaction) would catch it. The failure mode was a
+silent `ON CONFLICT ... DO NOTHING` no-op on `event_idempotency`'s schema-wide-unique
+index, followed by a later read-back fetching the wrong row and crashing with
+`KeyError` — reproduced only by RELEASE-VALIDATOR, not caught at TEST-DESIGNER/REVIEWER
+time for the original PR.
+
+**Why this is a distinct shape from the entry above.** The `_more_pending` case was a
+*discarded* value — a missing read, visible as an underscore-bound variable, catchable by
+grepping other callers for the same position. This case is a *substituted* value — a
+present, used, type-correct read of the *wrong one of two same-shaped local variables*,
+where the correctness constraint is non-local: it depends on what else gets written,
+under which key, earlier in the same database transaction — not on anything visible from
+the call site, the function signature, or the callee's own contract. No amount of staring
+at the single call in isolation reveals the bug; it only shows up by diffing this branch's
+argument choice against every sibling branch's argument choice at the same call,
+line-by-line, specifically on the idempotency-key argument.
+
+**Correct alternative.** When a function derives a second, suffixed/salted variable
+specifically to avoid a same-transaction collision with another key already in scope (the
+tell: a local binding named `error_<x>` or `<x>_for_<path>` sitting next to the original
+`<x>`, with a comment explaining why), treat every new call site inside that function
+that passes either variable as a place requiring an explicit check: does this call also
+run in a transaction where the *other* key has already been consumed? If yes, it must use
+the derived one, matching every existing sibling branch — don't just confirm the new
+branch "compiles and passes the right type of key," confirm it passes the *same specific
+variable* every structurally-parallel branch around it already uses.

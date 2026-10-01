@@ -1,0 +1,21 @@
+id: ISS-0950
+title: "Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T14:06:29Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no
+  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in
+  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the
+  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not
+  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /
+  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).
+  Owner ELIXIR-DEV (via CODE-DESIGNER).
+affected_files:
+  - lib/letflow/service_catalog.ex
+  - lib/letflow/routers/admin_services.ex
+queue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950
+github_ref: GH-2095
+status: open

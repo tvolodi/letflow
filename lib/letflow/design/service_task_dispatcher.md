@@ -795,7 +795,7 @@ other existing child are untouched.
 | INV-STD-5 | `poll_and_dispatch/1` never raises — every per-row failure is caught and folded into its return value's counts. | §5.5, mirroring `Letflow.Scheduler.poll_and_fire/1`'s own contract (§0) |
 | INV-STD-6 | No sleep-based retry anywhere in this module or its Poller — the poller's own poll interval is the sole wait mechanism. | §5.6 step 5's `:retry` branch; §7 |
 | INV-STD-7 | `ServiceTaskDispatcher.Poller`'s supervision entry is boot-gated behind `:start_service_task_dispatcher` (default `true`, `false` in `config/test.exs`), mirroring `Letflow.Scheduler.Poller`'s own `:start_scheduler` gate. | §8 |
-| INV-STD-8 | `route_kind: :catalog_service` dispatch never reaches a real transport call — `catalog_lookup_stub/2` (or the absence of any real resolution) causes such a row's dispatch to be classified `:request_build_error`/give up, never `:advance`. | §5.3 — no code path in this module resolves a `service_id` to a dispatchable URL |
+| INV-STD-8 | `route_kind: :catalog_service` dispatch never reaches a real transport call — `catalog_lookup_stub/2` (or the absence of any real resolution) causes such a row's dispatch to be classified `:request_build_error`/give up, never `:advance`. | §5.3 — no code path in this module resolves a `service_id` to a dispatchable URL **SUPERSEDED by ISS-0917 (2026-10-01):** a `:catalog_service` row is dispatched only from a URL frozen at activation by `Letflow.Engine` from the instance's pinned catalog version; a row without a usable `rendered_url` gives up as `:request_build_error` with zero transport calls; `catalog_lookup_stub/2` was deleted (see `iss0917-catalog-service-task-pinned-dispatch.md`). |
 
 ---
 
@@ -924,10 +924,12 @@ acceptance criteria test only the claim-time skip, not this narrower in-flight r
 |---|---|
 | 1. A synthetic `:inline_url` row, claimed by `poll_and_dispatch/1`, results in exactly one `:httpc.request/4` call, correctly classifying a 2xx JSON-object response as `:advance` via `classify_failure_kind/1` | §5.2 (`http_transport/3`/`do_http_transport/3`), §5.6 steps 2-4 |
 | 2. A row resolving to a blocked SSRF range is rejected by `UrlValidator.validate/2` BEFORE any `:httpc.request/4` call, producing `:give_up` | §5.2's gate placement; §6's SSRF-block routing statement; INV-STD-1 |
-| 3. A `:catalog_service` row is rejected with a `:not_registered`-shaped `:give_up` outcome regardless of `service_id`, moduledoc states why | §5.3; INV-STD-8; §5.3's own moduledoc-content statement |
+| 3. A `:catalog_service` row is rejected with a `:not_registered`-shaped `:give_up` outcome regardless of `service_id`, moduledoc states why | §5.3; INV-STD-8; §5.3's own moduledoc-content statement **Superseded by ISS-0917** (see INV-STD-8 note). |
 | 4. A retriable failure below `retry_limit` advances `next_attempt_at` per `compute_service_task_backoff_ms/3` and increments `attempt_index`, in the SAME transaction | §5.6 step 5's `:retry` branch; INV-STD-3 |
 | 5. A non-retriable failure, or retriable-but-exhausted, produces `:give_up` carrying `build_service_task_give_up_error_attrs/1`'s exact shape; this module never calls `set_instance_error/2` | §5.6 step 5's `:give_up` branch; §6; INV-STD-2 |
 | 6. `ServiceTaskDispatcher.Poller` is its own supervision-tree entry, distinct from and alongside `Scheduler.Poller`, with its own configurable poll interval | §8 (concrete `application.ex` diff); §7 (`poll_interval_ms/0`); §5.1 |
 | 7. A row belonging to a no-longer-ACTIVE instance is skipped at claim time, never produces `:httpc.request/4` | §5.4's join condition; INV-STD-4 |
 | 8. SECURITY-REVIEWER sign-off confirming every dispatch path (both `route_kind` values) gates via `UrlValidator.validate/2` before `:httpc.request/4` | §5.2 (single unbypassable gate); INV-STD-1 — the concrete inspection target |
 | 9. `mix test` and `mix compile --warnings-as-errors` both pass | Verified at Step 2a (ELIXIR-DEV), not this design step — no design element blocks it structurally (all types close, all functions total over their documented domains) |
+
+> **ISS-0917 note (2026-10-01):** §5.3's `catalog_lookup_stub/2` is retired. Catalog resolution now happens at activation in `Letflow.Engine` (pinned version via `Letflow.ServiceCatalog.resolve_pinned_version/3`); this module dispatches the frozen `rendered_url` for both route kinds through the same `http_transport/3` and SSRF gate. See `lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md`.

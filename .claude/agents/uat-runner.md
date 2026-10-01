@@ -224,6 +224,19 @@ substituting a different actor or inventing a workaround — the gap is real and
 array against the target instance, Part A is not done; if the actor is resolvable but
 `GET /api/v1/identity/roles` has no `role-ops-manager` row, Part B has not been run.
 
+**Meridian and Vortex persona actors -- run the persona seed scripts after the definition
+seeds.** Process-routing role groups and group memberships for these tenants are NOT
+created by `scripts/seed_meridian_definition.sh` / `scripts/seed_vortex_definition.sh`.
+Before executing any scenario under `test/fixtures/uat/scenarios/meridian/` or
+`.../vortex/`, the target QA instance must have had, in order: (1) the definition seed
+(`seed_<tenant>_definition.sh`), (2) Keycloak accounts for the `actor-<tenant>-*` personas
+(Part A, `ai-dala-infra`), (3) `scripts/seed_<tenant>_persona_actors.sh` with a tenant
+PLATFORM_ADMIN `QA_AUTH_TOKEN`. Detect a missing step 3 with `GET /api/v1/identity/roles`:
+no `role-*` rows of kind `process_routing_role` (e.g. `role-credit-manager` /
+`role-production-manager`), or an empty inbox plus 409 "caller does not hold the assigned
+role" on claim. Record the affected steps BLOCKED/PRECONDITION_MISSING; do not substitute
+actors (ISS-0931).
+
 ## Forbidden
 
 Don't mock the backend or intercept HTTP calls — the whole point is exercising the real

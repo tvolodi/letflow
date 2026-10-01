@@ -13,4 +13,19 @@ related:
   - ISS-0912
 queue_ref: Q-914  # queue issue_ref ISS-0914 collides with an existing local file; local filename ISS-0931
 github_ref: GH-2065
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0931-20261001
+resolved_at: "2026-10-01T13:50:00Z"
+resolution: >
+  Root cause: missing seed data, not a lib/ defect. Meridian and vortex definitions route
+  HUMAN_TASKs by role-* names (8 meridian, 4 vortex, taken from test/fixtures/qa/*.json) but
+  nothing created the matching process_routing_role rows or group memberships in those tenants
+  (only swiftroute had a persona-actor seed, ISS-0739). Tasks.resolve_principal_scope therefore
+  gave actors no role names, the inbox filtered to empty, and claim returned 409
+  assignee_role_not_held. Fix: scripts/seed_meridian_persona_actors.sh and
+  scripts/seed_vortex_persona_actors.sh (shared helper scripts/lib/seed_persona_actors_base.sh),
+  mirroring the swiftroute script, plus a uat-runner.md precondition note. The scripts have NOT
+  been run against QA (separate post-merge step); a QA-independent drift-guard test pins the
+  seeded role set to the fixtures.
+regression_tests:
+  - test/scripts/persona_actor_seed_drift_test.exs

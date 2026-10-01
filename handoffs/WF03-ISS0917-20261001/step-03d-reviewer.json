@@ -1,0 +1,75 @@
+{
+  "handoff_id": "72175ca1-52ac-4361-901e-7081971b4b02",
+  "run_id": "WF03-ISS0917-20261001",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0917-20261001/step-03d-reviewer.json",
+  "created_at": "2026-10-01T13:13:22Z",
+  "started_at": "2026-10-01T13:13:22Z",
+  "completed_at": "2026-10-01T13:16:50Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0917": "id: ISS-0917\ntitle: \"Catalog SERVICE_TASK cannot execute: ServiceTaskDispatcher.catalog_lookup_stub/2 is an unconditional {:error,:not_registered}; POST /tasks/:id/complete returns 500 when the next node is a catalog-only SERVICE_TASK\"\ndiscovered_by: RELEASE-VALIDATOR\ndiscovered_in_run: WF02-REQ432-20260930 (filed by ORCH)\ndiscovered_at: \"2026-09-30T20:50:51Z\"\nseverity: MAJOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by WF02-REQ432-20260930 (REQ-432 live pipeline run,\n  test/reports/report-20260930-WF02-REQ432-20260930.yaml; step-02b-rework1-frontend-\n  dev.json). A process whose SERVICE_TASK references a service_id (catalog_entry pin) cannot\n  ever execute: Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2\n  (lib/letflow/engine/service_task_dispatcher.ex ~411-416) returns {:error,:not_registered}\n  unconditionally, so activation renders an empty URL. Measured live: completing the\n  preceding human task hops synchronously into the SERVICE_TASK, the engine persists only\n  EXECUTION_ERROR (affected node n3, error_type service_task_url_rendered_empty, no\n  TASK_COMPLETED for the completed task) and POST /api/v1/tasks/:id/complete answers HTTP\n  500 (probably needs a non-500 mapping for {:instance_execution_error,_,_} in\n  lib/letflow/routers/tasks.ex). Independent of service retirement. Consequence: scenario\n  platform-instance-pin-survives-catalog-change EO-001/EO-004 'the in-flight step completes\n  without error' cannot be met on success; REQ-432's pipeline spec accepts the measured\n  outcome (B) as a documented limitation. Needed: resolve service_id through the instance's\n  PINNED service_catalog version (Letflow.Engine.PinResolver / ServiceCatalog lookup) in the\n  dispatcher, then tighten the REQ-432 spec step 03 to require success. SCOPE GAP already\n  noted in design docs lib/letflow/design/req373-service-catalog-version-lifecycle.md and\n  lib/letflow/design/req432-rebind-pins-publish-retire-ui.md (M5). Owner ELIXIR-DEV (via\n  CODE-DESIGNER). Severity MAJOR.\n  NOTE (added by ORCH at close-out of the cancelled duplicate run WF02-REQ432-20260930): the\n  REQ-432 implementation that actually landed on main is PR #2055 (5d7ca7bf), not this run's\n  branch. Its spec (web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change\n  .pipeline.e2e.spec.ts, header 'Scope note (deliberately not exercised): SERVICE_TASK dispatch')\n  never drives a token onto the SERVICE_TASK node, so on main the scenario's 'the in-flight step\n  completes without error' (EO-001/EO-004 step 3) is unverified; the evidence of this stub's effect\n  is the duplicate run's live finding (archived on remote branch feature/WF02-REQ432-20260930,\n  handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json and step-05-release-validator.json).\nsource_reports:\n  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json\n  - test/reports/report-20260930-WF02-REQ432-20260930.yaml\naffected_files:\n  - lib/letflow/engine/service_task_dispatcher.ex\n  - lib/letflow/routers/tasks.ex\nqueue_ref: Q-907  # queue allocated issue_ref ISS-0907, which collides with an existing local file; local filename kept as ISS-0917 (next free on origin/main) and GH-2057 retitled to match\ngithub_ref: GH-2057\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md",
+      "lib/letflow/design/req085-task-routes-write.md",
+      "handoffs/WF03-ISS0917-20261001/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0917-20261001/step-03c-security-reviewer.json",
+      "docs/issues/ISS-0933.yaml",
+      "docs/migration/decisions/",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0917-20261001",
+    "queue_task_id": 907,
+    "github_issue": 2057
+  },
+  "task": {
+    "description": "WF-03 Step 3d: REVIEWER hard gate (idiomatic OTP/Elixir usage, supervision integrity, scope creep, decision-record consistency) on the implementation: `git diff origin/main...HEAD -- lib/ test/` against design lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md; SECURITY-REVIEWER passed (handoffs/WF03-ISS0917-20261001/step-03c-security-reviewer.json). REQUIRED rulings: (1) the D4 amendment: Routers.Tasks maps {:instance_execution_error, error_type, _} to 409 (uniform for all error_types), diverging from lib/letflow/design/req085-task-routes-write.md section 5.5.1's old row which mapped it to 500 via catch-all. Per the issue ('consider that decision record carefully; flag/REVIEWER sign-off if diverging') give an explicit sign-off or rejection with reasons; check the amendment text actually in the design doc, check docs/migration/decisions/ for anything touching error-to-status mapping (e.g. any decision on 5xx for engine failures) and the open ISS-0933 for conflict; if you reject, say precisely what to change. (2) scope creep check: only files/behaviours in the design; inline_url arm unchanged; no web/ change; no migration; the 5 call-site changes are minimal; (3) engine.ex helper structure: private function growth, memoisation of reconstruct/tenant lookup, error tuple handling consistent with the existing {:empty_url_error,...} wrapper; no new process/supervision changes; (4) the deleted stub and replaced tests: confirm no remaining reference (`grep -rn catalog_lookup_stub lib test docs`), that replaced tests still assert meaningful behaviour (not weakened), (5) docs consistency of moduledocs touched. Verdict PASS / FAIL with numbered must-fix vs optional findings. Read-only; you may run scoped MIX_ENV=test mix test on files (limited machine memory shared with other workers and a shared test DB: no full suite; DB-contention failures in TaskAssigneeTypeBackfillTest / ServiceCatalogTest delete/update_scope were reported by ELIXIR-DEV as environmental, do not chase them). Modify only your handoff; do not commit; `git status --porcelain lib test` empty at finish.",
+    "acceptance_criteria": [
+      "Explicit sign-off or rejection of the D4 409 amendment with reasons",
+      "Scope-creep and decision-record consistency verdict",
+      "git status --porcelain lib test empty at finish"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "VERDICT: PASS. Method: read-only review of git diff origin/main...HEAD (lib/ test/) against the ISS-0917 design; no tests run; git status --porcelain lib test empty.\nRULING 1 (D4 409 amendment): APPROVED. (a) complete_task/3 returns {:instance_execution_error,_,_} only after its Multi has committed: the request was valid and authorised and the instance is durably parked in ERROR by design (req061 5.4), so it is a resource-state conflict, not a platform fault; the old 500 row came from a catch-all residual-risk bucket, not a recorded decision. (b) The amendment text actually in lib/letflow/design/req085-task-routes-write.md matches design 5.3: new row before the catch-all, member removed from the catch-all member list, router catch-all comment updated (no stale claim left). (c) Searched docs/migration/decisions/ (0001-0041): no record governs error-to-status mapping or mandates 5xx for engine failures (only unrelated '500' hits in 0009/0030), so no decision-record conflict. (d) Open ISS-0933 (GH-2067) asks for exactly a 4xx conflict-style response for POST /tasks/:id/complete on an ERROR instance: aligned, no conflict; it is effectively delivered by this change, so ORCH/DOC-UPDATER should close or re-scope it (the design says 'ISS-0933 untouched'). (e) Clause sits after the three 403 clauses, is guarded by is_atom, detail names only the error_type atom (INV-2); uniform 409 for all error_types is acceptable since every instance_execution_error is the same 'instance parked in ERROR' state.\n2 SCOPE: clean. Changed lib files are the design's set (engine.ex, engine/service_task.ex, engine/service_task_dispatcher.ex, routers/tasks.ex, service_catalog.ex; pin_resolver.ex, service_catalog/entry.ex, pin_lookup.ex doc-only; design docs). inline_url arm unchanged (inline snapshot gets no extra keys; catalog_version defaults nil). No web/ change, no priv/ migration. The 5 prepare_service_task_dispatch call sites (create, two timer-fire sites, dispatch-advance, completion hop) each only add a ctx argument (completion hop also threads prefix). No new behaviours/macros/generic plumbing; private visible_to_tenant/2 de-duplicates get_for_tenant/2 to prevent drift, not speculative. catalog_retry_policy is audit-only, as designed.\n3 ENGINE HELPERS: idiomatic. Private-function growth is linear and single-purpose (resolve_catalog_version/2 with-chain plus small helpers). Pin reconstruction and schema-prefix tenant lookup are lazy and memoised via the ctx threaded through the reduce_while accumulator, so at most once per hop chain and only if a catalog node activates. The new {:catalog_resolution_error,...} tuple mirrors the existing {:empty_url_error,...} wrapper at every layer (prepare, create/2 activation_failed, timer-fire abort wrapper, completion-hop execution_error); typed tuples only, no raise. No process/supervision changes; InstanceSupervisor untouched, consistent with REQ-045. New @typep types are closed; no type-safety gap worth filing.\n4 STUB/TESTS: grep catalog_lookup_stub in lib test docs: no code or test references remain; only design docs (iss0917 design; service_task_dispatcher.md with dated SUPERSEDED notes) and test/specs/REQ-214.md lines 31 and 91 (stale prose, optional). Replaced dispatcher tests are strengthened: gate-ON blocked listener with zero-request refute, link-local 169.254.169.254 rejected pre-transport, gate-bypass real 2xx advances (impossible under the stub), nil/empty/non-binary rendered_url give up with zero requests. engine_test.exs assertion moved to the typed {:service_task_catalog_unresolved,'svc',:version_not_found} (stricter, and still asserts projection_count 0). engine_pin_resolver_catalog_test.exs change is comment-only.\n5 DOC CONSISTENCY: moduledocs in service_task_dispatcher.ex, service_task.ex (catalog_lookup_fun marked superseded/historical, kept), pin_resolver.ex, service_catalog.ex agree with the new behaviour; INV-STD-8 in service_task_dispatcher.md carries a dated superseded note instead of silent rewrite.\nFINDINGS: must-fix: none. Optional: O1 annotate test/specs/REQ-214.md lines 31/91 as superseded by ISS-0917. O2 close/re-scope ISS-0933. O3 ServiceTask.catalog_lookup_fun type is now dead surface (documented historical; fine). O4 SECURITY-REVIEWER's follow-up (registration-time endpoint_url validation, decision 0027) still needs an issue filed by ORCH.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Optional: test/specs/REQ-214.md lines 31 and 91 still describe catalog_lookup_stub/2 routing; annotate as superseded by ISS-0917.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Optional: ISS-0933 (4xx instead of 500 for ERROR instance) is effectively delivered by the D4 clause; close or re-scope it.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0917-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (REVIEWER gate PASS; D4 409 amendment approved)"
+  }
+}

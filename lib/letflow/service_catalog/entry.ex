@@ -54,9 +54,10 @@ defmodule Letflow.ServiceCatalog.Entry do
   (`Letflow.ServiceCatalog.Version`) archiving every version a `publish`/
   `retire` supersedes — **not** a composite-key (`service_id` + `version`)
   versioned table. `Letflow.Engine.PinResolver.Lookup.catalog_lookup/1`
-  itself takes only `service_id`, never a requested version — nothing
-  downstream of `Lookup` ever addresses a specific historical version by
-  key, so composite-keying `service_catalog` would buy nothing at the one
+  itself takes only `service_id`, never a requested version (the one
+  exception, added later by ISS-0917, is SERVICE_TASK dispatch:
+  `Letflow.ServiceCatalog.resolve_pinned_version/3` fetches the pinned
+  version by `version_id` or `(service_id, version)`), so composite-keying `service_catalog` would buy nothing at the one
   call site this exists to wire up, while forcing every existing bare
   `service_id`-keyed caller (this module's own five functions, the
   `SERVICE_TASK` graph-node reference, `scope_validator_lookup/1`) to gain a

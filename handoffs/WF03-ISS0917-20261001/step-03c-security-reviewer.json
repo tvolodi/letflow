@@ -1,0 +1,70 @@
+{
+  "handoff_id": "ee2624fb-7952-4317-9bb9-6e7468e7eb61",
+  "run_id": "WF03-ISS0917-20261001",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0917-20261001/step-03c-security-reviewer.json",
+  "created_at": "2026-10-01T13:12:12Z",
+  "started_at": "2026-10-01T13:12:12Z",
+  "completed_at": "2026-10-01T13:13:02Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0917": "id: ISS-0917\ntitle: \"Catalog SERVICE_TASK cannot execute: ServiceTaskDispatcher.catalog_lookup_stub/2 is an unconditional {:error,:not_registered}; POST /tasks/:id/complete returns 500 when the next node is a catalog-only SERVICE_TASK\"\ndiscovered_by: RELEASE-VALIDATOR\ndiscovered_in_run: WF02-REQ432-20260930 (filed by ORCH)\ndiscovered_at: \"2026-09-30T20:50:51Z\"\nseverity: MAJOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by WF02-REQ432-20260930 (REQ-432 live pipeline run,\n  test/reports/report-20260930-WF02-REQ432-20260930.yaml; step-02b-rework1-frontend-\n  dev.json). A process whose SERVICE_TASK references a service_id (catalog_entry pin) cannot\n  ever execute: Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2\n  (lib/letflow/engine/service_task_dispatcher.ex ~411-416) returns {:error,:not_registered}\n  unconditionally, so activation renders an empty URL. Measured live: completing the\n  preceding human task hops synchronously into the SERVICE_TASK, the engine persists only\n  EXECUTION_ERROR (affected node n3, error_type service_task_url_rendered_empty, no\n  TASK_COMPLETED for the completed task) and POST /api/v1/tasks/:id/complete answers HTTP\n  500 (probably needs a non-500 mapping for {:instance_execution_error,_,_} in\n  lib/letflow/routers/tasks.ex). Independent of service retirement. Consequence: scenario\n  platform-instance-pin-survives-catalog-change EO-001/EO-004 'the in-flight step completes\n  without error' cannot be met on success; REQ-432's pipeline spec accepts the measured\n  outcome (B) as a documented limitation. Needed: resolve service_id through the instance's\n  PINNED service_catalog version (Letflow.Engine.PinResolver / ServiceCatalog lookup) in the\n  dispatcher, then tighten the REQ-432 spec step 03 to require success. SCOPE GAP already\n  noted in design docs lib/letflow/design/req373-service-catalog-version-lifecycle.md and\n  lib/letflow/design/req432-rebind-pins-publish-retire-ui.md (M5). Owner ELIXIR-DEV (via\n  CODE-DESIGNER). Severity MAJOR.\n  NOTE (added by ORCH at close-out of the cancelled duplicate run WF02-REQ432-20260930): the\n  REQ-432 implementation that actually landed on main is PR #2055 (5d7ca7bf), not this run's\n  branch. Its spec (web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change\n  .pipeline.e2e.spec.ts, header 'Scope note (deliberately not exercised): SERVICE_TASK dispatch')\n  never drives a token onto the SERVICE_TASK node, so on main the scenario's 'the in-flight step\n  completes without error' (EO-001/EO-004 step 3) is unverified; the evidence of this stub's effect\n  is the duplicate run's live finding (archived on remote branch feature/WF02-REQ432-20260930,\n  handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json and step-05-release-validator.json).\nsource_reports:\n  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json\n  - test/reports/report-20260930-WF02-REQ432-20260930.yaml\naffected_files:\n  - lib/letflow/engine/service_task_dispatcher.ex\n  - lib/letflow/routers/tasks.ex\nqueue_ref: Q-907  # queue allocated issue_ref ISS-0907, which collides with an existing local file; local filename kept as ISS-0917 (next free on origin/main) and GH-2057 retitled to match\ngithub_ref: GH-2057\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md",
+      "handoffs/WF03-ISS0917-20261001/step-03-elixir-dev.json",
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0917-20261001",
+    "queue_task_id": 907,
+    "github_issue": 2057
+  },
+  "task": {
+    "description": "WF-03 Step 3c: SECURITY-REVIEWER hard gate (tenant-data path: service_catalog lookup, engine activation, router response shaping). Review the committed implementation on this branch: `git diff origin/main...HEAD -- lib/ test/` (implementation commit; ELIXIR-DEV handoff handoffs/WF03-ISS0917-20261001/step-03-elixir-dev.json result.summary lists notes for you; design: lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md sections 7 and 6). Gate against docs/agents/instructions/security-invariants.md INV-1..INV-8 and the decision records it cites (including 0027's INV-9 trigger about the stub being replaced and registration-time URL checking). Specifically verify by reading code: (a) tenant visibility in ServiceCatalog.resolve_pinned_version/3 equals get_for_tenant/2 and cannot leak another tenant's tenant-scoped catalog entry/endpoint (including via the archived service_catalog_versions fallback and via the (service_id, version) rebound identity); (b) version_id/version only from the instance's own event-sourced pins, never request input; (c) no fallback to the live current row on missing pin; (d) SSRF gate (Webhooks.UrlValidator) still applies before the HTTP call on the catalog arm, including DNS-rebinding class concerns already accepted for the inline arm, and the registration-time gap (0027) - give a ruling: acceptable for this fix (file follow-up) or must-fix now; (e) required_auth != NONE fails closed with no row and no request; (f) no logging/echo of variables, headers, URLs, service_id beyond what's stated; the 409 detail names only the error_type atom; error messages from create path carry service_id - is that an info leak to a tenant that is allowed to know its own pin? ; (g) the 409 clause does not weaken authorization ordering (the 403 clauses before it). Verdict PASS / FAIL with numbered findings (severity-ranked); distinguish must-fix from follow-up issues. You may run read-only commands and MIX_ENV=test mix test on scoped files (memory is limited: other workers share the machine and test DB, so scope tests, no full suite). Modify only your handoff; do not commit; do not leave mutants or scratch files in the tree (`git status --porcelain lib test` must be empty at finish).",
+    "acceptance_criteria": [
+      "Verdict PASS/FAIL with numbered findings",
+      "Ruling on registration-time URL validation gap",
+      "git status --porcelain lib test empty at finish"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "VERDICT: PASS. Scope test: IN scope (service_catalog lookup, engine activation, router response shaping, secret-adjacent required_auth). Method: read-only code review of git diff origin/main...HEAD (lib/); no tests run, no mutants; git status --porcelain lib test is empty.\nINVARIANTS: INV-1 APPLIES - PASS: service_catalog/service_catalog_versions are the global (public-schema) catalog, tenant visibility is the SVC-01 row predicate (scope/owner_tenant_id), identical to get_for_tenant/2 because both now call the single private visible_to_tenant/2; instance/pin reads go through the tenant prefix (reconstruct_effective_pins prefix:); tenant_id derived from create/2's prefix-resolved id or lazily from the schema prefix via TenantProvisioning.tenant_id_for_schema_name, never request input; no new table/migration. INV-2 APPLIES - PASS: new 409 detail is the fixed string plus the error_type atom only (affected/variables/reason/details not echoed); persisted ExecutionError details carry only the reason atom class and fixed sentences. INV-3 N/A (no Lua/WASM). INV-4 APPLIES - PASS: no secrets resolved or logged; required_auth != NONE fails closed before URL render/row; no Logger/inspect added in service_catalog/engine/dispatcher diff. INV-5 APPLIES - PASS: resolve_pinned_version/3 collapses missing service, invisible service, unknown version, other-service version, malformed UUID into one :not_found; no new lookup-by-id endpoint (inputs come from event-sourced pins). INV-6 satisfied by this handoff. INV-7 N/A/PASS: only Ecto query API with pinned vars (from v in Version where ... ^entry.service_id, ^version), no Repo.query. INV-8 PASS: all new failure paths are typed tuples (no bare matches on I/O); malformed version_id via Ecto.UUID.cast, not raise; reconstruct/tenant lookup errors fold to :pins_unavailable. INV-9 APPLIES - PASS (see d).\nSPECIFIC CHECKS: (a) PASS - visibility checked on the live row of the same service_id first (archive rows carry no scope/owner); archived fallback by version_id requires sid == entry.service_id, and the (service_id, version) path filters by entry.service_id, so a pin cannot reach another service's or another tenant's tenant-scoped entry/endpoint through either identity. Residual (accepted, informational): an archived version published while the entry was global stays reachable by a tenant that still sees the live row; visibility follows the live row by design. (b) PASS - version_id/version come only from PinResolver.pin_for over the instance's own event-sourced pins ({:pins,...} from create/2 or reconstruct_effective_pins); no request input reaches resolve_pinned_version/3. (c) PASS - every resolution failure returns a typed error; no path reads the live current row as a substitute (live row is used only when its version_id/version equals the pinned identity). (d) PASS - the catalog arm in the dispatcher calls the same http_transport/3, whose UrlValidator.validate(rendered_url, dns_resolver) runs immediately before :httpc.request, so the INV-9 point-of-request check applies to both route kinds; nil/empty/non-binary rendered_url -> :request_build_error with zero transport calls. DNS-rebinding is covered by the same per-request resolve-and-check as the inline arm (accepted class). (e) PASS - check_catalog_auth_supported fails closed with no dispatch row and no request for API_KEY/OAUTH2/MUTUAL_TLS. (f) PASS - no logging; 409 names only the error_type atom. The create-path reason {:pin_missing,:catalog_entry,service_id} carries service_id: the caller is the tenant that authored the definition whose node names that service_id, and the create path error is not echoed in a body by routers/instances.ex (falls to the generic catch-all), so no leak to a tenant that is not allowed to know it; acceptable. (g) PASS - the new 409 clause is placed after the three 403 authorization clauses and only matches the post-commit {:instance_execution_error, atom, _} result of complete_task, which is reachable only after Tasks.authorize_completion/3 succeeded; it does not alter authorization ordering. \nRULING ON REGISTRATION-TIME URL VALIDATION (decision 0027 gap): ACCEPTABLE for this fix, file a follow-up (not must-fix). Rationale: INV-9 requires the check at the point of the actual request, not at ingestion alone; that control is present and unconditional for the catalog arm. Registration-time validation of endpoint_url in publish/admin_services would be fast-feedback and defence in depth only, and the catalog is admin-managed (admin_services), not directly tenant-supplied. This change newly makes catalog endpoints reachable by the dispatcher, so the follow-up should be prioritised (MINOR/MAJOR hardening): validate endpoint_url scheme/host syntactically at publish.\nFINDINGS (numbered, ranked): 1. [FOLLOW-UP, MINOR] No registration/publish-time UrlValidator check on service_catalog.endpoint_url (0027); dispatch-time gate is the binding control. File issue. 2. [INFO] required_auth != NONE services are unusable via SERVICE_TASK (fail closed by design) until a secret-reference auth mechanism exists; correct per INV-4. 3. [INFO] catalog_retry_policy and endpoint rendering with {{variables.KEY}}: variables are interpolated into the pinned URL exactly as the inline arm does; the SSRF gate runs on the rendered result, so a variable cannot bypass it. 4. [INFO, process] ELIXIR-DEV did not run the full suite locally (shared DB contention); not a security matter, TEST-RUNNER to confirm. No must-fix findings.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Follow-up: no registration/publish-time UrlValidator check on service_catalog.endpoint_url (decision 0027); dispatch-time INV-9 gate is the binding control and is present. File follow-up issue; not must-fix.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0917-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER"
+  }
+}

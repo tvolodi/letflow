@@ -1,0 +1,99 @@
+{
+  "handoff_id": "aad52940-39ea-4da6-bc33-00e17fa42725",
+  "run_id": "WF03-ISS0917-20261001",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0917-20261001/step-03-elixir-dev.json",
+  "created_at": "2026-10-01T12:30:26Z",
+  "started_at": "2026-10-01T12:30:26Z",
+  "completed_at": "2026-10-01T13:11:35Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0917": "id: ISS-0917\ntitle: \"Catalog SERVICE_TASK cannot execute: ServiceTaskDispatcher.catalog_lookup_stub/2 is an unconditional {:error,:not_registered}; POST /tasks/:id/complete returns 500 when the next node is a catalog-only SERVICE_TASK\"\ndiscovered_by: RELEASE-VALIDATOR\ndiscovered_in_run: WF02-REQ432-20260930 (filed by ORCH)\ndiscovered_at: \"2026-09-30T20:50:51Z\"\nseverity: MAJOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by WF02-REQ432-20260930 (REQ-432 live pipeline run,\n  test/reports/report-20260930-WF02-REQ432-20260930.yaml; step-02b-rework1-frontend-\n  dev.json). A process whose SERVICE_TASK references a service_id (catalog_entry pin) cannot\n  ever execute: Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2\n  (lib/letflow/engine/service_task_dispatcher.ex ~411-416) returns {:error,:not_registered}\n  unconditionally, so activation renders an empty URL. Measured live: completing the\n  preceding human task hops synchronously into the SERVICE_TASK, the engine persists only\n  EXECUTION_ERROR (affected node n3, error_type service_task_url_rendered_empty, no\n  TASK_COMPLETED for the completed task) and POST /api/v1/tasks/:id/complete answers HTTP\n  500 (probably needs a non-500 mapping for {:instance_execution_error,_,_} in\n  lib/letflow/routers/tasks.ex). Independent of service retirement. Consequence: scenario\n  platform-instance-pin-survives-catalog-change EO-001/EO-004 'the in-flight step completes\n  without error' cannot be met on success; REQ-432's pipeline spec accepts the measured\n  outcome (B) as a documented limitation. Needed: resolve service_id through the instance's\n  PINNED service_catalog version (Letflow.Engine.PinResolver / ServiceCatalog lookup) in the\n  dispatcher, then tighten the REQ-432 spec step 03 to require success. SCOPE GAP already\n  noted in design docs lib/letflow/design/req373-service-catalog-version-lifecycle.md and\n  lib/letflow/design/req432-rebind-pins-publish-retire-ui.md (M5). Owner ELIXIR-DEV (via\n  CODE-DESIGNER). Severity MAJOR.\n  NOTE (added by ORCH at close-out of the cancelled duplicate run WF02-REQ432-20260930): the\n  REQ-432 implementation that actually landed on main is PR #2055 (5d7ca7bf), not this run's\n  branch. Its spec (web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change\n  .pipeline.e2e.spec.ts, header 'Scope note (deliberately not exercised): SERVICE_TASK dispatch')\n  never drives a token onto the SERVICE_TASK node, so on main the scenario's 'the in-flight step\n  completes without error' (EO-001/EO-004 step 3) is unverified; the evidence of this stub's effect\n  is the duplicate run's live finding (archived on remote branch feature/WF02-REQ432-20260930,\n  handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json and step-05-release-validator.json).\nsource_reports:\n  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json\n  - test/reports/report-20260930-WF02-REQ432-20260930.yaml\naffected_files:\n  - lib/letflow/engine/service_task_dispatcher.ex\n  - lib/letflow/routers/tasks.ex\nqueue_ref: Q-907  # queue allocated issue_ref ISS-0907, which collides with an existing local file; local filename kept as ISS-0917 (next free on origin/main) and GH-2057 retitled to match\ngithub_ref: GH-2057\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md",
+      "handoffs/WF03-ISS0917-20261001/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/service_catalog/",
+      "lib/letflow/design/req085-task-routes-write.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/service_catalog/",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/design/req085-task-routes-write.md",
+      "test/letflow/engine/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0917-20261001",
+    "queue_task_id": 907,
+    "github_issue": 2057
+  },
+  "task": {
+    "description": "WF-03 Step 3: IMPLEMENT the fix exactly as specified by the validated design lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md (read it FULLY, it is normative; the diagnosis is in handoffs/WF03-ISS0917-20261001/step-01-issue-fixer-diagnose.json). Scope for YOU: the Elixir side only (lib/letflow/ service_catalog resolver, engine.ex activation at all five prepare_service_task_dispatch call sites, service_task_dispatcher.ex stub removal and snapshot-driven :catalog_service arm, routers/tasks.ex D4 409 clause, moduledoc/doc-claim updates the design assigns to code, the req085 5.5.1 amendment note in lib/letflow/design/req085-task-routes-write.md that the design prescribes, and edits to EXISTING tests that the design's inventory says must change/flip/be replaced so the suite stays green - including engine_test.exs:1232-1247 flip and the dispatcher stub tests). The e2e spec under web/ is a LATER FRONTEND-DEV step: do NOT touch web/. Brand-new regression tests are TEST-DESIGNER's later step (Step 4) - do not write the T1-T11/R1-R3 suite, but you may add minimal tests needed to keep coverage of code you changed if the design inventory requires it. No migration (design D7). Required checks before completing, run for real and quote results in result.summary: `mix format` (and --check-formatted), `mix compile --warnings-as-errors` (or the project's equivalent; see mix.exs aliases / `mix letflow.check` - read what it runs), and `MIX_ENV=test mix test` on at least: test/letflow/engine/ (all), test/letflow/service_catalog* , test/letflow/routers/tasks_test.exs, test/letflow/routers/admin_services*; then the FULL `mix test` (or `mix letflow.check` if that is the project gate) and report totals; if there are failures, determine whether they are caused by your change (fix) or pre-existing/flaky (prove by re-running the failing file on origin/main in a throwaway worktree made by `git worktree add` with a REAL COPY of deps/_build - never junction - and remove the worktree after). Honour security-invariants.md (INV tenant scoping), docs/anti-patterns.md, and the design's notes for SECURITY-REVIEWER (visibility rule, version_id only from the instance's own pins, no live-row fallback, no logging of variables/headers, required_auth != NONE fails closed). Work on the current branch feature/WF03-ISS0917-20261001 (do not switch). Do NOT commit and do NOT push (ORCH commits after you finish); leave the working tree with your changes uncommitted. Complete the handoff per HANDOFF_PROTOCOL.md section 3 listing artifacts_out (every file changed), next_action 'Route to SECURITY-REVIEWER'. In result.summary list design deviations (should be none; if you must deviate, justify and flag).",
+    "acceptance_criteria": [
+      "Implementation matches design D1-D8 with no unflagged deviation",
+      "mix format / compile --warnings-as-errors clean, quoted",
+      "Full mix test result quoted with attribution of any failure",
+      "No web/ changes; no migration; no commit"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented design D1-D4, D6, D7 (Elixir side only). D1: Letflow.ServiceCatalog.resolve_pinned_version/3 (by version_id, or (service_id,version) for rebound pins; live row incl. RETIRED first, else service_catalog_versions; visibility via a private predicate now shared with get_for_tenant/2; single :not_found; malformed UUID -> :not_found). D2: engine.ex activation resolves :catalog_service nodes from the instance's own pin at all five prepare_service_task_dispatch call sites (create passes {:pins, pins}; completion hop/timer/escalation/service-advance use lazy {:reconstruct,...}; completion hop derives tenant_id lazily from the schema prefix; reconstruct and tenant lookup memoised once per call); no fallback to the live row; required_auth != NONE fails closed before any URL/row; snapshot gets rendered pinned endpoint_url, min(node,catalog) timeout_ms, catalog_version_id/catalog_version/catalog_retry_policy (inline snapshot unchanged, no new keys); new outcome {:catalog_resolution_error,...} routed per 3.6 (create -> {:activation_failed,{:service_task_catalog_unresolved,node,reason}}; completion hop -> ExecutionError via ServiceTask.build_catalog_unresolved_error_attrs/1; timer/escalation/advance -> {:service_task_catalog_unresolved_not_supported_for_timer_fire,node,reason}). D3: catalog_lookup_stub/2 deleted; dispatcher :catalog_service arm is snapshot-driven through the same http_transport/3 (SSRF gate unchanged), nil/empty/non-binary rendered_url -> :request_build_error with zero transport calls; moduledocs rewritten; ServiceTask catalog_lookup_fun type/moduledoc kept and annotated superseded (service_task_test.exs:279 untouched). D4: one new Routers.Tasks clause {:instance_execution_error, atom, _} -> 409 'instance entered ERROR status: <error_type>' placed after the three 403 clauses, catch-all comment updated; req085 5.5.1 amended (new row, tuple removed from catch-all row). Doc-claim updates: pin_lookup.ex, entry.ex, service_catalog.ex, pin_resolver.ex moduledocs; design docs service_task_dispatcher.md (INV-STD-8 + AC row 3 superseded), service_task.md, req373. Existing tests edited: engine_test.exs flip to {:activation_failed,{:service_task_catalog_unresolved,\"svc\",:version_not_found}} (count assertions unchanged); service_task_dispatcher_test.exs stub describe deleted and catalog describe replaced (SSRF-gate block with live listener, link-local 169.254.169.254, gate-bypassed 2xx advance, nil/empty/non-binary rendered_url zero requests); engine_pin_resolver_catalog_test.exs comment only. No new T1-T11/R1-R3 suite written (TEST-DESIGNER). No web/ change, no migration, no commit/push. CHECKS (real): mix format --check-formatted -> clean; mix compile --warnings-as-errors (dev and MIX_ENV=test) -> clean, no warnings. A throwaway smoke test (written, run, deleted; not in tree) passed 2/2: HUMAN_TASK->catalog SERVICE_TASK complete_task after retire+republish v2 returned {:ok, instance_status: :active} with one pending dispatch row rendered_url==v1 endpoint, catalog_version \"1\", timeout_ms=5000 (min); required_auth :API_KEY -> {:error,{:instance_execution_error,:service_task_catalog_unresolved,{:node,\"svc\"}}} and zero dispatch rows. Scoped MIX_ENV=test mix test: (1) test/letflow/engine/ + engine_test.exs + engine_pin_resolver_catalog_test.exs -> 1072/1081 passed (16 excluded), 9 failed; --failed rerun 167/175, 8 failures, all in Letflow.Engine.TaskAssigneeTypeBackfillTest (error: relation tenant_template_build_<hash>.tasks does not exist, i.e. another worker's concurrent mix test invocation building tenant_template on the shared DB; TenantSchemaReaper logs show another mix test invocation connected); my changed engine_test.exs create/2 flip test and all other engine tests passed. (2) service_catalog_test.exs + routers/tasks_test.exs + routers/admin_services_test.exs + admin_services_publish_retire_test.exs + engine/service_task_{dispatcher,,wiring,routing}_test.exs -> 228/244 first run, 16 failures (missing tenant_template schema clone errors and undefined_table on other workers' tenant schemas); --failed rerun: 10 of the 16 passed (incl. all new dispatcher catalog tests and wiring tests), 6 remain, all Letflow.ServiceCatalogTest delete/1 and update_scope/2 referential-guard tests failing with 42P01 relation tenant_<hash>.process_definitions does not exist from the cross-tenant-schema sweep over other workers' half-built schemas. routers/tasks_test.exs and admin_services tests had no failures. Failure attribution: environmental cross-worker DB contention on the shared test database (not code I changed; the failing functions delete/1, update_scope/2 and TaskAssigneeTypeBackfill.run/0 are untouched by this diff); NOT proven by re-running on an origin/main worktree because ORCH instructed (resource limits) to run scoped files only; recommend TEST-RUNNER re-run those two files when the DB is quiet. THE FULL mix test / mix letflow.check SUITE WAS NOT RUN LOCALLY per ORCH instruction (CI runs it). DESIGN DEVIATIONS: none material. Minor implementation notes: (a) catalog ctx tenant_id may also be {:schema_prefix, prefix} (completion hop only) to implement 3.3a's lazy derivation; (b) the defensive rendered_url check is applied to the catalog arm only, leaving the inline arm byte-identical per INV-PD-6; (c) the design 4.3 pointer for req432-rebind-pins-publish-retire-ui.md could not be added because that file does not exist on this branch. NOTES FOR SECURITY-REVIEWER: tenant_id comes from the schema prefix or create/2's tenant_id, never request input; version_id/version only from the instance's own pins; one :not_found atom end to end; no Logger and no variables/headers/URL/service_id placed in error details or the 409 detail (create-path activation error reason does carry {:pin_missing,:catalog_entry,service_id} per design 3.2); required_auth != NONE fails closed; registration-time SSRF validation (0027 point) not added here, dispatch-time gate is the control (design 7.4) - reviewer to decide. REVIEWER sign-off needed for the req085 5.5.1 amendment (D4) and the uniform 409 for every error_type.",
+    "artifacts_out": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/service_catalog/pin_lookup.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/design/req085-task-routes-write.md",
+      "lib/letflow/design/service_task_dispatcher.md",
+      "lib/letflow/design/service_task.md",
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "test/letflow/engine_test.exs",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "test/letflow/engine_pin_resolver_catalog_test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Local test DB is shared with concurrent worker mix-test invocations: TaskAssigneeTypeBackfillTest (8) and ServiceCatalogTest delete/update_scope (6) failed with undefined_table on other workers' tenant schemas. Not caused by this change; re-run on a quiet DB. Full suite not run locally per ORCH.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "design 4.3 asks for a pointer in req432-rebind-pins-publish-retire-ui.md (M5) but that file does not exist on this branch; pointer not added.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0917-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER"
+  }
+}

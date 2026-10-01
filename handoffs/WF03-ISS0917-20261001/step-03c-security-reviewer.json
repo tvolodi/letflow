@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0917-20261001/step-03c-security-reviewer.json",
   "created_at": "2026-10-01T13:12:12Z",
   "started_at": "2026-10-01T13:12:12Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T13:13:02Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -45,5 +45,26 @@
       "Ruling on registration-time URL validation gap",
       "git status --porcelain lib test empty at finish"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "VERDICT: PASS. Scope test: IN scope (service_catalog lookup, engine activation, router response shaping, secret-adjacent required_auth). Method: read-only code review of git diff origin/main...HEAD (lib/); no tests run, no mutants; git status --porcelain lib test is empty.\nINVARIANTS: INV-1 APPLIES - PASS: service_catalog/service_catalog_versions are the global (public-schema) catalog, tenant visibility is the SVC-01 row predicate (scope/owner_tenant_id), identical to get_for_tenant/2 because both now call the single private visible_to_tenant/2; instance/pin reads go through the tenant prefix (reconstruct_effective_pins prefix:); tenant_id derived from create/2's prefix-resolved id or lazily from the schema prefix via TenantProvisioning.tenant_id_for_schema_name, never request input; no new table/migration. INV-2 APPLIES - PASS: new 409 detail is the fixed string plus the error_type atom only (affected/variables/reason/details not echoed); persisted ExecutionError details carry only the reason atom class and fixed sentences. INV-3 N/A (no Lua/WASM). INV-4 APPLIES - PASS: no secrets resolved or logged; required_auth != NONE fails closed before URL render/row; no Logger/inspect added in service_catalog/engine/dispatcher diff. INV-5 APPLIES - PASS: resolve_pinned_version/3 collapses missing service, invisible service, unknown version, other-service version, malformed UUID into one :not_found; no new lookup-by-id endpoint (inputs come from event-sourced pins). INV-6 satisfied by this handoff. INV-7 N/A/PASS: only Ecto query API with pinned vars (from v in Version where ... ^entry.service_id, ^version), no Repo.query. INV-8 PASS: all new failure paths are typed tuples (no bare matches on I/O); malformed version_id via Ecto.UUID.cast, not raise; reconstruct/tenant lookup errors fold to :pins_unavailable. INV-9 APPLIES - PASS (see d).\nSPECIFIC CHECKS: (a) PASS - visibility checked on the live row of the same service_id first (archive rows carry no scope/owner); archived fallback by version_id requires sid == entry.service_id, and the (service_id, version) path filters by entry.service_id, so a pin cannot reach another service's or another tenant's tenant-scoped entry/endpoint through either identity. Residual (accepted, informational): an archived version published while the entry was global stays reachable by a tenant that still sees the live row; visibility follows the live row by design. (b) PASS - version_id/version come only from PinResolver.pin_for over the instance's own event-sourced pins ({:pins,...} from create/2 or reconstruct_effective_pins); no request input reaches resolve_pinned_version/3. (c) PASS - every resolution failure returns a typed error; no path reads the live current row as a substitute (live row is used only when its version_id/version equals the pinned identity). (d) PASS - the catalog arm in the dispatcher calls the same http_transport/3, whose UrlValidator.validate(rendered_url, dns_resolver) runs immediately before :httpc.request, so the INV-9 point-of-request check applies to both route kinds; nil/empty/non-binary rendered_url -> :request_build_error with zero transport calls. DNS-rebinding is covered by the same per-request resolve-and-check as the inline arm (accepted class). (e) PASS - check_catalog_auth_supported fails closed with no dispatch row and no request for API_KEY/OAUTH2/MUTUAL_TLS. (f) PASS - no logging; 409 names only the error_type atom. The create-path reason {:pin_missing,:catalog_entry,service_id} carries service_id: the caller is the tenant that authored the definition whose node names that service_id, and the create path error is not echoed in a body by routers/instances.ex (falls to the generic catch-all), so no leak to a tenant that is not allowed to know it; acceptable. (g) PASS - the new 409 clause is placed after the three 403 authorization clauses and only matches the post-commit {:instance_execution_error, atom, _} result of complete_task, which is reachable only after Tasks.authorize_completion/3 succeeded; it does not alter authorization ordering. \nRULING ON REGISTRATION-TIME URL VALIDATION (decision 0027 gap): ACCEPTABLE for this fix, file a follow-up (not must-fix). Rationale: INV-9 requires the check at the point of the actual request, not at ingestion alone; that control is present and unconditional for the catalog arm. Registration-time validation of endpoint_url in publish/admin_services would be fast-feedback and defence in depth only, and the catalog is admin-managed (admin_services), not directly tenant-supplied. This change newly makes catalog endpoints reachable by the dispatcher, so the follow-up should be prioritised (MINOR/MAJOR hardening): validate endpoint_url scheme/host syntactically at publish.\nFINDINGS (numbered, ranked): 1. [FOLLOW-UP, MINOR] No registration/publish-time UrlValidator check on service_catalog.endpoint_url (0027); dispatch-time gate is the binding control. File issue. 2. [INFO] required_auth != NONE services are unusable via SERVICE_TASK (fail closed by design) until a secret-reference auth mechanism exists; correct per INV-4. 3. [INFO] catalog_retry_policy and endpoint rendering with {{variables.KEY}}: variables are interpolated into the pinned URL exactly as the inline arm does; the SSRF gate runs on the rendered result, so a variable cannot bypass it. 4. [INFO, process] ELIXIR-DEV did not run the full suite locally (shared DB contention); not a security matter, TEST-RUNNER to confirm. No must-fix findings.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Follow-up: no registration/publish-time UrlValidator check on service_catalog.endpoint_url (decision 0027); dispatch-time INV-9 gate is the binding control and is present. File follow-up issue; not must-fix.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0917-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER"
   }
 }

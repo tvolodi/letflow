@@ -178,9 +178,12 @@ defmodule Letflow.ServiceCatalog.EndpointUrlValidationTest do
       end
     end
 
-    test "R-LEN: an over-length URL yields exactly ONE :endpoint_url error (the length error), not two" do
-      long = "https://example.test/" <> String.duplicate("a", 2049 - 21)
+    test "R-LEN: an over-length AND statically-bad URL yields exactly ONE :endpoint_url error (the length error), not two" do
+      # http:// is also rejected by check_endpoint_url/1, so without the
+      # "field already has an error" de-duplication in Entry there would be two errors.
+      long = "http://example.test/" <> String.duplicate("a", 2049 - 20)
       assert String.length(long) == 2049
+      assert Entry.check_endpoint_url(long) == {:error, :endpoint_url_not_allowed}
 
       assert {:error, %Ecto.Changeset{} = cs} =
                ServiceCatalog.register(register_attrs(%{endpoint_url: long}))
@@ -308,6 +311,22 @@ defmodule Letflow.ServiceCatalog.EndpointUrlValidationTest do
         refute msg == Fx.message(), label
         assert version_count(entry.service_id) == 0, label
       end
+    end
+
+    test "R-LEN (publish): an over-length AND statically-bad URL yields exactly ONE :endpoint_url error (length), and rolls back" do
+      entry = register!(%{})
+      long = "http://example.test/" <> String.duplicate("a", 2049 - 20)
+      assert String.length(long) == 2049
+
+      assert {:error, %Ecto.Changeset{} = cs} =
+               ServiceCatalog.publish(entry.service_id, "2", %{
+                 endpoint_url: long,
+                 timeout_ms: 6_000
+               })
+
+      assert [{_msg, opts}] = endpoint_url_errors(cs)
+      assert opts[:validation] == :length
+      assert version_count(entry.service_id) == 0
     end
 
     test "P-ABSENT (a): key omitted + good stored URL -> publish succeeds and INHERITS the stored URL" do

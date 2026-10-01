@@ -1,0 +1,53 @@
+{
+  "handoff_id": "a2393e57-da41-470b-8b61-6dce59fef417",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-Q926-20261001/step-02-code-designer.json",
+  "created_at": "2026-10-01T18:18:12Z",
+  "started_at": "2026-10-01T18:18:12Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-Q926-20261001/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0926.yaml",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md",
+      "lib/letflow/design/q915-regulatory-review-21day-timer-path.md",
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json",
+      "test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 2 (fix design) for ISS-0926. Branch feature/WF03-Q926-20261001, already checked out; do not switch. Claim: status IN_PROGRESS only. Read the Step 1 diagnosis (handoffs/WF03-Q926-20261001/step-01-issue-fixer-diagnose.json result.summary) in full first, then the files in artifacts_in.\nWrite ONE design doc at lib/letflow/design/iss0926-service-task-body-template-rendering.md (design only, no implementation code beyond signatures/@specs/shapes). It must decide and specify:\n 1. Rendering: render config.body_template at activation (variables in scope, engine.ex ~967-995), freeze as config_snapshot[\"rendered_body\"] (parity with rendered_url, incl. the ISS-0917 catalog path decision: where does a catalog node's body_template come from; the inline and catalog paths must both be addressed or the catalog limit explicitly stated), and make the dispatcher send the frozen rendered_body instead of the raw template (dispatcher ~719/741). State the exact placeholder syntax ({{variables.KEY}} as the URL renderer), the nil/missing-variable behaviour, and how existing frozen snapshots that lack rendered_body (rows created before this change) are handled (fallback must be backward compatible and safe - say which).\n 2. Escaping/injection (SECURITY): adopt diagnosis option A (per-value JSON-string escaping, placeholders only inside quoted strings) unless you find a concrete flaw; specify exactly: how values are stringified (strings, numbers, booleans, nil, maps/lists), JSON escape of quote/backslash/control chars/U+2028-9 etc (e.g. Jason.encode! then strip outer quotes), what happens to a placeholder that is NOT inside a JSON string (reject at activation with a typed error vs leave literal - choose, justify), whether the rendered result must be validated as decodable JSON when content-type is JSON, size cap on rendered body, and the error path (mirror build_service_task_empty_url_error/catalog-unresolved error: a typed, non-leaking error, never the variable value). Also confirm the URL renderer is NOT changed in behaviour (do not widen scope), and secrets/variables must not leak into logs/audit beyond what rendered_url already does (decide whether rendered_body is stored in config_snapshot; since snapshot is persisted state consider PII - decide and justify).\n 3. Fixture: split regulatory-auto-escalation so the two inbound paths get distinct bodies without a lib engine node-type change: e.g. keep node id regulatory-auto-escalation for the 21-day timeout path with body {\"reason\":\"sla_breach_30_days\", \"review_id\": \"{{variables.<the variable that exists>}}\"}  (check which instance variables really exist) and add a second SERVICE_TASK (e.g. regulatory-remediation-escalation) reached by e10 with body reason 'remediation_unresolved' (or whatever the BA scenario/regulation wording supports; read test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml and docs for the e10 semantics), both -> end-closed; retarget edges; bump fixture version 1.2 -> 1.3; list exactly which other files reference the fixture shape (test/fixtures/simulation/meridian/process_policy_binding.yaml, scripts/seed_meridian_definition.sh header, existing tests incl. Q915 T8/M9 which currently forbid a body on that node and node counts/edge ids in tests) and what each needs. Check graph validation (validate_graph / node attributes / edge conditions) accepts the new shape, and that the UAT scenario's other steps (EO-xxx referencing node ids, scripts/ seeds) stay consistent. Also state clearly what EO-002's verification method (audit_event with payload containing reason) can observe, per the diagnosis note that the engine may not audit the outbound body: say whether this fix can make EO-002 satisfiable, and if not, name the residual gap as a follow-up (do not expand scope to build audit of outbound bodies; recommend filing an issue).\n 4. Public surface: list every new/changed function with @spec and visibility (prefer private defp in engine.ex or a small pure public helper in Letflow.Engine.ServiceTask that is unit-testable without DB, e.g. render_body_template/2 returning {:ok, String.t()} | {:error, reason}); state it is MINOR, no migration, no supervision files, whether config_snapshot shape change needs any schema/migration (it is a map column: say so with evidence).\n 5. Decision records: grep docs/migration/decisions for anything touching SERVICE_TASK dispatch/SSRF/secrets/templating and state consistency (the diagnosis found none settling body rendering; confirm; if a new decision record is warranted, say so and justify - do not write one unless needed).\n 6. Test plan the TEST-DESIGNER should follow: unit tests of the pure renderer (injection cases: quote, backslash, newline, unicode, nested map value, nil, missing key, placeholder outside quotes, oversize), integration test that the dispatcher transport receives the rendered body (check how existing service task engine tests stub transport - note Postgres may be unreachable on this machine; say which tests need DB), fixture tests (new nodes, version 1.3, bodies, both inbound paths), and the regression test that fails pre-fix. Also an owned_modules list for this run.\nDocs only: modify nothing except the design doc and this handoff. Complete handoff PASS, next_action 'Route to CODE-DESIGN-VALIDATOR'; commit with git add of those two files only, push origin HEAD. Do not touch handoffs/registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "Design doc exists at lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "Rendering location + frozen snapshot + dispatcher change specified incl. catalog path and legacy rows",
+      "Injection/escaping rules concrete and testable",
+      "Fixture split specified with version bump and full list of affected files/tests",
+      "EO-002 observability gap stated with follow-up recommendation",
+      "@specs and visibility listed, no implementation code",
+      "Decision-record consistency stated",
+      "Test plan and owned_modules listed"
+    ]
+  }
+}

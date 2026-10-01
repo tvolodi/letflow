@@ -1,0 +1,54 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000007",
+  "run_id": "WF02-REQ430-20261001",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ430-20261001/step-02c-security-reviewer.json",
+  "created_at": "2026-10-01T00:00:00Z",
+  "started_at": "2026-10-01T00:00:00Z",
+  "completed_at": "2026-10-01T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-430"],
+    "requirement_text": {
+      "REQ-430": "MOB-8, the last requirement in the S9 mobile-tier chain: a static v1-scope-boundary guard (no push/messaging or background-task dependency; no persisted store write shaped like an outgoing HTTP request) plus S9 close-out doc updates to docs/mobile/architecture.md §4 and docs/migration/stage-9-mobile.md."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ430-20261001/step-02b-mobile-dev.json"
+    ],
+    "artifacts_in": [
+      "apps/mobile/test/guards/v1_scope_boundary_guard_test.dart",
+      "docs/mobile/architecture.md",
+      "docs/migration/stage-9-mobile.md"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 2c: SECURITY-REVIEWER scope test and (if applicable) INV-1..INV-8 gate on REQ-430 (MOB-8, v1 scope-boundary guard + S9 close-out docs).",
+    "acceptance_criteria": [
+      "Independently determine scope (do not take MOBILE-DEV's self-assessment at face value)",
+      "If in scope, give every one of INV-1..INV-8 an explicit APPLIES/NOT-APPLICABLE verdict with reasoning and run each APPLIES invariant's verification",
+      "If out of scope, state the scope determination explicitly and give the correct next_action"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test performed independently against the real diff (working tree vs. main, since no commit exists yet on this branch): `git diff -- docs/mobile/architecture.md docs/migration/stage-9-mobile.md` plus a full read of the new, previously-untracked `apps/mobile/test/guards/v1_scope_boundary_guard_test.dart`. Three files touched total, all read in full, not summarized from MOBILE-DEV's handoff.\n\nOUT OF SCOPE -- no tenant-data path touched. Reasoning against each of SECURITY-REVIEWER's own scope-test clauses: (1) no API route added/modified -- the new file is a `flutter_test` guard under apps/mobile/test/, not production route code, and no lib/letflow/ router changed. (2) no priv/repo/migrations/*.exs touched -- confirmed by the diff stat (only the three files named above changed; no .exs anywhere). (3) no secret-resolving code -- this is the clause the dispatch specifically asked me to check hard against. Checker A (checkV1ScopeDependencies) only parses pubspec.yaml/pubspec.lock dependency-name keys as plain strings and compares them against a forbidden-package-name list (firebase_messaging, workmanager, etc.) -- it never reads, stores, transmits, logs, or resolves any secret, token, or credential value; a package *name* is not secret material. Checker B (checkNoPersistedOutgoingRequests) is a textual regex scan over apps/mobile/lib/**/*.dart source text looking for a `.record(...).put(...)` call-site near map keys named method/url/body/payload/request -- it inspects the shape of source code, not runtime values, and touches no lib/auth/, lib/api/, or token-storage code at all (confirmed: grep of the new test file shows zero references to flutter_secure_storage, TenantTokenStore, Authorization, Dio, or any transport/auth module; the dispatch's 'auth/token storage/transport (MOB-2/5/6)' trigger does not fire because nothing in this diff resolves, stores, or transmits a token -- it is a static lint over source text and a manifest-adjacent dependency list, run entirely at test time, never at runtime against live credentials). (4) no response-shaping code for a tenant-scoped entity -- none of the three changed files touch a response/serialization path; the two docs files are architecture/scope-table prose and the test file emits only ExUnit/flutter_test expect() failures, never an API response. (5) no lookup-by-ID handler -- none added or modified.\n\ndocs/mobile/architecture.md's diff (the §4 scope-table replacement + restated deferred-exclusions prose) and docs/migration/stage-9-mobile.md's diff (the new phase-gate table citing existing test file paths) are both prose-only; verified by reading the full diff that no code block, secret, token, URL, or config value was introduced in either -- they cite file paths of existing, already-reviewed guard/test files, not new ones that bypass review (token_storage_boundary_guard_test.dart, authenticate_with_tenant_test.dart, etc. were all reviewed under their own originating requirements, e.g. REQ-422's SECURITY-REVIEWER pass).\n\nPer the scope test's own instruction, since the diff touches none of the five tenant-data-path triggers, the correct disposition is PASS with an explicit out-of-scope record, not a forced walk through INV-1..INV-8 (those invariants presuppose a tenant-data path or secret-resolution path to apply to; none exists here to apply against).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ430-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "not_pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

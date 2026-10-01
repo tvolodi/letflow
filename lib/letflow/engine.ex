@@ -2936,20 +2936,38 @@ defmodule Letflow.Engine do
   def advance_after_escalation_timer_fired(%Timer{} = timer, repo, prefix) do
     with {:ok, projection} <- fetch_and_lock_instance_projection(repo, timer.instance_id, prefix),
          {:ok, snapshot_and_state} <-
-           build_snapshot_and_state_for_timer(repo, timer, projection, prefix),
-         {:ok, advanced_state, pending_events} <-
-           dispatch_escalation_timer_fired_hop_chain(snapshot_and_state),
-         {:ok, _changes} <-
-           persist_escalation_timer_fired_advance(
-             repo,
-             timer,
-             projection,
-             snapshot_and_state,
-             advanced_state,
-             pending_events,
-             prefix
-           ) do
-      {:ok, :advanced}
+           build_snapshot_and_state_for_timer(repo, timer, projection, prefix) do
+      if escalation_timer_stale?(timer, snapshot_and_state) do
+        # ISS-0925: the token is no longer at the node this timer was armed for
+        # (its HUMAN_TASK completed and the token moved on). Never act on a
+        # different node -- the timer is simply consumed as a no-op.
+        {:ok, :advanced}
+      else
+        with {:ok, advanced_state, pending_events} <-
+               dispatch_escalation_timer_fired_hop_chain(snapshot_and_state),
+             {:ok, _changes} <-
+               persist_escalation_timer_fired_advance(
+                 repo,
+                 timer,
+                 projection,
+                 snapshot_and_state,
+                 advanced_state,
+                 pending_events,
+                 prefix
+               ) do
+          {:ok, :advanced}
+        end
+      end
+    end
+  end
+
+  defp escalation_timer_stale?(%Timer{node_id: node_id}, %{
+         original_active_tokens: records,
+         own_token_id: own_token_id
+       }) do
+    case Enum.find(records, &(to_string(&1.id) == own_token_id)) do
+      %{node_id: current} -> current != node_id
+      nil -> false
     end
   end
 
@@ -4220,6 +4238,18 @@ defmodule Letflow.Engine do
         normalized_changes.task,
         actor_id,
         output_variables,
+        completed_at,
+        prefix
+      )
+    end)
+    |> Multi.run(:cancel_escalation_timers, fn repo, _changes ->
+      # ISS-0925: a normally-completed HUMAN_TASK must not leave its escalation
+      # timer pending (it would fire later against whatever node the token is on).
+      TaskActivation.cancel_pending_escalation_timers(
+        repo,
+        normalized_changes.task.instance_id,
+        normalized_changes.task.token_id,
+        normalized_changes.task.node_id,
         completed_at,
         prefix
       )

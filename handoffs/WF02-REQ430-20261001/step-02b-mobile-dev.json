@@ -1,0 +1,64 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000006",
+  "run_id": "WF02-REQ430-20261001",
+  "workflow_id": "WF-02",
+  "step": "02b-mobile",
+  "from_agent": "ORCH",
+  "to_agent": "MOBILE-DEV",
+  "file": "handoffs/WF02-REQ430-20261001/step-02b-mobile-dev.json",
+  "created_at": "2026-10-01T00:00:00Z",
+  "started_at": "2026-10-01T00:00:00Z",
+  "completed_at": "2026-10-01T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-430"],
+    "requirement_text": {
+      "REQ-430": "MOB-8, the last requirement in the S9 mobile-tier chain: a static v1-scope-boundary guard (no push/messaging or background-task dependency; no persisted store write shaped like an outgoing HTTP request) plus S9 close-out doc updates to docs/mobile/architecture.md §4 and docs/migration/stage-9-mobile.md."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ430-20261001/step-01-code-designer.json",
+      "handoffs/WF02-REQ430-20261001/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req430-mobile-scope-boundary.md",
+      "apps/mobile/test/guards/forbidden_dependencies_guard_test.dart",
+      "apps/mobile/test/guards/token_storage_boundary_guard_test.dart",
+      "docs/mobile/architecture.md",
+      "docs/migration/stage-9-mobile.md"
+    ],
+    "owned_modules": ["apps/mobile/", "docs/mobile/", "docs/migration/stage-9-mobile.md"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/req430-mobile-scope-boundary.md exactly: new apps/mobile/test/guards/v1_scope_boundary_guard_test.dart (Checker A: forbidden push/messaging + background-task pubspec dependencies; Checker B: detects a .record(...).put(...) store write persisting a map/object shaped like an outgoing HTTP request -- method/url/body), docs/mobile/architecture.md §4 replacement (REQ-id-to-MOB-N scope table + restated deferred exclusions), docs/migration/stage-9-mobile.md new phase-gate section (M-1/M-2/M-3 with citing test files, plus deferred items with reasons). Run flutter analyze && flutter test && flutter build apk --debug from apps/mobile/, quote real output. Re-verify git grep for outbox/pending_writes/write_queue/offline_queue under apps/mobile stays empty.",
+    "acceptance_criteria": [
+      "The scope guard fails each of its self-test fixtures (pubspec w/ firebase_messaging; pubspec w/ workmanager; a Dart file writing a request method/url/body map to a store) and passes on the real tree -- quote real flutter test output",
+      "git grep -n -i -E 'outbox|pending_writes|write_queue|offline_queue' -- apps/mobile returns no hits -- quote it",
+      "docs/mobile/architecture.md §4 names, for each of MOB-1..MOB-8, the REQ id(s) that delivered it, and lists offline writes, push invalidation and the on-device form builder as deferred",
+      "docs/migration/stage-9-mobile.md lists each of the three build-order phase gates (M-1, M-2, M-3) with the test file(s) that demonstrate it and every deferred item with its reason",
+      "cd apps/mobile && flutter analyze && flutter test && flutter build apk --debug all pass -- quote real output for all three commands"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "AC1: New file apps/mobile/test/guards/v1_scope_boundary_guard_test.dart implements Checker A (checkV1ScopeDependencies, forbidden-exact + forbidden-substring lists for push/messaging + background-task packages, reusing extractPubspecYamlDependencyNames/extractPubspecLockPackageNames duplicated verbatim per the design's OQ-1 precedent) and Checker B (checkNoPersistedOutgoingRequests, regex-detects `.record(...).put(` call-sites and scores a fixed +-400-char window for >=2 of method/httpMethod/url/uri/body/payload/request key tokens as quoted-map-keys or named-args, per OQ-2's simpler fixed-window option, documented inline). All three required-fail fixtures plus the real-tree test pass: `flutter test test/guards/v1_scope_boundary_guard_test.dart --reporter expanded` output: '00:00 +0: real pubspec.yaml/pubspec.lock and lib/ tree have zero v1-scope-boundary violations' / '00:00 +1: self-test: checker fires on a pubspec containing firebase_messaging' / '00:00 +2: self-test: checker fires on a pubspec containing workmanager' / '00:00 +3: self-test: checker fires on a Dart file writing a request method/url/body map to a store' / '00:00 +4: self-test: a definition-cache-shaped .put() with unrelated keys fires zero violations (boundary is shape-specific, not every .put() call)' / '00:00 +5: All tests passed!'. AC2: `git grep -n -i -E 'outbox|pending_writes|write_queue|offline_queue' -- apps/mobile` returns no output (exit code 1, confirmed before and after this change). AC3: docs/mobile/architecture.md §4 replaced per the design doc verbatim -- added 'Scope table (added 2026-10-01, REQ-430)' mapping each MOB-1..MOB-8 to its delivering REQ id(s), and restated the three deferred exclusions (offline writes, push invalidation, on-device form builder) each tied to the new guard file or to requirement-scope enforcement. AC4: docs/migration/stage-9-mobile.md appended with '## Phase-gate evidence and deferrals (REQ-430, 2026-10-01)' -- M-1/M-2/M-3 phase-gate table citing real existing test files (all 16 citations verified to exist on disk before writing the table: test/auth/authenticate_with_tenant_test.dart, tenant_token_store_test.dart, audience_scoping_test.dart, test/bootstrap/bootstrap_sequence_test.dart, tenant_switch_test.dart, test/guards/token_storage_boundary_guard_test.dart, test/definitions/definition_sync_service_test.dart, sembast_cache_repository_test.dart, active_definition_cache_holder_test.dart, pinned_form_resolver_test.dart, sembast_pinned_form_cache_repository_test.dart, test/renderers/task/task_pinned_version_test.dart, test/renderers/renderer_state_view_ac1_test.dart, renderer_state_view_ac2_backpressure_countdown_test.dart, test/renderers/form/form_expression_unevaluable_test.dart, test/renderers/task/task_claim_conflict_test.dart, plus test/guards/ios_ats_guard_test.dart cited in the deferred table) and a Deferred table with two items and reasons (iOS build/runtime -- no Xcode toolchain on this Windows host; interactive OIDC login -- requires UAT-RUNNER against a live instance). AC5: `cd apps/mobile && flutter analyze` -> 'No issues found! (ran in 3.6s)' (after fixing one prefer_interpolation_to_compose_strings info-level lint in the new guard file's regex construction). `flutter test` -> full suite tail: '00:10 +301: All tests passed!' (301 tests, zero failures, includes the new guard file's 5 tests). `flutter build apk --debug` -> 'Running Gradle task 'assembleDebug'... 50,3s' / '√ Built build\\app\\outputs\\flutter-apk\\app-debug.apk'. Self-review per the MOBILE-DEV role file: no general scripting runtime introduced (Checker B is a static textual regex heuristic over existing source, not an evaluator); no token-handling code touched (lib/auth/, lib/api/ untouched); no backend/contract mismatch found or shimmed (this requirement is pure static-guard + docs, touches no lib/letflow/ or web/ code). One documented, intentional deviation from the design's literal text: the design's Checker-B window description describes 'the smallest enclosing { ... } block, or a fixed window of the preceding 400 characters plus the statement itself' as MOBILE-DEV's choice (OQ-2); I implemented a fixed +-400-character window around the match (both preceding AND following), rather than preceding-only, so a map literal written entirely as the .put(...) argument (the common and fixture-tested case) is reliably captured regardless of exactly where within the statement the .record(...).put( token lands -- this has no effect on any of AC1's three required fixtures (OQ-2 explicitly notes neither window choice affects those) and is documented in the shipped file's own doc comment per the design's own instruction to document whichever choice is made.",
+    "artifacts_out": [
+      "apps/mobile/test/guards/v1_scope_boundary_guard_test.dart",
+      "docs/mobile/architecture.md",
+      "docs/migration/stage-9-mobile.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ430-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "not_pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d) -- this change is a static test-file guard plus documentation edits only; it touches no auth/token/transport/tenant-data-path code (no lib/letflow/ change, no new Dio/secure-storage/network code in apps/mobile/lib/), so it is out of SECURITY-REVIEWER's tenant-data-path scope per security-invariants.md. REVIEWER should check: idiom consistency with the two precedent guard files, that the regex heuristic's documented false-negative boundary is honest and matches the design doc, and decision-record consistency (D1a / 0020-frontend-architecture.md unchanged, MOB-8 scope table accurate against requirements.yaml). This is the final requirement in the S9 mobile-tier chain (REQ-417..430) -- once REVIEWER/TEST-DESIGNER/TEST-RUNNER gates pass, DOC-UPDATER should consider whether S9's own stage status in docs/migration/README.md is ready to flip."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

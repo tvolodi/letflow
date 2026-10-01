@@ -31758,7 +31758,7 @@ requirements:
   - id: REQ-430
     title: "MOB-8: enforce the v1 scope boundary (no offline write queue, no push invalidation, no on-device form builder) with a static guard, and close out S9 phases M-1..M-3"
     owner: MOBILE-DEV
-    status: pending
+    status: done
     stage: S9
     impl_order: 867  # letflow-queue task id, GH#1884. Registered 2026-09-27T03:00:09Z by ORCH (WF-01 Step 3).
     description: >

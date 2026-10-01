@@ -403,3 +403,78 @@ history:
       state diagram or Running-it change. letflow-queue task 866 (GH#1883)
       still needs release_lock(status=done) -- not called from here;
       DOC-UPDATER does not call the queue.
+  - req: REQ-430
+    event: started
+    agent: ORCH
+    at: "2026-10-01T14:16:39Z"
+    note: >
+      WF02-REQ430-20261001. Last requirement in the S9 mobile-tier chain
+      (depends_on REQ-428, REQ-429, both done). letflow-queue task 867
+      (GH#1884) locked by ORCH-letflow-main. Branch
+      feature/WF02-REQ430-20261001 created from origin/main
+      (f020527b) and pushed.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T14:50:32Z"
+    note: >
+      ISS-0944 resolved (D4: POST /tasks/:id/complete returned HTTP 500
+      instead of a proper 4xx when the owning instance was in ERROR status).
+      PR #2090, branch fix/ISS-0944-task-complete-instance-not-active-mapping,
+      commit bf5d4be3. Root cause: handle_complete_result/2 in
+      lib/letflow/routers/tasks.ex had no case clause for
+      {:error, {:instance_not_active, status}} -- a documented, correctly-
+      returned member of Engine.complete_task/3's own error union when the
+      owning instance isn't :active -- so it fell through to the generic
+      catch-all and returned 500. Fix: one new clause mirroring the existing
+      {:task_not_pending, _} precedent, mapping to Response.conflict(conn,
+      "instance is #{status}") -> 409, with a single clause correctly
+      covering all three possible status values (:completed/:cancelled/
+      :error) via the unbound status variable. {:instance_execution_error,
+      _, _} (separate, still-open ISS-0917) deliberately left untouched.
+      Full gate chain ALL PASSed: CODE-DESIGN-VALIDATOR, ELIXIR-DEV
+      implementation, REVIEWER, TEST-RUNNER (full suite clean after
+      correctly diagnosing a host connection-budget sizing issue), and
+      RELEASE-VALIDATOR (exhaustive independent re-verification -- its own
+      mutation test proving the regression guard is non-vacuous, removing
+      the clause reproduced the original 500; its own adversarial tests
+      confirming the single new clause correctly covers all three instance
+      statuses, not just the reported :error case; two independent
+      full-suite runs including mix letflow.check.test). docs/issues/
+      ISS-0944.yaml set to status: resolved in this same commit. This is an
+      ISSUE closure, not a REQ -- docs/requirements.yaml untouched.
+      letflow-queue task 916 to be released as done after merge.
+  - req: REQ-430
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T18:05:00Z"
+    note: >
+      MOB-8 v1 scope boundary enforced and S9 phases M-1..M-3 closed out.
+      apps/mobile/test/guards/v1_scope_boundary_guard_test.dart added
+      (static guard: no firebase_messaging/workmanager dependency, no
+      Dart file persisting a request method/url/body map to a store).
+      docs/mobile/architecture.md §4 rewritten with a scope table naming
+      each MOB-1..MOB-8's delivering REQ id, and the three deferrals
+      (offline writes, push invalidation, on-device form builder) listed
+      with reasons. docs/migration/stage-9-mobile.md gained a "Phase-gate
+      evidence and deferrals (REQ-430, 2026-10-01)" section listing
+      M-1/M-2/M-3 phase gates with demonstrating test files, and the two
+      deferred items (iOS build/runtime -- no Xcode on Windows host;
+      interactive OIDC login -- deferred to UAT-RUNNER) with reasons.
+      RELEASE-VALIDATOR independently re-verified all 5 acceptance
+      criteria PASS (handoffs/WF02-REQ430-20261001/step-05-release-validator.json):
+      AC1 guard self-tests (5/5 passed, including the three fixture
+      failure-mode self-tests); AC2 `git grep` for
+      outbox/pending_writes/write_queue/offline_queue under apps/mobile
+      returned no hits; AC3 architecture.md §4 scope table/deferrals
+      confirmed; AC4 stage-9-mobile.md phase-gate table and deferred-item
+      reasons confirmed, 5 cited test files spot-checked to exist; AC5
+      `flutter analyze` clean, `flutter test` 301/301 passed, `flutter
+      build apk --debug` succeeded. Backend status-invariant recheck also
+      independently re-run: `mix test
+      test/docs/requirement_status_invariants_test.exs` 25 passed, 0
+      failures. status: done in docs/requirements.yaml. This is the last
+      requirement in the S9 mobile-tier backlog (REQ-417..430 plus
+      REQ-294 all confirmed status: done). letflow-queue task 867
+      (GH#1884) still needs release_lock(status=done) -- not called from
+      here; DOC-UPDATER does not call the queue.

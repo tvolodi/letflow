@@ -1,8 +1,20 @@
+
 import { useEffect, useState, type ReactNode } from 'react'
-import { fetchTenantConfig } from '@/auth/tenantConfig'
+import { fetchTenantConfig, fetchTenantConfigForSlug } from '@/auth/tenantConfig'
+import { useAuth } from '@/auth/AuthContext'
 import { applyBrandingColors } from './applyBranding'
 import { BrandingContext } from './BrandingContext'
 import { DEFAULT_BRANDING_CONTEXT_VALUE, PLATFORM_DEFAULT_APP_NAME, type BrandingContextValue } from './brandingDefaults'
+
+/** The signed-in session's tenant slug, or null when unauthenticated or rendered
+ *  outside an <AuthProvider> (useAuth throws there; branding must still render). */
+function useSessionTenantSlug(): string | null {
+  try {
+    return useAuth().session?.tenant_slug ?? null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Mounted once at the app root (web/src/main.tsx), wrapping <RouterProvider>.
@@ -15,14 +27,26 @@ import { DEFAULT_BRANDING_CONTEXT_VALUE, PLATFORM_DEFAULT_APP_NAME, type Brandin
  * own fallback object), so no .catch() is needed here — every one of the three
  * fallback cases in design doc section 4 is already handled by fetchTenantConfig
  * itself plus this component's `?.`/`??` reads.
+ *
+ * ISS-0937 (Q-937): the backend has NO host->tenant binding, so
+ * `?host=<hostname>` always yields the DEFAULT config and a normal load never
+ * shows tenant branding. Once a session exists, branding is therefore re-fetched
+ * for the session's own tenant (`?realm=<tenant_slug>`, per-slug cache). This
+ * provider sits INSIDE <AuthProvider> (main.tsx); it tolerates
+ * being rendered outside one (see useSessionTenantSlug).
  */
 export function BrandingProvider({ children }: { children: ReactNode }) {
   const [value, setValue] = useState<BrandingContextValue>(DEFAULT_BRANDING_CONTEXT_VALUE)
+  const sessionTenantSlug = useSessionTenantSlug()
 
   useEffect(() => {
     let cancelled = false
 
-    void fetchTenantConfig(window.location.hostname).then((config) => {
+    const configPromise = sessionTenantSlug
+      ? fetchTenantConfigForSlug(sessionTenantSlug)
+      : fetchTenantConfig(window.location.hostname)
+
+    void configPromise.then((config) => {
       applyBrandingColors(config.branding?.brand_colors)
 
       if (cancelled) return
@@ -35,7 +59,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [sessionTenantSlug])
 
   return <BrandingContext.Provider value={value}>{children}</BrandingContext.Provider>
 }

@@ -5826,8 +5826,21 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 14
+    entries: 16
     note: >
+      Re-incremented to 16 by ORCH resolving a rebase conflict between
+      feature/WF02-REQ430-20261001 and origin/main: this branch's own two
+      REQ-430 event appends (started 2026-10-01T14:16:39Z, done
+      2026-10-01T18:05:00Z, on top of a prior local entries: 14 bump)
+      conflicted textually with main's independently merged ISS-0944
+      SCOPE-CHANGE done-event append (already counted in the prior 14).
+      Resolved by composing all three (no entry dropped, no entry
+      rewritten), ordering by real `at:` timestamp (REQ-430 started
+      14:16:39Z, then ISS-0944 done 14:50:32Z, then REQ-430 done
+      18:05:00Z). `grep -c "^  - req:" docs/status/requirement_status.v25.yaml`
+      = 16 on-disk entries after the merge; 480 lines / 29295 bytes, well
+      under the 1200-line/120000-byte roll ceiling, no roll triggered.
+
       Re-incremented to 14 by DOC-UPDATER resolving a merge conflict between
       fix/ISS-0944-task-complete-instance-not-active-mapping and
       origin/main: this branch's own ISS-0944 SCOPE-CHANGE done-event

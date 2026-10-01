@@ -1,0 +1,49 @@
+{
+  "handoff_id": "b4a1c0d0-0001-4000-8000-000000000001",
+  "run_id": "WF02-REQ430-20261001",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "MOBILE-DEV",
+  "file": "handoffs/WF02-REQ430-20261001/step-00-git-setup.json",
+  "created_at": "2026-10-01T14:16:39Z",
+  "started_at": "2026-10-01T14:16:39Z",
+  "completed_at": "2026-10-01T14:16:52Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-430"],
+    "requirement_text": {
+      "REQ-430": "MOB-8 in docs/mobile/requirements.md: v1 is online-first with a read-through definition cache; offline writes, push-based cache invalidation and an on-device form builder are out of v1 and recorded as deferred (architecture.md §4). Its own text calls it \"a gate\": an offline cache grows a write queue one reasonable commit at a time. BUILDS: 1. A static guard in apps/mobile/test/guards/ that fails if pubspec.yaml gains a push/messaging dependency (firebase_messaging or equivalent), a background-task/workmanager package, or if any file under apps/mobile/lib persists an outgoing request (a store write whose payload is a request body/method/url), with self-tests. 2. Reconcile docs/mobile/architecture.md §4's scope table with the shipped feature set, listing each MOB requirement's delivering REQ id, and marking the three exclusions as deferred. 3. Record in docs/migration/stage-9-mobile.md which build-order phase gates (build-order.md \"Phasing\": M-1 two tenants + secure tokens; M-2 airplane-mode + pinned versions never substitute; M-3 all six states incl. forced 429) are demonstrated and by which tests, and which parts are DEFERRED (iOS build and runtime checks -- Windows host; interactive login -- UAT-RUNNER) with reasons. Stage REVIEWER sign-off and status flips stay with REVIEWER and DOC-UPDATER."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["apps/mobile/test/guards/", "docs/mobile/architecture.md", "docs/migration/stage-9-mobile.md"]
+  },
+  "task": {
+    "description": "Per docs/agents/protocols/GIT_SETUP.md: git checkout main; git pull --ff-only origin main; create and push feature/WF02-REQ430-20261001 from main. Mobile-only run (apps/mobile/ + docs/mobile/ + docs/migration/stage-9-mobile.md scope) -- MOBILE-DEV performs Step 00 and Step Final, same precedent as REQ-425/REQ-428.",
+    "acceptance_criteria": [
+      "git pull --ff-only exited 0",
+      "git branch --show-current outputs feature/WF02-REQ430-20261001",
+      "git push -u origin feature/WF02-REQ430-20261001 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "git checkout main, pull --ff-only origin main (already up to date at f020527b), created feature/WF02-REQ430-20261001 from main, pushed to origin with upstream tracking. letflow-queue task 867 (GH#1884) locked under agent_id ORCH-letflow-main.",
+    "artifacts_out": ["branch: feature/WF02-REQ430-20261001"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ430-20261001",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ430-20261001",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to CODE-DESIGNER (Step 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

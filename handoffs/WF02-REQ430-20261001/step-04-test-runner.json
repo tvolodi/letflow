@@ -1,0 +1,58 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000009",
+  "run_id": "WF02-REQ430-20261001",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ430-20261001/step-04-test-runner.json",
+  "created_at": "2026-10-01T00:00:00Z",
+  "started_at": "2026-10-01T00:00:00Z",
+  "completed_at": "2026-10-01T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-430"],
+    "requirement_text": {
+      "REQ-430": "MOB-8, last requirement in the S9 mobile-tier chain (depends_on REQ-428, REQ-429). v1 scope-boundary guard: no outbox/offline-write-queue/push-based cache invalidation/on-device form builder anywhere in apps/mobile/. docs/mobile/architecture.md SS4 names every MOB-1..MOB-8's delivering REQ id(s) and lists the deferred items; docs/migration/stage-9-mobile.md lists the three phase gates with demonstrating test files and every deferred item with its reason."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ430-20261001/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ430-20261001/step-03b-test-design-validator.json"
+    ],
+    "owned_modules": ["apps/mobile/", "test/"]
+  },
+  "task": {
+    "description": "Run scripts/test_parallel.sh (full backend ExUnit suite, not just new tests -- this run's own diff touches apps/mobile/ + two docs files only, no backend regression expected, but the full suite must still be run per Unblock-Everything). Additionally, since this diff touches apps/mobile/: from apps/mobile/, run flutter analyze, flutter test, and flutter build apk --debug (AC5 reconfirmation), and record real output. Write test/reports/report-<date>-WF02-REQ430-20261001.yaml with real output. Attribute any failure structurally (core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching') -- never by count-matching alone.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run to completion with real aggregated Result:/Failed: counts quoted",
+      "flutter analyze && flutter test && flutter build apk --debug run from apps/mobile/ with real output quoted",
+      "test/reports/report-<date>-WF02-REQ430-20261001.yaml written with both result sets",
+      "Any failure attributed structurally (diff/working-tree membership, merge-base reproduction, or measured mechanism), never by count-matching; unattributed failures reported for filing, not fixed here"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Host memory re-checked at ~5.2GB free (5200288 KB / 33389048 KB total) -- tighter than the ~6GB readings on the REQ-428/REQ-429 runs, so TEST_PARALLEL_N=2 was used (not nproc=16). scripts/test_parallel.sh ran to completion on the first attempt (no reap/kill): combined 5155 tests, 8 properties, 1 failure (5162/5163 passed). The single failure -- A9 requirement-status invariant (Letflow.Docs.RequirementStatusInvariantsTest) -- IS attributable to this branch: docs/status/requirement_status.v25.yaml shows a direct working-tree modification (confirmed via `git diff`) appending a REQ-430 'started' history entry (bringing on-disk entries from 13 to 14) without bumping docs/status/requirement_status.index.yaml's volume-25 `entries:` field, which is still 13 (confirmed by direct read) -- same defect class as the REQ-428 and REQ-294 runs. Unlike REQ-428's run, no other ExUnit test failed this time (the event-retention/partition-maintenance/tenant-template failures seen on REQ-428 passed cleanly here), so no pre-existing-failure attribution was needed. apps/mobile/: flutter analyze clean (No issues found!, 5.7s); flutter test 301/301 passed; flutter build apk --debug succeeded (Gradle assembleDebug, 23.9s, app-debug.apk built) -- AC5 reconfirmed. Overall FAIL: not routable to RELEASE-VALIDATOR until the index entries: drift is fixed.",
+    "artifacts_out": [
+      "test/reports/report-20261001-WF02-REQ430-20261001.yaml"
+    ],
+    "issues": [
+      "A9 requirement_status invariant failure: docs/status/requirement_status.index.yaml volume 25 entries: is 13, on-disk docs/status/requirement_status.v25.yaml now has 14 entries after this branch's own ORCH working-tree edit (REQ-430 started-event append) -- branch-introduced, needs DOC-UPDATER/ORCH fix before RELEASE-VALIDATOR."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ430-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "not_pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route back to ORCH / DOC-UPDATER to increment docs/status/requirement_status.index.yaml's volume 25 entries: field from 13 to 14, then re-run the A9 invariant test (or the full suite) before routing to RELEASE-VALIDATOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

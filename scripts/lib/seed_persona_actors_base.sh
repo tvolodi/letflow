@@ -47,6 +47,22 @@ lookup_user_id() {
   echo "${user_id}"
 }
 
+# ISS-0932 (Q-932): like lookup_user_id but a persona with no account is NOT
+# fatal -- prints an empty string so persona_run can skip-with-warning and still
+# seed memberships for every persona that does exist. HTTP errors stay fatal.
+lookup_user_id_optional() {
+  local username="$1"
+  local response
+  response=$(curl -sf \
+    -H "${AUTH_HEADER}" \
+    "${API}/users?search=${username}") || {
+    echo "ERROR: GET /api/v1/identity/users?search=${username} failed (HTTP error)." >&2
+    exit 1
+  }
+  echo "${response}" | jq -r --arg u "${username}" \
+    '[.items[] | select(.username==$u)][0].id // empty'
+}
+
 # Find group ID by exact name; prints empty string if not found.
 find_group_id() {
   local name="$1"
@@ -204,11 +220,16 @@ persona_run() {
   echo ""
   echo "--- Step 3: Resolve persona actor user IDs ---"
   local persona username uid
-  local persona_uids=()
+  local persona_uids=() missing_personas=()
   for persona in "${PERSONAS[@]}"; do
     username="${persona%%|*}"
-    uid=$(lookup_user_id "${username}")
-    echo "  ${username} : ${uid}"
+    uid=$(lookup_user_id_optional "${username}")
+    if [[ -z "${uid}" ]]; then
+      echo "  WARNING: ${username} has no account (Part A missing) -- skipping its memberships." >&2
+      missing_personas+=("${username}")
+    else
+      echo "  ${username} : ${uid}"
+    fi
     persona_uids+=("${uid}")
   done
 
@@ -219,6 +240,10 @@ persona_run() {
     username="${persona%%|*}"
     roles_field="${persona#*|}"
     uid="${persona_uids[$idx]}"
+    if [[ -z "${uid}" ]]; then
+      idx=$((idx + 1))
+      continue
+    fi
     add_group_member "${task_worker_gid}" "${uid}" "${username} -> TASK_WORKER"
     if [[ -n "${roles_field}" ]]; then
       IFS=',' read -ra role_list <<< "${roles_field}"
@@ -261,4 +286,13 @@ persona_run() {
   echo "  \"${QA_URL}/api/v1/identity/groups/${task_worker_gid}/members\" | \\"
   echo "  jq '[.items[] | select(.username | startswith(\"actor-${tenant_label}-\"))] | length'"
   echo "# Expected: ${#PERSONAS[@]}"
+
+  # ISS-0932: report skipped personas and exit non-zero, AFTER every other
+  # persona's memberships have been seeded.
+  if [[ ${#missing_personas[@]} -gt 0 ]]; then
+    echo "" >&2
+    echo "ERROR: ${#missing_personas[@]} persona(s) had no account and were skipped: ${missing_personas[*]}" >&2
+    echo "       Memberships were seeded for all other personas. Complete Part A for the missing ones and re-run." >&2
+    return 1
+  fi
 }

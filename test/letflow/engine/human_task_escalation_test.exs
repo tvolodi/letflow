@@ -216,4 +216,98 @@ defmodule Letflow.Engine.HumanTaskEscalationTest do
       refute "orig-task" in projection_after.current_nodes
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # ISS-0925 -- a normally-completed HUMAN_TASK must not leave its escalation
+  # timer pending, and a stale escalation timer must never act on another node.
+  # ---------------------------------------------------------------------------
+
+  describe "ISS-0925: stale escalation timer" do
+    # orig-task (escalation armed, never fired) -> next-task (plain HUMAN_TASK) -> end
+    defp stale_timer_graph do
+      %{
+        "nodes" => [
+          %{"id" => "start", "node_type" => "START"},
+          %{
+            "id" => "orig-task",
+            "node_type" => "HUMAN_TASK",
+            "attributes" => %{
+              "role" => "approver",
+              "escalation_timer_duration" => "P21D",
+              "escalation_role" => "role-escalation"
+            }
+          },
+          %{
+            "id" => "next-task",
+            "node_type" => "HUMAN_TASK",
+            "attributes" => %{"role" => "approver"}
+          },
+          %{"id" => "end", "node_type" => "END"}
+        ],
+        "edges" => [
+          %{"id" => "e1", "source" => "start", "target" => "orig-task"},
+          %{"id" => "e2", "source" => "orig-task", "target" => "next-task"},
+          %{"id" => "e3", "source" => "next-task", "target" => "end"}
+        ]
+      }
+    end
+
+    defp start_and_complete_orig_task!(schema_name) do
+      definition = active_definition!(schema_name, stale_timer_graph())
+      assert {:ok, result} = Engine.create(create_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [%EngineTask{node_id: "orig-task", status: :pending} = orig_task] =
+               Repo.all(EngineTask, prefix: schema_name)
+
+      assert {:ok, _} =
+               Engine.complete_task(
+                 orig_task.id,
+                 %{
+                   output_variables: %{},
+                   actor_id: Ecto.UUID.generate(),
+                   idempotency_key: unique_name("iss0925-complete")
+                 },
+                 prefix: schema_name
+               )
+
+      timer =
+        Timer
+        |> where([t], t.instance_id == ^instance_id and t.timer_type == "escalation")
+        |> Repo.one!(prefix: schema_name)
+
+      {instance_id, timer}
+    end
+
+    test "normal completion cancels the node's pending escalation timer" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      {_instance_id, timer} = start_and_complete_orig_task!(schema_name)
+
+      assert timer.status == "cancelled"
+      assert timer.cancel_reason == "task_completed"
+      assert timer.cancelled_at != nil
+    end
+
+    test "a stale escalation timer that fires anyway never acts on the token's current node" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      {instance_id, timer} = start_and_complete_orig_task!(schema_name)
+
+      # Simulate the pre-fix state: the timer was left pending.
+      timer
+      |> Ecto.Changeset.change(status: "pending", cancelled_at: nil, cancel_reason: nil)
+      |> Repo.update!(prefix: schema_name)
+
+      assert {:ok, :fired} = Scheduler.fire_timer(timer.id, schema_name)
+
+      # next-task is untouched: still pending, no escalation task created.
+      tasks = Repo.all(EngineTask, prefix: schema_name)
+      assert %EngineTask{status: :pending} = Enum.find(tasks, &(&1.node_id == "next-task"))
+      refute Enum.any?(tasks, &(&1.status == :cancelled and &1.node_id == "next-task"))
+      assert length(tasks) == 2
+
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert projection.status == :active
+      assert "next-task" in projection.current_nodes
+    end
+  end
 end

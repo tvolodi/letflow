@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ428-20261001/step-02c-security-reviewer.json",
   "created_at": "2026-10-01T03:10:00Z",
   "started_at": "2026-10-01T03:10:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T05:05:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -34,18 +34,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Scope test: OUT OF SCOPE -- no tenant-data path touched. `git diff main...HEAD --name-only` shows changes confined to apps/mobile/lib/renderers/task/task.dart, apps/mobile/lib/renderers/process/process.dart, their tests, plus docs/requirements.yaml, docs/status/requirement_status.v25.yaml, lib/letflow/design/req428-task-and-instance-renderer.md (a design doc, not code), and run-bookkeeping handoff JSONs. `grep -rE 'lib/letflow|priv/repo/migrations' <(git diff main...HEAD --name-only)` matches only the design markdown -- zero .ex/.exs changes under lib/letflow/ or priv/repo/migrations/. Checked each scope-test trigger from security-invariants.md / security-reviewer.md against the actual diff: (1) no new/modified tenant-data API route -- lib/letflow/routers/tasks.ex and instances.ex are read-only inputs, unmodified; (2) no migration; (3) nothing resolving a secret -- grep for token/secret/password/apikey in both changed Dart files hits only `tokenId`/`token_id`, which is the process-engine workflow-token concept carried in JSON response bodies (instance/task token identity), not an auth credential or API secret; (4) no server-side response-shaping change for a tenant-scoped entity -- all map-building (task_list_item_map/2, task_detail_map/3, instance_map/1, timeline_item_map/1) lives server-side in already-shipped, unmodified routers; the new Dart code only deserialises what the server already emits; (5) no new lookup-by-ID handler -- the Dart controllers call existing GET /api/v1/instances/:id and GET/POST /api/v1/tasks/:id* endpoints unchanged, via the existing ApiClient/HttpGateway/PostCapableHttpGateway interfaces, no new Dio/transport/secure-storage code (confirmed by reading task.dart and process.dart diffs in full -- claim/complete/load all delegate to `client.get`/`client.post` on the pre-existing gateway abstraction). None of the five triggers fire, so per the scope test this is out of scope and INV-1..INV-8 are not individually run. Recorded per the Applicability note's instruction to check current reality rather than trust stale text: confirmed this file's INV-1 live-now status and INV-2/3/5 S4/S5-landed status do not change the verdict, since the diff never approaches lib/letflow/, migrations, or secrets regardless of which invariants are currently live.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ428-20261001",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ428-20261001",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to REVIEWER (2d)"
   },
   "rework_count": 0,
   "max_rework": 3

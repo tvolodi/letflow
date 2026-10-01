@@ -38,21 +38,50 @@ export function resolveCredential(envVarName: string, localDevFallback: string):
   return value
 }
 
+const TRANSIENT_NETWORK_ERROR = /ECONNRESET|ECONNREFUSED|EPIPE|socket hang up/i
+
+/**
+ * ISS-0921 (Q-912): the Windows/WSL2 host intermittently resets the first
+ * connection to `localhost:8094` (Keycloak) because `wslrelay.exe` owns
+ * `::1:8094` while Docker publishes `0.0.0.0`; the next attempt succeeds.
+ * The URL must stay `localhost` (JWT `iss` must match the backend), so the
+ * spec side cannot pick IPv4 -- retry the transient connection-level failure
+ * instead. Only thrown network errors are retried; any HTTP response
+ * (including 4xx/5xx) is returned to the caller untouched.
+ */
+export async function retryTransientNetworkError<T>(
+  attempt: () => Promise<T>,
+  retries = 3,
+  delayMs = 500,
+): Promise<T> {
+  for (let n = 0; ; n++) {
+    try {
+      return await attempt()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (n >= retries || !TRANSIENT_NETWORK_ERROR.test(message)) throw err
+      await new Promise((resolve) => setTimeout(resolve, delayMs * (n + 1)))
+    }
+  }
+}
+
 /** Obtain a JWT access token from Keycloak via password grant. */
 export async function getKeycloakToken(
   request: APIRequestContext,
   username = 'admin-user',
   password = resolveCredential('UAT_QA_ADMIN_PASSWORD', 'admin-pass'),
 ): Promise<string> {
-  const response = await request.post(KEYCLOAK_TOKEN_URL, {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    form: {
-      client_id: BPM_IDP_CLIENT_ID,
-      username,
-      password,
-      grant_type: 'password',
-    },
-  })
+  const response = await retryTransientNetworkError(() =>
+    request.post(KEYCLOAK_TOKEN_URL, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      form: {
+        client_id: BPM_IDP_CLIENT_ID,
+        username,
+        password,
+        grant_type: 'password',
+      },
+    }),
+  )
 
   if (!response.ok()) {
     const body = await response.text()
@@ -240,7 +269,7 @@ export async function assertServiceReadiness(
   await assertBackendHealthy(request, apiBaseUrl)
 
   const keycloakDiscoveryUrl = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
-  const idpHealth = await request.fetch(keycloakDiscoveryUrl)
+  const idpHealth = await retryTransientNetworkError(() => request.fetch(keycloakDiscoveryUrl))
   if (!idpHealth.ok()) {
     throw new Error(
       `Keycloak not ready (${idpHealth.status()}) at ${keycloakDiscoveryUrl}.\n` +

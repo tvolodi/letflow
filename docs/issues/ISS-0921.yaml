@@ -29,4 +29,16 @@ affected_files:
   - web/tests/e2e/helpers.ts
 queue_ref: Q-912  # queue allocated issue_ref ISS-0912, which collides with an existing local file; local filename kept as ISS-0921 (next free on origin/main) and GH-2063 retitled to match
 github_ref: GH-2063
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0921-partition-death-diagnostics-idp-retry
+resolved_at: "2026-10-01T14:10:00Z"
+resolution: >
+  Part 1 (partition BEAM deaths) could not be root-caused from the repo: no
+  repro, no kill in test or lib code, identical re-runs pass; evidence still
+  points at host interference (Windows + WSL2/Docker Desktop). Fixed what is
+  fixable: scripts/test_parallel.sh now decodes a missing-summary partition exit
+  status (128+N = killed by signal N) and prints the partition log tail inline,
+  so the next occurrence is attributable. Part 2 (Keycloak localhost:8094
+  ECONNRESET): web/tests/e2e/helpers.ts retries transient connection errors
+  (retryTransientNetworkError) on the IdP discovery and token requests; the URL
+  stays localhost (JWT iss must match). Unit test iss-0921-retry-transient-network-error.test.ts.

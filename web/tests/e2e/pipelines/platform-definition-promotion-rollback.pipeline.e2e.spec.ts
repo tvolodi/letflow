@@ -56,7 +56,7 @@ import {
   loginWithToken,
   navigateSpa,
   authHeaders,
-  jwtSubject,
+  resolveLocalUserId,
   shot,
 } from '../pipeline'
 import { assertServiceReadiness, resolveCredential } from '../helpers'
@@ -135,9 +135,10 @@ test.describe('Pipeline: platform-definition-promotion-rollback (PW-01)', () => 
 
     // ── Pre-step (API): version 1 then version 2, both activated ────────────
     await pl.step('pre: create and activate version 1, then version 2', async (s) => {
+      const adminLocalId = await resolveLocalUserId(request, API_BASE_URL, s.adminToken, 'admin-user')
       const v1Resp = await request.post(`${API_BASE_URL}/api/v1/definitions`, {
         headers: authHeaders(s.adminToken),
-        data: { name: processKey, version: '1.0.0', description: 'rollback pipeline fixture v1', graph: graphFor(fixtureId, '1.0.0', jwtSubject(s.adminToken)) },
+        data: { name: processKey, version: '1.0.0', description: 'rollback pipeline fixture v1', graph: graphFor(fixtureId, '1.0.0', adminLocalId) },
       })
       pl.gate(v1Resp.ok(), `v1 create failed: ${v1Resp.status()} ${await v1Resp.text()}`)
       const v1 = await v1Resp.json() as { id: string }
@@ -147,7 +148,7 @@ test.describe('Pipeline: platform-definition-promotion-rollback (PW-01)', () => 
 
       const v2Resp = await request.post(`${API_BASE_URL}/api/v1/definitions`, {
         headers: authHeaders(s.adminToken),
-        data: { name: processKey, version: '2.0.0', description: 'rollback pipeline fixture v2', graph: graphFor(fixtureId, '2.0.0', jwtSubject(s.adminToken)) },
+        data: { name: processKey, version: '2.0.0', description: 'rollback pipeline fixture v2', graph: graphFor(fixtureId, '2.0.0', adminLocalId) },
       })
       pl.gate(v2Resp.ok(), `v2 create failed: ${v2Resp.status()} ${await v2Resp.text()}`)
       const v2 = await v2Resp.json() as { id: string }

@@ -35,6 +35,11 @@ graph:
       attributes:
         endpoint: POST /compliance/regulatory-notice
         timeout_ms: 300000
+    - id: remediation-unresolved-escalation
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /compliance/regulatory-notice
+        timeout_ms: 300000
     - id: severity-routing
       node_type: EXCLUSIVE_GATEWAY
     - id: remediation-subprocess
@@ -110,7 +115,7 @@ graph:
       condition: "variables.remediation_status == 'resolved'"
     - id: e10
       source: post-remediation-check
-      target: regulatory-auto-escalation
+      target: remediation-unresolved-escalation
       condition: "variables.remediation_status == 'unresolved'"
     - id: e11
       source: findings-sign-off
@@ -145,3 +150,6 @@ graph:
     - id: e17
       source: reopen-review
       target: end-reopened
+    - id: e18
+      source: remediation-unresolved-escalation
+      target: end-closed

@@ -93,6 +93,33 @@ echo "QA_URL: ${QA_URL}"
 # never update (design §4.1 OQ-4).
 # ---------------------------------------------------------------------------
 
+# ISS-0931 (Q-931): the activate endpoint requires a non-blank `rationale`
+# (422 "rationale: field is required" otherwise). Prints nothing on success;
+# on failure echoes the HTTP status and body, then exits.
+activate_definition() {
+  local name="$1"
+  local body_file http_code
+  body_file=$(mktemp)
+  http_code=$(curl -s -o "${body_file}" -w '%{http_code}' \
+    -X POST \
+    -H "${AUTH_HEADER}" \
+    -H "Content-Type: application/json" \
+    -d "{\"rationale\":\"UAT seed: activate ${name} entity definition (seed_vortex_entities.sh)\"}" \
+    "${API}/entities/definitions/${name}/activate") || {
+    echo "ERROR: POST /api/v1/entities/definitions/${name}/activate failed (network error)." >&2
+    rm -f "${body_file}"
+    exit 1
+  }
+  if [[ "${http_code}" != "200" && "${http_code}" != "201" ]]; then
+    echo "ERROR: POST /api/v1/entities/definitions/${name}/activate returned HTTP ${http_code}." >&2
+    cat "${body_file}" >&2
+    rm -f "${body_file}"
+    exit 1
+  fi
+  echo "  Activated -- status: $(jq -r '.status // "ok"' "${body_file}")"
+  rm -f "${body_file}"
+}
+
 seed_entity_definition() {
   local name="$1"
   local fixture_path="$2"
@@ -110,9 +137,15 @@ seed_entity_definition() {
 
   if [[ "${status}" == "200" ]]; then
     echo "  Already exists -- skipping creation (this script never updates an existing definition in place)."
-    local existing_id
+    local existing_id existing_status
     existing_id=$(jq -r '.id' /tmp/vortex_entity_def_check.json)
-    echo "  Definition ID: ${existing_id}"
+    existing_status=$(jq -r '.status // empty' /tmp/vortex_entity_def_check.json)
+    echo "  Definition ID: ${existing_id} (status: ${existing_status:-unknown})"
+    # ISS-0931: resume a draft left inactive by an earlier aborted run.
+    if [[ "${existing_status}" == "inactive" ]]; then
+      echo "--- entity type '${name}': inactive draft found -- activating ---"
+      activate_definition "${name}"
+    fi
     return 0
   fi
 
@@ -146,15 +179,7 @@ seed_entity_definition() {
   echo "  Created (DRAFT) -- ID: ${definition_id}"
 
   echo "--- entity type '${name}': activating ---"
-  local activate_response
-  activate_response=$(curl -sf \
-    -X POST \
-    -H "${AUTH_HEADER}" \
-    "${API}/entities/definitions/${name}/activate") || {
-    echo "ERROR: POST /api/v1/entities/definitions/${name}/activate failed." >&2
-    exit 1
-  }
-  echo "  Activated -- status: $(echo "${activate_response}" | jq -r '.status')"
+  activate_definition "${name}"
   echo "  Browse at: ${QA_URL}/api/v1/entities/definitions/${definition_id}"
 }
 

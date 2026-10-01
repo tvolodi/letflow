@@ -149,4 +149,44 @@ describe('BrandingProvider', () => {
       .trim()
     expect(resolved).toBe(tenantBrandColor)
   })
+
+  it('ISS-0937: with a session, branding is fetched for the SESSION tenant (?realm=<slug>), not the always-default host lookup', async () => {
+    vi.resetModules()
+    const clientModule = await import('@/api/client')
+    const get = vi.mocked(clientModule.client.get)
+    get.mockImplementation(((_path: string, params?: Record<string, string>) =>
+      Promise.resolve({
+        oidc_authority: 'http://example.invalid/realm',
+        client_id: 'letflow-web',
+        branding: {
+          app_name: params?.realm === 'session-tenant' ? 'Session Tenant Co' : 'Letflow',
+          logo_url: null,
+          brand_colors: {},
+        },
+      })) as never)
+
+    const { BrandingProvider } = await import('../BrandingProvider')
+    const { useBranding } = await import('../BrandingContext')
+    const { AuthContext } = await import('@/auth/AuthContext')
+
+    function Probe() {
+      return <span data-testid="probe-app-name">{useBranding().appName}</span>
+    }
+
+    const authValue = { session: { tenant_slug: 'session-tenant' } } as never
+
+    render(
+      <AuthContext.Provider value={authValue}>
+        <BrandingProvider>
+          <Probe />
+        </BrandingProvider>
+      </AuthContext.Provider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('probe-app-name')).toHaveTextContent('Session Tenant Co')
+    })
+    expect(get).toHaveBeenCalledWith('/api/tenant-config', { realm: 'session-tenant' })
+    expect(get).not.toHaveBeenCalledWith('/api/tenant-config', expect.objectContaining({ host: expect.anything() }))
+  })
 })

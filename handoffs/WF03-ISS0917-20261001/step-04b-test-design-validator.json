@@ -1,0 +1,46 @@
+{
+  "handoff_id": "b3aa4d36-847a-4ba1-9c37-85d26701fb2d",
+  "run_id": "WF03-ISS0917-20261001",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0917-20261001/step-04b-test-design-validator.json",
+  "created_at": "2026-10-01T13:53:17Z",
+  "started_at": "2026-10-01T13:53:17Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0917": "id: ISS-0917\ntitle: \"Catalog SERVICE_TASK cannot execute: ServiceTaskDispatcher.catalog_lookup_stub/2 is an unconditional {:error,:not_registered}; POST /tasks/:id/complete returns 500 when the next node is a catalog-only SERVICE_TASK\"\ndiscovered_by: RELEASE-VALIDATOR\ndiscovered_in_run: WF02-REQ432-20260930 (filed by ORCH)\ndiscovered_at: \"2026-09-30T20:50:51Z\"\nseverity: MAJOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by WF02-REQ432-20260930 (REQ-432 live pipeline run,\n  test/reports/report-20260930-WF02-REQ432-20260930.yaml; step-02b-rework1-frontend-\n  dev.json). A process whose SERVICE_TASK references a service_id (catalog_entry pin) cannot\n  ever execute: Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2\n  (lib/letflow/engine/service_task_dispatcher.ex ~411-416) returns {:error,:not_registered}\n  unconditionally, so activation renders an empty URL. Measured live: completing the\n  preceding human task hops synchronously into the SERVICE_TASK, the engine persists only\n  EXECUTION_ERROR (affected node n3, error_type service_task_url_rendered_empty, no\n  TASK_COMPLETED for the completed task) and POST /api/v1/tasks/:id/complete answers HTTP\n  500 (probably needs a non-500 mapping for {:instance_execution_error,_,_} in\n  lib/letflow/routers/tasks.ex). Independent of service retirement. Consequence: scenario\n  platform-instance-pin-survives-catalog-change EO-001/EO-004 'the in-flight step completes\n  without error' cannot be met on success; REQ-432's pipeline spec accepts the measured\n  outcome (B) as a documented limitation. Needed: resolve service_id through the instance's\n  PINNED service_catalog version (Letflow.Engine.PinResolver / ServiceCatalog lookup) in the\n  dispatcher, then tighten the REQ-432 spec step 03 to require success. SCOPE GAP already\n  noted in design docs lib/letflow/design/req373-service-catalog-version-lifecycle.md and\n  lib/letflow/design/req432-rebind-pins-publish-retire-ui.md (M5). Owner ELIXIR-DEV (via\n  CODE-DESIGNER). Severity MAJOR.\n  NOTE (added by ORCH at close-out of the cancelled duplicate run WF02-REQ432-20260930): the\n  REQ-432 implementation that actually landed on main is PR #2055 (5d7ca7bf), not this run's\n  branch. Its spec (web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change\n  .pipeline.e2e.spec.ts, header 'Scope note (deliberately not exercised): SERVICE_TASK dispatch')\n  never drives a token onto the SERVICE_TASK node, so on main the scenario's 'the in-flight step\n  completes without error' (EO-001/EO-004 step 3) is unverified; the evidence of this stub's effect\n  is the duplicate run's live finding (archived on remote branch feature/WF02-REQ432-20260930,\n  handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json and step-05-release-validator.json).\nsource_reports:\n  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json\n  - test/reports/report-20260930-WF02-REQ432-20260930.yaml\naffected_files:\n  - lib/letflow/engine/service_task_dispatcher.ex\n  - lib/letflow/routers/tasks.ex\nqueue_ref: Q-907  # queue allocated issue_ref ISS-0907, which collides with an existing local file; local filename kept as ISS-0917 (next free on origin/main) and GH-2057 retitled to match\ngithub_ref: GH-2057\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/ISS-0917.md",
+      "handoffs/WF03-ISS0917-20261001/step-04-test-designer.json",
+      "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md",
+      "docs/agents/instructions/core-directives.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0917-20261001",
+    "queue_task_id": 907,
+    "github_issue": 2057
+  },
+  "task": {
+    "description": "WF-03 Step 4b: TEST-DESIGN-VALIDATOR hard gate on TEST-DESIGNER's regression tests (handoff handoffs/WF03-ISS0917-20261001/step-04-test-designer.json; spec test/specs/ISS-0917.md; files test/letflow/engine_catalog_service_task_test.exs, test/letflow/service_catalog_resolve_pinned_version_test.exs, test/letflow/routers/tasks_test.exs (R1-R3 added), existing test/letflow/engine/service_task_dispatcher_test.exs changes by ELIXIR-DEV, plus the FRONTEND-DEV e2e spec web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts). All are committed on the branch. Verify: (1) every acceptance criterion in design lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md section 6.1 and every test in 6.2/6.3 has a runnable, non-tautological test; no skipped/excluded coverage; fixtures isolated and self-sufficient (INV-1 async rules, tenant fixtures, 255-char names); (2) the e2e spec implements 6.4 (read it; judge statically, it cannot run here). (3) WF-03 fail-first rule: YOU MUST INDEPENDENTLY RE-RUN the pre-fix side yourself: throwaway `git worktree add` of the merge-base (git merge-base HEAD origin/main) in a sibling dir, REAL COPY of deps and _build via robocopy /E (NEVER junction/symlink), copy only the new/changed test files, run MIX_ENV=test mix test <files> and report the fail counts; AND independently APPLY at least TWO of the reported mutants (choose m1 live-row fallback and m7 router clause order or m2 tenant visibility; others optional) in a throwaway worktree of THIS branch (never in the main checkout) and report the failing counts versus TEST-DESIGNER's claims (m1 13/40, m2 4/40, m7 R2 fails). (4) Run the new test files once in the main checkout post-fix (scoped; machine memory is limited and test DB is shared with other workers, so no full suite; re-run once on tenant_template DB-collision flakiness and say so). (5) Remove worktrees at the end (`git worktree remove --force`, `git worktree prune`), verify `ls deps | wc -l` unchanged (was 29) and `git status --porcelain lib/ test/ web/` empty in the main checkout, and quote both. Verdict PASS/FAIL with numbered blocking issues. Modify only your handoff; do not commit.",
+    "acceptance_criteria": [
+      "Independent pre-fix re-run with counts",
+      "At least two mutants independently applied with counts",
+      "Main checkout clean; worktrees removed; deps untouched",
+      "Verdict with numbered issues"
+    ]
+  }
+}

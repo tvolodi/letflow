@@ -2612,3 +2612,6 @@
 2026-10-01T13:17:07Z | PASS | WF03-ISS0917-20261001 | step-03d-reviewer | REVIEWER -> ORCH | PASS -- D4 409 amendment approved; no must-fix
 2026-10-01T13:17:31Z | DISPATCH | WF03-ISS0917-20261001 | step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
 2026-10-01T13:17:31Z | DISPATCH | WF03-ISS0917-20261001 | step-03e-frontend-dev | ORCH -> FRONTEND-DEV | PENDING
+2026-10-01T13:53:17Z | PASS | WF03-ISS0917-20261001 | step-03e-frontend-dev | FRONTEND-DEV -> ORCH | PASS -- e2e step 04b added; typecheck/eslint/list clean, e2e not run (needs live backend)
+2026-10-01T13:53:17Z | PASS | WF03-ISS0917-20261001 | step-04-test-designer | TEST-DESIGNER -> ORCH | PASS -- 43 new tests; pre-fix 36/40 + R1/R2 fail; 9 mutants killed
+2026-10-01T13:53:17Z | DISPATCH | WF03-ISS0917-20261001 | step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING

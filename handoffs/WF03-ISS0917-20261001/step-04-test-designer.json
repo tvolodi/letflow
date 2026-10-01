@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0917-20261001/step-04-test-designer.json",
   "created_at": "2026-10-01T13:17:31Z",
   "started_at": "2026-10-01T13:17:31Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T13:52:40Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -45,5 +45,31 @@
       "Mutants m1-m8 each recorded with failing tests",
       "Worktrees removed; lib/ clean; real deps untouched"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote ISS-0917 regression tests (all uncommitted; lib/ and web/ untouched). Files: test/letflow/engine_catalog_service_task_test.exs (T1-T11, 25 tests incl. mandatory T8a x3 and T8b x2), test/letflow/service_catalog_resolve_pinned_version_test.exs (resolver matrix, 15 tests), test/letflow/routers/tasks_test.exs (+R1-R3, 3 tests), spec test/specs/ISS-0917.md. Dispatcher tests of design 4.2 already exist from ELIXIR-DEV; verified via m8. POST-FIX (branch HEAD 07b288c9), MIX_ENV=test scoped: engine+resolver files 40/40 passed; routers/tasks_test.exs 75/75 passed; no 'default values for the optional arguments' warning in either log (helpers have no default args). mix letflow.check.test (full suite) NOT run per ORCH instruction (limited memory, shared DB). FAIL-FIRST (merge-base 0b1931d3, throwaway worktree, robocopy'd deps/_build): engine+resolver 36/40 fail (resolver: UndefinedFunctionError, non-existence rule -> mutants; engine: behavioural, completion hop returns {:instance_execution_error,:service_task_url_rendered_empty,{:node,\"svc\"}} as measured); the 4 passing are intentional regression guards. Router R1 fails pre-fix (500 vs 200), R2 fails pre-fix (500 vs 409), R3 guard passes both. MUTANTS (worktree of this branch, each reverted, lib clean after each): m1 live-row fallback 13/40 fail (T2,T4b,T4c,T8a x2,T8b x2 + 6 resolver); m2 no tenant visibility 4/40 (resolver other-tenant, scope-narrowed, get_for_tenant, T6); m3 rebound (service_id,version) disabled 5/40 (T4,T4b,T4c,T8a-unresolvable,T8b-unresolvable); m4 required_auth not failing closed 6/40 (T7 x4,T3b,T8a-auth); m5 catalog timeout wins 1/40 (T10 node-smaller); m6a completion hop without reconstructed pins 14/40; m6b timer/advance wrapper swallows typed error 3/40 (T8a x2,T8b); m7 router 409 clause after catch-all: R2 fails; m8 dispatcher catalog arm bypasses SSRF gate 2/46 in service_task_dispatcher_test.exs. All 9 killed. COVERAGE LIMITS: T11 failing branch (tenant_id_for_schema_name error at completion hop) is not reachable via public API (earlier hop steps use the same prefix); T11 is a lazy-evaluation control. Escalation-timer site not driven (shares the abort wrapper exercised by T8a/T8b, m6b). Environmental: m3 first run hit tenant_template duplicate-schema collision from a concurrent worker, re-run once clean. Cleanup: worktree removed and pruned, ls deps = 29 (unchanged), git status --porcelain lib/ empty. Note: design said router instance_status \"active\"; real response is \"ACTIVE\" (test asserts the real value).",
+    "artifacts_out": [
+      "test/letflow/engine_catalog_service_task_test.exs",
+      "test/letflow/service_catalog_resolve_pinned_version_test.exs",
+      "test/letflow/routers/tasks_test.exs",
+      "test/specs/ISS-0917.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "T11 failing branch and escalation-timer site not directly driven (harness-unreachable / shares covered wrapper); see test/specs/ISS-0917.md Coverage limits.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0917-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   }
 }

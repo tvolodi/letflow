@@ -307,6 +307,44 @@ defmodule Letflow.EngineSubProcessTest do
     }
   end
 
+  # ISS-0945: START -> HUMAN_TASK("gate") -> SUB_PROCESS("sp") ->
+  # EXCLUSIVE_GATEWAY("gw") -> SERVICE_TASK("svc") -> END. The gateway hop
+  # between "sp" and "svc" is deliberate (design doc §5): it is specifically
+  # the hop INSIDE advance_until_stable/4's own internal worklist loop (not
+  # the {:sub_process_completed, ...} hop itself) that produces the
+  # {:service_task_dispatch_requested, ...} pending event this bug drops --
+  # a direct sp -> svc edge would not reliably reproduce it. "gw"'s one
+  # outgoing edge is unconditional/default so it always advances straight
+  # through to "svc" in the same hop chain as the sub-process's own
+  # completion.
+  defp graph_parent_task_then_subprocess_then_gateway_then_service_task(child_definition_name) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "gate", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "gater"}},
+        %{
+          "id" => "sp",
+          "node_type" => "SUB_PROCESS",
+          "attributes" => %{"definition_name" => child_definition_name}
+        },
+        %{"id" => "gw", "node_type" => "EXCLUSIVE_GATEWAY"},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{"endpoint" => "https://example.test/iss0945", "timeout_ms" => 5000}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "gate"},
+        %{"id" => "e2", "source" => "gate", "target" => "sp"},
+        %{"id" => "e3", "source" => "sp", "target" => "gw"},
+        %{"id" => "e4", "source" => "gw", "target" => "svc", "is_default" => true},
+        %{"id" => "e5", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
   defp start_attrs(definition, overrides \\ %{}) do
     Map.merge(
       %{
@@ -1291,6 +1329,66 @@ defmodule Letflow.EngineSubProcessTest do
       # precedent) -- asserted here since it's exercised "for free" by this same
       # scenario, not because this fix changes that column's behavior.
       assert parent_projection.join_counters == %{}
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0945 -- build_completion_multi_from_merge/12's own advance_until_stable/4 call
+  # (sub_process.ex) used to bind its third return element to `_more_pending` and
+  # discard it. When the hop immediately after a sub-process's own completion edge is
+  # a gateway that lands on a SERVICE_TASK (inside advance_until_stable/4's own
+  # internal worklist loop, not the {:sub_process_completed, ...} hop itself), the
+  # {:service_task_dispatch_requested, ...} pending event that hop produces was
+  # silently dropped -- no service_task_dispatches row, so
+  # Letflow.Engine.ServiceTaskDispatcher's poller never picks up the node and the
+  # instance parks on it forever. See lib/letflow/design/iss0945-subprocess-pending-dispatch.md.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0945 -- a SERVICE_TASK reached immediately after sub-process completion gets a real dispatch row" do
+    test "sub-process completion cascades through a gateway onto a SERVICE_TASK, inserting exactly one pending dispatch row" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # START -> END, synchronous (ISS-0392's own graph_child_immediate/0) --
+      # per CODE-DESIGN-VALIDATOR's binding ruling, this test drives the child to
+      # completion via the ISS-0392-style synchronous completion path (the child's
+      # own graph completes inside the SAME transaction as its creation), not a
+      # separate complete_task/3 call on a HUMAN_TASK inside the child.
+      child_def = active_definition!(schema_name, graph_child_immediate())
+
+      parent_def =
+        active_definition!(
+          schema_name,
+          graph_parent_task_then_subprocess_then_gateway_then_service_task(child_def.name)
+        )
+
+      assert {:ok, created} = Engine.create(start_attrs(parent_def), prefix: schema_name)
+      gate_task = pending_task_for_instance!(schema_name, created.instance_id)
+
+      # Pre-fix: this call succeeds (no raise), but the parent silently parks on
+      # "svc" forever with zero service_task_dispatches rows -- the bug is a
+      # silently-dropped pending event, not an error. Post-fix: same {:ok, _}, but
+      # a real dispatch row now exists for "svc".
+      assert {:ok, _result} =
+               Engine.complete_task(gate_task.id, complete_attrs(), prefix: schema_name)
+
+      # The gate task's own hop chain reaches SUB_PROCESS("sp"), spawns the child,
+      # the child completes synchronously, {:sub_process_completed, ...} advances
+      # the parent token onto "gw", and advance_until_stable/4's own internal
+      # worklist loop then hops "gw"'s default edge onto "svc" -- confirming the
+      # gateway hop that produces the dropped pending event actually ran.
+      parent_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+      assert parent_projection.status == :active
+      assert parent_projection.current_nodes == ["svc"]
+
+      # The actual regression assertion (design doc §5): exactly one pending,
+      # attempt_index: 0 dispatch row for "svc" -- mirrors
+      # test/letflow/engine_test.exs:596-599's own DB-level assertion pattern for
+      # the normal (non-sub-process) SERVICE_TASK dispatch path. This is the
+      # assertion that fails pre-fix (dispatch_rows == []).
+      dispatch_rows =
+        Repo.all(Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch, prefix: schema_name)
+
+      assert [%{node_id: "svc", status: "pending", attempt_index: 0}] = dispatch_rows
     end
   end
 end

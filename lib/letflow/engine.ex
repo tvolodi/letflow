@@ -1301,7 +1301,7 @@ defmodule Letflow.Engine do
           tenant_id :: Ecto.UUID.t(),
           prefix :: String.t()
         ) :: Multi.t()
-  defp build_service_task_dispatch_multi(multi, prepared_dispatches, id_map, tenant_id, prefix) do
+  def build_service_task_dispatch_multi(multi, prepared_dispatches, id_map, tenant_id, prefix) do
     Enum.reduce(prepared_dispatches, multi, fn %{token_id: token_id, arm_attrs: arm_attrs},
                                                acc_multi ->
       token_record_id = Map.fetch!(id_map, token_id)
@@ -3815,7 +3815,7 @@ defmodule Letflow.Engine do
                    prepare_service_task_dispatch_for_completion(
                      pending_events,
                      graph,
-                     projection,
+                     projection.instance_id,
                      advanced_state.variables,
                      completed_at,
                      actor_id,
@@ -3905,28 +3905,41 @@ defmodule Letflow.Engine do
   # expects. No service_task_dispatches row is ever inserted for this event
   # (structurally -- prepare_service_task_dispatch/5 halts before building
   # arm_attrs for it).
-  defp prepare_service_task_dispatch_for_completion(
-         pending_events,
-         graph,
-         projection,
-         variables,
-         now,
-         actor_id,
-         idempotency_key,
-         prefix
-       ) do
+  @spec prepare_service_task_dispatch_for_completion(
+          pending_events :: [Letflow.Engine.Transition.pending_event()],
+          graph :: Graph.t(),
+          instance_id :: Ecto.UUID.t(),
+          variables :: map(),
+          now :: DateTime.t(),
+          actor_id :: Ecto.UUID.t() | nil,
+          idempotency_key :: String.t(),
+          prefix :: String.t()
+        ) ::
+          {:ok, [prepared_service_task_dispatch()]}
+          | {:error, {:empty_url_error, ExecutionError.error_args()}}
+          | {:error, {:catalog_resolution_error, ExecutionError.error_args()}}
+  def prepare_service_task_dispatch_for_completion(
+        pending_events,
+        graph,
+        instance_id,
+        variables,
+        now,
+        actor_id,
+        idempotency_key,
+        prefix
+      ) do
     # ISS-0917 -- pins are reconstructed lazily (only if a catalog node is
     # activated) under the row lock this hop already holds; tenant_id is
     # derived from the schema prefix, never from caller input (INV-PD-7).
     catalog_ctx = %{
-      pin_source: {:reconstruct, projection.instance_id, prefix},
+      pin_source: {:reconstruct, instance_id, prefix},
       tenant_id: {:schema_prefix, prefix}
     }
 
     case prepare_service_task_dispatch(
            pending_events,
            graph,
-           projection.instance_id,
+           instance_id,
            variables,
            now,
            catalog_ctx
@@ -3940,7 +3953,7 @@ defmodule Letflow.Engine do
       {:catalog_resolution_error, node_id, reason, variables} ->
         error_args =
           build_service_task_catalog_unresolved_error(
-            projection.instance_id,
+            instance_id,
             node_id,
             reason,
             variables,
@@ -3953,7 +3966,7 @@ defmodule Letflow.Engine do
       {:empty_url_error, node_id, variables} ->
         error_args =
           build_service_task_empty_url_error(
-            projection.instance_id,
+            instance_id,
             node_id,
             variables,
             actor_id,

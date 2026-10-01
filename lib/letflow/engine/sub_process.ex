@@ -91,6 +91,7 @@ defmodule Letflow.Engine.SubProcess do
   alias Letflow.EventStore.Registry.JsonSchema
   alias Letflow.EventStore.Registry.ValidationFailure
   alias Letflow.Repo
+  alias Letflow.TenantProvisioning
 
   @typedoc "The two activation-time (input-filter) SPC-01 failure modes, plus the defensive 5th."
   @type activation_failure ::
@@ -891,24 +892,61 @@ defmodule Letflow.Engine.SubProcess do
                  error_idempotency_key
                )}
 
-            {:ok, final_instance_state, _more_pending} ->
-              multi_with_steps =
-                build_completion_write_steps(
-                  multi,
-                  child_instance_id,
-                  parent_token,
-                  graph,
-                  seed_state,
-                  token_records,
-                  final_instance_state,
-                  merge_variables,
-                  merge_events,
-                  actor_id,
-                  idempotency_key,
-                  prefix
-                )
+            {:ok, final_instance_state, pending_dispatch_events} ->
+              # ISS-0945 -- advance_until_stable/4's own pending_events list
+              # (previously discarded here as `_more_pending`) can contain
+              # {:service_task_dispatch_requested, ...} tuples produced by a
+              # hop *inside* this same advance_until_stable/4 call (e.g. a
+              # gateway hop immediately after the sub-process's own
+              # completion edge) -- the exact same event shape
+              # dispatch_task_completion_hop_chain/7 already resolves via
+              # prepare_service_task_dispatch_for_completion/8 for the
+              # normal (non-sub-process) completion path
+              # (lib/letflow/engine.ex). completed_at is computed here (not
+              # inside build_completion_write_steps/14 below) so it doubles
+              # as both the dispatch-prep clock read and the write-steps'
+              # own completed_at -- a single clock read, mirroring
+              # dispatch_task_completion_hop_chain/7's own
+              # "completed_at doubles as arrival timestamp" precedent.
+              completed_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
-              {:ok, multi_with_steps}
+              case Letflow.Engine.prepare_service_task_dispatch_for_completion(
+                     pending_dispatch_events,
+                     graph,
+                     parent_token.instance_id,
+                     final_instance_state.variables,
+                     completed_at,
+                     actor_id,
+                     idempotency_key,
+                     prefix
+                   ) do
+                {:error, {:empty_url_error, error_args}} ->
+                  {:error, error_args}
+
+                {:error, {:catalog_resolution_error, error_args}} ->
+                  {:error, error_args}
+
+                {:ok, prepared_dispatches} ->
+                  multi_with_steps =
+                    build_completion_write_steps(
+                      multi,
+                      child_instance_id,
+                      parent_token,
+                      graph,
+                      seed_state,
+                      token_records,
+                      final_instance_state,
+                      merge_variables,
+                      merge_events,
+                      actor_id,
+                      idempotency_key,
+                      prefix,
+                      prepared_dispatches,
+                      completed_at
+                    )
+
+                  {:ok, multi_with_steps}
+              end
           end
       end
     else
@@ -958,9 +996,10 @@ defmodule Letflow.Engine.SubProcess do
          merge_events,
          actor_id,
          idempotency_key,
-         prefix
+         prefix,
+         prepared_dispatches,
+         completed_at
        ) do
-    completed_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
     parent_instance_id = parent_token.instance_id
     reconciliation_key = {:sub_process_parent_token_reconciliation, parent_token.id}
     event_key = {:sub_process_completed_event, parent_token.id}
@@ -984,6 +1023,31 @@ defmodule Letflow.Engine.SubProcess do
         completed_at,
         prefix
       )
+    end)
+    |> Multi.merge(fn _changes ->
+      # ISS-0945 -- mirrors lib/letflow/engine.ex's own
+      # build_complete_task_tail_multi/6 service-task-dispatch Multi.merge
+      # step exactly: positioned right after token reconciliation (every
+      # token_id in prepared_dispatches is already a real, persisted
+      # TokenRecord id by construction -- reconcile_parent_tokens/5, the
+      # step immediately above, has already proven this for every token_id
+      # in final_instance_state.tokens) and before the SUB_PROCESS_COMPLETED
+      # event step below.
+      with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+        id_map =
+          Map.new(prepared_dispatches, fn %{token_id: token_id} -> {token_id, token_id} end)
+
+        Letflow.Engine.build_service_task_dispatch_multi(
+          Multi.new(),
+          prepared_dispatches,
+          id_map,
+          tenant_id,
+          prefix
+        )
+      else
+        {:error, reason} ->
+          Multi.error(Multi.new(), :service_task_dispatch_tenant_lookup, reason)
+      end
     end)
     |> Multi.run(event_key, fn _repo, _changes ->
       append_sub_process_completed_event(

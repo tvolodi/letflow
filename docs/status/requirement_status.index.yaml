@@ -5828,6 +5828,16 @@ volumes:
     opened: 2026-09-30
     entries: 7
     note: >
+      Incremented to 7 by ORCH's own REQ-428 started-event append
+      (WF02-REQ428-20261001, 2026-10-01T01:18:43Z) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v25.yaml` = 7 on-disk entries; 179
+      lines, well under the 1200-line/120000-byte roll ceiling, no roll
+      triggered. This increment was itself originally missed in the same
+      commit that appended the entry -- caught by TEST-RUNNER's A9
+      requirement-status invariant test during WF02-REQ428-20261001's own
+      Step 4 run and fixed here before proceeding, rather than left for a
+      later session.
+
       Opened by DOC-UPDATER's own ISS-0908 closing SCOPE-CHANGE append,
       successor to volume 24 (closed at 30 entries / 1219 frozen-prefix
       lines, over the 1200-line roll ceiling). Created with volume 24's

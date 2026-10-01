@@ -1,0 +1,44 @@
+{
+  "handoff_id": "a3c1f0d2-9b7e-4c55-8a10-923000000012",
+  "run_id": "WF03-ISS0923-20261001",
+  "workflow_id": "WF-03",
+  "step": "04d",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-ISS0923-20261001/step-04d-release-validator.json",
+  "created_at": "2026-10-01T17:05:07Z",
+  "started_at": "2026-10-01T17:05:07Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0923.yaml": "ServiceCatalog.delete/1 does not block deletion while non-terminal instances are pinned to the service (MINOR). Design chose BLOCK."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0923.yaml",
+      "lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md",
+      "handoffs/WF03-ISS0923-20261001/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/service_catalog.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/api/error.ex",
+      "test/"
+    ],
+    "branch_name": "feature/WF03-ISS0923-20261001",
+    "queue_task_id": 923,
+    "github_issue": 2097
+  },
+  "task": {
+    "description": "Work in C:/Users/tvolo/dev/ai-dala/letflow-3 on the already checked-out branch feature/WF03-ISS0923-20261001 (do not switch branches; do not touch main or other branches/PRs). Shared machine: scoped `mix test <files>` only, never the full suite; use MIX_TEST_PARTITION=<unique> for tests that commit catalog rows. Do not commit (ORCH commits); do not leave mutants in the tree. WF-03 Step 4d: independently re-verify ISS-0923 is fixed: re-run (do not trust reports) MIX_ENV=test MIX_TEST_PARTITION=9234 mix test test/letflow/service_catalog_delete_pinned_instances_test.exs test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs (scoped only; no full suite). Also do a live repro of the original defect scenario (register svc, publish, tenant def with SERVICE_TASK, activate, Engine.create, deprecate the definition, then ServiceCatalog.delete) in a scratchpad script/test outside the repo test dir: it must now return {:error, {:referenced_by_active_instances, _}}, and after cancelling the instance delete must return :ok with version rows gone. Check acceptance criteria against the design section 10 and that no lib/test file is left mutated (git status/diff). Edit nothing in the repo but this handoff. Fill this handoff file's result (status PASS/FAIL, summary with quoted real output, issues, next_action) and set top-level status COMPLETED with real UTC completed_at (`date -u`)."
+  },
+  "result": null
+}

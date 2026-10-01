@@ -1,0 +1,36 @@
+run_id: WF03-ISS0950-20261001
+step: 04c
+agent: TEST-RUNNER
+generated_at: "2026-10-01T15:38:56Z"
+branch: feature/WF03-ISS0950-20261001
+scope: scoped (no full suite, shared machine)
+command: >
+  MIX_ENV=test mix test test/letflow/service_catalog/endpoint_url_validation_test.exs
+  test/letflow/webhooks/url_validator_test.exs test/letflow/service_catalog_test.exs
+  test/letflow/routers/admin_services_test.exs test/letflow/routers/admin_services_publish_retire_test.exs
+  test/letflow/engine_catalog_service_task_test.exs test/letflow/engine/service_task_dispatcher_test.exs
+  test/letflow/webhooks_delivery_test.exs test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs
+result:
+  passed: 218
+  total: 224
+  failed: 6
+  output: "Finished in 139.0 seconds; Result: 218/224 passed; Failed: 6 tests (two identical runs: 135.2s and 139.0s, both 218/224)"
+failures:
+  - file: test/letflow/service_catalog_test.exs
+    tests:
+      - "AC6 delete/1 referential guard: referenced by ACTIVE definition is refused"
+      - "AC6 delete/1 referential guard: substring service id does NOT block delete"
+      - "AC6 delete/1 referential guard: delete of unreferenced service succeeds"
+      - "AC6 delete/1 referential guard: concurrent delete treated as benign not-found"
+      - "AC7 update_scope/2: narrowing refused naming conflicting tenant"
+      - "AC7 update_scope/2: narrowing succeeds on self-exemption"
+    error: 'Postgrex.Error 42P01 (undefined_table) relation "tenant_template_build_6591449758645ed0716f3e149b0f6e68.process_definitions" does not exist'
+    classification: pre-existing / environmental
+    proof: >
+      Same file run on throwaway worktree of origin/main (2bc51bdd, removed afterwards):
+      Result: 38/44 passed, Failed: 6 tests, identical six tests, identical 42P01 error and
+      identical schema name. Cause: stale tenant_schemas rows named tenant_template_build_* in the shared
+      test DB (TenantSchemaReaper logs them as malformed schema_name); unrelated to ISS-0950.
+compile_warnings_as_errors: "MIX_ENV=test mix compile --warnings-as-errors exit 0, no output"
+format_check: "mix format --check-formatted on 9 changed .ex/.exs files vs origin/main: exit 0"
+lib_test_modified_by_step: false

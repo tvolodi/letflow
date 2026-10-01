@@ -1,0 +1,84 @@
+{
+  "handoff_id": "96c215ef-5f51-4d7b-9a45-9c0e9a0a0cfd",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0950-20261001/step-03-elixir-dev.json",
+  "created_at": "2026-10-01T15:00:54Z",
+  "started_at": "2026-10-01T15:00:54Z",
+  "completed_at": "2026-10-01T15:11:39Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/webhooks/url_validator.ex",
+      "test/letflow/engine_catalog_service_task_test.exs",
+      "docs/anti-patterns.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 3 IMPLEMENT. Implement exactly the validated design lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md (gate passed: step-02b-r2). Work in the main checkout C:/Users/tvolo/dev/ai-dala/letflow-3 on branch feature/WF03-ISS0950-20261001 (already created/pushed; do not switch branches). Scope: UrlValidator.validate_syntactic/1 (no DNS, shares the existing blocklist, validate/1,2 and the dispatcher gate UNCHANGED), the changeset validation in Entry insert/publish changesets (per design D-sections incl. get_field semantics and template policy), the two @doc sentences in service_catalog.ex per design section 4, and the single existing-fixture adjustment in test/letflow/engine_catalog_service_task_test.exs (~363) per design. Do NOT write the new regression test matrix -- TEST-DESIGNER does that next (fail-first discipline); but do verify by hand/scratch (outside the repo or deleted afterwards) that the key rejections work. Run ONLY scoped tests: MIX_ENV=test mix test test/letflow/engine_catalog_service_task_test.exs test/letflow/service_catalog_test.exs and the existing url_validator and admin_services/service-catalog route test files (find them with Glob); quote the real output. mix compile --warnings-as-errors must pass; run mix format on touched files. Machine is shared: NO full suite. Do not touch Q-866/REQ-429, Q-914/915, Q-908, Q-916, PR #2093/#2094 files. Do not commit (ORCH commits). Complete the handoff PASS/FAIL per HANDOFF_PROTOCOL.md with the list of changed files.",
+    "acceptance_criteria": [
+      "validate_syntactic/1 added with @spec; no DNS path; blocklist reused not duplicated",
+      "Entry insert and publish changesets reject non-https, private/loopback/link-local IP literals, templated host, with the design's error shape; accept the design's accepted classes",
+      "validate/1,2 and ServiceTaskDispatcher.http_transport gate unchanged (git diff shows no change to them)",
+      "Fixture adjustment per design only",
+      "mix compile --warnings-as-errors clean and scoped existing tests green (real output quoted)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented design iss0950 exactly. url_validator.ex: added public validate_syntactic/1 (@spec; shares check_scheme/check_ip_literal/blocklist via a :no_dns mode on check_host; validate/1,2 and default_resolver untouched; moduledoc paragraph). entry.ex: alias UrlValidator, public check_endpoint_url/1 (head extraction at first / ? # after first ://, brace in head rejected, validate_syntactic on head only), private validate_endpoint_url/1 using get_field (runs on unchanged values; skipped for nil or existing :endpoint_url error), wired after validate_length in insert_changeset and publish_changeset, error message and validation: :endpoint_url_not_allowed per D4, moduledoc paragraph. service_catalog.ex: two @doc sentences only (register/1, publish/3). engine_catalog_service_task_test.exs: single fixture change (register_with!(%{}) then Repo.update_all seeding {{variables.absent}} with comment). No router, dispatcher, engine change. Verification: MIX_ENV=test mix compile --warnings-as-errors clean; mix format --check-formatted ok on touched files; scratch script (outside repo, not committed) confirmed all 21 REJECT and 11 ACCEPT URL classes from the design matrix via Entry.check_endpoint_url/1. Scoped tests (engine_catalog_service_task, service_catalog, url_validator, admin_services, admin_services_publish_retire, service_catalog_resolve_pinned_version, webhooks): 'Result: 141/147 passed'. The 6 failures are all in service_catalog_test.exs AC6 delete/1 and AC7 update_scope/2 referential-guard tests, failing with Postgrex 42P01 relation tenant_template_build_<hex>.process_definitions does not exist -- stale tenant_template_build_* tenant_schemas rows in the shared test DB (TenantSchemaReaper warnings list them); those paths never touch endpoint_url validation, so judged environmental, not caused by this change. The new regression matrix and U-NODNS tests are NOT written (TEST-DESIGNER). Docs item 4 (security-invariants.md INV-9 paragraph) not done; left for DOC-UPDATER. Not committed. Design-vs-code note: engine_catalog_service_task_test passed including the reseeded url_rendered_empty test.",
+    "artifacts_out": [
+      "lib/letflow/webhooks/url_validator.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog.ex",
+      "test/letflow/engine_catalog_service_task_test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "6 service_catalog_test.exs tests (AC6 delete/1, AC7 update_scope/2) fail in this shared test DB with 42P01 on stale tenant_template_build_* schemas; environmental, unrelated to ISS-0950, but TEST-RUNNER should confirm on a clean DB.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "started_at was set by ORCH at dispatch; not touched. docs/agents/instructions/security-invariants.md INV-9 update (design item 4) deferred to DOC-UPDATER.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data/SSRF path) then REVIEWER; then TEST-DESIGNER for the matrix. ORCH commits the 4 changed files."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

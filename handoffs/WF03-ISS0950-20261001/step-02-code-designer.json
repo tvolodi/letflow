@@ -1,0 +1,83 @@
+{
+  "handoff_id": "a7879779-b884-44a9-9703-acdaa4da00b2",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0950-20261001/step-02-code-designer.json",
+  "created_at": "2026-10-01T14:54:09Z",
+  "started_at": "2026-10-01T14:54:09Z",
+  "completed_at": "2026-10-01T14:59:41Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0950-20261001/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0950.yaml",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/webhooks/url_validator.ex",
+      "docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 2 FIX DESIGN. Read the step-01 diagnosis (result.summary in handoffs/WF03-ISS0950-20261001/step-01-issue-fixer-diagnose.json) and produce a design artefact at lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md (design doc only, no implementation code). Stay in the main checkout on branch feature/WF03-ISS0950-20261001. Scope: fast-feedback SYNTACTIC validation of endpoint_url at register/1 and publish/3 (Entry changesets are the natural single choke point; 422 mapping already exists), reusing Letflow.Webhooks.UrlValidator logic WITHOUT DNS resolution (decide: new public no-DNS function on UrlValidator vs stub resolver; justify; DNS must not happen at register time). Rules to decide explicitly: https only; host present; reject private/loopback/link-local/metadata IP literals (reuse the dispatcher blocklist, do not duplicate it); template handling -- endpoint_url is a template rendered with {{variables.KEY}} at activation, so specify exactly how templates are validated (e.g. validate scheme prefix and, if host part contains no template token, host literal; what to do when the host itself is templated; the fixture at test/letflow/engine_catalog_service_task_test.exs:363 registers a bare {{variables.absent}} -- state whether that fixture must change and why that is acceptable or how to avoid breaking it); error shape (changeset error key/message so 422 body is stable); both insert and publish changesets; update/new-version paths if any. Dispatch gate (INV-9) stays binding and unchanged -- state it. Honour decision 0027 and security-invariants.md INV-9. Include: function signatures with @spec, exact list of files to change, exact list of existing tests/fixtures to adjust, and a test matrix (accepted and rejected URLs, templated cases, both write paths, router-level 422 assertion, plus a unit test asserting no DNS lookup happens). Severity MINOR; keep the change small. Complete the handoff per HANDOFF_PROTOCOL.md; do not commit (ORCH commits).\n\nREWORK ITERATION 1 (CODE-DESIGN-VALIDATOR FAIL, see handoffs/WF03-ISS0950-20261001/step-02b-code-design-validator.json): BLOCKER: R-MISSING and D5's parenthetical are wrong for publish/3 with the endpoint_url key ABSENT: publish base struct is the current row (service_catalog.ex:405-406), so validate_required passes and get_field validates the STORED value (good stored -> publish succeeds keeping old URL; bad stored -> endpoint_url_not_allowed). Only explicit nil / empty / whitespace gives the validate_required error. Restate R-MISSING per write path, add the absent-key publish as its own matrix row with the intended outcome, correct D5, and state whether making endpoint_url mandatory on publish is in or out of scope (recommend out). MINORs: fixture precedent is raw SQL via Repo.query not Repo.update_all; U-NODNS(b) trace patterns must not use 1..2 as arity (list each arity or use :_); make section 4's optional/conditional docs items binary do/do-not. Edit the existing design file in place. On finishing, flip status to COMPLETED/FAILED as normal (do not leave IN_PROGRESS).",
+    "acceptance_criteria": [
+      "Design file exists at lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md with no implementation code beyond signatures/specs",
+      "No-DNS approach decided and justified",
+      "Template-URL policy fully specified incl. the {{variables.absent}} fixture",
+      "Files-to-change and tests-to-adjust lists are exact",
+      "Dispatch gate unchanged, stated explicitly",
+      "Test matrix covers every rejected/accepted class and both write paths"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK 1: fixed validator BLOCKER and 3 MINORs in lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md. D5 now states absent-key publish semantics (base struct is the current row, so key absent validates the STORED value: good -> publish keeps old URL, bad -> endpoint_url_not_allowed; only explicit nil/blank gives validate_required); R-MISSING restated per write path; new matrix row P-ABSENT (a)/(b); making endpoint_url mandatory on publish declared OUT of scope. Fixture precedent corrected to Repo.query raw SQL (Repo.update_all also acceptable, recommended). U-NODNS(b) trace patterns listed per arity with :_ wildcards, modules pre-loaded. Section 4 optional items made binary (do add @doc sentences; do NOT edit decision 0027; do NOT edit e2e/CI). D1-D4, D6, D7 and template policy unchanged. Design only; nothing run.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Handoff context.requirement_ids/requirement_text empty (expected for WF-03; source_text carried the issue). No defect.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Possible separate issue (OQ-3): Routers.Webhooks.handle_create may lack a clause for {:error, :target_url_not_allowed} (step-01 flagged by reading, not run). Out of ISS-0950 scope.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (step 03), then ELIXIR-DEV. ORCH commits the design doc and this handoff."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

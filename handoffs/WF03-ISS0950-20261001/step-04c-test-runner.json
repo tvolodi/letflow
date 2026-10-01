@@ -1,0 +1,70 @@
+{
+  "handoff_id": "d09b594c-e848-4625-9149-2d647f97702a",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0950-20261001/step-04c-test-runner.json",
+  "created_at": "2026-10-01T15:31:36Z",
+  "started_at": "2026-10-01T15:31:36Z",
+  "completed_at": "2026-10-01T15:38:56Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/ISS-0950.md",
+      "handoffs/WF03-ISS0950-20261001/step-04b-r2-test-design-validator.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 4c TEST-RUNNER. On branch feature/WF03-ISS0950-20261001 (main checkout; do not switch), run the scoped suites and report with real output: MIX_ENV=test mix test test/letflow/service_catalog/endpoint_url_validation_test.exs test/letflow/webhooks/url_validator_test.exs test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs test/letflow/routers/admin_services_publish_retire_test.exs test/letflow/engine_catalog_service_task_test.exs, plus any service_task_dispatcher / webhooks router test files that exercise UrlValidator (Glob for them). Also MIX_ENV=test mix compile --warnings-as-errors and mix format --check-formatted on all files changed vs origin/main. For each failure: diagnose; for the known tenant_template_build_* undefined_table failures in service_catalog_test.exs AC6/AC7, PROVE they are pre-existing/environmental by running those same tests on a throwaway worktree of origin/main (outside repo, removed afterwards) and quoting the identical failures. No full suite (shared machine). Do not modify lib/ or test/. Write a structured report per the TEST-RUNNER convention (test/reports/ file) if the role file requires one, and complete the handoff (write result yourself). Do not commit.",
+    "acceptance_criteria": [
+      "Real output of each scoped run quoted",
+      "Any failure diagnosed; environmental ones proven on origin/main",
+      "compile --warnings-as-errors and format check results quoted",
+      "git status --porcelain lib/ test/ shows no modification by this step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scoped run of 9 test files (the 6 named plus service_task_dispatcher_test, webhooks_delivery_test, qa_fixture_service_task_endpoints_test which exercise UrlValidator): Result: 218/224 passed, Failed: 6 tests (reproduced twice, same counts). All 6 failures are service_catalog_test.exs AC6 (4) / AC7 (2) with Postgrex 42P01 undefined_table on tenant_template_build_6591449758645ed0716f3e149b0f6e68.process_definitions. Proven pre-existing: same file on a throwaway worktree of origin/main (2bc51bdd, removed afterwards, git worktree list clean) gave 38/44 passed, Failed: 6 tests, the identical six tests and identical error. Cause is stale tenant_template_build_* rows in the shared test DB's tenant_schemas (reaper logs them as malformed schema_name), not ISS-0950. All endpoint_url_validation, url_validator, admin_services, publish_retire, engine_catalog_service_task, dispatcher, webhooks_delivery and qa_fixture tests passed. MIX_ENV=test mix compile --warnings-as-errors: exit 0. mix format --check-formatted on the 9 changed .ex/.exs files vs origin/main: exit 0. git status --porcelain lib test: empty (no modification). Full suite not run per instruction.",
+    "artifacts_out": [
+      "test/reports/report-20261001-WF03-ISS0950-20261001.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Shared test DB holds stale tenant_template_build_* tenant_schemas rows causing 6 pre-existing failures in service_catalog_test.exs AC6/AC7 (also on origin/main); worth a separate cleanup issue.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to next step (RELEASE-VALIDATOR / close); the 6 failures are environmental and identical on origin/main."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -271,4 +271,67 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
       assert resp.status == 404
     end
   end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0950 -- POST /:service_id/versions rejects a statically-bad
+  # endpoint_url with the generic 422 (see test/specs/ISS-0950.md).
+  # ══════════════════════════════════════════════════════════════════════
+
+  defp post_publish(service_id, body) do
+    build_conn(:post, "/#{service_id}/versions", roles: ["PLATFORM_ADMIN"], body: body)
+    |> dispatch()
+  end
+
+  describe "ISS-0950: POST /:service_id/versions endpoint_url validation" do
+    test "every REJECT row -> 422 with the generic detail, no URL leakage, and the live row/version history unchanged" do
+      for {id, url} <- Letflow.Iss0950EndpointUrlFixtures.reject_urls() do
+        entry = register!()
+        before_row = Repo.get!(Entry, entry.service_id)
+
+        resp =
+          post_publish(entry.service_id, %{
+            "version" => "2",
+            "endpoint_url" => url,
+            "timeout_ms" => 6000
+          })
+
+        assert resp.status == 422, "#{id}: expected 422 for #{inspect(url)}, got #{resp.status}"
+        assert Jason.decode!(resp.resp_body)["detail"] == "validation failed"
+        refute resp.resp_body =~ url, "#{id}: response leaks the submitted URL"
+        refute resp.resp_body =~ "endpoint_url"
+
+        assert Repo.get!(Entry, entry.service_id) == before_row
+
+        assert Repo.aggregate(
+                 from(v in Version, where: v.service_id == ^entry.service_id),
+                 :count
+               ) == 0
+      end
+    end
+
+    test "every ACCEPT row -> 201 and the URL is echoed back verbatim" do
+      for {id, url} <- Letflow.Iss0950EndpointUrlFixtures.accept_urls() do
+        entry = register!()
+
+        resp =
+          post_publish(entry.service_id, %{
+            "version" => "2",
+            "endpoint_url" => url,
+            "timeout_ms" => 6000
+          })
+
+        assert resp.status == 201, "#{id}: expected 201 for #{inspect(url)}, got #{resp.status}"
+        assert Jason.decode!(resp.resp_body)["endpoint_url"] == url
+      end
+    end
+
+    test "P-ABSENT over HTTP: endpoint_url omitted from the body -> 201 and the stored URL is inherited" do
+      entry = register!()
+
+      resp = post_publish(entry.service_id, %{"version" => "2", "timeout_ms" => 6000})
+
+      assert resp.status == 201
+      assert Jason.decode!(resp.resp_body)["endpoint_url"] == "https://example.test/svc"
+    end
+  end
 end

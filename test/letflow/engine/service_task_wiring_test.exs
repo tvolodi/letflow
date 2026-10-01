@@ -198,6 +198,33 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
     }
   end
 
+  # ISS-0926 -- same shape as graph_service_task_end/1 but the SERVICE_TASK
+  # node also carries a body_template attribute, so a test can prove
+  # Letflow.Engine renders body_template the same way it renders
+  # url_template (same {{variables.KEY}} regex/value logic,
+  # render_service_task_template/2 shared between both fields).
+  defp graph_service_task_end_with_body(endpoint, body_template) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{
+            "endpoint" => endpoint,
+            "timeout_ms" => 5_000,
+            "body_template" => body_template
+          }
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "svc"},
+        %{"id" => "e2", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
   defp dispatches_for(schema_name, instance_id) do
     ServiceTaskDispatch
     |> where([d], d.instance_id == ^instance_id)
@@ -1134,6 +1161,122 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
       # design's own "one Regex.replace/3 call" minimal scope).
       assert rendered == "http://127.0.0.1:#{port}/hook?ref={{variables.other}}"
       refute rendered =~ "SHOULD_NOT_APPEAR"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0926 -- render_service_task_template/2 (renamed from
+  # render_service_task_url/2) is now also applied to body_template, not just
+  # url_template. These tests mirror the "minimal {{variables.KEY}} renderer"
+  # describe block above exactly, proving body rendering behaves identically
+  # to URL rendering (same regex/value logic, same renderer function), that
+  # config_snapshot_map/4's new "rendered_body" key is populated while the
+  # raw "body_template" key is preserved unchanged, and that
+  # ServiceTaskDispatcher actually sends the RENDERED body (not the raw
+  # template) as the real HTTP request body.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0926: body_template rendering" do
+    test "body_template renders, config_snapshot keeps raw+rendered, dispatcher sends the rendered body" do
+      enable_ssrf_bypass()
+      test_pid = self()
+
+      %{url: server_url} =
+        WebhookTestServer.start_with_responder(fn request ->
+          send(test_pid, {:received_request, request})
+          {200, ~s({"ok":true})}
+        end)
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body_template = ~s({"reason":"sla_breach_30_days","review_id":"{{variables.review_id}}"})
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_end_with_body(server_url, body_template)
+        )
+
+      assert {:ok, result} =
+               Engine.create(
+                 base_attrs(definition, %{initial_variables: %{"review_id" => "REV-42"}}),
+                 prefix: schema_name
+               )
+
+      instance_id = result.instance_id
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+
+      expected_rendered = ~s({"reason":"sla_breach_30_days","review_id":"REV-42"})
+
+      # config_snapshot_map/4's new derived key is populated with the
+      # rendered body ...
+      assert dispatch.config_snapshot["rendered_body"] == expected_rendered
+      # ... while the raw template is preserved unchanged, exactly mirroring
+      # url_template/rendered_url's own raw/derived pairing (design §2.3).
+      assert dispatch.config_snapshot["body_template"] == body_template
+
+      # And the dispatcher must have actually sent the RENDERED body, not
+      # the raw template, as the real HTTP request body -- the whole point
+      # of ISS-0926 (previously the dispatcher read "body_template" raw off
+      # the snapshot and sent the unrendered placeholder text verbatim).
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:received_request, %{body: body}}, 2_000
+      assert body == expected_rendered
+      refute body =~ "{{"
+    end
+
+    test "a missing variable in body_template renders to the empty string, not the placeholder text" do
+      enable_ssrf_bypass()
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body_template = ~s({"reason":"remediation_unresolved","review_id":"{{variables.missing}}"})
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_end_with_body(server_url, body_template)
+        )
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+      assert dispatch.config_snapshot["rendered_body"] ==
+               ~s({"reason":"remediation_unresolved","review_id":""})
+
+      refute dispatch.config_snapshot["rendered_body"] =~ "{{"
+      refute dispatch.config_snapshot["rendered_body"] =~ "}}"
+    end
+
+    test "a nil body_template renders to nil at both the config_snapshot and dispatched-body level" do
+      enable_ssrf_bypass()
+      test_pid = self()
+
+      %{url: server_url} =
+        WebhookTestServer.start_with_responder(fn request ->
+          send(test_pid, {:received_request, request})
+          {200, ~s({"ok":true})}
+        end)
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_service_task_end(server_url))
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+      assert dispatch.config_snapshot["rendered_body"] == nil
+      assert dispatch.config_snapshot["body_template"] == nil
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:received_request, %{body: body}}, 2_000
+      assert body == ""
     end
   end
 

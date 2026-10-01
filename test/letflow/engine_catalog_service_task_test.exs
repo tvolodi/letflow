@@ -304,7 +304,10 @@ defmodule Letflow.EngineCatalogServiceTaskTest do
   end
 
   @catalog_keys ~w(catalog_version_id catalog_version catalog_retry_policy)
-  @inline_keys ~w(route_kind url_template service_id method body_template headers timeout_ms retry_limit rendered_url)
+  # ISS-0926 added "rendered_body" alongside the pre-existing "rendered_url"
+  # (same raw/derived pairing as url_template/rendered_url) -- the snapshot's
+  # key SET grows by exactly that one key; everything else here is unchanged.
+  @inline_keys ~w(route_kind url_template service_id method body_template headers timeout_ms retry_limit rendered_url rendered_body)
 
   # ---------------------------------------------------------------------------------
   # T1 -- the issue's measured scenario: complete the HUMAN_TASK, hop into a
@@ -793,7 +796,7 @@ defmodule Letflow.EngineCatalogServiceTaskTest do
   # ---------------------------------------------------------------------------------
 
   describe "T9: inline SERVICE_TASK snapshot is unchanged" do
-    test "has exactly the pre-ISS-0917 key set and no catalog_* keys; the catalog row adds exactly the three audit keys" do
+    test "has exactly the pre-ISS-0917 key set (+ ISS-0926's rendered_body) and no catalog_* keys; the catalog row adds exactly the three audit keys" do
       tenant = tenant!()
       entry = register!()
       inline_def = active_definition!(tenant, graph_inline_then_catalog(entry.service_id))

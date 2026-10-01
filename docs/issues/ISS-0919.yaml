@@ -3,17 +3,20 @@ title: "Letflow.EventStore.PartitionMaintenanceTest: 8 tests fail when the file 
 discovered_by: TEST-RUNNER
 discovered_in_run: PR #2061 (ISS-0920 test_parallel.sh contention/aggregator/orphan-process fix) disambiguation pass
 # NOTE (added by DOC-UPDATER at ISS-0920/PR #2061 close-out, 2026-10-01): sibling
-# issue ISS-0918 (same disambiguation pass) was renumbered to ISS-0938 at close-out
-# -- see that file. This issue's own number, ISS-0919, was already free on main and
-# is unchanged. Also worth a look alongside main's existing ISS-0937 (Backend CI red
-# at UTC month boundary), which reports overlapping PartitionMaintenance
-# partition_not_eligible failures from a different PR -- not confirmed as the same
-# root cause, flagged for whoever triages either.
+# issue ISS-0918 (same disambiguation pass) was renumbered twice, finally landing as
+# ISS-0940 at close-out -- see that file for why (ISS-0938 was independently claimed
+# on main by a different run in the interim). This issue's own number, ISS-0919, was
+# already free on main and is unchanged. Also worth a look alongside main's existing
+# ISS-0937 (Backend CI red, now describing order-dependence) and ISS-0938
+# (PartitionMaintenanceTest/RetentionOperationsTest/EventRetentionTest
+# order-dependent failures across repeated runs, filed by a different PR) -- all
+# three look like facets of the same underlying EventStore test-isolation gap, not
+# confirmed as the literal same root cause, flagged for whoever triages any of them.
 discovered_at: "2026-10-01T00:05:30Z"
 severity: MINOR
 owner: null  # no clear single owner yet -- needs triage to decide whether this is a test-isolation gap or a real latent ordering dependency in PartitionMaintenance itself
 description: >
-  Found incidentally during the same disambiguation run as ISS-0938 (filed on this
+  Found incidentally during the same disambiguation run as ISS-0940 (filed on this
   branch as ISS-0918, renumbered at close-out; see that issue for the run's full
   context: an isolated, single-process `mix test` of 6 files that had failed under
   a TEST_PARALLEL_N=16 oversubscription run of PR #2061).
@@ -21,7 +24,7 @@ description: >
   8 of the 91 tests in that isolated run failed, all in
   `test/letflow/event_store/partition_maintenance_test.exs`, and all with
   DIFFERENT test names than anything that failed in the original N=16 run
-  (i.e. this is not the same failure set as ISS-0938 or as the N=16 run's
+  (i.e. this is not the same failure set as ISS-0940 or as the N=16 run's
   pool-contention symptoms -- a genuinely separate, newly-surfaced signal).
   Examples captured from the run:
 

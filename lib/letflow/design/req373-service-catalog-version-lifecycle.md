@@ -347,6 +347,12 @@ leading column already serves a `WHERE service_id = ?`-only query (standard B-tr
 leftmost-prefix behavior), and no acceptance criterion or planned read path needs an
 index shape that index can't already answer.
 
+> **Superseded by ISS-0923 (delete/1 contract and orphaned-archive-row text below):**
+> `delete/1` additionally returns `{:error, {:referenced_by_active_instances, instance_refs()}}`
+> and now deletes the service's `service_catalog_versions` rows atomically, so archive rows
+> are no longer orphaned after a delete; see `iss0923-catalog-delete-blocks-on-pinned-instances.md`.
+> The no-FK decision itself is unchanged.
+
 **Deliberate: no FK constraint from `service_catalog_versions.service_id` to
 `service_catalog.service_id`.** `delete/1` (unchanged by this design, §1 point 3)
 has an existing, tested error contract

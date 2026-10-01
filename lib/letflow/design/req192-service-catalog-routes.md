@@ -444,6 +444,7 @@ Result mapping:
 | `:ok` | `Response.no_content(conn)` (204, empty body) — confirmed present at `lib/letflow/api/response.ex` L91 (`def no_content(conn), do: send_resp(conn, 204, "")`) |
 | `{:error, :not_found}` | 404, `Response.not_found(conn)` |
 | `{:error, {:referenced_by_active_definitions, definition_ids}}` | 409, `Response.send_problem(conn, Error.service_referenced_by_active_definitions(definition_ids))` — AC5, first test |
+| `{:error, {:referenced_by_active_instances, instance_refs}}` | 409, `Response.send_problem(conn, Error.service_referenced_by_active_instances(instance_refs))`, problem type `service-referenced-by-active-instances`. Added by ISS-0923; see `iss0923-catalog-delete-blocks-on-pinned-instances.md` |
 
 ## §13 — Cross-cutting: 403 tests (AC4)
 

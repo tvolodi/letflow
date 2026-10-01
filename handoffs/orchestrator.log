@@ -2648,3 +2648,5 @@
 2026-10-01T15:41:41Z | PASS | WF03-ISS0950-20261001 | step-04d-release-validator | RELEASE-VALIDATOR -> ORCH | PASS -- 96 passed, live repro 422s
 2026-10-01T15:41:41Z | DISPATCH | WF03-ISS0950-20261001 | step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PENDING
 2026-10-01T15:42:18Z | PASS | WF03-ISS0950-20261001 | step-05-issue-fixer-close | ISSUE-FIXER -> ORCH | PASS -- ISS-0950 resolved (local); GH close + release_lock deferred to parent post-merge
+2026-10-01T17:07:37Z | DISPATCH | WF03-ISS0923-20261001 | step-01..05b chain (see handoffs dir)|ORCH -> ISSUE-FIXER..DOC-UPDATER|COMPLETED
+2026-10-01T17:07:37Z | PASS | WF03-ISS0923-20261001 | step-05-issue-fixer|ISSUE-FIXER -> ORCH|PASS -- ISS-0923 resolved (local); design validator FAIL once (rework 1) then PASS; 24 tests, 129 scoped pass; GH close + release_lock deferred to parent post-merge

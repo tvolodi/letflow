@@ -1,0 +1,49 @@
+{
+  "handoff_id": "01b9170c-d870-4344-85d2-968f33a247e4",
+  "run_id": "WF03-Q928-20261001",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-Q928-20261001/step-03d-reviewer.json",
+  "created_at": "2026-10-01T21:10:37Z",
+  "started_at": "2026-10-01T21:10:37Z",
+  "completed_at": "2026-10-01T21:11:12Z",
+  "status": "COMPLETE",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0928": "id: ISS-0928 (queue Q-928, GH-2114, local file docs/issues/ISS-0928.yaml exists ONLY on open PR #2129 branch origin/pr2129 -- view with git show origin/pr2129:docs/issues/ISS-0928.yaml; do not touch PR #2129). Title: Meridian Loan Origination: SERVICE_TASK kyc-aml-check inside PARALLEL_GATEWAY fork never dispatched; instance stalls ACTIVE (UAT WF05-FULL3-20261001 F1). Severity MAJOR. Symptom: meridian Loan Origination v1.1 on QA: after credit-memo-review (ben) and risk-assessment (miriam) complete, current_nodes=[kyc-aml-check]; instance ACTIVE >6.5min (past 300s timeout_ms) with no task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row; endpoint answers 200 directly; top-level service tasks complete in 2-6s. Suspect SERVICE_TASK activation inside PARALLEL_GATEWAY fork branch (cf. ISS-0398 walk_to_gateway, resolved): likely no service_task_dispatches row armed on the fork/join walk path (Letflow.Engine fork activation / arm_service_task_dispatch call sites / TaskActivation). ALSO: kyc-routing has no unconditional edge and the stub endpoint returns no kyc_status, so the token may stall at kyc-routing even once dispatched -- assess whether fixture/process-definition issue (test/fixtures/qa/ meridian loan origination definition); handle or file separately. Acceptance: SERVICE_TASK nodes on a PARALLEL_GATEWAY branch are dispatched and recorded; meridian loan-origination scenarios reach committee/L1 routing and complete; regression test fail-first reproducing the stall at engine level. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml (on PR #2129 branch origin/pr2129 only). Q-926 (body_template rendering) is DONE and merged on main -- build on it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/WF03-ISS0928-fix-design.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0928-parallel-fork-service-task-Q928"
+  },
+  "task": {
+    "description": "WF-03 Step 3d: review HEAD diff vs origin/main for OTP idiom, scope creep, decision-record consistency, design conformance (lib/letflow/design/WF03-ISS0928-fix-design.md; note ELIXIR-DEV's deviation dropping an unreachable arm), transaction semantics. Edit only your handoff; PASS/FAIL, real completed_at.",
+    "acceptance_criteria": [
+      "Design conformance",
+      "No scope creep",
+      "Idiom"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "Design conformance, scope and idiom all hold. (1) Design: persist_service_task_advance/10 routes both no_matching_edge shapes to a single nested Multi (ExecutionError.append_multi with locked_projection) inside the outer transaction; returns {:ok, :error_set}, which advance_after_service_task_outcome/4's existing spec/flow already passes through; only the multi-failure case rolls back. Dispatch row untouched (at-most-once kept). Shared build_no_matching_gateway_edge_error_args/6 extracted; both human-path sites refactored with identical shape. Dispatcher: require Logger, :instance_not_active at debug, other errors logged/audited with only ids and atom tag (no inspect(reason)), classifier has :other fallback, return value unchanged. Fixture: e9-default is_default edge, version 1.2, seed script comment updated. anti-patterns.md entry added. (2) ELIXIR-DEV deviation (dropping the generic {:error, reason} arm after advance_off_completed_node) is correct: Transition.advance_off_completed_node/4 @spec returns only {:error, {:no_matching_edge,_,_}}, so a catch-all would be unreachable; explanatory comment left in place. Accepted. (3) Scope: no new behaviours/macros/abstractions; one private builder justified by drift prevention; timer path correctly untouched; no migrations. (4) OTP/supervision: plain transactional context module per REQ-045/Engine moduledoc; no processes spawned; InstanceSupervisor untouched. Decision records: no conflict.",
+    "findings": [
+      "No blocking findings.",
+      "Note: poll summary counts execution-error outcomes under :given_up (design OQ-2, accepted).",
+      "Note: residual re-entry errors (hop limit, unknown token, merge rejection) are now loud but still leave instance ACTIVE (design OQ-3); recommend ORCH queue a follow-up issue.",
+      "Note: no tests in diff yet (T1-T8) -- expected, TEST-DESIGNER is the next step; must be fail-first per design.",
+      "Type-safety: none new to file (error tags are atoms in a closed classifier with :other fallback; consistent with existing code)."
+    ],
+    "issues_filed": []
+  }
+}

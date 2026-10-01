@@ -157,6 +157,26 @@ history:
       instruction). letflow-queue task 864 (GH#1881) still needs
       release_lock(status=done) -- not called from here; DOC-UPDATER does
       not call the queue.
+  - req: REQ-428
+    event: started
+    agent: ORCH
+    at: "2026-10-01T01:18:43Z"
+    note: >
+      WF-02 run WF02-REQ428-20261001. Eligible now that REQ-424 and REQ-427
+      are both done (depends_on satisfied). Queue task 865 (GH#1882) was
+      already locked under agent_id "orch" from a prior check this session;
+      re-confirmed via POST /tasks/865/lock (same-agent recovery, 200) rather
+      than assuming the lock was still valid. Noted but not yet actioned:
+      REQ-429's impl_order comment (866, GH#1883) points at a queue task that
+      does not exist on the live service (GET /tasks/866 -> 404, and task 866
+      is absent from the full GET /tasks listing even though task 867/REQ-430
+      cites it as a dependency) -- register_task was apparently never
+      actually run for REQ-429 despite the comment claiming it was; to
+      reconcile before REQ-429 can be locked/worked. Branch
+      feature/WF02-REQ428-20261001 created from freshly-pulled origin/main
+      and pushed by MOBILE-DEV (Step 00), commit 0335d144d94277cc0f1b25a0fd6723e4593ce8cd.
+      status: in_progress in docs/requirements.yaml. Routing to CODE-DESIGNER
+      next.
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER

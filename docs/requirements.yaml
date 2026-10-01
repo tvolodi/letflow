@@ -31675,7 +31675,7 @@ requirements:
   - id: REQ-428
     title: "MOB-4 (part 3): task renderer (inbox, claim, complete against the task API, pinned form) and process-instance renderer"
     owner: MOBILE-DEV
-    status: pending
+    status: in_progress
     stage: S9
     impl_order: 865  # letflow-queue task id, GH#1882. Registered 2026-09-27T03:00:06Z by ORCH (WF-01 Step 3).
     description: >

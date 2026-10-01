@@ -776,6 +776,17 @@ while [ "$i" -le "$N" ]; do
   partition_failed=0
   if [ "$has_result" -eq 0 ]; then
     echo "test_parallel: WARNING partition $i has no Result: line in its log (compile/config/crash abort), exit=$ex" >&2
+    # ISS-0921 (Q-912): a partition BEAM that dies with no ExUnit summary used
+    # to leave only the line above. Decode the exit status (128+N = killed by
+    # signal N, e.g. 137=KILL, 143=TERM -- the "someone else killed it" vs "it
+    # crashed on its own" discriminator) and print the log tail inline, since
+    # $tmp_dir is deleted by the EXIT trap and nothing else would keep it.
+    if [ "$ex" -gt 128 ] 2>/dev/null; then
+      echo "test_parallel: partition $i exit $ex = killed by signal $((ex - 128)) ($(kill -l $((ex - 128)) 2>/dev/null || echo unknown)) -- external kill or OOM, not an ExUnit failure" >&2
+    fi
+    echo "test_parallel: ---- last 25 lines of partition-$i.log (ISS-0921) ----" >&2
+    tail -n 25 "$log" >&2
+    echo "test_parallel: ---- end partition-$i.log tail ----" >&2
     partition_failed=1
   elif [ "$ex" -eq 0 ] && [ "$f" -eq 0 ]; then
     : # consistent clean pass, no warning

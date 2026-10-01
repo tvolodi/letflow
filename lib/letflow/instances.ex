@@ -151,6 +151,20 @@ defmodule Letflow.Instances do
     end
   end
 
+  @doc """
+  Batched `actor_id => display_name` lookup for the events on a history page
+  (one query for all distinct non-nil `actor_id`s, never one per event). An
+  actor with no resolvable non-blank display name is absent from the map.
+  """
+  @spec actor_display_names([Event.t()], opts()) :: %{Ecto.UUID.t() => String.t()}
+  def actor_display_names(events, opts) when is_list(events) and is_list(opts) do
+    events
+    |> Enum.map(& &1.actor_id)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> fetch_display_names_by_actor_id(Keyword.fetch!(opts, :prefix))
+  end
+
   # ── timeline/2 ───────────────────────────────────────────────────────────
 
   @doc """

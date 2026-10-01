@@ -309,6 +309,24 @@ history:
       state diagram or Running-it change). letflow-queue task 865 (GH#1882)
       still needs release_lock(status=done) -- not called from here;
       DOC-UPDATER does not call the queue.
+  - req: REQ-429
+    event: started
+    agent: ORCH
+    at: "2026-10-01T07:11:45Z"
+    note: >
+      WF-02 run WF02-REQ429-20261001. Eligible now that REQ-428 is done
+      (depends_on satisfied). Queue task 866 (GH#1883) -- previously noted in
+      REQ-428's own started entry as absent/404 on the live service despite
+      its impl_order comment -- is now present and lockable: POST
+      /tasks/866/lock (agent_id orch-req429) returned 200, task content
+      verified to match docs/requirements.yaml's REQ-429 entry verbatim
+      (same title, description, all 7 acceptance_criteria, depends_on:
+      [865]). Host memory checked before starting: ~0.73GB free (the known
+      swinging-low pattern from a concurrent peer session) -- any test run
+      this session uses TEST_PARALLEL_N=2 or serial mix test, not full
+      parallelism. Branch feature/WF02-REQ429-20261001 created from
+      freshly-pulled origin/main (d4e5f36c) and pushed. status: in_progress
+      in docs/requirements.yaml. Routing to CODE-DESIGNER next.
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER
@@ -356,3 +374,32 @@ history:
       status: resolved in this same commit. This is an ISSUE closure, not
       a REQ -- docs/requirements.yaml untouched. letflow-queue task 917 to
       be released as done after merge.
+  - req: REQ-429
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T11:07:52Z"
+    note: >
+      ARB-based i18n built under apps/mobile/lib -- a formatting-locale
+      resolver matching the SPA's resolveSessionLocale (sessionLocale.ts),
+      a UI-locale resolver matching resolveUiLocale's base-tag rule
+      (entitiesMessages.ts), a tenant {locale: value} resolver matching
+      resolveLocalizedText/resolveExamFieldText's UI-locale -> 'en' ->
+      first-non-empty -> '' chain, intl-based date/number formatting under
+      the tier-(a) session locale, and a non-vacuous literal-string guard
+      test (self-test plus a real pass over the actual widget tree). One
+      CODE-DESIGN-VALIDATOR rework cycle (pt-BR SPA-test-source citation
+      fix in the design doc) and one REVIEWER rework cycle (missing AC1-4
+      Dart test files, subsequently added) along the way. RELEASE-VALIDATOR
+      PASS: all 7 acceptance criteria independently re-derived, backend
+      suite 5106/5118 with the 12 failing tests correctly attributed to
+      pre-existing open ISS-0937/ISS-0938 (unrelated to this change),
+      mobile suite 296/296, flutter analyze clean. status: done in
+      docs/requirements.yaml. docs/mobile/requirements.md's MOB-7 entry
+      checked and found to already cover this requirement -- it already
+      references REQ-285, web/src/i18n/sessionLocale.ts and
+      web/src/i18n/entitiesMessages.ts, states the two-tier split, and
+      preserves the 2026-08-22 text verbatim; no edit made. README.md
+      checked and found to need no edit -- pure i18n internals, no ASCII
+      state diagram or Running-it change. letflow-queue task 866 (GH#1883)
+      still needs release_lock(status=done) -- not called from here;
+      DOC-UPDATER does not call the queue.

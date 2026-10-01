@@ -786,6 +786,11 @@ defmodule Letflow.Routers.InstancesTest do
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
       assert [%{"event_type" => "INSTANCE_STARTED"} | _] = body["items"]
+      # ISS-0918 M1: actor keys are always present on history items.
+      assert Enum.all?(
+               body["items"],
+               &(Map.has_key?(&1, "actor_id") and Map.has_key?(&1, "actor_display_name"))
+             )
     end
 
     test "GET /:id/timeline returns a lighter per-event projection" do

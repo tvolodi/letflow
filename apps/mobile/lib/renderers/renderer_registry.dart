@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../i18n/i18n.dart';
+
 /// Builds the widget for a server-delivered definition of a given type.
 ///
 /// [definition] is the raw JSON definition payload as decoded from the
@@ -62,7 +64,9 @@ class UnsupportedDefinitionTypeWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       key: unsupportedDefinitionTypeKey,
-      child: Text('Unsupported definition type: $definitionType'),
+      child: Text(
+        '${tr('renderer.unsupportedDefinitionType')}: $definitionType',
+      ),
     );
   }
 }

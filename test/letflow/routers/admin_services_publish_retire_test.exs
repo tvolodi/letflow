@@ -157,6 +157,7 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
       assert body["version"] == "2"
       assert body["status"] == "ACTIVE"
       assert body["endpoint_url"] == "https://example.test/svc-v2"
+      assert Map.has_key?(body, "retry_policy")
       assert body["version_id"] != entry.version_id
 
       reloaded = Repo.get(Entry, entry.service_id)

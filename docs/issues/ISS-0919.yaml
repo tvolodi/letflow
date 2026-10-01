@@ -1,0 +1,79 @@
+id: ISS-0919
+title: "Letflow.EventStore.PartitionMaintenanceTest: 8 tests fail when the file runs in isolation but pass embedded in the full suite -- order-dependency/shared-state sensitivity"
+discovered_by: TEST-RUNNER
+discovered_in_run: PR #2061 (ISS-0920 test_parallel.sh contention/aggregator/orphan-process fix) disambiguation pass
+# NOTE (added by DOC-UPDATER at ISS-0920/PR #2061 close-out, 2026-10-01): sibling
+# issue ISS-0918 (same disambiguation pass) was renumbered twice, finally landing as
+# ISS-0940 at close-out -- see that file for why (ISS-0938 was independently claimed
+# on main by a different run in the interim). This issue's own number, ISS-0919, was
+# already free on main and is unchanged. Also worth a look alongside main's existing
+# ISS-0937 (Backend CI red, now describing order-dependence) and ISS-0938
+# (PartitionMaintenanceTest/RetentionOperationsTest/EventRetentionTest
+# order-dependent failures across repeated runs, filed by a different PR) -- all
+# three look like facets of the same underlying EventStore test-isolation gap, not
+# confirmed as the literal same root cause, flagged for whoever triages any of them.
+discovered_at: "2026-10-01T00:05:30Z"
+severity: MINOR
+owner: null  # no clear single owner yet -- needs triage to decide whether this is a test-isolation gap or a real latent ordering dependency in PartitionMaintenance itself
+description: >
+  Found incidentally during the same disambiguation run as ISS-0940 (filed on this
+  branch as ISS-0918, renumbered at close-out; see that issue for the run's full
+  context: an isolated, single-process `mix test` of 6 files that had failed under
+  a TEST_PARALLEL_N=16 oversubscription run of PR #2061).
+
+  8 of the 91 tests in that isolated run failed, all in
+  `test/letflow/event_store/partition_maintenance_test.exs`, and all with
+  DIFFERENT test names than anything that failed in the original N=16 run
+  (i.e. this is not the same failure set as ISS-0940 or as the N=16 run's
+  pool-contention symptoms -- a genuinely separate, newly-surfaced signal).
+  Examples captured from the run:
+
+    2) test AC2/EO-001 -- whole-partition DDL only a concurrent write to a
+       different, live partition completes while retirement runs
+       assert {:ok, %{resumed_from: :not_started}} =
+         PartitionMaintenance.retire_month(schema_name, year, month)
+       left:  {:ok, %{resumed_from: :not_started}}
+       right: {:error, :partition_not_eligible}
+
+    3) test §4.4b -- events_archive_default reconciliation, batched
+       pre-accumulated events_archive_default rows are swept in more than
+       one batch
+    4) test EO-002 -- keep_forever count identical before/after retirement
+    5) test crash-recovery / idempotent resume idempotent no-op resumed
+       from :already_retired, no ATTACH/DETACH re-issued
+    6) test EO-003 -- replay after retirement, no gap, no error
+    7) test AC2/EO-001 -- whole-partition DDL only issues zero per-row
+       DELETE/row-scoped INSERT when nothing needs reconciling
+    8) test correction (a) -- events_default self-heals stays attached as
+       DEFAULT after retirement, and a far-future write still lands there
+    9) test correction (b) -- archived_at real and non-null, excluded from
+       read/2 every retired row has a non-null archived_at
+
+  None of these 8 appeared as failures in the N=16 test_parallel.sh run
+  (where this same file's tests ran split across multiple partitions
+  alongside the rest of the suite), nor would be expected to from a quick
+  read of config/test.exs (Ecto.Adapters.SQL.Sandbox, nominally isolating
+  each test's DB state). The pattern -- clean when embedded in the full
+  suite, broken when the file runs alone -- points at either: (a) some
+  other test file elsewhere in the suite incidentally resets or seeds
+  state this file's tests depend on (a hidden coupling, not true
+  isolation), or (b) a fixture/setup ordering assumption inside
+  partition_maintenance_test.exs itself (e.g. month/year boundaries
+  computed relative to "now" at different points in setup vs. assertion)
+  that only manifests under a particular execution order. Not investigated
+  further here -- out of scope for TEST-RUNNER's disambiguation task, which
+  was specifically about separating PR #2061/ISS-0920 pool-contention
+  symptoms from real regressions. Filed so it's claimable rather than lost.
+
+  Fix direction: ISSUE-FIXER should first try reproducing with
+  `mix test test/letflow/event_store/partition_maintenance_test.exs` alone
+  (as done here) vs. the full suite, bisect which other test file(s) need
+  to be present for it to pass, and check
+  test/letflow/event_store/partition_maintenance_test.exs's own setup/teardown
+  and any date/time (`DateTime.utc_now/0` or similar) capture points for an
+  ordering assumption.
+affected_files:
+  - test/letflow/event_store/partition_maintenance_test.exs
+queue_ref: null  # discovered incidentally by TEST-RUNNER mid-task, not queue-originated
+github_ref: null  # not yet mirrored to GitHub
+status: open

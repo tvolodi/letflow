@@ -1,0 +1,32 @@
+id: ISS-0939
+title: "mix letflow.check.test's report_partition_failures/1 hangs indefinitely when formatting a failure report with very large partition logs or a no-Result:-line crash"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: ISS-0920 validation (PR #2061), filed by ORCH
+# NOTE (added by DOC-UPDATER at ISS-0920/PR #2061 close-out, 2026-10-01): originally
+# drafted on this branch as ISS-0920, before that number was discovered to already be
+# the canonical, previously-merged filing (on main) of the exact issue this PR fixes.
+# Renumbered to ISS-0939, the next free number on main at close-out.
+discovered_at: "2026-10-01T00:45:00Z"
+severity: MINOR
+owner: "ISSUE-FIXER (diagnose first)"
+description: >
+  Found incidentally while independently re-verifying PR #2061 (ISS-0920). After
+  a real, naturally-occurring too_many_connections Postgres exhaustion killed one
+  partition mid-build (no Result: line for that partition), running
+  `mix letflow.check.test` on top of the already-completed scripts/test_parallel.sh
+  invocation caused report_partition_failures/1
+  (lib/mix/tasks/letflow.check.test.ex:345) to hang indefinitely -- observed
+  ~0% CPU, zero output growth, for 26+ minutes before being killed by hand.
+  Suspected trigger: very large partition logs (tens of MB, from debug-level
+  Ecto query logging) and/or the missing-Result:-line crash case confusing the
+  report-formatting step. Reproduced live, not theoretical. This is pre-existing
+  code, untouched by PR #2061/ISS-0920's own changes (which only touch
+  scripts/test_parallel.sh and test/test_helper.exs) -- filed separately rather
+  than folded into that closure.
+source_reports:
+  - (no formal report filed; discovered live during RELEASE-VALIDATOR's PR #2061 re-verification session)
+affected_files:
+  - lib/mix/tasks/letflow.check.test.ex
+queue_ref: null  # discovered directly by RELEASE-VALIDATOR mid-task, filed by ORCH; not a queue-originated task
+github_ref: null  # discovered directly in this repo; no GitHub mirror issue was opened
+status: open

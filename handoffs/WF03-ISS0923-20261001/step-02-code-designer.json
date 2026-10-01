@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0923-20261001/step-02-code-designer.json",
   "created_at": "2026-10-01T16:40:00Z",
   "started_at": "2026-10-01T16:40:00Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-01T16:32:35Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null, "requirement_ids": [], "requirement_text": {},
@@ -22,5 +22,11 @@
   "task": {
     "description": "WF-03 Step 2: produce the fix design artefact lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md (design only, no implementation code, follow the format of lib/letflow/design/iss0917-*.md). Work on branch feature/WF03-ISS0923-20261001 in C:/Users/tvolo/dev/ai-dala/letflow-3 (do not switch branches). Read the step-01 diagnosis result.summary in full first; it recommends BLOCK via a second guard in ServiceCatalog.delete/1 using the tenant-schema join of instance_projections (non-terminal = :active, :error i.e. not InstanceProjection.terminal?/1) with instance_definition_snapshots graph SERVICE_TASK service_id match, iterating TenantProvisioning.list_registrations/0 like referencing_active_definitions/2. Decide and specify unambiguously: (a) block vs document (decision stands unless you find a reason); (b) the typed error shape, e.g. {:error, {:referenced_by_active_instances, ...}} and what it exposes (INV: no cross-tenant leakage of other tenants' instance ids to the caller -- decide whether to return ids, counts, or tenant-grouped; justify against security-invariants.md); (c) whether ERROR-status instances block; (d) guard ordering vs the active-definitions guard; (e) the race between the guard and Repo.delete (TOCTOU: a new instance could start between check and delete -- specify whether a lock/transaction is warranted or accepted and documented); (f) the orphaned service_catalog_versions rows on delete and re-register-same-id concern (in scope or filed as follow-up -- state it); (g) how every caller of delete/1 (grep lib/ for ServiceCatalog.delete and routers, e.g. Routers.AdminServices) maps the new error to HTTP (likely 409 with a stable error code) and any OpenAPI/doc update needed; (h) @spec/@doc changes; (i) an explicit acceptance-criteria list (testable) and test-seam notes (fixtures needed: tenant def + SERVICE_TASK + Engine.create; note the shared letflow_test DB hazard MIX_TEST_PARTITION diagnosed in step 01). Keep scope to Q-923; do not touch other issues. Write the design file, fill this handoff's result, set status COMPLETED with real UTC completed_at. Do not commit; ORCH commits."
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md (design only, no implementation code). Decisions: (a) BLOCK via a second guard in ServiceCatalog.delete/1; (b) error {:error, {:referenced_by_active_instances, %{instance_ids: [uuid] (cap 50, ascending, flat), truncated: boolean}}}, no tenant ids, no totals, justified against INV-1/2/5/7/8; (c) :error instances BLOCK (non-terminal == not InstanceProjection.terminal?/1 = :active + :error); (d) order: not_found, active-definitions guard, instances guard (first failing only; definitions-first makes the instance set stable); (e) TOCTOU accepted and documented, no lock (Engine.create does not touch the catalog row, so a lock would not serialize the racer; retire is the safe alternative); (f) orphaned service_catalog_versions rows IN SCOPE: deleted with the entry in one transaction (versions first), stale-entry still maps to :not_found, no FK/migration; reason: re-register-same-id trap and stale {:version, v} pin resolution to a previous incarnation; (g) only caller is Routers.AdminServices.handle_delete (no catch-all => CaseClauseError without a clause): new Error.service_referenced_by_active_instances/1 (409, type service-referenced-by-active-instances, extensions instance_ids + truncated); no OpenAPI file and no web/src consumer exist; doc pointers in req192 routes design and iss0917 OQ-3; (h) @spec union and @doc rewritten; (i) 14 testable ACs (AC-1..AC-14), fixtures from engine_catalog_service_task_test.exs, fail-first set, 7 mutants, MIX_TEST_PARTITION required for committed-row delete tests (shared letflow_test DB 42P01 hazard). Follow-ups noted, not in scope: update_scope/2 narrowing has the same blind spot for running instances; engine-side lock at instance start. No open question blocks implementation; REVIEWER to confirm cap=50 and the two-table write set.",
+    "artifacts_out": ["lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md"],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  }
 }

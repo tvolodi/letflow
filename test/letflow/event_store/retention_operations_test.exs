@@ -56,6 +56,10 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
   alias Letflow.EventStore.RetentionPolicy
   alias Letflow.Repo
   alias Letflow.TenantFixture
+  alias Letflow.Test.PartitionClock
+
+  # Single source for the override value and the PartitionClock argument.
+  @override_age_days 1
 
   # ===========================================================================
   # Tenant / schema fixtures -- provisions via Letflow.TenantFixture (ISS-0112 /
@@ -140,7 +144,11 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
     {from, to}
   end
 
-  defp eligible_past_month, do: shift_months(current_month(), -1)
+  # Latest month eligible under the `min_partition_age_days: @override_age_days`
+  # override. Last calendar month is NOT eligible on the 1st of a month; see
+  # Letflow.Test.PartitionClock (ISS-0937).
+  defp eligible_past_month,
+    do: PartitionClock.eligible_past_month(Date.utc_today(), @override_age_days)
 
   defp create_events_month_partition!(schema_name, year, month) do
     partition = events_partition_name(year, month)
@@ -210,7 +218,7 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
     end
 
     test "oldest_eligible_month is the minimum eligible month across every provisioned schema" do
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         %{schema_name: schema_a} = provisioned_tenant()
         %{schema_name: schema_b} = provisioned_tenant()
 
@@ -301,7 +309,7 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
 
   describe "retire_oldest_eligible_month/1 -- happy path" do
     test "inserts a running row immediately, returns before the fanout completes, and the row later reaches completed" do
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         %{schema_name: schema_name} = provisioned_tenant()
         {year, month} = eligible_past_month()
         create_events_month_partition!(schema_name, year, month)
@@ -339,7 +347,7 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
     end
 
     test "a schema with no eligible month for the chosen month is recorded skipped, not failed" do
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         %{schema_name: eligible_schema} = provisioned_tenant()
         %{schema_name: bare_schema} = provisioned_tenant()
 
@@ -402,7 +410,7 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
     end
 
     test "found case: returns the retirement plus every outcome row, ordered by tenant_id" do
-      with_event_retention_override([min_partition_age_days: 1], fn ->
+      with_event_retention_override([min_partition_age_days: @override_age_days], fn ->
         %{schema_name: schema_name, tenant_id: tenant_id} = provisioned_tenant()
         {year, month} = eligible_past_month()
         create_events_month_partition!(schema_name, year, month)

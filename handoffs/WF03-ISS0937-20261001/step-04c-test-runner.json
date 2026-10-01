@@ -1,0 +1,53 @@
+{
+  "handoff_id": "77c3bf93-95a7-41f8-9e69-d94dd0ccaa95",
+  "run_id": "WF03-ISS0937-20261001",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0937-20261001/step-04c-test-runner.json",
+  "created_at": "2026-10-01T01:22:27Z",
+  "started_at": "2026-10-01T01:22:27Z",
+  "completed_at": "2026-10-01T01:37:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0937": "id: ISS-0937\ntitle: \"Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01\"\ndiscovered_by: ELIXIR-DEV\ndiscovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)\ndiscovered_at: \"2026-10-01T00:21:56Z\"\nseverity: MAJOR\ndescription: >\n  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest\n  parity failure extra=[\"events_y2026m09\"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in\n  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not\n  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.\n  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.\naffected_files:\n  - test/letflow/events/ (partition maintenance / retention tests)\n  - test/letflow/tenants/ (tenant template parity test)\nqueue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937\ngithub_ref: GH-2077\nstatus: open\n"
+    },
+    "related_handoff_ids": [
+      "284e267e-f735-46dd-a0dc-793628320938"
+    ],
+    "artifacts_in": [
+      "test/support/partition_clock_test.exs",
+      "test/support/tenant_template_test.exs",
+      "mix.exs"
+    ],
+    "owned_modules": [
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs",
+      "test/support/partition_clock.ex (new)",
+      "test/support/tenant_template_test.exs (new parity regression test)"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937",
+    "branch_name": "feature/WF03-ISS0937-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4 (run) TEST-RUNNER for ISS-0937 in the worktree. Run the FULL backend gate the way CI does: `mix letflow.check` (or at minimum `mix letflow.check.test`, the partitioned full suite; check mix.exs aliases to see what CI runs and prefer the complete gate) from the worktree C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0937 (DB via .env port 5482; deps present). The real date is 2026-10-01 (the 1st) so the previously-failing tests (PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest, TenantTemplateTest parity) must now pass. Quote the final summary lines (per-partition counts, combined failures). If anything fails: diagnose each failure (is it related to this change? does it also fail on origin/main? re-run the single failing file with the same seed) and RECORD THE EXACT FAILING TEST NAMES and output - a prior run by TEST-DESIGNER had one unexplained first-run failure that vanished on re-run, so if you see a failure, capture it before any re-run and then re-run to classify it as deterministic vs flaky; run the full suite a second time if the first is green only if cheap (>=2 consecutive green full runs preferred; one is acceptable if the first is green). Do not modify any file other than this handoff and do not commit. Set IN_PROGRESS at claim then COMPLETED/FAILED, result.status PASS/FAIL; next_action 'Route to ISSUE-FIXER close (Step 5)' on PASS.",
+    "acceptance_criteria": [
+      "Full suite run with real output",
+      "Previously failing tests pass",
+      "Any failure classified deterministic vs flaky with names"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "mix letflow.check (full gate, exit 0) on 2026-10-01 UTC: combined 5123 tests, 8 properties, 0 failures (5131/5131 passed) across 16 partitions; 5/5 isolated wasm_hang passed; isolated lua_wallclock_race passed. Previously failing tests (PartitionMaintenance, RetentionOperations, EventRetention, TenantTemplate parity) green. No failures, so no flaky/deterministic classification needed. Single green run. Used sibling letflow-4 Postgres on 5482 (port already bound; worktree compose not started).",
+    "next_action": "Route to ISSUE-FIXER close (Step 5)"
+  }
+}

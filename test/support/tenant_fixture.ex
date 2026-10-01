@@ -417,7 +417,19 @@ defmodule Letflow.TenantFixture do
   @spec req376_partition_management_table?(String.t()) :: boolean()
   def req376_partition_management_table?(table_name) when is_binary(table_name) do
     table_name in @req376_fixed_partition_management_tables or
-      Regex.match?(@req376_dynamic_partition_table_pattern, table_name)
+      req376_dynamic_partition_table?(table_name)
+  end
+
+  @doc """
+  True only for the date-dependent calendar-month partition tables
+  (`events_yYYYYmMM` / `events_archive_yYYYYmMM`, month 01-12) -- NOT for the
+  four fixed partition-management tables. Their names depend on the UTC date
+  the migration ran, so they differ between a template built in one month and
+  a reference replayed in another (ISS-0937). Single source of the pattern.
+  """
+  @spec req376_dynamic_partition_table?(String.t()) :: boolean()
+  def req376_dynamic_partition_table?(table_name) when is_binary(table_name) do
+    Regex.match?(@req376_dynamic_partition_table_pattern, table_name)
   end
 
   # -----------------------------------------------------------------------------------

@@ -5826,9 +5826,9 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 12
+    entries: 13
     note: >
-      Re-incremented to 12 by MOBILE-DEV during WF02-REQ429-20261001's own
+      Re-incremented to 13 by MOBILE-DEV during WF02-REQ429-20261001's own
       Step Final, across three successive rebases onto a fast-moving
       origin/main. This branch's REQ-429 started- and done-event appends
       (ORCH at 2026-10-01T07:11:45Z, then DOC-UPDATER at
@@ -5842,7 +5842,7 @@ volumes:
       by real `at:` timestamp (REQ-429 started 07:11:45Z, then ISS-0935
       done 07:12:21Z, then REQ-428 done 09:45:00Z, then ISS-0942 done
       10:15:00Z, then REQ-429 done 11:07:52Z). `grep -c "^  - req:"
-      docs/status/requirement_status.v25.yaml` = 12 on-disk entries after
+      docs/status/requirement_status.v25.yaml` = 13 on-disk entries after
       this rebase; well under the 1200-line/120000-byte roll ceiling, no
       roll triggered.
 

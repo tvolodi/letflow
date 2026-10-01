@@ -31702,7 +31702,7 @@ requirements:
   - id: REQ-429
     title: "MOB-7: internationalisation matching the platform locale policy (REQ-285) -- supported set, fallback to 'en', {locale: value} tenant content, locale-aware date/number formatting, no hardcoded strings"
     owner: MOBILE-DEV
-    status: in_progress
+    status: done
     stage: S9
     impl_order: 866  # letflow-queue task id, GH#1883. Registered 2026-09-27T03:00:07Z by ORCH (WF-01 Step 3).
     description: >

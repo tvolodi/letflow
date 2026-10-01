@@ -12,4 +12,29 @@ related:
   - ISS-0932
 queue_ref: Q-926
 github_ref: GH-2106
-status: open
+status: resolved
+resolved_in_run: WF03-Q926-20261001
+resolved_at: "2026-10-01T20:11:59Z"
+resolution: >
+  Root cause: the engine rendered only the SERVICE_TASK URL; body_template was never rendered, so
+  the raw template (placeholders and all) was what the dispatcher had. Fix: body_template is now
+  rendered at activation (pure ServiceTask.render_body_template/2: placeholders accepted only
+  inside a JSON string, values escaped, missing variable is a typed error, result decode-checked
+  and size-capped), frozen into config_snapshot as rendered_body, and the dispatcher sends that
+  frozen rendered_body on both the inline_url and catalog_service branches. Legacy rows without
+  the key: a static template is sent verbatim, a templated body fails closed as
+  request_build_error with no outbound request. Fixture v1.3 splits the two paths that shared one
+  node: regulatory-auto-escalation (timer path only, reason sla_breach_30_days) and the new
+  regulatory-remediation-escalation (reached via e10, reason remediation_unresolved). Verified by
+  RELEASE-VALIDATOR PASS (step-04d).
+  Caveats, not closed by this issue: (1) scenario EO-002 as literally worded (an audit_event) is
+  NOT met, because the engine writes no outbound-request audit event; sla_breach_30_days is
+  visible only in the SERVICE_TASK_COMPLETED payload for endpoints that echo the request ->
+  follow-up ISS-0953 (Q-934 / GH-2122). (2) The e10 remediation notice is not actually dispatched,
+  due to the sub-process pending-events discard -> follow-up ISS-0954 (Q-935 / GH-2123).
+regression_tests:
+  - test/letflow/engine/service_task_body_render_test.exs
+  - test/letflow/engine/service_task_wiring_test.exs
+  - test/letflow/engine/service_task_dispatcher_test.exs
+  - test/letflow/engine/regulatory_review_timer_path_test.exs
+  - test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs

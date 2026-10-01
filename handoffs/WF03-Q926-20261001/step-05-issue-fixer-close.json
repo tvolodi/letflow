@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-Q926-20261001/step-05-issue-fixer-close.json",
   "created_at": "2026-10-01T20:11:41Z",
   "started_at": "2026-10-01T20:11:41Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T20:12:06Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,5 +40,9 @@
       "Only the issue file and this handoff modified",
       "No gh close and no release_lock performed"
     ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "docs/issues/ISS-0926.yaml set to status resolved (resolved_in_run WF03-Q926-20261001, real-clock resolved_at), with truthful resolution incl. EO-002 caveat and follow-ups ISS-0953 (Q-934/GH-2122) and ISS-0954 (Q-935/GH-2123), plus regression_tests list. mix letflow.check_issue_refs: OK (551 files). No gh close, no release_lock, registry.json/orchestrator.log untouched."
   }
 }

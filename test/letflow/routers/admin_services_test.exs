@@ -254,4 +254,67 @@ defmodule Letflow.Routers.AdminServicesTest do
       assert second_resp.status == 200
     end
   end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0950 -- POST /admin/services rejects a statically-bad endpoint_url
+  # with the generic 422 (see test/specs/ISS-0950.md). Dispatch gate unchanged.
+  # ══════════════════════════════════════════════════════════════════════
+
+  defp register_body(overrides) do
+    Map.merge(
+      %{
+        "service_id" => unique_service_id("iss0950-admin-router-svc"),
+        "endpoint_url" => "https://example.test/svc",
+        "scope" => "global",
+        "auth_method" => "NONE",
+        "timeout_ms" => 5_000
+      },
+      overrides
+    )
+  end
+
+  defp post_register(body) do
+    on_exit(fn -> cleanup_entry!(body["service_id"]) end)
+
+    conn(:post, "/")
+    |> Map.put(:body_params, body)
+    |> put_req_header("content-type", "application/json")
+    |> assign(:auth_context, %{
+      user_id: Ecto.UUID.generate(),
+      tenant_id: Ecto.UUID.generate(),
+      roles: ["PLATFORM_ADMIN"]
+    })
+    |> assign(:trace_id, "fixed-test-trace-id")
+    |> dispatch()
+  end
+
+  describe "ISS-0950: POST /admin/services endpoint_url validation" do
+    test "every REJECT row -> 422 with the generic detail, no URL leakage, and no row created" do
+      for {id, url} <- Letflow.Iss0950EndpointUrlFixtures.reject_urls() do
+        body = register_body(%{"endpoint_url" => url})
+        resp = post_register(body)
+
+        assert resp.status == 422, "#{id}: expected 422 for #{inspect(url)}, got #{resp.status}"
+        assert Jason.decode!(resp.resp_body)["detail"] == "validation failed"
+        refute resp.resp_body =~ url, "#{id}: response leaks the submitted URL"
+        refute resp.resp_body =~ "endpoint_url"
+        refute Repo.get(Entry, body["service_id"]), "#{id}: row was created"
+      end
+    end
+
+    test "every ACCEPT row -> 201 and the URL is echoed back verbatim" do
+      for {id, url} <- Letflow.Iss0950EndpointUrlFixtures.accept_urls() do
+        body = register_body(%{"endpoint_url" => url})
+        resp = post_register(body)
+
+        assert resp.status == 201, "#{id}: expected 201 for #{inspect(url)}, got #{resp.status}"
+        assert Jason.decode!(resp.resp_body)["endpoint_url"] == url
+      end
+    end
+
+    test "a missing endpoint_url is still a 422 (the required error, not a 500)" do
+      body = Map.delete(register_body(%{}), "endpoint_url")
+      assert post_register(body).status == 422
+    end
+  end
 end

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0950-20261001/step-04-test-designer.json",
   "created_at": "2026-10-01T15:14:28Z",
   "started_at": "2026-10-01T15:14:28Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T15:22:16Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -47,7 +47,34 @@
       "Scoped run on branch green apart from the known environmental tenant_template_build failures (output quoted)"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Regression tests written for every design section-7 matrix row; no skips/tags. Files: appended describe 'validate_syntactic/1' (8 tests) to test/letflow/webhooks/url_validator_test.exs; new test/letflow/service_catalog/endpoint_url_validation_test.exs (19 tests: Entry.check_endpoint_url/1 E-level, register R-level, publish P-level incl. P-SAME-URL, P-ROLLBACK, P-ABSENT a/b, R-MISSING register+publish, R-LEN, R-NO-ROW, UNTOUCHED-PATHS, validate/1,2 + dispatch-gate parity); appended 3 HTTP tests each to admin_services_test.exs and admin_services_publish_retire_test.exs; new shared URL tables test/support/iss0950_endpoint_url_fixtures.ex (23 REJECT + 10 ACCEPT rows, used at E/R/P/HTTP); spec test/specs/ISS-0950.md. FAIL-FIRST (throwaway worktree of origin/main 2bc51bdd, only new/changed test files copied in): 'Result: 50/70 passed' - 20 failed: 8 validate_syntactic/1 UndefinedFunctionError, 8 Entry.check_endpoint_url/1 UndefinedFunctionError, plus register REJECT, publish REJECT (P-ROLLBACK), P-SAME-URL, P-ABSENT(b), HTTP register REJECT and HTTP publish REJECT (MatchError / wrong status as bad URLs are accepted). The 50 passing are pre-existing tests plus ACCEPT/R-MISSING/inherit-path tests that correctly pass on old code. Because the failure is 'code did not exist', mutants were also run. MUTANTS (each in a throwaway worktree of branch HEAD eada9e67, same 4 test files; counts are 'Result: passed/total' over 70 tests; each reverted with git checkout -- lib and verified git diff -- lib = 0 lines): m1 accept http scheme in shared check_scheme -> 59/70, 11 failed (U-SCHEME, U-PARITY, existing 'http:// scheme is rejected', E/R/P/HTTP-register/HTTP-publish REJECT, P-SAME-URL, P-ABSENT(b), gate-parity). m2 drop IP-literal blocklist on the :no_dns path -> 61/70, 9 failed (U-BLOCKLIST x2, U-PARITY, E/R/P/HTTP-register/HTTP-publish REJECT, gate-parity). m3 allow {{ }} in host (remove brace check) -> 64/70, 6 failed (E REJECT, E 'placeholder only after host', R, P, HTTP-register, HTTP-publish REJECT). m4 get_change instead of get_field (validate_change semantics) -> 68/70, 2 failed: P-SAME-URL unchanged-bad-URL republish, P-ABSENT(b). m5 drop validate_endpoint_url from publish_changeset only -> 66/70, 4 failed: P REJECT, HTTP-publish REJECT, P-SAME-URL, P-ABSENT(b); register-level tests still pass, proving per-path coverage. m6 resolve DNS (default_resolver) inside validate_syntactic -> 37/70, 33 failed (U-NODNS a and b, localhost, validate_syntactic accept test, all ACCEPT rows at E/R/P/HTTP since example.test does not resolve, etc.). m7 skip when endpoint_url key absent from params -> 69/70, 1 failed: P-ABSENT(b) (sole killer; P-SAME-URL passes the key so is unaffected). All 7 killed. SCOPED RUN on branch (MIX_ENV=test mix test url_validator_test, endpoint_url_validation_test, admin_services_test, admin_services_publish_retire_test, engine_catalog_service_task_test, service_catalog_test): 'Result: 133/139 passed'; the 6 failures are exactly service_catalog_test.exs AC6 x4 + AC7 x2, all Postgrex undefined_table 'tenant_template_build_<hash>.process_definitions' (the known environmental failures). engine_catalog_service_task_test.exs fully green (includes ELIXIR-DEV's adjusted url_rendered_empty test). CLEANUP: both worktrees removed with git worktree remove --force + prune; 'git worktree list' shows only C:/Users/tvolo/dev/ai-dala/letflow-3 on feature/WF03-ISS0950-20261001; 'git status --porcelain lib/' is empty (0 lines); main checkout never switched/reset. Nothing committed. mix format --check-formatted passes on all touched test files; 'mix compile --force --warnings-as-errors' (test env) clean with no 'default values for the optional arguments' text; no test helper I wrote has a default argument. DEVIATIONS: (1) U-NODNS(b): design's self-trace (:erlang.trace(self(),...)) delivers zero trace messages (measured), making refute_receive vacuous; used a separate tracer process forwarding to the test pid, plus a positive control proving default_resolver/1 does emit an :inet.getaddrs trace. (2) 'mix letflow.check.test' not run because the handoff forbids the full suite and that task runs it; covered by the forced warnings-as-errors compile plus format check instead.",
+    "artifacts_out": [
+      "test/specs/ISS-0950.md",
+      "test/letflow/service_catalog/endpoint_url_validation_test.exs",
+      "test/support/iss0950_endpoint_url_fixtures.ex",
+      "test/letflow/webhooks/url_validator_test.exs",
+      "test/letflow/routers/admin_services_test.exs",
+      "test/letflow/routers/admin_services_publish_retire_test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Handoff started_at equals created_at as ORCH-stamped (left untouched, nothing to report). Note: design U-NODNS(b) self-trace recipe does not work (a process cannot receive its own trace messages); design text could be corrected to use a separate tracer process.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 4b). Tests uncommitted in the main checkout; ORCH commits first. Validator should re-apply one of m1-m7 (e.g. m4 or m7) itself."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

@@ -1193,24 +1193,23 @@ defmodule Letflow.Test.TenantTemplate do
   # established at each of this module's other catalog-query sites) and so
   # never has these tables at all -- their absence from a clone is the
   # CORRECT, intended output of provisioning, not something this dimension
-  # should ever have flagged as "missing". Reject them from the reference
-  # side before flagging it as "missing" -- exactly the same oracle
-  # `template_self_check!/1` (use site 1) already trusts for this identical
-  # asymmetry -- not a new whitelist invented for this fix. Deliberately
-  # filters only the `missing` set (tables present in the reference,
-  # absent from the candidate), NOT `ref_tables`/`extra` themselves: this
-  # same function ALSO serves use site 1's self-check
-  # (`assert_template_parity_against_independent_reference!/1`), where BOTH
-  # sides are genuinely `replay_migrations/2`-built and DO both have every
-  # one of these tables -- pre-filtering `ref_tables` there would make the
-  # candidate's real copies of them look like false "extra" tables instead
-  # of correctly matching. Filtering only `missing` is safe for both use
-  # sites: a table absent from `missing` in the first place needs no
-  # filtering, and a `:clone` candidate's legitimate absence is exactly
-  # what `missing` would otherwise (wrongly) report.
+  # should ever have flagged as "missing". The `missing` side is therefore
+  # rejected through the full `req376_partition_management_table?/1` oracle
+  # (the same one `template_self_check!/1`, use site 1, trusts) for the
+  # `:clone` case.
+  #
+  # The DYNAMIC calendar-month tables (`events_yYYYYmMM` /
+  # `events_archive_yYYYYmMM`) are additionally ignored on BOTH sides before
+  # either set is computed: their names depend on the UTC date the
+  # migration ran, so a template built in month N and a reference replayed
+  # in month N+1 legitimately hold different ones (ISS-0937). Removing them
+  # from both sets leaves no false "extra". The four FIXED tables
+  # (`events_default`, `events_archive_default`, the two `*_pre_partition_*`)
+  # are not date-dependent and stay in the comparison, so a missing or extra
+  # fixed table is still real drift.
   defp check_table_set(reference_schema, candidate_schema) do
-    ref_tables = MapSet.new(tables_in(reference_schema))
-    cand_tables = MapSet.new(tables_in(candidate_schema))
+    ref_tables = reference_schema |> tables_in() |> reject_dynamic_partitions() |> MapSet.new()
+    cand_tables = candidate_schema |> tables_in() |> reject_dynamic_partitions() |> MapSet.new()
 
     missing =
       ref_tables
@@ -1224,6 +1223,9 @@ defmodule Letflow.Test.TenantTemplate do
     |> add_if(MapSet.size(missing) > 0, "table set: missing=#{inspect(MapSet.to_list(missing))}")
     |> add_if(MapSet.size(extra) > 0, "table set: extra=#{inspect(MapSet.to_list(extra))}")
   end
+
+  defp reject_dynamic_partitions(tables),
+    do: Enum.reject(tables, &Letflow.TenantFixture.req376_dynamic_partition_table?/1)
 
   # dimension #2: columns -- name, data type, is_nullable, column_default
   # (schema-qualifier-normalized), ordinal position.

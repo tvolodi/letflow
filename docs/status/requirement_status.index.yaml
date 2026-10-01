@@ -5826,23 +5826,25 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 11
+    entries: 12
     note: >
-      Incremented to 11 by DOC-UPDATER's own ISS-0942 done-event append
-      (fix/ISS-0942-task-complete-authorization-gap, 2026-10-01T10:15:00Z)
-      -- `grep -c "^  - req:" docs/status/requirement_status.v25.yaml` =
-      11 on-disk entries; 358 lines / 21559 bytes, well under the
-      1200-line/120000-byte roll ceiling, no roll triggered.
-
-      Re-incremented to 10 by ORCH resolving a merge conflict between
-      fix/ISS-0935-vortex-entity-seed and origin/main: this branch's own
-      ISS-0935 SCOPE-CHANGE done-event append (DOC-UPDATER, at
-      2026-10-01T07:12:21Z) conflicted textually with main's independently
-      merged REQ-428 done-event append (at 2026-10-01T09:45:00Z). Resolved
-      by composing both (no entry dropped, no entry rewritten), ordering by
-      real `at:` timestamp (ISS-0935 07:12:21Z before REQ-428 09:45:00Z).
-      `grep -c "^  - req:" docs/status/requirement_status.v25.yaml` = 10
-      on-disk entries after the merge.
+      Re-incremented to 12 by MOBILE-DEV during WF02-REQ429-20261001's own
+      Step Final, across three successive rebases onto a fast-moving
+      origin/main. This branch's REQ-429 started- and done-event appends
+      (ORCH at 2026-10-01T07:11:45Z, then DOC-UPDATER at
+      2026-10-01T11:07:52Z) conflicted textually, over separate rebase
+      passes, with three entries main had independently gained since this
+      branch's last sync -- the ISS-0935 SCOPE-CHANGE done-event append
+      (DOC-UPDATER, at 2026-10-01T07:12:21Z), the REQ-428 done-event append
+      (DOC-UPDATER, at 2026-10-01T09:45:00Z), and the ISS-0942 SCOPE-CHANGE
+      done-event append (DOC-UPDATER, at 2026-10-01T10:15:00Z). Resolved by
+      composing all five (no entry dropped, no entry rewritten), ordering
+      by real `at:` timestamp (REQ-429 started 07:11:45Z, then ISS-0935
+      done 07:12:21Z, then REQ-428 done 09:45:00Z, then ISS-0942 done
+      10:15:00Z, then REQ-429 done 11:07:52Z). `grep -c "^  - req:"
+      docs/status/requirement_status.v25.yaml` = 12 on-disk entries after
+      this rebase; well under the 1200-line/120000-byte roll ceiling, no
+      roll triggered.
 
       Incremented to 8 by DOC-UPDATER's own REQ-428 done-event append
       (WF02-REQ428-20261001, 2026-10-01T09:45:00Z) -- `grep -c "^  - req:"

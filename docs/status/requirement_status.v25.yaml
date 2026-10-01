@@ -309,6 +309,24 @@ history:
       state diagram or Running-it change). letflow-queue task 865 (GH#1882)
       still needs release_lock(status=done) -- not called from here;
       DOC-UPDATER does not call the queue.
+  - req: REQ-429
+    event: started
+    agent: ORCH
+    at: "2026-10-01T07:11:45Z"
+    note: >
+      WF-02 run WF02-REQ429-20261001. Eligible now that REQ-428 is done
+      (depends_on satisfied). Queue task 866 (GH#1883) -- previously noted in
+      REQ-428's own started entry as absent/404 on the live service despite
+      its impl_order comment -- is now present and lockable: POST
+      /tasks/866/lock (agent_id orch-req429) returned 200, task content
+      verified to match docs/requirements.yaml's REQ-429 entry verbatim
+      (same title, description, all 7 acceptance_criteria, depends_on:
+      [865]). Host memory checked before starting: ~0.73GB free (the known
+      swinging-low pattern from a concurrent peer session) -- any test run
+      this session uses TEST_PARALLEL_N=2 or serial mix test, not full
+      parallelism. Branch feature/WF02-REQ429-20261001 created from
+      freshly-pulled origin/main (d4e5f36c) and pushed. status: in_progress
+      in docs/requirements.yaml. Routing to CODE-DESIGNER next.
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER

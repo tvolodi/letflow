@@ -1,0 +1,49 @@
+{
+  "handoff_id": "92394544-0795-4d95-b733-402eae4895b3",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0950-20261001/step-02b-code-design-validator.json",
+  "created_at": "2026-10-01T14:57:00Z",
+  "started_at": "2026-10-01T14:57:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md",
+      "handoffs/WF03-ISS0950-20261001/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0950-20261001/step-02-code-designer.json",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 2b CODE-DESIGN-VALIDATOR (hard gate). Validate lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md against the issue (context.source_text), the step-01 diagnosis and step-02 handoff. Independently verify against the real code (read, do not trust the design's claims): (a) Entry.insert_changeset/publish_changeset are the only caller-supplied endpoint_url write paths; (b) the proposed UrlValidator.validate_syntactic/1 reuses the dispatcher blocklist without DNS and does not change validate/1,2 behaviour or the dispatch gate; (c) the template policy is unambiguous and implementable (check engine placeholder syntax at engine.ex ~980) and consistent with ISS-0917 catalog dispatch; (d) the get_field-vs-validate_change reasoning is correct for Ecto; (e) the proposed fixture change at test/letflow/engine_catalog_service_task_test.exs ~363 is sound (verify the engine resolves the pinned version from the live row by version_id, as the design's open point asks, and say what you found); (f) 422 mapping claim holds (router needs no change); (g) every acceptance criterion of the step-02 handoff is met; no implementation code; decision 0027 and INV-9 respected. Do not edit the design; report issues. Machine is shared: no full suite. Complete the handoff PASS/FAIL per HANDOFF_PROTOCOL.md with specific issues on FAIL. Do not commit.",
+    "acceptance_criteria": [
+      "Each of (a)-(g) explicitly verified with file:line evidence",
+      "Verdict PASS or FAIL with actionable issues",
+      "No file outside handoffs/ modified (git status --porcelain lib/ test/ web/ shows only the design file as untracked/committed)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

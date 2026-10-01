@@ -2623,3 +2623,5 @@
 2026-10-01T14:50:29Z | DISPATCH | WF03-ISS0950-20261001 | step-01-issue-fixer-diagnose | ORCH -> ISSUE-FIXER | PENDING
 2026-10-01T14:54:08Z | PASS | WF03-ISS0950-20261001 | step-01-issue-fixer-diagnose | ISSUE-FIXER -> ORCH | PASS -- no register-time endpoint_url validation (entry.ex changesets only presence/length); gate only at dispatch
 2026-10-01T14:54:09Z | DISPATCH | WF03-ISS0950-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-10-01T14:57:00Z | PASS | WF03-ISS0950-20261001 | step-02-code-designer | CODE-DESIGNER -> ORCH | PASS -- design lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md
+2026-10-01T14:57:00Z | DISPATCH | WF03-ISS0950-20261001 | step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING

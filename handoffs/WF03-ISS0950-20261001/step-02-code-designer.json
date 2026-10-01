@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0950-20261001/step-02-code-designer.json",
   "created_at": "2026-10-01T14:54:09Z",
   "started_at": "2026-10-01T14:54:09Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T14:56:43Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -50,7 +50,34 @@
       "Test matrix covers every rejected/accepted class and both write paths"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md (signatures/specs and prose only). Decisions: (D1) check lives in Entry.insert_changeset/2 and Entry.publish_changeset/2, the only two endpoint_url input paths; no router change (existing Changeset clause gives 422 'validation failed'). (D2) no-DNS via a new public UrlValidator.validate_syntactic/1 sharing the private scheme/host/IP-literal checks (not a stub resolver: structural no-DNS, no blocklist copy). (D3) template policy: head = text up to first / ? # after '://'; placeholders allowed only in the tail; any { or } in head (scheme/userinfo/host/port) is rejected; only head is passed to the validator so the engine regex is not duplicated. (D4) one changeset error on :endpoint_url, validation: :endpoint_url_not_allowed, fixed message. (D5) validation uses get_field, not validate_change, so republishing an unchanged legacy-bad URL is still checked (cast records no change). (D6/D7) stored bad rows tolerated; rejected publish rolls back the archive insert. Dispatch gate (INV-9, ServiceTaskDispatcher.http_transport) stated unchanged. Exactly one existing test changes: engine_catalog_service_task_test.exs ~line 363 ({{variables.absent}}) is re-seeded via register with the valid URL then a raw update_all, assertions unchanged, because register now rejects it; all other fixtures verified to use literal https://example.test heads. Test matrix covers 22 reject and 10 accept classes at pure/register/publish/HTTP levels plus P-SAME-URL, P-ROLLBACK, length dedupe, and a two-part no-DNS unit test (contrast + trace). Not run: no code or tests (design only). One unverified assumption: the fixture reseed relies on the engine resolving the pinned version from the live row by version_id; ELIXIR-DEV must confirm when running that test file.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Handoff context.requirement_ids/requirement_text empty (expected for WF-03; source_text carried the issue). No defect.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Possible separate issue (OQ-3): Routers.Webhooks.handle_create may lack a clause for {:error, :target_url_not_allowed} (step-01 flagged by reading, not run). Out of ISS-0950 scope.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (step 03), then ELIXIR-DEV. ORCH commits the design doc and this handoff."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

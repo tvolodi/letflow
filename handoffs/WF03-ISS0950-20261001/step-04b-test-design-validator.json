@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0950-20261001/step-04b-test-design-validator.json",
   "created_at": "2026-10-01T15:22:54Z",
   "started_at": "2026-10-01T15:22:54Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T15:25:53Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -43,7 +43,27 @@
       "Verdict PASS/FAIL"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "FAIL",
+    "summary": "Read the design matrix, ISS-0950.md spec and all five test files directly. Matrix coverage is complete and non-skipped except one row that is vacuous: R-LEN. All 23 REJECT and 10 ACCEPT rows are exercised at E/R/P/HTTP via a shared fixture; P-SAME-URL, P-ROLLBACK, R-NO-ROW, R-MISSING (register+publish), P-ABSENT a/b, UNTOUCHED-PATHS, U-SCHEME/BLOCKLIST/PARITY/NODNS(a)(b) present; no @tag skip/TODO; fixtures use unique ids with on_exit cleanup; assertions check 422 detail, absence of URL/'endpoint_url' in body, changeset message + validation tag, and DB row/version-count unchanged. U-NODNS(b) is non-vacuous (separate tracer + positive control). INDEPENDENT MUTANTS in throwaway worktree of d4c506a0 (outside repo; deps/_build copied), 4 test files, baseline 'Result: 70 passed': m4 get_change instead of get_field -> 68/70 (P-SAME-URL, P-ABSENT(b) fail) REPRODUCED; m7 skip when key absent from params -> 69/70 (only P-ABSENT(b)) REPRODUCED; m1 accept http -> 59/70, 11 failed REPRODUCED. Own mutants: own1 brace anywhere in URL rejected (path-placeholder wrongly rejected) -> 64/70, 6 ACCEPT-row/placeholder tests fail (killed); own3 silent default_resolver call inside validate_syntactic (result ignored) -> 69/70, only U-NODNS(b) fails (killed, confirms trace test is live); own2 remove the 'field already has an :endpoint_url error' de-duplication clause in validate_endpoint_url -> 70/70 passed, i.e. SURVIVED. Cause: the R-LEN test (endpoint_url_validation_test.exs ~L181-190) uses 'https://example.test/' + 'a' padding, a URL that is valid under check_endpoint_url, so the new step would add no second error even without the dedup branch; the test cannot distinguish dedup from no-dedup and design D5(b) / matrix R-LEN is effectively unasserted. Cleanup: worktree removed + pruned, git worktree list shows only the main checkout; git status --porcelain lib/ test/ is empty (0 lines); main checkout never modified (git checkout only ever ran inside the throwaway worktree).",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "R-LEN is vacuous: test 'R-LEN: an over-length URL yields exactly ONE :endpoint_url error' in test/letflow/service_catalog/endpoint_url_validation_test.exs uses an over-length URL that is otherwise valid, so deleting the Keyword.has_key?(changeset.errors, :endpoint_url) clause from Entry.validate_endpoint_url/1 leaves all 70 tests green (measured 70/70). Fix: make the over-length URL ALSO statically bad (e.g. 'http://example.test/' padded to 2049 chars, or 'https://127.0.0.1/' padded) and assert exactly one error with validation == :length (and no :endpoint_url_not_allowed). Optionally mirror on publish/3. Re-verify by removing the dedup clause in a throwaway worktree: the new test must fail.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework TEST-DESIGNER (iteration 1 of 3): strengthen R-LEN as described so the dedup-removal mutant is killed; no other changes required. Then re-gate 4b."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

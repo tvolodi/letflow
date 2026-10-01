@@ -2638,3 +2638,4 @@
 2026-10-01T15:14:28Z | DISPATCH | WF03-ISS0950-20261001 | step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
 2026-10-01T15:22:54Z | PASS | WF03-ISS0950-20261001 | step-04-test-designer | TEST-DESIGNER -> ORCH | PASS -- pre-fix 50/70, mutants m1-m7 killed
 2026-10-01T15:22:54Z | DISPATCH | WF03-ISS0950-20261001 | step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-10-01T15:26:20Z | FAIL | WF03-ISS0950-20261001 | step-04b-test-design-validator | TEST-DESIGN-VALIDATOR -> ORCH | FAIL -- R-LEN vacuous (dedup-clause mutant survives); rework 1 to TEST-DESIGNER

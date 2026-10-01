@@ -1,0 +1,44 @@
+{
+  "handoff_id": "c2aaf9d7-1dfc-46d7-980c-afcd38e173d0",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-Q926-20261001/step-04c-test-runner.json",
+  "created_at": "2026-10-01T19:56:39Z",
+  "started_at": "2026-10-01T19:56:39Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/ISS-0926.md",
+      "handoffs/WF03-Q926-20261001/step-04b-test-design-validator.json",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 4c: run and report on the ISS-0926 branch (HEAD of feature/WF03-Q926-20261001; do not modify any file other than this handoff). Claim: IN_PROGRESS only; flip COMPLETED on finishing. Shared machine - SCOPED runs only (no full mix test). Use a throwaway Postgres container on a private docker network/unused host port per docs/anti-patterns.md Docker fallback (NOT the shared dev DB on 5462; leave q929-pg alone); verify config/test points to it before running; remove it afterwards. Run, quoting real counts: (1) mix compile --warnings-as-errors; (2) mix format --check-formatted; (3) the six ISS-0926 test files (test/letflow/engine/service_task_body_render_test.exs, service_task_wiring_test.exs, service_task_dispatcher_test.exs, test/letflow/engine_catalog_service_task_test.exs, test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs, test/letflow/engine/regulatory_review_timer_path_test.exs); (4) neighbours that read the meridian fixture or service task paths: test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs, test/scripts/persona_actor_seed_drift_test.exs, test/letflow/scripts/seed_swiftroute_definition_test.exs, plus any test file found by grep -l 'meridian_regulatory\\|regulatory-auto-escalation\\|service_task_dispatcher\\|ServiceTask' test/ not already listed (run them in scoped batches); (5) mix letflow.lint_handoffs (full corpus lint; report any failure, including started_at > completed_at). The earlier ELIXIR-DEV run had one flaky failure (AC5 cancel race in service_task_wiring_test.exs died on a closed DB pool connection; passed alone) - if you see flakes, rerun the failing file alone and in the batch and report both. Diagnose any real failure (root cause, file:line) but do not fix; FAIL with details or PASS. Commit this handoff only and push origin HEAD. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "compile --warnings-as-errors and format results quoted",
+      "six ISS-0926 test files counts quoted",
+      "neighbour tests counts quoted",
+      "lint_handoffs result quoted",
+      "flakes distinguished from real failures",
+      "container removed, no file modified except this handoff"
+    ]
+  }
+}

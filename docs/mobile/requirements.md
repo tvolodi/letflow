@@ -272,13 +272,27 @@ hardcodes `'en-US'`), and no `{locale: value}`-shaped tenant-content map
 exists anywhere in `web/src/types/`. ~315 hardcoded English JSX strings would
 need externalizing to adopt one.
 
-This requirement therefore has nothing to "match" yet — `MOB-7`'s locale set
-and fallback chain cannot be defined by reference to a web policy that
-doesn't exist. Either the web platform adopts a real locale policy first (see
-the concrete adoption cost in `docs/frontend/frontend-requirements.md`), or
-this mobile requirement defines its own locale set/fallback chain
-independently and accepts that it will not match the web tier, since the web
-tier currently has none to match.
+**Update (REQ-285, 2026-09-09 design; REQ-429, 2026-10-01 mobile match).**
+`REQ-285` (`lib/letflow/design/req285-i18n-layer-adoption.md`,
+`docs/migration/decisions/0021-web-i18n-library.md`) adopted a real web
+locale policy, closing the gap the 2026-08-22 finding above recorded. That
+policy has **two tiers**, kept deliberately separate rather than unified:
+
+- A **formatting-locale** tier — `PLATFORM_SUPPORTED_LOCALES` /
+  `FALLBACK_LOCALE` in `web/src/i18n/sessionLocale.ts` — governing
+  date/number formatting only.
+- A **UI-string-locale** tier — `ENTITIES_UI_LOCALES` /
+  `ENTITIES_UI_FALLBACK_LOCALE` in `web/src/i18n/entitiesMessages.ts` —
+  governing translated UI strings, with its own independent resolver and
+  base-tag matching rule.
+
+`REQ-429` is the mobile implementation matching both tiers (plus tenant
+`{locale: value}` content resolution, `apps/mobile/lib/i18n/`), replacing
+this requirement's old "defines its own locale set independently" framing:
+the mobile tier now matches the web tier's locale sets, fallbacks, and
+resolution order exactly, with `TenantConfig.locales`/`.defaultLocale`
+(`GET /tenant-config`) playing the role of the SPA's tenant default and the
+device's reported locales playing the role of the browser's.
 
 ---
 

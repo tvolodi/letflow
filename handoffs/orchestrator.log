@@ -2617,3 +2617,5 @@
 2026-10-01T13:53:17Z | DISPATCH | WF03-ISS0917-20261001 | step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
 2026-10-01T14:05:16Z | PASS | WF03-ISS0917-20261001 | step-04b-test-design-validator | TEST-DESIGN-VALIDATOR -> ORCH | PASS -- independently reproduced pre-fix 36/40 + R1/R2, mutants m1 13/40, m2 4/40, m7 R2
 2026-10-01T14:05:16Z | DISPATCH | WF03-ISS0917-20261001 | step-04c-test-runner | ORCH -> TEST-RUNNER | PENDING
+2026-10-01T14:14:58Z | PASS | WF03-ISS0917-20261001 | step-04c-test-runner | TEST-RUNNER -> ORCH | PASS -- scoped runs, 14 failures pre-existing/environmental (orphan tenant_template_build row; reproduced on origin/main)
+2026-10-01T14:14:58Z | DISPATCH | WF03-ISS0917-20261001 | step-final-git-merge | ORCH (acting for ELIXIR-DEV, mechanical git) | PR open

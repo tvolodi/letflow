@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-Q926-20261001/step-04-test-designer.json",
   "created_at": "2026-10-01T18:54:13Z",
   "started_at": "2026-10-01T18:54:13Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T19:47:35Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -46,5 +46,22 @@
       "Worktrees and containers removed, git status clean",
       "Committed before mutation and pushed"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Tests and spec written for ISS-0926. Files: test/letflow/engine/service_task_body_render_test.exs (new, 33 pure tests incl. 1 StreamData property; T-R1..T-R21), wiring (I-1,I-1b,I-1c,I-2,I-4a,I-4b,I-5,I-6a-d,I-7,I-8a-c), dispatcher (I-2,I-2b,I-5,I-5b,I-9,I-10 x2,I-11), catalog (I-3, 4 tests), fixture (T13, T14 graph-routing only, M9c2, M11-M15; T1/T8/M9a-c by ELIXIR-DEV kept), Meridian E1 rendered_body assertion, test/specs/ISS-0926.md, ISS-0932.md amended. GREEN on branch (throwaway postgres on 127.0.0.1:51926, scoped runs): body_render 33/33, wiring 38/38, dispatcher 54/54, catalog 29/29, fixture 32/32, regulatory timer path 2/2; all six together 188 passed (1 property, 187 tests). PRE-FIX (merge-base 6d2e2548 lib + the six new test files, per file): body_render 0/33, wiring 24/38 (14 red), dispatcher 48/54 (6 red), catalog 25/29 (4 red), fixture 24/32 (8 red), E1 1/2 (1 red); total 122/188 passed, 66 red. MUTANTS (detached throwaway worktree of ef5603ac, all six files, baseline 188; reverted and git diff clean after each): 29 mutants, all killed (red count out of 188): M01 no escaping 11; M02 :json escape 1 (T-R7a); M03 :html_safe 2 (T-R7b,T-R7d); M04 outside-string check skipped 4; M05 nil->null 1; M06 lenient missing var 7; M07 cap < vs <= 1 (T-R13); M08 cap removed 3; M09 decode check removed 3; M10 scan escaped flag 1 (T-R12); M11 static template JSON-checked 2; M12 class keeps tuple 6; M13 details leak variables 2 (T-R19,I-7); M14 map value quotes rewritten 1 (T-R8); M20 dispatcher sends raw template 6 (I-2,I-2b,I-4b,I-5b,I-11); M21 legacy templated sends raw 2 (I-10); M22 nil treated as absent 1 (I-5b); M23 legacy static fails closed 5 (I-9); M24 legacy failure retriable 1 (I-10); M30 rendered_body not frozen 12; M31 completion-hop clause removed 1 (I-7); M32 timer fold untyped 2; M33 catalog skips render 2 (I-3); M34 body error beats empty-URL 1 (I-6d); M35 create fold wrong class 4; M36 URL renderer nil->null 5; M40 swapped reasons 3 (T8,T13,E1); M41 e10 retarget back 5; M42 version 1.2 1. Details in test/specs/ISS-0926.md. Not run: full-suite `mix letflow.check.test` (instruction: scoped tests only on shared machine); instead the six files were compiled fresh in a clean worktree and the output contains no 'default values for the optional arguments' warning (only the pre-existing ExUnit property register_test/4 deprecation warning used by 39 other tests); all new helpers have no default arguments. Deviation: unit tests live in a new file service_task_body_render_test.exs instead of service_task_test.exs (a sed accident mangled the latter; it was restored with git checkout of my own uncommitted edit, no other work lost). Cleanup: both worktrees removed (git worktree list shows only main checkout), container q926-pg removed, no commits of mutated code. Tests committed as ef5603ac before any mutation.",
+    "findings": [],
+    "files_modified": [
+      "test/letflow/engine/service_task_body_render_test.exs",
+      "test/letflow/engine/service_task_wiring_test.exs",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "test/letflow/engine_catalog_service_task_test.exs",
+      "test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs",
+      "test/letflow/engine/regulatory_review_timer_path_test.exs",
+      "test/specs/ISS-0926.md",
+      "test/specs/ISS-0932.md",
+      "handoffs/WF03-Q926-20261001/step-04-test-designer.json"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   }
 }

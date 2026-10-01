@@ -1,0 +1,86 @@
+{
+  "entity_type": "shipment_manifest",
+  "record_export_schema_version": "entities/record-export/v1",
+  "records": [
+    {
+      "record_id": "SM-001",
+      "field_values": {
+        "manifest_ref": "SM-001",
+        "destination": "Hamburg",
+        "shipped_at": "2026-03-06"
+      }
+    },
+    {
+      "record_id": "SM-002",
+      "field_values": {
+        "manifest_ref": "SM-002",
+        "destination": "Rotterdam",
+        "shipped_at": "2026-03-11"
+      }
+    },
+    {
+      "record_id": "SM-003",
+      "field_values": {
+        "manifest_ref": "SM-003",
+        "destination": "Gdansk",
+        "shipped_at": "2026-03-16"
+      }
+    },
+    {
+      "record_id": "SM-004",
+      "field_values": {
+        "manifest_ref": "SM-004",
+        "destination": "Antwerp",
+        "shipped_at": "2026-03-21"
+      }
+    },
+    {
+      "record_id": "SM-005",
+      "field_values": {
+        "manifest_ref": "SM-005",
+        "destination": "Bremerhaven",
+        "shipped_at": "2026-03-26"
+      }
+    },
+    {
+      "record_id": "SM-006",
+      "field_values": {
+        "manifest_ref": "SM-006",
+        "destination": "Hamburg",
+        "shipped_at": "2026-03-31"
+      }
+    },
+    {
+      "record_id": "SM-007",
+      "field_values": {
+        "manifest_ref": "SM-007",
+        "destination": "Rotterdam",
+        "shipped_at": "2026-04-05"
+      }
+    },
+    {
+      "record_id": "SM-008",
+      "field_values": {
+        "manifest_ref": "SM-008",
+        "destination": "Gdansk",
+        "shipped_at": "2026-04-10"
+      }
+    },
+    {
+      "record_id": "SM-009",
+      "field_values": {
+        "manifest_ref": "SM-009",
+        "destination": "Antwerp",
+        "shipped_at": "2026-04-15"
+      }
+    },
+    {
+      "record_id": "SM-010",
+      "field_values": {
+        "manifest_ref": "SM-010",
+        "destination": "Bremerhaven",
+        "shipped_at": "2026-04-20"
+      }
+    }
+  ]
+}

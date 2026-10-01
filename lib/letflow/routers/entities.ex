@@ -57,6 +57,7 @@ defmodule Letflow.Routers.Entities do
   | delete_record_attachment | `DELETE /entities/records/:entity_type/:record_id/attachments/:attachment_id` | `Letflow.Repository.EntityAttachments.delete/2` | `EntitiesAttachmentsManage` | 204 / 404 |
   | export_records | `POST /entities/records/:entity_type/export` | the identical `Letflow.Entities.Query.Allowlist.load/2` → `Letflow.Entities.Query.Compiler.compile/2` → `Letflow.Entities.Query.Cursor.paginate/5` sequence `query` uses above, then EITHER a `Letflow.Entities.Query.FieldGrants` redaction step (default) OR a second, in-handler `Letflow.Api.Authorization.evaluate_access/2` check against `:EntitiesRecordsExportUnredacted` that skips redaction entirely on success (`unredacted: true`) | `EntitiesRecordsExport` (route-level); `EntitiesRecordsExportUnredacted` (in-handler only, see below) | 200 / 400 / 403 / 404 / 422 |
   | import_records | `POST /entities/records/:entity_type/import` | `Letflow.Entities.Records.create_record/2` per entry (REQ-320) | `EntitiesRecordsImport` | 200 / 404 / 413 / 422 |
+  | import_restrictions | `POST /entities/restrictions/import` | `Letflow.Entities.Restrictions.import_restrictions/2` (ISS-0935) | `EntitiesRestrictionsManage` | 200 / 400 / 403 / 422 |
 
   ## `POST .../export`'s two-tier redaction mechanism (REQ-319, design §6 INV-2)
 
@@ -89,6 +90,17 @@ defmodule Letflow.Routers.Entities do
   `handle_import_records/2`'s own comment for the exact check ordering (the
   200-record cap, then the schema-version gate, then the path/body
   `entity_type` match, all three before any `create_record/2` call).
+
+  ISS-0935 appended `import_restrictions`, `POST /entities/restrictions/import`
+  — per `lib/letflow/design/iss0935-vortex-entity-seed.md` §1.3, the first
+  write path into `entity_field_restrictions`/`user_entity_grants`
+  (REQ-231)/`entity_type_restrictions`/`user_entity_type_grants` (REQ-394),
+  all four of which were read-only tables before this. Gated by a NEW,
+  distinct permission, `:EntitiesRestrictionsManage` — deliberately not a
+  reuse of `:EntitiesDefinitionsWrite` (design §1.3's own justification).
+  Delegates to `Letflow.Entities.Restrictions.import_restrictions/2`, the
+  one new context module this change adds; `FieldGrants`/`TypeAccess`
+  themselves stay read-only and unmodified.
 
   ## Route ordering — load-bearing, not cosmetic (design §1)
 
@@ -229,6 +241,7 @@ defmodule Letflow.Routers.Entities do
   alias Letflow.Entities.Query.Types
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
+  alias Letflow.Entities.Restrictions
   alias Letflow.Entities.TypeAccess
   alias Letflow.EventStore.Registry.ValidationFailure
   alias Letflow.Repository.Artifact
@@ -300,6 +313,21 @@ defmodule Letflow.Routers.Entities do
 
   authz_post "/records/:entity_type/import", :EntitiesRecordsImport do
     handle_import_records(conn, conn.params["entity_type"])
+  end
+
+  # ── Restriction/grant bulk-import route (ISS-0935) ────────────────────
+  #
+  # The one write path into entity_field_restrictions/user_entity_grants/
+  # entity_type_restrictions/user_entity_type_grants -- see
+  # lib/letflow/design/iss0935-vortex-entity-seed.md §1.3 and this module's
+  # moduledoc table. Gated by the NEW, distinct :EntitiesRestrictionsManage
+  # permission, not a reuse of :EntitiesDefinitionsWrite (design §1.3's own
+  # justification). Declared at the same "/restrictions/..." path prefix,
+  # a sibling of "/records/..." and "/definitions/..." above -- no ordering
+  # hazard with either (distinct first path segment).
+
+  authz_post "/restrictions/import", :EntitiesRestrictionsManage do
+    handle_import_restrictions(conn)
   end
 
   # ── Query route ───────────────────────────────────────────────────────
@@ -1220,6 +1248,59 @@ defmodule Letflow.Routers.Entities do
   defp import_reason_json(other) do
     Logger.warning("entity record import entry failed: #{inspect(other)}")
     %{"type" => "internal_error"}
+  end
+
+  # ══ POST /entities/restrictions/import (ISS-0935) ═════════════════════
+  #
+  # Body carries up to four optional arrays -- `field_restrictions`,
+  # `field_grants`, `type_restrictions`, `type_grants`
+  # (`Letflow.Entities.Restrictions.import_restrictions/2`'s own moduledoc
+  # has the full per-row shape/validation contract). 403 is handled entirely
+  # by the route-level :EntitiesRestrictionsManage check above (the
+  # `authz_post` macro) -- this handler never emits its own 403. `actor_id`
+  # is read from conn.assigns but not forwarded to the delegate: these rows
+  # carry no "created_by" column (design §1.3's table shapes), matching
+  # entity_field_restrictions/user_entity_grants' own already-shipped,
+  # audit-column-free shape.
+
+  defp handle_import_restrictions(conn) do
+    prefix = prefix!(conn)
+
+    with {:ok, body} <- object_body(conn) do
+      case Restrictions.import_restrictions(body, prefix) do
+        {:ok, counts} ->
+          Response.ok(conn, %{"inserted" => restrictions_counts_json(counts)})
+
+        {:error, {:invalid_rows, errors}} ->
+          Response.unprocessable(conn, restriction_rows_error_detail(errors))
+      end
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+    end
+  end
+
+  defp restrictions_counts_json(%{
+         field_restrictions: field_restrictions,
+         field_grants: field_grants,
+         type_restrictions: type_restrictions,
+         type_grants: type_grants
+       }) do
+    %{
+      "field_restrictions" => field_restrictions,
+      "field_grants" => field_grants,
+      "type_restrictions" => type_restrictions,
+      "type_grants" => type_grants
+    }
+  end
+
+  defp restriction_rows_error_detail(errors) do
+    detail =
+      Enum.map_join(errors, "; ", fn %{table: table, index: index, reason: reason} ->
+        "#{table}[#{index}]: #{reason}"
+      end)
+
+    "invalid restriction row(s): " <> detail
   end
 
   # design §7, Records.command_error(), mapped exhaustively:

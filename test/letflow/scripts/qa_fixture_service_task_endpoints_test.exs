@@ -20,7 +20,16 @@ defmodule Letflow.Scripts.QaFixtureServiceTaskEndpointsTest do
   alias Letflow.Engine.ServiceTask
   alias Letflow.Webhooks.UrlValidator
 
-  @fixture_glob Path.expand("../../fixtures/qa/*.json", __DIR__)
+  # ISS-0935 added non-ProcessDefinition fixtures to this same directory
+  # (entity-type definitions and their sample-record import payloads,
+  # named `vortex_production_batch_entity_definition.json`,
+  # `vortex_shipment_manifest_entity_definition.json`,
+  # `vortex_production_batch_records.json`,
+  # `vortex_shipment_manifest_records.json`) -- this test's own scope
+  # (ISS-0930) is SERVICE_TASK dispatch inside ProcessDefinition payloads
+  # only, so the glob is narrowed to `*_process_definition.json` rather
+  # than every JSON file in the directory.
+  @fixture_glob Path.expand("../../fixtures/qa/*_process_definition.json", __DIR__)
   @scripts_dir Path.expand("../../../scripts", __DIR__)
   @seed_scripts ~w(seed_meridian_definition.sh seed_vortex_definition.sh seed_swiftroute_definition.sh)
   @valid_methods ~w(GET POST PUT PATCH DELETE)

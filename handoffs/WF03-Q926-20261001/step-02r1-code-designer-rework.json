@@ -1,0 +1,44 @@
+{
+  "handoff_id": "50ec1542-9134-4645-9269-edd22a4efee7",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "02r1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-Q926-20261001/step-02r1-code-designer-rework.json",
+  "created_at": "2026-10-01T18:30:50Z",
+  "started_at": "2026-10-01T18:30:50Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "handoffs/WF03-Q926-20261001/step-02b-code-design-validator.json",
+      "lib/letflow/engine/sub_process.ex",
+      "deps/jason/lib/jason.ex"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 (rework_count=1 of 3) of WF-03 Step 2 for ISS-0926. The CODE-DESIGN-VALIDATOR FAILED your design: read handoffs/WF03-Q926-20261001/step-02b-code-design-validator.json result.summary and result.issues (3 MAJOR + 4 MINOR) and fix ALL of them in lib/letflow/design/iss0926-service-task-body-template-rendering.md (edit the same file; branch feature/WF03-Q926-20261001, already checked out). Claim: status IN_PROGRESS only; on finishing flip status to COMPLETED with result.status PASS and completed_at from a real clock read, as normal. ORCH rulings on the MAJORs: (1) Pick ONE Jason escape option, verified against deps/jason source for the pinned version, state its exact guarantees (is '/' escaped or not, U+2028/9, control chars, DEL, non-ASCII) and add a test row per guarantee; do not claim behaviour you did not verify in deps/jason/lib. (2) The remediation sub-process discards pending service-task events (lib/letflow/engine/sub_process.ex ~877-894): verify this yourself. It is a pre-existing separate defect, OUT OF SCOPE for ISS-0926 (ORCH will file a follow-up issue); keep the fixture split (graph-level correctness: e10 gets its own node/body so a static sla reason is never attached to the remediation path) but state plainly in the design that the e10 notice is not dispatched today because of that gap, relabel the e10 test as graph-routing/fixture-shape only, and remove any claim that the remediation-path notice is sent. Do not pretend to fix the sub-process. (3) Specify T14 concretely: start node/event/variables, or demote it to a pure graph/fixture-shape assertion if a runnable path cannot be given without DB, using existing helpers (check token_node/3 and what helpers exist; do not invent helpers without specifying them). MINORs: fix typespec, name the reason-class reduction function and give all six error sentences, fully specify the placeholder scan (runs over the ORIGINAL template, backslash handling, how positions are obtained), delete the duplicate mutant. Docs only: modify the design doc and this handoff... actually modify the design doc and mark THIS rework handoff complete; commit those two files only; push origin HEAD; next_action 'Route to CODE-DESIGN-VALIDATOR (re-gate)'. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "All 3 MAJOR and 4 MINOR validator issues addressed in the design",
+      "Jason option claims verified against deps/jason source",
+      "e10 dispatch gap stated and scoped out",
+      "No implementation code",
+      "Only design doc + this handoff modified"
+    ]
+  }
+}

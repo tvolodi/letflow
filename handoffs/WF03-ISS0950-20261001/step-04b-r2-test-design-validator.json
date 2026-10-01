@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0950-20261001/step-04b-r2-test-design-validator.json",
   "created_at": "2026-10-01T15:28:51Z",
   "started_at": "2026-10-01T15:28:51Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T15:31:12Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -44,7 +44,21 @@
       "Verdict PASS/FAIL"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Read the reworked R-LEN register test (endpoint_url_validation_test.exs L181-193: 'http://example.test/' padded to 2049 chars, asserts check_endpoint_url == {:error,:endpoint_url_not_allowed} precondition, exactly one :endpoint_url error with validation :length) and the new R-LEN (publish) test (L316-330, same URL, exactly one length error, version_count == 0). Independently measured in a throwaway git worktree of 57a833c0 outside the repo (deps/_build copied), 4 test files, baseline 'Result: 71 passed'. De-dup mutant (removed the Keyword.has_key?(changeset.errors, :endpoint_url) cond clause in Entry.validate_endpoint_url): 69/71 passed, 2 failed = both R-LEN tests (register and publish) -> KILLED (previously survived at 70/70). Regression re-runs: m4 (get_change instead of get_field) 69/71, failing P-SAME-URL and P-ABSENT(b) -> killed; m1 (accept http scheme in UrlValidator.check_scheme) 59/71, 12 failed -> killed. Worktree mutations reverted with git checkout -- lib/ inside the worktree after each run; worktree removed and pruned; git worktree list shows only the main checkout; git status --porcelain lib/ test/ in the main checkout is empty; scoped re-run of endpoint_url_validation_test.exs in main checkout 'Result: 20 passed' (matches TEST-DESIGNER's baseline 20/20). No skips, no full suite, nothing committed, main checkout never checked out or reset.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Advance WF-03 past step 4b to TEST-RUNNER (next step per workflow)."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

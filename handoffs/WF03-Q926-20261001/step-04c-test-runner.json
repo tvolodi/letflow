@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-Q926-20261001/step-04c-test-runner.json",
   "created_at": "2026-10-01T19:56:39Z",
   "started_at": "2026-10-01T19:56:39Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T20:01:43Z",
+  "status": "FAILED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,5 +40,9 @@
       "flakes distinguished from real failures",
       "container removed, no file modified except this handoff"
     ]
+  },
+  "result": {
+    "verdict": "FAIL (lint only; code and tests green)",
+    "summary": "Environment: local mix 1.20.3 with MIX_ENV=test, LETFLOW_DB_PORT=51926 -> throwaway postgres:16 container q926-runner-pg on 127.0.0.1:51926 (shared dev DB 5462 and q929-pg untouched; container removed afterwards). (1) mix compile --warnings-as-errors exit 0; also mix compile --force --warnings-as-errors: 'Compiling 315 files (.ex) / Generated letflow app', exit 0. (2) mix format --check-formatted exit 0. (3) Six ISS-0926 files in one run: 'Result: 188 passed (1 property, 187 tests)', exit 0, no flakes, 99.2s. (4) Neighbours batch A (qa_fixture_service_task_endpoints, persona_actor_seed_drift, seed_swiftroute_definition, service_task_routing, service_task): 'Result: 96 passed'. Batch B (engine_test, routers/tasks_test, simulation/req208_meridian_test, supervisor/pollers_test): 'Result: 133 passed'. All files from the grep -l over test/ (.exs) were covered. No failures, no flakes seen (AC5 cancel race in service_task_wiring_test did not reproduce). (5) mix letflow.lint_handoffs: FAIL, exit 1, 'found 1 new violation(s)': [H1] handoffs/WF03-Q926-20261001/step-02-code-designer.json: top-level status \"PASS\" is not one of [PENDING, IN_PROGRESS, COMPLETED, FAILED, ESCALATED, CANCELLED] (introduced by commit 3600fc21, CODE-DESIGNER step 02). Not fixed here per instructions (only this handoff may be modified); fix is a one-line status change to COMPLETED by ORCH. Other lint output is grandfathered (including two started_at > completed_at H2 entries in WF02-REQ025 and WF03-ISS0047) or INFO/H5 registry coverage report. No test/reports file written because dispatch restricted modifications to this handoff."
   }
 }

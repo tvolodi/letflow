@@ -5826,8 +5826,17 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 7
+    entries: 8
     note: >
+      Incremented to 8 by DOC-UPDATER's own REQ-428 done-event append
+      (WF02-REQ428-20261001, 2026-10-01T09:45:00Z) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v25.yaml` = 8 on-disk entries; 208
+      lines / 12076 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered. Same as the prior increment below, this
+      bump was missed in DOC-UPDATER's own Step 6 commit and caught/fixed
+      by ORCH here before Step Final, rather than left for a later
+      session's A9 invariant failure to surface again.
+
       Incremented to 7 by ORCH's own REQ-428 started-event append
       (WF02-REQ428-20261001, 2026-10-01T01:18:43Z) -- `grep -c "^  - req:"
       docs/status/requirement_status.v25.yaml` = 7 on-disk entries; 179

@@ -1219,6 +1219,186 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
       # and does not cover).
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0926 -- the dispatcher sends the FROZEN config_snapshot["rendered_body"], never
+  # the raw template (design sections 1.4, 1.5; tests I-2, I-5, I-9, I-10, I-11).
+  # Snapshots are inserted directly so the raw template and the rendered body can be
+  # made to DIFFER, which is what proves which of the two goes on the wire.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0926 dispatcher body resolution" do
+    @raw_template ~s({"reason":"x","id":"{{variables.review_id}}"})
+    @rendered_body ~s({"reason":"x","id":"rev-1"})
+
+    setup do
+      Application.put_env(:letflow, :service_task_ssrf_validation_enabled, false)
+      on_exit(fn -> Application.delete_env(:letflow, :service_task_ssrf_validation_enabled) end)
+      :ok
+    end
+
+    defp iss0926_row!(overrides) do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot: config_snapshot(overrides)
+        })
+
+      {schema_name, dispatch}
+    end
+
+    test "I-2 the rendered body is sent with content-type application/json; the raw template never goes on the wire" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      {schema_name, dispatch} =
+        iss0926_row!(%{
+          "rendered_url" => server_url,
+          "body_template" => @raw_template,
+          "rendered_body" => @rendered_body
+        })
+
+      assert {:ok, {:advance, %{"ok" => true}}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:webhook_test_server_request, request}, 1_000
+      assert request.body == @rendered_body
+      assert request.headers["content-type"] == "application/json"
+      refute request.body =~ "{{"
+    end
+
+    test "I-2b the catalog_service branch also sends the rendered body, not the raw template" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      {schema_name, dispatch} =
+        iss0926_row!(%{
+          "route_kind" => "catalog_service",
+          "service_id" => "some-catalog-service",
+          "url_template" => nil,
+          "rendered_url" => server_url,
+          "body_template" => @raw_template,
+          "rendered_body" => @rendered_body
+        })
+
+      assert {:ok, {:advance, _}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:webhook_test_server_request, request}, 1_000
+      assert request.body == @rendered_body
+      assert request.headers["content-type"] == "application/json"
+    end
+
+    test "I-5 a new-format row with rendered_body nil sends an empty body" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      {schema_name, dispatch} =
+        iss0926_row!(%{
+          "rendered_url" => server_url,
+          "body_template" => nil,
+          "rendered_body" => nil
+        })
+
+      assert {:ok, {:advance, _}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:webhook_test_server_request, request}, 1_000
+      assert request.body == ""
+    end
+
+    test "I-5b key presence, not nil-ness, decides: rendered_body nil with a templated body_template is NOT the legacy fail-closed path" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      {schema_name, dispatch} =
+        iss0926_row!(%{
+          "rendered_url" => server_url,
+          "body_template" => @raw_template,
+          "rendered_body" => nil
+        })
+
+      assert {:ok, {:advance, _}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:webhook_test_server_request, request}, 1_000
+      assert request.body == ""
+      refute request.body =~ "{{"
+    end
+
+    test "I-9 legacy row (no rendered_body key) with a STATIC template still sends it verbatim" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+      static = ~s({"reason":"static"})
+
+      {schema_name, dispatch} =
+        iss0926_row!(%{"rendered_url" => server_url, "body_template" => static})
+
+      refute Map.has_key?(dispatch.config_snapshot, "rendered_body")
+
+      assert {:ok, {:advance, _}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:webhook_test_server_request, request}, 1_000
+      assert request.body == static
+      assert request.headers["content-type"] == "application/json"
+    end
+
+    for route_kind <- ["inline_url", "catalog_service"] do
+      test "I-10 legacy row (no rendered_body key) with a templated body fails closed (#{route_kind}): zero requests, given_up request_build_error" do
+        %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+        {schema_name, dispatch} =
+          iss0926_row!(%{
+            "route_kind" => unquote(route_kind),
+            "service_id" => "some-catalog-service",
+            "rendered_url" => server_url,
+            "body_template" => @raw_template
+          })
+
+        assert {:ok, {:give_up, error_attrs}} =
+                 ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+        assert error_attrs.details.last_failure_kind == :request_build_error
+
+        reloaded = reload!(schema_name, dispatch.id)
+        assert reloaded.status == "given_up"
+        assert reloaded.last_failure_kind == "request_build_error"
+        assert reloaded.attempt_index == 0
+        refute_receive {:webhook_test_server_request, _request}, 300
+      end
+    end
+
+    test "I-11 a retry resends the identical frozen rendered body (never a re-render, never the raw template)" do
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+      %{url: server_url} =
+        WebhookTestServer.start_with_responder(fn _request ->
+          case Agent.get_and_update(counter, fn n -> {n, n + 1} end) do
+            0 -> {429, "slow down"}
+            _later -> {200, ~s({"ok":true})}
+          end
+        end)
+
+      {schema_name, dispatch} =
+        iss0926_row!(%{
+          "rendered_url" => server_url,
+          "body_template" => @raw_template,
+          "rendered_body" => @rendered_body
+        })
+
+      assert {:ok, :retry_scheduled} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert reload!(schema_name, dispatch.id).status == "pending"
+
+      assert {:ok, {:advance, _}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:webhook_test_server_request, first}, 1_000
+      assert_receive {:webhook_test_server_request, second}, 1_000
+      assert first.body == @rendered_body
+      assert second.body == @rendered_body
+      assert reload!(schema_name, dispatch.id).config_snapshot["rendered_body"] == @rendered_body
+    end
+  end
 end
 
 defmodule Iss0446RegressionGuard.SlowTrapChild do

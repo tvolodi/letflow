@@ -162,6 +162,17 @@ defmodule Letflow.Engine.RegulatoryReviewTimerPathTest do
     assert row.config_snapshot["rendered_url"] ==
              "https://httpbin.org/anything/compliance/regulatory-notice"
 
+    # ISS-0926 / EO-002: the frozen outbound body carries the rendered reason for THIS path
+    # (the 21-day timer), with the instance's own review_id -- not the raw template, and
+    # not the remediation path's reason.
+    assert is_binary(row.config_snapshot["rendered_body"])
+    refute row.config_snapshot["rendered_body"] =~ "{{"
+
+    assert Jason.decode!(row.config_snapshot["rendered_body"]) == %{
+             "reason" => "sla_breach_30_days",
+             "review_id" => "sim-q915-001"
+           }
+
     # Step 6: dispatcher stub -> poller re-entry.
     assert {:ok, :advanced} =
              Engine.advance_after_service_task_outcome(

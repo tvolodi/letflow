@@ -12,6 +12,11 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
   the pure `Transition.transition/3`. Each guard is a `check_*` function over a decoded
   document so the same logic is re-applied to mutated in-memory copies (M1-M10) to prove
   it fires. See `test/specs/ISS-0932.md`.
+
+  ISS-0926 amends the contract to v1.3 (split regulatory notice nodes with literal
+  `body_template` reasons): T1/T8 are rewritten, T13/T14 and mutants M9a-M9c, M9c2,
+  M11-M15 are added. T14 is GRAPH ROUTING ONLY -- the remediation-path notice is not
+  dispatched today (design section 3.6). See `test/specs/ISS-0926.md`.
   """
 
   use ExUnit.Case, async: true
@@ -20,6 +25,7 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
 
   alias Letflow.Definitions.Graph
   alias Letflow.Engine.InstanceState
+  alias Letflow.Engine.ServiceTask
   alias Letflow.Engine.Token
   alias Letflow.Engine.Transition
 
@@ -91,6 +97,43 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
   defp token_node(doc, event, variables) do
     case Transition.transition(graph!(doc), state(variables, "risk-evaluation"), {event, "tok-1"}) do
       {:ok, new_state, _events} -> {:ok, Enum.map(new_state.tokens, & &1.node_id)}
+      other -> {:error, other}
+    end
+  end
+
+  # ISS-0926 T14 helper (GRAPH-ROUTING / FIXTURE-SHAPE ONLY): where does a token land after
+  # the remediation sub-process completes, and after the gateway that follows it is advanced?
+  # Pure: only Transition.transition/3. waiting_child_instance_id MUST be non-nil or
+  # dispatch_sub_process_completion/4 refuses the event.
+  @spec remediation_exit_nodes(doc :: map(), variables :: map()) ::
+          {:ok, after_subprocess :: [String.t()], after_gateway :: [String.t()]}
+          | {:error, term()}
+  defp remediation_exit_nodes(doc, variables) do
+    graph = graph!(doc)
+
+    start = %InstanceState{
+      instance_id: "inst-q926",
+      status: :active,
+      tokens: [
+        %Token{
+          node_id: "remediation-subprocess",
+          token_id: "tok-1",
+          waiting_child_instance_id: "child-1"
+        }
+      ],
+      variables: variables,
+      pending_task_nodes: []
+    }
+
+    with {:ok, s1, _events1} <- step(graph, start, {:sub_process_completed, "tok-1"}),
+         {:ok, s2, _events2} <- step(graph, s1, {:advance_token, "tok-1"}) do
+      {:ok, Enum.map(s1.tokens, & &1.node_id), Enum.map(s2.tokens, & &1.node_id)}
+    end
+  end
+
+  defp step(graph, state, event) do
+    case Transition.transition(graph, state, event) do
+      {:ok, _new_state, _events} = ok -> ok
       other -> {:error, other}
     end
   end
@@ -203,6 +246,47 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
     )
   end
 
+  # ISS-0926 T13: both shipped templates render against a real variable map.
+  defp check_t13(doc) do
+    render = fn id ->
+      template = get_in(node(doc, id) || %{}, ["attributes", "body_template"])
+
+      with {:ok, rendered} when is_binary(rendered) <-
+             ServiceTask.render_body_template(template, %{"review_id" => "r-1"}) do
+        Jason.decode(rendered)
+      else
+        {:ok, nil} -> {:error, :no_body_template}
+        other -> other
+      end
+    end
+
+    results =
+      {render.("regulatory-auto-escalation"), render.("regulatory-remediation-escalation")}
+
+    ok_if(
+      results ==
+        {{:ok, %{"reason" => "sla_breach_30_days", "review_id" => "r-1"}},
+         {:ok, %{"reason" => "remediation_unresolved", "review_id" => "r-1"}}},
+      results
+    )
+  end
+
+  # ISS-0926 T14: graph routing only -- e10 (unresolved) reaches the remediation notice node,
+  # e9 (resolved) still reaches findings-sign-off.
+  defp check_t14(doc) do
+    unresolved =
+      remediation_exit_nodes(doc, %{"remediation_status" => "unresolved", "review_id" => "r-1"})
+
+    resolved =
+      remediation_exit_nodes(doc, %{"remediation_status" => "resolved", "review_id" => "r-1"})
+
+    ok_if(
+      unresolved == {:ok, ["post-remediation-check"], ["regulatory-remediation-escalation"]} and
+        resolved == {:ok, ["post-remediation-check"], ["findings-sign-off"]},
+      {unresolved, resolved}
+    )
+  end
+
   defp check_t9(doc) do
     results =
       for vars <- [%{}, %{"highest_severity" => "low"}],
@@ -283,6 +367,14 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
 
     test "T8 split regulatory notice nodes: distinct inbound edges, e5/e18 -> end-closed, literal reasons" do
       assert check_t8(json_doc()) == :ok
+    end
+
+    test "T13 both shipped body templates render against {review_id} and decode to their literal reasons" do
+      assert check_t13(json_doc()) == :ok
+    end
+
+    test "T14 (graph routing / fixture shape only; it does not prove the remediation notice is dispatched) e10 reaches regulatory-remediation-escalation, e9 still reaches findings-sign-off" do
+      assert check_t14(json_doc()) == :ok
     end
 
     test "T9 escalation_timer_fired at risk-evaluation lands on regulatory-auto-escalation" do
@@ -425,6 +517,58 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
         )
 
       assert {:error, _} = check_t12(json_doc(), old_yaml)
+    end
+
+    test "M9c2 e10 retargeted back to regulatory-auto-escalation -> T14 red" do
+      m = map_edge(json_doc(), "e10", &Map.put(&1, "target", "regulatory-auto-escalation"))
+      assert {:error, _} = check_t14(m)
+    end
+
+    test "M11 placeholder moved outside the JSON string in a shipped template -> T13 red" do
+      m =
+        map_node(
+          json_doc(),
+          "regulatory-auto-escalation",
+          &put_in(
+            &1,
+            ["attributes", "body_template"],
+            ~s({"reason":"sla_breach_30_days","review_id":{{variables.review_id}}})
+          )
+        )
+
+      assert {:error, _} = check_t13(m)
+    end
+
+    test "M12 remediation template removed -> T13 red" do
+      m =
+        map_node(
+          json_doc(),
+          "regulatory-remediation-escalation",
+          &update_in(&1, ["attributes"], fn a -> Map.delete(a, "body_template") end)
+        )
+
+      assert {:error, _} = check_t13(m)
+    end
+
+    test "M13 JSON new but YAML lacks the new node -> T12 red" do
+      old_yaml =
+        update_in(yaml_doc(), ["graph", "nodes"], fn ns ->
+          Enum.reject(ns, &(&1["id"] == "regulatory-remediation-escalation"))
+        end)
+
+      assert {:error, _} = check_t12(json_doc(), old_yaml)
+    end
+
+    test "M14 JSON new but YAML lacks edge e18 -> T12 red" do
+      old_yaml = drop_edge(yaml_doc(), "e18")
+      assert {:error, _} = check_t12(json_doc(), old_yaml)
+    end
+
+    test "M15 e9 (resolved) retargeted to the remediation notice -> T14 red" do
+      m =
+        map_edge(json_doc(), "e9", &Map.put(&1, "target", "regulatory-remediation-escalation"))
+
+      assert {:error, _} = check_t14(m)
     end
   end
 end

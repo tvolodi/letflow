@@ -875,4 +875,93 @@ defmodule Letflow.EngineCatalogServiceTaskTest do
       assert {:ok, %{instance_status: :completed}} = complete(tenant, task)
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0926 I-3 -- a catalog SERVICE_TASK's body_template is a NODE attribute, rendered
+  # by the same activation step as an inline node's (design section 1.6).
+  # ---------------------------------------------------------------------------------
+
+  @iss0926_template ~s({"reason":"sla","review_id":"{{variables.review_id}}"})
+
+  # START -> SERVICE_TASK(service_id + body_template) -> END
+  defp graph_start_catalog_with_body(service_id, body_template) do
+    graph = graph_start_catalog(service_id)
+
+    update_in(graph, ["nodes"], fn nodes ->
+      Enum.map(nodes, fn
+        %{"id" => "svc"} = node -> put_in(node, ["attributes", "body_template"], body_template)
+        other -> other
+      end)
+    end)
+  end
+
+  describe "ISS-0926 I-3: catalog SERVICE_TASK renders its node body_template" do
+    test "the catalog row freezes the rendered body beside the pinned endpoint" do
+      tenant = tenant!()
+      entry = register!()
+
+      definition =
+        active_definition!(
+          tenant,
+          graph_start_catalog_with_body(entry.service_id, @iss0926_template)
+        )
+
+      result = create!(tenant, definition, %{initial_variables: %{"review_id" => "rev-3"}})
+
+      assert [row] = dispatches(tenant, result.instance_id)
+      assert row.config_snapshot["route_kind"] == "catalog_service"
+      assert row.config_snapshot["rendered_url"] == @v1_url
+      assert row.config_snapshot["body_template"] == @iss0926_template
+      assert row.config_snapshot["rendered_body"] == ~s({"reason":"sla","review_id":"rev-3"})
+    end
+
+    test "an injection value is escaped in the catalog row's frozen body" do
+      tenant = tenant!()
+      entry = register!()
+
+      definition =
+        active_definition!(
+          tenant,
+          graph_start_catalog_with_body(entry.service_id, @iss0926_template)
+        )
+
+      result =
+        create!(tenant, definition, %{initial_variables: %{"review_id" => ~s(x","admin":true)}})
+
+      assert [row] = dispatches(tenant, result.instance_id)
+      decoded = Jason.decode!(row.config_snapshot["rendered_body"])
+      assert decoded |> Map.keys() |> Enum.sort() == ["reason", "review_id"]
+    end
+
+    test "a missing variable fails the catalog node's create/2 with the typed class and writes no row" do
+      tenant = tenant!()
+      entry = register!()
+
+      definition =
+        active_definition!(
+          tenant,
+          graph_start_catalog_with_body(entry.service_id, @iss0926_template)
+        )
+
+      assert {:error,
+              {:activation_failed, {:service_task_body_render_failed, "svc", :missing_variable}}} =
+               Engine.create(start_attrs(definition, %{}), prefix: tenant.schema_name)
+
+      assert Repo.aggregate(ServiceTaskDispatch, :count, prefix: tenant.schema_name) == 0
+    end
+
+    test "a catalog resolution error still wins over a body render error (precedence)" do
+      tenant = tenant!()
+      entry = register_with!(%{required_auth: :API_KEY})
+
+      definition =
+        active_definition!(
+          tenant,
+          graph_start_catalog_with_body(entry.service_id, @iss0926_template)
+        )
+
+      assert {:error, {:activation_failed, {:service_task_catalog_unresolved, "svc", _reason}}} =
+               Engine.create(start_attrs(definition, %{}), prefix: tenant.schema_name)
+    end
+  end
 end

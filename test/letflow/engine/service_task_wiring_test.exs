@@ -1213,4 +1213,440 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
              }
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0926 -- SERVICE_TASK `body_template` is rendered at activation and frozen in
+  # config_snapshot["rendered_body"] (design sections 1.1, 1.6, 1.7, 2; tests I-1, I-2,
+  # I-4..I-8). See test/specs/ISS-0926.md.
+  # ---------------------------------------------------------------------------------
+
+  @iss0926_template ~s({"reason":"sla","review_id":"{{variables.review_id}}"})
+
+  defp svc_node_with_body(endpoint, body_template) do
+    attrs = %{"endpoint" => endpoint, "timeout_ms" => 5_000}
+    attrs = if body_template, do: Map.put(attrs, "body_template", body_template), else: attrs
+    %{"id" => "svc", "node_type" => "SERVICE_TASK", "attributes" => attrs}
+  end
+
+  # START -> SERVICE_TASK(body) -> END
+  defp graph_svc_body(endpoint, body_template) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        svc_node_with_body(endpoint, body_template),
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "svc"},
+        %{"id" => "e2", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
+  # START -> HUMAN_TASK -> SERVICE_TASK(body) -> END (SERVICE_TASK reached through the completion hop)
+  defp graph_human_task_svc_body(endpoint, body_template) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "ht", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "role-any"}},
+        svc_node_with_body(endpoint, body_template),
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "ht"},
+        %{"id" => "e2", "source" => "ht", "target" => "svc"},
+        %{"id" => "e3", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
+  # START -> TIMER(P0D) -> SERVICE_TASK(body) -> END (SERVICE_TASK reached through the timer-fire site)
+  defp graph_timer_svc_body(endpoint, body_template) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "tmr",
+          "node_type" => "TIMER",
+          "attributes" => %{"duration_iso8601" => "P0D"}
+        },
+        svc_node_with_body(endpoint, body_template),
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "tmr"},
+        %{"id" => "e2", "source" => "tmr", "target" => "svc"},
+        %{"id" => "e3", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
+  # START -> SERVICE_TASK(plain) -> SERVICE_TASK(body) -> END (second one reached through the outcome-advance site)
+  defp graph_svc_then_svc_body(endpoint, body_template) do
+    second = Map.put(svc_node_with_body(endpoint, body_template), "id", "svc2")
+
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "svc1",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{"endpoint" => endpoint, "timeout_ms" => 5_000}
+        },
+        second,
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "svc1"},
+        %{"id" => "e2", "source" => "svc1", "target" => "svc2"},
+        %{"id" => "e3", "source" => "svc2", "target" => "end"}
+      ]
+    }
+  end
+
+  defp create_with!(schema_name, graph, variables) do
+    definition = active_definition!(schema_name, graph)
+
+    assert {:ok, result} =
+             Engine.create(base_attrs(definition, %{initial_variables: variables}),
+               prefix: schema_name
+             )
+
+    result
+  end
+
+  describe "ISS-0926 create/2 renders and freezes the body" do
+    test "I-1 (REGRESSION) the dispatch row freezes rendered_body; the raw template stays alongside it" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      result =
+        create_with!(
+          schema_name,
+          graph_svc_body("https://example.test/hook", @iss0926_template),
+          %{"review_id" => "rev-1"}
+        )
+
+      assert [dispatch] = dispatches_for(schema_name, result.instance_id)
+      snapshot = dispatch.config_snapshot
+      assert snapshot["rendered_body"] == ~s({"reason":"sla","review_id":"rev-1"})
+      assert snapshot["body_template"] == @iss0926_template
+      assert snapshot["rendered_url"] == "https://example.test/hook"
+    end
+
+    test "I-1b a static body_template (no placeholder) is frozen verbatim" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      static = ~s({"reason":"static"})
+
+      result =
+        create_with!(schema_name, graph_svc_body("https://example.test/hook", static), %{})
+
+      assert [dispatch] = dispatches_for(schema_name, result.instance_id)
+      assert dispatch.config_snapshot["rendered_body"] == static
+    end
+
+    test "I-5 no body_template: the rendered_body key is still present and nil" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      result =
+        create_with!(schema_name, graph_svc_body("https://example.test/hook", nil), %{})
+
+      assert [dispatch] = dispatches_for(schema_name, result.instance_id)
+      assert Map.has_key?(dispatch.config_snapshot, "rendered_body")
+      assert dispatch.config_snapshot["rendered_body"] == nil
+      assert dispatch.config_snapshot["body_template"] == nil
+    end
+
+    test "I-4a injection value is escaped in the frozen body: decoded body has exactly the template's keys" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      result =
+        create_with!(
+          schema_name,
+          graph_svc_body("https://example.test/hook", @iss0926_template),
+          %{"review_id" => ~s(x","admin":true)}
+        )
+
+      assert [dispatch] = dispatches_for(schema_name, result.instance_id)
+      decoded = Jason.decode!(dispatch.config_snapshot["rendered_body"])
+      assert decoded |> Map.keys() |> Enum.sort() == ["reason", "review_id"]
+      assert decoded["review_id"] == ~s(x","admin":true)
+    end
+
+    test "I-4b end to end: the dispatcher puts the rendered, escaped body on the wire (injection cannot add a key)" do
+      enable_ssrf_bypass()
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      result =
+        create_with!(schema_name, graph_svc_body(server_url, @iss0926_template), %{
+          "review_id" => ~s(x","admin":true)
+        })
+
+      assert [dispatch] = dispatches_for(schema_name, result.instance_id)
+
+      assert {:ok, {:advance, %{"ok" => true}}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:webhook_test_server_request, request}, 1_000
+      assert request.headers["content-type"] == "application/json"
+      refute request.body =~ "{{"
+
+      decoded = Jason.decode!(request.body)
+      assert decoded |> Map.keys() |> Enum.sort() == ["reason", "review_id"]
+      assert decoded == %{"reason" => "sla", "review_id" => ~s(x","admin":true)}
+    end
+
+    test "I-2 end to end: the server receives the rendered body for a plain variable" do
+      enable_ssrf_bypass()
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      result =
+        create_with!(schema_name, graph_svc_body(server_url, @iss0926_template), %{
+          "review_id" => "rev-9"
+        })
+
+      assert [dispatch] = dispatches_for(schema_name, result.instance_id)
+
+      assert {:ok, {:advance, _}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:webhook_test_server_request, request}, 1_000
+      assert request.body == ~s({"reason":"sla","review_id":"rev-9"})
+    end
+
+    test "I-6a a missing variable fails create/2 with the typed class and writes nothing" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_svc_body("https://example.test/hook", @iss0926_template)
+        )
+
+      assert {:error,
+              {:activation_failed, {:service_task_body_render_failed, "svc", :missing_variable}}} =
+               Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert Repo.aggregate(InstanceProjection, :count, prefix: schema_name) == 0
+      assert Repo.aggregate(TokenRecord, :count, prefix: schema_name) == 0
+      assert Repo.aggregate(ServiceTaskDispatch, :count, prefix: schema_name) == 0
+      assert Repo.aggregate(Event, :count, prefix: schema_name) == 0
+    end
+
+    test "I-6b a placeholder outside a JSON string fails create/2 with the position class" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_svc_body("https://example.test/hook", ~s({"a": {{variables.review_id}}}))
+        )
+
+      assert {:error,
+              {:activation_failed,
+               {:service_task_body_render_failed, "svc", :placeholder_outside_string}}} =
+               Engine.create(
+                 base_attrs(definition, %{initial_variables: %{"review_id" => "r"}}),
+                 prefix: schema_name
+               )
+
+      assert Repo.aggregate(ServiceTaskDispatch, :count, prefix: schema_name) == 0
+    end
+
+    test "I-6c an oversized rendered body fails create/2 with :rendered_body_too_large and the error never echoes the value" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_svc_body("https://example.test/hook", @iss0926_template)
+        )
+
+      too_big = String.duplicate("S3CR3T", 20_000)
+
+      assert {:error, {:activation_failed, error}} =
+               Engine.create(
+                 base_attrs(definition, %{initial_variables: %{"review_id" => too_big}}),
+                 prefix: schema_name
+               )
+
+      assert error == {:service_task_body_render_failed, "svc", :rendered_body_too_large}
+      refute inspect(error) =~ "S3CR3T"
+    end
+
+    test "I-6d an empty rendered URL still wins over a body render error (precedence)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_svc_body("{{variables.missing_url}}", @iss0926_template)
+        )
+
+      assert {:error, {:activation_failed, {:service_task_url_rendered_empty, "svc"}}} =
+               Engine.create(base_attrs(definition), prefix: schema_name)
+    end
+  end
+
+  describe "ISS-0926 completion hop (HUMAN_TASK -> SERVICE_TASK)" do
+    test "I-1c the hop renders against the merged task output variables and freezes the result" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_human_task_svc_body("https://example.test/hook", @iss0926_template)
+        )
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      [task] = Repo.all(EngineTask, prefix: schema_name)
+
+      assert {:ok, _} =
+               Engine.complete_task(
+                 task.id,
+                 complete_attrs(%{output_variables: %{"review_id" => "from-task"}}),
+                 prefix: schema_name
+               )
+
+      assert [dispatch] = dispatches_for(schema_name, result.instance_id)
+
+      assert dispatch.config_snapshot["rendered_body"] ==
+               ~s({"reason":"sla","review_id":"from-task"})
+    end
+
+    test "I-7 a missing variable at the hop puts the instance in ERROR with the typed class, no row, no value leak" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_human_task_svc_body("https://example.test/hook", @iss0926_template)
+        )
+
+      assert {:ok, result} =
+               Engine.create(
+                 base_attrs(definition, %{initial_variables: %{"unrelated" => "S3CR3T-VALUE"}}),
+                 prefix: schema_name
+               )
+
+      [task] = Repo.all(EngineTask, prefix: schema_name)
+
+      assert {:error,
+              {:instance_execution_error, :service_task_body_render_failed, {:node, "svc"}}} =
+               Engine.complete_task(task.id, complete_attrs(), prefix: schema_name)
+
+      projection = Repo.get!(InstanceProjection, result.instance_id, prefix: schema_name)
+      assert projection.status == :error
+      assert projection.error_detail["error_type"] == "service_task_body_render_failed"
+      assert dispatches_for(schema_name, result.instance_id) == []
+
+      assert [event] =
+               Event
+               |> where(
+                 [e],
+                 e.instance_id == ^result.instance_id and e.event_type == "EXECUTION_ERROR"
+               )
+               |> Repo.all(prefix: schema_name)
+
+      assert event.payload["details"] == %{"reason" => "missing_variable"}
+
+      assert event.payload["reason"] ==
+               "service task body template could not be rendered: referenced variable is not set"
+
+      surface =
+        Jason.encode!(%{reason: event.payload["reason"], details: event.payload["details"]})
+
+      refute surface =~ "S3CR3T-VALUE"
+      refute surface =~ "review_id"
+    end
+  end
+
+  describe "ISS-0926 non-hop sites return the typed not-supported tuple (I-8)" do
+    test "I-8a timer-fire: advance_after_timer_fired/3 returns the typed tuple, writes no row, does not raise" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      result =
+        create_with!(
+          schema_name,
+          graph_timer_svc_body("https://example.test/hook", @iss0926_template),
+          %{}
+        )
+
+      assert [timer] =
+               Repo.all(
+                 from(t in Letflow.Scheduler.Timer, where: t.instance_id == ^result.instance_id),
+                 prefix: schema_name
+               )
+
+      assert {:error,
+              {:service_task_body_render_failed_not_supported_for_timer_fire, "svc",
+               :missing_variable}} =
+               Engine.advance_after_timer_fired(timer, Repo, schema_name)
+
+      assert dispatches_for(schema_name, result.instance_id) == []
+    end
+
+    test "I-8b service-outcome advance: the typed tuple is returned and no row is created for the second node" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      result =
+        create_with!(
+          schema_name,
+          graph_svc_then_svc_body("https://example.test/hook", @iss0926_template),
+          %{}
+        )
+
+      assert [first] = dispatches_for(schema_name, result.instance_id)
+      assert first.node_id == "svc1"
+
+      advanced =
+        first |> Ecto.Changeset.change(%{status: "advanced"}) |> Repo.update!(prefix: schema_name)
+
+      assert {:error,
+              {:service_task_body_render_failed_not_supported_for_timer_fire, "svc2",
+               :missing_variable}} =
+               Engine.advance_after_service_task_outcome(
+                 advanced.id,
+                 {:advance, %{}},
+                 Repo,
+                 schema_name
+               )
+
+      assert Enum.filter(dispatches_for(schema_name, result.instance_id), &(&1.node_id == "svc2")) ==
+               []
+    end
+
+    test "I-8c service-outcome advance succeeds and freezes a rendered body when the variable is present" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      result =
+        create_with!(
+          schema_name,
+          graph_svc_then_svc_body("https://example.test/hook", @iss0926_template),
+          %{"review_id" => "rev-2"}
+        )
+
+      assert [first] = dispatches_for(schema_name, result.instance_id)
+
+      advanced =
+        first |> Ecto.Changeset.change(%{status: "advanced"}) |> Repo.update!(prefix: schema_name)
+
+      assert {:ok, :advanced} =
+               Engine.advance_after_service_task_outcome(
+                 advanced.id,
+                 {:advance, %{}},
+                 Repo,
+                 schema_name
+               )
+
+      assert [second] =
+               Enum.filter(
+                 dispatches_for(schema_name, result.instance_id),
+                 &(&1.node_id == "svc2")
+               )
+
+      assert second.config_snapshot["rendered_body"] == ~s({"reason":"sla","review_id":"rev-2"})
+    end
+  end
 end

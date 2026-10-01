@@ -141,8 +141,26 @@ skipped only when (a) the value is nil (already an error from `validate_required
 (b) the changeset already carries an error on `:endpoint_url` (e.g. length > 2048), to
 avoid two errors for one field. Consequence, accepted and intended: republishing a
 version with an unchanged legacy-bad URL now returns 422; the admin must supply a good
-URL (they supply `endpoint_url` in every publish body anyway; `validate_required`
-already demands it).
+URL.
+
+**Absent-key semantics on publish (corrected).** `validate_required` and `get_field` both
+read the effective value (changes over data). On `publish_changeset/2` the base struct is
+the current row (`service_catalog.ex:405-406`), so a publish attrs map WITHOUT the
+`endpoint_url` key (the router builds it with `maybe_put`, `admin_services.ex:297`, so an
+omitted body field yields exactly that) leaves `endpoint_url` = the STORED value.
+`validate_required` therefore passes; it demands the field only when the effective value
+is nil/blank, i.e. an explicit `nil`, `""` or whitespace-only string (cast turns these into
+a nil change). Consequences, all intended:
+- key absent + stored URL passes the check -> publish succeeds and keeps the old URL
+  (unchanged pre-existing behaviour);
+- key absent + stored URL is legacy-bad -> publish fails with the new
+  `endpoint_url_not_allowed` error (the check validates the effective value, D5);
+- explicit nil / `""` / whitespace -> only the `validate_required` error, no second error
+  from the new step (the new step skips a nil value).
+
+**Scope decision: making `endpoint_url` mandatory in the publish body is OUT of scope.**
+Current absent-key behaviour (inherit the stored value) is not changed by ISS-0950; no
+change to `handle_publish`, `publish_attrs()` or `validate_required` lists.
 
 ### D6. Already-stored bad rows
 
@@ -202,7 +220,7 @@ Production:
    `validate_endpoint_url/1`, wire into `insert_changeset/2` and `publish_changeset/2`,
    moduledoc paragraph.
 3. `lib/letflow/service_catalog.ex` -- doc sentences only on `register/1` and `publish/3`
-   (no code change). Optional; may be skipped if ELIXIR-DEV judges Entry docs sufficient.
+   (no code change). DO add the two @doc sentences.
 
 Docs (DOC-UPDATER / ELIXIR-DEV, small):
 4. `docs/agents/instructions/security-invariants.md` INV-9 "Reference" paragraph: add the
@@ -210,10 +228,9 @@ Docs (DOC-UPDATER / ELIXIR-DEV, small):
    that `validate_syntactic/1` exists. The "How to verify" list gains the new test files
    from section 6.
 5. `docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md`:
-   no edit of its Decision (it is a record); if a status/addendum convention exists,
-   add a one-line pointer that the INV-9 point-3 gap is closed by ISS-0950 and correct
-   `POST /service-catalog` to `POST /admin/services`. Skip if the project convention
-   forbids editing signed-off records (then record in the issue YAML only).
+   DO NOT edit decision 0027 (it is a signed-off record). The closure of its INV-9
+   point-3 gap and the `POST /service-catalog` -> `POST /admin/services` correction are
+   recorded only in the INV-9 paragraph (item 4) and in the issue YAML note by ORCH.
 6. `docs/issues/ISS-0950.yaml` status flip is ORCH/DOC-UPDATER's, not the builder's.
 
 Explicitly NOT changed: `lib/letflow/routers/admin_services.ex` (the Changeset clause
@@ -222,8 +239,7 @@ already maps to 422), `lib/letflow/engine*.ex`, `lib/letflow/engine/service_task
 `ServicesPage.tsx` free-text form already renders the generic 422 failure; no new
 client contract; the e2e pipeline spec uses `https://httpbin.org/anything` by default
 and is unaffected unless CI sets an `http://` or localhost `SERVICE_TASK_MOCK_BASE_URL`,
-which the dispatch gate would already reject -- verify that CI value as a no-op check,
-no edit planned).
+which the dispatch gate would already reject; DO NOT edit the e2e spec or CI config).
 
 ## 5. Existing tests / fixtures to adjust (exact)
 
@@ -243,9 +259,13 @@ Exactly ONE existing test must change:
   How: keep the test and every assertion unchanged; replace only the setup. Register the
   entry with the default valid `@v1_url` via `register_with!(%{})`, then force the stored
   value with a direct statement that bypasses changesets, matching the file's/this
-  suite's existing precedent of raw writes in `service_catalog_test.exs` (e.g.
-  `Repo.update_all(from(e in Entry, where: e.service_id == ^entry.service_id), set:
-  [endpoint_url: "{{variables.absent}}"])`). Because the pin freezes `version_id`
+  suite's existing precedent of raw SQL writes via `Repo.query`/`Repo.query!` in
+  `service_catalog_test.exs` (lines 182-248, 634, 853, 888). Either raw SQL
+  (`UPDATE service_catalog SET endpoint_url = $1 WHERE service_id = $2`; confirm the real
+  table/column names against the schema) or `Repo.update_all` on `Entry` (which also
+  bypasses changesets; `Ecto.Query` is already imported in that file) is acceptable; the
+  recommended form is `Repo.update_all(from(e in Entry, where: e.service_id ==
+  ^entry.service_id), set: [endpoint_url: "{{variables.absent}}"])`. Because the pin freezes `version_id`
   resolution to the row, update the live row only (the test registers v1 and pins it; the
   engine resolves the pinned version from the current row by `version_id`). A one-line
   comment must say the value is seeded as legacy data on purpose because register now
@@ -336,8 +356,18 @@ Write-path-specific cases:
 - R-NO-ROW: after a rejected `register/1`, no `service_catalog` row exists for the id.
 - R-LEN: 2049-char valid-looking URL yields exactly ONE `:endpoint_url` error (the length
   error), proving D5(b) de-duplication.
-- R-MISSING: nil/absent `endpoint_url` yields only the `validate_required` error (no
-  second error from the new step); `""` likewise.
+- R-MISSING (per write path):
+  - register/1 with key absent, explicit nil, `""` or whitespace-only: exactly ONE
+    `:endpoint_url` error, the `validate_required` one (no second error from the new step).
+  - publish/3 with explicit nil, `""` or whitespace-only: same, exactly ONE
+    `validate_required` error.
+  - publish/3 with the key ABSENT: NOT a required error (see P-ABSENT).
+- P-ABSENT (publish, `endpoint_url` key omitted from attrs; base is the current row):
+  (a) current row has a good stored URL -> `{:ok, entry}`, new version row has the SAME
+  `endpoint_url` as before (inherits the stored value); (b) current row has a legacy-bad
+  URL (raw SQL seeded) -> `{:error, %Changeset{}}` with the `endpoint_url_not_allowed`
+  error and NO `validate_required` error, and P-ROLLBACK holds. Both sub-cases asserted
+  at P level; (a) also at HTTP (201, body omits the field in the request).
 - UNTOUCHED-PATHS: `update_scope/2` and `retire/1` on a legacy-bad-URL row still succeed
   (no URL check on those paths).
 
@@ -361,9 +391,13 @@ Unit tests for `UrlValidator.validate_syntactic/1` (no DB, async):
   (a) contrast: `validate_syntactic("https://example.test/x") == :ok` while
   `validate("https://example.test/x", fn _ -> {:error, :nxdomain} end)` returns
   `{:error, :target_url_not_allowed}` -- the only difference is the (non-)resolution.
-  (b) trace: in the test process, `:erlang.trace(self(), true, [:call])` with
-  `:erlang.trace_pattern({:inet, :getaddrs, 2}, true, [:local])` (and `{:inet, :gethostbyname, 1..2}`,
-  `{:inet_res, :resolve, :_}` for completeness), call `validate_syntactic/1` with several
+  (b) trace: ensure the modules are loaded first (`Code.ensure_loaded!(:inet)`,
+  `Code.ensure_loaded!(:inet_res)`), then in the test process
+  `:erlang.trace(self(), true, [:call])` with one `:erlang.trace_pattern/3` call per
+  pattern, each with match spec `true` and options `[:local]`: `{:inet, :getaddrs, 2}`,
+  `{:inet, :gethostbyname, 1}`, `{:inet, :gethostbyname, 2}`, and
+  `{:inet_res, :_, :_}` (wildcards are `:_`; ranges such as `1..2` are NOT valid
+  arities). Then call `validate_syntactic/1` with several
   hostnames (`example.test`, `localhost`, `internal.corp`), then `refute_receive
   {:trace, _, :call, {:inet, _, _}}` within a short window; turn tracing off in
   `on_exit`. `localhost` must return `:ok` here (hostname literal is not resolved; the

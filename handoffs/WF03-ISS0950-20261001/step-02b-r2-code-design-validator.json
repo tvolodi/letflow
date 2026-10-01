@@ -1,0 +1,49 @@
+{
+  "handoff_id": "c3c86ac3-4ded-41a1-9ca9-2cd29b814b48",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b-r2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0950-20261001/step-02b-r2-code-design-validator.json",
+  "created_at": "2026-10-01T14:59:53Z",
+  "started_at": "2026-10-01T14:59:53Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md",
+      "handoffs/WF03-ISS0950-20261001/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0950-20261001/step-02-code-designer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 2b re-validation (iteration 2 of the design gate; the step-02b FAIL is in handoffs/WF03-ISS0950-20261001/step-02b-code-design-validator.json). Re-validate lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md after CODE-DESIGNER rework 1. Verify the BLOCKER (publish absent-key semantics: R-MISSING per write path, P-ABSENT row, D5 correction, mandatory-on-publish out of scope) is correctly fixed against the real code (service_catalog.ex ~405, admin_services.ex maybe_put ~297), the three MINORs are fixed, and the rest of the design still satisfies every previous check (a)-(g). Re-verify independently, not from the earlier report. Complete PASS/FAIL per HANDOFF_PROTOCOL.md. Do not commit; do not edit design/lib/test.",
+    "acceptance_criteria": [
+      "BLOCKER fix verified against code with file:line evidence",
+      "3 MINORs verified fixed",
+      "No new inconsistencies introduced",
+      "Verdict PASS or FAIL"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -2548,3 +2548,30 @@
 2026-09-30T22:06:07Z | DISPATCH | WF03-ISS0936-20261001 | step-final-git-merge | ORCH -> ELIXIR-DEV | PENDING
 2026-09-30T22:27:00Z | PASS | WF03-ISS0936-20261001 | step-final | ELIXIR-DEV -> ORCH | PASS -- PR #2074 squash-merged as 63f26fa4 (CI green); ORCH verified merge state, ISS-0936 resolved on main, fix+test on main
 2026-09-30T22:27:00Z | RUN_DONE | WF03-ISS0936-20261001 | ORCH | DONE -- ISS-0936/Q-919/GH#2070 resolved; queue task 919 release_lock(done) OK (status done, unlocked)
+2026-09-30T22:29:14Z | DISPATCH | WF03-ISS0930-20261001 | step-01-issue-fixer-diagnose | ORCH -> ISSUE-FIXER | PENDING
+2026-09-30T22:31:23Z | PASS | WF03-ISS0930-20261001 | step-01 | ISSUE-FIXER -> ORCH | PASS -- root cause: seeded endpoints are relative 'POST /path' strings; engine requires absolute https URL (url_validator check_scheme) -> {:request_build_error,:target_url_not_allowed}; fix in seed
+2026-09-30T22:31:23Z | DISPATCH | WF03-ISS0930-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-09-30T22:34:20Z | PASS | WF03-ISS0930-20261001 | step-02 | CODE-DESIGNER -> ORCH | PASS -- design lib/letflow/design/iss0930-seed-service-task-endpoints.md
+2026-09-30T22:34:20Z | DISPATCH | WF03-ISS0930-20261001 | step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-30T22:36:35Z | FAIL | WF03-ISS0930-20261001 | step-02b | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- 4 design gaps; rework 1/3
+2026-09-30T22:36:35Z | DISPATCH | WF03-ISS0930-20261001 | step-02-r1-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-09-30T22:37:22Z | PASS | WF03-ISS0930-20261001 | step-02-r1 | CODE-DESIGNER -> ORCH | PASS -- design reworked
+2026-09-30T22:37:22Z | DISPATCH | WF03-ISS0930-20261001 | step-02b-r1-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-30T22:38:06Z | PASS | WF03-ISS0930-20261001 | step-02b-r1 | CODE-DESIGN-VALIDATOR -> ORCH | PASS
+2026-09-30T22:38:06Z | DISPATCH | WF03-ISS0930-20261001 | step-03-elixir-dev | ORCH -> ELIXIR-DEV | PENDING
+2026-09-30T22:40:58Z | PASS | WF03-ISS0930-20261001 | step-03 | ELIXIR-DEV -> ORCH | PASS
+2026-09-30T22:40:59Z | DISPATCH | WF03-ISS0930-20261001 | step-03c-security-reviewer | ORCH -> SECURITY-REVIEWER | PENDING
+2026-09-30T22:41:39Z | PASS | WF03-ISS0930-20261001 | step-03c | SECURITY-REVIEWER -> ORCH | PASS (out of tenant-data scope; MINOR: README note on httpbin egress)
+2026-09-30T22:41:39Z | DISPATCH | WF03-ISS0930-20261001 | step-03d-reviewer | ORCH -> REVIEWER | PENDING
+2026-09-30T22:42:43Z | PASS | WF03-ISS0930-20261001 | step-03d | REVIEWER -> ORCH | PASS (README follow-up mandatory, to be applied by DOC-UPDATER)
+2026-09-30T22:42:44Z | DISPATCH | WF03-ISS0930-20261001 | step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
+2026-09-30T23:11:15Z | PASS | WF03-ISS0930-20261001 | step-04 | TEST-DESIGNER -> ORCH | PASS (31 tests; fail-first 7/31; full mix check gate deferred to TEST-RUNNER)
+2026-09-30T23:11:15Z | DISPATCH | WF03-ISS0930-20261001 | step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-09-30T23:13:56Z | PASS | WF03-ISS0930-20261001 | step-04b | TEST-DESIGN-VALIDATOR -> ORCH | PASS (7 mutants independently killed)
+2026-09-30T23:13:57Z | DISPATCH | WF03-ISS0930-20261001 | step-04-run-test-runner | ORCH -> TEST-RUNNER | PENDING
+2026-09-30T23:45:29Z | PASS | WF03-ISS0930-20261001 | step-04 | TEST-RUNNER -> ORCH | PARTIAL->accepted: scripts 41 passed, format+compile clean, full suite 2 partitions 5118 passed 0 failed (wrapper timeout); CI authoritative
+2026-09-30T23:45:29Z | DISPATCH | WF03-ISS0930-20261001 | step-05-doc-updater | ORCH -> DOC-UPDATER | PENDING
+2026-09-30T23:48:40Z | PASS | WF03-ISS0930-20261001 | step-05-doc | DOC-UPDATER -> ORCH | PASS (README egress note)
+2026-09-30T23:48:40Z | DISPATCH | WF03-ISS0930-20261001 | step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PENDING
+2026-09-30T23:49:13Z | PASS | WF03-ISS0930-20261001 | step-05 | ISSUE-FIXER -> ORCH | PASS -- ISS-0930 resolved, GH#2064 closed w/ evidence comment (ORCH verified yaml)
+2026-09-30T23:49:27Z | DISPATCH | WF03-ISS0930-20261001 | step-final-git-merge-elixir-dev | ORCH -> ELIXIR-DEV | PENDING

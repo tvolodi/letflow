@@ -1,6 +1,6 @@
 {
   "name": "Production Order Release",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Multi-level release gate for a new production order. Planner creates the order; Production Manager reviews; if value > 10000 Financial Controller signs off. Timer escalation to CEO. Exercises: sequential chain, timer escalation, conditional branch.",
   "graph": {
     "nodes": [
@@ -37,7 +37,8 @@
         "id": "assign-line",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /mes/orders/{order_id}/assign",
+          "endpoint": "https://httpbin.org/anything/mes/orders/{{variables.order_id}}/assign",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -45,7 +46,8 @@
         "id": "auto-reject-order",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /mes/orders/{order_id}/reject",
+          "endpoint": "https://httpbin.org/anything/mes/orders/{{variables.order_id}}/reject",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -53,7 +55,8 @@
         "id": "notify-planner",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /webhooks/notify",
+          "endpoint": "https://httpbin.org/anything/webhooks/notify",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },

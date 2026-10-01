@@ -1,6 +1,6 @@
 {
   "name": "Shipment Approval",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Sequential approval chain for high-value or non-standard shipments. Dispatcher raises the request; Operations Manager reviews; if value exceeds 500 the CEO must co-sign. Exercises: sequential chain + CEL conditional branch.",
   "graph": {
     "nodes": [
@@ -32,7 +32,8 @@
         "id": "release-shipment",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /internal/shipments/{shipment_id}/release",
+          "endpoint": "https://httpbin.org/anything/internal/shipments/{{variables.shipment_id}}/release",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -40,7 +41,8 @@
         "id": "auto-reject",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /internal/shipments/{shipment_id}/reject",
+          "endpoint": "https://httpbin.org/anything/internal/shipments/{{variables.shipment_id}}/reject",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -48,7 +50,8 @@
         "id": "notify-requester",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /webhooks/notify",
+          "endpoint": "https://httpbin.org/anything/webhooks/notify",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },

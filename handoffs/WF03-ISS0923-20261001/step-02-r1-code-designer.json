@@ -1,0 +1,44 @@
+{
+  "handoff_id": "a3c1f0d2-9b7e-4c55-8a10-923000000004",
+  "run_id": "WF03-ISS0923-20261001",
+  "workflow_id": "WF-03",
+  "step": "02-r1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0923-20261001/step-02-r1-code-designer.json",
+  "created_at": "2026-10-01T16:37:24Z",
+  "started_at": "2026-10-01T16:37:24Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0923.yaml": "ServiceCatalog.delete/1 does not block deletion while non-terminal instances are pinned to the service (MINOR). Design chose BLOCK."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0923.yaml",
+      "lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md",
+      "handoffs/WF03-ISS0923-20261001/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/service_catalog.ex",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/api/error.ex",
+      "test/"
+    ],
+    "branch_name": "feature/WF03-ISS0923-20261001",
+    "queue_task_id": 923,
+    "github_issue": 2097
+  },
+  "task": {
+    "description": "Work in C:/Users/tvolo/dev/ai-dala/letflow-3 on the already checked-out branch feature/WF03-ISS0923-20261001 (do not switch branches; do not touch main or other branches/PRs). Shared machine: scoped `mix test <files>` only, never the full suite; use MIX_TEST_PARTITION=<unique> for tests that commit catalog rows. Do not commit (ORCH commits); do not leave mutants in the tree. REWORK 1 of 3 of Step 2 (design). CODE-DESIGN-VALIDATOR FAILED the design: read handoffs/WF03-ISS0923-20261001/step-02b-code-design-validator.json result.summary in full, and fix EVERY issue it lists in lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md: (1) section 6 D-E TOCTOU premise is false -- Engine.create/2 does read the live catalog row at start via PinLookup.catalog_lookup/1 (lib/letflow/service_catalog/pin_lookup.ex:63-73, engine.ex:1278-1281); re-derive both interleavings from the real code, restate the outcome honestly (create-before-delete -> pinned instance on deleted service -> ERROR; delete-first -> start fails with pin-lookup not_found), re-decide with correct cost reasoning whether to accept+document+advise retire-first or take a lock (e.g. FOR SHARE in PinLookup / FOR UPDATE on entry in delete) -- justify the decision either way; keep scope small; (2) AC-6 line refs; (3) ordering: list_registrations/0 has no ORDER BY -- specify sorting ids after aggregation so truncation is deterministic; (4) index wording; (5) AC-8 specify direct insertion of minimal instance_projections + instance_definition_snapshots rows as the test seam; (6) req373 design doc line ~353 stale delete/1 return union -- list it as a doc-update item. Edit only the design file and this handoff. Fill this handoff file's result (status PASS/FAIL, summary with quoted real output, issues, next_action) and set top-level status COMPLETED with real UTC completed_at (`date -u`)."
+  },
+  "result": null
+}

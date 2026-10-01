@@ -309,3 +309,50 @@ history:
       state diagram or Running-it change). letflow-queue task 865 (GH#1882)
       still needs release_lock(status=done) -- not called from here;
       DOC-UPDATER does not call the queue.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T10:15:00Z"
+    note: >
+      ISS-0942 resolved (D5: claim enforces the assigned role but complete
+      did not -- confirmed a genuine, live-UAT-exploited authorization
+      bypass, not by-design behavior). PR #2087, branch
+      fix/ISS-0942-task-complete-authorization-gap, commit bc5fc597. Root
+      cause: Letflow.Engine.complete_task/3 performed zero assignee/role/
+      group authorization checks -- gated only by the coarse tenant-wide
+      :TasksComplete RBAC permission any TASK_WORKER holds -- while
+      claim_task/3 correctly enforced per-resource assignee authorization.
+      This was a documented, explicit deferral in REQ-048's design doc
+      ("that is the S4 auth plug's job") that was never actually built
+      once S4 landed, and was live-exploited in UAT (non-member actors
+      completed ROLE-assigned tasks they correctly got 409'd on claiming).
+      Fix: new Letflow.Tasks.authorize_completion/3 (read-only, mirrors
+      claim's precedence table), wired into handle_complete/3 before
+      Engine.complete_task/3 is ever called, rejecting USER/GROUP/ROLE
+      mismatches with 403. Engine itself kept untouched (authz lives in
+      the router/Tasks-context layer only, preserving the existing module
+      boundary). Three pre-existing simulation test fixtures (req206/207/
+      208) that had unknowingly relied on the gap were corrected with
+      real role/group seeding. Full gate chain ALL PASSed:
+      CODE-DESIGN-VALIDATOR, ELIXIR-DEV implementation, SECURITY-REVIEWER
+      (mandatory hard gate -- hand-traced the full precedence table,
+      confirmed fail-closed behavior, confirmed claim's path
+      byte-identical, ran a live mutation test), REVIEWER (PASS, also
+      added a docs/anti-patterns.md entry on undischarged security-
+      deferral notes), TEST-RUNNER (full suite, confirmed no other
+      fixtures affected beyond the 3 already fixed), and
+      RELEASE-VALIDATOR (exhaustive independent re-verification -- its
+      own hand-trace of all 7 precedence branches, its own independently
+      devised adversarial superstring/substring role-name bypass tests,
+      its own independently devised mutation test specifically on the
+      GROUP-membership check confirming the suite catches a GROUP-
+      specific regression independently of SECURITY-REVIEWER's broader
+      mutation test; no live backend reachable, so verification relied on
+      test-level confirmation via the real router dispatch path). During
+      RELEASE-VALIDATOR's verification, `mix letflow.check.test` hit the
+      already-documented ISS-0939 hang bug -- unrelated to this PR, not a
+      blocker -- RELEASE-VALIDATOR's own direct scripts/test_parallel.sh
+      run covered the same ground. docs/issues/ISS-0942.yaml set to
+      status: resolved in this same commit. This is an ISSUE closure, not
+      a REQ -- docs/requirements.yaml untouched. letflow-queue task 917 to
+      be released as done after merge.

@@ -475,6 +475,17 @@ the requirement backlog FIFO exactly as before this priority split existed.
   every open task's dependencies aren't done yet, or everything open is already
   locked). Report this plainly — it is not an error to work around.
 
+**Drain/loop mode does not change this contract — see `ORCHESTRATOR.md` §4a for the
+full continuous-processing rule.** Each loop iteration is exactly one fresh
+`get_next_task` call claiming exactly one task, identical to a non-looped invocation;
+decision 0017's eligibility/selection rules are evaluated fresh every time. **There is
+no batch-claim mode, and none is to be invented:** an agent in drain mode MUST NOT
+pre-claim or lock more than one task ahead of the one it is actively working, whether
+via repeated `get_next_task` calls stacked before dispatching the first, via `GET
+/tasks` + multiple `set_lock` calls, or by any other means. "So I don't have to ask
+again" is not a reason to hold more than one lock at a time — drain mode's "don't pause
+to ask" guarantee is delivered by looping the single-claim call, not by claiming ahead.
+
 ### 3. `set_lock` — lock a task you already know the id of
 
 **Who calls this:** `ORCH` only. Three legitimate uses:

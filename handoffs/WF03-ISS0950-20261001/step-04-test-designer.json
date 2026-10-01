@@ -1,0 +1,53 @@
+{
+  "handoff_id": "ec046503-bedd-48fe-998d-9612beea40fb",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0950-20261001/step-04-test-designer.json",
+  "created_at": "2026-10-01T15:14:28Z",
+  "started_at": "2026-10-01T15:14:28Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md",
+      "lib/letflow/webhooks/url_validator.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "handoffs/WF03-ISS0950-20261001/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0950-20261001/step-03d-reviewer.json",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 4 REGRESSION TESTS. Implement the design's test matrix (lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md, test-matrix section: 22 rejected + 10 accepted URL classes at register, publish and HTTP 422 levels, R-MISSING per write path, P-ABSENT good/bad stored URL, unchanged-republish of legacy bad URL, publish-rollback of the archive insert, templated-host rejection, U-NODNS (a)+(b), validate_syntactic/1 unit tests, and a test that validate/1,2 and the dispatch gate still reject the same URLs). Place tests in the existing relevant test files or new files following repo conventions (check test/letflow/webhooks url_validator test, service_catalog_test.exs, admin_services route tests, e.g. via Glob). Branch feature/WF03-ISS0950-20261001 in the main checkout; do NOT switch branches. FAIL-FIRST PROOF (mandatory, WF-03 section 'When the pre-fix failure is the code under test does not exist'): (1) in a THROWAWAY git worktree outside the repo (git worktree add <scratchpad>/wt-pre origin/main, copy only the new/changed test files in; share deps/_build via copy or symlink only if safe, else compile there -- machine is shared so be modest), run the new tests and record which fail pre-fix (expect register/publish-acceptance and validate_syntactic undefined failures) with real counts; (2) MUTANTS applied ONLY in throwaway worktrees of the branch, never in the main checkout, targeting the specific traps: m1 accept http scheme; m2 drop the private/loopback blocklist for syntactic path; m3 allow {{ }} in host part; m4 use validate_change instead of get_field (skips unchanged republish); m5 check only insert_changeset not publish_changeset; m6 resolve DNS (call resolver) in validate_syntactic; m7 treat absent key on publish as skip. Record for each mutant the pass/fail counts and which tests fail; every mutant must be killed by at least one test, else add tests. Remove all worktrees when done (git worktree remove --force; git worktree prune) and verify git worktree list shows only the main checkout. Then in the main checkout run the scoped files: MIX_ENV=test mix test <your test files> plus test/letflow/engine_catalog_service_task_test.exs and quote real output (6 pre-existing tenant_template_build failures in service_catalog_test.exs AC6/AC7 are environmental -- confirm they are the only failures). Machine is shared: NO full suite. Do not commit (ORCH commits). Complete the handoff PASS/FAIL per HANDOFF_PROTOCOL.md (spec: list of tests per acceptance item; verify git status --porcelain lib/ is empty at the end -- you must not change lib/).",
+    "acceptance_criteria": [
+      "Every design matrix row has a runnable test; no skips/tags excluding them",
+      "Pre-fix run in throwaway worktree recorded with real counts",
+      "Mutants m1-m7 each recorded with counts and killed by >=1 test",
+      "Worktrees removed and verified; git status --porcelain lib/ empty",
+      "Scoped run on branch green apart from the known environmental tenant_template_build failures (output quoted)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

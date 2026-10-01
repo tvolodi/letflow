@@ -724,6 +724,27 @@ verbatim in substance:
 
 Satisfies AC5 directly.
 
+**Superseding note (ISS-0942, 2026-10-01):** `INV-EE48-10` and the quoted
+moduledoc text above both remain **true, unchanged, and still required** —
+`Letflow.Engine.complete_task/3` still performs zero
+assignee-authorization checking, by design; that boundary is not what
+this note revises. What *is* superseded is the quoted text's claim that
+the IDN-03 assignee check is "the S4 auth plug's job" in the sense of
+having been built as an S4 HTTP `Plug` — it was a documented, explicit
+deferral that never actually landed once S4 shipped, leaving `POST
+/tasks/:id/complete` gated only by the coarse tenant-wide `:TasksComplete`
+RBAC permission (live-UAT-exploited, see
+`test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml`). ISS-0942 closed
+that gap by implementing the check as `Letflow.Tasks.authorize_completion/3`,
+called from `Letflow.Routers.Tasks.handle_complete/3` *before*
+`Engine.complete_task/3` is ever invoked — functionally the same scope
+boundary (HTTP-layer, pre-engine-call) this section already establishes,
+just realized as a `Letflow.Tasks` context function rather than a `Plug`
+module, consistent with how `claim_task/3`'s own authorization resolution
+already lives in `Letflow.Tasks`, not a plug. See
+`lib/letflow/design/iss0942-task-complete-authorization-gap.md` for the
+full design.
+
 ---
 
 ## 13. Open questions — explicitly listed, not silently resolved

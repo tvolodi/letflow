@@ -226,6 +226,7 @@ defmodule Letflow.Simulation.Req207VortexTest do
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity
   alias Letflow.Identity.OnboardingRecord
+  alias Letflow.Identity.RoleRegistry
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.Simulation.Runner
@@ -460,6 +461,41 @@ defmodule Letflow.Simulation.Req207VortexTest do
     stefan = Map.fetch!(users_by_actor_id, "actor-vortex-stefan")
     karl = Map.fetch!(users_by_actor_id, "actor-vortex-karl")
     nina = Map.fetch!(users_by_actor_id, "actor-vortex-nina")
+
+    # ISS-0942: org_structure.yaml's departments were seeded as plain groups
+    # but never bound to the "role-*" process_routing_role names the
+    # @simple_production_order_graph/@simple_supplier_deviation_graph
+    # HUMAN_TASK nodes assign to -- harmless before this fix (POST
+    # /tasks/:id/complete enforced no assignee check at all), but now that
+    # it does, the scenario's own actors (sabine production, stefan
+    # controller, karl/nina quality) must actually hold the role their step
+    # completes, same as a real tenant would be configured.
+    {:ok, groups} = Seed.seed_groups(org_structure, tenant)
+    group_by_name = Map.new(groups, &{&1.name, &1})
+
+    {:ok, _} =
+      RoleRegistry.upsert_role(
+        "role-production-manager",
+        :process_routing_role,
+        Map.fetch!(group_by_name, "dept-production").id,
+        prefix: schema_name
+      )
+
+    {:ok, _} =
+      RoleRegistry.upsert_role(
+        "role-controller",
+        :process_routing_role,
+        Map.fetch!(group_by_name, "dept-finance").id,
+        prefix: schema_name
+      )
+
+    {:ok, _} =
+      RoleRegistry.upsert_role(
+        "role-quality-manager",
+        :process_routing_role,
+        Map.fetch!(group_by_name, "dept-quality").id,
+        prefix: schema_name
+      )
 
     # Seed the trivial sub-process child definition first, so the parent simplified
     # graph can reference its real name.

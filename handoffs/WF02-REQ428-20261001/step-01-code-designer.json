@@ -1,0 +1,61 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000002",
+  "run_id": "WF02-REQ428-20261001",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ428-20261001/step-01-code-designer.json",
+  "created_at": "2026-10-01T01:30:00Z",
+  "started_at": "2026-10-01T01:30:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-428"],
+    "requirement_text": {
+      "REQ-428": "Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex): GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task form is resolved through REQ-424's pinned resolver and rendered by REQ-427's form renderer; never the active version. Process-instance renderer: read-only view of GET /api/v1/instances/:id and /api/v1/instances/:id/timeline (lib/letflow/routers/instances.ex) -- status, current step, timeline. No cancel/rebind/advance actions (not in MOB-4). All screens use REQ-426's six-state wrapper; claim/complete errors (409 already claimed, 403, 422) map to its states."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ428-20261001/step-00-git-setup.json",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/design/req424-pinned-form-resolution.md",
+      "lib/letflow/design/req427-form-renderer.md",
+      "docs/mobile/requirements.md",
+      "docs/mobile/architecture.md",
+      "apps/mobile/lib/renderers/"
+    ],
+    "owned_modules": ["apps/mobile/"]
+  },
+  "task": {
+    "description": "Branch feature/WF02-REQ428-20261001 is checked out (verify with git branch --show-current before writing anything). Design the task-inbox/claim/complete screens and the read-only process-instance screen for apps/mobile/, per REQ-428's full text above. Write lib/letflow/design/req428-task-and-instance-renderer.md covering: (1) the task inbox/detail/claim/complete flow against GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete -- read lib/letflow/routers/tasks.ex for the exact request/response shapes, status codes (409 already claimed, 403, 422), and how form_id/form_version/form_schema appear on the task detail payload; (2) how the task's pinned (form_id, form_version) is resolved through REQ-424's resolver (read lib/letflow/design/req424-pinned-form-resolution.md and apps/mobile/lib/definitions/ for its actual public interface) and handed to REQ-427's form renderer (read lib/letflow/design/req427-form-renderer.md and apps/mobile/lib/renderers/form/ for its actual public interface) -- never the active version, by construction; (3) the read-only process-instance screen against GET /api/v1/instances/:id and GET /api/v1/instances/:id/timeline (read lib/letflow/routers/instances.ex for shapes) -- status, current step, timeline entries, and explicitly NO cancel/rebind/advance action anywhere in the design; (4) every screen's error/loading states mapped onto REQ-426's six-state wrapper (read apps/mobile/lib/renderers/ for its real public interface) -- in particular claim 409 (already claimed) must map to a state that tells the user the task is no longer available and triggers an inbox refresh, not a crash, and 403/422 on claim/complete map to the wrapper's existing permission-denied/validation-error states. State Dart class/widget names, constructor signatures, method signatures with input/output types, and state-shape fields -- no implementation bodies. List every open question explicitly rather than guessing (e.g. exact widget composition, navigation entry points) if the existing mobile codebase conventions don't already settle it -- check apps/mobile/lib/ for the established pattern from REQ-426/427 first.",
+    "acceptance_criteria": [
+      "Design element covering: list inbox, claim a task (POST .../claim), open it, complete it (POST .../complete with form values in the body) -- maps to AC1",
+      "Design element showing form_version pinning is structural (always resolved via REQ-424's resolver using the task's own form_id/form_version, never 'the active version') -- maps to AC2",
+      "Design element for the 409-on-claim path: specific state shown, and an inbox refresh triggered, not a crash -- maps to AC3",
+      "Design element for the process-instance screen: status + current step + timeline rendering, and an explicit statement that no cancel/rebind/advance action exists anywhere in this design -- maps to AC4",
+      "Design states which existing six-state wrapper states each error class (loading, fetch-failure, permission-denied, stale-version, validation-error, 429-backpressure) maps to for every screen in this design",
+      "No implementation code (.dart bodies) -- signatures and type/state shapes only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

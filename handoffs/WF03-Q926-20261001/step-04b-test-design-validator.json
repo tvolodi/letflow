@@ -1,0 +1,51 @@
+{
+  "handoff_id": "751a7f33-78bc-4d38-8fd6-ee358047b85e",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q926-20261001/step-04b-test-design-validator.json",
+  "created_at": "2026-10-01T19:48:17Z",
+  "started_at": "2026-10-01T19:48:17Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/ISS-0926.md",
+      "test/specs/ISS-0932.md",
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "handoffs/WF03-Q926-20261001/step-04-test-designer.json",
+      "test/letflow/engine/service_task_body_render_test.exs",
+      "test/letflow/engine/service_task_wiring_test.exs",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "test/letflow/engine_catalog_service_task_test.exs",
+      "test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs",
+      "test/letflow/engine/regulatory_review_timer_path_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 4b: hard gate on TEST-DESIGNER for ISS-0926 (HEAD fb2a56a8 on feature/WF03-Q926-20261001; step-04-test-designer.json result.summary has its claims). Claim: IN_PROGRESS only; flip COMPLETED on finishing. Verify: (1) every AC (body_template rendered with instance variables and sent as request body; Meridian regulatory-auto-escalation posts reason sla_breach_30_days by inbound path (timer path) and e10 gets its own body; regression test; injection safety) has a runnable test, no skips/@tag :skip, fixtures isolated/self-sufficient, tests not asserting implementation tautologies; (2) design test plan IDs (T-R*, I-*, T13/T14, M-list) all present; (3) WF-03 fail-first: INDEPENDENTLY reproduce the pre-fix red run - in a THROWAWAY git worktree OUTSIDE the repo checkout (e.g. under the session scratchpad) at merge-base 6d2e2548 plus ONLY the new/changed test files, run them and compare to the claim (66 red of 188; 0/33 for service_task_body_render_test) - and (4) APPLY AT LEAST TWO of the TEST-DESIGNER's reported mutants yourself (choose ones most security relevant: no-escaping of substituted values, and dispatcher-sends-raw-template; plus one of your choice such as placeholder-outside-string check skipped) ONLY inside a throwaway worktree of the branch, run the six test files, and compare counts with the claim (11 red / 6 red / 4 red respectively). NEVER mutate this working checkout; do not use git checkout/reset in it. Remove worktrees afterwards and verify git worktree list shows only the main checkout and git status --porcelain lib/ test/ is empty here. DB: use a throwaway postgres container on a private network/unused host port (docs/anti-patterns.md Docker fallback; check config/test env points to it, never the shared dev DB on 5462; q929-pg belongs to another session - leave it alone); remove yours afterwards. Scoped tests only. Also read test/specs/ISS-0926.md for AC mapping and check the amended test/specs/ISS-0932.md edit is legitimate. Return FAIL with numbered issues or PASS, quoting your measured counts. Modify only this handoff; commit it only; push origin HEAD. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "Every AC has a runnable test",
+      "Pre-fix red run independently reproduced with counts",
+      "At least two mutants independently applied with counts compared",
+      "Revert verified, worktrees/containers removed",
+      "No file modified except this handoff"
+    ]
+  }
+}

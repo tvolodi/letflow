@@ -2647,3 +2647,4 @@
 2026-10-01T15:39:12Z | DISPATCH | WF03-ISS0950-20261001 | step-04d-release-validator | ORCH -> RELEASE-VALIDATOR | PENDING
 2026-10-01T15:41:41Z | PASS | WF03-ISS0950-20261001 | step-04d-release-validator | RELEASE-VALIDATOR -> ORCH | PASS -- 96 passed, live repro 422s
 2026-10-01T15:41:41Z | DISPATCH | WF03-ISS0950-20261001 | step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PENDING
+2026-10-01T15:42:18Z | PASS | WF03-ISS0950-20261001 | step-05-issue-fixer-close | ISSUE-FIXER -> ORCH | PASS -- ISS-0950 resolved (local); GH close + release_lock deferred to parent post-merge

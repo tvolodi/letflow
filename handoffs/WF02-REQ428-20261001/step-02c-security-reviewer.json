@@ -1,0 +1,52 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000005",
+  "run_id": "WF02-REQ428-20261001",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ428-20261001/step-02c-security-reviewer.json",
+  "created_at": "2026-10-01T03:10:00Z",
+  "started_at": "2026-10-01T03:10:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-428"],
+    "requirement_text": {
+      "REQ-428": "Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex): GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task form is resolved through REQ-424's pinned resolver and rendered by REQ-427's form renderer; never the active version. Process-instance renderer: read-only view of GET /api/v1/instances/:id and /api/v1/instances/:id/timeline (lib/letflow/routers/instances.ex) -- status, current step, timeline. No cancel/rebind/advance actions (not in MOB-4). All screens use REQ-426's six-state wrapper; claim/complete errors (409 already claimed, 403, 422) map to its states."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ428-20261001/step-02b-mobile-dev.json",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["apps/mobile/"]
+  },
+  "task": {
+    "description": "Run WF-02 Step 2c's scope test (docs/agents/workflows/WF-02_requirement_implementation.md): git diff main...HEAD (against this branch, feature/WF02-REQ428-20261001) and decide whether it touches a tenant-data path per security-invariants.md's applicability notes. This diff adds apps/mobile/lib/renderers/task/task.dart and apps/mobile/lib/renderers/process/process.dart plus tests -- read-only task/instance listing, claim/complete against existing authenticated endpoints via the existing ApiClient (no new auth/token/transport code; it reuses REQ-422's token store and REQ-425's single API client unchanged). Determine PASS (out of scope) or, if you find it does touch auth/token storage/transport (MOB-2/MOB-5/MOB-6 territory) via some mechanism not obvious from this description, run the full INV-1..INV-8 checklist instead.",
+    "acceptance_criteria": [
+      "Scope test result stated explicitly with reasoning, not just a verdict",
+      "If in scope: INV-1..INV-8 each marked APPLIES/NOT-APPLICABLE with a verification note for each APPLIES invariant",
+      "If out of scope: PASS with next_action routing to REVIEWER (2d)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

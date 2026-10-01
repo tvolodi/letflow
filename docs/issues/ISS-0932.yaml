@@ -13,4 +13,24 @@ related:
   - ISS-0912
 queue_ref: Q-915  # queue issue_ref ISS-0915 collides with an existing local file; local filename ISS-0932
 github_ref: GH-2066
-status: open
+status: resolved
+resolved_in_run: WF03-Q915-20261001
+resolved_at: "2026-10-01T16:40:34Z"
+resolution: >
+  Root cause: the definition (ported from an R-Co YAML) modelled the 21-day SLA as a dead
+  "timeout-*" edge convention the Letflow engine does not have. risk-evaluation had only a role
+  attribute, so no timer was ever armed (advance-timer -> 404 no_pending_timer), and the
+  unconditioned timeout edge sat after unconditioned e3 so it was never taken; regulatory-auto-escalation
+  was reachable only from the remediation-unresolved branch. Fix (fixture only, lib/ unchanged):
+  fixture v1.2 - risk-evaluation gets escalation_timer_duration P21D + escalation_role role-ceo; the
+  timeout-risk-evaluation fallback edge now targets regulatory-auto-escalation (the engine's escalation
+  path follows the first non-conditioned edge); e3 gets condition 'true' so the normal completion path
+  is unchanged; orphan node risk-evaluation-timeout and edge e4 removed; simulation YAML parity.
+  After evidence-collection a single pending P21D timer exists, advance-timer fires it, the BaFin
+  notice SERVICE_TASK runs and the instance COMPLETES. Needs a QA re-seed of v1.2 (ops step). Out of
+  scope, filed as follow-ups: ISS-0925/Q-925 (stale escalation timer not cancelled on normal task
+  completion), ISS-0926/Q-926 (SERVICE_TASK body_template not rendered, so scenario EO-002
+  reason sla_breach_30_days is still unmet).
+regression_tests:
+  - test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs
+  - test/letflow/engine/regulatory_review_timer_path_test.exs

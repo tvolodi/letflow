@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0923-20261001/step-03d-reviewer.json",
   "created_at": "2026-10-01T16:43:32Z",
   "started_at": "2026-10-01T16:43:32Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-01T16:43:45Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,5 +40,10 @@
   "task": {
     "description": "Work in C:/Users/tvolo/dev/ai-dala/letflow-3 on the already checked-out branch feature/WF03-ISS0923-20261001 (do not switch branches; do not touch main or other branches/PRs). Shared machine: scoped `mix test <files>` only, never the full suite; use MIX_TEST_PARTITION=<unique> for tests that commit catalog rows. Do not commit (ORCH commits); do not leave mutants in the tree. WF-03 Step 3d: hard gate on OTP idiom, supervision integrity, scope creep, decision-record consistency for git diff main...HEAD -- lib/ (design file + handoff step-03-elixir-dev.json, step-03c-security-reviewer.json). Specifically confirm the design's two asks: cap=50 and the two-table write set (service_catalog_versions + entry in one transaction, no FK/migration); check the rescue wrapping the transaction, transaction/rollback semantics, no scope creep beyond Q-923, consistent with decision 0027 / ISS-0917 pinning contract. Read-only; edit nothing but this handoff. Fill this handoff file's result (status PASS/FAIL, summary with quoted real output, issues, next_action) and set top-level status COMPLETED with real UTC completed_at (`date -u`)."
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD -- lib/ (service_catalog.ex, api/error.ex, routers/admin_services.ex, design md). (1) Idiom: no GenServer/gen_statem involved; plain context-module Ecto code, consistent with the Engine 'Process-vs-row decision' (no process per instance). Repo.transaction with Repo.rollback(:not_found) is idiomatic; function-level rescue Ecto.StaleEntryError on delete_entry/1 wraps the whole Repo.transaction, so the raise rolls back the version-row delete_all and maps to {:error, :not_found} (existing race test contract kept). Version alias exists (service_catalog.ex:168). Pattern {:ok,:ok}/{:error,:not_found} case is exhaustive for the transaction's returns. (2) Supervision: unchanged; InstanceSupervisor untouched, no spawn/singleton. (3) Design asks: cap=50 confirmed (@max_reported_instance_ids 50; per-tenant LIMIT cap+1, concat, sort, take 50, truncated = length > 50 -> globally smallest 50, ascending). Two-table write set confirmed: delete_all(Version where service_id) then Repo.delete(entry) in one transaction, versions first; no FK, no migration, no index in diff (only 3 lib files + design doc). (4) Scope creep: none; no new behaviours/macros; guard reuses @service_task_reference_fragment and the tenant loop; terminality derived from InstanceProjection.terminal?/1 + Ecto.Enum.values (no duplicated status list: [:active,:error] non-terminal). Router change is one case clause (INV-8 satisfied); Error constructor mirrors the sibling definitions constructor. Decision-record/ISS-0917 pinning contract: consistent -- delete is blocked while non-terminal instances pin the service, retire path (PinLookup refuses RETIRED at start, pinned resolution keeps working) documented; TOCTOU honestly documented per validator note wording. Decision 0027 only concerns install-policy/route authz; no conflict. Type-safety: instance_refs() typed map with @type; Error.service_referenced_by_active_instances guards is_list/is_boolean; nothing worth a type-safety issue. Minor non-blocking observations: delete_entry pipes Repo.transaction(...) into case (stylistic only); the new guard is not exercised until TEST-DESIGNER adds instance-fixture tests (expected per step ordering). Working tree: git status shows only untracked letflow-3.code-workspace (no mutants). Edited only this handoff.",
+    "issues": [],
+    "next_action": "TEST-DESIGNER (Step 4)"
+  }
 }

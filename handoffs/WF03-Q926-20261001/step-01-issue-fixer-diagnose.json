@@ -1,0 +1,51 @@
+{
+  "handoff_id": "acedbb4a-af16-4b1b-8a54-0a3c3e40676c",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-Q926-20261001/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-10-01T18:14:37Z",
+  "started_at": "2026-10-01T18:14:37Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0926.yaml",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md",
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json",
+      "test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 + Step 1 (diagnose only) for ISS-0926 (Q-926 / GH-2106). Work on the branch feature/WF03-Q926-20261001 already checked out in this working tree (do NOT switch branches; do not touch any other branch/PR). Claim: set status to IN_PROGRESS only.\nVerify by READING CODE and reproducing (pure functions / scoped mix test only; the machine is shared so run only the specific test files you need, never the full suite):\n 1. Registry lookup: docs/issues/*.yaml resolved entries with similar symptoms (ISS-0917 catalog SERVICE_TASK pinned dispatch, ISS-0932 meridian timer). State the result.\n 2. Where body_template is parsed (Letflow.Engine.ServiceTask.Config, parse_config_from_node_attributes), where it is stored (config_snapshot \"body_template\", engine.ex config_snapshot_map ~1111-1122), and the exact path by which the dispatcher (lib/letflow/engine/service_task_dispatcher.ex) obtains `rendered_body` for http_transport/3,4 and the 3-arity transport closure (service_task.ex ~line 123). Is rendered_body ever non-nil in production? Is it computed at INSERT time (frozen like rendered_url) or at dispatch time? Cite file:line.\n 3. The existing renderer render_service_task_url/2 (engine.ex ~1140-1165): syntax, how values are stringified, and what escaping (none?) it does. Note how URL-rendered values are guarded (UrlValidator SSRF check at dispatch, UrlValidator.validate). What is the right escaping for a JSON body (content-type is set from body_template presence, see headers_from ~line 375) - raw string substitution of variable values into a JSON template is a JSON-injection risk; enumerate the options.\n 4. The catalog (ISS-0917) path: does a catalog_service node carry body_template on the node (config.body_template) or in the catalog row? Read lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md and decision records under docs/migration/decisions/ that touch SERVICE_TASK / body / template rendering / SSRF / secrets (grep -il 'body_template\\|url_template\\|SERVICE_TASK' docs/migration/decisions/*.md) and state whether any record settles body rendering semantics. Also REQ-215 design doc (grep lib/letflow/design for the REQ-215 service task design, section 7 Open Question 2 about body_template).\n 5. The fixture test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json node regulatory-auto-escalation: it uses attributes \"endpoint\"/\"method\"/\"timeout_ms\" - check whether the engine actually reads \"endpoint\" or \"url_template\" for an inline SERVICE_TASK (parse_config_from_node_attributes) and whether the fixture is therefore valid today (qa_fixture_service_task_endpoints_test). Read scenario test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml step EO-002. Regulatory-auto-escalation is reachable via the 21-day timer (reason sla_breach_30_days) AND via e10 (remediation unresolved) where a static reason would be wrong: determine what instance variable(s) could distinguish the two inbound paths in the engine as it exists (e.g. an explicit variable set earlier, a route-dependent variable, variables set by the timer or by remediation) - and what the fixture can do WITHOUT a lib change (e.g. a pre-escalation SCRIPT/assign node on each inbound edge, or conditional edges) versus what needs engine support. Report which options are feasible with the current node types (look at lib/letflow/definitions/graph.ex and the node types the engine supports).\n 6. Existing tests that assert on body / rendered_body / body_template so the fix's blast radius is known (grep test/ for body_template and rendered_body).\n 7. Files referencing the fixture shape that must change if the fixture version bumps (test/fixtures/simulation/meridian/process_policy_binding.yaml, scripts/seed_meridian_definition.sh header, tests asserting version 1.2).\nDo NOT implement; do not modify any file except this handoff JSON. Put the diagnosis in result.summary: root cause with file:line, options ranked by risk with a recommendation, affected files, and whether lib/ changes are needed (expected yes, MINOR) and whether the change is on a tenant-data path. Set next_action 'Route to CODE-DESIGNER for fix design'. When done set status COMPLETED, result.status PASS/FAIL, completed_at from a real clock read (date -u +%Y-%m-%dT%H:%M:%SZ), commit the handoff only (git add handoffs/; git commit; git push origin HEAD). Never print or read .env secrets.",
+    "acceptance_criteria": [
+      "Registry lookup result stated",
+      "Root cause with file:line citations",
+      "How rendered_body is (not) populated today",
+      "Escaping/injection options for JSON body rendering enumerated with a recommendation",
+      "Decision records consulted and stated whether any settles body rendering",
+      "Inbound-path distinction options for the fixture (timer vs e10) with feasibility without lib change",
+      "Files/tests affected listed",
+      "No file modified except this handoff"
+    ]
+  }
+}

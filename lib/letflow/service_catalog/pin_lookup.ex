@@ -13,6 +13,12 @@ defmodule Letflow.ServiceCatalog.PinLookup do
   module closes the `service_catalog` half of that gap only; the PLC-01 half
   remains open, not silently expanded into this requirement's scope.
 
+  **START-time only.** This lookup answers "what is the current ACTIVE
+  version of this service today" (untenanted, refuses RETIRED). It is NOT
+  used for SERVICE_TASK dispatch: since ISS-0917, `Letflow.Engine` resolves
+  an instance's PINNED version at activation through
+  `Letflow.ServiceCatalog.resolve_pinned_version/3`.
+
   Not folded into `Letflow.ServiceCatalog` itself (unlike
   `scope_validator_lookup/1`) because `build/0`'s shape needs to compose
   with `PinResolver.default_lookup/0`'s own `variable_schema_lookup` rather

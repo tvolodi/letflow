@@ -105,10 +105,11 @@ defmodule Letflow.ServiceCatalog do
 
   **Reasoning:**
 
-    1. The consuming contract itself never asks for a specific version —
+    1. The START-time consuming contract never asks for a specific version —
        `Letflow.Engine.PinResolver.Lookup.catalog_lookup/1` takes
        `service_id` alone, "give me the currently resolvable version of X,"
-       never "give me version N of X." Composite-keying `service_catalog`
+       never "give me version N of X." (SERVICE_TASK dispatch does ask for a
+       specific pinned version, via `resolve_pinned_version/3`, ISS-0917.) Composite-keying `service_catalog`
        buys nothing at the one call site this whole requirement exists to
        wire up (`Letflow.ServiceCatalog.PinLookup.catalog_lookup/1`): under
        either schema shape, resolving a fresh reference means "find the row
@@ -489,20 +490,140 @@ defmodule Letflow.ServiceCatalog do
   @spec get_for_tenant(service_id :: String.t(), tenant_id :: Ecto.UUID.t()) ::
           {:ok, Entry.t()} | {:error, :not_found}
   def get_for_tenant(service_id, tenant_id) when is_binary(service_id) and is_binary(tenant_id) do
-    case Repo.get(Entry, service_id) do
-      nil ->
-        {:error, :not_found}
+    Entry
+    |> Repo.get(service_id)
+    |> visible_to_tenant(tenant_id)
+  end
 
-      %Entry{scope: :global} = entry ->
-        {:ok, entry}
+  # The one SVC-01 three-way visibility predicate, shared by get_for_tenant/2
+  # and resolve_pinned_version/3 so the two cannot drift. Invisible and
+  # missing are the identical `{:error, :not_found}`.
+  @spec visible_to_tenant(Entry.t() | nil, Ecto.UUID.t()) ::
+          {:ok, Entry.t()} | {:error, :not_found}
+  defp visible_to_tenant(nil, _tenant_id), do: {:error, :not_found}
+  defp visible_to_tenant(%Entry{scope: :global} = entry, _tenant_id), do: {:ok, entry}
 
-      %Entry{scope: :tenant, owner_tenant_id: owner_tenant_id} = entry
-      when owner_tenant_id == tenant_id ->
-        {:ok, entry}
+  defp visible_to_tenant(%Entry{scope: :tenant, owner_tenant_id: owner} = entry, tenant_id)
+       when owner == tenant_id,
+       do: {:ok, entry}
 
-      %Entry{scope: :tenant} ->
-        {:error, :not_found}
+  defp visible_to_tenant(%Entry{scope: :tenant}, _tenant_id), do: {:error, :not_found}
+
+  # ===========================================================================
+  # resolve_pinned_version/3 (ISS-0917 design D1)
+  # ===========================================================================
+
+  @typedoc """
+  The technical fields of ONE specific catalog version, as a plain map (not
+  an Ecto struct) so the engine never holds a schema struct from two
+  different tables. `source` is `:live` when the pinned version is still the
+  `service_catalog` row's current one (ACTIVE or RETIRED), `:archived` when
+  it was read from `service_catalog_versions`.
+  """
+  @type resolved_service_version :: %{
+          service_id: String.t(),
+          version_id: Ecto.UUID.t(),
+          version: String.t(),
+          endpoint_url: String.t(),
+          timeout_ms: pos_integer(),
+          retry_policy: String.t() | nil,
+          required_auth: :NONE | :API_KEY | :OAUTH2 | :MUTUAL_TLS,
+          source: :live | :archived
+        }
+
+  @doc """
+  Resolves the exact catalog version an instance pinned -- by the pin's
+  `version_id` or, for a rebound pin that carries no `resolved_id`, by
+  `(service_id, version)` -- regardless of whether that version is still the
+  current ACTIVE one. A RETIRED current version and an archived version both
+  resolve (the REQ-373/432 case). Unlike `Letflow.ServiceCatalog.PinLookup`
+  (a START-time "what is ACTIVE now" question) this applies no `status`
+  filter.
+
+  Visibility is decided by the live row of the same `service_id` via the
+  same three-way rule as `get_for_tenant/2` (archive rows carry no
+  scope/owner). Returns exactly one error atom, `:not_found`, for a missing
+  service, an invisible service, an unknown version, a version belonging to
+  a different service, or a malformed `version_id` -- never a reason that
+  distinguishes them (INV-5). Read-only; the arguments must only ever come
+  from the instance's own event-sourced pins, never from request input.
+  """
+  @spec resolve_pinned_version(
+          service_id :: String.t(),
+          pin_identity :: {:version_id, Ecto.UUID.t()} | {:version, String.t()},
+          tenant_id :: Ecto.UUID.t()
+        ) :: {:ok, resolved_service_version()} | {:error, :not_found}
+  def resolve_pinned_version(service_id, pin_identity, tenant_id)
+      when is_binary(service_id) and is_binary(tenant_id) do
+    with {:ok, %Entry{} = entry} <- get_for_tenant(service_id, tenant_id) do
+      locate_pinned_version(entry, pin_identity)
     end
+  end
+
+  defp locate_pinned_version(%Entry{} = entry, {:version_id, version_id})
+       when is_binary(version_id) do
+    with {:ok, uuid} <- cast_uuid(version_id) do
+      if entry.version_id == uuid do
+        {:ok, resolved_from_entry(entry)}
+      else
+        case Repo.get(Version, uuid) do
+          %Version{service_id: sid} = archived when sid == entry.service_id ->
+            {:ok, resolved_from_archive(archived)}
+
+          _missing_or_other_service ->
+            {:error, :not_found}
+        end
+      end
+    end
+  end
+
+  defp locate_pinned_version(%Entry{} = entry, {:version, version}) when is_binary(version) do
+    if entry.version == version do
+      {:ok, resolved_from_entry(entry)}
+    else
+      query =
+        from(v in Version, where: v.service_id == ^entry.service_id and v.version == ^version)
+
+      case Repo.one(query) do
+        %Version{} = archived -> {:ok, resolved_from_archive(archived)}
+        nil -> {:error, :not_found}
+      end
+    end
+  end
+
+  defp locate_pinned_version(_entry, _other_identity), do: {:error, :not_found}
+
+  defp cast_uuid(value) do
+    case Ecto.UUID.cast(value) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :not_found}
+    end
+  end
+
+  defp resolved_from_entry(%Entry{} = entry) do
+    %{
+      service_id: entry.service_id,
+      version_id: entry.version_id,
+      version: entry.version,
+      endpoint_url: entry.endpoint_url,
+      timeout_ms: entry.timeout_ms,
+      retry_policy: entry.retry_policy,
+      required_auth: entry.required_auth,
+      source: :live
+    }
+  end
+
+  defp resolved_from_archive(%Version{} = version) do
+    %{
+      service_id: version.service_id,
+      version_id: version.version_id,
+      version: version.version,
+      endpoint_url: version.endpoint_url,
+      timeout_ms: version.timeout_ms,
+      retry_policy: version.retry_policy,
+      required_auth: version.required_auth,
+      source: :archived
+    }
   end
 
   # ===========================================================================

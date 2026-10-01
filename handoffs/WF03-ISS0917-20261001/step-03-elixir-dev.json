@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0917-20261001/step-03-elixir-dev.json",
   "created_at": "2026-10-01T12:30:26Z",
   "started_at": "2026-10-01T12:30:26Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T13:11:35Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -53,5 +53,47 @@
       "Full mix test result quoted with attribution of any failure",
       "No web/ changes; no migration; no commit"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented design D1-D4, D6, D7 (Elixir side only). D1: Letflow.ServiceCatalog.resolve_pinned_version/3 (by version_id, or (service_id,version) for rebound pins; live row incl. RETIRED first, else service_catalog_versions; visibility via a private predicate now shared with get_for_tenant/2; single :not_found; malformed UUID -> :not_found). D2: engine.ex activation resolves :catalog_service nodes from the instance's own pin at all five prepare_service_task_dispatch call sites (create passes {:pins, pins}; completion hop/timer/escalation/service-advance use lazy {:reconstruct,...}; completion hop derives tenant_id lazily from the schema prefix; reconstruct and tenant lookup memoised once per call); no fallback to the live row; required_auth != NONE fails closed before any URL/row; snapshot gets rendered pinned endpoint_url, min(node,catalog) timeout_ms, catalog_version_id/catalog_version/catalog_retry_policy (inline snapshot unchanged, no new keys); new outcome {:catalog_resolution_error,...} routed per 3.6 (create -> {:activation_failed,{:service_task_catalog_unresolved,node,reason}}; completion hop -> ExecutionError via ServiceTask.build_catalog_unresolved_error_attrs/1; timer/escalation/advance -> {:service_task_catalog_unresolved_not_supported_for_timer_fire,node,reason}). D3: catalog_lookup_stub/2 deleted; dispatcher :catalog_service arm is snapshot-driven through the same http_transport/3 (SSRF gate unchanged), nil/empty/non-binary rendered_url -> :request_build_error with zero transport calls; moduledocs rewritten; ServiceTask catalog_lookup_fun type/moduledoc kept and annotated superseded (service_task_test.exs:279 untouched). D4: one new Routers.Tasks clause {:instance_execution_error, atom, _} -> 409 'instance entered ERROR status: <error_type>' placed after the three 403 clauses, catch-all comment updated; req085 5.5.1 amended (new row, tuple removed from catch-all row). Doc-claim updates: pin_lookup.ex, entry.ex, service_catalog.ex, pin_resolver.ex moduledocs; design docs service_task_dispatcher.md (INV-STD-8 + AC row 3 superseded), service_task.md, req373. Existing tests edited: engine_test.exs flip to {:activation_failed,{:service_task_catalog_unresolved,\"svc\",:version_not_found}} (count assertions unchanged); service_task_dispatcher_test.exs stub describe deleted and catalog describe replaced (SSRF-gate block with live listener, link-local 169.254.169.254, gate-bypassed 2xx advance, nil/empty/non-binary rendered_url zero requests); engine_pin_resolver_catalog_test.exs comment only. No new T1-T11/R1-R3 suite written (TEST-DESIGNER). No web/ change, no migration, no commit/push. CHECKS (real): mix format --check-formatted -> clean; mix compile --warnings-as-errors (dev and MIX_ENV=test) -> clean, no warnings. A throwaway smoke test (written, run, deleted; not in tree) passed 2/2: HUMAN_TASK->catalog SERVICE_TASK complete_task after retire+republish v2 returned {:ok, instance_status: :active} with one pending dispatch row rendered_url==v1 endpoint, catalog_version \"1\", timeout_ms=5000 (min); required_auth :API_KEY -> {:error,{:instance_execution_error,:service_task_catalog_unresolved,{:node,\"svc\"}}} and zero dispatch rows. Scoped MIX_ENV=test mix test: (1) test/letflow/engine/ + engine_test.exs + engine_pin_resolver_catalog_test.exs -> 1072/1081 passed (16 excluded), 9 failed; --failed rerun 167/175, 8 failures, all in Letflow.Engine.TaskAssigneeTypeBackfillTest (error: relation tenant_template_build_<hash>.tasks does not exist, i.e. another worker's concurrent mix test invocation building tenant_template on the shared DB; TenantSchemaReaper logs show another mix test invocation connected); my changed engine_test.exs create/2 flip test and all other engine tests passed. (2) service_catalog_test.exs + routers/tasks_test.exs + routers/admin_services_test.exs + admin_services_publish_retire_test.exs + engine/service_task_{dispatcher,,wiring,routing}_test.exs -> 228/244 first run, 16 failures (missing tenant_template schema clone errors and undefined_table on other workers' tenant schemas); --failed rerun: 10 of the 16 passed (incl. all new dispatcher catalog tests and wiring tests), 6 remain, all Letflow.ServiceCatalogTest delete/1 and update_scope/2 referential-guard tests failing with 42P01 relation tenant_<hash>.process_definitions does not exist from the cross-tenant-schema sweep over other workers' half-built schemas. routers/tasks_test.exs and admin_services tests had no failures. Failure attribution: environmental cross-worker DB contention on the shared test database (not code I changed; the failing functions delete/1, update_scope/2 and TaskAssigneeTypeBackfill.run/0 are untouched by this diff); NOT proven by re-running on an origin/main worktree because ORCH instructed (resource limits) to run scoped files only; recommend TEST-RUNNER re-run those two files when the DB is quiet. THE FULL mix test / mix letflow.check SUITE WAS NOT RUN LOCALLY per ORCH instruction (CI runs it). DESIGN DEVIATIONS: none material. Minor implementation notes: (a) catalog ctx tenant_id may also be {:schema_prefix, prefix} (completion hop only) to implement 3.3a's lazy derivation; (b) the defensive rendered_url check is applied to the catalog arm only, leaving the inline arm byte-identical per INV-PD-6; (c) the design 4.3 pointer for req432-rebind-pins-publish-retire-ui.md could not be added because that file does not exist on this branch. NOTES FOR SECURITY-REVIEWER: tenant_id comes from the schema prefix or create/2's tenant_id, never request input; version_id/version only from the instance's own pins; one :not_found atom end to end; no Logger and no variables/headers/URL/service_id placed in error details or the 409 detail (create-path activation error reason does carry {:pin_missing,:catalog_entry,service_id} per design 3.2); required_auth != NONE fails closed; registration-time SSRF validation (0027 point) not added here, dispatch-time gate is the control (design 7.4) - reviewer to decide. REVIEWER sign-off needed for the req085 5.5.1 amendment (D4) and the uniform 409 for every error_type.",
+    "artifacts_out": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/service_catalog/pin_lookup.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/design/req085-task-routes-write.md",
+      "lib/letflow/design/service_task_dispatcher.md",
+      "lib/letflow/design/service_task.md",
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "test/letflow/engine_test.exs",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "test/letflow/engine_pin_resolver_catalog_test.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Local test DB is shared with concurrent worker mix-test invocations: TaskAssigneeTypeBackfillTest (8) and ServiceCatalogTest delete/update_scope (6) failed with undefined_table on other workers' tenant schemas. Not caused by this change; re-run on a quiet DB. Full suite not run locally per ORCH.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "design 4.3 asks for a pointer in req432-rebind-pins-publish-retire-ui.md (M5) but that file does not exist on this branch; pointer not added.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0917-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER"
   }
 }

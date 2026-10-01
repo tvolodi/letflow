@@ -22,6 +22,7 @@ import '../../api/api_error.dart'
 import '../../bootstrap/navigation_bootstrap.dart' show apiClientProvider;
 import '../../definitions/pinned_form_resolver.dart' as pinned_form;
 import '../../expr/expr.dart';
+import '../../i18n/i18n.dart';
 import '../renderer_state.dart';
 import '../renderer_state_view.dart';
 
@@ -718,7 +719,7 @@ class ExpressionUnavailableBannerWidget extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       color: Theme.of(context).colorScheme.errorContainer,
       child: Text(
-        'This app cannot evaluate a condition this form needs '
+        '${tr('form.expressionUnavailable.prefix')} '
         '("$field" / $kind): $reason.',
       ),
     );
@@ -1002,7 +1003,9 @@ class _FormRendererBodyState extends State<FormRendererBody> {
         return Padding(
           key: formFieldInputKey(field.name),
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text('${field.title}: this field type is not yet editable on mobile'),
+          child: Text(
+            '${field.title}: ${tr('form.field.notYetEditableOnMobile')}',
+          ),
         );
     }
   }
@@ -1140,21 +1143,27 @@ class _FormRendererBodyState extends State<FormRendererBody> {
             // since no such platform-channel source is wired in yet; tests
             // call [FormRendererController.pickAndUploadFile] directly.
             onPressed: null,
-            child: Text(outcome is FileUploadSuccess ? 'Replace file' : 'Choose file'),
+            child: Text(
+              outcome is FileUploadSuccess
+                  ? tr('form.file.replace')
+                  : tr('form.file.choose'),
+            ),
           ),
           switch (outcome) {
             null => const SizedBox.shrink(),
-            FileUploadInFlight() =>
-              const Text('Uploading…', key: Key('file-upload-in-flight')),
+            FileUploadInFlight() => Text(
+              tr('form.file.uploading'),
+              key: const Key('file-upload-in-flight'),
+            ),
             FileUploadSuccess(:final fileName) =>
               Text(fileName, key: const Key('file-upload-success')),
-            FileUploadNetworkUnavailable() => const Text(
-              'No network connection',
-              key: Key('file-upload-network-unavailable'),
+            FileUploadNetworkUnavailable() => Text(
+              tr('form.file.networkUnavailable'),
+              key: const Key('file-upload-network-unavailable'),
             ),
-            FileUploadOtherFailure() => const Text(
-              'Upload failed',
-              key: Key('file-upload-other-failure'),
+            FileUploadOtherFailure() => Text(
+              tr('form.file.uploadFailed'),
+              key: const Key('file-upload-other-failure'),
             ),
           },
         ],
@@ -1172,7 +1181,7 @@ class _FormRendererBodyState extends State<FormRendererBody> {
           onPressed: submitOutcome is SubmitInFlight
               ? null
               : () => widget.controller.submit(),
-          child: const Text('Submit'),
+          child: Text(tr('form.submit.action')),
         ),
         switch (submitOutcome) {
           null => const SizedBox.shrink(),
@@ -1183,17 +1192,17 @@ class _FormRendererBodyState extends State<FormRendererBody> {
             ),
           ),
           SubmitSuccess() =>
-            const Text('Submitted.', key: formSubmitSuccessKey),
-          SubmitNetworkUnavailable() => const Text(
-            'No network connection — your answers are still here.',
+            Text(tr('form.submit.success'), key: formSubmitSuccessKey),
+          SubmitNetworkUnavailable() => Text(
+            tr('form.submit.networkUnavailable'),
             key: formSubmitNetworkUnavailableKey,
           ),
           SubmitValidationError(:final fieldErrors) => Column(
             key: formSubmitValidationErrorKey,
             children: [for (final e in fieldErrors) Text(e.message)],
           ),
-          SubmitOtherFailure() => const Text(
-            'Something went wrong submitting this form.',
+          SubmitOtherFailure() => Text(
+            tr('form.submit.otherFailure'),
             key: formSubmitOtherFailureKey,
           ),
         },

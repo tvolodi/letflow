@@ -78,10 +78,14 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # REQ-429 (MOB-7): the three ARB message-catalogue files, one per
+  # ENTITIES_UI_LOCALES entry (en/ru/kk) -- plain JSON, loaded at runtime
+  # via `rootBundle.loadString` (`lib/i18n/catalogue.dart`), not Flutter's
+  # `gen_l10n` codegen (see that file's doc comment for why).
+  assets:
+    - lib/i18n/l10n/app_en.arb
+    - lib/i18n/l10n/app_ru.arb
+    - lib/i18n/l10n/app_kk.arb
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

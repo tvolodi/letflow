@@ -8,6 +8,7 @@ library;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
+import '../i18n/i18n.dart';
 import 'renderer_state.dart';
 
 // ── §2.2 Widget keys — exported so a widget test can assert on them without
@@ -67,18 +68,18 @@ class _RendererStateViewState<T> extends State<RendererStateView<T>> {
         key: rendererContentKey,
         child: widget.contentBuilder(context, data),
       ),
-      RendererFetchFailure<T>() => const Center(
+      RendererFetchFailure<T>() => Center(
         key: rendererFetchFailureKey,
-        child: Text('Something went wrong loading this screen.'),
+        child: Text(tr('renderer.state.fetchFailure')),
       ),
-      RendererPermissionDenied<T>() => const Center(
+      RendererPermissionDenied<T>() => Center(
         key: rendererPermissionDeniedKey,
-        child: Text("You don't have access to this."),
+        child: Text(tr('renderer.state.permissionDenied')),
       ),
       RendererStaleVersion<T>(:final reason) => Center(
         key: rendererStaleVersionKey,
         child: Text(
-          'This app needs an update.'
+          '${tr('renderer.state.staleVersion')}'
           '${kDebugMode ? ' (${reason.runtimeType})' : ''}',
         ),
       ),

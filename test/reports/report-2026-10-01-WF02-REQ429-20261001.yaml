@@ -1,0 +1,127 @@
+run_id: WF02-REQ429-20261001
+agent: TEST-RUNNER
+date: "2026-10-01"
+branch: feature/WF02-REQ429-20261001
+commit: fdc016c61fb4bdbc60a5d2f8b5a440f9a525accb
+step: "WF-02 Step 4 (Test run)"
+verdict: PASS
+
+environment_note: >
+  Host free RAM was low and swinging during this run (~2.02GB free of ~31.84GB
+  total measured via Get-CimInstance Win32_OperatingSystem immediately before
+  the backend run -- consistent with the ~1.93GB baseline this run was briefed
+  against). Per instruction, TEST_PARALLEL_N was pinned to 2 (not auto-derived
+  from nproc/getconf) to avoid the OOM/connection-timeout failure pattern seen
+  in ISS-0920. docker compose up -d confirmed letflow-postgres-1 and
+  letflow-keycloak-1 already Running before the run.
+
+backend_suite:
+  command: "TEST_PARALLEL_N=2 scripts/test_parallel.sh"
+  partition_count_n: 2
+  partition_count_source: "env override (TEST_PARALLEL_N=2, set per host-memory-constraint instruction)"
+  wall_time: "30m12.037s"
+  raw_output: |
+    test_parallel: N=2 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: WARN psql not found -- skipping host Postgres ceiling verification (ISS-0287 §4.2); TEST_MAX_CONNECTIONS/TEST_SUPERUSER_RESERVED assumptions unverified against the live server
+    test_parallel: TEST_POOL_SIZE=41 (computed: N=2, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5, per_partition_headroom=0)
+    test_parallel: seeding 2 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.fjPiXG
+    test_parallel: seeding+migrating 2 partition databases (capped at 4 concurrent)
+    test_parallel: all 2 partition databases created+migrated
+    test_parallel: template-build admission control capped at 4 concurrent (ready dir: /tmp/letflow_test_parallel.fjPiXG/template-ready)
+    test_parallel: TEST_PARALLEL_GROUP=tp329315 (shared by all 2 partitions)
+    partition 1: 2393 tests, 6 properties, 4 failures, exit 2
+    partition 2: 2717 tests, 2 properties, 8 failures, exit 2
+    ---
+    combined: 5110 tests, 8 properties, 12 failures (5106/5118 passed) -- 2/2 partitions reported
+    test_parallel: preserving /tmp/letflow_test_parallel.fjPiXG (exit_code=1, TEST_PARALLEL_KEEP_LOGS=unset)
+  combined_totals:
+    tests: 5110
+    properties: 8
+    total_examples: 5118
+    passed: 5106
+    failed: 12
+  failing_tests:
+    - module: Letflow.EventStore.RetentionOperationsTest
+      cases:
+        - "retirement_status/1 found case: returns the retirement plus every outcome row, ordered by tenant_id"
+        - "retire_oldest_eligible_month/1 -- happy path inserts a running row immediately, returns before the fanout completes, and the row later reaches completed"
+        - "retire_oldest_eligible_month/1 -- happy path a schema with no eligible month for the chosen month is recorded skipped, not failed"
+    - module: Letflow.Routers.EventRetentionTest
+      cases:
+        - "permission gate -- PLATFORM_ADMIN caller POST /retirements (AC1) returns 202 with the retirement record; GET status (AC1) reaches completed with the outcome table"
+    - module: Letflow.EventStore.PartitionMaintenanceTest
+      cases:
+        - "correction (b) -- archived_at real and non-null, excluded from read/2 every retired row has a non-null archived_at, never exposed on the Event struct"
+        - "AC2/EO-001 -- whole-partition DDL only issues zero per-row DELETE/row-scoped INSERT when nothing needs reconciling"
+        - "AC2/EO-001 -- whole-partition DDL only a concurrent write to a different, live partition completes while retirement runs"
+        - "correction (a) -- events_default self-heals stays attached as DEFAULT after retirement, and a far-future write still lands there"
+        - "crash-recovery / idempotent resume idempotent no-op resumed from :already_retired, no ATTACH/DETACH re-issued"
+        - "§4.4b -- events_archive_default reconciliation, batched pre-accumulated events_archive_default rows are swept in more than one batch"
+        - "EO-003 -- replay after retirement, no gap, no error an instance spanning two months returns every event, in order, after the older month retires"
+        - "EO-002 -- keep_forever count identical before/after retirement a keep_forever row's count across events UNION events_archive is unchanged"
+
+failure_attribution:
+  method: "structural (core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching'), form (a)"
+  evidence: >
+    `git diff main...HEAD --name-only` for this branch shows only:
+    apps/mobile/lib/**, apps/mobile/test/**, apps/mobile/pubspec.yaml,
+    docs/mobile/requirements.md, docs/requirements.yaml,
+    docs/status/requirement_status.index.yaml,
+    docs/status/requirement_status.v25.yaml,
+    lib/letflow/design/req429-mobile-i18n.md, test/specs/REQ-429.md.
+    None of lib/letflow/event_store*, lib/letflow_web/routers/event_retention*,
+    or their test files appear anywhere in that diff -- this branch touches zero
+    backend EventStore/retention code or tests.
+  matches_known_issue: true
+  matching_issue_ids: [ISS-0937, ISS-0938]
+  note: >
+    All 12 failures fall exclusively in Letflow.EventStore.RetentionOperationsTest,
+    Letflow.Routers.EventRetentionTest, and Letflow.EventStore.PartitionMaintenanceTest
+    -- precisely the module set ISS-0937/ISS-0938 (both already filed, status: open)
+    describe as order-dependent/shared-state-leakage failures in the REQ-377
+    EventStore partition/retention area, reproduced non-deterministically across
+    separate runs at varying partition counts. This run's failure set is consistent
+    with that already-filed pattern and is not folded into a new filing. Not the
+    ISS-0940/ISS-0941 pattern (those name a different module set: TenantTemplateTest,
+    ServiceCatalogTest, RoleBackfillTest, etc. -- none of which appear in this run's
+    failures), so this run found no NEW finding needing filing.
+  conclusion: >
+    All 12 backend failures are structurally pre-existing and unrelated to this
+    requirement's own acceptance criteria. Does not block this step's PASS verdict,
+    per WF-02 Step 4's "Failures unrelated to this run's own acceptance criteria
+    (pre-existing) are filed and forwarded per ISSUE_QUEUE.md -- not fixed here,
+    don't block this step's own PASS verdict." Already covered by ISS-0937/ISS-0938;
+    no new issue needs filing.
+
+mobile_suite:
+  diff_scope_note: "This branch's diff is apps/mobile/-only (plus docs/specs) -- mobile gates run per WF-02 Step 4 item 2b."
+  analyze:
+    command: "flutter analyze (from apps/mobile/)"
+    result: "No issues found! (ran in 14.3s)"
+  test:
+    command: "flutter test (from apps/mobile/)"
+    result: "All tests passed!"
+    tests_run: 296
+    tests_failed: 0
+    notable_i18n_suites:
+      - test/i18n/catalogue_formatting_test.dart
+      - test/i18n/formatting_locale_test.dart
+      - test/i18n/localized_text_test.dart
+      - test/i18n/ui_locale_test.dart
+      - test/guards/text_literal_guard_test.dart
+      - test/widgets/tenant_home_screen_test.dart
+      - test/widgets/renderer_registry_fallback_test.dart
+
+summary: >
+  PASS. Backend full suite: 5106/5118 passed, 12 failures, all structurally
+  attributed as pre-existing (ISS-0937/ISS-0938, EventStore partition/retention
+  order-dependence) and not caused by this branch (zero overlap with the diff).
+  Mobile suite (this requirement's actual implementation surface): flutter analyze
+  clean, flutter test 296/296 passed, including the full REQ-429 i18n test set
+  (two-tier locale match + tenant content resolver: catalogue_formatting_test,
+  formatting_locale_test, localized_text_test, ui_locale_test) plus the
+  text-literal-guard and tenant-home-screen regression coverage.
+
+next_action: "Route to RELEASE-VALIDATOR"

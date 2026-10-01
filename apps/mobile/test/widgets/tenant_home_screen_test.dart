@@ -12,6 +12,7 @@ import 'package:letflow/definitions/definitions.dart';
 import 'package:letflow/definitions/tenant_home_screen.dart';
 
 import '../support/fake_http_gateway.dart';
+import '../support/load_test_catalogue.dart';
 
 Map<String, dynamic> _deltaItem({
   required String id,
@@ -40,6 +41,8 @@ void _expectNoLoadingIndicatorAnywhere() {
 }
 
 void main() {
+  setUpAll(loadTestMessageCatalogue);
+
   testWidgets(
     'airplane mode: pre-populated cache renders immediately, SocketException'
     ' on every sync call, and no loading indicator appears at any frame',

@@ -217,3 +217,46 @@ history:
       ISS-0940, ISS-0919, or ISS-0939 block this closure. This is an ISSUE
       closure, not a REQ -- docs/requirements.yaml untouched. letflow-queue
       task 910 released as done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T07:12:21Z"
+    note: >
+      ISS-0935 resolved (Vortex tenant had no entity types/batches seeded at
+      all, blocking the vortex-entity-list-filter-and-page UAT scenario's
+      data precondition). PR #2084, branch fix/ISS-0935-vortex-entity-seed,
+      commit e977ab15. Fix: two new entity-type definitions
+      (production_batch with a cost_figure field restricted to a
+      cost-approver persona and a non-searchable internal_notes field;
+      shipment_manifest, a second type fully restricted from the
+      quality-manager persona), 83+10 sample records, and -- because no
+      existing mechanism could write the necessary field/type restriction
+      rows against a remote QA instance -- a brand-new POST
+      /entities/restrictions/import admin route gated by a new
+      :EntitiesRestrictionsManage permission, backed by a new
+      Letflow.Entities.Restrictions.import_restrictions/2 context module,
+      plus a new seed script scripts/seed_vortex_entities.sh. Full gate
+      chain: CODE-DESIGN-VALIDATOR 2-attempt cycle (1st attempt caught a
+      real missing-write-mechanism gap, resolved via the new admin route),
+      ELIXIR-DEV implementation, SECURITY-REVIEWER mandatory hard-gate PASS
+      (new route/permission/tenant-table write path -- traced cross-tenant
+      user_id rejection with a genuine two-tenant cross-tenant-injection
+      test, judged the deliberate missing-revoke-path limitation acceptable
+      for this narrowly-scoped seed-only tool), REVIEWER 2 passes (full
+      review plus a narrow re-check after the tripwire fix), TEST-RUNNER 2
+      full runs (careful per-failure classification after an earlier
+      misattribution was caught and corrected), and RELEASE-VALIDATOR 2
+      passes -- the first FAILed on a real regression it alone caught: the
+      PR's new route wasn't registered in
+      test/letflow/simulation/req207_vortex_test.exs's route-tripwire test,
+      fixed by ELIXIR-DEV, the second re-check confirmed the fix.
+      docs/issues/ISS-0526.yaml (the separate Playwright-spec gap for this
+      same scenario) remains open and unresolved -- this fix only closes
+      the DATA-seeding half of the original blocker; the scenario cannot
+      run end-to-end until ISS-0526 also lands. The new seed script was NOT
+      run against live QA (no credentials in this sandbox) -- documented
+      operational follow-up, same precedent as
+      ISS-0897/ISS-0886/ISS-0892. docs/issues/ISS-0935.yaml set to status:
+      resolved in this same commit. This is an ISSUE closure, not a REQ --
+      docs/requirements.yaml untouched. letflow-queue task 918 to be
+      released as done after merge.

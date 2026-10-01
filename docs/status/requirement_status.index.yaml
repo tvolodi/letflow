@@ -5826,7 +5826,7 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 7
+    entries: 8
     note: >
       Opened by DOC-UPDATER's own ISS-0908 closing SCOPE-CHANGE append,
       successor to volume 24 (closed at 30 entries / 1219 frozen-prefix

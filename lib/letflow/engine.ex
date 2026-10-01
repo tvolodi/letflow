@@ -3371,13 +3371,111 @@ defmodule Letflow.Engine do
               prefix
             )
 
+          {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
+            persist_service_task_no_matching_edge(
+              repo,
+              dispatch,
+              projection,
+              state_with_merged_variables,
+              node_id,
+              evaluated_conditions,
+              prefix
+            )
+
           {:error, reason} ->
             {:error, {:transition_failed, reason}}
         end
 
-      {:error, reason} ->
-        {:error, {:transition_failed, reason}}
+      {:error, {:no_matching_edge, node_id, evaluated_conditions}} ->
+        persist_service_task_no_matching_edge(
+          repo,
+          dispatch,
+          projection,
+          state_with_merged_variables,
+          node_id,
+          evaluated_conditions,
+          prefix
+        )
+
+        # No generic `{:error, reason}` arm here: `Transition.advance_off_completed_node/4`
+        # only ever returns `{:error, {:no_matching_edge, _, _}}` (the type checker
+        # rejects a catch-all as unreachable).
     end
+  end
+
+  # ISS-0928 -- the hop chain that follows a completed SERVICE_TASK reached an
+  # EXCLUSIVE_GATEWAY with no matching condition and no default edge. The
+  # dispatch row was already committed "advanced" by
+  # `ServiceTaskDispatcher.handle_success/3` in an earlier transaction, so
+  # rolling back here (the old bare `{:transition_failed, _}`) left the
+  # instance ACTIVE forever with no event/DLQ row. Mirror the human-task
+  # path (`dispatch_task_completion_hop_chain/7`): write the ExecutionError
+  # records inside the ALREADY-OPEN outer transaction (the projection is
+  # already FOR UPDATE-locked) and let it COMMIT. Writes: EXECUTION_ERROR
+  # event + DLQ row + projection -> :error. Deliberately NOT written: no
+  # SERVICE_TASK_COMPLETED, no token/task/timer/dispatch changes, no variable
+  # merge persistence; the dispatch row stays "advanced" (never re-armed, so
+  # at-most-once HTTP dispatch is preserved). No snapshot (log replay is
+  # authoritative).
+  defp persist_service_task_no_matching_edge(
+         repo,
+         %ServiceTaskDispatch{} = dispatch,
+         %InstanceProjection{} = projection,
+         %InstanceState{} = state_with_merged_variables,
+         node_id,
+         evaluated_conditions,
+         prefix
+       ) do
+    error_args =
+      build_no_matching_gateway_edge_error_args(
+        projection.instance_id,
+        node_id,
+        evaluated_conditions,
+        state_with_merged_variables.variables,
+        EventStore.platform_actor_id(),
+        "service_task_dispatch:#{dispatch.id}"
+      )
+
+    multi =
+      Multi.new()
+      |> ExecutionError.append_multi(error_args, prefix: prefix, locked_projection: projection)
+
+    case repo.transaction(multi) do
+      {:ok, _changes} -> {:ok, :error_set}
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
+  # Shared by the human-task completion path and the SERVICE_TASK re-entry
+  # path so the ExecutionError shape for `:no_matching_gateway_edge` cannot
+  # drift between them.
+  @spec build_no_matching_gateway_edge_error_args(
+          Ecto.UUID.t(),
+          String.t(),
+          term(),
+          map(),
+          Ecto.UUID.t() | nil,
+          String.t()
+        ) :: ExecutionError.error_args()
+  defp build_no_matching_gateway_edge_error_args(
+         instance_id,
+         node_id,
+         evaluated_conditions,
+         variables,
+         actor_id,
+         idempotency_key
+       ) do
+    %{
+      instance_id: instance_id,
+      error_type: :no_matching_gateway_edge,
+      affected: {:node, node_id},
+      reason:
+        "no outgoing edge matched conditions and no default edge configured for gateway node '#{node_id}'",
+      variables: variables,
+      details: %{evaluated_conditions: evaluated_conditions},
+      actor_id: actor_id,
+      idempotency_key: idempotency_key
+    }
   end
 
   defp do_persist_service_task_advance(
@@ -3855,17 +3953,15 @@ defmodule Letflow.Engine do
             end
 
           {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
-            error_args = %{
-              instance_id: projection.instance_id,
-              error_type: :no_matching_gateway_edge,
-              affected: {:node, node_id},
-              reason:
-                "no outgoing edge matched conditions and no default edge configured for gateway node '#{node_id}'",
-              variables: state_with_merged_variables.variables,
-              details: %{evaluated_conditions: evaluated_conditions},
-              actor_id: actor_id,
-              idempotency_key: idempotency_key
-            }
+            error_args =
+              build_no_matching_gateway_edge_error_args(
+                projection.instance_id,
+                node_id,
+                evaluated_conditions,
+                state_with_merged_variables.variables,
+                actor_id,
+                idempotency_key
+              )
 
             {:ok, {:execution_error, error_args}}
 
@@ -3874,17 +3970,15 @@ defmodule Letflow.Engine do
         end
 
       {:error, {:no_matching_edge, node_id, evaluated_conditions}} ->
-        error_args = %{
-          instance_id: projection.instance_id,
-          error_type: :no_matching_gateway_edge,
-          affected: {:node, node_id},
-          reason:
-            "no outgoing edge matched conditions and no default edge configured for gateway node '#{node_id}'",
-          variables: state_with_merged_variables.variables,
-          details: %{evaluated_conditions: evaluated_conditions},
-          actor_id: actor_id,
-          idempotency_key: idempotency_key
-        }
+        error_args =
+          build_no_matching_gateway_edge_error_args(
+            projection.instance_id,
+            node_id,
+            evaluated_conditions,
+            state_with_merged_variables.variables,
+            actor_id,
+            idempotency_key
+          )
 
         {:ok, {:execution_error, error_args}}
 
@@ -4720,6 +4814,61 @@ defmodule Letflow.Engine do
         Logger.warning(
           "Repo.transaction/1 failed recording task_activation.rejected for instance " <>
             "#{instance_id} (node #{node_id}): #{inspect(rollback_reason)}"
+        )
+
+        :ok
+    end
+  end
+
+  # ISS-0928 -- best-effort audit for a SERVICE_TASK re-entry failure that is
+  # NOT routed to an ExecutionError (hop limit, unknown token, variable-merge
+  # rejection, DB failure ...). Called by
+  # `ServiceTaskDispatcher.call_advance_after_service_task_outcome/3` strictly
+  # after `advance_after_service_task_outcome/4` has returned, same
+  # post-return rule and log-and-swallow, never-raise contract as
+  # `record_task_activation_rejection_audit/5`. Stores/logs only ids and an
+  # atom tag, never the failure reason (it can hold variables / response body).
+  @doc false
+  @spec record_service_task_advance_failure_audit(
+          instance_id :: Ecto.UUID.t(),
+          node_id :: String.t() | nil,
+          reason_tag :: atom(),
+          actor_id :: Ecto.UUID.t() | nil,
+          prefix :: String.t()
+        ) :: :ok
+  def record_service_task_advance_failure_audit(
+        instance_id,
+        node_id,
+        reason_tag,
+        actor_id,
+        prefix
+      ) do
+    attrs = %{
+      actor_id: actor_id,
+      action: "service_task.advance_failed",
+      resource_type: "instance",
+      resource_id: instance_id,
+      before_state: nil,
+      after_state: %{"node_id" => node_id, "reason" => Atom.to_string(reason_tag)},
+      trace_id: nil
+    }
+
+    case Repo.transaction(fn -> Audit.insert_entry(Repo, attrs, prefix) end) do
+      {:ok, {:ok, _entry}} ->
+        :ok
+
+      {:ok, {:error, _insert_reason}} ->
+        Logger.warning(
+          "Letflow.Audit.insert_entry/3 failed recording service_task.advance_failed for " <>
+            "instance #{instance_id} (node #{node_id}, reason #{reason_tag})"
+        )
+
+        :ok
+
+      {:error, _rollback_reason} ->
+        Logger.warning(
+          "Repo.transaction/1 failed recording service_task.advance_failed for instance " <>
+            "#{instance_id} (node #{node_id}, reason #{reason_tag})"
         )
 
         :ok

@@ -4340,3 +4340,26 @@ not an optional note CODE-DESIGN-VALIDATOR can wave through with "flagged, not r
 ISS-0926's own design doc §7 did mark SECURITY-REVIEWER as a judgment call rather than an
 auto-skip for exactly this reason — the lesson is to let a design doc's own named risk
 raise, not lower, the bar for whether the security gate runs.
+
+## A dispatch row committed terminal in one transaction, then a rolled-back re-entry in the next, is a silent stall (ELIXIR-DEV, ISS-0928/Q-928)
+
+`ServiceTaskDispatcher.handle_success/3` commits the `service_task_dispatches` row
+`"advanced"` in its own transaction; `Letflow.Engine.advance_after_service_task_outcome/4`
+then re-enters the engine in a SECOND transaction. When the hop chain after the SERVICE_TASK
+hit an EXCLUSIVE_GATEWAY with no matching condition and no default edge,
+`persist_service_task_advance/10` returned a bare `{:error, {:transition_failed, _}}`, the
+second transaction rolled back, the poller never re-claimed the already-"advanced" row, and
+the dispatcher's catch-all dropped the error with no log and no audit. Net: instance ACTIVE
+forever, no task, no EXECUTION_ERROR, no DLQ row. The UAT report blamed the
+PARALLEL_GATEWAY fork ("never dispatched"); the fork was a red herring, the dispatch worked.
+The human-task completion path already routed the same condition to an ExecutionError; the
+service-task re-entry path never got that treatment.
+
+**Correct alternative.** Whenever a step commits a row to a terminal status and a later
+transaction does the follow-on work, every error arm of that follow-on must either (a) write
+an ExecutionError/DLQ record and COMMIT, or (b) be logged and audited loudly. A bare rollback
+after the earlier commit is never acceptable, and a catch-all `{:error, reason} -> {:error,
+reason}` that a caller then folds away uncounted is the same defect. When diagnosing a "stalled
+ACTIVE, no events" symptom, check the error arms of the re-entry before blaming topology.
+Related fixture lesson: an EXCLUSIVE_GATEWAY after an external call needs an `is_default`
+edge when the call's response may omit the routed key.

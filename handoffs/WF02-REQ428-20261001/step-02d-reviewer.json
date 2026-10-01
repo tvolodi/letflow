@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ428-20261001/step-02d-reviewer.json",
   "created_at": "2026-10-01T03:40:00Z",
   "started_at": "2026-10-01T03:40:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T01:43:50Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S9",
@@ -38,18 +38,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Idiom review of git diff main...HEAD (apps/mobile/lib/renderers/task/task.dart, apps/mobile/lib/renderers/process/process.dart, + tests) against req428-task-and-instance-renderer.md and reviewer.md's four questions. (1) Idiomatic vs. crutch: no gen_statem/supervision concerns (Dart/Flutter, not Elixir/OTP) -- controllers follow the existing ChangeNotifier + RendererState<T> idiom (ListRendererController/FormRendererController precedent) with no hand-rolled state-machine-via-case substituting for an existing framework piece. (2) Supervision: N/A for this diff -- no process/isolation concerns; InstanceDetailController correctly keeps detailState/timelineState as two INDEPENDENT RendererState instances per design S4.4.1, verified in process.dart (lines ~149-328) -- a timeline-only 429 does not collapse the already-loaded header, matching the project's general 'don't collapse independent failure domains into one shared state' principle. (3) Type-safety: TaskStatus.fromWire/InstanceStatus.fromWire return nullable enums and an unrecognized wire value folds the WHOLE page/item to RendererStaleVersion(UnknownFieldType) rather than throwing -- already as typed as reasonably achievable short of making the wire format itself a closed type (not this diff's call); no new type-safety gap worth filing. (4) Scope creep: none found -- no new abstraction, behaviour, or registry mechanism beyond what S2/S3/S4/S6 of the design call for; TaskClaimOutcome is the only new sealed hierarchy and the design (S3.3/S5) explicitly justifies it as mirroring REQ-427's already-shipped FormSubmitOutcome precedent, not an ad hoc workaround. Verified the three flagged specifics directly against source rather than trusting MOBILE-DEV's self-report: (a) task.dart line 127, TaskInboxController.client is PostCapableHttpGateway with an inline comment explaining claim()'s shared POST-capable claimTask() function requires it and ApiClient already satisfies the interface -- a sound interface-typing correction, not an undocumented capability expansion (inbox fetch itself still issues only GET, confirmed by reading _fetchPage). (b) renderer_state.dart line 149: `ConflictError() => RendererFetchFailure(cause: error),` IS present in rendererStateForError's switch -- OQ-3's premise (a possible missing arm) does not hold against the shipped file; MOBILE-DEV's claim that no fix was needed there is correct and the gap was already closed before REQ-428 (OQ-3 remains worth closing out as a doc note in a future requirement/decision update, non-blocking). (c) TaskClaimOutcome (task.dart line 352) and lastClaimOutcome (line 415-416) are kept outside RendererState<TaskDetail> entirely, exactly mirroring REQ-427's FormSubmitOutcome precedent for the same stated reason (a claim-action failure must not discard the already-loaded TaskDetail) -- sound separation, not a crutch. (d) grep for cancel/rebind/reconstruct/advance across both new files and their tests: zero calls to any such route; the only matches are the InstanceStatus.cancelled status value (a legitimate terminal-state enum member, not an action) and explanatory doc comments restating the non-goal. No crutch, broken invariant, or scope creep found. Non-blocking notes only: OQ-1 (pinned_form_resolver.dart's stale design-doc citation) and OQ-5 (no backpressure variant on TaskClaimOutcome) remain open per the design doc's own deferral to a future requirement -- neither blocks this gate.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ428-20261001",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ428-20261001",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGNER (3)"
   },
   "rework_count": 0,
   "max_rework": 3

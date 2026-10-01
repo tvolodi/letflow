@@ -437,6 +437,32 @@ defmodule Letflow.Api.Error do
   end
 
   @doc """
+  HTTP 409 — Service Referenced By Active Instances (ISS-0923, design
+  `lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md` §8).
+  Same shape rationale as `service_referenced_by_active_definitions/1` above, for
+  `Letflow.ServiceCatalog.delete/1`'s
+  `{:error, {:referenced_by_active_instances, instance_refs}}` shape.
+
+  `instance_refs` is `Letflow.ServiceCatalog.instance_refs()`: a capped, ascending
+  list of opaque non-terminal instance ids plus a `truncated` flag. `detail` is a
+  fixed sentence with no ids interpolated; the ids live only in the extensions map.
+  """
+  @spec service_referenced_by_active_instances(%{
+          instance_ids: [String.t()],
+          truncated: boolean()
+        }) :: t()
+  def service_referenced_by_active_instances(%{instance_ids: ids, truncated: truncated})
+      when is_list(ids) and is_boolean(truncated) do
+    %__MODULE__{
+      type: @problems_base <> "service-referenced-by-active-instances",
+      title: "Service Referenced By Active Instances",
+      status: 409,
+      detail: "the service is pinned by one or more non-terminal process instances",
+      extensions: %{"instance_ids" => ids, "truncated" => truncated}
+    }
+  end
+
+  @doc """
   HTTP 409 — Service Scope Narrowing Conflict (REQ-192, design §11). Same
   shape rationale as `service_referenced_by_active_definitions/1` above, for
   `Letflow.ServiceCatalog.update_scope/2`'s

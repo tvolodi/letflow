@@ -198,6 +198,33 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
     }
   end
 
+  # ISS-0926 -- same shape as graph_service_task_end/1 but the SERVICE_TASK
+  # node also carries a body_template attribute, so a test can prove
+  # Letflow.Engine renders body_template the same way it renders
+  # url_template (same {{variables.KEY}} regex/value logic,
+  # render_service_task_template/2 shared between both fields).
+  defp graph_service_task_end_with_body(endpoint, body_template) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{
+            "endpoint" => endpoint,
+            "timeout_ms" => 5_000,
+            "body_template" => body_template
+          }
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "svc"},
+        %{"id" => "e2", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
   defp dispatches_for(schema_name, instance_id) do
     ServiceTaskDispatch
     |> where([d], d.instance_id == ^instance_id)
@@ -1134,6 +1161,203 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
       # design's own "one Regex.replace/3 call" minimal scope).
       assert rendered == "http://127.0.0.1:#{port}/hook?ref={{variables.other}}"
       refute rendered =~ "SHOULD_NOT_APPEAR"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0926 -- body_template is now rendered too, not just url_template,
+  # through its own render_service_task_body_template/2 (sibling of
+  # render_service_task_template/2, same {{variables.KEY}} regex/value logic).
+  # These tests mirror the "minimal {{variables.KEY}} renderer" describe block
+  # above, proving config_snapshot_map/4's new "rendered_body" key is
+  # populated while the raw "body_template" key is preserved unchanged, and
+  # that ServiceTaskDispatcher actually sends the RENDERED body (not the raw
+  # template) as the real HTTP request body. A SECURITY-REVIEWER fail on
+  # PR #2113 found that the original shared-renderer version did this
+  # substitution unescaped, which is a JSON-injection vulnerability for
+  # body_template specifically (a URL has no JSON-string quoting to break) --
+  # render_service_task_body_template/2 JSON-string-escapes every substituted
+  # value; the last test below reproduces that exact adversarial proof.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0926: body_template rendering" do
+    test "body_template renders, config_snapshot keeps raw+rendered, dispatcher sends the rendered body" do
+      enable_ssrf_bypass()
+      test_pid = self()
+
+      %{url: server_url} =
+        WebhookTestServer.start_with_responder(fn request ->
+          send(test_pid, {:received_request, request})
+          {200, ~s({"ok":true})}
+        end)
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body_template = ~s({"reason":"sla_breach_30_days","review_id":"{{variables.review_id}}"})
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_end_with_body(server_url, body_template)
+        )
+
+      assert {:ok, result} =
+               Engine.create(
+                 base_attrs(definition, %{initial_variables: %{"review_id" => "REV-42"}}),
+                 prefix: schema_name
+               )
+
+      instance_id = result.instance_id
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+
+      expected_rendered = ~s({"reason":"sla_breach_30_days","review_id":"REV-42"})
+
+      # config_snapshot_map/4's new derived key is populated with the
+      # rendered body ...
+      assert dispatch.config_snapshot["rendered_body"] == expected_rendered
+      # ... while the raw template is preserved unchanged, exactly mirroring
+      # url_template/rendered_url's own raw/derived pairing (design §2.3).
+      assert dispatch.config_snapshot["body_template"] == body_template
+
+      # And the dispatcher must have actually sent the RENDERED body, not
+      # the raw template, as the real HTTP request body -- the whole point
+      # of ISS-0926 (previously the dispatcher read "body_template" raw off
+      # the snapshot and sent the unrendered placeholder text verbatim).
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:received_request, %{body: body}}, 2_000
+      assert body == expected_rendered
+      refute body =~ "{{"
+    end
+
+    test "a missing variable in body_template renders to the empty string, not the placeholder text" do
+      enable_ssrf_bypass()
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body_template = ~s({"reason":"remediation_unresolved","review_id":"{{variables.missing}}"})
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_end_with_body(server_url, body_template)
+        )
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+
+      assert dispatch.config_snapshot["rendered_body"] ==
+               ~s({"reason":"remediation_unresolved","review_id":""})
+
+      refute dispatch.config_snapshot["rendered_body"] =~ "{{"
+      refute dispatch.config_snapshot["rendered_body"] =~ "}}"
+    end
+
+    test "a nil body_template renders to nil at both the config_snapshot and dispatched-body level" do
+      enable_ssrf_bypass()
+      test_pid = self()
+
+      %{url: server_url} =
+        WebhookTestServer.start_with_responder(fn request ->
+          send(test_pid, {:received_request, request})
+          {200, ~s({"ok":true})}
+        end)
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_service_task_end(server_url))
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+      assert dispatch.config_snapshot["rendered_body"] == nil
+      assert dispatch.config_snapshot["body_template"] == nil
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:received_request, %{body: body}}, 2_000
+      assert body == ""
+    end
+
+    # SECURITY-REVIEWER fail on PR #2113 -- render_service_task_template/2's
+    # plain substitution let a `"` in an unconstrained free-text variable
+    # (review_id has no variable_schema registered, so it is genuinely
+    # unconstrained) close the surrounding JSON string early and inject
+    # attacker-controlled sibling keys, or forge a duplicate key whose
+    # resolution is parser-dependent. The fix: body_template now renders
+    # through render_service_task_body_template/2, which JSON-string-escapes
+    # every substituted value before splicing it between the template's own
+    # quotes. This test reproduces SECURITY-REVIEWER's exact adversarial
+    # review_id and proves the rendered body is valid JSON with review_id
+    # as a single harmless string value -- no injected "reviewer_override"
+    # key, and no duplicate "reason" key shadowing the legitimate one.
+    test "a `\"`-containing review_id cannot inject sibling keys or shadow an existing key" do
+      enable_ssrf_bypass()
+      test_pid = self()
+
+      %{url: server_url} =
+        WebhookTestServer.start_with_responder(fn request ->
+          send(test_pid, {:received_request, request})
+          {200, ~s({"ok":true})}
+        end)
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body_template = ~s({"reason":"sla_breach_30_days","review_id":"{{variables.review_id}}"})
+
+      adversarial_review_id = ~s(x","reviewer_override":"approved_by_attacker","notes":"n)
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_end_with_body(server_url, body_template)
+        )
+
+      assert {:ok, result} =
+               Engine.create(
+                 base_attrs(definition, %{
+                   initial_variables: %{"review_id" => adversarial_review_id}
+                 }),
+                 prefix: schema_name
+               )
+
+      instance_id = result.instance_id
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+
+      rendered_body = dispatch.config_snapshot["rendered_body"]
+
+      # The rendered body must still be valid JSON (the injection, if it had
+      # succeeded, would also still be syntactically valid JSON -- that was
+      # the whole danger -- so the real proof is in the decoded shape below,
+      # not merely that decoding succeeds).
+      assert {:ok, decoded} = Jason.decode(rendered_body)
+
+      # The legitimate "reason" field must be untouched -- no duplicate key
+      # shadowed it with the attacker's own "all_clear"-style value.
+      assert decoded["reason"] == "sla_breach_30_days"
+
+      # review_id must decode back to EXACTLY the adversarial string, as one
+      # harmless scalar value -- proving the `"` characters inside it were
+      # escaped, not interpreted as JSON structure.
+      assert decoded["review_id"] == adversarial_review_id
+
+      # No attacker-controlled key was injected into the JSON object.
+      refute Map.has_key?(decoded, "reviewer_override")
+      refute Map.has_key?(decoded, "notes")
+      assert Map.keys(decoded) |> Enum.sort() == ["reason", "review_id"]
+
+      # And the dispatcher sends this same safely-escaped body over the wire.
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:received_request, %{body: body}}, 2_000
+      assert body == rendered_body
+      assert {:ok, ^decoded} = Jason.decode(body)
     end
   end
 

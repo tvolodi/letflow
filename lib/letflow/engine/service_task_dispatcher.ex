@@ -716,7 +716,7 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
     case config_from_snapshot(row) do
       {:ok, %ServiceTask.Config{route_kind: :inline_url} = config} ->
         rendered_url = row.config_snapshot["rendered_url"]
-        rendered_body = row.config_snapshot["body_template"]
+        rendered_body = row.config_snapshot["rendered_body"]
 
         raw_outcome = http_transport(config, rendered_url, rendered_body)
 
@@ -738,7 +738,7 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
       {:ok, %ServiceTask.Config{route_kind: :catalog_service} = config} ->
         case row.config_snapshot["rendered_url"] do
           rendered_url when is_binary(rendered_url) and rendered_url != "" ->
-            rendered_body = row.config_snapshot["body_template"]
+            rendered_body = row.config_snapshot["rendered_body"]
 
             case ServiceTask.classify_failure_kind(
                    http_transport(config, rendered_url, rendered_body)

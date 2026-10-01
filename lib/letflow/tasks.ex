@@ -478,6 +478,92 @@ defmodule Letflow.Tasks do
 
   defp apply_claim(_repo, %Task{}, _actor_id, _scope, _prefix), do: {:error, :not_claimable}
 
+  # =========================================================================
+  # authorize_completion/3 (ISS-0942) -- see
+  # lib/letflow/design/iss0942-task-complete-authorization-gap.md §2 for the
+  # full design this implements. Read-only admission check called from
+  # Letflow.Routers.Tasks.handle_complete/3 BEFORE Letflow.Engine.complete_task/3
+  # -- mirrors apply_claim/5's own precedence table exactly, minus the write.
+  # No row lock here (§2.3 of the design doc): this function never mutates
+  # anything -- Engine.complete_task/3 still takes its own `SELECT ... FOR
+  # UPDATE` inside its own Ecto.Multi, unchanged by this function.
+  # =========================================================================
+
+  @type complete_authz_opts :: opts()
+
+  @type complete_authz_error ::
+          {:error, :invalid_task_id}
+          | {:error, :task_not_found}
+          | {:error, :assigned_to_other_user}
+          | {:error, :assignee_group_not_member}
+          | {:error, :assignee_role_not_held}
+
+  @doc """
+  Read-only authorization admission check for `POST /tasks/:id/complete`
+  (ISS-0942) -- mirrors `apply_claim/5`'s own precedence table exactly,
+  minus the write: unassigned (`nil`) task -> `:ok` (permissive, same as
+  `claim_task/3`'s own unassigned case -- any authenticated actor may
+  complete a currently-unassigned task, same as they may claim one);
+  `USER` assignee matching `actor_id` -> `:ok`, mismatch -> `{:error,
+  :assigned_to_other_user}`; `GROUP` assignee the caller belongs to ->
+  `:ok`, else `{:error, :assignee_group_not_member}`; `ROLE` assignee the
+  caller holds -> `:ok`, else `{:error, :assignee_role_not_held}`.
+
+  Performs no write -- `write_assignment/4` is never called from here. The
+  actual completion mutation stays entirely inside
+  `Letflow.Engine.complete_task/3`'s own transaction, unchanged by this
+  function (REQ-048's module boundary: assignee authorization does not
+  live inside `Letflow.Engine`).
+  """
+  @spec authorize_completion(
+          task_id :: String.t(),
+          actor_id :: Ecto.UUID.t(),
+          opts :: complete_authz_opts()
+        ) :: :ok | complete_authz_error()
+  def authorize_completion(task_id, actor_id, opts) when is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, task_id} <- cast_task_id(task_id),
+         {:ok, task} <- fetch_task_for_completion_authz(task_id, prefix) do
+      scope = resolve_principal_scope(actor_id, prefix: prefix)
+      apply_completion_authz(task, actor_id, scope)
+    end
+  end
+
+  defp fetch_task_for_completion_authz(task_id, prefix) do
+    case Repo.get(Task, task_id, prefix: prefix) do
+      nil -> {:error, :task_not_found}
+      %Task{} = task -> {:ok, task}
+    end
+  end
+
+  defp apply_completion_authz(%Task{assignee_type: nil}, _actor_id, _scope), do: :ok
+
+  defp apply_completion_authz(%Task{assignee_type: "USER", assignee_ref: ref}, actor_id, _scope)
+       when ref == actor_id do
+    :ok
+  end
+
+  defp apply_completion_authz(%Task{assignee_type: "USER"}, _actor_id, _scope) do
+    {:error, :assigned_to_other_user}
+  end
+
+  defp apply_completion_authz(%Task{assignee_type: "GROUP", assignee_ref: ref}, _actor_id, scope) do
+    if ref in scope.group_ids do
+      :ok
+    else
+      {:error, :assignee_group_not_member}
+    end
+  end
+
+  defp apply_completion_authz(%Task{assignee_type: "ROLE", assignee_ref: ref}, _actor_id, scope) do
+    if ref in scope.role_names do
+      :ok
+    else
+      {:error, :assignee_role_not_held}
+    end
+  end
+
   @type assign_attrs :: %{required(:user_id) => String.t()}
   @type assign_opts :: opts()
 

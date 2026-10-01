@@ -44,6 +44,7 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Identity
   alias Letflow.Identity.OnboardingRecord
+  alias Letflow.Identity.RoleRegistry
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.Scheduler
@@ -217,6 +218,32 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
     alice = Map.fetch!(users_by_actor_id, "actor-swiftroute-alice")
     lena = Map.fetch!(users_by_actor_id, "actor-swiftroute-lena")
     marco = Map.fetch!(users_by_actor_id, "actor-swiftroute-marco")
+
+    # ISS-0942: org_structure.yaml's departments were seeded as plain groups
+    # but never bound to the "role-*" process_routing_role names the
+    # @simple_approval_graph/@ops_escalation_graph HUMAN_TASK nodes assign
+    # to -- harmless before this fix (POST /tasks/:id/complete enforced no
+    # assignee check at all), but now that it does, the scenario's own
+    # actors (marco the ops manager, alice the CEO) must actually hold the
+    # role their step completes, same as a real tenant would be configured.
+    {:ok, groups} = Seed.seed_groups(org_structure, tenant)
+    group_by_name = Map.new(groups, &{&1.name, &1})
+
+    {:ok, _} =
+      RoleRegistry.upsert_role(
+        "role-ops-manager",
+        :process_routing_role,
+        Map.fetch!(group_by_name, "dept-ops").id,
+        prefix: schema_name
+      )
+
+    {:ok, _} =
+      RoleRegistry.upsert_role(
+        "role-ceo",
+        :process_routing_role,
+        Map.fetch!(group_by_name, "dept-mgmt").id,
+        prefix: schema_name
+      )
 
     # Seed shipment-dispatch process (for ops-timeout-escalation scenario)
     {:ok, dispatch_fixture} =

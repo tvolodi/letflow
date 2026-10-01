@@ -1,0 +1,28 @@
+id: ISS-0942
+title: "D5: claim enforces the assigned role but complete does not - non-member actors completed ROLE-assigned tasks without claiming (possibly security-relevant, may be by design)"
+discovered_by: UAT-RUNNER
+discovered_in_run: ISS-0912 re-run, filed by ORCH
+discovered_at: "2026-10-01T08:37:47Z"
+severity: MAJOR
+owner: "SECURITY-REVIEWER (determination first)"
+description: >
+  Found by UAT-RUNNER in ISS-0912's re-run; see
+  test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml. The claim
+  endpoint/action correctly enforces that only a member of the assigned role
+  may claim a ROLE-assigned task, but the complete endpoint/action does NOT
+  enforce the same check -- a non-member actor was able to complete a
+  ROLE-assigned task without ever claiming it first. This needs a
+  SECURITY-REVIEWER determination against docs/agents/instructions/security-invariants.md
+  to confirm whether this is a genuine authorization gap or intended/by-design
+  behavior (e.g. if completion is meant to be gated solely by a prior claim
+  record rather than re-checking role membership at completion time, and the
+  real gap is that completion doesn't require a claim at all). Needs to
+  confirm intended behavior before any fix is designed.
+source_reports:
+  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml
+affected_files:
+  - lib/letflow/routers/tasks.ex
+  - lib/letflow/engine/task_activation.ex
+queue_ref: Q-917  # queue allocated issue_ref ISS-0917, which collides with an existing local file (a different, unrelated catalog SERVICE_TASK dispatcher issue); local filename kept as ISS-0942 (next free on origin/main) and GH-2068 retitled to match
+github_ref: GH-2068
+status: open

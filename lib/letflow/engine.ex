@@ -120,11 +120,24 @@ defmodule Letflow.Engine do
   tuples only, exactly as `Letflow.EventStore.append/2`'s `is_duplicate`
   boolean already left the 200-vs-201 choice to S4. Whether the calling
   `TASK_WORKER` is the task's own `assignee_ref` (HTTP 403 otherwise, per
-  IDN-03's role matrix) is **not checked anywhere in this module** — that is
-  the S4 auth plug's job, per REQ-021's precedent; `complete_task/3` performs
-  no assignee comparison and accepts `attrs.actor_id` as already-authorized
-  by the caller. See `lib/letflow/design/req048-task-completion.md` for the
-  full design.
+  IDN-03's role matrix) is **not checked anywhere in this module** —
+  `complete_task/3` performs no assignee comparison and accepts
+  `attrs.actor_id` as already-authorized by the caller. See
+  `lib/letflow/design/req048-task-completion.md` for the full design.
+
+  (ISS-0942 update: the sentence above used to say this check was "the S4
+  auth plug's job, per REQ-021's precedent" without it actually having been
+  built — it was a documented, explicit deferral (§12, `INV-EE48-10`) that
+  never landed once S4 shipped, leaving `POST /tasks/:id/complete` gated
+  only by the coarse tenant-wide `:TasksComplete` RBAC permission. ISS-0942
+  closed that gap by adding the check as `Letflow.Tasks.authorize_completion/3`,
+  called from `Letflow.Routers.Tasks.handle_complete/3` *before*
+  `complete_task/3` is ever invoked — not as an S4 `Plug`, but as a
+  `Letflow.Tasks` context function, consistent with how `claim_task/3`'s own
+  authorization resolution already lives there. The module boundary this
+  section asserts — this check is not this module's job — remains true and
+  unchanged; only the implication that it was never built is corrected. See
+  `lib/letflow/design/iss0942-task-complete-authorization-gap.md`.)
 
   ## Output-variable schema validation at the merge call site (REQ-109)
 
@@ -1918,7 +1931,12 @@ defmodule Letflow.Engine do
   §10).
 
   See this module's moduledoc for the S4 (HTTP status mapping, IDN-03
-  assignee authorization) scope boundary this function does not implement.
+  assignee authorization) scope boundary this function does not implement
+  -- the IDN-03 assignee check is implemented as
+  `Letflow.Tasks.authorize_completion/3`, called from
+  `Letflow.Routers.Tasks.handle_complete/3` *before* this function, per
+  ISS-0942 (moduledoc's "`complete_task/3` (EE-04, REQ-048)" section has
+  the full update).
   """
   @spec complete_task(
           task_id :: Ecto.UUID.t(),

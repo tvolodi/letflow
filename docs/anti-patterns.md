@@ -4340,3 +4340,35 @@ not an optional note CODE-DESIGN-VALIDATOR can wave through with "flagged, not r
 ISS-0926's own design doc §7 did mark SECURITY-REVIEWER as a judgment call rather than an
 auto-skip for exactly this reason — the lesson is to let a design doc's own named risk
 raise, not lower, the bar for whether the security gate runs.
+
+## A sibling completion path's own correct handling of a return value wasn't checked when its counterpart discarded the same value via `_`-prefix (2026-10-01, ELIXIR-DEV/REVIEWER, ISS-0945/PR #2136)
+
+**What happened.** `lib/letflow/engine.ex`'s `dispatch_task_completion_hop_chain/7` (the
+normal, non-sub-process task-completion path) and `lib/letflow/engine/sub_process.ex`'s
+`build_completion_multi_from_merge/12` (the sub-process completion path) both call
+`advance_until_stable/4` and both receive back the same three-element return shape —
+`{:ok, final_instance_state, pending_events}` — where `pending_events` can contain a
+`{:service_task_dispatch_requested, ...}` tuple produced by a hop *inside*
+`advance_until_stable/4`'s own internal worklist loop (e.g. a gateway hop immediately
+following the node that just completed). The normal path threads this list through
+`prepare_service_task_dispatch_for_completion/8` into a real `service_task_dispatches`
+row. The sub-process path bound the identical tuple element to `_more_pending` and never
+read it again — so a `SERVICE_TASK` reached immediately after a sub-process completed
+silently never got a dispatch row (no error, no test failure until a DB-level assertion
+specifically checked for the row). This is the same underscore-prefix-discards-a-value-
+that-later-mattered shape as the `_produces` entry above, but a different sub-class: that
+one was sibling *clauses of one function* diverging; this one is two independently-
+implemented, structurally-parallel functions in different modules — one correct, one
+not — where nothing forced a diff of their handling of the same conceptual return value
+against each other, because they live far enough apart (different files, different
+authors' turns) that nobody naturally reads them side by side.
+
+**Correct alternative.** When implementing or reviewing a new code path that is
+structurally parallel to an existing one (same upstream call, same return shape, "this is
+the sub-process/batch/async version of X"), diff the new path's handling of every element
+of that shared return value against the existing path's handling, specifically — not just
+its handling of the elements the new path's own acceptance criteria call out. An
+underscore-prefixed binding (`_more_pending`, `_produces`, `_unused`) for a value a
+sibling implementation reads for real is a specific, greppable smell: before accepting it,
+grep the codebase for other callers of the same function and confirm none of them treat
+that position as meaningful.

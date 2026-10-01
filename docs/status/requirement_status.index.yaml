@@ -5826,7 +5826,7 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 8
+    entries: 9
     note: >
       Incremented to 8 by DOC-UPDATER's own REQ-428 done-event append
       (WF02-REQ428-20261001, 2026-10-01T09:45:00Z) -- `grep -c "^  - req:"
@@ -5836,6 +5836,20 @@ volumes:
       bump was missed in DOC-UPDATER's own Step 6 commit and caught/fixed
       by ORCH here before Step Final, rather than left for a later
       session's A9 invariant failure to surface again.
+
+      Re-incremented to 9 by MOBILE-DEV during Step Final's rebase onto
+      origin/main (WF02-REQ428-20261001): main had independently gained a
+      `req: SCOPE-CHANGE` / ISS-0920 done entry (agent DOC-UPDATER, at
+      2026-10-01T02:35:00Z) in this same volume since this branch's last
+      sync, appended by a concurrent run (queue task 910) this branch never
+      saw until the rebase. Both the REQ-428 `started` entry and the
+      incoming SCOPE-CHANGE entry conflicted textually at the same append
+      point; resolved by composing both (no entry dropped, no entry
+      rewritten) and ordering by real `at:` timestamp (REQ-428 started
+      01:18:43Z before SCOPE-CHANGE done 02:35:00Z), per GIT_MERGE.md's
+      append-only-history conflict guidance. `grep -c "^  - req:"
+      docs/status/requirement_status.v25.yaml` = 9 on-disk entries after the
+      rebase; 243 lines, still well under the roll ceiling.
 
       Incremented to 7 by ORCH's own REQ-428 started-event append
       (WF02-REQ428-20261001, 2026-10-01T01:18:43Z) -- `grep -c "^  - req:"

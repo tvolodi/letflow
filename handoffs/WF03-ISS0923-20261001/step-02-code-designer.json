@@ -1,0 +1,26 @@
+{
+  "handoff_id": "a3c1f0d2-9b7e-4c55-8a10-923000000002",
+  "run_id": "WF03-ISS0923-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0923-20261001/step-02-code-designer.json",
+  "created_at": "2026-10-01T16:40:00Z",
+  "started_at": "2026-10-01T16:40:00Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null, "requirement_ids": [], "requirement_text": {},
+    "source_text": {"docs/issues/ISS-0923.yaml": "ServiceCatalog.delete/1 does not block deletion while non-terminal instances are pinned to the service (see the issue file; MINOR; block or document)."},
+    "related_handoff_ids": ["a3c1f0d2-9b7e-4c55-8a10-923000000001"],
+    "artifacts_in": ["handoffs/WF03-ISS0923-20261001/step-01-issue-fixer-diagnose.json","docs/issues/ISS-0923.yaml","lib/letflow/service_catalog.ex","lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md","lib/letflow/event_store/instance_projection.ex","docs/agents/instructions/security-invariants.md","docs/anti-patterns.md"],
+    "owned_modules": ["lib/letflow/service_catalog.ex","test/"],
+    "branch_name": "feature/WF03-ISS0923-20261001", "queue_task_id": 923, "github_issue": 2097
+  },
+  "task": {
+    "description": "WF-03 Step 2: produce the fix design artefact lib/letflow/design/iss0923-catalog-delete-blocks-on-pinned-instances.md (design only, no implementation code, follow the format of lib/letflow/design/iss0917-*.md). Work on branch feature/WF03-ISS0923-20261001 in C:/Users/tvolo/dev/ai-dala/letflow-3 (do not switch branches). Read the step-01 diagnosis result.summary in full first; it recommends BLOCK via a second guard in ServiceCatalog.delete/1 using the tenant-schema join of instance_projections (non-terminal = :active, :error i.e. not InstanceProjection.terminal?/1) with instance_definition_snapshots graph SERVICE_TASK service_id match, iterating TenantProvisioning.list_registrations/0 like referencing_active_definitions/2. Decide and specify unambiguously: (a) block vs document (decision stands unless you find a reason); (b) the typed error shape, e.g. {:error, {:referenced_by_active_instances, ...}} and what it exposes (INV: no cross-tenant leakage of other tenants' instance ids to the caller -- decide whether to return ids, counts, or tenant-grouped; justify against security-invariants.md); (c) whether ERROR-status instances block; (d) guard ordering vs the active-definitions guard; (e) the race between the guard and Repo.delete (TOCTOU: a new instance could start between check and delete -- specify whether a lock/transaction is warranted or accepted and documented); (f) the orphaned service_catalog_versions rows on delete and re-register-same-id concern (in scope or filed as follow-up -- state it); (g) how every caller of delete/1 (grep lib/ for ServiceCatalog.delete and routers, e.g. Routers.AdminServices) maps the new error to HTTP (likely 409 with a stable error code) and any OpenAPI/doc update needed; (h) @spec/@doc changes; (i) an explicit acceptance-criteria list (testable) and test-seam notes (fixtures needed: tenant def + SERVICE_TASK + Engine.create; note the shared letflow_test DB hazard MIX_TEST_PARTITION diagnosed in step 01). Keep scope to Q-923; do not touch other issues. Write the design file, fill this handoff's result, set status COMPLETED with real UTC completed_at. Do not commit; ORCH commits."
+  },
+  "result": null
+}

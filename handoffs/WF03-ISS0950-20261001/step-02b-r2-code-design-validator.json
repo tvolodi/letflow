@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0950-20261001/step-02b-r2-code-design-validator.json",
   "created_at": "2026-10-01T14:59:53Z",
   "started_at": "2026-10-01T14:59:53Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T15:00:36Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -43,7 +43,27 @@
       "Verdict PASS or FAIL"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Re-read lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md directly and re-verified against code, independent of the iteration-1 report. BLOCKER fix VERIFIED: apply_publish builds publish_attrs from Map.take of caller attrs and calls current |> Entry.publish_changeset(publish_attrs) |> Repo.update() (service_catalog.ex:383-406), so the base struct is the current row; admin_services.ex:297 handle_publish builds attrs via maybe_put (defined 358-363: Map.put only if Map.fetch(body,key) is {:ok,_}), so an omitted body field yields an attrs map without :endpoint_url; entry.ex:200-208 validate_required then sees the stored value and passes. The design now says exactly this: D5 'Absent-key semantics on publish (corrected)' (key absent + good stored URL -> publish succeeds, inherits URL; absent + legacy-bad -> endpoint_url_not_allowed error; explicit nil/blank -> only validate_required error), the false 'validate_required already demands it' parenthetical is gone, mandatory-on-publish is explicitly OUT of scope (no change to handle_publish, publish_attrs() or validate_required lists), and section 7 has R-MISSING restated per write path plus a separate P-ABSENT row (a: good stored -> {:ok}, same URL; b: bad stored -> changeset error, no required error, P-ROLLBACK holds; also HTTP 201 for (a)). register absent-key: insert_changeset (entry.ex:142-148) base struct default nil -> required error only, consistent. MINORs: (1) section 5 now correctly cites raw SQL via Repo.query/query! for service_catalog_test.exs 182-248/634/853/888 (spot-checked line 182-188 is Repo.query INSERT) and recommends Repo.update_all on Entry as the concrete form; test file engine_catalog_service_task_test.exs:361-373 still matches the quoted fixture at line 363. (2) U-NODNS(b) now uses valid trace_pattern forms (separate gethostbyname/1, /2, {:inet_res,:_,:_}, Code.ensure_loaded! first, [:local], :_ wildcards, no ranges) with a fallback that must keep part (a). (3) Section 4 items 3 and 5 are binary (DO add two @doc sentences; DO NOT edit decision 0027; DO NOT edit e2e spec/CI). Previous checks (a)-(g) re-checked and unchanged: (a) endpoint_url enters only via insert_changeset/publish_changeset (update_scope_changeset casts scope/owner only, entry.ex:~167); (b) url_validator.ex check_scheme 97, check_host 100-109 (only non-IP branch calls resolve_and_check) so validate_syntactic/1 needs only that branch split; validate/1,2 untouched; (c) D3 head/tail policy mechanical, engine placeholder regex engine.ex:1153; (d) cast records no change for equal value so get_field is correct, D7 rollback holds (service_catalog.ex 340-345); (e) pinned version resolved from live row by version_id (service_catalog.ex:563-567, 603-613), fixture change sound; (f) admin_services.ex:235-236 and 314-315 map any Changeset to 422 'validation failed', no router change; (g) no implementation bodies, no TBD/deferral language, cross-module deps in section 9, decision 0027 and INV-9 respected. git status --porcelain lib/ test/ web/ is empty. One residual inaccuracy, non-blocking (does not change any assertion or builder action): D5 says a whitespace-only string is turned into a nil change by cast; in Ecto 3.14.1 cast empty_values is [\"\"] only (deps/ecto/lib/ecto/changeset.ex:372), so '   ' stays a change and validate_required (which treats whitespace-only as missing) adds the error, after which the new step is skipped via D5(b) (changeset already has an :endpoint_url error). Outcome is still exactly one validate_required error, so R-MISSING rows are correct as written. Verdict PASS.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "D5 absent-key paragraph says cast turns whitespace-only strings into a nil change; in Ecto 3.14.1 only \"\" is an empty value (changeset.ex:372). Whitespace-only stays a change, validate_required flags it, and the new step is skipped by D5(b). Test outcome (exactly one required error) is unaffected; fix wording if the doc is touched again, builder need not act.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (WF-03 implementation step); design gate PASS at iteration 2 of 3"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

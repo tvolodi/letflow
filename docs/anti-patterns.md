@@ -4253,3 +4253,45 @@ a multi-governance-file change with no cited requirement/decision record an auto
 "no," and the fix is additionally recorded as its own decision record,
 `docs/migration/decisions/0041-orch-drain-mode-scope-guardrail.md` — on the same
 precedent as 0004 and 0017, so the "why" survives independently of the prose it governs.
+
+## A moduledoc's own prose documented a security-check deferral to a future layer that
+## was never actually built, and nothing caught the gap until live UAT (2026-10-01, REVIEWER, ISS-0942)
+
+**What happened.** REQ-048's design doc and `Letflow.Engine`'s own moduledoc both stated,
+in plain prose, that whether a `TASK_WORKER` completing a task is actually the task's
+`assignee_ref` ("HTTP 403 otherwise, per IDN-03's role matrix") was "not checked anywhere
+in this module — that is the S4 auth plug's job, per REQ-021's precedent." S4 shipped.
+No such plug, or any equivalent check anywhere else in the call path, was ever built.
+`POST /tasks/:id/complete` was gated only by the coarse tenant-wide `:TasksComplete` RBAC
+permission every `TASK_WORKER` holds — so any `TASK_WORKER`, regardless of assignment,
+could complete any tenant's any task. This sat unnoticed for the entire span between
+REQ-048 and REQ-085 (which built the real per-resource check for the *sibling* `claim`
+endpoint, `apply_claim/5`, without anyone cross-checking that `complete` still lacked its
+own copy) until UAT-RUNNER's live exploit reproduction (ISS-0912 re-run) caught it by
+actually completing a ROLE-assigned task as a non-member actor and observing HTTP 200.
+
+**Why the existing guards did not catch it.** A deferral note in a design doc or
+moduledoc ("that's layer X's job") is prose, not a tracked obligation — nothing forced a
+re-check when the layer it named (S4) actually shipped, the way `mix
+letflow.check_deferral_staleness` forces a re-check for a *stage*-scoped deferral marker
+(see this file's "Drafting new requirements with a blank `impl_order:`" entry above).
+SECURITY-REVIEWER's own gate exists per-change, not as a standing sweep over every
+previously-recorded "deferred to a layer that doesn't exist yet" note once that layer
+lands — so a security-relevant promise with no code behind it can outlive the moment it
+became falsifiable by an arbitrary number of unrelated requirements, invisible to every
+reviewer who only ever reads the diff in front of them, not the full history of prose
+promises the codebase is carrying.
+
+**Correct alternative.** A design doc's "this is deferred to future layer/requirement X"
+note needs a tracking mechanism, not just prose, so it cannot silently rot once X ships —
+either a `docs/issues/` entry filed at design time with `depends_on` the deferred-to
+requirement (closed only when the specific check is independently confirmed present, not
+merely when X reaches `status: done`), or, for anything on a tenant-data authorization
+path specifically, a standing SECURITY-REVIEWER checklist item that re-walks every open
+"deferred to S<n>" note the moment stage S<n> is declared complete, re-deriving from the
+actual call path (not from the requirement's own `status: done` claim) whether the
+deferred check exists. ISS-0942's own fix (`lib/letflow/tasks.ex`'s
+`authorize_completion/3`, called from `handle_complete/3` before `Engine.complete_task/3`)
+additionally corrected both stale prose sources — `Letflow.Engine`'s moduledoc and
+`lib/letflow/design/req048-task-completion.md` §12 — in place, so the record now says what
+actually exists rather than what was once merely planned.

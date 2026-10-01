@@ -1,0 +1,91 @@
+id: ISS-0942
+title: "D5: claim enforces the assigned role but complete does not - non-member actors completed ROLE-assigned tasks without claiming (possibly security-relevant, may be by design)"
+discovered_by: UAT-RUNNER
+discovered_in_run: ISS-0912 re-run, filed by ORCH
+discovered_at: "2026-10-01T08:37:47Z"
+severity: MAJOR
+owner: "SECURITY-REVIEWER (determination first)"
+description: >
+  Found by UAT-RUNNER in ISS-0912's re-run; see
+  test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml. The claim
+  endpoint/action correctly enforces that only a member of the assigned role
+  may claim a ROLE-assigned task, but the complete endpoint/action does NOT
+  enforce the same check -- a non-member actor was able to complete a
+  ROLE-assigned task without ever claiming it first. This needs a
+  SECURITY-REVIEWER determination against docs/agents/instructions/security-invariants.md
+  to confirm whether this is a genuine authorization gap or intended/by-design
+  behavior (e.g. if completion is meant to be gated solely by a prior claim
+  record rather than re-checking role membership at completion time, and the
+  real gap is that completion doesn't require a claim at all). Needs to
+  confirm intended behavior before any fix is designed.
+source_reports:
+  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml
+affected_files:
+  - lib/letflow/routers/tasks.ex
+  - lib/letflow/engine/task_activation.ex
+queue_ref: Q-917  # queue allocated issue_ref ISS-0917, which collides with an existing local file (a different, unrelated catalog SERVICE_TASK dispatcher issue); local filename kept as ISS-0942 (next free on origin/main) and GH-2068 retitled to match
+github_ref: GH-2068
+status: resolved
+resolved_in_run: fix/ISS-0942-task-complete-authorization-gap
+resolved_at: "2026-10-01T10:15:00Z"
+resolution: >
+  Confirmed a genuine, live-exploited authorization bypass, not by-design
+  behavior. Root cause: Letflow.Engine.complete_task/3 performed zero
+  assignee/role/group authorization checks -- gated only by the coarse
+  tenant-wide :TasksComplete RBAC permission any TASK_WORKER holds -- while
+  claim_task/3 correctly enforced per-resource assignee authorization via
+  apply_claim/5's precedence table. This was a documented, explicit
+  deferral in REQ-048's design doc and Letflow.Engine's own moduledoc
+  ("that is the S4 auth plug's job, per REQ-021's precedent"), which was
+  never actually built once S4 landed, and sat unnoticed from REQ-048
+  through REQ-085 (which built the real check only for the sibling claim
+  endpoint) until UAT-RUNNER's live exploit reproduction in ISS-0912's
+  re-run: a non-member actor completed a ROLE-assigned task with HTTP 200
+  after correctly getting HTTP 409 on /claim for the same task.
+
+  Fix: new Letflow.Tasks.authorize_completion/3 (read-only, mirrors
+  claim's own precedence table for USER/GROUP/ROLE assignee, nil
+  permissive), wired into Letflow.Routers.Tasks.handle_complete/3 before
+  Engine.complete_task/3 is ever called on every path, rejecting
+  USER/GROUP/ROLE mismatches with 403 (deliberately distinct from claim's
+  409 mapping of the same atoms -- claim is a self-assignment attempt,
+  complete is an authorization decision per IDN-03's role matrix).
+  Letflow.Engine.complete_task/3 itself kept untouched -- authz lives in
+  the router/Tasks-context layer only, preserving REQ-048's existing
+  module boundary; only its stale "S4 auth plug's job" moduledoc note was
+  corrected, along with lib/letflow/design/req048-task-completion.md
+  (superseding note added to §12/INV-EE48-10). Three pre-existing
+  simulation test fixtures (req206_swiftroute_test.exs,
+  req207_vortex_test.exs, req208_meridian_test.exs) that had unknowingly
+  relied on the gap were corrected with real role/group seeding so actors
+  now hold the process_routing_role their step completes, and their own
+  now-stale "unconditional :TasksComplete" moduledoc notes corrected too.
+
+  Design doc: lib/letflow/design/iss0942-task-complete-authorization-gap.md
+  (CODE-DESIGNER, PASSed by CODE-DESIGN-VALIDATOR). Implementation:
+  ELIXIR-DEV, commit f41975d8. SECURITY-REVIEWER mandatory hard gate PASS:
+  hand-traced the full precedence table, confirmed fail-closed behavior on
+  every branch, confirmed byte-identical USER/GROUP/ROLE resolution logic
+  against claim's own path, and ran a live mutation test proving the new
+  check is load-bearing. REVIEWER PASS, additionally filing
+  docs/anti-patterns.md's "A moduledoc's own prose documented a
+  security-check deferral to a future layer that was never actually
+  built" entry so an undischarged "deferred to layer X" design-doc note
+  can no longer silently outlive the layer it named. TEST-RUNNER PASS:
+  full suite, confirmed no fixtures affected beyond the 3 already fixed.
+  RELEASE-VALIDATOR PASS via exhaustive independent re-verification: its
+  own hand-trace of all 7 precedence branches, its own independently
+  devised adversarial superstring/substring role-name bypass tests (all
+  correctly rejected), and its own independently devised mutation test
+  targeting specifically the GROUP-membership check (confirming the test
+  suite catches a GROUP-specific regression independently of the broader
+  mutation SECURITY-REVIEWER already tested) -- no live backend reachable
+  in this execution context, so verification relied on test-level
+  confirmation via the real router dispatch path (not a stub). Commit
+  bc5fc597 adds the anti-patterns entry. During RELEASE-VALIDATOR's
+  verification, `mix letflow.check.test` hit the already-documented
+  ISS-0939 hang bug (report_partition_failures/1 hangs on large/malformed
+  partition logs) -- unrelated to this PR, not a blocker; RELEASE-VALIDATOR's
+  own direct scripts/test_parallel.sh run covered the same ground without
+  hitting it. Commit f41975d8 also fixes req206/207/208 fixtures per
+  above. Full gate chain ALL PASSed. Merged to main via PR #2087.

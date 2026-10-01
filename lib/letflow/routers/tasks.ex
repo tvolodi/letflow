@@ -302,7 +302,7 @@ defmodule Letflow.Routers.Tasks do
     end
   end
 
-  # ── POST /tasks/:id/complete (REQ-085 design §5.2) ──────────────────────
+  # ── POST /tasks/:id/complete (REQ-085 design §5.2, ISS-0942) ────────────
   #
   # INV-TW85-2: this handler performs ZERO Repo. calls and ZERO
   # Task.complete_changeset/2 calls -- completion is driven entirely by
@@ -312,20 +312,34 @@ defmodule Letflow.Routers.Tasks do
   # stalled (output variables never merged, token never advanced) -- the
   # single most damaging way to get this route wrong. Do not add a Repo call
   # here under any circumstance.
+  #
+  # ISS-0942: `Tasks.authorize_completion/3` runs BEFORE
+  # `Engine.complete_task/3` on every path -- a caller who is not the
+  # task's `USER`/`GROUP`/`ROLE` assignee is rejected with 403 here and
+  # `Engine.complete_task/3` is never reached (no transaction opened, no
+  # idempotency_key even generated). See
+  # lib/letflow/design/iss0942-task-complete-authorization-gap.md §3.
   defp handle_complete(conn, id, opts) do
-    output_variables = conn.body_params
     actor_id = conn.assigns.auth_context.user_id
-    idempotency_key = Ecto.UUID.generate()
 
-    attrs = %{
-      output_variables: output_variables,
-      actor_id: actor_id,
-      idempotency_key: idempotency_key
-    }
+    case Tasks.authorize_completion(id, actor_id, opts) do
+      :ok ->
+        output_variables = conn.body_params
+        idempotency_key = Ecto.UUID.generate()
 
-    id
-    |> Engine.complete_task(attrs, opts)
-    |> handle_complete_result(conn)
+        attrs = %{
+          output_variables: output_variables,
+          actor_id: actor_id,
+          idempotency_key: idempotency_key
+        }
+
+        id
+        |> Engine.complete_task(attrs, opts)
+        |> handle_complete_result(conn)
+
+      {:error, reason} ->
+        handle_complete_result({:error, reason}, conn)
+    end
   end
 
   defp handle_complete_result({:ok, result}, conn) do
@@ -350,6 +364,27 @@ defmodule Letflow.Routers.Tasks do
 
   defp handle_complete_result({:error, %Ecto.Changeset{}}, conn) do
     Response.unprocessable(conn, "validation failed")
+  end
+
+  # ISS-0942: Tasks.authorize_completion/3's three assignee-mismatch atoms.
+  # Deliberately 403 (Response.forbidden/2), NOT 409 -- a divergence from
+  # handle_claim_result/3's own mapping of these exact same atoms to 409
+  # Conflict. claim is a self-assignment attempt whose failure is a state
+  # conflict; complete is an authorization decision -- IDN-03's role matrix
+  # is explicit that this is 403 Forbidden. Detail strings copied verbatim
+  # from handle_claim_result/3's matching clauses for message consistency
+  # between the two endpoints -- only the status code differs. See
+  # lib/letflow/design/iss0942-task-complete-authorization-gap.md §4.
+  defp handle_complete_result({:error, :assigned_to_other_user}, conn) do
+    Response.forbidden(conn, "task is assigned to a different user")
+  end
+
+  defp handle_complete_result({:error, :assignee_group_not_member}, conn) do
+    Response.forbidden(conn, "caller is not a member of the assigned group")
+  end
+
+  defp handle_complete_result({:error, :assignee_role_not_held}, conn) do
+    Response.forbidden(conn, "caller does not hold the assigned role")
   end
 
   # Catch-all: every other complete_error() member (:invalid_schema_name,

@@ -25,3 +25,9 @@ related:
 queue_ref: Q-904  # queue allocated issue_ref ISS-0904, which collides with an existing local file; local filename kept as ISS-0912 and GH-2039 (retitle to match)
 github_ref: GH-2039
 status: open
+progress_2026_10_01: >
+  Seeds executed on QA (meridian + vortex), /definitions/active returns 200 for all four
+  definitions. Re-run of the 7 ready scenarios: 0 PASS / 6 FAIL / 1 BLOCKED, now caused by
+  product/seed defects ISS-0930..ISS-0935 (queue tasks Q-913..918) (see test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml).
+  Preflight tooling defect: ISS-0936 (Q-919). Ran under successor queue task Q-911 (Q-904 was blocked).
+  Kept open until the scenarios pass.

@@ -1,0 +1,36 @@
+id: ISS-0930
+title: "D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task"
+discovered_by: UAT-RUNNER
+discovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)
+discovered_at: "2026-10-01T00:00:00Z"
+severity: BLOCKER
+description: >
+  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.
+  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.
+source_reports:
+  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml
+related:
+  - ISS-0912
+queue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930
+github_ref: GH-2064
+status: resolved
+resolved_in_run: WF03-ISS0930-20261001
+resolved_at: "2026-09-30T23:48:51Z"
+resolution: >
+  Seeded service-task endpoints used relative URLs, which the dispatcher could not build
+  into a request (request_build_error). The QA fixture scripts now emit absolute https
+  endpoints (service-task mock base, default httpbin.org) and the affected definitions
+  (Loan Origination, Regulatory Compliance Review, Production Order Release, Supplier
+  Quality Deviation) are v1.1. Verified on real QA (https://qa.bizdala.com): fresh Loan
+  Origination instance 89cbc769-... stayed ACTIVE, kyc-aml-check dispatch row 'advanced'
+  (rendered_url https://httpbin.org/anything/kyc/screen), parallel tasks risk-assessment
+  and credit-memo-review PENDING; fresh Supplier Quality Deviation instance e0a97a8f-...
+  passed quarantine-batch and reached severity-classification PENDING; test instances
+  cancelled. Regression test: test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs
+  (fail-first 7/31 pre-fix, 31/31 post-fix; 7 mutants killed).
+residual_risk: >
+  Seeded endpoints now depend on third-party httpbin.org availability; override with the
+  SERVICE_TASK_MOCK_BASE_URL environment variable to point at a controlled mock. Remaining
+  UAT scenario defects are separate issues, not covered here: ISS-0931 (D2 role groups),
+  ISS-0932 (D3 21-day timer path), ISS-0933 (D4 complete returns 500 on ERROR instance),
+  ISS-0934 (D5 complete role enforcement), ISS-0935 (D6 vortex seed data).

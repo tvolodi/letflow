@@ -1,0 +1,97 @@
+{
+  "handoff_id": "19c41b47-4923-4169-b57e-274d8572ae75",
+  "run_id": "WF02-REQ432-20260930",
+  "workflow_id": "WF-02",
+  "step": "01b-recheck1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ432-20260930/step-01b-recheck1-code-design-validator.json",
+  "created_at": "2026-09-30T17:03:05Z",
+  "started_at": "2026-09-30T17:03:08Z",
+  "completed_at": "2026-09-30T17:08:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-432"
+    ],
+    "requirement_text": {
+      "REQ-432": "Follow-on to REQ-373 (service_catalog version/status lifecycle + real PinResolver.Lookup, status: done on the backend) and to REQ-399 (case-detail dependency-version/provenance screen, status: done -- REQ-399 already built the GET /api/v1/instances/{id}/pins route, web/src/hooks/useInstancePins.ts, and web/src/components/instances/InstancePinsPanel.tsx, wired into InstanceDetailPage.tsx). Filed from ISS-0898, split from ISS-0890's WF05-FULL-20260929 PLATFORM UAT report: the platform-instance-pin-survives-catalog-change scenario (test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml) is BLOCKED not because the read-only provenance screen is missing (REQ-399 built that) but because two operator ACTIONS the scenario's own steps exercise have no UI anywhere, and REQ-399's own SCOPE explicitly excluded one of them: \"any UI affordance to CHANGE a pin from this screen... is a separate requirement if one is ever filed.\"\nWHAT EXISTS TODAY, verified 2026-09-30 by direct source read: - `POST /api/v1/admin/services/:service_id/versions` (publish) and\n  `POST /api/v1/admin/services/:service_id/retire` (retire) are real,\n  shipped REQ-373 routes (lib/letflow/routers/admin_services.ex,\n  design doc lib/letflow/design/req373-service-catalog-version-lifecycle.md\n  §7), gated by the existing :AdminServicesManage permission. Grepping\n  web/src/api/services.ts and web/src/pages/admin/services/ServicesPage.tsx\n  for \"publish\"/\"retire\"/\"version\" returns zero hits beyond the existing\n  `ServiceRecord` type -- neither route has any frontend client function or\n  UI control. An operator today cannot publish a new service-connection\n  version or retire an old one from the GUI at all, which is exactly the\n  scenario's own step 2 action.\n- `POST /instances/:id/rebind-pins` is a real, shipped REQ-078/PIN-05 route\n  (lib/letflow/routers/instances.ex, `Letflow.Engine.PinRebind.rebind_pins/3`,\n  200 response `{instance_id, changes, rebound_at}`, each change item\n  carrying `ref`/`prior_version`/`new_version` per the\n  `INSTANCE_PINS_REBOUND` event it appends). Grepping web/src for \"rebind\"\n  returns zero hits beyond REQ-399's own read-only provenance panel and its\n  test -- there is no rebind client function, no rebind action/button/dialog\n  anywhere in web/src. An operator today cannot deliberately move a running\n  case onto a different pinned version from the GUI at all, which is\n  exactly the scenario's own step 5 action (with a caller-supplied reason\n  -- `rebind_attrs()` requires `:idempotency_key`, per\n  lib/letflow/routers/instances.ex's own design notes, and the scenario's\n  step 5 input is `reason: \\\"External system retires the old endpoint at\n  month end.\\\"`).\n- Case history rendering: grepped web/src for any existing generic\n  event-timeline renderer capable of showing an `INSTANCE_PINS_REBOUND`\n  entry with actor/prior_version/new_version/reason (EO-005's own evidence\n  requirement, \"the case history shows the change with the operator's\n  name, the previous and new version, and the reason given\") -- confirm at\n  implementation time whether InstanceDetailPage.tsx's existing\n  history/timeline section already renders arbitrary event types generically\n  (in which case this requirement only needs the rebind action itself to\n  produce the right event, already true by construction since\n  `rebind_pins/3` already appends the real event) or needs a\n  dedicated case for this event type -- do not assume either way without\n  checking.\n\nTHIS REQUIREMENT BUILDS: (1) a typed `publish`/`retire` client pair in web/src/api/services.ts and UI controls on web/src/pages/admin/services/ServicesPage.tsx (a \"publish new version\" action taking the publish_attrs() fields plus a version string, and a \"retire\" action) for a PLATFORM_ADMIN-equivalent operator; (2) a typed `rebind` client function (POST /instances/:id/rebind-pins) and a rebind action/dialog on REQ-399's InstancePinsPanel.tsx (or InstanceDetailPage.tsx) requiring the caller to supply a reason string, wired to the real endpoint; (3) confirm, and if needed extend, the case history/timeline rendering so an `INSTANCE_PINS_REBOUND` entry's actor, prior_version, new_version and reason are all visible per EO-005; (4) the named pipeline_test spec.\nOUT OF SCOPE: any change to `Letflow.ServiceCatalog`, `PinResolver`, `PinRebind`, or any of REQ-373/REQ-399's already-shipped routes (pure frontend consumption/action wiring against already-shipped endpoints); re-scoping or modifying REQ-399's read-only provenance display beyond what is needed to add the rebind action to the same screen; PLC-01/module_ref catalog versioning (still the identical, already-named SCOPE GAP pin_resolver.ex's own moduledoc states, unscoped to any stage, restated by both REQ-373 and REQ-399).\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req432-rebind-pins-publish-retire-ui.md",
+      "handoffs/WF02-REQ432-20260930/step-01-code-designer.json",
+      ".claude/agents/code-design-validator.md",
+      "docs/agents/workflows/WF-02_requirement_implementation.md",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/engine/pin_rebind.ex",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "web/src/api/client.ts",
+      "web/src/components/instances/EventHistoryPanel.tsx",
+      "web/src/components/instances/TimelineFeedItem.tsx",
+      "test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "handoffs/WF02-REQ432-20260930/step-01-rework1-code-designer.json",
+      "handoffs/WF02-REQ432-20260930/step-01b-code-design-validator.json",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "web/src/api/queryKeys.ts",
+      "web/src/pages/instances/InstanceDetailPage.tsx",
+      "web/src/hooks/useInstances.ts",
+      "lib/letflow/instances.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RE-CHECK ITERATION 1 (after CODE-DESIGNER rework 1) -- WF-02 Step 1b design gate, HARD GATE, fresh FULL re-check (not just the three prior BLOCKERs). Verify branch feature/WF02-REQ432-20260930. Re-read lib/letflow/design/req432-rebind-pins-publish-retire-ui.md in full from disk (revised in commit c933023c) and apply the complete Step 1b check list (docs/agents/workflows/WF-02_requirement_implementation.md Step 1b, .claude/agents/code-design-validator.md) to every REQ-432 acceptance criterion and build item. Confirm independently, against source, that each of the three earlier BLOCKERs is actually resolved (prior FAIL text: handoffs/WF02-REQ432-20260930/step-01b-code-design-validator.json result.issues): (1) EO-005: one view shows operator name + prior + new + reason, the join mechanism is real (the page-level timeline query, event_id matching, page-size bound of 200 -- verify the backend page-size max and that the INSTANCE_PINS_REBOUND event's timeline entry actually carries actor_display_name and the same event_id as the history row; check web/src/hooks/useInstances.ts, web/src/pages/instances/InstanceDetailPage.tsx, lib/letflow/instances.ex, lib/letflow/routers/instances.ex); (2) pipeline fixture mechanism and step-3 history assertion are concrete and TRUE to source (verify the definition JSON shape the definitions create route accepts, the SERVICE_TASK node config keys, how the engine resolves a catalog_entry pin at instance start so the pins panel actually lists the service, the event type names TASK_COMPLETED/SERVICE_TASK_COMPLETED/EXECUTION_ERROR and payload keys quoted, and the finding M5 that lib/letflow/engine/service_task_dispatcher.ex catalog_lookup_stub/2 is unconditional {:error,:not_registered}); (3) exact cache invalidation stated and consistent with web/src/api/queryKeys.ts. ALSO judge M5 honestly: the design accepts EXECUTION_ERROR (request_build_error / retries exhausted) as an allowed step-3 outcome because the real backend cannot complete a catalog service step. Decide whether that is (a) an honest, adequate covering of the AC 'retiring a version does not error or block the already-running case's pin display or its in-flight step' given the backend limit, with the AC's in-flight-step half explicitly reported as unverifiable-on-success -- PASS with that recorded as a MAJOR non-blocking issue for forwarding, or (b) a hollow assertion (an assertion that would pass whether or not retirement broke the case) that requires rework; be specific about what the assertion can and cannot detect. Also re-verify the design has no TBD/deferral on AC-mapped elements and no implementation bodies. FAIL immediately on any failed check, every failed check listed by AC. PASS must state artefacts opened and commands run. Do not edit the design. Lint: mix letflow.lint_handoffs --dir handoffs/WF02-REQ432-20260930/step-01b-recheck1-code-design-validator.json. Commit your handoff by explicit filename and push to origin feature/WF02-REQ432-20260930. Claim by setting status IN_PROGRESS only; on finish set COMPLETED/FAILED, fill result, real-clock completed_at; never edit task/created_at/started_at/gate_history; do not write registry.json. Run everything synchronously in the foreground.",
+    "acceptance_criteria": [
+      "design file read in full from disk, not from the producer's summary",
+      "every REQ-432 acceptance criterion maps to a design element with no TBD and no implementation bodies",
+      "the factual backend/frontend claims listed in the task were each re-checked against source and the evidence named",
+      "verdict PASS or FAIL with every failed check enumerated"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "PASS (recheck 1). Read lib/letflow/design/req432-rebind-pins-publish-retire-ui.md in full from disk (249 lines); no TBD/deferral wording on AC-mapped elements (grep), no code fences or implementation bodies (signatures/type shapes only); all four build items and every AC map to a section. All three prior BLOCKERs verified resolved against source. (1) EO-005: single History-tab row; join via page-level useInstanceTimeline(id,{page_size:200}) (web/src/hooks/useInstances.ts:51-65, key instances.timeline(id,null,200) distinct from tab's 50-size key); backend @max_page_size 200 (lib/letflow/api/pagination.ex:50); timeline_item/2 (lib/letflow/instances.ex) emits event_id and actor_display_name resolved from users table by event.actor_id (PinRebind sets actor_id on the event, pin_rebind.ex:470-474), routers/instances.ex timeline_item_map passes both through; history_item_map emits event_id so the event_id join is real; User.display_name is validate_required so the name is non-blank for a provisioned admin; payload {entries,actor,reason} confirmed pin_rebind.ex:460-466. (2) Pipeline fixture: POST /definitions schema (name,version,graph) and activate routes confirmed; SERVICE_TASK attrs service_id/method/timeout_ms/retry_limit accepted by ServiceTask.parse_config_from_node_attributes (retry_limit>=0, method POST) and Graph CHK-10/CHK-11 (service_id satisfies endpoint check, timeout 1..300000); PinResolver enumerates (SERVICE_TASK,service_id)->catalog_entry and Engine.pin_lookup defaults to real PinLookup.build/0 (engine.ex:1049-1064); register yields version '1' ACTIVE; M5 confirmed: ServiceTaskDispatcher.catalog_lookup_stub/2 unconditional {:error,:not_registered} (service_task_dispatcher.ex:411-416, branch 763-765) -> handle_failure(:request_build_error), is_retriable_failure(:request_build_error)=false -> give-up attrs error_type service_task_retries_exhausted, details.last_failure_kind, reason text (service_task.ex:460-486) -> EXECUTION_ERROR payload keys error_type/affected/reason/variables/details (engine execution_error append); TASK_COMPLETED payload has node_id (engine.ex:4434 region), SERVICE_TASK_COMPLETED payload {dispatch_id,node_id,decoded_body} (engine.ex:3225); poller only disabled by config/test.exs so it runs in BPM_TEST_URL backend. (3) Cache invalidation: exact, instances.all() prefix ['tenant',tenantId,'instances'] (queryKeys.ts:87, useTenantScopedQueryKeys.ts:44) is a strict prefix of pins/detail/events/timeline keys (queryKeys.ts:90-100), same as useCancelInstance (useInstances.ts:95). Earlier non-blocking note (Idempotency-Key replay) also addressed in 5.3. M5 JUDGEMENT: (a) honest and adequate given the backend limit, PASS with a MAJOR non-blocking issue forwarded. The step-3 assertion CAN detect: retirement/publish causing the n2 task-complete call to be rejected (non-2xx), the TASK_COMPLETED(n2) event not being appended, the in-flight case ending in a different terminal event type or a different last_failure_kind (e.g. a new catalog_entry/not_found style failure), and the pins panel dropping or changing the pinned version '1'. It CANNOT detect: any regression in retirement's effect on the service-step outcome itself, because the stub ignores catalog state entirely, so the step-3 EXECUTION_ERROR outcome is identical with or without retirement; and it can never prove the in-flight step completes successfully. Because the design states this explicitly (7.3 Consequence A, 9 M5, spec logs which outcome occurred) and does not present the EXECUTION_ERROR as a success, it is not a hollow assertion; the 'in-flight step completes without error' half of the AC is reported unverifiable-on-success. Non-blocking items forwarded: see issues.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ432-20260930/step-01b-recheck1-code-design-validator.json"
+    ],
+    "issues": [
+      "MAJOR (non-blocking, forward to REQ-ANALYST/ORCH): EO-001/EO-004 'in-flight step completes without error' cannot be verified on success. ServiceTaskDispatcher.catalog_lookup_stub/2 is unconditional {:error,:not_registered} (service_task_dispatcher.ex:411-416), so the REQ-432 pipeline step 3 can only assert the TASK_COMPLETED + (SERVICE_TASK_COMPLETED | EXECUTION_ERROR request_build_error) outcome and the pin display; a backend requirement to resolve the catalog service through the pinned version in the dispatcher must be filed, and RELEASE-VALIDATOR/BA sign-off must record this half as unverified, not passed. The design's M5 already states this.",
+      "MINOR (fix at implementation, FRONTEND-DEV): design 7.2 says complete the n2 task with body {output_variables: {}}, but routers/tasks.ex handle_complete (line ~316) passes conn.body_params itself as output_variables, so that body would merge a variable literally named 'output_variables'. Send {} instead in the pipeline spec (web/src/api/tasks.ts complete has the same pre-existing shape quirk; not in REQ-432 scope).",
+      "MINOR: design 7.2 graph description omits node label (precedent definitions include label and attributes:null on START/END); copy the platform-definition-promotion-approved precedent node shape exactly.",
+      "MINOR: pipeline step 06 asserts actor equals operatorDisplayName from the timeline API and not 'system'; holds because users.display_name is required, but FRONTEND-DEV should capture the name from the same timeline response rather than hardcode it (design already does this)."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ432-20260930",
+      "commit_sha_list": [
+        "725793ad5298d8e8125f00dd48f31e41e940e522"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ432-20260930",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to WF-02 Step 2 (ELIXIR-DEV skipped as frontend-only; route to FRONTEND-DEV per orchestrator). Forward the MAJOR M5 issue to REQ-ANALYST for a dispatcher follow-on requirement and to the release gate."
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-30T16:54:38Z",
+      "status": "FAIL",
+      "summary": "Design FAILED on 3 BLOCKERs: EO-005 split across tabs with OQ-1 deferral; pipeline definition/service-step/step-3 history assertion deferred to OQ-4/OQ-9; cache invalidation left conditional. Full text in handoffs/WF02-REQ432-20260930/step-01b-code-design-validator.json.",
+      "issues": [
+        "EO-005 single-view",
+        "pipeline fixture + step-3 evidence",
+        "exact cache invalidation"
+      ],
+      "next_action": "Rework CODE-DESIGNER (done in step-01-rework1, commit c933023c)"
+    }
+  ]
+}

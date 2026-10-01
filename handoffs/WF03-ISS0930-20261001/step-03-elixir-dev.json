@@ -1,0 +1,68 @@
+{
+  "handoff_id": "b27c0eac-eb84-421f-8d90-8ae27d7a45ac",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0930-20261001/step-03-elixir-dev.json",
+  "created_at": "2026-09-30T22:38:06Z",
+  "started_at": "2026-09-30T22:38:06Z",
+  "completed_at": "2026-09-30T22:40:43Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0930-seed-service-task-endpoints.md",
+      "test/fixtures/qa/",
+      "scripts/seed_meridian_definition.sh",
+      "scripts/seed_vortex_definition.sh",
+      "scripts/seed_swiftroute_definition.sh",
+      "scripts/README.md"
+    ],
+    "owned_modules": [
+      "test/fixtures/qa/",
+      "scripts/seed_meridian_definition.sh",
+      "scripts/seed_vortex_definition.sh",
+      "scripts/seed_swiftroute_definition.sh",
+      "scripts/lib/seed_service_task_base.sh",
+      "scripts/README.md"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 3 (implement) for ISS-0930. Implement EXACTLY the validated design lib/letflow/design/iss0930-seed-service-task-endpoints.md (validated PASS in handoffs/WF03-ISS0930-20261001/step-02b-r1-code-design-validator.json): rewrite all 25 service-task endpoints in the 5 test/fixtures/qa/*.json to absolute https URLs on the mock base, explicit method, {{variables.x}} placeholders, version bump to 1.1; add scripts/lib/seed_service_task_base.sh helper; update scripts/seed_meridian_definition.sh, seed_vortex_definition.sh, seed_swiftroute_definition.sh (SERVICE_TASK_MOCK_BASE_URL env, https-only check, replace-if-older / skip-equal / warn-skip-newer via sort -V); scripts/README.md. Keep the JSON fixtures' formatting (minimal diffs). Do NOT write the regression test file test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs - TEST-DESIGNER writes it in Step 4 - BUT you may run existing tests that touch these fixtures/seed scripts (grep test/ for qa fixtures, swiftroute seed test) and update them only if the version bump / endpoint change breaks them (report any such edit). Run bash -n on each script and `jq empty` on each fixture; if a mix toolchain with deps is available run the relevant existing tests (try the Docker fallback in docs/anti-patterns.md if mix deps are missing; say explicitly if you cannot). Do NOT run the seed scripts against QA (ORCH does that after the gates). Work ONLY in context.worktree; do not commit. Set IN_PROGRESS at claim, then COMPLETED/FAILED with result.status PASS/FAIL; artifacts_out = list of changed files; next_action 'Route to SECURITY-REVIEWER'.",
+    "acceptance_criteria": [
+      "All 25 nodes rewritten; jq validates all fixtures",
+      "Scripts pass bash -n; behaviour matches design section 5",
+      "No engine / url_validator change",
+      "Existing affected tests run and result quoted (or inability stated)",
+      "Test file not written"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All 25 SERVICE_TASK endpoints in 5 QA fixtures rewritten to https://httpbin.org/anything/<path> with {{variables.x}} placeholders, explicit method POST, version 1.1 (jq empty OK on all). Added scripts/lib/seed_service_task_base.sh (SERVICE_TASK_MOCK_BASE_URL https-only validation, rewrite_service_task_base, version_is_older via sort -V); the three seed scripts source it and implement skip-equal / replace-if-older / warn-skip-newer, verified with a stub curl (none/1.0/1.1/1.2/1.10) and bash -n. scripts/README.md updated. No engine/url_validator change; regression test file not written. Existing test seed_swiftroute_definition_test.exs: 5 passed (mix deps.get run in worktree; no test edits needed). Seed scripts not run against QA.",
+    "artifacts_out": [
+      "test/fixtures/qa/meridian_loan_origination_process_definition.json",
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json",
+      "test/fixtures/qa/vortex_production_order_release_process_definition.json",
+      "test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json",
+      "test/fixtures/qa/swiftroute_process_definition.json",
+      "scripts/lib/seed_service_task_base.sh",
+      "scripts/seed_meridian_definition.sh",
+      "scripts/seed_vortex_definition.sh",
+      "scripts/seed_swiftroute_definition.sh",
+      "scripts/README.md"
+    ],
+    "next_action": "Route to SECURITY-REVIEWER"
+  }
+}

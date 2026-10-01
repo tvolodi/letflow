@@ -1,0 +1,49 @@
+{
+  "handoff_id": "606c16d9-f061-4682-930c-1c983127b6de",
+  "run_id": "WF03-ISS0936-20261001",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0936-20261001/step-03c-security-reviewer.json",
+  "created_at": "2026-09-30T21:24:57Z",
+  "started_at": "2026-09-30T21:24:57Z",
+  "completed_at": "2026-10-01T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0936": "Issue ISS-0936 (local record docs/issues/ISS-0936.yaml, queue_ref Q-919, queue task 919, GH#2070; record may not yet be on this branch - PR #2071): scripts/uat_preflight.sh's qa-uat-env credential protocol (fetch_credential, ~line 290) expects the credential source's `token <user>` to print a line `Token: <jwt>`, but ai-dala-infra's qa-uat-env.sh `token <user>` prints a BARE JWT, so every actor login reports NO_PASSWORD. Fix: make fetch_credential accept a bare JWT line (three dot-separated base64url segments) as well as the `Token:` form. Add/adjust tests per project's existing preflight tests (none found under test/ -- TEST-DESIGNER decides a minimal in-repo test shape). Also update the script's header docs (qa-uat-env protocol paragraph) and scripts/README.md if they state the Token: form."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "scripts/uat_preflight.sh",
+      "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "scripts/uat_preflight.sh"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0936",
+    "branch_name": "feature/WF03-ISS0936-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 3c hard gate: review the diff of scripts/uat_preflight.sh (git diff origin/main -- scripts/uat_preflight.sh in the worktree). It handles bearer tokens from a credential source. Check against docs/agents/instructions/security-invariants.md: token never printed/logged/written to file/argv (incl. --out JSON and error messages), bare-line acceptance cannot cause a hostname/noise/secret line to be sent as a bearer token to an unintended host, read-only behavior unchanged. Run the script yourself with a fake source to confirm no token leakage. Verdict PASS/FAIL with evidence. Modify only your handoff; no commit.",
+    "acceptance_criteria": [
+      "No secret leakage",
+      "No new unsafe acceptance path",
+      "Verdict PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope: in scope via INV-4 (script handles bearer tokens from a credential source). INV-1/2/3/5/9 NOT-APPLICABLE (no tenant-data path, response shaping, Lua/WASM, lookup-by-ID, or tenant-supplied outbound URL; token only goes to operator-supplied --base-url). INV-6 satisfied by this review. INV-7 NOT-APPLICABLE (no SQL). INV-8 PASS (parse_token_line is pure, total; fetch_credential keeps its try/except returning (None,None)). INV-4 PASS. Diff: new parse_token_line(): 'Token:' labelled branch unchanged in trust; bare branch requires full-line match of eyJ+3 base64url segments, len>=40, so hostnames, warnings, banners and password-like lines are rejected; first parsing line wins. Empirical run with fake qa-uat-env source (noise, hostname, password-like line, sentinel JWT, second JWT) against a local logging HTTP server: rc=1 only due to unrelated env GAPs; sentinel token count in stdout, stderr and --out JSON = 0; server saw the sentinel only as Authorization Bearer on GET requests to the configured base URL (me/modules, tasks/inbox, definitions/active, health without auth); second JWT never used; no token in argv (run_cred args are only ['token', user]); http() error path returns exception type name only; no new print/log of credential. All calls remain read-only GET. Not run: a noise-only source (code path trivially returns None -> NO_PASSWORD).",
+    "issues": [],
+    "next_action": "Proceed to next WF-03 step (REVIEWER)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

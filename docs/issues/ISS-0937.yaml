@@ -1,0 +1,18 @@
+id: ISS-0937
+title: "Backend CI red at UTC month boundary: TenantTemplateTest parity (extra events_y2026m09) and PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}) fail on 2026-10-01"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0930-20261001 (Step Final, PR #2076; filed by ORCH)
+discovered_at: "2026-10-01T00:21:56Z"
+severity: MAJOR
+description: >
+  PR #2076 (scripts/fixtures-only, no lib/ or migration change) had its backend job fail twice. Run 1: one TenantTemplateTest
+  parity failure extra=["events_y2026m09"]. Re-run after the 2026-09-30 to 2026-10-01 UTC rollover: 12 failures in
+  PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest ({:error, :partition_not_eligible}). Hypothesis, not
+  reproduced on main: the tests depend on the real current UTC month / partition eligibility and break at the month boundary.
+  PR #2076 was merged with --admin per decision 0018. Confirm via main's CI on ed40c2fa, then make the tests clock-independent.
+affected_files:
+  - test/letflow/events/ (partition maintenance / retention tests)
+  - test/letflow/tenants/ (tenant template parity test)
+queue_ref: Q-920  # queue issue_ref ISS-0920 collides with an existing local file; local filename ISS-0937
+github_ref: GH-2077
+status: open

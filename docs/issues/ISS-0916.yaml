@@ -53,6 +53,6 @@ affected_files:
   - web/src/pages/admin/services/ServicesPage.tsx
   - web/src/components/instances/RebindPinDialog.tsx
   - web/src/utils/deferClickState.ts
-queue_ref: null  # discovered incidentally during a REVIEWER gate pass, not queue-originated
-github_ref: null  # not yet mirrored to GitHub
+queue_ref: Q-909  # registered retroactively by ORCH (close-out of cancelled duplicate run WF02-REQ432-20260930), which independently filed the same finding as queue task 909; queue's own issue_ref ISS-0909 collides with an existing local file and is NOT this record's id
+github_ref: GH-2059  # mirror created by the same registration; GH title retitled to ISS-0916
 status: open

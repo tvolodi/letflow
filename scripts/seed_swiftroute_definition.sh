@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 # seed_swiftroute_definition.sh
 #
-# Deploys the SwiftRoute "Shipment Approval" v1.0 ProcessDefinition to a
-# live Letflow QA instance. Idempotent: skips creation if the definition
-# already exists and is ACTIVE.
+# Deploys the SwiftRoute "Shipment Approval" v1.1 ProcessDefinition to a
+# live Letflow QA instance. Version-aware idempotency (versions compared
+# numerically by `sort -V`, see scripts/lib/seed_service_task_base.sh):
+#   none ACTIVE               -> create the fixture version and activate it
+#   ACTIVE == fixture version -> skip (no-op)
+#   ACTIVE older than fixture -> create + activate the fixture version; the
+#                                platform deprecates the prior ACTIVE one
+#   ACTIVE newer than fixture -> warn, do not downgrade, skip (exit 0)
+# A 409 on create means (name, fixture version) already exists as DRAFT /
+# DEPRECATED / ARCHIVED: bump the fixture "version"; never delete.
 #
 # Prerequisites:
 #   - curl and jq installed
@@ -11,6 +18,10 @@
 #       DefinitionsWrite (for deployment) + InstancesStart/TasksList/TasksComplete
 #       (for AC2/AC3 verification).  A PLATFORM_ADMIN or PROCESS_OPERATOR token
 #       satisfies all four.
+#   - SERVICE_TASK_MOCK_BASE_URL: optional https:// base that every SERVICE_TASK
+#       endpoint in the seeded fixture is pointed at (default:
+#       https://httpbin.org/anything). Engine service tasks need an absolute,
+#       public https URL returning 2xx JSON (ISS-0930). http:// is refused.
 #   - QA_URL: base URL of the QA instance (default: https://qa.bizdala.com)
 #   - SWIFTROUTE_TENANT_ID: UUID of the swiftroute tenant (optional; used only
 #       for the PLATFORM_ADMIN provisioning note; the actual API calls are
@@ -45,9 +56,14 @@ if [[ -z "${QA_AUTH_TOKEN:-}" ]]; then
 fi
 
 AUTH_HEADER="Authorization: Bearer ${QA_AUTH_TOKEN}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib/seed_service_task_base.sh
+source "${SCRIPT_DIR}/lib/seed_service_task_base.sh"
+FIXTURE_PATH="${SCRIPT_DIR}/../test/fixtures/qa/swiftroute_process_definition.json"
 
 echo "=== seed_swiftroute_definition.sh ==="
 echo "QA_URL: ${QA_URL}"
+echo "Service-task mock base: ${SERVICE_TASK_EFFECTIVE_BASE_URL}"
 
 # --- Idempotency guard ---
 # Check if a definition named "Shipment Approval" with status ACTIVE already exists.
@@ -60,9 +76,23 @@ EXISTING=$(curl -sf \
 }
 
 EXISTING_ID=$(echo "${EXISTING}" | jq -r '.items[0].id // empty')
+EXISTING_VERSION=$(echo "${EXISTING}" | jq -r '.items[0].version // empty')
+FIXTURE_VERSION=$(jq -r '.version' "${FIXTURE_PATH}")
 
+SKIP=0
 if [[ -n "${EXISTING_ID}" ]]; then
-  echo "Definition already exists and is ACTIVE — skipping creation."
+  if [[ "${EXISTING_VERSION}" == "${FIXTURE_VERSION}" ]]; then
+    echo "Definition already exists and is ACTIVE at v${FIXTURE_VERSION} — skipping creation."
+    SKIP=1
+  elif version_is_older "${EXISTING_VERSION}" "${FIXTURE_VERSION}"; then
+    echo "Replacing ACTIVE v${EXISTING_VERSION} (id ${EXISTING_ID}) with v${FIXTURE_VERSION}; the platform will deprecate v${EXISTING_VERSION}."
+  else
+    echo "WARNING: ACTIVE v${EXISTING_VERSION} is newer than fixture v${FIXTURE_VERSION}; not downgrading. Bump the fixture version above v${EXISTING_VERSION} to re-seed." >&2
+    SKIP=1
+  fi
+fi
+
+if [[ "${SKIP}" -eq 1 ]]; then
   echo "  Definition ID : ${EXISTING_ID}"
   echo "  Name          : $(echo "${EXISTING}" | jq -r '.items[0].name')"
   echo "  Version       : $(echo "${EXISTING}" | jq -r '.items[0].version')"
@@ -74,9 +104,8 @@ if [[ -n "${EXISTING_ID}" ]]; then
 fi
 
 # --- Step 1: POST /api/v1/definitions (create as DRAFT) ---
-echo "--- Creating definition (DRAFT) ---"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PAYLOAD=$(cat "${SCRIPT_DIR}/../test/fixtures/qa/swiftroute_process_definition.json")
+echo "--- Creating definition v${FIXTURE_VERSION} (DRAFT) ---"
+PAYLOAD=$(rewrite_service_task_base "$(cat "${FIXTURE_PATH}")")
 
 CREATE_RESPONSE=$(curl -sf \
   -X POST \
@@ -85,7 +114,7 @@ CREATE_RESPONSE=$(curl -sf \
   -d "${PAYLOAD}" \
   "${API}/definitions") || {
   echo "ERROR: POST /api/v1/definitions failed." >&2
-  echo "       If you got a 409 the definition already exists as DRAFT; activate it manually or re-run after deleting it." >&2
+  echo "       A 409 means 'Shipment Approval' v${FIXTURE_VERSION} already exists as DRAFT, DEPRECATED or ARCHIVED; bump the fixture \"version\" (do not delete)." >&2
   exit 1
 }
 

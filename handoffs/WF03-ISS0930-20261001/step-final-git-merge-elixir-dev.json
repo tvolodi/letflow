@@ -1,0 +1,57 @@
+{
+  "handoff_id": "5aeeec9a-22d5-4e90-b179-5260594f43f8",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0930-20261001/step-final-git-merge-elixir-dev.json",
+  "created_at": "2026-09-30T23:49:27Z",
+  "started_at": "2026-09-30T23:49:27Z",
+  "completed_at": "2026-10-01T00:22:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: resolved\nresolved_in_run: WF03-ISS0930-20261001\nresolved_at: \"2026-09-30T23:48:51Z\"\nresolution: >\n  Seeded service-task endpoints used relative URLs, which the dispatcher could not build\n  into a request (request_build_error). The QA fixture scripts now emit absolute https\n  endpoints (service-task mock base, default httpbin.org) and the affected definitions\n  (Loan Origination, Regulatory Compliance Review, Production Order Release, Supplier\n  Quality Deviation) are v1.1. Verified on real QA (https://qa.bizdala.com): fresh Loan\n  Origination instance 89cbc769-... stayed ACTIVE, kyc-aml-check dispatch row 'advanced'\n  (rendered_url https://httpbin.org/anything/kyc/screen), parallel tasks risk-assessment\n  and credit-memo-review PENDING; fresh Supplier Quality Deviation instance e0a97a8f-...\n  passed quarantine-batch and reached severity-classification PENDING; test instances\n  cancelled. Regression test: test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs\n  (fail-first 7/31 pre-fix, 31/31 post-fix; 7 mutants killed).\nresidual_risk: >\n  Seeded endpoints now depend on third-party httpbin.org availability; override with the\n  SERVICE_TASK_MOCK_BASE_URL environment variable to point at a controlled mock. Remaining\n  UAT scenario defects are separate issues, not covered here: ISS-0931 (D2 role groups),\n  ISS-0932 (D3 21-day timer path), ISS-0933 (D4 complete returns 500 on ERROR instance),\n  ISS-0934 (D5 complete role enforcement), ISS-0935 (D6 vortex seed data).\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/issues/ISS-0930.yaml"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step Final: git merge per docs/agents/protocols/GIT_MERGE.md (read it fully, incl. the worktree variants and rebase/force-with-lease rule at step 6). Context: branch feature/WF03-ISS0930-20261001 already exists, is pushed to origin (earlier commit) and has local commits ahead (all gates passed: design, security, reviewer, tests, doc, issue close). You are in the dedicated worktree context.worktree; never switch branches in the main checkout C:/Users/tvolo/dev/ai-dala/letflow-4 and never touch it. Procedure: git fetch; rebase onto origin/main if main moved (expected: it has not); push the branch (use --force-with-lease ONLY for your own rebased feature branch if needed); open a PR against main via gh with a title like 'fix(ISS-0930): seed service-task endpoints as absolute https URLs [WF03-ISS0930-20261001]' and a body summarising root cause (relative 'POST /path' endpoints rejected by the https-only SSRF gate -> request_build_error :target_url_not_allowed), fix (fixtures v1.1 + seed scripts, engine untouched), verification (QA re-seeded; Loan Origination and Supplier Quality Deviation instances pass their service tasks; test instances cancelled), regression test path, residual risk (httpbin.org dependency); end the body with the line: 🤖 Generated with [Claude Code](https://claude.com/claude-code). Commit messages you add must end with: Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>. Then poll CI (`gh pr checks`; the required jobs are `backend` and `frontend`) until conclusive - poll with sensible sleeps, total up to ~60 minutes; repo disallows auto-merge, so once both are green run `gh pr merge <n> --squash` (use --admin only per decision 0018's documented override if the protocol says so). If CI fails: diagnose from the logs; if the failure is caused by this change, fix it in the worktree (scripts/fixtures/test only, minimal) and push; if it is an unrelated flake re-run the failed job once; report what you did. After merge verify `git log origin/main` contains the squash commit and that the fix files are on origin/main; delete the remote feature branch. Do NOT remove the worktree (ORCH does). Do not edit handoffs/registry.json or handoffs/orchestrator.log (ORCH-owned; bookkeeping is a follow-up PR by ORCH). Set IN_PROGRESS at claim then COMPLETED/FAILED with result.status PASS/FAIL, including PR number, merge sha, CI job conclusions; next_action 'Route to ORCH'.",
+    "acceptance_criteria": [
+      "PR opened, required CI jobs green",
+      "PR squash-merged; sha on origin/main",
+      "Fix files verified present on origin/main",
+      "Remote feature branch deleted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PR #2076 squash-merged to main as ed40c2fa (admin override per decision 0018, attributed backend failures). Main had not moved so rebase was a no-op. CI: frontend pass, mobile pass, detect-paths pass; backend fail after two runs. Run 1: lint_handoffs flagged own handoffs (self-ref artifacts_out in step-05-doc-updater, duplicate trailing JSON in step-03d-reviewer) - fixed in-branch; then 1 failure (TenantTemplateTest parity, events_y2026m09) - unrelated month-boundary clock flake; rerun-failed produced 12 failures in PartitionMaintenance/RetentionOperations/EventRetention tests ({:error,:partition_not_eligible}), same class (UTC 2026-09-30 -> 2026-10-01 rollover), none touch seed scripts/fixtures; branch changes no lib/ or migration code. Attribution recorded in PR body. Fix files verified on origin/main; remote branch deleted; worktree left detached at origin/main.",
+    "git_evidence": {
+      "pr": 2076,
+      "merge_sha": "ed40c2fa13a47ad85dad886169362777daa48572",
+      "admin_override": true,
+      "override_reason": "backend gate red from clock/month-boundary tests unrelated to branch; attribution in PR body"
+    },
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "Month-boundary-sensitive tests (TenantTemplateTest parity, PartitionMaintenanceTest, RetentionOperationsTest, EventRetentionTest) fail on 2026-10-01 UTC; main CI will likely be red until fixed or until clock-relative assumptions are repaired. Should be filed as an issue by ORCH."
+      }
+    ],
+    "artifacts_out": [],
+    "next_action": "Route to ORCH"
+  }
+}

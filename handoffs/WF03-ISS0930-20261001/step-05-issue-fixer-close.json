@@ -1,0 +1,47 @@
+{
+  "handoff_id": "58706a11-b842-4f05-ac20-6bde193a021d",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0930-20261001/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-30T23:48:40Z",
+  "started_at": "2026-09-30T23:48:40Z",
+  "completed_at": "2026-09-30T23:49:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0930.yaml",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 5 close for ISS-0930. First read docs/agents/protocols/ISSUE_QUEUE.md 'Issue status vocabulary' and choose the correct terminal status (expected: resolved - root cause removed and verified). Evidence to cite (ORCH verified on REAL QA, 2026-09-30/10-01, this run): scripts re-run against https://qa.bizdala.com replaced Loan Origination, Regulatory Compliance Review, Production Order Release and Supplier Quality Deviation v1.0 with v1.1 (absolute https endpoints); a fresh Loan Origination instance (89cbc769-...) stayed ACTIVE with kyc-aml-check service_task_dispatches row status 'advanced' (rendered_url https://httpbin.org/anything/kyc/screen) and parallel tasks risk-assessment/credit-memo-review PENDING; a fresh Supplier Quality Deviation instance (e0a97a8f-...) passed quarantine-batch and reached severity-classification PENDING; all test instances cancelled. Regression test: test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs (fail-first 7/31 pre-fix, 31/31 post-fix; 7 mutants killed). Edit docs/issues/ISS-0930.yaml: status resolved, resolved_in_run: WF03-ISS0930-20261001, resolved_at: a REAL UTC timestamp from `date -u`, keep queue_ref/github_ref, add a short resolution note and residual-risk note (depends on third-party httpbin.org, override SERVICE_TASK_MOCK_BASE_URL; D2/D3/D4 scenario defects are separate issues ISS-0931..0935 - check which exist in docs/issues/ and cite them, do not re-file). Then close GitHub issue #2064 with `gh issue close 2064 --comment` using the `resolved` comment form from WF-03 Step 5 (cite run id, docs/issues/ISS-0930.yaml and the regression test path; mention the fix merges via the run's PR - ORCH merges right after this step) - a comment is REQUIRED. Also verify the GitHub issue number belongs to this defect (gh issue view 2064). Work in context.worktree only; do not commit. Set IN_PROGRESS at claim then COMPLETED/FAILED with result.status PASS/FAIL; next_action 'Route to Step Final'.",
+    "acceptance_criteria": [
+      "ISS-0930.yaml status resolved with resolved_in_run and real resolved_at",
+      "GH#2064 closed with evidence comment (or failure reported)",
+      "No other files changed except handoff and ISS-0930.yaml"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ISS-0930.yaml set to status resolved (resolved_in_run WF03-ISS0930-20261001, resolved_at 2026-09-30T23:48:51Z from date -u), with resolution and residual_risk notes citing ISS-0931..0935 (all exist). GH#2064 verified as this defect (queue ref ISS-0913) and closed with the resolved-form evidence comment. Queue release_lock should be status done.",
+    "files_changed": [
+      "docs/issues/ISS-0930.yaml"
+    ],
+    "next_action": "Route to Step Final"
+  }
+}

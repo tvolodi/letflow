@@ -1,0 +1,32 @@
+id: ISS-0921
+title: "Host flakiness during full-suite runs, UNATTRIBUTED: several test_parallel partition BEAMs die simultaneously with no error text; intermittent Keycloak localhost:8094 ECONNRESET from Playwright/Node"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ432-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T20:50:51Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  Found by WF02-REQ432-20260930 step-05 RELEASE-VALIDATOR
+  (handoffs/WF02-REQ432-20260930/step-05-release-validator.json) and step-04b/04-rerun1
+  TEST-RUNNER. (1) Twice during independent full-suite re-runs 5-6 partition BEAMs died
+  simultaneously with no error text (script exit 127/1); identical re-runs passed clean; no
+  test or lib code contains taskkill/kill; UNATTRIBUTED, treated as host interference
+  (Windows + WSL2/Docker Desktop host). (2) Playwright's assertServiceReadiness
+  intermittently fails with ECONNRESET to http://localhost:8094 (Keycloak, docker-published
+  0.0.0.0/[::]:8094) because wslrelay.exe owns ::1:8094; curl to 127.0.0.1 answered 200 at
+  the same time; web/tests/e2e/helpers.ts normalizeIdpBaseUrl rewrites 127.0.0.1 back to
+  localhost, so the spec-side cannot choose IPv4. Runs 1-2 of a RELEASE-VALIDATOR attempt
+  failed, run 3 passed; earlier a TEST-RUNNER attempt failed entirely and a later one
+  passed. Needed: root-cause the partition deaths (capture exit codes/ stderr per partition
+  in scripts/test_parallel.sh), and either make e2e IdP host resolution deterministic (try
+  127.0.0.1 and ::1 / retry) or document the preflight. Owner ELIXIR-DEV / FRONTEND-DEV
+  (helpers). Severity MINOR.
+source_reports:
+  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json
+  - test/reports/report-20260930-WF02-REQ432-20260930.yaml
+affected_files:
+  - scripts/test_parallel.sh
+  - web/tests/e2e/helpers.ts
+queue_ref: Q-912  # queue allocated issue_ref ISS-0912, which collides with an existing local file; local filename kept as ISS-0921 (next free on origin/main) and GH-2063 retitled to match
+github_ref: GH-2063
+status: open

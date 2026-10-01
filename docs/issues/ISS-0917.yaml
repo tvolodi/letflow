@@ -1,0 +1,44 @@
+id: ISS-0917
+title: "Catalog SERVICE_TASK cannot execute: ServiceTaskDispatcher.catalog_lookup_stub/2 is an unconditional {:error,:not_registered}; POST /tasks/:id/complete returns 500 when the next node is a catalog-only SERVICE_TASK"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ432-20260930 (filed by ORCH)
+discovered_at: "2026-09-30T20:50:51Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  Found by WF02-REQ432-20260930 (REQ-432 live pipeline run,
+  test/reports/report-20260930-WF02-REQ432-20260930.yaml; step-02b-rework1-frontend-
+  dev.json). A process whose SERVICE_TASK references a service_id (catalog_entry pin) cannot
+  ever execute: Letflow.Engine.ServiceTaskDispatcher.catalog_lookup_stub/2
+  (lib/letflow/engine/service_task_dispatcher.ex ~411-416) returns {:error,:not_registered}
+  unconditionally, so activation renders an empty URL. Measured live: completing the
+  preceding human task hops synchronously into the SERVICE_TASK, the engine persists only
+  EXECUTION_ERROR (affected node n3, error_type service_task_url_rendered_empty, no
+  TASK_COMPLETED for the completed task) and POST /api/v1/tasks/:id/complete answers HTTP
+  500 (probably needs a non-500 mapping for {:instance_execution_error,_,_} in
+  lib/letflow/routers/tasks.ex). Independent of service retirement. Consequence: scenario
+  platform-instance-pin-survives-catalog-change EO-001/EO-004 'the in-flight step completes
+  without error' cannot be met on success; REQ-432's pipeline spec accepts the measured
+  outcome (B) as a documented limitation. Needed: resolve service_id through the instance's
+  PINNED service_catalog version (Letflow.Engine.PinResolver / ServiceCatalog lookup) in the
+  dispatcher, then tighten the REQ-432 spec step 03 to require success. SCOPE GAP already
+  noted in design docs lib/letflow/design/req373-service-catalog-version-lifecycle.md and
+  lib/letflow/design/req432-rebind-pins-publish-retire-ui.md (M5). Owner ELIXIR-DEV (via
+  CODE-DESIGNER). Severity MAJOR.
+  NOTE (added by ORCH at close-out of the cancelled duplicate run WF02-REQ432-20260930): the
+  REQ-432 implementation that actually landed on main is PR #2055 (5d7ca7bf), not this run's
+  branch. Its spec (web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change
+  .pipeline.e2e.spec.ts, header 'Scope note (deliberately not exercised): SERVICE_TASK dispatch')
+  never drives a token onto the SERVICE_TASK node, so on main the scenario's 'the in-flight step
+  completes without error' (EO-001/EO-004 step 3) is unverified; the evidence of this stub's effect
+  is the duplicate run's live finding (archived on remote branch feature/WF02-REQ432-20260930,
+  handoffs/WF02-REQ432-20260930/step-02b-rework1-frontend-dev.json and step-05-release-validator.json).
+source_reports:
+  - handoffs/WF02-REQ432-20260930/step-05-release-validator.json
+  - test/reports/report-20260930-WF02-REQ432-20260930.yaml
+affected_files:
+  - lib/letflow/engine/service_task_dispatcher.ex
+  - lib/letflow/routers/tasks.ex
+queue_ref: Q-907  # queue allocated issue_ref ISS-0907, which collides with an existing local file; local filename kept as ISS-0917 (next free on origin/main) and GH-2057 retitled to match
+github_ref: GH-2057
+status: open

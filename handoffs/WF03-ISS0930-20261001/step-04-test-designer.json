@@ -1,0 +1,86 @@
+{
+  "handoff_id": "4e0459fb-00a8-41ca-9e99-1dd2c6f11fe0",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0930-20261001/step-04-test-designer.json",
+  "created_at": "2026-09-30T22:42:44Z",
+  "started_at": "2026-09-30T22:42:44Z",
+  "completed_at": "2026-09-30T23:10:52Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0930-seed-service-task-endpoints.md",
+      "test/letflow/scripts/seed_swiftroute_definition_test.exs",
+      "test/fixtures/qa/",
+      "handoffs/WF03-ISS0930-20261001/step-03d-reviewer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4 regression test for ISS-0930. Write test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs exactly per section 6 of the validated design lib/letflow/design/iss0930-seed-service-task-endpoints.md (uses Letflow.Definitions.Graph.Node with node_type: :SERVICE_TASK, ServiceTask.parse_config_from_node_attributes/1, Letflow.Webhooks.UrlValidator.validate/2 with stub public resolver, sample value 'sample1', method atom comparison, no single-brace placeholders, static content assertions on the seed scripts/helper). Follow the style of the existing test/letflow/scripts/seed_swiftroute_definition_test.exs. FAIL-FIRST PROOF is mandatory: (a) run the new test against the PRE-FIX fixtures and show it fails - do this WITHOUT mutating the worktree: create a throwaway `git worktree` of origin/main plus only the new test file (run `mix deps.get`/ share _build as needed; if too heavy, copy the main-branch versions of test/fixtures/qa/*.json and scripts/*.sh into a temp copy) and quote failing counts; remove that throwaway worktree after; (b) run it on this branch and show it passes. Because the fix is a data fix (not a new module), ALSO do one or two targeted mutations in a throwaway copy - e.g. revert one node's endpoint to 'POST /x', set one endpoint to http://, leave one single-brace placeholder, drop one method - and record that the test fails for each; revert/remove the throwaway and verify `git status --porcelain lib/ test/ scripts/` in context.worktree shows only your new test file. Do not write a test spec .md unless the repo convention for WF-03 tests requires it (check a prior WF03 run's step-04 handoff). Work in context.worktree only; do not commit; set IN_PROGRESS at claim then COMPLETED/FAILED with result.status PASS/FAIL; next_action 'Route to TEST-DESIGN-VALIDATOR'.",
+    "acceptance_criteria": [
+      "New test file exists per design section 6",
+      "Fails against pre-fix fixtures (quoted output)",
+      "Passes on branch (quoted output)",
+      "Mutation probes recorded and reverted; git status clean apart from new test",
+      "Does not require network"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs"
+    ],
+    "summary": "New ExUnit contract test (31 tests: TC-0930-01..09, per-fixture describes x5) per design s6. No test spec md written (WF-03 regression convention not required by task).",
+    "fail_first_proof": "Throwaway copy of worktree (no .git) with origin/main test/fixtures/qa/*.json and scripts/ restored (helper removed): \"Result: 7/31 passed, Failed: 24 tests\" (TC-02/03/05/06 fail for all 5 fixtures, TC-08 x3, TC-09). Copy removed.",
+    "branch_pass": "mix test on this branch: \"Result: 31 passed\"; with --warnings-as-errors plus seed_swiftroute_definition_test.exs: \"Result: 36 passed\", no \"default values for the optional arguments\" text. mix format --check-formatted OK; bash -n ok on 3 seed scripts + helper.",
+    "mutants": [
+      {
+        "m": "endpoint -> \"POST /x\" (vortex assign-line)",
+        "result": "29/31 passed, 2 failed (TC-02, TC-05 for that file)"
+      },
+      {
+        "m": "https -> http:// on one endpoint",
+        "result": "29/31, 2 failed (TC-02, TC-05)"
+      },
+      {
+        "m": "{{variables.order_id}} -> {order_id}",
+        "result": "30/31, 1 failed (TC-06)"
+      },
+      {
+        "m": "drop \"method\" attr on one node",
+        "result": "30/31, 1 failed (TC-03)"
+      },
+      {
+        "m": "remove literal \"not downgrading\" from seed_vortex_definition.sh",
+        "result": "30/31, 1 failed (TC-08 vortex)"
+      },
+      {
+        "m": "host -> 127.0.0.1 literal on one node",
+        "result": "30/31, 1 failed (TC-05, private-IP gate)"
+      },
+      {
+        "m": "host -> localhost (hostname)",
+        "result": "31/31 NOT killed: expected, the stub resolver returns a public IP for any hostname; hostname-private checks are UrlValidator own unit-test domain"
+      }
+    ],
+    "mutants_note": "All mutants applied only in throwaway copy (removed); baseline copy re-verified 31 passed after reverts. Worktree never mutated.",
+    "git_status": "git status --porcelain lib/ test/ scripts/ in worktree: only \"?? test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs\"",
+    "check_test_caveat": "mix letflow.check.test NOT completed: run 1 (N=16) failed in test_helper ensure_template! with DBConnection checkout error (DB connection pressure); run 2 (TEST_PARALLEL_N=4) ran ~1h+ with partitions stalling (partition-2 log not growing), killed by me. Substituted the targeted equivalent: touch + mix test --warnings-as-errors on the new file plus seed_swiftroute test, output \"Result: 36 passed\", no dead-default text. No test helper in the file has a default argument. TEST-RUNNER should run the full suite.",
+    "no_network": "Test uses stub resolver; reads only local files.",
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  }
+}

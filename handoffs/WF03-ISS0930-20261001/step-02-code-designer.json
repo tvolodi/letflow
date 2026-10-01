@@ -1,0 +1,56 @@
+{
+  "handoff_id": "b7b39402-e65a-4368-ba72-c0571758139e",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0930-20261001/step-02-code-designer.json",
+  "created_at": "2026-09-30T22:31:23Z",
+  "started_at": "2026-09-30T22:31:23Z",
+  "completed_at": "2026-09-30T22:34:01Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0930-20261001/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/engine/service_task.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/webhooks/url_validator.ex",
+      "scripts/seed_meridian_definition.sh",
+      "scripts/seed_vortex_definition.sh",
+      "scripts/seed_swiftroute_definition.sh",
+      "test/fixtures/qa/",
+      "docs/issues/ISS-0930.yaml"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2 (fix design). Read the completed diagnosis in handoffs/WF03-ISS0930-20261001/step-01-issue-fixer-diagnose.json (result.summary) first and verify its key claims against the code (HANDOFF_PROTOCOL 1.1). Summary: seeded service-task nodes use endpoint strings like 'POST /kyc/screen' (relative, method embedded, single-brace placeholders); Letflow.Engine.ServiceTask expects an absolute https URL (endpoint) plus optional method; Letflow.Webhooks.UrlValidator rejects non-https/host-less/private-resolving URLs -> {:request_build_error,:target_url_not_allowed}, non-retriable. Decision already made by ORCH per diagnosis: fix lives in the SEED DEFINITIONS (fixtures + seed scripts), NOT by loosening the engine's https/SSRF check (security invariant) and NOT by adding engine base-URL/'METHOD path' parsing (would need a decision record). Design it: (1) which files change (test/fixtures/qa/*.json, scripts/seed_{meridian,vortex,swiftroute}_definition.sh, the simulation YAML sources only if they are the generation source \u2014 check how the JSON fixtures are produced); (2) target endpoint host: parameterised via an env var in the seed scripts (e.g. SERVICE_TASK_MOCK_BASE_URL) with a sane DEFAULT that actually works on QA \u2014 you MUST determine what works: a public https host that resolves to non-private addresses, returns 2xx with a JSON object body for POST/GET as the node needs (check how the dispatcher treats response bodies / output mapping in lib/letflow/engine/service_task*.ex and what the seeded nodes' output_mapping/expect). Candidates to evaluate and verify from the QA host via the ssh access in /c/Users/tvolo/dev/ai-dala/ai-dala-infra/scripts/qa-uat-env.sh (read it; ssh only, never print secrets): a public echo service such as https://httpbin.org/post, or a Letflow/QA-hosted endpoint. Prove reachability with a real curl from the QA server and record status+body shape; pick the option that is deterministic enough for UAT; (3) how an already-ACTIVE deployed definition is replaced (seed scripts currently skip ACTIVE definitions; design the minimal mechanism: e.g. a new version 1.1 or a retire+recreate / FORCE flag, consistent with the definitions API lifecycle \u2014 read the API before deciding, and keep scenario lookups by definition_name working); (4) {x} -> {{variables.x}} placeholder conversion and explicit method on each node; (5) regression test design: an ExUnit fixture-contract test (new file under test/letflow/ or test/fixtures-consistent location) asserting every service-task node in test/fixtures/qa/*.json has an absolute https endpoint, valid method, passes Letflow.Webhooks.UrlValidator with an injected public resolver, and has no unrendered single-brace placeholders; it must FAIL on current main fixtures. Design artefact goes in lib/letflow/design/ (one new .md, name e.g. iss0930-seed-service-task-endpoints.md); design docs only, no implementation code. Work ONLY in the worktree context.worktree. Do not commit; ORCH commits. Set status IN_PROGRESS at claim then COMPLETED/FAILED with result.status PASS/FAIL, artifacts_out listing the design path, next_action 'Route to CODE-DESIGN-VALIDATOR'.",
+    "acceptance_criteria": [
+      "Design artefact written in lib/letflow/design/ with no implementation code",
+      "Working QA endpoint host verified by real curl from QA and recorded",
+      "Replacement mechanism for already-ACTIVE definitions specified",
+      "File list / owned_modules specified",
+      "Regression test specified incl. why it fails on current fixtures",
+      "Every seeded service-task node across meridian, vortex (and swiftroute if affected) covered"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written. Diagnosis verified. Fix in seeds: 25 SERVICE_TASK nodes across 5 fixtures rewritten to https://httpbin.org/anything<path> with {{variables.x}} and explicit method POST; fixtures bumped to version 1.1; seed scripts take SERVICE_TASK_MOCK_BASE_URL (shared helper scripts/lib/seed_service_task_base.sh) and skip only when active version == fixture version, else create+activate new version (platform deprecates old). QA curl verified from ubuntu-16gb-nbg1-1: httpbin /anything POST 200 application/json, public AWS IPs, container DNS ok. New ExUnit contract test test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs fails on current main. Open questions OQ-1..4 listed in design.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0930-seed-service-task-endpoints.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  }
+}

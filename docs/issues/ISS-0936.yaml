@@ -1,0 +1,27 @@
+id: ISS-0936
+title: "uat_preflight.sh qa-uat-env protocol expects 'Token: <jwt>' but qa-uat-env.sh token prints a bare JWT (every actor login reports NO_PASSWORD)"
+discovered_by: UAT-RUNNER
+discovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MINOR
+description: >
+  Fix fetch_credential in scripts/uat_preflight.sh to accept a bare JWT line (keep the 'Token:' form).
+  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.
+source_reports:
+  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml
+related:
+  - ISS-0912
+queue_ref: Q-919  # queue issue_ref ISS-0919 collides with an existing local file; local filename ISS-0936
+github_ref: GH-2070
+status: resolved
+resolved_in_run: WF03-ISS0936-20261001
+resolved_at: "2026-09-30T22:06:30Z"
+resolution: >
+  Root cause removed: fetch_credential in scripts/uat_preflight.sh now accepts a bare JWT
+  line (three dot-separated base64url segments) from the qa-uat-env credential source's
+  `token <user>` as well as the legacy `Token: <jwt>` form, so actor logins no longer
+  report NO_PASSWORD. Queue ref Q-919 / GH-2070 (GitHub issue is closed by the queue's
+  release_lock(done) sync after merge, not by this run). Design:
+  lib/letflow/design/iss0936-uat-preflight-bare-jwt.md. Fail-first regression test:
+  test/scripts/uat_preflight_bare_jwt_test.exs (8/8 pass, see
+  handoffs/WF03-ISS0936-20261001/step-04-run-test-runner.json).

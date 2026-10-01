@@ -1,0 +1,65 @@
+{
+  "handoff_id": "f67895e8-fb3d-4c16-9f02-2e170f862328",
+  "run_id": "WF03-ISS0936-20261001",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0936-20261001/step-04-test-designer.json",
+  "created_at": "2026-09-30T21:26:07Z",
+  "started_at": "2026-09-30T21:26:07Z",
+  "completed_at": "2026-09-30T21:48:45Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0936": "Issue ISS-0936 (local record docs/issues/ISS-0936.yaml, queue_ref Q-919, queue task 919, GH#2070; record may not yet be on this branch - PR #2071): scripts/uat_preflight.sh's qa-uat-env credential protocol (fetch_credential, ~line 290) expects the credential source's `token <user>` to print a line `Token: <jwt>`, but ai-dala-infra's qa-uat-env.sh `token <user>` prints a BARE JWT, so every actor login reports NO_PASSWORD. Fix: make fetch_credential accept a bare JWT line (three dot-separated base64url segments) as well as the `Token:` form. Add/adjust tests per project's existing preflight tests (none found under test/ -- TEST-DESIGNER decides a minimal in-repo test shape). Also update the script's header docs (qa-uat-env protocol paragraph) and scripts/README.md if they state the Token: form."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0936-uat-preflight-bare-jwt.md",
+      "scripts/uat_preflight.sh",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "test/scripts/uat_preflight_bare_jwt_test.exs",
+      "test/specs/ISS-0936.md"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0936",
+    "branch_name": "feature/WF03-ISS0936-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4: write the regression test per the validated design section 6 (lib/letflow/design/iss0936-uat-preflight-bare-jwt.md): test/scripts/uat_preflight_bare_jwt_test.exs (ExUnit, T1-T7 with the pinned flags/substrings, run_preflight/2 helper, hermetic --idp-url) plus a test spec test/specs/ISS-0936.md. FAIL-FIRST proof is mandatory: run the tests against the PRE-FIX script (use a throwaway `git worktree` from origin/main, or copy `git show origin/main:scripts/uat_preflight.sh` into a temp path and point the test at it via an env var/param only if the design allows -- preferred: throwaway worktree of origin/main plus your new test file) and record which tests fail; then run on the fix branch and record pass. Additionally mutate the fix (e.g. drop the eyJ prefix requirement so hostnames pass; drop bare-JWT acceptance; print token) in a THROWAWAY worktree only and record which tests fail per mutant; remove worktrees after. Make sure the main fix worktree lib/ scripts/ stay unmutated (quote `git status --porcelain scripts/ lib/` at end: only expected diffs). Elixir toolchain: see docs/anti-patterns.md Docker fallback if mix is not installed locally; if you truly cannot run mix test, say so explicitly and run the equivalent otherwise. Use Git Bash via UAT_PF_BASH on this Windows host. Do not commit or push. REWORK ITERATION 1: step-04-run TEST-RUNNER FAIL -- mix format --check-formatted fails on test/scripts/uat_preflight_bare_jwt_test.exs (line ~93 `defp run_dead(tmp, lines, crlf), do: run_preflight(...)` must be split with `do:` on its own line). Run `mix format` on that file only (mix needs a toolchain; you ran mix before) and verify with --check-formatted; re-run the 8 tests. No semantic change. Flip status to COMPLETED/FAILED as normal on finishing.",
+    "acceptance_criteria": [
+      "Test file + spec written",
+      "Fail-first against pre-fix quoted",
+      "Mutants recorded per-trap",
+      "No mutation left behind",
+      "Real test run output quoted"
+    ]
+  },
+  "result": {
+    "summary": "Wrote test/scripts/uat_preflight_bare_jwt_test.exs (T1-T7 plus T5b, 8 tests) and test/specs/ISS-0936.md. Not committed.",
+    "fail_first_prefix_origin_main": "3/8 passed; failed T1,T5,T5b,T6,T7",
+    "fix_branch": "8/8 passed (direct ExUnit run, UAT_PF_BASH=git-bash)",
+    "mutants": {
+      "M1a drop eyJ prefix": "T4 fails (1)",
+      "M1b drop prefix+length floor": "T4 (1)",
+      "M1c drop length floor": "T4 (1)",
+      "M2 drop bare JWT acceptance": "T1,T5,T5b,T6,T7 (5)",
+      "M3 print token": "T6 (1)",
+      "M4 drop Token: branch": "T2 (1)",
+      "M5 accept any line": "T3,T4 (2)",
+      "M7 drop strip": "T5b (1)"
+    },
+    "notes": "M1a/M1c first survived; T4 extended with a long non-eyJ 3-segment hostname and short eyJh.a.b to kill them. Test names must not contain NO_PASSWORD/BAD_CRED (tmp_dir path echoed by script).",
+    "mix_letflow_check_test": "exit 0; 'mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.' (16 partitions, throwaway postgres container on 5499, removed). Aggregate total line and per-partition confirmation that the new file ran were not captured.",
+    "cleanup": "all letflow-4-tmp-* worktrees removed; copied _build/deps removed; scripts/ and lib/ unmodified (git status clean for them)",
+    "rework_1": "Ran mix format on the test file only (run_dead defp, do: on its own line; no semantic change). mix format --check-formatted exit 0; 8/8 tests pass (direct ExUnit run, UAT_PF_BASH=git-bash). Copied _build/deps removed; no Postgres container needed or started."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -1,0 +1,75 @@
+{
+  "handoff_id": "4fe0922a-a86b-417d-a11f-c0e99f2b2a0b",
+  "run_id": "WF03-ISS0936-20261001",
+  "workflow_id": "WF-03",
+  "step": "04-run",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0936-20261001/step-04-run-test-runner.json",
+  "created_at": "2026-09-30T21:55:02Z",
+  "started_at": "2026-09-30T21:55:02Z",
+  "completed_at": "2026-10-01T00:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0936": "Issue ISS-0936 (local record docs/issues/ISS-0936.yaml, queue_ref Q-919, queue task 919, GH#2070; record may not yet be on this branch - PR #2071): scripts/uat_preflight.sh's qa-uat-env credential protocol (fetch_credential, ~line 290) expects the credential source's `token <user>` to print a line `Token: <jwt>`, but ai-dala-infra's qa-uat-env.sh `token <user>` prints a BARE JWT, so every actor login reports NO_PASSWORD. Fix: make fetch_credential accept a bare JWT line (three dot-separated base64url segments) as well as the `Token:` form. Add/adjust tests per project's existing preflight tests (none found under test/ -- TEST-DESIGNER decides a minimal in-repo test shape). Also update the script's header docs (qa-uat-env protocol paragraph) and scripts/README.md if they state the Token: form."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/scripts/uat_preflight_bare_jwt_test.exs",
+      "handoffs/WF03-ISS0936-20261001/step-04-test-designer.json"
+    ],
+    "owned_modules": [
+      "scripts/uat_preflight.sh"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0936",
+    "branch_name": "feature/WF03-ISS0936-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4 run: run test/scripts/uat_preflight_bare_jwt_test.exs on the fix worktree (real run output quoted; set UAT_PF_BASH to Git Bash on this Windows host; consult step-04-test-designer.json result for how mix was run -- throwaway Postgres container on a free port, copy _build/deps from main checkout only if needed and clean up afterwards; do not modify the main checkout). Then run `mix test test/scripts` plus `mix format --check-formatted test/scripts/uat_preflight_bare_jwt_test.exs` and `mix compile --warnings-as-errors` if feasible; ALSO confirm the new test file is executed under the project's CI path (`mix letflow.check` -> test_parallel.sh partitions) by running e.g. `mix test --partitions`-equivalent listing or `mix test --trace` with the file path plus checking the partition hashing includes it -- or state explicitly it cannot be shown. Report PASS/FAIL with counts. Clean up containers/dirs you create. Modify only your handoff (and nothing in lib/scripts/test); no commit.",
+    "acceptance_criteria": [
+      "Test file run, counts quoted",
+      "format/compile check results",
+      "CI-path execution shown or stated unprovable",
+      "Cleanup done"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-run after TEST-DESIGNER format-only fix: format check exit 0, 8/8 tests pass, compile --warnings-as-errors exit 0. CI-path partition evidence (partition 7 of 16 via --dry-run) from first run stands; file content changed only by formatting.",
+    "test_run": {
+      "cmd": "mix test test/scripts/uat_preflight_bare_jwt_test.exs (LETFLOW_DB_PORT=5497 throwaway postgres:16, UAT_PF_BASH=C:/Program Files/Git/bin/bash.exe)",
+      "output": "Excluding tags: [:keycloak, :wasm_hang, :lua_wallclock_race]\n........\nFinished in 96.5 seconds\nResult: 8 passed",
+      "counts": {
+        "passed": 8,
+        "failed": 0
+      }
+    },
+    "mix_test_test_scripts": "Result: 8 passed (only .exs under test/scripts is the new file)",
+    "format_check": {
+      "exit": 1,
+      "output": "The following files are not formatted: test/scripts/uat_preflight_bare_jwt_test.exs ; diff: line 93 `defp run_dead(tmp, lines, crlf), do: run_preflight(tmp, lines: lines, base_url: @dead_url, crlf: crlf)` must be split to `defp run_dead(tmp, lines, crlf),\n    do: run_preflight(...)`"
+    },
+    "compile_warnings_as_errors": {
+      "cmd": "MIX_ENV=test mix compile --warnings-as-errors --force",
+      "exit": 0,
+      "output": "Compiling 312 files (.ex)\nGenerated letflow app"
+    },
+    "ci_path": "No test_paths/test_pattern override in mix.exs, so default test/**/*_test.exs applies. Mix partitions by sorted file index round-robin (rem(index,N)); in the 304 test files the new file is index 294 -> partition 7 of 16. Verified with `MIX_TEST_PARTITION=7 mix test --partitions 16 --dry-run --trace`: lists Letflow.Scripts.UatPreflightBareJwtTest with all 8 tests (lines 145,153,159,166,182,188,194,205). Full scripts/test_parallel.sh aggregate not re-run (would duplicate designer's `mix letflow.check.test` exit 0 run). Note: partition number depends on N (16 here) and file count. Attempt to run all 16 partitions concurrently failed from DB pool contention (skipped ecto setup); not a test defect, discarded.",
+    "cleanup": "throwaway container letflow-iss0936-pg removed, copied deps/_build removed, temp logs removed; main checkout untouched; worktree git status shows only this handoff modified. No test/reports file written (task said modify only the handoff).",
+    "next_action": "Proceed to RELEASE-VALIDATOR.",
+    "rerun": {
+      "format_check": "mix format --check-formatted test/scripts/uat_preflight_bare_jwt_test.exs exit 0",
+      "format_other_changed_files": "git diff --name-only origin/main filtered to .ex/.exs lists only the test file; nothing else to check",
+      "test_run": "Result: 8 passed (0 failed)",
+      "compile": "MIX_ENV=test mix compile --warnings-as-errors --force exit 0",
+      "cleanup": "container, deps, _build removed"
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

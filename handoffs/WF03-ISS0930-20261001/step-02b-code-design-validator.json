@@ -1,0 +1,65 @@
+{
+  "handoff_id": "8e7579eb-8419-44be-bb68-fc010acc7479",
+  "run_id": "WF03-ISS0930-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0930-20261001/step-02b-code-design-validator.json",
+  "created_at": "2026-09-30T22:34:20Z",
+  "started_at": "2026-09-30T22:34:20Z",
+  "completed_at": "2026-10-01T00:00:00Z",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0930": "id: ISS-0930\ntitle: \"D1 BLOCKER: seeded meridian/vortex service-task endpoints fail with request_build_error; instances ERROR at first service task\"\ndiscovered_by: UAT-RUNNER\ndiscovered_in_run: ISS-0912 QA re-run 2026-10-01 (filed by ORCH)\ndiscovered_at: \"2026-10-01T00:00:00Z\"\nseverity: BLOCKER\ndescription: >\n  Every seeded service-task endpoint (POST /kyc/screen, /mes/.../quarantine, /mes/.../assign) fails request_build_error on QA; instances go to ERROR at kyc-aml-check / assign-line / quarantine-batch, so no meridian or vortex scenario can complete.\n  Source: test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml.\nsource_reports:\n  - test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml\nrelated:\n  - ISS-0912\nqueue_ref: Q-913  # queue issue_ref ISS-0913 collides with an existing local file; local filename ISS-0930\ngithub_ref: GH-2064\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0930-seed-service-task-endpoints.md",
+      "handoffs/WF03-ISS0930-20261001/step-02-code-designer.json",
+      "handoffs/WF03-ISS0930-20261001/step-01-issue-fixer-diagnose.json",
+      "test/fixtures/qa/",
+      "scripts/seed_meridian_definition.sh",
+      "docs/issues/ISS-0930.yaml"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-4-wf03-iss0930",
+    "branch_name": "feature/WF03-ISS0930-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2b: validate the fix design lib/letflow/design/iss0930-seed-service-task-endpoints.md (producer handoff: handoffs/WF03-ISS0930-20261001/step-02-code-designer.json). Check: covers every acceptance criterion of the defect (docs/issues/ISS-0930.yaml + diagnosis in step-01); contains no implementation code; unambiguous enough to build from; INDEPENDENTLY verify its key claims rather than copying them: count the service-task nodes in test/fixtures/qa/*.json (design claims 25) and confirm none is missed; confirm ServiceTask.parse_config_from_node_attributes/1 + UrlValidator behaviour cited; confirm the seed scripts' skip-if-ACTIVE and version-replacement logic claim by reading them (and optionally the definitions API lifecycle in lib/) so that re-seeding v1.1 on QA will actually replace v1.0; confirm how the dispatcher treats the httpbin JSON response body (merging into instance variables - any risk to gateway conditions / variable collisions e.g. keys 'args','data','json','url','headers','method','origin','form','files'); confirm the proposed test fails on current fixtures. You may curl https://httpbin.org from your own host to sanity check. Do not modify files other than this handoff. Work only in context.worktree. Set IN_PROGRESS at claim, then COMPLETED/FAILED with result.status PASS/FAIL and concrete numbered issues on FAIL; next_action 'Route to ELIXIR-DEV' on PASS.",
+    "acceptance_criteria": [
+      "Independent node count verified",
+      "No implementation code in design",
+      "Replacement-of-ACTIVE mechanism verified against scripts/API code",
+      "Response-body merge collision risk assessed",
+      "Verdict PASS/FAIL with evidence"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "verdict": "FAIL",
+    "summary": "Design is sound in substance and its key claims independently verify, but it contains one wrong cross-module reference that makes the regression-test spec not buildable as written, plus one false statement about VariableMerge schema validation and one unspecified edge in the replacement rule. Per the no-partial-credit gate: FAIL, route back to CODE-DESIGNER with the numbered issues.",
+    "evidence": {
+      "node_count": "Independently counted with jq over test/fixtures/qa/*.json (key is node_type, not type): meridian_loan_origination 7, meridian_regulatory_compliance_review 6, swiftroute 3, vortex_production_order_release 3, vortex_supplier_quality_deviation 6 = 25. grep -c '\"endpoint\"' gives the same 7/6/3/6/3, so no endpoint-bearing node outside SERVICE_TASK. Every node id and endpoint listed in design section 3 matches the fixtures exactly; all 25 are 'POST /path' with single-brace placeholders, no method, no service_id, all fixtures version 1.0. PASS.",
+      "no_implementation_code": "Read the whole design: prose, tables and signatures only; no .ex/.exs/.sh bodies. PASS.",
+      "parse_and_validator": "ServiceTask.parse_config_from_node_attributes/1 (service_task.ex ~176-222): endpoint taken verbatim as url_template, route_kind :inline_url unless service_id present, method default :POST from separate 'method' attr. UrlValidator.validate/2 (url_validator.ex:43-49): check_scheme accepts only scheme https (line 97); host nil/empty rejected; resolver type is charlist -> {:ok,[{:inet,tuple,[]}|...]} | {:error,_}, which matches the stub resolver the design specifies. Engine.render_service_task_url renders only {{variables.KEY}} (engine.ex:964-968), absent key renders empty string. Claims CONFIRMED.",
+      "replacement_mechanism": "Seed scripts (meridian lines ~57-78; vortex 62-77; swiftroute 53-68) GET ?name=<n>&status=active and skip when any ACTIVE exists regardless of version, exactly as the design says. Definitions.activate/2 -> activate_draft/3 (definitions.ex:2394-2412) deprecates every ACTIVE row with the same name in the same transaction before activating the draft; uniqueness is uq_definition_version on (name,version) (process_definition.ex:157) so v1.1 of the same name can be created alongside ACTIVE v1.0. So 'create v1.1 + activate; platform deprecates v1.0' will replace v1.0 on QA. CONFIRMED. Graph validation CHK-10 (definitions/graph.ex:797-817) only checks endpoint non-blank, so new absolute endpoints pass activation.",
+      "response_merge": "Engine.advance_service_task_dispatch (engine.ex:2944) calls VariableMerge.merge(seed_state.variables, decoded_body, nil): top-level key merge, new keys inserted, existing keys overwritten with a :variable_overwritten event; variable_validations is nil so NO tenant variable_schema rejection occurs here. httpbin /anything live-curled from this host: 200 application/json, object with keys args,data,files,form,headers,json,method,origin,url (359 bytes). Erlang :httpc (OTP 29, same as .tool-versions) POST to https://httpbin.org/anything/x returned 200 locally. Collision assessment: no edge condition in any qa fixture references variables.{args,data,json,url,headers,method,origin,form,files} (all conditions enumerated: *_decision, kyc_status, severity, order_value_eur, etc.); no UAT scenario initial_variables use those names. kyc-routing needs variables.kyc_status, which httpbin does not supply; scenarios supply kyc_status='clear' via initial_variables (req208 design) and httpbin does not overwrite it, so the gateway still resolves. Risk ACCEPTABLE (note: merged 'origin' stores the QA server public IP in instance variables; cosmetic).",
+      "test_fails_on_current_fixtures": "Confirmed by inspection: URI.parse('POST /kyc/screen') has scheme nil so assertions 2 and 5 fail; no node has attributes.method so 3 fails; single braces remain so 6 fails; scripts lack SERVICE_TASK_MOCK_BASE_URL so the static block fails. Existing seed_swiftroute_definition_test.exs compares ids/edges/escalation/one CEL condition, not endpoints or version (grep for version/1.0 in test/letflow/scripts finds nothing), so bumping to 1.1 does not break it."
+    },
+    "issues": [
+      "1. WRONG CROSS-MODULE DEPENDENCY (section 6, Exercise path): design says to build a `Letflow.Engine.Graph.Node` struct. That module does not exist. parse_config_from_node_attributes/1 takes `Letflow.Definitions.Graph.Node` (alias Letflow.Definitions.Graph in service_task.ex:56; struct defined at lib/letflow/definitions/graph.ex:156). Also that struct has `@enforce_keys [:id, :node_type]` with node_type typed as atom (:SERVICE_TASK), but the design says to build it 'from the node's id/attributes' only, so a build-from-design test would raise ArgumentError. Fix: name the correct module and state the struct is built with id, node_type: :SERVICE_TASK, attributes (map decoded with string keys, as Jason.decode! yields and as the parser expects).",
+      "2. FALSE STATEMENT (OQ-1, section 2 collision paragraph): design claims merged httpbin keys 'may be checked against tenant variable_schemas' and could be rejected later. Engine.advance_service_task_dispatch passes nil variable_validations to VariableMerge.merge/3 (engine.ex:2944), so service-task response merges are never schema-rejected on this path. Correct OQ-1 so the residual-risk statement is accurate (real residual effects: later service tasks overwrite url/method/etc. with :variable_overwritten events, and 'origin'/'headers' get stored in instance variables).",
+      "3. UNSPECIFIED RULE (section 5 step 3-4): 'if active_version != fixture_version then create+activate' also fires when the active version is HIGHER than the fixture (for example someone already activated 1.2), which would silently replace it with an older graph. Specify the behaviour explicitly (for example: replace only when active_version differs AND fixture_version is not lower by the script's comparison rule, or explicitly accept downgrade and say so). An implementer cannot build this deterministically otherwise.",
+      "4. UNSPECIFIED TEST INPUT (section 6): 'a fixed sample value for each {{variables.KEY}} token' is not given. State the value (for example the literal string 'sample-1') so the rendering helper and assertion 6 are deterministic, and state the case-handling for assertion 3 method comparison vs Config.method (an atom: :POST)."
+    ],
+    "owned_modules": [],
+    "next_action": "Route back to CODE-DESIGNER to fix issues 1-4 (re-validate after revision)"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "Regulatory Compliance Review",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates. Critical findings spawn a remediation sub-process. Exercises: timer boundary event, conditional sub-process, DLQ path.",
   "graph": {
     "nodes": [
@@ -19,7 +19,8 @@
         "id": "evidence-collection-timeout",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /internal/reviews/{review_id}/flag",
+          "endpoint": "https://httpbin.org/anything/internal/reviews/{{variables.review_id}}/flag",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -34,7 +35,8 @@
         "id": "risk-evaluation-timeout",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /internal/reviews/{review_id}/flag",
+          "endpoint": "https://httpbin.org/anything/internal/reviews/{{variables.review_id}}/flag",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -42,7 +44,8 @@
         "id": "regulatory-auto-escalation",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /compliance/regulatory-notice",
+          "endpoint": "https://httpbin.org/anything/compliance/regulatory-notice",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -69,7 +72,8 @@
         "id": "cro-sign-off-timeout",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /internal/reviews/{review_id}/escalate",
+          "endpoint": "https://httpbin.org/anything/internal/reviews/{{variables.review_id}}/escalate",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -84,7 +88,8 @@
         "id": "archive-review",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /compliance/reviews/{review_id}/archive",
+          "endpoint": "https://httpbin.org/anything/compliance/reviews/{{variables.review_id}}/archive",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },
@@ -92,7 +97,8 @@
         "id": "reopen-review",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "POST /compliance/reviews/{review_id}/reopen",
+          "endpoint": "https://httpbin.org/anything/compliance/reviews/{{variables.review_id}}/reopen",
+          "method": "POST",
           "timeout_ms": 300000
         }
       },

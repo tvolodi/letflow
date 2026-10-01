@@ -2599,3 +2599,5 @@
 2026-10-01T12:13:53Z | DISPATCH | WF03-ISS0917-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
 2026-10-01T12:21:05Z | PASS | WF03-ISS0917-20261001 | step-02-code-designer | CODE-DESIGNER -> ORCH | PASS -- design iss0917-catalog-service-task-pinned-dispatch.md (688 lines), D1-D8, 10 OQs
 2026-10-01T12:21:24Z | DISPATCH | WF03-ISS0917-20261001 | step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-10-01T12:25:56Z | FAIL | WF03-ISS0917-20261001 | step-02b-code-design-validator | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- 5 blocking (e2e trap URL, e2e identity fixture, router test authz idiom, OQ-6 test, deferral language)
+2026-10-01T12:25:56Z | DISPATCH | WF03-ISS0917-20261001 | step-02-code-designer (rework 1) | ORCH -> CODE-DESIGNER | PENDING

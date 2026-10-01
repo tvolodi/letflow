@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0950-20261001/step-04d-release-validator.json",
   "created_at": "2026-10-01T15:39:12Z",
   "started_at": "2026-10-01T15:39:12Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T15:41:24Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -44,7 +44,32 @@
       "Verdict PASS/FAIL"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived, not copied from TEST-RUNNER. (1) Re-ran MIX_ENV=test mix test on the 5 named files: 'Result: 96 passed', zero failures, no compiler warnings other than pre-existing TenantSchemaReaper log lines. (2) Live repro through the real AdminServices router with a scratch ExUnit file outside the repo (scratchpad/rv_live_test.exs, not committed): POST / with http://127.0.0.1/x, https://169.254.169.254/, https://10.0.0.5/, ftp://x, 'not a url' each -> 422 'validation failed', no service_catalog row created; good https://example.test/path/{{variables.id}} -> 201 echoed verbatim; POST /:id/versions with https://10.0.0.5/, http://x/, 'not a url' each -> 422, service_catalog_versions archive rows = 0, live row's endpoint_url unchanged; a good publish afterwards -> 201. (3) git diff origin/main...HEAD -- lib/: only service_catalog.ex (docs only, +11), service_catalog/entry.ex (check_endpoint_url/1 + validate_endpoint_url/1 wired into register and publish changesets), webhooks/url_validator.ex (new validate_syntactic/1 and a :no_dns clause in check_host/2) and the design doc. ServiceTaskDispatcher and routers/admin_services.ex are NOT in the diff; validate/1,2 bodies unchanged (the new check_host clause only fires for :no_dns, which validate/1,2 never pass). Diff matches the design; no scope creep. The one existing-test edit (engine_catalog_service_task_test.exs) seeds the legacy templated-host row via Repo.update_all because register now rejects it - justified, engine behaviour under test unchanged. (4) Issue acceptance points: https-only scheme enforced at register and publish; private/loopback/link-local IP-literal hosts rejected at register and publish (incl. effective inherited URL on publish, rollback leaves no archive row); dispatch-time INV-9 gate untouched and still binding. Not run per handoff constraint (scoped tests only): scripts/test_parallel.sh full suite and mix letflow.check.test - ORCH/CI should cover these before merge.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Full-suite scripts/test_parallel.sh and mix letflow.check.test not run by this validator (handoff said scoped tests only); the dead-default-arg check is therefore left to CI/ORCH.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Test runs emit 'Could not create schema migrations table' error log lines at startup (parallel DB setup noise); tests still pass. Pre-existing, unrelated to the diff.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0950-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: proceed to commit/push/merge gate; run mix letflow.check.test and CI as final checks."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

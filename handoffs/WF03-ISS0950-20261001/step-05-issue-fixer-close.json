@@ -1,0 +1,49 @@
+{
+  "handoff_id": "7e497e44-81c9-4cd9-bf8f-8182c98a4097",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0950-20261001/step-05-issue-fixer-close.json",
+  "created_at": "2026-10-01T15:41:41Z",
+  "started_at": "2026-10-01T15:41:41Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0950.yaml",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "handoffs/WF03-ISS0950-20261001/step-04d-release-validator.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 5 CLOSE ISSUE (local record only). In docs/issues/ISS-0950.yaml set status: resolved with resolved_in_run: WF03-ISS0950-20261001 and resolved_at: <real UTC from the clock> (check docs/agents/protocols/ISSUE_QUEUE.md for the exact key shape and any required fields, e.g. regression test path and the three follow-up MINORs: 0.0.0.0/8 missing from blocked_ipv4? (pre-existing, https://0/ passes register and dispatch), UrlValidator.validate(url, :no_dns) footgun, webhooks router possibly missing a {:error,:target_url_not_allowed} clause; for those, record them in the yaml as notes only -- do NOT create new issue files). Keep queue_ref Q-921 and github_ref GH-2095 untouched. Do NOT run gh issue close and do NOT call the queue (release_lock) -- the parent session does both after merge; the GitHub close comment must cite the regression tests test/letflow/service_catalog/endpoint_url_validation_test.exs when it is later made, so record that path in the yaml. Edit only docs/issues/ISS-0950.yaml (plus your handoff file). Write the result block yourself, COMPLETED. Do not commit.",
+    "acceptance_criteria": [
+      "ISS-0950.yaml status resolved with resolved_in_run and a real UTC resolved_at",
+      "queue_ref and github_ref intact",
+      "No gh close, no queue call",
+      "Only ISS-0950.yaml modified besides handoff"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

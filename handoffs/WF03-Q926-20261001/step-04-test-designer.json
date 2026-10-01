@@ -1,0 +1,50 @@
+{
+  "handoff_id": "03c7c72a-b05b-41fd-9e01-772c235141e7",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-Q926-20261001/step-04-test-designer.json",
+  "created_at": "2026-10-01T18:54:13Z",
+  "started_at": "2026-10-01T18:54:13Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "handoffs/WF03-Q926-20261001/step-03d-reviewer.json",
+      "lib/letflow/engine/service_task.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs",
+      "test/letflow/engine/regulatory_review_timer_path_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 4: write the regression test spec and tests for ISS-0926 per design section 6/8 (lib/letflow/design/iss0926-service-task-body-template-rendering.md): test/specs/ISS-0926.md (new) plus the new/extended tests: unit tests of ServiceTask.render_body_template/2, body_render_reason_class/1 etc. (T-R1..T-R21 incl. injection cases, placeholder-position scan, cap, no re-expansion, error sentences), DB-backed engine/dispatcher tests (I-1..I-13: rendered_body frozen in config_snapshot, dispatcher transport receives the rendered body, legacy-row fallback static vs templated, body_render_error wiring at create/completion-hop, catalog path), fixture tests incl. T13/T14 (v1.3, both bodies, e10 graph-routing via remediation_exit_nodes/2, graph validation) and the Meridian regulatory-auto-escalation engine test asserting the dispatch row's rendered_body decodes to reason sla_breach_30_days via the 21-day-timer path. Branch feature/WF03-Q926-20261001 (checked out, implementation 883f43d6 present; SECURITY and REVIEWER PASSed). Claim: IN_PROGRESS only; flip COMPLETED on finishing. Do NOT modify lib/ (except none) - tests/specs only; existing test edits by ELIXIR-DEV stay.\nWF-03 fail-first rule (WF-03_issue_resolving.md Step 4 + 'When the pre-fix failure is non-existence'): (1) Prove the regression tests FAIL against pre-fix code: create a THROWAWAY git worktree (outside the repo dir, e.g. under the session scratchpad or a temp dir) at origin/main plus ONLY your new test files, run them there, record counts. (2) Because new pure functions make pre-fix failure partly non-existence, ALSO mutate the shipped logic ONLY inside a separate throwaway worktree of the branch (never in this working checkout - a past incident destroyed uncommitted work via git checkout in a shared tree): at least the design's mutants M-list (e.g. no escaping / quote not escaped, '/'... per design, placeholder outside string accepted, nil->'null', body sent raw template instead of rendered, legacy templated row sends raw, URL renderer widened, review_id/reason swapped on e10, missing error wiring at one site), recording per-mutant pass/fail counts. Remove the worktrees when done and verify git worktree list shows only the main checkout. (3) Commit your tests BEFORE running any mutation, so nothing uncommitted is at risk.\nDB: Postgres is unreachable by default; use the docs/anti-patterns.md Docker fallback (throwaway postgres container on a private docker network and an unused host port; NOT the shared dev stack on 5462; make sure config/test env points at the throwaway before running anything, since a previous run accidentally hit the shared dev DB) and remove the container afterwards. Scoped tests only; shared machine. Quote real outputs (counts) in result.summary: new-test file counts green on the branch, red on the pre-fix side, per-mutant counts. mix format touched files. Commit (git add specific files) and push origin HEAD. next_action 'Route to TEST-DESIGN-VALIDATOR'. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "test/specs/ISS-0926.md exists and maps each AC to tests",
+      "Unit, DB-backed, fixture and Meridian regression tests written per design",
+      "Tests green on branch with quoted counts",
+      "Pre-fix (main + new tests only) run red with quoted counts",
+      "Mutants applied in a throwaway worktree with per-mutant counts",
+      "Worktrees and containers removed, git status clean",
+      "Committed before mutation and pushed"
+    ]
+  }
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0937-20261001/step-04-test-designer.json",
   "created_at": "2026-10-01T00:42:15Z",
   "started_at": "2026-10-01T00:42:15Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T01:17:09Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -47,5 +47,15 @@
       "Mutants applied and recorded in throwaway worktree, removed",
       "Passing on branch with counts"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. New: test/support/partition_clock_test.exs (6 tests), test/support/tenant_template_test.exs (+7 tests, new 'ISS-0937' describe, helper build_schemas!/2), test/specs/ISS-0937.md. No fix files modified. FAIL-FIRST (throwaway worktree from origin/main + only the new test files): 13/23 passed, 10 failed: all 6 partition_clock tests (PartitionClock undefined / retention files lack PartitionClock) and 4 parity tests (stale dynamic partition on candidate: 'table set: extra=[\"events_y2026m09\"]'; events_archive variant: extra=[\"events_archive_y2026m09\"]; reference-only: extra=[\"events_y2026m11\"]; non-partition extra: extra=[\"events_y2026m09\", \"widgets_extra\"]). The 3 guard tests (missing non-partition, invalid names, fixed events_default extra) pass pre-fix by design (anti-vacuity guards). Branch: 23 passed. MUTANTS (fix applied in throwaway worktree, each reverted and baseline re-verified 23 passed; counts are failed/23): M1 PartitionClock ignores N (legacy month_of(today)-1): 3 fail (eligible-every-day, legacy-regression, boundary dates). M2 offset -2 over-conservative: 2 fail (latest-eligible, boundary dates). M3 filter applied to reference side only (candidate unfiltered = original bug): 6 fail (4 ISS-0937 parity + 2 real-replay template parity tests). M4 filter applied to candidate side only: 0 fail -- EQUIVALENT mutant (missing side is already filtered by the full req376 predicate, so reference-only dynamic tables cannot surface). M5 filter loosened to hide any events* table: 2 fail (invalid-names, fixed events_default extra). M6 regex month part loosened to m[0-9][0-9]: 1 fail (invalid names m13). (First M6 sed was malformed -> regex matched nothing -> 7 fail; discarded and redone.) M7 filter disabled entirely: 4 fail. M8 retention_operations_test.exs reverted to legacy shift_months(current_month(), -1): 1 fail (source scan). Throwaway worktree removed (git worktree remove --force + prune); main checkout untouched. BRANCH VERIFICATION: mix format --check-formatted on both new/changed files OK; mix compile --warnings-as-errors OK; mix test test/support + the 3 retention files + test/letflow/support: 107 passed (4 properties, 103 tests), 0 failures; mix letflow.check.test: second run exit 0, 16 partitions all 0 failures (~5156 tests incl. properties), 'OK -- isolated :lua_wallclock_race run also passed clean'. CAVEAT: the FIRST mix letflow.check.test run exited 1 ('real test failure/error') and its partition logs were no longer on disk, so the failing test is unidentified; the rerun was fully green. Not reproduced; ORCH/TEST-RUNNER should watch for a flaky test. git status --porcelain: only test/support/tenant_template_test.exs (M), test/support/partition_clock_test.exs (new), test/specs/ISS-0937.md (new), plus this handoff. Final owned_modules: test/support/partition_clock_test.exs (new), test/support/tenant_template_test.exs, test/specs/ISS-0937.md (new); fix files from step 03 unchanged.",
+    "artifacts_out": [
+      "test/support/partition_clock_test.exs",
+      "test/support/tenant_template_test.exs",
+      "test/specs/ISS-0937.md"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   }
 }

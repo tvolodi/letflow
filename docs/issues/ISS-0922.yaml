@@ -16,4 +16,11 @@ affected_files:
   - lib/letflow/service_catalog/pin_lookup.ex
 queue_ref: Q-922
 github_ref: GH-2096
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0922-pinlookup-tenant-scoped
+resolved_at: "2026-10-01T16:00:00Z"
+resolution: >
+  PinLookup.build/1 and catalog_lookup/2 are tenant-scoped via
+  ServiceCatalog.get_for_tenant/2 (same visibility rule as resolve_pinned_version/3);
+  Engine.start_instance passes the schema-derived tenant_id. Cross-tenant tests added.
+  SECURITY-REVIEWER: PASS. 32 related tests pass.

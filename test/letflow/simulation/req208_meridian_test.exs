@@ -85,9 +85,21 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   confirmed empirically this session (`{:error, :invalid_role_set}` on a
   `role-*` string). Every actor below is granted `PROCESS_OPERATOR`
   (matching REQ-206/207's own precedent) -- per §0.7, claim is not required
-  before complete and `:TasksComplete` unconditionally allows any
-  `PROCESS_OPERATOR`-permissioned actor to complete any task regardless of its
-  `assignee_ref`.
+  before complete.
+
+  (ISS-0942 update: the sentence this note used to end on --
+  "`:TasksComplete` unconditionally allows any `PROCESS_OPERATOR`-permissioned
+  actor to complete any task regardless of its `assignee_ref`" -- was the
+  exact gap ISS-0942 closed (this fixture's own `role-*` HUMAN_TASK
+  attributes were the live-UAT-exploited case, meridian/regulatory-
+  compliance-review-bafin). `POST /tasks/:id/complete` now additionally
+  enforces `Tasks.authorize_completion/3` ahead of
+  `Engine.complete_task/3` -- a `PROCESS_OPERATOR` token alone is no longer
+  sufficient; the calling user must also actually hold/belong to the
+  task's `USER`/`GROUP`/`ROLE` assignee. This is why the setup below now
+  also seeds each `org_structure.yaml` department as a real group and binds
+  the `role-*` names this fixture's HUMAN_TASK nodes use to the department
+  whose member actually drives that step.)
 
   ## REQ-199 status at execution time (AC4)
   `docs/requirements.yaml` REQ-199 entry: `status: done`, stage S6 (re-confirmed
@@ -116,6 +128,7 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   alias Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch
   alias Letflow.Identity
   alias Letflow.Identity.OnboardingRecord
+  alias Letflow.Identity.RoleRegistry
   alias Letflow.Identity.Tenant
   alias Letflow.Instances
   alias Letflow.Repo
@@ -542,6 +555,59 @@ defmodule Letflow.Simulation.Req208MeridianTest do
     marcus = Map.fetch!(users_by_actor_id, "actor-meridian-marcus")
     claudia = Map.fetch!(users_by_actor_id, "actor-meridian-claudia")
 
+    # ISS-0942: org_structure.yaml's departments were seeded as plain groups
+    # but never bound to the "role-*" process_routing_role names the
+    # @simple_loan_origination_graph/@simple_regulatory_review_graph
+    # HUMAN_TASK nodes assign to -- harmless before this fix (this
+    # moduledoc's own now-superseded "Token roles are a separate namespace"
+    # note documented `:TasksComplete` as unconditionally allowing any
+    # PROCESS_OPERATOR to complete any task regardless of assignee_ref), but
+    # POST /tasks/:id/complete now enforces that check
+    # (Tasks.authorize_completion/3) -- the scenario's own actors must
+    # actually hold the role their step completes, same as a real tenant
+    # would be configured.
+    {:ok, groups} = Seed.seed_groups(org_structure, tenant)
+    group_by_name = Map.new(groups, &{&1.name, &1})
+
+    {:ok, _} =
+      RoleRegistry.upsert_role(
+        "role-credit-manager",
+        :process_routing_role,
+        Map.fetch!(group_by_name, "dept-credit-de").id,
+        prefix: schema_name
+      )
+
+    {:ok, _} =
+      RoleRegistry.upsert_role(
+        "role-risk-manager",
+        :process_routing_role,
+        Map.fetch!(group_by_name, "dept-risk").id,
+        prefix: schema_name
+      )
+
+    {:ok, _} =
+      RoleRegistry.upsert_role(
+        "role-compliance-officer",
+        :process_routing_role,
+        Map.fetch!(group_by_name, "dept-compliance").id,
+        prefix: schema_name
+      )
+
+    # julia (dept-credit-de) drives both loan-origination scenarios' step 2b,
+    # which the test's own pre-existing comment (describe "meridian-loan-
+    # origination-above-threshold") documents as actually completing
+    # `items.0` of `GET /tasks?status=PENDING` -- the risk-assessment task
+    # (role-risk-manager), not credit-memo-review as the scenario YAML's step
+    # name assumes, because of `list_tasks/2`'s `inserted_at DESC` ordering.
+    # That ordering quirk predates ISS-0942 and is unrelated to it; julia is
+    # added to dept-risk here only so this pre-existing scenario quirk
+    # continues to complete successfully under the newly-enforced assignee
+    # check, without rewriting the scenario's own documented behavior.
+    {:ok, _} =
+      Identity.add_group_member(Map.fetch!(group_by_name, "dept-risk").id, julia.id,
+        prefix: schema_name
+      )
+
     # Seed simplified loan-origination process (no SERVICE_TASKs; shared by both
     # above-threshold and below-threshold scenarios, per the requirement text).
     simple_loan_name = "SimpleLoanOrigination-" <> unique
@@ -609,14 +675,18 @@ defmodule Letflow.Simulation.Req208MeridianTest do
     # `role-*` strings are `HUMAN_TASK` node `attributes.role` values -- a
     # completely separate namespace the engine uses only for `assignee_ref`
     # resolution (design §0.7), never a token permission. Per §0.7, claim is not
-    # required before complete and `:TasksComplete` always yields unconditional
-    # `:Allow` -- every actor below is granted `PROCESS_OPERATOR` (matching
-    # REQ-206/207's own precedent, `req206_swiftroute_test.exs`/
-    # `req207_vortex_test.exs`), sufficient to complete any task regardless of
-    # its `assignee_ref` string. `task_assigned` checks against a role-attributed
-    # task still assert `outcome in [:pass, :fail]` with the real
-    # `observed.assignee_ref` string as evidence, same limitation REQ-206/207
-    # already recorded (design §0.7).
+    # required before complete -- every actor below is granted `PROCESS_OPERATOR`
+    # (matching REQ-206/207's own precedent, `req206_swiftroute_test.exs`/
+    # `req207_vortex_test.exs`), satisfying the coarse `:TasksComplete` RBAC gate.
+    # `task_assigned` checks against a role-attributed task still assert
+    # `outcome in [:pass, :fail]` with the real `observed.assignee_ref` string as
+    # evidence, same limitation REQ-206/207 already recorded (design §0.7).
+    #
+    # (ISS-0942 update: `:TasksComplete` passing is no longer sufficient on its
+    # own -- `PROCESS_OPERATOR` here only satisfies the RBAC permission check;
+    # the group/role bindings seeded just above additionally satisfy
+    # `Tasks.authorize_completion/3`'s per-task assignee check, now enforced
+    # ahead of `Engine.complete_task/3`.)
     {:ok, %{plaintext: lars_token}} =
       Identity.create_token(lars.id, %{roles: ["PROCESS_OPERATOR"]}, prefix: schema_name)
 

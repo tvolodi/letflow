@@ -194,6 +194,34 @@ defmodule Letflow.Routers.TasksTest do
     }
   end
 
+  # ISS-0942 AC4 fixture: same shape as graph_human_task_end/0, but the
+  # HUMAN_TASK node's assignee is explicitly overridden to `assignee_type`/
+  # `assignee_ref` via `resolve_assignee/1`'s documented precedence
+  # (`node.attributes["assignee_type"]`, if present, always wins over the
+  # `"role"`-derived "ROLE" default -- lib/letflow/engine/task_activation.ex).
+  # `attributes["role"]` is still populated (CHK-09 requires a HUMAN_TASK
+  # node's `role` to be a non-blank string at authoring time regardless of
+  # the derived assignee_type), but its value is irrelevant once
+  # `assignee_type` is explicit -- `assignee_ref` is always `attributes["role"]`
+  # itself, so it is set to the real `assignee_ref` under test.
+  defp graph_human_task_end_for_assignee(assignee_type, assignee_ref) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "task",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => assignee_ref, "assignee_type" => assignee_type}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "task"},
+        %{"id" => "e2", "source" => "task", "target" => "end"}
+      ]
+    }
+  end
+
   defp active_definition!(tenant, graph) do
     attrs = %{
       name: unique_name(),
@@ -231,6 +259,21 @@ defmodule Letflow.Routers.TasksTest do
     assert task.status == :pending
 
     {result.instance_id, task}
+  end
+
+  # ISS-0942 AC4 fixture: same as start_instance_with_pending_task!/2, but
+  # using graph_human_task_end_for_assignee/2 so the resulting PENDING task's
+  # assignee_type/assignee_ref are exactly `assignee_type`/`assignee_ref`,
+  # created through the real Letflow.Engine.create/2 activation path (not a
+  # raw insert_task!/2 fixture) -- needed so Engine.complete_task/3 (called
+  # after Tasks.authorize_completion/3 returns :ok) has a real instance/
+  # snapshot to drive, proving the matching-assignee path genuinely still
+  # reaches and succeeds through the engine, not just the authz pre-check.
+  defp start_instance_with_pending_task_for_assignee!(tenant, assignee_type, assignee_ref) do
+    start_instance_with_pending_task!(
+      tenant,
+      graph_human_task_end_for_assignee(assignee_type, assignee_ref)
+    )
   end
 
   # ── REQ-126 fixture helpers (form-version pinning) ──────────────────────
@@ -1259,9 +1302,24 @@ defmodule Letflow.Routers.TasksTest do
          %{tenant: tenant} do
       {instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
 
+      # ISS-0942: graph_human_task_end/0's HUMAN_TASK node carries
+      # attributes: %{"role" => "approver"}, which resolve_assignee/1
+      # (ISS-0905) derives to assignee_type "ROLE"/assignee_ref "approver" --
+      # POST /tasks/:id/complete now enforces that check (Tasks.authorize_completion/3),
+      # so the caller completing this task must actually hold "approver",
+      # same as a real tenant's PLATFORM_ADMIN would need a role grant to
+      # act as this task's assignee. This test is about the engine
+      # completion flow (AC1), not authorization, so the caller is wired to
+      # satisfy the gate rather than testing it.
+      caller = insert_user!(tenant, %{username: "req085-ac1-caller"})
+      approver_group = insert_group!(tenant, name: "req085-ac1-approvers")
+      insert_group_member!(tenant, approver_group.id, caller.id)
+      insert_role!(tenant, "approver", approver_group.id)
+
       conn =
         build_conn(:post, "/#{task.id}/complete", tenant,
           roles: ["PLATFORM_ADMIN"],
+          user_id: caller.id,
           body: %{"decision" => "approved"}
         )
         |> dispatch()
@@ -1733,6 +1791,296 @@ defmodule Letflow.Routers.TasksTest do
         |> dispatch()
 
       assert conn.status == 400
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0942 -- POST /tasks/:id/complete authorization gap
+  # (`Tasks.authorize_completion/3`, called from `handle_complete/3` before
+  # `Engine.complete_task/3`). See
+  # lib/letflow/design/iss0942-task-complete-authorization-gap.md.
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "ISS-0942 AC1: 403 on a task assigned to a different USER" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0942-ac1")}
+
+    test "a caller who is not the USER assignee gets 403, not 200 -- Engine.complete_task/3 never reached",
+         %{tenant: tenant} do
+      other_user = Ecto.UUID.generate()
+      caller = Ecto.UUID.generate()
+      task = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: other_user})
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["TASK_WORKER"], user_id: caller)
+        |> dispatch()
+
+      assert conn.status == 403
+      body = Jason.decode!(conn.resp_body)
+      assert body["detail"] == "task is assigned to a different user"
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.status == :pending
+      assert unchanged.assignee_type == "USER"
+      assert unchanged.assignee_ref == other_user
+      assert unchanged.completed_at == nil
+    end
+  end
+
+  describe "ISS-0942 AC2: 403 on a task assigned to a GROUP the caller is not a member of" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0942-ac2")}
+
+    test "a caller who does not belong to the assigned GROUP gets 403, task state unchanged",
+         %{tenant: tenant} do
+      caller = Ecto.UUID.generate()
+      group = insert_group!(tenant, name: "iss0942-ac2-group")
+      task = insert_task!(tenant, %{assignee_type: "GROUP", assignee_ref: group.id})
+
+      # caller deliberately never added as a member of `group`
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["TASK_WORKER"], user_id: caller)
+        |> dispatch()
+
+      assert conn.status == 403
+      body = Jason.decode!(conn.resp_body)
+      assert body["detail"] == "caller is not a member of the assigned group"
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.status == :pending
+      assert unchanged.assignee_type == "GROUP"
+      assert unchanged.assignee_ref == group.id
+    end
+  end
+
+  describe "ISS-0942 AC3/AC7: 403 on a task assigned to a ROLE the caller does not hold -- the live UAT exploit" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0942-ac3")}
+
+    test "a caller who does not hold the assigned ROLE gets 403, task state unchanged",
+         %{tenant: tenant} do
+      caller = Ecto.UUID.generate()
+
+      task =
+        insert_task!(tenant, %{assignee_type: "ROLE", assignee_ref: "role-compliance-officer"})
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["TASK_WORKER"], user_id: caller)
+        |> dispatch()
+
+      assert conn.status == 403
+      body = Jason.decode!(conn.resp_body)
+      assert body["detail"] == "caller does not hold the assigned role"
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.status == :pending
+      assert unchanged.assignee_type == "ROLE"
+      assert unchanged.assignee_ref == "role-compliance-officer"
+    end
+
+    # AC7 -- regression test reproducing the EXACT live UAT exploit scenario
+    # from test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml,
+    # meridian/regulatory-compliance-review-bafin, Step 2: "complete as
+    # claudia -> 200 (note she holds no role-compliance-officer; claim as
+    # claudia -> 409)". A ROLE-assigned task, an actor who is NOT a member
+    # of that role: claim correctly 409s (unchanged by this fix); complete
+    # without ever claiming must now ALSO reject (403), not silently
+    # succeed (200) the way live UAT observed pre-fix.
+    test "claim correctly 409s for a non-member actor, and complete (skipping claim entirely) now 403s too -- pre-fix this returned 200",
+         %{tenant: tenant} do
+      claudia = insert_user!(tenant, %{username: "iss0942-ac7-claudia"}).id
+
+      task =
+        insert_task!(tenant, %{assignee_type: "ROLE", assignee_ref: "role-compliance-officer"})
+
+      claim_conn =
+        build_conn(:post, "/#{task.id}/claim", tenant, roles: ["TASK_WORKER"], user_id: claudia)
+        |> dispatch()
+
+      assert claim_conn.status == 409
+      claim_body = Jason.decode!(claim_conn.resp_body)
+      assert claim_body["detail"] == "caller does not hold the assigned role"
+
+      # The exploit path: skip /claim entirely, call /complete directly.
+      complete_conn =
+        build_conn(:post, "/#{task.id}/complete", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: claudia,
+          body: %{}
+        )
+        |> dispatch()
+
+      assert complete_conn.status == 403,
+             "pre-ISS-0942, a non-member actor completed a ROLE-assigned task with HTTP 200 " <>
+               "without ever claiming it -- this must now be 403"
+
+      complete_body = Jason.decode!(complete_conn.resp_body)
+      assert complete_body["detail"] == "caller does not hold the assigned role"
+
+      unchanged = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert unchanged.status == :pending
+      assert unchanged.assignee_type == "ROLE"
+      assert unchanged.assignee_ref == "role-compliance-officer"
+      assert unchanged.completed_at == nil
+      assert unchanged.completed_by == nil
+    end
+  end
+
+  describe "ISS-0942 AC4: matching/permitted assignee and unassigned-task completion are unchanged (no regression)" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0942-ac4")}
+
+    test "a USER-type assignee completing their own task still succeeds with 200", %{
+      tenant: tenant
+    } do
+      caller = Ecto.UUID.generate()
+      {instance_id, task} = start_instance_with_pending_task_for_assignee!(tenant, "USER", caller)
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: caller,
+          body: %{}
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["instance_id"] == instance_id
+    end
+
+    test "a GROUP member completing a GROUP-assigned task still succeeds with 200", %{
+      tenant: tenant
+    } do
+      caller = insert_user!(tenant, %{username: "iss0942-ac4-group-member"}).id
+      group = insert_group!(tenant, name: "iss0942-ac4-group")
+      insert_group_member!(tenant, group.id, caller)
+
+      {instance_id, task} =
+        start_instance_with_pending_task_for_assignee!(tenant, "GROUP", group.id)
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: caller,
+          body: %{}
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["instance_id"] == instance_id
+    end
+
+    test "a ROLE holder completing a ROLE-assigned task still succeeds with 200", %{
+      tenant: tenant
+    } do
+      caller = insert_user!(tenant, %{username: "iss0942-ac4-role-holder"}).id
+      group = insert_group!(tenant, name: "iss0942-ac4-role-group")
+      insert_group_member!(tenant, group.id, caller)
+      insert_role!(tenant, "role-compliance-officer", group.id)
+
+      {instance_id, task} =
+        start_instance_with_pending_task_for_assignee!(tenant, "ROLE", "role-compliance-officer")
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: caller,
+          body: %{}
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["instance_id"] == instance_id
+    end
+
+    # Unlike the USER/GROUP/ROLE cases above, a genuinely unassigned
+    # (assignee_type: nil) task cannot be produced through the real
+    # authoring/activation path -- CHK-09 (Letflow.Definitions.Graph)
+    # requires every HUMAN_TASK node's `attributes["role"]` to be a
+    # non-blank string, so `Definitions.create/2` rejects any graph that
+    # would resolve to a nil assignee_ref/assignee_type (confirmed:
+    # `resolve_assignee/1` only returns `nil` when both `"assignee_type"`
+    # and `"role"` are absent). This precedence branch is therefore tested
+    # directly against `Letflow.Tasks.authorize_completion/3` -- the same
+    # boundary `apply_claim/5`'s own unassigned-task clause is unit-level
+    # verified at elsewhere in this codebase -- rather than through a full
+    # HTTP round-trip that cannot legitimately exist.
+    test "Letflow.Tasks.authorize_completion/3 returns :ok for a genuinely unassigned task -- permissive case unchanged",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{})
+      assert task.assignee_type == nil
+
+      assert :ok =
+               Letflow.Tasks.authorize_completion(task.id, Ecto.UUID.generate(),
+                 prefix: tenant.schema_name
+               )
+    end
+  end
+
+  describe "ISS-0942 AC5: invalid_task_id/task_not_found responses are unchanged" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0942-ac5")}
+
+    test "a malformed task id on complete still returns 400", %{tenant: tenant} do
+      conn =
+        build_conn(:post, "/not-a-uuid/complete", tenant, roles: ["TASK_WORKER"], body: %{})
+        |> dispatch()
+
+      assert conn.status == 400
+    end
+
+    test "a nonexistent task id on complete still returns 404", %{tenant: tenant} do
+      conn =
+        build_conn(:post, "/#{Ecto.UUID.generate()}/complete", tenant,
+          roles: ["TASK_WORKER"],
+          body: %{}
+        )
+        |> dispatch()
+
+      assert conn.status == 404
+    end
+  end
+
+  describe "ISS-0942: claim's own 409 mapping of the three assignee-mismatch atoms is unaffected by this fix" do
+    setup do: %{
+            tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0942-claim-unaffected")
+          }
+
+    test "claim still returns 409 (not 403) for USER/GROUP/ROLE assignee mismatches", %{
+      tenant: tenant
+    } do
+      other_user = Ecto.UUID.generate()
+      user_task = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: other_user})
+
+      user_conn =
+        build_conn(:post, "/#{user_task.id}/claim", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: Ecto.UUID.generate()
+        )
+        |> dispatch()
+
+      assert user_conn.status == 409
+
+      group = insert_group!(tenant, name: "iss0942-claim-unaffected-group")
+      group_task = insert_task!(tenant, %{assignee_type: "GROUP", assignee_ref: group.id})
+
+      group_conn =
+        build_conn(:post, "/#{group_task.id}/claim", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: Ecto.UUID.generate()
+        )
+        |> dispatch()
+
+      assert group_conn.status == 409
+
+      role_task = insert_task!(tenant, %{assignee_type: "ROLE", assignee_ref: "role-whatever"})
+
+      role_conn =
+        build_conn(:post, "/#{role_task.id}/claim", tenant,
+          roles: ["TASK_WORKER"],
+          user_id: Ecto.UUID.generate()
+        )
+        |> dispatch()
+
+      assert role_conn.status == 409
     end
   end
 

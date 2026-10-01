@@ -5826,8 +5826,14 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 10
+    entries: 11
     note: >
+      Incremented to 11 by DOC-UPDATER's own ISS-0942 done-event append
+      (fix/ISS-0942-task-complete-authorization-gap, 2026-10-01T10:15:00Z)
+      -- `grep -c "^  - req:" docs/status/requirement_status.v25.yaml` =
+      11 on-disk entries; 358 lines / 21559 bytes, well under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
+
       Re-incremented to 10 by ORCH resolving a merge conflict between
       fix/ISS-0935-vortex-entity-seed and origin/main: this branch's own
       ISS-0935 SCOPE-CHANGE done-event append (DOC-UPDATER, at

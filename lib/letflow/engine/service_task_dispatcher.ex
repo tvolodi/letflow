@@ -1,7 +1,7 @@
 defmodule Letflow.Engine.ServiceTaskDispatcher do
   @moduledoc """
   REQ-214 — SERVICE_TASK dispatch-orchestration core: HTTP transport, the
-  SSRF gate, the `service_catalog` stub, and the poll-claim-decide loop
+  SSRF gate, and the poll-claim-decide loop
   against the `service_task_dispatches` table. See
   `lib/letflow/design/service_task_dispatcher.md` for the full design this
   module implements (gate-approved after one rework round). Plain Ecto
@@ -21,38 +21,32 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
   activation-time caller that renders a URL template and INSERTs the first
   `service_task_dispatches` row, are both REQ-215's job — not built here.
 
-  ## `route_kind: :catalog_service` — stub only (design §5.3)
+  ## `route_kind: :catalog_service` — snapshot-driven (ISS-0917)
 
-  `catalog_lookup_stub/2` returns `{:error, :not_registered}`
-  unconditionally for every `service_id`, because S6's real
-  `service_catalog` subsystem (a DB-backed lookup resolving a `service_id`
-  to a URL template) does not exist anywhere in this codebase yet. This is a
-  REAL, CURRENT LIMITATION, not a placeholder to silently work around — a
-  future S6 requirement is expected to replace this stub with a real
-  lookup. No dispatch row with `route_kind: :catalog_service` can ever
-  reach `:advance` through this module's own poll loop today; every such
-  attempt gives up immediately (§5.3, §6, INV-STD-8).
-
-  BLOCKER fix (TEST-DESIGNER finding, queue task 415): `do_attempt_dispatch/2`
-  explicitly branches on `config.route_kind` — `:inline_url` goes through
-  `http_transport/3` as before; `:catalog_service` calls
-  `catalog_lookup_stub/2` instead and never reaches `:httpc.request/4` at
-  all. The stub's `{:error, :not_registered}` is folded into the SAME
-  `:request_build_error` failure_kind the SSRF-block and malformed-config
-  paths already use — deterministic, non-retriable, no new failure_kind
-  introduced.
+  Catalog resolution happens at activation, in `Letflow.Engine`: the engine
+  resolves the instance's PINNED `service_catalog` version
+  (`Letflow.ServiceCatalog.resolve_pinned_version/3`), renders its
+  `endpoint_url`, and freezes the result into
+  `config_snapshot["rendered_url"]` exactly as for an inline URL. This
+  module therefore dispatches the frozen `rendered_url` for BOTH route kinds
+  and never calls the catalog (INV-STD-8, restated: a `:catalog_service` row
+  is dispatched only from a URL frozen at activation from the instance's
+  pinned catalog version). A `:catalog_service` row whose `rendered_url` is
+  nil, empty or not a binary can never build a request: it is classified
+  `:request_build_error` (deterministic, non-retriable) with zero
+  `http_transport/3`/`:httpc.request/4` calls.
 
   ## SSRF gate placement (INV-9, BLOCKER — design §5.2)
 
   `http_transport/3` is this module's single `transport_fun()`
   implementation and the ONLY call site in this module (and in
   `Poller`) that reaches `:httpc.request/4`. `Letflow.Webhooks.UrlValidator.validate/2`
-  is called immediately before every such call, for `route_kind: :inline_url`
-  (the only `route_kind` that ever reaches `http_transport/3` — see the
-  `:catalog_service` section above) — unconditionally, with no bypass path
-  in production. A blocked URL never reaches `:httpc.request/4`; it is
-  classified `{:request_build_error, :target_url_not_allowed}` instead
-  (design §5.2, §6).
+  is called immediately before every such call, for BOTH
+  `route_kind: :inline_url` and `route_kind: :catalog_service` —
+  unconditionally, with no bypass path in production. A blocked URL never
+  reaches `:httpc.request/4`; it is classified
+  `{:request_build_error, :target_url_not_allowed}` instead (design §5.2,
+  §6).
 
   ## Test-only SSRF-validation bypass seam (TEST-DESIGNER finding, queue
   task 415)
@@ -398,24 +392,6 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
   defp to_string_or_nil(body), do: to_string(body)
 
   # ===========================================================================
-  # catalog_lookup_stub/2 -- design §5.3
-  # ===========================================================================
-
-  @doc """
-  Unconditional `{:error, :not_registered}` for every input, matching
-  REQ-056's `catalog_lookup_fun()` type exactly. S6's real
-  `service_catalog` does not exist anywhere in this codebase yet — this
-  stub exists so the type/contract is concretely satisfied, not to silently
-  approximate real catalog resolution.
-  """
-  @spec catalog_lookup_stub(service_id :: String.t(), tenant_id :: Ecto.UUID.t()) ::
-          {:error, :not_registered}
-  def catalog_lookup_stub(service_id, tenant_id)
-      when is_binary(service_id) and is_binary(tenant_id) do
-    {:error, :not_registered}
-  end
-
-  # ===========================================================================
   # claim_due_dispatch_ids/2 -- design §5.4, the hot claim query
   # ===========================================================================
 
@@ -752,17 +728,31 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
             handle_failure(row, tenant_schema, config.retry_limit, failure_kind)
         end
 
-      # BLOCKER fix (TEST-DESIGNER finding, queue task 415): route_kind:
-      # :catalog_service must call catalog_lookup_stub/2, not
-      # http_transport/3 -- S6's real service_catalog does not exist yet
-      # (§5.3 above), so this row can never advance today. The stub's
-      # {:error, :not_registered} is classified identically to a
-      # {:request_build_error, _} raw_outcome would be (design §5.2/§5.6's
-      # existing :request_build_error precedent) -- no new failure_kind,
-      # and :httpc.request/4 is never called for this route_kind at all.
+      # ISS-0917: a :catalog_service row is snapshot-driven exactly like an
+      # inline row -- Letflow.Engine resolved the instance's pinned catalog
+      # version at activation and froze the rendered endpoint into
+      # config_snapshot["rendered_url"]; this module never consults the
+      # catalog. The same http_transport/3 (and its SSRF gate) runs on every
+      # attempt. A row without a usable frozen URL can never build a request:
+      # it is classified :request_build_error with zero transport calls.
       {:ok, %ServiceTask.Config{route_kind: :catalog_service} = config} ->
-        {:error, :not_registered} = catalog_lookup_stub(config.service_id, row.tenant_id)
-        handle_failure(row, tenant_schema, config.retry_limit, :request_build_error)
+        case row.config_snapshot["rendered_url"] do
+          rendered_url when is_binary(rendered_url) and rendered_url != "" ->
+            rendered_body = row.config_snapshot["body_template"]
+
+            case ServiceTask.classify_failure_kind(
+                   http_transport(config, rendered_url, rendered_body)
+                 ) do
+              {:success, decoded_body} ->
+                handle_success(row, tenant_schema, decoded_body)
+
+              failure_kind ->
+                handle_failure(row, tenant_schema, config.retry_limit, failure_kind)
+            end
+
+          _missing_or_unusable ->
+            handle_failure(row, tenant_schema, config.retry_limit, :request_build_error)
+        end
 
       {:error, _malformed_reason} ->
         # BLOCKER fix (SECURITY-REVIEWER, queue task 415) -- a malformed

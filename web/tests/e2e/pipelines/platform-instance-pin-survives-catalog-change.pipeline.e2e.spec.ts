@@ -21,10 +21,11 @@
  *     for every SERVICE_TASK's `service_id` attribute across the WHOLE
  *     graph at instance-start time, structurally — not only for nodes the
  *     token has reached (`pin_resolver.ex`'s own "freezes every versioned
- *     dependency... at case-start time"). The human task is never
- *     completed in this spec: the long-running case stays parked there for
- *     the scenario's entire "left part-way through" duration, and its pin
- *     is already frozen the moment it started regardless.
+ *     dependency... at case-start time"). The long-running
+ *     case's human task is never completed in this spec: it stays parked there
+ *     for the scenario's entire "left part-way through" duration, and its pin
+ *     is already frozen the moment it started regardless. (A second in-flight
+ *     case's task IS completed in step 04b - see the ISS-0917 note below.)
  *
  * ── Step-2 ordering: RETIRE then PUBLISH, not publish-then-retire ──
  * The scenario's own prose is "publishes the newer version... and retires
@@ -46,33 +47,56 @@
  * after, resolves against the CURRENT row (now version 2, ACTIVE) (EO-002).
  * Both actions are still performed from the GUI exactly once each (AC2/AC3).
  *
- * ── Scope note (deliberately not exercised): SERVICE_TASK dispatch ──
- * `Letflow.Engine.ServiceTaskDispatcher`'s own moduledoc states a
- * `route_kind: :catalog_service` dispatch "can never reach :advance through
- * this module's own poll loop today" (no real service_catalog-backed HTTP
- * dispatch target exists yet — a separate, already-named gap, out of
- * REQ-432's scope). This spec never completes the long-running case's
- * HUMAN_TASK and therefore never drives a token onto the SERVICE_TASK node
- * — it only needs the pin FROZEN (which happens at instance-start,
- * unconditionally) and the case to remain in a non-terminal status so the
- * rebind action (step 5) stays possible. Verifying the dispatcher's own
- * correctness is out of scope (design "Scope discipline" — no
- * lib/letflow/service_catalog.ex/PinResolver/PinRebind file is touched by
- * this requirement).
+ * ── SERVICE_TASK dispatch IS exercised (ISS-0917, step 04b) ──
+ * This header used to record that SERVICE_TASK dispatch was deliberately NOT
+ * exercised, because a catalog-referencing SERVICE_TASK could not execute
+ * (`catalog_lookup_stub/2` was an unconditional `{:error, :not_registered}`,
+ * so completing the preceding HUMAN_TASK ended in EXECUTION_ERROR and HTTP
+ * 500). ISS-0917 fixed that: the engine now resolves the node's `service_id`
+ * through the instance's PINNED catalog version at activation and freezes
+ * the rendered endpoint into the dispatch row. Design:
+ * `lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md`
+ * section 6.4. Step 04b therefore completes a SECOND in-flight case's
+ * HUMAN_TASK AFTER v1 was retired and v2 published, and asserts:
+ *   - UNCONDITIONAL (no network, no poller): HTTP 200, `instance_status`
+ *     ACTIVE, history holds TASK_COMPLETED and no EXECUTION_ERROR.
+ *   - ENFORCED BY DEFAULT: the case reaches COMPLETED. The registered v1
+ *     endpoint answers 2xx JSON; the published v2 endpoint is a TRAP that
+ *     answers non-2xx. Reaching COMPLETED therefore proves the dispatch used
+ *     the PINNED v1 endpoint (the e2e cannot read `rendered_url` directly; no
+ *     HTTP route exposes `service_task_dispatches`).
+ * Endpoints (both must be public https; UrlValidator blocks loopback and
+ * `example.test` does not resolve):
+ *   v1   = <SERVICE_TASK_MOCK_BASE_URL, default https://httpbin.org/anything>/shared-connection/v1
+ *   trap = new URL(base).origin + SERVICE_TASK_MOCK_TRAP_PATH (default /status/503)
+ * The trap is built from the ORIGIN, not base + path: httpbin `/anything/...`
+ * answers 200 for any suffix, which would make the trap succeed and hide a
+ * wrong-version dispatch. A non-httpbin mock needs a SERVICE_TASK_MOCK_TRAP_PATH
+ * on the same origin that answers non-2xx (and v1's path must answer 2xx JSON
+ * object). If none exists, set E2E_SKIP_SERVICE_TASK_POLL=1: that skips ONLY
+ * the COMPLETED-poll assertion, with a loud console.warn and a
+ * `skipped-assertion` test annotation; the unconditional assertions still run.
+ * The dispatcher poller defaults ON outside test config
+ * (`start_service_task_dispatcher`; only config/test.exs sets false), and the
+ * target needs outbound HTTPS to the mock host. The endpoint-identity proof at
+ * data level stays in ExUnit (T1/T2). The pre-existing long-running case is
+ * NOT completed here: step 06 rebinds it and needs it non-terminal.
  *
  * Chain topology:
  *   pre-check services → login as platform-admin
  *   → 01: register the shared-connection service (API) + create/activate
  *         the process definition (API)
- *   → 02: start the long-running case (GUI)                    [step 1]
+ *   → 02: start the long-running case + a second in-flight case (GUI) [step 1]
  *   → 03: retire v1, then publish v2 of the shared connection (GUI) [step 2]
  *   → 04: long-running case's pins panel still shows v1/resolved  [EO-001/EO-004]
+ *   → 04b: complete the second in-flight case's task; pinned v1 dispatch
+ *          succeeds, no EXECUTION_ERROR (API) [scenario step 3, EO-001/EO-004, ISS-0917]
  *   → 05: start the new case (GUI); both cases show distinct pinned
  *         versions                                            [step 4, EO-002/EO-003]
  *   → 06: rebind the long-running case's pin onto v2, with a reason (GUI) [step 5]
  *   → 07: History tab shows the rebind with the operator's resolved name,
  *         prior/new version, and the reason verbatim               [EO-005]
- *   → cleanup: cancel both instances
+ *   → cleanup: cancel every started instance
  */
 
 import { test, expect } from '@playwright/test'
@@ -84,6 +108,7 @@ import {
   navigateSpa,
   authHeaders,
   extractIdFromUrl,
+  jwtSubject,
   shot,
 } from '../pipeline'
 import { assertServiceReadiness } from '../helpers'
@@ -91,13 +116,23 @@ import { typeIntoTestIdInput } from '../type-into-input'
 
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
 
+// ISS-0917: controllable, public-https SERVICE_TASK endpoints (see header).
+const SERVICE_TASK_MOCK_BASE_URL = (process.env.SERVICE_TASK_MOCK_BASE_URL ?? 'https://httpbin.org/anything').replace(/\/+$/, '')
+const SERVICE_TASK_MOCK_TRAP_PATH = process.env.SERVICE_TASK_MOCK_TRAP_PATH ?? '/status/503'
+const V1_ENDPOINT_URL = `${SERVICE_TASK_MOCK_BASE_URL}/shared-connection/v1`
+// Built from the ORIGIN on purpose: `<base>/status/503` under httpbin /anything is a 200.
+const V2_TRAP_ENDPOINT_URL = new URL(SERVICE_TASK_MOCK_BASE_URL).origin + SERVICE_TASK_MOCK_TRAP_PATH
+const SKIP_SERVICE_TASK_POLL = process.env.E2E_SKIP_SERVICE_TASK_POLL === '1'
+
 interface PinSurvivesPipelineState {
   adminToken: string
+  adminSub: string
   serviceId: string
   definitionId: string
   definitionName: string
   definitionVersion: string
   longRunningCaseId: string
+  pinDispatchCaseId: string
   newCaseId: string
   rebindReason: string
 }
@@ -142,6 +177,8 @@ async function startInstanceViaGui(page: import('@playwright/test').Page, defini
 
 test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)', () => {
   test('a case in progress keeps its pinned version through publish/retire, a later case gets the new one, and a deliberate rebind is recorded with who/what/why', async ({ page, request }) => {
+    // Step 04b polls for the SERVICE_TASK to advance (dispatcher poll interval ~5s).
+    test.setTimeout(300_000)
     await assertServiceReadiness(request, API_BASE_URL)
 
     const adminToken = await getKeycloakToken(request)
@@ -154,13 +191,14 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
 
     const pl = createPipeline<PinSurvivesPipelineState>('platform-instance-pin-survives-catalog-change', { page, request })
     pl.state.adminToken = adminToken
+    pl.state.adminSub = jwtSubject(adminToken)
     pl.state.serviceId = serviceId
     pl.state.definitionName = definitionName
     pl.state.rebindReason = rebindReason
 
     // Cleanup: cancel both instances (scenario's own cleanup block).
     pl.onCleanup(async (s) => {
-      for (const id of [s.longRunningCaseId, s.newCaseId]) {
+      for (const id of [s.longRunningCaseId, s.pinDispatchCaseId, s.newCaseId]) {
         if (!id) continue
         await request.post(`${API_BASE_URL}/api/v1/instances/${id}/cancel`, {
           headers: authHeaders(s.adminToken),
@@ -175,7 +213,7 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
         headers: authHeaders(s.adminToken),
         data: {
           service_id: s.serviceId,
-          endpoint_url: 'https://example.test/shared-connection/v1',
+          endpoint_url: V1_ENDPOINT_URL,
           scope: 'global',
           auth_method: 'NONE',
           timeout_ms: 5000,
@@ -201,7 +239,10 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
                 id: 'n2',
                 node_type: 'HUMAN_TASK',
                 label: 'Hold before shared connection',
-                attributes: { role: 'admin-user', assignee_type: 'user', assignee_ref: 'admin-user' },
+                // ISS-0917 6.4 item 6: `role` is what the engine reads for the assignee ref;
+                // UPPERCASE 'USER' matches Tasks.apply_completion_authz/3's USER clause, which
+                // compares against the caller's actor id (= token `sub`).
+                attributes: { role: s.adminSub, assignee_type: 'USER', assignee_ref: s.adminSub },
               },
               {
                 id: 'n3',
@@ -237,6 +278,13 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
       s.longRunningCaseId = await startInstanceViaGui(page, s.definitionId, s.definitionName, s.definitionVersion)
       pl.gate(!!s.longRunningCaseId, 'long-running case ID must be present in URL after start')
       await shot(page, 'platform-instance-pin-survives-catalog-change', '02-long-running-case-started')
+
+      // ISS-0917: a SECOND in-flight case, started from the same definition so it
+      // pins v1 exactly like the long-running case. Completed in step 04b.
+      await navigateSpa(page, '/instances')
+      s.pinDispatchCaseId = await startInstanceViaGui(page, s.definitionId, s.definitionName, s.definitionVersion)
+      pl.gate(!!s.pinDispatchCaseId, 'pin-dispatch case ID must be present in URL after start')
+      pl.gate(s.pinDispatchCaseId !== s.longRunningCaseId, 'pin-dispatch case must be a distinct instance from the long-running one')
     })
 
     // ── Step 03: retire v1, then publish v2 (GUI) — scenario step 2 ───────────
@@ -272,7 +320,7 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
       await row.getByRole('button', { name: 'Publish new version' }).dispatchEvent('click')
       await expect(page.getByTestId('publish-version-dialog')).toBeVisible({ timeout: 8_000 })
       await typeIntoTestIdInput(page, 'publish-version-input', '2')
-      await typeIntoTestIdInput(page, 'publish-endpoint-url-input', 'https://example.test/shared-connection/v2')
+      await typeIntoTestIdInput(page, 'publish-endpoint-url-input', V2_TRAP_ENDPOINT_URL)
       await typeIntoTestIdInput(page, 'publish-timeout-ms-input', '5000')
       await page.getByTestId('publish-version-submit').dispatchEvent('click')
       await expect(page.getByTestId('publish-version-dialog')).not.toBeVisible({ timeout: 10_000 })
@@ -316,6 +364,80 @@ test.describe('Pipeline: platform-instance-pin-survives-catalog-change (PW-03)',
       pl.gate(inst.status === 'ACTIVE', `long-running case must remain ACTIVE, got ${inst.status}`)
 
       await shot(page, 'platform-instance-pin-survives-catalog-change', '04-long-running-case-pin-unaffected')
+    })
+
+    // ── Step 04b: ISS-0917 — complete the in-flight task AFTER retire+publish ──
+    await pl.step('04b: scenario step 3 / EO-001/EO-004 — the in-flight step completes without error and dispatches the PINNED version', async (s) => {
+      const tasksResp = await request.get(
+        `${API_BASE_URL}/api/v1/tasks?instance_id=${s.pinDispatchCaseId}`,
+        { headers: authHeaders(s.adminToken) },
+      )
+      pl.gate(tasksResp.ok(), `task lookup failed: ${tasksResp.status()} ${await tasksResp.text()}`)
+      const tasksBody = (await tasksResp.json()) as { items?: Array<{ id: string }> }
+      const taskId = tasksBody.items?.[0]?.id ?? ''
+      pl.gate(!!taskId, 'a pending HUMAN_TASK must exist for the pin-dispatch case')
+
+      // Same admin token the HUMAN_TASK was assigned to (assignee_ref = its `sub`).
+      const completeResp = await request.post(`${API_BASE_URL}/api/v1/tasks/${taskId}/complete`, {
+        headers: { ...authHeaders(s.adminToken), 'Content-Type': 'application/json' },
+        data: { output_variables: {} },
+      })
+      // (a) the ISS-0917 acceptance: no 500 when the next node is a catalog SERVICE_TASK.
+      pl.gate(
+        completeResp.status() === 200,
+        `task complete must return HTTP 200 (ISS-0917), got ${completeResp.status()} ${await completeResp.text()}`,
+      )
+      const completed = await completeResp.json() as { instance_status?: string }
+      pl.gate(
+        String(completed.instance_status).toUpperCase() === 'ACTIVE',
+        `instance_status right after completion must be active (SERVICE_TASK dispatch is asynchronous), got ${completed.instance_status}`,
+      )
+
+      const fetchEventTypes = async (): Promise<string[]> => {
+        const histResp = await request.get(
+          `${API_BASE_URL}/api/v1/instances/${s.pinDispatchCaseId}/history?page_size=200`,
+          { headers: authHeaders(s.adminToken) },
+        )
+        pl.gate(histResp.ok(), `instance history fetch failed: ${histResp.status()}`)
+        const hist = await histResp.json() as { items?: Array<{ event_type: string }> }
+        return (hist.items ?? []).map((e) => e.event_type)
+      }
+
+      // (c-immediate) TASK_COMPLETED present, no EXECUTION_ERROR - no network, no poller needed.
+      const eventsNow = await fetchEventTypes()
+      pl.gate(!eventsNow.includes('EXECUTION_ERROR'), `history must hold no EXECUTION_ERROR after completion, got ${eventsNow.join(',')}`)
+      pl.gate(eventsNow.includes('TASK_COMPLETED'), `history must hold TASK_COMPLETED after completion, got ${eventsNow.join(',')}`)
+
+      // (b) ENFORCED by default: the case reaches COMPLETED. v1 answers 2xx JSON, the
+      // v2 trap answers non-2xx, so COMPLETED proves the PINNED v1 endpoint was used.
+      if (SKIP_SERVICE_TASK_POLL) {
+        const msg =
+          'E2E_SKIP_SERVICE_TASK_POLL=1: SKIPPING the COMPLETED-poll assertion of step 04b. ' +
+          'Lost coverage: proof that the SERVICE_TASK dispatched the PINNED v1 endpoint (not the v2 trap) and advanced to END. ' +
+          'Unconditional assertions (HTTP 200, ACTIVE, TASK_COMPLETED, no EXECUTION_ERROR) still ran.'
+        console.warn(`\n!!! ${msg}\n`)
+        test.info().annotations.push({ type: 'skipped-assertion', description: msg })
+      } else {
+        const deadline = Date.now() + 120_000
+        let status = ''
+        while (Date.now() < deadline) {
+          const instResp = await request.get(`${API_BASE_URL}/api/v1/instances/${s.pinDispatchCaseId}`, {
+            headers: authHeaders(s.adminToken),
+          })
+          pl.gate(instResp.ok(), `instance fetch failed: ${instResp.status()}`)
+          status = ((await instResp.json()) as { status: string }).status
+          if (status === 'COMPLETED' || status === 'ERROR') break
+          await new Promise((r) => setTimeout(r, 2_000))
+        }
+        const eventsAfter = await fetchEventTypes()
+        pl.gate(
+          status === 'COMPLETED',
+          `pin-dispatch case must reach COMPLETED via the pinned v1 endpoint (${V1_ENDPOINT_URL}); the v2 trap (${V2_TRAP_ENDPOINT_URL}) must not be used. ` +
+            `Last status "${status}" (ERROR or timeout). Events: ${eventsAfter.join(',')}. ` +
+            'If the mock host is unreachable or not httpbin-compatible, see the header (SERVICE_TASK_MOCK_BASE_URL / SERVICE_TASK_MOCK_TRAP_PATH / E2E_SKIP_SERVICE_TASK_POLL).',
+        )
+        pl.gate(!eventsAfter.includes('EXECUTION_ERROR'), `history must hold no EXECUTION_ERROR, got ${eventsAfter.join(',')}`)
+      }
     })
 
     // ── Step 05: start the new case; both cases show distinct versions ────────

@@ -1,0 +1,19 @@
+id: ISS-0922
+title: "PinLookup.catalog_lookup/1 is not tenant-scoped (global catalog lookup at instance start has no visibility check)"
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T14:06:29Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  Found by ISSUE-FIXER in WF03-ISS0917-20261001. lib/letflow/service_catalog/pin_lookup.ex
+  catalog_lookup/1 does Repo.get(Entry, service_id) with no tenant argument or scope/owner_tenant_id
+  visibility check; the activation-time ServiceScopeValidator is the only guard. Make start-time pin
+  resolution apply the same get_for_tenant visibility rule that
+  ServiceCatalog.resolve_pinned_version/3 now uses (shared visible_to_tenant/2). Severity MINOR/MAJOR
+  (tenant-data path; needs SECURITY-REVIEWER). Owner ELIXIR-DEV (via CODE-DESIGNER).
+affected_files:
+  - lib/letflow/service_catalog/pin_lookup.ex
+queue_ref: Q-922
+github_ref: GH-2096
+status: open

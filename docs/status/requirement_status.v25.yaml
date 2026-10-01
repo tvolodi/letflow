@@ -119,3 +119,41 @@ history:
       231/231 passed. Backend suite 5082 passed / 0 failures via ORCH's own
       serial mix test run, after two RELEASE-VALIDATOR attempts were blocked
       by host memory exhaustion. status: done in docs/requirements.yaml.
+  - req: REQ-427
+    event: started
+    agent: ORCH
+    at: "2026-09-30T21:47:05Z"
+    note: >
+      WF-02 run WF02-REQ427-20261001. Eligible now that REQ-294 and REQ-426
+      are both done (depends_on satisfied). Verified GH#1881 (letflow-queue
+      task 864) is OPEN with no blocking labels -- no mechanical reopen
+      needed this time, unlike REQ-294. Branch feature/WF02-REQ427-20261001
+      created from freshly-pulled origin/main (93cdc0fd) and pushed.
+      status: in_progress in docs/requirements.yaml.
+  - req: REQ-427
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T00:49:05Z"
+    note: >
+      apps/mobile/lib/renderers/form/form.dart (now the real form renderer,
+      no longer a placeholder) plus buildFileUploadFormData in
+      api_client.dart, composing REQ-294's Dart Expr evaluator and REQ-426's
+      six-state renderer wrapper. One TEST-DESIGN-VALIDATOR rework cycle:
+      AC4 (network-unavailable submit writes nothing) was vacuous as first
+      written (no assertion could actually fail); fixed with a counting
+      repository spy asserting zero writes. Full gate chain:
+      CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS (out of scope --
+      no tenant-data path touched), REVIEWER PASS, TEST-DESIGN-VALIDATOR
+      PASS after the AC4 rework, TEST-RUNNER PARTIAL (an ORCH bookkeeping
+      gap, not a code defect; fixed), RELEASE-VALIDATOR PASS via an
+      independent re-run -- mobile suite 252/252, backend full suite
+      5079/5079 on an isolated DB, all 7 acceptance criteria independently
+      confirmed. ISS-0937 filed during this run for flaky
+      EventStore/retention tests, unrelated to REQ-427 and not a blocker.
+      status: done in docs/requirements.yaml. Design doc
+      lib/letflow/design/req427-form-renderer.md's OQ-1/OQ-6 field-type
+      reconciliation applied to docs/mobile/requirements.md's MOB-4 entry in
+      this same commit (never papered over, per this requirement's own
+      instruction). letflow-queue task 864 (GH#1881) still needs
+      release_lock(status=done) -- not called from here; DOC-UPDATER does
+      not call the queue.

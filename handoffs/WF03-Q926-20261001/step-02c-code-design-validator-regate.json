@@ -1,0 +1,42 @@
+{
+  "handoff_id": "550b4d9f-5355-4f01-ab80-97617012db85",
+  "run_id": "WF03-Q926-20261001",
+  "workflow_id": "WF-03",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q926-20261001/step-02c-code-design-validator-regate.json",
+  "created_at": "2026-10-01T18:34:43Z",
+  "started_at": "2026-10-01T18:34:43Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0926.yaml": "id: ISS-0926\ntitle: \"SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)\"\ndiscovered_by: CODE-DESIGNER\ndiscovered_in_run: WF03-Q915-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T16:40:34Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.\n  Found while fixing ISS-0932.\nrelated:\n  - ISS-0932\nqueue_ref: Q-926\ngithub_ref: GH-2106\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0926-service-task-body-template-rendering.md",
+      "handoffs/WF03-Q926-20261001/step-02b-code-design-validator.json",
+      "handoffs/WF03-Q926-20261001/step-02r1-code-designer-rework.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q926-20261001",
+    "queue_ref": "Q-926",
+    "github_ref": "GH-2106"
+  },
+  "task": {
+    "description": "WF-03 Step 2b re-gate (rework iteration 1 verification) of the ISS-0926 design lib/letflow/design/iss0926-service-task-body-template-rendering.md, reworked by CODE-DESIGNER (handoff step-02r1-code-designer-rework.json). Branch feature/WF03-Q926-20261001 checked out; claim status IN_PROGRESS only, flip to COMPLETED on finishing. First, independently re-check each of your prior 3 MAJOR + 4 MINOR issues (handoffs/WF03-Q926-20261001/step-02b-code-design-validator.json) against the reworked design and against the real code (deps/jason/lib for the escape guarantees - actually run a one-liner with mix run --no-start -e or elixir script using the pinned Jason to confirm the claimed outputs for quote, backslash, '/', U+2028/9, control chars, DEL, non-ASCII, if feasible without Postgres; sub_process.ex ~877-894; test helper existence for T14). Second, re-read the full design fresh for any NEW defect the rework introduced (consistency between sections, test IDs referenced exist, no leftover claim that the e10 notice is dispatched, no implementation code). Return FAIL with numbered issues or PASS. Modify only this handoff (result, completed_at from real clock), commit it only, push origin HEAD. Do not touch registry.json or orchestrator.log.",
+    "acceptance_criteria": [
+      "Each prior issue verified fixed or re-raised",
+      "Jason claims empirically confirmed or stated not runnable",
+      "No new defects, or listed",
+      "No file modified except this handoff"
+    ]
+  }
+}

@@ -541,7 +541,7 @@ defmodule Letflow.Engine do
            PinResolver.resolve(
              graph,
              definition,
-             pin_lookup(attrs, prefix),
+             pin_lookup(attrs, tenant_id),
              pin_overrides(attrs)
            ),
          :ok <- PinResolver.validate_initial_variables(initial_variables, variable_json_schema),
@@ -1262,22 +1262,20 @@ defmodule Letflow.Engine do
   end
 
   # design doc §8 -- attrs[:pin_lookup] surface: a caller-supplied
-  # PinResolver.Lookup.t(), or (REQ-373 design §6) Letflow.ServiceCatalog.PinLookup.build/0
+  # PinResolver.Lookup.t(), or (REQ-373 design §6) Letflow.ServiceCatalog.PinLookup.build/1
   # -- the real, catalog-backed Lookup -- when none is given. Only this
   # second Map.get/3 argument changed (was PinResolver.default_lookup/0);
   # attrs[:pin_lookup], when a caller supplies one, is still returned
-  # verbatim and untouched. PinLookup.build/0 itself copies
+  # verbatim and untouched. PinLookup.build/1 itself copies
   # module_lookup/variable_schema_lookup verbatim from
   # PinResolver.default_lookup/0 (see that module's own @doc), so every
   # existing variable_schema/module_ref resolution path is byte-unchanged by
   # this wiring -- only a catalog_entry (SERVICE_TASK service_id) reference's
-  # resolution outcome can differ. prefix is unused today (mirrors the
-  # design's own 2-arity spec) -- kept as a named parameter rather than
-  # dropped, since a real future Lookup builder plausibly needs the tenant
-  # schema to construct itself.
-  @spec pin_lookup(attrs :: map(), prefix :: String.t() | nil) :: PinResolver.Lookup.t()
-  defp pin_lookup(attrs, _prefix) do
-    Map.get(attrs, :pin_lookup, PinLookup.build())
+  # resolution outcome can differ. tenant_id (ISS-0922) scopes the catalog
+  # lookup to services visible to the starting tenant.
+  @spec pin_lookup(attrs :: map(), tenant_id :: Ecto.UUID.t()) :: PinResolver.Lookup.t()
+  defp pin_lookup(attrs, tenant_id) do
+    Map.get(attrs, :pin_lookup, PinLookup.build(tenant_id))
   end
 
   # design doc §8 -- attrs[:pin_overrides] surface, [] when absent.

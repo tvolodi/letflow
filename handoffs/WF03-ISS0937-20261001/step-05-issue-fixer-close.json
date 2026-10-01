@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0937-20261001/step-05-issue-fixer-close.json",
   "created_at": "2026-10-01T01:42:23Z",
   "started_at": "2026-10-01T01:42:23Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T01:42:47Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -44,5 +44,13 @@
       "No premature GH close",
       "Lint result quoted"
     ]
-  }
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Closed docs/issues/ISS-0937.yaml: status: resolved, resolved_in_run: WF03-ISS0937-20261001, resolved_at 2026-10-01T01:42:37Z (resolved/resolved_in_run/resolved_at is the correct pair per ISSUE_QUEUE.md; verdict_* is for no_defect only). Added resolution (two test-side month-boundary dependencies: eligible_past_month fails on the 1st with min_partition_age_days=1; check_table_set/2 flagged stale events_yYYYYmMM as extra across UTC months; lib/ unchanged), regression_tests (partition_clock_test.exs, tenant_template_test.exs ISS-0937 describe), main_ci_evidence (runs 36795709173, 36795979277 FAILURE on same 12 tests; green before 36785684070). queue_ref Q-920 and github_ref GH-2077 kept. Lint: `mix letflow.check_issue_refs` -> 'letflow.check_issue_refs -- 535 file(s) under docs/issues/ OK -- every cross-reference is prefixed and well-formed.' (no letflow.lint_issues task exists). YAML parses; status=resolved. No gh close, no queue call. Anti-pattern proposal (for ORCH/DOC-UPDATER, not applied): tests must not derive fixtures from the real wall-clock UTC month/day (e.g. 'last month is always eligible', or asserting a dynamic partition set built at a different time); inject a clock via test/support/partition_clock.ex and run suites near month boundaries.",
+    "files_modified": [
+      "docs/issues/ISS-0937.yaml"
+    ]
+  },
+  "next_action": "Route to Step Final"
 }

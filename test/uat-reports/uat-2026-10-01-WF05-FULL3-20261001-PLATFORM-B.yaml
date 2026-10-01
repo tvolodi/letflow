@@ -1,0 +1,140 @@
+run_id: WF05-FULL3-20261001-PLATFORM-B
+date: "2026-10-02"
+agent: UAT-RUNNER
+scope: >
+  Slice PLATFORM-B of WF05-FULL3-20261001: 9 platform scenarios from
+  test/fixtures/uat/scenarios/platform/ against live QA.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  idp_base_url: "https://auth.qa.bizdala.com"
+  environment: qa
+  credential_source: "ai-dala-infra/scripts/qa-uat-env.sh (platform exports, token) + qa-login.sh (operator-user)"
+  preflight_report: test/uat-reports/preflight-2026-10-01-qa-FULL3.txt
+
+credential_acquisition: >
+  Passwords/tokens held in-process only (eval of qa-uat-env.sh platform; operator-user password
+  from qa-login.sh); never printed or written.
+
+actor_substitution: >
+  Preflight GAP: actor-platform-admin has no seeded user. The pipeline specs hard-code the
+  seeded bpm-default PLATFORM_ADMIN account admin-user (and worker-user / operator-user), which
+  faithfully holds the role the scenarios require (PLATFORM_ADMIN / tenant admin / dual-company
+  operator). Substituted admin-user for actor-platform-admin on template-update-conflict,
+  tenant-branding-applied and tenant-switch-cache-isolation; checks not weakened. Scenarios whose
+  other actors do not exist at all (actor-system-change-checker, actor-system-tenant-automation)
+  were not substituted.
+
+method: >
+  Specs driven with `npx playwright test <spec> --retries=0` from web/ with E2E_BASE_URL=BPM_TEST_URL=
+  https://qa.bizdala.com, BPM_IDP_BASE_URL=https://auth.qa.bizdala.com. Scenarios without a
+  pipeline_test probed over HTTP. No mocks, no interception, no DB edits.
+
+summary:
+  total: 9
+  pass: 2
+  fail: 2
+  env_blocked: 2        # partition-retention-drop (whole), tenant-switch-cache-isolation (EO-001 only; EO-002/EO-003 PASS)
+  unbuilt_feature: 3
+  result_overall: ENV_NOT_READY
+
+scenarios:
+  - id: platform-login-routing-by-role
+    verdict: PASS
+    branches_run: [PLATFORM_ADMIN (PASS), TASK_WORKER (PASS), unauthenticated (PASS)]
+    evidence: >
+      3 passed (54.8s). admin-user landed on the platform dashboard; worker-user on the workspace root
+      with narrower nav; unauthenticated visit redirected off-origin to Keycloak. (A first attempt without
+      credentials in env failed at the Keycloak token fetch -- harness setup, not a product result.)
+
+  - id: platform-template-update-conflict-resolution
+    verdict: PASS
+    actor_note: "admin-user substituted for actor-platform-admin"
+    evidence: "1 passed (5.9s): own adaptations survive a pack update; unresolved conflicts block apply; resolutions not re-flagged."
+
+  - id: platform-tenant-branding-applied
+    verdict: FAIL
+    actor_note: "admin-user substituted for actor-platform-admin"
+    evidence: >
+      Spec: 2 passed (EO-001/AC1 live swatch; ISS-0887 contract test), 2 failed. EO-003/AC2 (line 122) and
+      EO-005 (line 174): getComputedStyle --color-brand-600 in the browser is "#228be6" where "#1864ab" was
+      expected right after the spec's flat seed PATCH {"brand_colors":{"primary":"#1864ab"}}.
+      Independent API checks as admin-user: PATCH /api/v1/tenant/settings now persists (200, body echoes
+      brand_colors) -- ISS-0887 write-side fix verified live; GET /api/tenant-config?realm=bpm-default
+      returns the saved primary (#0a3d91 after the contract test). But GET /api/tenant-config?host=qa.bizdala.com
+      and the no-param GET return the platform default #228be6 with the same saved settings in place; the SPA
+      (web/src/auth/tenantConfig.ts fetchTenantConfig) uses ?host=<hostname> unless a realm override is in
+      sessionStorage, so the browser never sees the tenant saved colour. GET /api/v1/tenant/settings is 404.
+    diagnosis_hint: >
+      Saved branding is stored and served by realm lookup, but the host-based tenant-config lookup for
+      qa.bizdala.com resolves to a no-tenant/default config (same QA host->tenant mapping family as ISS-0727),
+      so a normal SPA load shows default branding. Fix is QA host config (ai-dala-infra) or making the host
+      lookup resolve bpm-default; the SPA cannot show saved branding until then.
+    maps_to_existing_issue: "ISS-0727 (related, not identical); ISS-0887 (write side resolved)"
+    cleanup: >
+      Branding left as brand_colors {} via PATCH {"brand_colors":{}} (200). Pre-run stored state was
+      empty/unset (FULL2 persisted nothing); tenant-config ?host still serves default #228be6.
+
+  - id: platform-renderer-permission-denied-surface
+    verdict: FAIL
+    evidence: >
+      renderer-states.pipeline.e2e.spec.ts, 1 test, failed at step 5 (spec line 381): after operator-user
+      PROCESS_OPERATOR group membership was revoked, steps 1-4 behaved (very next /dlq request denied,
+      PermissionDenied "You do not have access to this area..." rendered, nav and direct URL identical),
+      but following "My Tasks" rendered the same PermissionDenied and getByTestId('task-inbox-list') was
+      never attached. Identical to FULL2. After the run membership was restored: operator-user GET /dlq 200,
+      GET /tasks/inbox 200 (verified).
+    diagnosis_hint: >
+      With only the PROCESS_OPERATOR group revoked, /tasks/inbox is refused, so operator-user holds no
+      TASK_WORKER-granting membership on QA. ISS-0907 (closed_not_applicable) attributed this to the QA data
+      gap ISS-0886/ISS-0910 (backfill never created group_members) and asked for a re-run to confirm; the
+      re-run still fails, so that remediation is not in effect for operator-user (add TASK_WORKER group
+      membership for operator-user on QA, or reopen ISS-0907). Could equally be classed ENV; kept FAIL
+      because the scenario literal outcome is contradicted on the live instance.
+    maps_to_existing_issue: ISS-0907 (closed_not_applicable; re-run did not confirm remediation), ISS-0910, ISS-0886
+
+  - id: platform-tenant-switch-cache-isolation
+    verdict: ENV_BLOCKED
+    reason: ENV_NOT_SUPPORTED
+    scope: "EO-001 only (sidecar test/fixtures/uat/scenario-env-limitations/platform-tenant-switch-cache-isolation.yaml)"
+    evidence: >
+      EO-001 not executed (needs direct SQL tenant_memberships write via db-exec.ts). EO-002 (sign-out clears
+      bpm_realm_slug residue) PASS and EO-003 (task shows the form version it was created against) PASS:
+      2 passed (8.3s) with --grep "EO-002|EO-003".
+    issue_ref: ISS-0901
+
+  - id: platform-partition-retention-drop
+    verdict: ENV_BLOCKED
+    reason: ENV_NOT_SUPPORTED
+    evidence: "Sidecar platform-partition-retention-drop.yaml covers the whole scenario (spec backdates partitions via docker compose psql). Not run."
+    issue_ref: ISS-0901
+
+  - id: platform-sandbox-cross-tenant-probe
+    verdict: UNBUILT_FEATURE
+    security_note: "Tenant-isolation scenario, but the subsystem is absent so there is nothing to observe; not a security failure."
+    evidence: >
+      Scenario NOTE (ISS-0527) states the runtime-agent subsystem is not built; lib/letflow/router.ex on origin/main
+      still lists AgentRequests/AgentResponses/AgentEvents as post-S6 deferred. As admin-user GET /api/v1/agent-requests,
+      agent-responses, agent-events, agent/sandboxes, agent-sandboxes, sandboxes all 404.
+
+  - id: platform-outbox-cap-backpressure
+    verdict: UNBUILT_FEATURE
+    reason: NO_INSTANCE_SURFACE
+    evidence: >
+      No pipeline_test. Letflow.Plugs.OutboxCap appears on origin/main only in the api_pipeline.ex doc table
+      as deferred ("S6 (outbox subsystem)"); GET /api/v1/outbox, outbox/status, admin/outbox all 404.
+    issue_ref: ISS-0903
+
+  - id: platform-unsafe-migration-rejected
+    verdict: UNBUILT_FEATURE
+    reason: NO_INSTANCE_SURFACE
+    evidence: >
+      No pipeline_test; no DDL-safety/change-set review symbol in lib/ on origin/main; GET
+      /api/v1/platform-migrations/rollouts 404 as admin-user; actors actor-system-change-checker and
+      actor-system-tenant-automation have no seeded users.
+    issue_ref: ISS-0902
+
+state_changes_on_qa: >
+  Spec fixtures (pl-pack-update-*, tenant-cache form-pin definition/instances) remain in bpm-default as the
+  spec cleanup leaves them. Tenant settings brand_colors set to #1864ab / #0a3d91 during runs, then reset
+  to {}. renderer-states spec removed and re-added operator-user group membership (restored, verified).

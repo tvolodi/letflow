@@ -1,0 +1,94 @@
+report_id: ba-signoff-swiftroute-WF05-FULL3-20261001
+run_id: WF05-FULL3-20261001
+vertical: swiftroute
+solution_pack: swiftroute
+generated_at: "2026-10-01T20:00:00Z"
+persona: Alice Bauer (Chief Executive Officer, SwiftRoute Logistics)
+source_uat_report: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml
+
+scenarios_reviewed: 4
+domain_verdict: PARTIAL
+
+scenario_verdicts:
+  - scenario_id: swiftroute-shipment-high-value-happy
+    title: "High-value shipment correctly routed to CEO for co-sign"
+    persona_verdict: PARTIAL
+    business_note: >
+      The problem I raised last time is fixed: the review now appears in our
+      operations manager's own list of work, and people outside that role
+      are refused when they try to take it or finish it. When the manager
+      approved, the approval correctly came to me, was invisible to the
+      operations manager, and after my co-sign the shipment was released
+      in under two minutes. However, those later steps were only confirmed
+      through a back-up route, not through the screens our people actually
+      use, so I cannot formally accept the full journey yet.
+    issues: [BA-SWIFTROUTE-001, BA-SWIFTROUTE-002]
+
+  - scenario_id: swiftroute-shipment-ops-timeout-escalation
+    title: "Unanswered operations review escalates to the CEO"
+    persona_verdict: PARTIAL
+    business_note: >
+      When the operations manager did not respond in time, the review was
+      closed, my approval task was created, and a late attempt to finish the
+      closed review was refused. The record now also shows the review being
+      closed before my task appeared, which resolves my earlier audit
+      concern. My own approval screen was not checked, so I cannot sign off
+      the whole scenario.
+    issues: [BA-SWIFTROUTE-001, BA-SWIFTROUTE-002]
+
+  - scenario_id: swiftroute-shipment-attach-delivery-note
+    title: "Attach a delivery note to a shipment"
+    persona_verdict: PARTIAL
+    business_note: >
+      Not assessed. The check could not be run in the QA environment, so I
+      have no view on whether delivery notes work. This is neither an
+      acceptance nor a rejection.
+    issues: [BA-SWIFTROUTE-003]
+
+  - scenario_id: swiftroute-tenant-onboarding-happy
+    title: "New tenant onboarding"
+    persona_verdict: PARTIAL
+    business_note: >
+      Not assessed. This check cannot apply where SwiftRoute is already set
+      up, so it gives no evidence either way.
+    issues: [BA-SWIFTROUTE-003]
+
+domain_issues:
+  - id: BA-SWIFTROUTE-001
+    severity: MAJOR
+    business_description: >
+      The manager approval, CEO co-sign and shipment release steps, and the
+      CEO step after a timeout, were not confirmed through the screens people
+      use. The back-up route shows the process works, but the promise that
+      nothing ships without both approvals is not yet accepted as verified
+      from a user's point of view.
+    affected_scenario: swiftroute-shipment-high-value-happy
+    suggested_action: route_to_req_analyst
+  - id: BA-SWIFTROUTE-002
+    severity: MINOR
+    business_description: >
+      Completion of a shipment approval is not recorded as its own entry in
+      the audit trail, and in some cases a history entry is time-stamped
+      slightly after the next task already exists. Outcomes are correct, but
+      the trail is harder to read for after-the-fact accountability.
+      Separately, the scenario describes the CEO's decision under a different
+      name than the process uses, which should be tidied up.
+    affected_scenario: swiftroute-shipment-high-value-happy
+    suggested_action: route_to_wf03
+  - id: BA-SWIFTROUTE-003
+    severity: MINOR
+    business_description: >
+      Delivery-note attachment and new-tenant onboarding could not be
+      checked in QA because of the environment. This is a coverage gap, not
+      a defect finding, but it means two of our four scenarios remain
+      unconfirmed.
+    affected_scenario: swiftroute-shipment-attach-delivery-note
+    suggested_action: route_to_req_analyst
+
+overall_note: >
+  Much improved: the approval routing that blocked release last time now
+  reaches and stays with the right people, and the timeout escalation leaves
+  a proper trail. No business failure was found. I cannot yet give full
+  acceptance because the end-to-end journey was not confirmed through the
+  real screens and two scenarios could not be run, so SwiftRoute is
+  conditionally ready pending that coverage.

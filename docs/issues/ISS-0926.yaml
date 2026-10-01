@@ -13,3 +13,5 @@ related:
 queue_ref: Q-926
 github_ref: GH-2106
 status: open
+uat_update_WF05-FULL3-20261001: >
+  Re-observed on QA: meridian regulatory-review EO-002 (sla_breach_30_days absent from notice) and vortex/production-order-above-threshold EO-003 (assign-line call sent no body, Line-A never reached MES endpoint) share this root cause. Severity: scenario treats EO-002 as BLOCKER-impact; consider raising. Open.

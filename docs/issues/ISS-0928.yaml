@@ -1,0 +1,12 @@
+id: ISS-0928
+title: "Meridian Loan Origination: SERVICE_TASK kyc-aml-check inside PARALLEL_GATEWAY fork never dispatched; instance stalls ACTIVE"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T19:58:01Z"
+severity: BLOCKER
+owner: "ELIXIR-DEV"
+description: >
+  meridian Loan Origination v1.1 on QA: after credit-memo-review and risk-assessment complete, current_nodes=[kyc-aml-check]; instance stays ACTIVE 6.5+ min (past 300s timeout_ms) with no task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row, while httpbin answers 200 directly and top-level service tasks complete in 2-6s. Suspect SERVICE_TASK activation inside a PARALLEL_GATEWAY fork branch (cf. ISS-0398). kyc-routing also has no unconditional edge and httpbin returns no kyc_status. Blocks meridian/loan-origination-above-threshold and -below-threshold. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml
+queue_ref: Q-928  # queue issue_ref ISS-0928 may collide with an existing local file; local filename ISS-0928
+github_ref: GH-2114
+status: open

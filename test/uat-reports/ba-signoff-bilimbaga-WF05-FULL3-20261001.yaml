@@ -1,0 +1,45 @@
+report_id: ba-signoff-bilimbaga-WF05-FULL3-20261001
+run_id: WF05-FULL3-20261001
+vertical: bilimbaga
+solution_pack: bilimbaga
+generated_at: "2026-10-02T00:00:00Z"
+persona: Ainur Zhaksybekova (Head of Learning & Assessment)
+source_uat_report: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-BILIMBAGA.yaml
+
+scope_note: >
+  This sign-off covers the BilimBaga vertical only. I make no statement
+  about other organizations or the shared platform in this run.
+
+scenarios_reviewed: 1
+domain_verdict: PASS
+
+scenario_verdicts:
+  - scenario_id: bilimbaga-candidate-timed-exam-autograde
+    title: "Candidate takes a timed certification exam and receives an auto-graded score"
+    persona_verdict: PASS
+    business_note: >
+      A candidate signed in, opened the Safety Certification Exam from their
+      list, and saw the countdown running (29:57 at the start, visibly
+      ticking). They answered both questions with the known-correct choices,
+      submitted, and immediately saw "2 of 2 (100%)" and "Passed", which is
+      the right result. The session was closed cleanly with nothing left open.
+    issues:
+      - BA-BILIMBAGA-004
+
+domain_issues:
+  - id: BA-BILIMBAGA-004
+    severity: MINOR
+    business_description: >
+      The side panel for the BilimBaga candidate still shows "Unknown
+      workspace" where the organization name should appear. It does not
+      affect taking the exam or seeing the result, but a candidate could
+      find it confusing. This is the same item I raised last run and it has
+      not yet been fixed.
+    affected_scenario: bilimbaga-candidate-timed-exam-autograde
+    suggested_action: route_to_req_analyst
+
+overall_note: >
+  The core promise for BilimBaga, a timed exam with an immediate and accurate
+  score, held up again in a real browser on the live QA site, matching the
+  previous run. I am comfortable with this vertical shipping; the
+  organization-name label remains a polish item, not a blocker.

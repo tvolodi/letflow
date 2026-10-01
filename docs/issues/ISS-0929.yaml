@@ -1,0 +1,12 @@
+id: ISS-0929
+title: "Vortex Supplier Quality Deviation v1.1: corrective-action-subprocess has no sub-process definition; critical path ends ERROR SUB_PROCESS_DEFINITION_NOT_FOUND"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T19:58:01Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  vortex/supplier-quality-deviation-critical: classifying critical puts the instance in ERROR with SUB_PROCESS_DEFINITION_NOT_FOUND. The seeded corrective-action-subprocess node carries no definition reference and no 8D/corrective-action definition or procurement role is seeded. EO-002/EO-003 FAIL. Fix is fixture/seed side. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml
+queue_ref: Q-929  # queue issue_ref ISS-0929 may collide with an existing local file; local filename ISS-0929
+github_ref: GH-2115
+status: open

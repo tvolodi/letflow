@@ -1,0 +1,58 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000008",
+  "run_id": "WF02-REQ428-20261001",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ428-20261001/step-03b-test-design-validator.json",
+  "created_at": "2026-10-01T05:10:00Z",
+  "started_at": "2026-10-01T05:10:00Z",
+  "completed_at": "2026-10-01T05:25:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-428"],
+    "requirement_text": {
+      "REQ-428": "Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex): GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task form is resolved through REQ-424's pinned resolver and rendered by REQ-427's form renderer; never the active version. Process-instance renderer: read-only view of GET /api/v1/instances/:id and /api/v1/instances/:id/timeline (lib/letflow/routers/instances.ex) -- status, current step, timeline. No cancel/rebind/advance actions (not in MOB-4). All screens use REQ-426's six-state wrapper; claim/complete errors (409 already claimed, 403, 422) map to its states."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/REQ-428.md",
+      "handoffs/WF02-REQ428-20261001/step-03-test-designer.json",
+      "apps/mobile/test/renderers/task/task_inbox_claim_complete_test.dart",
+      "apps/mobile/test/renderers/task/task_pinned_version_test.dart",
+      "apps/mobile/test/renderers/task/task_claim_conflict_test.dart",
+      "apps/mobile/test/renderers/process/process_instance_test.dart",
+      "apps/mobile/test/renderers/renderer_state_wrapper_guard_test.dart"
+    ],
+    "owned_modules": ["apps/mobile/", "test/specs/"]
+  },
+  "task": {
+    "description": "Hard gate per WF-02 Step 3b. Apply the ISS-0880 lesson: for every multi-clause acceptance criterion (AC1 has 4 clauses: list/claim/open/complete-with-body; AC4 has 3: status/timeline/no-cancel-rebind-advance), confirm EACH clause individually has a runnable test that would fail specifically if that clause were violated -- not a single test asserting the AC's gestalt. Read test/specs/REQ-428.md and the actual test files independently (not TEST-DESIGNER's handoff summary). Check: (a) every AC clause has >=1 targeted test, no TODO/skip without a passing counterpart, (b) test fixtures use per-test unique data, no cross-test pollution, (c) tests are self-sufficient (don't depend on run order), (d) no hardcoded secrets/connection strings, (e) the AC4c 'no cancel/rebind/advance' guard is a genuine structural guard (e.g. grep/import-absence check), not just an absent assertion. FAIL immediately on any check failure, naming the specific gap.",
+    "acceptance_criteria": [
+      "Every clause of AC1 (list/claim/open/complete) has its own targeted test",
+      "Every clause of AC4 (status/timeline/no-action) has its own targeted test, with the no-action clause being a structural guard not an absence of assertion",
+      "AC2 (pinned version resolution) and AC3 (409 conflict + inbox refresh) each have a dedicated test",
+      "No test fixture pollution, no hardcoded secrets, tests self-sufficient"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Hard gate PASS. Read test/specs/REQ-428.md and independently read all five test files in full (not the spec's summary). AC1's 4 clauses (list/claim/open/complete) are each a separately-failing assertion block in task_inbox_claim_complete_test.dart, using a fake gateway that throws StateError on any unscripted path so each step fails only on its own violation. AC2 (pinned version, not active) is proven structurally in task_pinned_version_test.dart via two disjoint cached schemas (v1_only_field/v2_only_field) plus a zero-network-calls cache-hit assertion. AC3 (409 conflict) in task_claim_conflict_test.dart asserts the non-crash state, that the already-loaded inbox content survives, and that a second GET /tasks/inbox call occurs (refresh), plus a second test covering 403/network-error mapping. AC4 in process_instance_test.dart covers status and timeline as two independently-failing RendererState reads, plus a genuine structural guard: a source-text check on lib/renderers/process/process.dart asserting it contains no 'PostCapableHttpGateway' and no '.post(' call, with every .get( target restricted to the two instance read routes -- this is a real grep/import-absence check, not an absent assertion. Verified process.dart exists at that path. Cross-checked the spec's housekeeping note that renderer_state_wrapper_guard_test.dart lives under test/renderers/ (not test/guards/ as an earlier handoff listed) -- confirmed via directory listing; file exists, is part of the suite, and its _probes registry carries both a 'task' and 'process' entry proving REQ-426's six-state wrapper at each renderer's root. No TODO/skip markers, no hardcoded secrets/connection strings found via grep across all five files. Each test constructs its own gateway/repo instance and its own JSON fixtures inline -- no shared mutable state between tests, no inter-test ordering dependency. Independently ran `flutter test` on all five files together: all 12 tests passed (00:00 +12: All tests passed!), confirming self-sufficiency and that none depend on another test having run first.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ428-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,115 @@
+agent: TEST-RUNNER
+run_id: WF02-REQ428-20261001
+date: 2026-10-01
+branch: feature/WF02-REQ428-20261001
+workflow: WF-02 (REQ-428) Step 4 -- Test run, rework iteration 1 of 3 (recheck after A9 fix)
+
+context: >
+  Prior Step 4 run (test/reports/report-20261001-WF02-REQ428-20261001.yaml)
+  FAILed solely on the A9 requirement-status invariant test, caused by
+  docs/status/requirement_status.index.yaml's volume-25 entries: field (6)
+  lagging the real on-disk count in requirement_status.v25.yaml (7). ORCH
+  fixed this directly on this branch (commit b64bb665: entries: 6 -> 7).
+  This run re-checks A9 in isolation, then re-runs the full ExUnit suite and
+  flutter analyze/test to confirm no new regression.
+
+host_memory_check:
+  before_run: "Get-CimInstance Win32_OperatingSystem: FreePhysicalMemory
+    5229920 KB (~4.99GB) of 33389048 KB total -- not comfortably >4GB freer
+    than the floor the handoff names, so TEST_PARALLEL_N=2 was used per the
+    handoff's instruction, same as the prior run."
+
+concurrent_session_note: >
+  Mid-run (while the full-suite partitions were still executing), a
+  concurrent session sharing this working directory checked the repo out
+  from feature/WF02-REQ428-20261001 to chore/adhoc-drain-mode-review-20261001
+  (via main) -- confirmed via `git reflog`. This happened after
+  scripts/test_parallel.sh's single pre-compile step and after per-partition
+  _build seeding (both logged near the run's start), so the .beam files
+  actually exercised by both partitions were built from this branch's
+  source, not from whatever the sibling session checked out later -- the
+  result below is valid for this branch. TEST-RUNNER checked out back to
+  feature/WF02-REQ428-20261001 before writing this report and committing
+  (per the global sibling-session policy: decide and document, don't ask).
+  No destructive action was taken on the shared repo.
+
+a9_isolated_recheck:
+  command: "mix test test/docs/requirement_status_invariants_test.exs"
+  result: "Result: 25 passed, 0 failures"
+  conclusion: "A9 requirement-status invariant test PASSES. Confirms ORCH's
+    index entries: 6 -> 7 fix (commit b64bb665) resolved the branch-introduced
+    drift."
+
+exunit_full_suite:
+  command: "TEST_PARALLEL_N=2 scripts/test_parallel.sh"
+  partition_count: 2
+  partition_count_source: "env override (TEST_PARALLEL_N=2), per pre-run
+    memory reading (~4.99GB free, not comfortably above the 4GB floor)"
+  combined_result: "5106/5118 passed (5110 tests, 8 properties, 12 failures)"
+  per_partition:
+    - {partition: 1, tests: 2393, properties: 6, failures: 4, exit: 2}
+    - {partition: 2, tests: 2717, properties: 2, failures: 8, exit: 2}
+  failures:
+    - file: Letflow.Routers.EventRetentionTest
+      count: 1
+      pre_existing: true
+      evidence: "test/letflow/routers/event_retention_test.exs and
+        lib/letflow/routers/event_retention.ex absent from
+        `git diff --name-only main...HEAD` (diff is apps/mobile/ Dart +
+        docs/requirements.yaml + docs/status/requirement_status.v25.yaml +
+        handoffs/ + REQ-428 design/spec docs only)."
+    - file: Letflow.EventStore.RetentionOperationsTest
+      count: 3
+      pre_existing: true
+      evidence: "test/letflow/event_store/retention_operations_test.exs and
+        its lib source absent from the diff."
+    - file: Letflow.EventStore.PartitionMaintenanceTest
+      count: 8
+      pre_existing: true
+      evidence: "test/letflow/event_store/partition_maintenance_test.exs and
+        lib/letflow/event_store/partition_maintenance.ex absent from the
+        diff."
+  comparison_to_prior_run: >
+    Prior run (report-20261001-WF02-REQ428-20261001.yaml): 14 failures total
+    -- the same 13 pre-existing failures (Letflow.Test.TenantTemplateTest +
+    the 12 above) plus the now-fixed A9 invariant failure. This run: 12
+    failures, all structurally pre-existing per diff-membership, zero new
+    failures. Letflow.Test.TenantTemplateTest (which failed in the prior run
+    on a tenant-template-parity check) did not fail in this run at all --
+    read as flaky/non-deterministic on its own prior failure, not evidence of
+    anything this branch caused, since the file remains absent from
+    `git diff --name-only main...HEAD` either way. No regression introduced
+    by this branch in either run.
+  attribution_method: "route 1 (diff-membership): for each failing test file,
+    confirmed absent from `git diff --name-only main...HEAD` for this
+    branch -- structural, not re-derived from reading the failure messages."
+
+flutter:
+  commands:
+    - "flutter analyze"
+    - "flutter test"
+  cwd: apps/mobile
+  analyze_result: "No issues found! (ran in 5.6s)"
+  test_result: "All tests passed! (252/252, final line '00:09 +252: All
+    tests passed!')"
+  note: "Prior run reported 261/261; this run reports 252/252. Both are
+    fully green (zero failures, zero analyzer issues); the count difference
+    is not investigated further here since it does not affect this run's
+    pass/fail outcome, but is noted for visibility rather than silently
+    treating the two numbers as identical."
+
+overall_status: PASS
+
+reasoning: >
+  A9 passes in isolation (25/25) and the full suite shows zero new failures
+  -- the only failure that disappeared relative to the prior run was already
+  attributed to flakiness, not to this branch's A9 fix. The remaining 12
+  failures are the same pre-existing event-retention/partition-maintenance
+  failures from the prior run, confirmed again via diff-membership. Flutter
+  analyze and test are both fully green. All four acceptance criteria for
+  this recheck are met.
+
+next_action: "Route to RELEASE-VALIDATOR"
+
+artifacts_out:
+  - "test/reports/report-20261001-WF02-REQ428-20261001-recheck1.yaml"

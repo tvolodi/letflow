@@ -27,7 +27,9 @@ import 'package:letflow/definitions/pinned_form_resolver.dart';
 import 'package:letflow/expr/expr.dart' show kStaticCapabilities;
 import 'package:letflow/renderers/form/form.dart';
 import 'package:letflow/renderers/list/list.dart';
+import 'package:letflow/renderers/process/process.dart';
 import 'package:letflow/renderers/renderer_state_view.dart';
+import 'package:letflow/renderers/task/task.dart';
 
 import '../support/fake_post_capable_http_gateway.dart';
 
@@ -59,7 +61,18 @@ final List<_RendererProbe> _probes = [
     },
     findStateView: () => find.byType(RendererStateView<FormViewModel>),
   ),
-  // REQ-428 appends 'process' and 'task' entries the same way.
+  (
+    definitionType: 'task',
+    builder: buildTaskRenderer,
+    definition: const {'task_id': 'task-1'},
+    findStateView: () => find.byType(RendererStateView<TaskDetail>),
+  ),
+  (
+    definitionType: 'process',
+    builder: buildProcessRenderer,
+    definition: const {'instance_id': 'instance-1'},
+    findStateView: () => find.byType(RendererStateView<InstanceDetail>),
+  ),
 ];
 
 void main() {
@@ -77,7 +90,10 @@ void main() {
         final gateway = FakePostCapableHttpGateway()
           ..getResponses['/api/v1/entities/definitions/active/widgets'] =
               ScriptedResponse.hang()
-          ..getResponses['/api/v1/tasks/task-1'] = ScriptedResponse.hang();
+          ..getResponses['/api/v1/tasks/task-1'] = ScriptedResponse.hang()
+          ..getResponses['/api/v1/instances/instance-1'] = ScriptedResponse.hang()
+          ..getResponses['/api/v1/instances/instance-1/timeline'] =
+              ScriptedResponse.hang();
 
         await tester.pumpWidget(
           ProviderScope(
@@ -100,6 +116,16 @@ void main() {
                   formId: params.formId,
                   formVersion: params.formVersion,
                   instanceId: params.instanceId,
+                ),
+              ),
+              taskDetailControllerProvider.overrideWith(
+                (ref, taskId) =>
+                    TaskDetailController(client: gateway, taskId: taskId),
+              ),
+              instanceDetailControllerProvider.overrideWith(
+                (ref, instanceId) => InstanceDetailController(
+                  client: gateway,
+                  instanceId: instanceId,
                 ),
               ),
             ],

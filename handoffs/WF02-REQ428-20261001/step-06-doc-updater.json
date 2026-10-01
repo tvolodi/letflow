@@ -1,0 +1,58 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-00000000000c",
+  "run_id": "WF02-REQ428-20261001",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ428-20261001/step-06-doc-updater.json",
+  "created_at": "2026-10-01T09:30:00Z",
+  "started_at": "2026-10-01T09:30:00Z",
+  "completed_at": "2026-10-01T09:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-428"],
+    "requirement_text": {
+      "REQ-428": "Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex): GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task form is resolved through REQ-424's pinned resolver and rendered by REQ-427's form renderer; never the active version. Process-instance renderer: read-only view of GET /api/v1/instances/:id and /api/v1/instances/:id/timeline (lib/letflow/routers/instances.ex) -- status, current step, timeline. No cancel/rebind/advance actions (not in MOB-4). All screens use REQ-426's six-state wrapper; claim/complete errors (409 already claimed, 403, 422) map to its states."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ428-20261001/step-05-release-validator.json",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v25.yaml"
+    ],
+    "owned_modules": ["docs/requirements.yaml", "docs/status/"]
+  },
+  "task": {
+    "description": "Flip REQ-428's status from in_progress to done in docs/requirements.yaml. Append a 'done' event to the current run-history volume (docs/status/requirement_status.v25.yaml -- confirm it is still the current volume via the index first; it is currently at 7 entries / under the 1200-line roll ceiling, so no roll is needed) with a real UTC timestamp, summarizing: apps/mobile/lib/renderers/task/task.dart and apps/mobile/lib/renderers/process/process.dart implementing the task inbox/claim/complete flow and read-only process-instance screen, composed over REQ-424's pinned resolver, REQ-427's form renderer, and REQ-426's six-state wrapper; full gate chain CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS (out of scope), REVIEWER PASS, TEST-DESIGN-VALIDATOR PASS, TEST-RUNNER rework 1 of 3 (A9 requirement-status index entries: count fixed by ORCH, then PASS), RELEASE-VALIDATOR PASS with all 6 ACs independently verified and the 261-vs-252 flutter test-count discrepancy resolved as a benign sibling-session race during discovery (not a regression); AC5 (live emulator check) genuinely DEFERRED to UAT-RUNNER, no adb/emulator available in this execution context. letflow-queue task 865 (GH#1882) still needs release_lock(status=done) -- note this in your summary but do NOT call the queue yourself; ORCH does that at Step Final. Do not update README.md -- this requirement did not alter any documented current-behavior section there (no ASCII state diagram or Running-it change). docs/mobile/requirements.md's MOB-4 entry was already reconciled by REQ-427; confirm it does not also need a note for this requirement's task/instance renderer addition (if MOB-4's text already covers 'task renderer' and 'process instance view' generically, no edit needed -- state which you found).",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-428 status flipped pending/in_progress -> done",
+      "A 'done' event appended to docs/status/requirement_status.v25.yaml, real UTC timestamp, append-only (no edits to prior entries)",
+      "Confirmation of whether docs/mobile/requirements.md needed any edit, stated explicitly either way",
+      "artifacts_out lists every file actually touched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-428 flipped pending/in_progress -> done in docs/requirements.yaml. One 'done' event appended to docs/status/requirement_status.v25.yaml (current volume, confirmed via the index: 'status: current', 'entries: 7' at line ~5797) summarizing the task/process-instance renderer implementation, full gate chain (TEST-RUNNER rework 1/3 on an A9 bookkeeping gap then PASS; RELEASE-VALIDATOR PASS; AC5 live-emulator check DEFERRED to UAT-RUNNER), and letflow-queue task 865 (GH#1882) still needing release_lock (not called from here). Append verified append-only via `git diff --numstat`: 29 insertions / 0 deletions on the v25 volume. Volume now 208 lines / 12076 bytes / 8 entries, well under the 1200-line/120000-byte roll ceiling -- no roll triggered. docs/mobile/requirements.md checked: its MOB-4 section intro already names 'process-instance, and task-inbox renderers' generically, and its own AC bullet 'The task renderer supports inbox, claim, and complete against the task API' already covers this requirement's inbox/claim/complete flow -- no edit made. README.md not touched, per the task's explicit instruction (no documented current-behavior change).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v25.yaml",
+      "handoffs/WF02-REQ428-20261001/step-06-doc-updater.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ428-20261001",
+      "commit_sha_list": ["74d17a97ccbf49a160a2b0168583b8145a4763da"],
+      "remote_branch": "origin/feature/WF02-REQ428-20261001",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to MOBILE-DEV for Step Final"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

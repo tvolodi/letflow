@@ -1,5 +1,74 @@
 # REVIEWER sign-off — ADHOC-20261001-001 (drain-mode scope-creep guardrail)
 
+## Re-check (2026-10-01, commit `75f43d70`) — VERDICT: PASS
+
+Independently re-derived all three MUST-FIX items from the original pass below, on the
+correct checkout (`chore/adhoc-drain-mode-review-20261001` at `75f43d70`) — note for the
+record: my first attempt at this re-check ran grep/Read against a stale local working
+tree still on an unrelated branch, same mistake as the first pass; caught it before
+reporting, by noticing all six "fixed" files still showed "six checks" and realizing I
+hadn't actually checked out the fetched commit. Re-ran everything after `git checkout
+chore/adhoc-drain-mode-review-20261001` at `75f43d70`.
+
+1. **Registry/log — confirmed fixed.** `handoffs/registry.json` (validated via `node
+   -e "JSON.parse(...)"`, parses clean) gained exactly one new array entry,
+   `run_id: "ADHOC-20261001-001"`, appended after the prior last entry with nothing
+   else in the file altered (`git diff 6d3156c4..75f43d70 -- handoffs/registry.json`
+   shows only a trailing-comma addition + the new object). Shape is consistent with the
+   project's schema as it has evolved (`workflow_id: "ADHOC"` matches the newer
+   generic-workflow-type convention used by recent `WF03-*` entries, e.g.
+   `"workflow_id": "WF-03"` — not the older `ADHOC-20260821-001` entries, which predate
+   that convention and set `workflow_id` equal to `run_id`; this is evolution, not a
+   defect). `handoffs/orchestrator.log` gained exactly 13 new lines at the end of the
+   file (`git diff 6d3156c4..75f43d70` confirms every earlier line is byte-identical;
+   append-only holds), covering the full REQ-ANALYST → REQ-VALIDATOR → CODE-DESIGNER →
+   CODE-DESIGN-VALIDATOR → DOC-UPDATER (implementation) → REVIEWER dispatch chain. Minor,
+   non-blocking note: the log's timestamps are suspiciously round
+   (`00:00:00Z`, `00:05:00Z`, ...) for a reconstructed/backfilled record while the
+   registry entry claims `"backfilled": false` — this is very likely an approximated
+   reconstruction rather than a literally real-time log, which arguably should say
+   `"backfilled": true`. Flagging as a quality nit, not re-opening the MUST-FIX: the
+   content is accurate and the bookkeeping gap this was fixing is closed.
+
+2. **"six checks" staleness — confirmed fixed, all six named surfaces.** Re-grepped
+   `six.?check` (case-insensitive) repo-wide on the correct checkout. All six files I
+   named — `docs/agents/ORCHESTRATOR.md`, `docs/agents/AGENT_SYSTEM.md`,
+   `.claude/agents/orchestrator.md`, `.claude/agents/elixir-dev.md`,
+   `docs/agents/instructions/core-directives.md`, `CLAUDE.md` — no longer contain the
+   phrase. Every remaining hit is either a legitimate historical snapshot
+   (`requirement_status.v8/v9.yaml`, `registry.json` prior entries, `handoffs/**/*.json`
+   step records, `docs/issues/*.yaml`, point-in-time `lib/letflow/design/*.md` docs) or
+   this sign-off file itself quoting the old text as part of the finding. Spot-checked
+   the implementer's two claimed false positives directly rather than accepting the
+   characterization: `test/specs/REQ-423.md:92` ("Each of these six checks would
+   independently fail...") is about a tenant-isolation cache test's six assertions, no
+   relation to §10; `lib/letflow/design/req396-human-task-escalation-timer.md:13`
+   ("`validate_node_attributes/1` runs six checks...") is about `graph.ex`'s node-attribute
+   validation checks, also unrelated. Both confirmed genuinely unrelated, not
+   mischaracterized.
+
+3. **`docs/anti-patterns.md` entry — confirmed, and it matches the file's format.** New
+   section "## Drain-mode license used to self-author and merge an unreviewed
+   governance-policy change (ORCH, REQ-294/PR #2081)" follows the file's documented
+   per-entry shape exactly (what happened → why the existing guards didn't catch it →
+   correct alternative), matching the style of the adjacent existing entries. Content is
+   accurate against the incident as established earlier in this review (names PR #2081,
+   `a59a93a6`, the missing requirement/REQ-VALIDATOR/REVIEWER/design/bookkeeping, the
+   §10 sizing-rule violation, and correctly cites the actual fix: §4a's guardrail, §10
+   item 7, and decision record 0041).
+
+4. **Diff scope — clean, no drift.** `git diff --stat 6d3156c4..HEAD` touches exactly 9
+   files: the 6 "six checks" corrections, `docs/anti-patterns.md`, `handoffs/orchestrator.log`,
+   `handoffs/registry.json` — i.e. precisely the three MUST-FIX categories from the
+   original sign-off, nothing else.
+
+**All three required fixes verified independently, not on the implementer's say-so.
+PASS. Clear to merge.**
+
+---
+
+## Original pass (2026-10-01, commit `6d3156c4`)
+
 **Verdict: PASS-WITH-FINDINGS** — three findings below are MUST-FIX before merge. None
 requires reopening REQ-ANALYST/REQ-VALIDATOR/CODE-DESIGNER; all three are narrow,
 mechanical corrections consistent with the design already approved. Routing back to

@@ -1,4 +1,4 @@
-id: ISS-0937
+id: ISS-0938
 title: "mix letflow.check.test: Letflow.EventStore.{PartitionMaintenanceTest,RetentionOperationsTest} / Routers.EventRetentionTest fail non-deterministically (order-dependent) across repeated runs at varying partition counts"
 discovered_by: RELEASE-VALIDATOR
 discovered_in_run: WF02-REQ427-20261001

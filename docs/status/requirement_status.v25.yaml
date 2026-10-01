@@ -403,3 +403,34 @@ history:
       state diagram or Running-it change. letflow-queue task 866 (GH#1883)
       still needs release_lock(status=done) -- not called from here;
       DOC-UPDATER does not call the queue.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-01T14:50:32Z"
+    note: >
+      ISS-0944 resolved (D4: POST /tasks/:id/complete returned HTTP 500
+      instead of a proper 4xx when the owning instance was in ERROR status).
+      PR #2090, branch fix/ISS-0944-task-complete-instance-not-active-mapping,
+      commit bf5d4be3. Root cause: handle_complete_result/2 in
+      lib/letflow/routers/tasks.ex had no case clause for
+      {:error, {:instance_not_active, status}} -- a documented, correctly-
+      returned member of Engine.complete_task/3's own error union when the
+      owning instance isn't :active -- so it fell through to the generic
+      catch-all and returned 500. Fix: one new clause mirroring the existing
+      {:task_not_pending, _} precedent, mapping to Response.conflict(conn,
+      "instance is #{status}") -> 409, with a single clause correctly
+      covering all three possible status values (:completed/:cancelled/
+      :error) via the unbound status variable. {:instance_execution_error,
+      _, _} (separate, still-open ISS-0917) deliberately left untouched.
+      Full gate chain ALL PASSed: CODE-DESIGN-VALIDATOR, ELIXIR-DEV
+      implementation, REVIEWER, TEST-RUNNER (full suite clean after
+      correctly diagnosing a host connection-budget sizing issue), and
+      RELEASE-VALIDATOR (exhaustive independent re-verification -- its own
+      mutation test proving the regression guard is non-vacuous, removing
+      the clause reproduced the original 500; its own adversarial tests
+      confirming the single new clause correctly covers all three instance
+      statuses, not just the reported :error case; two independent
+      full-suite runs including mix letflow.check.test). docs/issues/
+      ISS-0944.yaml set to status: resolved in this same commit. This is an
+      ISSUE closure, not a REQ -- docs/requirements.yaml untouched.
+      letflow-queue task 916 to be released as done after merge.

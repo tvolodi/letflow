@@ -362,6 +362,14 @@ defmodule Letflow.Routers.Tasks do
     Response.conflict(conn, "task is not pending")
   end
 
+  # ISS-0944: the owning InstanceProjection is no longer :active (it is
+  # :completed, :cancelled, or :error -- see Engine.complete_error/0's
+  # {:instance_not_active, status} member). One clause covers all three
+  # status values, same reasoning as {:task_not_pending, _status} above.
+  defp handle_complete_result({:error, {:instance_not_active, status}}, conn) do
+    Response.conflict(conn, "instance is #{status}")
+  end
+
   defp handle_complete_result({:error, %Ecto.Changeset{}}, conn) do
     Response.unprocessable(conn, "validation failed")
   end
@@ -400,7 +408,7 @@ defmodule Letflow.Routers.Tasks do
   end
 
   # Catch-all: every other complete_error() member (:invalid_schema_name,
-  # :instance_not_found, {:instance_not_active, _}, :snapshot_not_found,
+  # :instance_not_found, :snapshot_not_found,
   # {:graph_structure_invalid, _}, {:missing_token_record, _},
   # {:transition_failed, _}, {:new_token_during_resume_not_supported, _},
   # {:task_activation_failed, _}, {:event_append_failed, _},

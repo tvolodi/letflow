@@ -2597,3 +2597,4 @@
 2026-10-01T12:09:19Z | DISPATCH | WF03-ISS0917-20261001 | step-01-issue-fixer-diagnose | ORCH -> ISSUE-FIXER | PENDING
 2026-10-01T12:13:53Z | PASS | WF03-ISS0917-20261001 | step-01-issue-fixer-diagnose | ISSUE-FIXER -> ORCH | PASS -- root cause is Engine activation (engine.ex:906 nil rendered_url for :catalog_service), not the dispatcher stub; fix = resolve pinned version at activation
 2026-10-01T12:13:53Z | DISPATCH | WF03-ISS0917-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-10-01T12:21:05Z | PASS | WF03-ISS0917-20261001 | step-02-code-designer | CODE-DESIGNER -> ORCH | PASS -- design iss0917-catalog-service-task-pinned-dispatch.md (688 lines), D1-D8, 10 OQs

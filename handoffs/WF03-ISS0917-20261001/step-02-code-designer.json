@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0917-20261001/step-02-code-designer.json",
   "created_at": "2026-10-01T12:13:53Z",
   "started_at": "2026-10-01T12:13:53Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-01T12:20:37Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -50,5 +50,30 @@
       "Fail-first regression test plan with concrete scenarios",
       "500-mapping decision explicit with REVIEWER-signoff note if diverging from req085 5.5.1"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md (no implementation code, no fenced code blocks). Key decisions: D1 new ServiceCatalog.resolve_pinned_version(service_id, {:version_id,id}|{:version,v}, tenant_id) -> {:ok, map}|{:error,:not_found}; live row (incl RETIRED current) else service_catalog_versions; visibility inherited from the live row via a predicate shared with get_for_tenant/2; invisible==not found. NEW FINDING: rebound pins (INSTANCE_PINS_REBOUND) have resolved_id nil, so resolution must also work by (service_id, version). D2 resolve at activation in Engine for :catalog_service: create uses in-scope pins, other 4 sites (completion hop, timer, escalation timer, service-outcome advance - 5 sites total, diagnosis said 4) lazily use PinResolver.reconstruct_effective_pins; render endpoint_url via render_service_task_url, freeze rendered_url + catalog_version_id/version/retry_policy(audit only) in config_snapshot; timeout=min(node,catalog); typed errors (pin_missing, version_not_found, pins_unavailable, required_auth_unsupported) with NO live-row fallback; new error_type :service_task_catalog_unresolved. D3 delete catalog_lookup_stub/2, dispatcher :catalog_service arm becomes snapshot-driven sharing http_transport + SSRF gate; enumerated tests (engine_test.exs:1232-1247 flip, dispatcher_test 201-300 replace) and doc claims to change. D4 include a dedicated clause {:instance_execution_error,error_type,_} -> 409 naming only error_type; explicit amendment to req085 5.5.1, REVIEWER sign-off required, fallback = drop D4; ISS-0933 (different tuple) untouched. D5 fail-first plan T1-T9 + resolver matrix + router R1-R3 + e2e (second in-flight case, new step 04b completing HUMAN_TASK, v1 endpoint=mock 2xx, v2=trap /status/503, SERVICE_TASK_MOCK_BASE_URL precedent; scenario yaml header comment only). D6 required_auth != NONE out of scope and fails closed; SSRF gate unchanged; decision-0027 INV-9 trigger flagged for SECURITY-REVIEWER (registration-time URL check absent). D7 no migration. D8 owned files; PR #2087 is already MERGED on origin/main (not in branch) - ORCH must merge origin/main before ELIXIR-DEV; PR #2089 no file overlap. 10 open questions listed (OQ-1..10).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0917-catalog-service-task-pinned-dispatch.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Handoff premise stale: PR #2087 is already merged to origin/main (0b1931d3) but not in branch feature/WF03-ISS0917-20261001; routers/tasks.ex and engine.ex comment line numbers differ. ORCH should merge origin/main before dispatching ELIXIR-DEV.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Diagnosis corrections: rebound pins carry resolved_id nil (resolver must support (service_id, version)); five (not four) prepare_service_task_dispatch call sites; ISS-0933 concerns {:instance_not_active,_}, a different tuple from {:instance_execution_error,_,_}.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Decision 0027 anticipated this change: registration-time SSRF check on POST /service-catalog absent; design relies on dispatch-time UrlValidator gate; SECURITY-REVIEWER must decide if a follow-up issue is needed. Also file follow-ups: required_auth support, PinLookup.catalog_lookup untenanted, ServiceCatalog.delete vs pinned instances.",
+        "affected_requirement": null
+      }
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   }
 }

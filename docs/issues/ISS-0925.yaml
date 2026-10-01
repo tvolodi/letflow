@@ -1,0 +1,15 @@
+id: ISS-0925
+title: "Stale HUMAN_TASK escalation timer is not cancelled when the task completes normally"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-Q915-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T16:40:34Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  Only TaskActivation.cancel_pending_timers (instance completion/cancel) cancels timers; a normally-completed HUMAN_TASK leaves its escalation timer pending and, if the instance is still active when it fires, Transition.dispatch_escalation_timer_fired acts on whatever HUMAN_TASK the token is then at. Affects every definition using escalation_timer_duration. Fix: cancel node-scoped timer on task completion and/or compare timer.node_id with the token current node at fire time.
+  Found while fixing ISS-0932.
+related:
+  - ISS-0932
+queue_ref: Q-925
+github_ref: GH-2105
+status: open

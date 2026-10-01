@@ -1,0 +1,15 @@
+id: ISS-0926
+title: "SERVICE_TASK body_template is not rendered by the engine (UAT EO-002 reason sla_breach_30_days unmet)"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-Q915-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T16:40:34Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  Engine renders only the SERVICE_TASK URL (engine.ex ~1141-1147); body_template is not sent, so the regulatory-notice reason in scenario regulatory-compliance-review-bafin.yaml EO-002 cannot be satisfied; node is also reachable via e10 where a static reason would be wrong.
+  Found while fixing ISS-0932.
+related:
+  - ISS-0932
+queue_ref: Q-926
+github_ref: GH-2106
+status: open

@@ -1,0 +1,51 @@
+{
+  "handoff_id": "3ea43ba6-bb49-421e-81ac-b853f3977029",
+  "run_id": "WF03-Q915-20261001",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-Q915-20261001/step-03-elixir-dev.json",
+  "created_at": "2026-10-01T15:36:32Z",
+  "started_at": "2026-10-01T15:37:46Z",
+  "completed_at": "2026-10-01T15:37:46Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0932": "id: ISS-0932 (queue Q-915, GH-2066); title: D3: Regulatory Compliance Review definition lacks the 21-day timer path to BaFin escalation; severity MAJOR; discovered_by UAT-RUNNER (ISS-0912 QA re-run 2026-10-01). Symptom: POST /instances/:id/advance-timer on risk-evaluation returns 404; regulatory-auto-escalation only reachable from the post-remediation-check unresolved branch. Evidence test/uat-reports/uat-2026-10-01-ISS0912-NARRATIVE.yaml (D3). Scenario test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml. Definition fixture test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json. ORCH findings (verify): risk-evaluation is HUMAN_TASK with only {role}; no pending timer exists so advance-timer 404s (Scheduler.resolve_advance_target picks the single pending timer, 400 if >1, 404 if none); edge timeout-risk-evaluation goes risk-evaluation->risk-evaluation-timeout->severity-routing->findings-sign-off, never regulatory-auto-escalation; HUMAN_TASK escalation_timer_duration only reassigns role; a :TIMER node (duration_iso8601) is the engine's routable timer. Required outcome: after evidence-collection completes a pending P21D timer exists, advance-timer fires it, flow runs regulatory-auto-escalation (SERVICE_TASK POST .../compliance/regulatory-notice) -> end-closed, instance COMPLETED; normal path (risk manager completes risk-evaluation -> severity-routing ...) must keep working with no dangling timer trouble. Consider whether reason 'sla_breach_30_days' must be in the service-task body. No QA data/DB changes; repo fixtures/definitions/tests/docs only; bump fixture version if appropriate."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/q915-regulatory-review-21day-timer-path.md",
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json",
+      "test/fixtures/simulation/meridian/process_policy_binding.yaml",
+      "scripts/seed_meridian_definition.sh"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2",
+    "branch_name": "feature/WF03-Q915-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 3 implement the validated design lib/letflow/design/q915-regulatory-review-21day-timer-path.md section 8 edit list EXACTLY: fixture JSON edits (version 1.2, description fix, risk-evaluation attrs, e3 condition 'true', retarget timeout-risk-evaluation, remove node risk-evaluation-timeout and edge e4), parity edit to test/fixtures/simulation/meridian/process_policy_binding.yaml, seed_meridian_definition.sh header comment only. Do NOT write the two new test files (TEST-DESIGNER does that later). Then run existing affected tests: test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs, test/scripts/persona_actor_seed_drift_test.exs, test/letflow/scripts/seed_swiftroute_definition_test.exs and grep for other tests/fixtures asserting the old shape (risk-evaluation-timeout, e4) and update any that fail; mix format; JSON must stay valid and formatted like the original. No lib/ change expected. You can spawn no one else and must not self-review.",
+    "acceptance_criteria": [
+      "Fixture matches design section 8 exactly",
+      "Existing affected tests green (quote results)",
+      "mix format clean, JSON valid",
+      "No lib change; no files outside owned list",
+      "Commit not required (ORCH commits)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Applied design section 8 edits: fixture JSON v1.2 (description, risk-evaluation P21D/role-ceo, e3 condition true, timeout-risk-evaluation -> regulatory-auto-escalation, removed risk-evaluation-timeout and e4), YAML parity, seed script header comment. No lib change. Tests: 52 passed (qa_fixture_service_task_endpoints, persona_actor_seed_drift, seed_swiftroute_definition); mix format clean; JSON/YAML parse. No other test/fixture references the old shape.",
+    "artifacts_out": [
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json",
+      "test/fixtures/simulation/meridian/process_policy_binding.yaml",
+      "scripts/seed_meridian_definition.sh"
+    ]
+  }
+}

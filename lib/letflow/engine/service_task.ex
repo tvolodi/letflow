@@ -44,6 +44,14 @@ defmodule Letflow.Engine.ServiceTask do
   deliberately a pure, no-sleep function so a future orchestration caller
   can unit-test its own retry loop's *decisions* without any real waiting.
 
+  ## `body_template` rendering (ISS-0926)
+
+  `render_body_template/2` (with `body_has_placeholders?/1` and
+  `build_body_render_error_attrs/1`) renders a node's `body_template` against
+  the instance variables at activation; `Letflow.Engine` freezes the result as
+  `config_snapshot["rendered_body"]`. See
+  `lib/letflow/design/iss0926-service-task-body-template-rendering.md`.
+
   ## Purity
 
   `parse_config_from_node_attributes/1`, `validate_rendered_url/1`,
@@ -61,7 +69,8 @@ defmodule Letflow.Engine.ServiceTask do
     @moduledoc """
     Parsed SERVICE_TASK dispatch configuration — design doc §3.1. Plain
     struct, not `Ecto.Schema`, mirrors `Graph.Node`/`Graph.Edge`'s
-    nested-plain-struct convention.
+    nested-plain-struct convention. `body_template` is the raw template; it is
+    rendered at activation by `render_body_template/2` (ISS-0926), not here.
     """
 
     @enforce_keys [:node_id, :route_kind, :method, :timeout_ms, :retry_limit]

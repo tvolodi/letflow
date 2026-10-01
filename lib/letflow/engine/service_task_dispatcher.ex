@@ -71,7 +71,8 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
   ## URL freeze-at-INSERT / never-re-render / always-re-validate (OQ-3,
   RESOLVED — design §10)
 
-  `config_snapshot["rendered_url"]` is frozen once, at INSERT time, by
+  `config_snapshot["rendered_url"]` (and, per ISS-0926, `"rendered_body"`) is
+  frozen once, at INSERT time, by
   REQ-215's future activation-time caller. This module never renders a URL
   template and never writes `config_snapshot` — it only ever reads
   `row.config_snapshot["rendered_url"]` back, unchanged, on every attempt of
@@ -277,7 +278,8 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
   @doc """
   The concrete `Letflow.Engine.ServiceTask.transport_fun()` value this
   module supplies. `rendered_url` is the value frozen once at the claimed
-  row's own INSERT time (`row.config_snapshot["rendered_url"]`) — this
+  row's own INSERT time (`row.config_snapshot["rendered_url"]`; the body is
+  likewise the frozen `"rendered_body"`, ISS-0926) — this
   function never renders anything, it only ever receives an
   already-rendered string, on every attempt including every retry.
 

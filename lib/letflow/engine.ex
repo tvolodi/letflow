@@ -1157,7 +1157,8 @@ defmodule Letflow.Engine do
   end
 
   # design doc §2.2 -- plain map projection of ServiceTask.Config.t() plus
-  # the one derived key "rendered_url", matching exactly the field set
+  # the two derived keys "rendered_url" and (ISS-0926) "rendered_body", matching
+  # exactly the field set
   # ServiceTaskDispatcher's own config_from_snapshot/1 reads back
   # (service_task_dispatcher.ex:630-648). String-keyed, matching
   # ServiceTaskDispatch.config_snapshot()'s own @type.

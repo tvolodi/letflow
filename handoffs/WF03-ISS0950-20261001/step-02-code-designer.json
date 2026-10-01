@@ -1,0 +1,56 @@
+{
+  "handoff_id": "a7879779-b884-44a9-9703-acdaa4da00b2",
+  "run_id": "WF03-ISS0950-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0950-20261001/step-02-code-designer.json",
+  "created_at": "2026-10-01T14:54:09Z",
+  "started_at": "2026-10-01T14:54:09Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0950.yaml": "id: ISS-0950\ntitle: \"Catalog service endpoint_url is not URL-validated at registration/publish time (decision 0027 gap)\"\ndiscovered_by: SECURITY-REVIEWER\ndiscovered_in_run: WF03-ISS0917-20261001 (filed by ORCH)\ndiscovered_at: \"2026-10-01T14:06:29Z\"\nseverity: MINOR\nowner: \"ELIXIR-DEV\"\ndescription: >\n  Found by SECURITY-REVIEWER in WF03-ISS0917-20261001. POST /service-catalog and publish do no\n  UrlValidator check on endpoint_url; the only control is the dispatch-time INV-9 gate in\n  ServiceTaskDispatcher.http_transport/3. ISS-0917's fix makes catalog endpoints reachable by the\n  dispatcher for the first time, so add fast-feedback syntactic validation (https scheme, host not\n  private/loopback literal) at register/publish time in Letflow.ServiceCatalog /\n  Routers.AdminServices. Defense in depth; dispatch gate stays binding. Severity MINOR (hardening).\n  Owner ELIXIR-DEV (via CODE-DESIGNER).\naffected_files:\n  - lib/letflow/service_catalog.ex\n  - lib/letflow/routers/admin_services.ex\nqueue_ref: Q-921  # queue issue_ref ISS-0921 collides with an existing local file; local filename ISS-0950\ngithub_ref: GH-2095\nstatus: open\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0950-20261001/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0950.yaml",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/webhooks/url_validator.ex",
+      "docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/"
+    ],
+    "worktree": null,
+    "branch_name": "feature/WF03-ISS0950-20261001",
+    "queue_task_id": 921,
+    "github_issue": 2095
+  },
+  "task": {
+    "description": "WF-03 Step 2 FIX DESIGN. Read the step-01 diagnosis (result.summary in handoffs/WF03-ISS0950-20261001/step-01-issue-fixer-diagnose.json) and produce a design artefact at lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md (design doc only, no implementation code). Stay in the main checkout on branch feature/WF03-ISS0950-20261001. Scope: fast-feedback SYNTACTIC validation of endpoint_url at register/1 and publish/3 (Entry changesets are the natural single choke point; 422 mapping already exists), reusing Letflow.Webhooks.UrlValidator logic WITHOUT DNS resolution (decide: new public no-DNS function on UrlValidator vs stub resolver; justify; DNS must not happen at register time). Rules to decide explicitly: https only; host present; reject private/loopback/link-local/metadata IP literals (reuse the dispatcher blocklist, do not duplicate it); template handling -- endpoint_url is a template rendered with {{variables.KEY}} at activation, so specify exactly how templates are validated (e.g. validate scheme prefix and, if host part contains no template token, host literal; what to do when the host itself is templated; the fixture at test/letflow/engine_catalog_service_task_test.exs:363 registers a bare {{variables.absent}} -- state whether that fixture must change and why that is acceptable or how to avoid breaking it); error shape (changeset error key/message so 422 body is stable); both insert and publish changesets; update/new-version paths if any. Dispatch gate (INV-9) stays binding and unchanged -- state it. Honour decision 0027 and security-invariants.md INV-9. Include: function signatures with @spec, exact list of files to change, exact list of existing tests/fixtures to adjust, and a test matrix (accepted and rejected URLs, templated cases, both write paths, router-level 422 assertion, plus a unit test asserting no DNS lookup happens). Severity MINOR; keep the change small. Complete the handoff per HANDOFF_PROTOCOL.md; do not commit (ORCH commits).",
+    "acceptance_criteria": [
+      "Design file exists at lib/letflow/design/iss0950-catalog-endpoint-url-register-validation.md with no implementation code beyond signatures/specs",
+      "No-DNS approach decided and justified",
+      "Template-URL policy fully specified incl. the {{variables.absent}} fixture",
+      "Files-to-change and tests-to-adjust lists are exact",
+      "Dispatch gate unchanged, stated explicitly",
+      "Test matrix covers every rejected/accepted class and both write paths"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

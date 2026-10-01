@@ -2648,3 +2648,7 @@
 2026-10-01T15:41:41Z | PASS | WF03-ISS0950-20261001 | step-04d-release-validator | RELEASE-VALIDATOR -> ORCH | PASS -- 96 passed, live repro 422s
 2026-10-01T15:41:41Z | DISPATCH | WF03-ISS0950-20261001 | step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PENDING
 2026-10-01T15:42:18Z | PASS | WF03-ISS0950-20261001 | step-05-issue-fixer-close | ISSUE-FIXER -> ORCH | PASS -- ISS-0950 resolved (local); GH close + release_lock deferred to parent post-merge
+2026-10-01T14:48:24Z | DONE | WF-03 | WF03-ISS0917-20261001 | ORCH -> main | merged 2bc51bdd via PR #2100, squash, all CI checks green, no override needed
+2026-10-01T14:49:00Z | RELEASE_LOCK | WF-03 | WF03-ISS0917-20261001 | ORCH -> letflow-queue | task 907 done
+2026-10-01T16:25:00Z | DONE | WF-03 | WF03-ISS0950-20261001 | ORCH -> main | merged ce431622 via PR #2102, squash, all CI checks green, no override needed
+2026-10-01T16:25:00Z | RELEASE_LOCK | WF-03 | WF03-ISS0950-20261001 | ORCH -> letflow-queue | task 921 done

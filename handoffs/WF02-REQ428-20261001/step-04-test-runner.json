@@ -1,0 +1,52 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000009",
+  "run_id": "WF02-REQ428-20261001",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ428-20261001/step-04-test-runner.json",
+  "created_at": "2026-10-01T05:40:00Z",
+  "started_at": "2026-10-01T05:40:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-428"],
+    "requirement_text": {
+      "REQ-428": "Third MOB-4 requirement. Task routes (lib/letflow/routers/tasks.ex): GET /api/v1/tasks/inbox, GET /api/v1/tasks/:id, POST /api/v1/tasks/:id/claim, POST /api/v1/tasks/:id/complete. The task form is resolved through REQ-424's pinned resolver and rendered by REQ-427's form renderer; never the active version. Process-instance renderer: read-only view of GET /api/v1/instances/:id and /api/v1/instances/:id/timeline (lib/letflow/routers/instances.ex) -- status, current step, timeline. No cancel/rebind/advance actions (not in MOB-4). All screens use REQ-426's six-state wrapper; claim/complete errors (409 already claimed, 403, 422) map to its states."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ428-20261001/step-03b-test-design-validator.json"
+    ],
+    "owned_modules": ["apps/mobile/", "test/"]
+  },
+  "task": {
+    "description": "Host memory check just before this run: Get-CimInstance Win32_OperatingSystem showed FreePhysicalMemory ~6.0GB free out of ~31.9GB total -- not comfortably above the 4GB floor, so use TEST_PARALLEL_N=2 (not full nproc parallelism) for scripts/test_parallel.sh. Re-check memory yourself before running, and drop to serial mix test if it's tighter than this by the time you run. Run scripts/test_parallel.sh (full backend ExUnit suite, not just new tests -- this run's own diff touches apps/mobile/ only so no backend regression is expected, but Unblock-Everything still requires the full suite). Additionally, since this diff touches apps/mobile/: from apps/mobile/, run flutter analyze && flutter test and record real output alongside the ExUnit results. Write test/reports/report-<date>-WF02-REQ428-20261001.yaml with real output including derived partition count N and its source. If you hit a failure, attribute it structurally (core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching') -- do not call it pre-existing by count-matching alone. If reaped/killed twice at the same settings, stop and report rather than retrying a third time.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run to completion (or a clearly reported memory-constrained stop after 2 attempts) with real aggregated Result:/Failed: counts quoted",
+      "flutter analyze && flutter test run from apps/mobile/ with real output quoted",
+      "test/reports/report-<date>-WF02-REQ428-20261001.yaml written with both result sets",
+      "Any failure attributed structurally (diff membership, merge-base reproduction, or measured mechanism), never by count-matching; unattributed failures reported for filing, not fixed here"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -84,4 +84,66 @@ queue_ref: null  # letflow-queue not called by this agent -- ISSUE-FIXER does no
                  # precedent in this repo. ORCH may adopt this GitHub issue into
                  # letflow-queue later via register_task's github_issue_number field.
 github_ref: GH-2149
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0974-join-dispatch-id-map
+resolved_at: "2026-10-02T07:20:29Z"
+resolution:
+  root_cause: >
+    A PARALLEL_GATEWAY join firing within the same hop chain as the triggering
+    completion minted a new, hop-chain-local synthetic token id with no real
+    persisted TokenRecord id yet. Four sibling Multi.merge/2 blocks in
+    lib/letflow/engine.ex (build_complete_task_tail_multi/6,
+    persist_timer_fired_advance/7, persist_escalation_timer_fired_advance/7,
+    do_persist_service_task_advance/10) each independently rebuilt a wrong,
+    pure-identity token-id map instead of reusing the real id_map
+    insert_hop_chain_new_token_records/5 already computed earlier in the same
+    transaction -- causing an Ecto.UUID cast failure (422) whenever such a join
+    fired directly into a SERVICE_TASK or TIMER-start node. Found during
+    REQ-433's implementation (committee quorum voting), which needs exactly
+    this shape.
+  design: >
+    lib/letflow/design/iss0974-join-dispatch-id-map-fix.md, CODE-DESIGN-VALIDATOR
+    PASSed after independently tracing Ecto.Multi's own source to confirm
+    cross-merge `changes` visibility, and independently proving the
+    identity-fallback is logically exhaustive/safe.
+  fix: >
+    Each of the 4 sites now reads the real id_map via
+    Map.fetch!(changes, {:hop_chain_token_records, <instance_id>}) and builds a
+    sparse real map with identity fallback (Map.get(hop_chain_id_map, token_id,
+    token_id)) instead of the pure-identity map.
+  security_reviewer: >
+    PASSed via a full independent INV-1/INV-6/INV-8 trace (brought the change
+    into scope despite not literally matching the agent's 5-bullet scope test,
+    reasoning it's a tenant-scoped write-path correctness fix) -- confirmed
+    key-scoping correctness, identity-fallback exhaustiveness, and fail-closed
+    Map.fetch! behavior.
+  reviewer: >
+    PASSed; confirmed idiomatic consistency across all 4 sites; filed ISS-0975
+    (merged via PR #2152) for a structurally-identical but differently-shaped
+    5th instance in append_pending_event_arms_multi/7 (not inside a
+    Multi.merge, needs a different fix shape); added a docs/anti-patterns.md
+    entry (grep-for-siblings lesson).
+  test_runner: >
+    Full suite 5368/5368 green, including both new regression test cases
+    (SERVICE_TASK and TIMER, for site 1 specifically).
+  release_validator: >
+    Exhaustive independent re-verification -- hand-traced all 4 sites' key-
+    matching and identity-fallback logic, ran its OWN mutation test reverting
+    sites 2/3/4 while leaving site 1 fixed, and found a REAL coverage gap: all
+    91 broader regression tests still passed with sites 2-4 broken, proving
+    those 3 sites currently have ZERO independent regression coverage (their
+    correctness rests only on code-symmetry with site 1, confirmed by
+    hand-trace/mutation test, not by anything in CI). RELEASE-VALIDATOR
+    explicitly ruled this is NOT a blocker to merging THIS PR (the fix itself
+    is correct and traced) but said it "must not be silently dropped" -- filed
+    as follow-up issue ISS-0976 for TEST-DESIGNER to add TIMER-fired/
+    escalation-TIMER-fired/SERVICE_TASK-advance join-dispatch regression cases
+    mirroring test/letflow/iss0974_join_dispatch_id_map_test.exs's existing
+    shape for sites 2/3/4. Independently re-ran the full suite (5368/5368,
+    matching TEST-RUNNER) and confirmed docs/requirements.yaml untouched.
+  queue_note: >
+    This is an ISSUE closure, not a REQ. No letflow-queue task to release
+    (filed directly by ISSUE-FIXER during REQ-433's implementation;
+    queue_ref: null per ISSUE-FIXER's own note -- ISSUE-FIXER isn't permitted
+    to call the queue).
+  pr: "PR #2151, final commit 5ce31010"

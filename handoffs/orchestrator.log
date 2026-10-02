@@ -2648,6 +2648,10 @@
 2026-10-01T15:41:41Z | PASS | WF03-ISS0950-20261001 | step-04d-release-validator | RELEASE-VALIDATOR -> ORCH | PASS -- 96 passed, live repro 422s
 2026-10-01T15:41:41Z | DISPATCH | WF03-ISS0950-20261001 | step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PENDING
 2026-10-01T15:42:18Z | PASS | WF03-ISS0950-20261001 | step-05-issue-fixer-close | ISSUE-FIXER -> ORCH | PASS -- ISS-0950 resolved (local); GH close + release_lock deferred to parent post-merge
+2026-10-01T14:48:24Z | DONE | WF-03 | WF03-ISS0917-20261001 | ORCH -> main | merged 2bc51bdd via PR #2100, squash, all CI checks green, no override needed
+2026-10-01T14:49:00Z | RELEASE_LOCK | WF-03 | WF03-ISS0917-20261001 | ORCH -> letflow-queue | task 907 done
+2026-10-01T16:25:00Z | DONE | WF-03 | WF03-ISS0950-20261001 | ORCH -> main | merged ce431622 via PR #2102, squash, all CI checks green, no override needed
+2026-10-01T16:25:00Z | RELEASE_LOCK | WF-03 | WF03-ISS0950-20261001 | ORCH -> letflow-queue | task 921 done
 2026-10-01T17:07:37Z | DISPATCH | WF03-ISS0923-20261001 | step-01..05b chain (see handoffs dir)|ORCH -> ISSUE-FIXER..DOC-UPDATER|COMPLETED
 2026-10-01T17:07:37Z | PASS | WF03-ISS0923-20261001 | step-05-issue-fixer|ISSUE-FIXER -> ORCH|PASS -- ISS-0923 resolved (local); design validator FAIL once (rework 1) then PASS; 24 tests, 129 scoped pass; GH close + release_lock deferred to parent post-merge
 2026-10-01T15:24:58Z | DISPATCH | WF03-Q915-20261001 | step-01-issue-fixer-diagnose | ORCH -> ISSUE-FIXER | PENDING
@@ -2672,6 +2676,8 @@
 2026-10-01T16:40:41Z | INFO | WF03-Q915-20261001 | step-05-close-issue | ORCH | ISS-0932 resolved; follow-ups ISS-0925/Q-925/GH-2105 and ISS-0926/Q-926/GH-2106 filed (also an accidental probe task Q-927/GH-2107 created and closed)
 2026-10-01T17:34:01Z | RUN_DONE | WF03-Q915-20261001 | ORCH | DONE -- PR #2108 (b6a4773d) squash-merged. ISS-0932/Q-915/GH-2066: meridian regulatory review fixture v1.2 arms P21D escalation timer on risk-evaluation, fallback edge -> regulatory-auto-escalation, e3 condition true; lib/ unchanged. Gates: ISSUE-FIXER, CODE-DESIGNER, CODE-DESIGN-VALIDATOR PASS, ELIXIR-DEV, SECURITY-REVIEWER skipped (fixture-only, no tenant-data path), REVIEWER PASS, TEST-DESIGNER (fail-first 11/24 red), TEST-DESIGN-VALIDATOR PASS (independent), TEST-RUNNER PASS, RELEASE-VALIDATOR PASS. CI 4/4 green on 19126744. Follow-ups Q-925/GH-2105, Q-926/GH-2106. release_lock 915 done (agent tvolo-win11-orch-uat); GH#2066 closed.
 2026-10-01T17:34:01Z | RELEASE_LOCK | WF03-Q915-20261001 | ORCH | task 915 released status=done, locked_by=null
+2026-10-01T18:45:00Z | DONE | WF-03 | WF03-ISS0923-20261001 | ORCH -> main | merged 6d2e2548 via PR #2110, squash, all CI checks green, no override needed
+2026-10-01T18:45:00Z | RELEASE_LOCK | WF-03 | WF03-ISS0923-20261001 | ORCH -> letflow-queue | task 923 done
 2026-10-01T20:53:43Z | DISPATCH | WF03-Q928-20261001 | step-01-issue-fixer-diagnose | ORCH -> ISSUE-FIXER | PENDING
 2026-10-01T20:56:57Z | DISPATCH | WF03-Q928-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
 2026-10-01T20:59:33Z | DISPATCH | WF03-Q928-20261001 | step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
@@ -2688,3 +2694,5 @@
 2026-10-01T20:10:00Z | INFO | WF03-Q929-20261001 | step-03b-security-reviewer | ORCH | SKIPPED -- engine post-subprocess dispatch wrapper + fixtures/seeds; no API route, authz, tenant derivation, migration, secrets or response shaping touched (tenant from schema prefix as complete_task/3 already does)
 2026-10-01T21:25:00Z | INFO | WF03-Q929-20261001 | step-final | ORCH | gates PASS (ISSUE-FIXER, CODE-DESIGNER, CODE-DESIGN-VALIDATOR, ELIXIR-DEV, SECURITY-REVIEWER skipped, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR); PR opened, merge held for supervisor; lock 929 kept
 2026-10-01T23:40:00Z | INFO | WF03-Q929-20261001 | rework | ORCH | CI failure persona_actor_seed_missing_account_test (hard-coded 11 vs 12 after role-procurement-manager); count now derived from PERSONAS table
+2026-10-02T00:55:00Z | DONE | WF-03 | WF03-Q928-20261001 | ORCH -> main | merged 3d214949 via PR #2135, squash, all CI checks green, no override needed
+2026-10-02T00:55:00Z | RELEASE_LOCK | WF-03 | WF03-Q928-20261001 | ORCH -> letflow-queue | task 928 done

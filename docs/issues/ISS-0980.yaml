@@ -59,6 +59,6 @@ acceptance_criteria:
 related:
   - ISS-0969
   - ISS-0946
-queue_ref: null
-github_ref: null
+queue_ref: null   # filed directly by REVIEWER during PR #2166's review, not via get_next_task
+github_ref: null  # not filed on GitHub; local-only follow-up, same as its sibling ISS-0969
 status: open

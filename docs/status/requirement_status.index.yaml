@@ -5826,8 +5826,14 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 24
+    entries: 25
     note: >
+      Incremented to 25 by DOC-UPDATER's own ISS-0972 SCOPE-CHANGE done-event
+      append (2026-10-02T16:14:01Z -- ISS-0972 resolved, PR #2163, final commit
+      1f3ccd4b), recounted from the composed file (25 on-disk `- req:` entries
+      in requirement_status.v25.yaml; 955 lines / 60382 bytes, well under the
+      1200-line/120000-byte roll ceiling, no roll triggered).
+
       Incremented to 24 by DOC-UPDATER's own ISS-0976 SCOPE-CHANGE done-event
       append (2026-10-02T13:40:00Z -- ISS-0976 resolved, PR #2161, final commit
       87b0b99e), recounted from the composed file (24 on-disk `- req:` entries

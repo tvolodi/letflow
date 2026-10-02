@@ -23,4 +23,59 @@ source_reports:
   - docs/issues/ISS-0970.yaml
 related:
   - ISS-0970
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0972-audit-chain-ordering
+resolved_at: "2026-10-02T16:14:01Z"
+resolution:
+  root_cause: >
+    test/support/simulation/runner.ex's :audit_event_ordering verification
+    compared two audit entries via DateTime.compare/2 -- the same
+    timestamp-only fragility ISS-0970 found and fixed for events (which has
+    sequence_number/global_seq). ISSUE-FIXER confirmed this was live,
+    load-bearing code (consumed by
+    test/fixtures/simulation/vortex/scenarios/supplier-quality-deviation-critical.yaml's
+    EO-001-ordering scenario), not dead code.
+  design: >
+    lib/letflow/design/iss0972-audit-ordering-rework.md, 2
+    CODE-DESIGN-VALIDATOR cycles (1st FAILed only on a mechanical issue --
+    literal implementation code present in the design doc instead of
+    specs/prose; substance was correct both times). CODE-DESIGNER confirmed
+    audit_entries has no sequence-equivalent column but its
+    chain_hash/prev_chain_hash hash-chain linkage (already used by
+    verify_chain/2) is a genuine structural ordering primitive.
+  fix: >
+    New public Letflow.Audit.chain_precedes?/3 (walks prev_chain_hash
+    backward, bounded by @max_chain_walk_hops = 10_000, returns
+    {:ok, boolean()} | {:error, {:max_hops_exceeded, n} | {:broken_chain_link, hash}}).
+    runner.ex's :audit_event_ordering clause reworked to delegate to it via
+    new require_same_prefix/2/ordering_outcome/3 helpers.
+    req207_vortex_test.exs's EO-001-ordering check now calls
+    chain_precedes?/3 directly. New unit tests cover true-precedes,
+    reversed/false, same-entry, broken-link, and max-hops-exceeded cases.
+  reviewer: >
+    PASSed; confirmed idiom consistency with verify_chain/2's house style,
+    confirmed same-entry handling was genuinely specified by the design
+    (not invented), noted ISS-0970's own resolution had already anticipated
+    this exact follow-up.
+  test_runner: >
+    Full suite clean (5378/5378); flagged a tooling gap
+    (test_parallel.sh watchdog orphan processes) filed separately as
+    ISS-0978.
+  release_validator: >
+    Exhaustive independent re-verification -- hand-traced the walk logic's
+    termination/correctness, constructed its OWN adversarial tests beyond
+    the shipped suite (a 3-entry CYCLE in the chain, correctly caught by the
+    hop-bound rather than infinite-looping; a mid-chain GAP, correctly
+    producing broken_chain_link rather than crashing), confirmed the EO-001
+    business claim genuinely holds (chain-insertion order coincides with
+    real causal order for this scenario's sequential-engine-instance
+    shape), confirmed docs/requirements.yaml untouched, independently
+    re-ran the full suite (5378/5378). Flagged one NON-BLOCKING observation
+    for future tracking: fetch_chain_tail/2's tail-selection query has no
+    row lock, so under true concurrent writers to the same tenant chain,
+    two inserts could theoretically race and fork the chain -- pre-existing
+    insert_entry/3 behavior, untouched by this PR, out of scope for
+    ISS-0972's own acceptance criteria.
+  pr: "#2163"
+  final_commit: 1f3ccd4b
+queue_ref: null  # ISSUE closure, not a REQ; no letflow-queue task to release (owner: ISSUE-FIXER (diagnosis first), filed directly during ISS-0970's own closure; queue_ref: null per that precedent)

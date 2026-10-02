@@ -529,7 +529,9 @@ defmodule Letflow.ISS0974JoinDispatchIdMapTest do
       %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
 
       %{schema_name: schema_name} = provisioned_tenant("iss0976-s2")
-      definition = active_definition!(schema_name, graph_split_timer_then_join_service_task(server_url))
+
+      definition =
+        active_definition!(schema_name, graph_split_timer_then_join_service_task(server_url))
 
       assert {:ok, created} = Engine.create(start_attrs(definition), prefix: schema_name)
       instance_id = created.instance_id
@@ -660,7 +662,10 @@ defmodule Letflow.ISS0974JoinDispatchIdMapTest do
       %{schema_name: schema_name} = provisioned_tenant("iss0976-s4")
 
       definition =
-        active_definition!(schema_name, graph_split_service_task_then_join_service_task(url_a, url_c))
+        active_definition!(
+          schema_name,
+          graph_split_service_task_then_join_service_task(url_a, url_c)
+        )
 
       assert {:ok, created} = Engine.create(start_attrs(definition), prefix: schema_name)
       instance_id = created.instance_id

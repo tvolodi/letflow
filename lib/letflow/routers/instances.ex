@@ -1344,6 +1344,22 @@ defmodule Letflow.Routers.Instances do
 
         :ok
     end
+  rescue
+    exception ->
+      # ISS-0980: no Repo.transaction/1 wrapper to rescue around here (this
+      # write is intentionally non-transactional/best-effort), but a raise
+      # from Audit.insert_entry/3 itself (e.g. a DROP TABLE-class fault) must
+      # be caught at the function level for the same reason the {:error,
+      # error_reason} branch above exists -- this already-decided 404 must
+      # never become a 500 because of an unrelated audit-write hiccup. Same
+      # ids-only, no-query-text logging discipline.
+      Logger.error(
+        "attachment.access_denied audit write raised " <>
+          "(attachment_id=#{attachment_id}, instance_id=#{instance_id}): " <>
+          inspect(exception)
+      )
+
+      :ok
   end
 
   # Metadata-only sibling of fetch_scoped_attachment_content/3, for DELETE

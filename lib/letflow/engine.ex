@@ -2804,23 +2804,32 @@ defmodule Letflow.Engine do
                 )
               end)
             end)
-            |> Multi.merge(fn _changes ->
+            |> Multi.merge(fn changes ->
+              # ISS-0974 fix: same real-id_map reasoning as the hop-chain
+              # merge above -- a same-hop-chain join can mint a token_id not
+              # yet persisted. Read the real mapping back out of `changes`
+              # rather than assuming identity.
+              {hop_chain_id_map, _hop_chain_new_records} =
+                Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
               id_map =
-                Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
+                Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
+                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+                end)
 
               build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
             end)
-            |> Multi.merge(fn _changes ->
-              # REQ-215 design doc §2.1 point 2/§2.5 -- every token_id in
-              # prepared_service_task_dispatches is already a real, persisted
-              # TokenRecord id by this point (same reasoning
-              # do_reconcile_token_records/4's own guard already enforces for
-              # final_instance_state as a whole), so the id_map is the
-              # identity map, mirroring the timer-arms merge immediately
-              # above.
+            |> Multi.merge(fn changes ->
+              # REQ-215 design doc §2.1 point 2/§2.5 -- ISS-0974 fix: use the
+              # real hop-chain id_map (same as the timer-arms merge above)
+              # instead of assuming every token_id in
+              # prepared_service_task_dispatches is already persisted.
+              {hop_chain_id_map, _hop_chain_new_records} =
+                Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
               id_map =
                 Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
-                  {token_id, token_id}
+                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
                 end)
 
               build_service_task_dispatch_multi(
@@ -3094,16 +3103,29 @@ defmodule Letflow.Engine do
                 )
               end)
             end)
-            |> Multi.merge(fn _changes ->
+            |> Multi.merge(fn changes ->
+              # ISS-0974 fix: use the real hop-chain id_map instead of
+              # assuming identity -- a same-hop-chain join can mint a
+              # token_id not yet persisted.
+              {hop_chain_id_map, _hop_chain_new_records} =
+                Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
               id_map =
-                Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
+                Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
+                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+                end)
 
               build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
             end)
-            |> Multi.merge(fn _changes ->
+            |> Multi.merge(fn changes ->
+              # ISS-0974 fix: same real-id_map reasoning as the timer-arms
+              # merge immediately above.
+              {hop_chain_id_map, _hop_chain_new_records} =
+                Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
               id_map =
                 Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
-                  {token_id, token_id}
+                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
                 end)
 
               build_service_task_dispatch_multi(
@@ -3619,16 +3641,29 @@ defmodule Letflow.Engine do
                 )
               end)
             end)
-            |> Multi.merge(fn _changes ->
+            |> Multi.merge(fn changes ->
+              # ISS-0974 fix: use the real hop-chain id_map instead of
+              # assuming identity -- a same-hop-chain join can mint a
+              # token_id not yet persisted.
+              {hop_chain_id_map, _hop_chain_new_records} =
+                Map.fetch!(changes, {:hop_chain_token_records, dispatch.instance_id})
+
               id_map =
-                Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
+                Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
+                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+                end)
 
               build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
             end)
-            |> Multi.merge(fn _changes ->
+            |> Multi.merge(fn changes ->
+              # ISS-0974 fix: same real-id_map reasoning as the timer-arms
+              # merge immediately above.
+              {hop_chain_id_map, _hop_chain_new_records} =
+                Map.fetch!(changes, {:hop_chain_token_records, dispatch.instance_id})
+
               id_map =
                 Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
-                  {token_id, token_id}
+                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
                 end)
 
               build_service_task_dispatch_multi(
@@ -4288,7 +4323,7 @@ defmodule Letflow.Engine do
 
     normalized_changes
     |> build_task_activation_and_reconciliation_multi(completed_at, prefix, skip_task_activation?)
-    |> Multi.merge(fn _changes ->
+    |> Multi.merge(fn changes ->
       # REQ-187 design doc §3.2 -- positioned immediately after
       # :token_reconciliation (the step that resolves real TokenRecord ids
       # here -- every token_id in final_instance_state is already a real,
@@ -4299,14 +4334,32 @@ defmodule Letflow.Engine do
       # actually sits AFTER :event/:projection below, not before -- this
       # step's own placement here follows the design's explicit instruction,
       # not that (incorrect) precedent claim.
-      id_map = Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
+      #
+      # ISS-0974 fix: a PARALLEL_GATEWAY join firing within this same hop
+      # chain can mint a token_id that is NOT yet a real, persisted
+      # TokenRecord id at this point -- build_task_activation_and_reconciliation_multi/4
+      # (called just above, in the same pipe) already resolved the real
+      # mapping via insert_hop_chain_new_token_records/5 and stashed it in
+      # `changes` under {:hop_chain_token_records, parent_instance_id}. Read
+      # it back out and fall back to identity for every token_id it doesn't
+      # cover (the sparse/common "no join fired" case) instead of assuming
+      # every token_id is already real.
+      {hop_chain_id_map, _hop_chain_new_records} =
+        Map.fetch!(changes, {:hop_chain_token_records, parent_instance_id})
+
+      id_map =
+        Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
+          {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+        end)
+
       build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
     end)
-    |> Multi.merge(fn _changes ->
+    |> Multi.merge(fn changes ->
       # REQ-215 design doc §2.1 point 1/§2.5 -- positioned alongside the
-      # timer-arms merge immediately above, same identity-id_map reasoning
-      # (every token_id in prepared_service_task_dispatches is already a
-      # real, persisted TokenRecord id at this point in the hop chain).
+      # timer-arms merge immediately above, same ISS-0974 real-id_map
+      # reasoning (every token_id in prepared_service_task_dispatches is
+      # mapped to its real, persisted TokenRecord id, whether it was already
+      # real or was minted fresh by a same-hop-chain join).
       # `prefix` was already validated by this function's own caller
       # (complete_task/3's top-level `with` chain) -- the error branch here
       # is unreachable in practice, but matched via `with` rather than a
@@ -4314,9 +4367,12 @@ defmodule Letflow.Engine do
       # error instead of a MatchError, consistent with this module's own
       # with/<- idiom elsewhere (e.g. create/2, persist_timer_fired_advance/7).
       with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+        {hop_chain_id_map, _hop_chain_new_records} =
+          Map.fetch!(changes, {:hop_chain_token_records, parent_instance_id})
+
         id_map =
           Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
-            {token_id, token_id}
+            {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
           end)
 
         build_service_task_dispatch_multi(

@@ -109,9 +109,11 @@ expected_outcomes:
     verification:
       method: audit_event
       detail: >
-        audit event for POST /compliance/regulatory-notice with payload
-        containing reason 'sla_breach_30_days' for review
-        sim-meridian-review-001
+        GET /api/v1/audit returns an entry with action
+        'service_task.outbound_request_sent', resource_type 'instance',
+        resource_id equal to the review's instance_id, and
+        after_state.request_body_preview containing the substring
+        'sla_breach_30_days', for review sim-meridian-review-001
     on_fail:
       severity: BLOCKER
       business_impact: >

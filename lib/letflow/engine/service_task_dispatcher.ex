@@ -87,6 +87,7 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
 
   require Logger
 
+  alias Letflow.Audit
   alias Letflow.Engine.ServiceTask
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
@@ -748,10 +749,10 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
       Repo.transaction(fn ->
         case fetch_and_lock_dispatch(dispatch_id, tenant_schema) do
           nil ->
-            {:ok, :already_final}
+            {:ok, {:already_final, nil}}
 
           %ServiceTaskDispatch{status: status} when status != "pending" ->
-            {:ok, :already_final}
+            {:ok, {:already_final, nil}}
 
           %ServiceTaskDispatch{} = row ->
             do_attempt_dispatch(row, tenant_schema)
@@ -761,6 +762,18 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
           {:error, reason} -> Repo.rollback(reason)
         end
       end)
+      # ISS-0946 -- everything below this line runs strictly after
+      # Repo.transaction/1 has returned (committed or rolled back), still
+      # inside this existing try, still before rescue (design
+      # lib/letflow/design/iss0946-service-task-audit-decision.md §3.3).
+      |> case do
+        {:ok, {outcome, audit_context}} ->
+          if audit_context, do: audit_outbound_request(audit_context, tenant_schema)
+          {:ok, outcome}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
     rescue
       exception -> {:error, {:raised, exception}}
     end
@@ -781,12 +794,25 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
 
         raw_outcome = http_transport(config, rendered_url, rendered_body)
 
+        audit_context =
+          if genuine_attempt?(raw_outcome) do
+            build_outbound_audit_context(
+              row,
+              :inline_url,
+              config.method,
+              rendered_url,
+              rendered_body
+            )
+          end
+
         case ServiceTask.classify_failure_kind(raw_outcome) do
           {:success, decoded_body} ->
             handle_success(row, tenant_schema, decoded_body)
+            |> wrap_with_audit_context(audit_context)
 
           failure_kind ->
             handle_failure(row, tenant_schema, config.retry_limit, failure_kind)
+            |> wrap_with_audit_context(audit_context)
         end
 
       # ISS-0917: a :catalog_service row is snapshot-driven exactly like an
@@ -801,18 +827,34 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
           rendered_url when is_binary(rendered_url) and rendered_url != "" ->
             rendered_body = row.config_snapshot["rendered_body"]
 
-            case ServiceTask.classify_failure_kind(
-                   http_transport(config, rendered_url, rendered_body)
-                 ) do
+            raw_outcome = http_transport(config, rendered_url, rendered_body)
+
+            audit_context =
+              if genuine_attempt?(raw_outcome) do
+                build_outbound_audit_context(
+                  row,
+                  :catalog_service,
+                  config.method,
+                  rendered_url,
+                  rendered_body
+                )
+              end
+
+            case ServiceTask.classify_failure_kind(raw_outcome) do
               {:success, decoded_body} ->
                 handle_success(row, tenant_schema, decoded_body)
+                |> wrap_with_audit_context(audit_context)
 
               failure_kind ->
                 handle_failure(row, tenant_schema, config.retry_limit, failure_kind)
+                |> wrap_with_audit_context(audit_context)
             end
 
           _missing_or_unusable ->
+            # no http_transport call ever happens on this branch -- audit_context
+            # is unconditionally nil, same as the original design's intent.
             handle_failure(row, tenant_schema, config.retry_limit, :request_build_error)
+            |> wrap_with_audit_context(nil)
         end
 
       {:error, _malformed_reason} ->
@@ -825,13 +867,249 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
         # no new failure_kind is introduced, and http_transport/3 is never
         # called for this row. retry_limit is read directly from the
         # snapshot (never from the Config.t() this branch failed to build)
-        # since it does not depend on route_kind/method at all.
+        # since it does not depend on route_kind/method at all. No
+        # http_transport call on this branch either -- nil, same reasoning.
         handle_failure(
           row,
           tenant_schema,
           row.config_snapshot["retry_limit"],
           :request_build_error
         )
+        |> wrap_with_audit_context(nil)
+    end
+  end
+
+  # ===========================================================================
+  # ISS-0946 -- SERVICE_TASK outbound-request audit. See
+  # lib/letflow/design/iss0946-service-task-audit-decision.md for the full
+  # design (§3.1-§3.4). Writes one best-effort Letflow.Audit entry per genuine
+  # outbound attempt (never for a :request_build_error, which never reaches
+  # http_transport/3), strictly AFTER attempt_dispatch/2's own
+  # Repo.transaction/1 has returned -- never nested inside it (design §3.3's
+  # SAVEPOINT-hazard finding).
+  # ===========================================================================
+
+  @type outbound_audit_context :: %{
+          dispatch_id: Ecto.UUID.t(),
+          instance_id: Ecto.UUID.t(),
+          node_id: String.t(),
+          attempt_index: non_neg_integer(),
+          route_kind: :inline_url | :catalog_service,
+          method: ServiceTask.Config.http_method(),
+          rendered_url: String.t(),
+          rendered_body: String.t() | nil
+        }
+
+  # design §3.1 -- the genuine_attempt?/1 guard: a :request_build_error never
+  # reached http_transport/3 at all, so it is never auditable as an outbound
+  # request. Every other raw_outcome() shape (:timeout, {:network, _},
+  # {:http, _, _}) represents a real attempt that reached the transport.
+  @spec genuine_attempt?(ServiceTask.raw_outcome()) :: boolean()
+  defp genuine_attempt?({:request_build_error, _reason}), do: false
+  defp genuine_attempt?(_other), do: true
+
+  # design §3.3 -- Option (b)'s one new private helper. Wraps
+  # do_attempt_dispatch/2's four call-site results (handle_success/3 or
+  # handle_failure/4, never handle_retry/3 or handle_give_up/4 directly --
+  # those stay reached only through handle_failure/4's own unchanged internal
+  # routing) into the uniform {outcome, audit_context} shape attempt_dispatch/2
+  # unwraps after its own Repo.transaction/1 returns. handle_success/3,
+  # handle_failure/4, handle_retry/3, and handle_give_up/4 are NOT changed by
+  # this helper -- it wraps their already-produced result, it does not alter
+  # how they are called or what they compute.
+  @spec wrap_with_audit_context(
+          {:ok, outcome} | {:error, reason},
+          audit_context :: outbound_audit_context() | nil
+        ) :: {:ok, {outcome, outbound_audit_context() | nil}} | {:error, reason}
+        when outcome: var, reason: var
+  defp wrap_with_audit_context({:ok, outcome}, audit_context), do: {:ok, {outcome, audit_context}}
+  defp wrap_with_audit_context({:error, _} = err, _audit_context), do: err
+
+  # design §3.3 -- built immediately after raw_outcome is computed, inside
+  # do_attempt_dispatch/2's existing transaction -- every field is already
+  # available at that call site. Returns the context map to thread out of the
+  # transaction; callers only invoke this when genuine_attempt?(raw_outcome)
+  # is true.
+  @spec build_outbound_audit_context(
+          row :: ServiceTaskDispatch.t(),
+          route_kind :: :inline_url | :catalog_service,
+          method :: ServiceTask.Config.http_method(),
+          rendered_url :: String.t(),
+          rendered_body :: String.t() | nil
+        ) :: outbound_audit_context()
+  defp build_outbound_audit_context(
+         %ServiceTaskDispatch{} = row,
+         route_kind,
+         method,
+         rendered_url,
+         rendered_body
+       ) do
+    %{
+      dispatch_id: row.id,
+      instance_id: row.instance_id,
+      node_id: row.node_id,
+      attempt_index: row.attempt_index,
+      route_kind: route_kind,
+      method: method,
+      rendered_url: rendered_url,
+      rendered_body: rendered_body
+    }
+  end
+
+  # design §3.3 -- called from attempt_dispatch/2 strictly AFTER its own
+  # Repo.transaction/1 has returned -- opens its own fresh Repo.transaction/1
+  # wrapping only Letflow.Audit.insert_entry/3, mirroring
+  # record_task_activation_rejection_audit/5's exact shape
+  # (engine.ex:4846-4887), plus one added `rescue` to also swallow a raised
+  # (not merely {:error, _}-returned) Postgres-level failure. Never raises;
+  # never affects the already-committed dispatch row.
+  #
+  # `@doc false def`, not `defp` -- mirrors the same visibility reasoning
+  # `record_task_activation_rejection_audit/5`/`record_service_task_advance_failure_audit/5`
+  # (engine.ex) already use: the ONLY reason this is public at all is design
+  # §3.6 test case 7a, which calls this directly (unit-level, not through
+  # `attempt_dispatch/2`) to exercise the Ecto-changeset-validation-failure
+  # branch, a class `attempt_dispatch/2`'s own real call sites never produce
+  # (every field they supply is always present and well-typed). No
+  # production caller outside this module exists or is intended.
+  @doc false
+  @spec audit_outbound_request(
+          context :: outbound_audit_context(),
+          tenant_schema :: String.t()
+        ) :: :ok
+  def audit_outbound_request(%{} = context, tenant_schema) when is_binary(tenant_schema) do
+    attrs = %{
+      actor_id: EventStore.platform_actor_id(),
+      action: "service_task.outbound_request_sent",
+      resource_type: "instance",
+      resource_id: context.instance_id,
+      before_state: nil,
+      after_state: service_task_outbound_audit_state(context),
+      trace_id: nil
+    }
+
+    case Repo.transaction(fn -> Audit.insert_entry(Repo, attrs, tenant_schema) end) do
+      {:ok, {:ok, _entry}} ->
+        :ok
+
+      {:ok, {:error, insert_reason}} ->
+        Logger.warning(
+          "Letflow.Audit.insert_entry/3 failed recording service_task.outbound_request_sent " <>
+            "for dispatch #{context.dispatch_id} (instance #{context.instance_id}, " <>
+            "tenant_schema #{tenant_schema}): #{inspect(insert_reason)}"
+        )
+
+        :ok
+
+      {:error, rollback_reason} ->
+        Logger.warning(
+          "Repo.transaction/1 failed recording service_task.outbound_request_sent for " <>
+            "dispatch #{context.dispatch_id} (instance #{context.instance_id}, " <>
+            "tenant_schema #{tenant_schema}): #{inspect(rollback_reason)}"
+        )
+
+        :ok
+    end
+  rescue
+    exception ->
+      Logger.warning(
+        "Repo.transaction/1 raised recording service_task.outbound_request_sent for " <>
+          "dispatch #{context.dispatch_id} (instance #{context.instance_id}, " <>
+          "tenant_schema #{tenant_schema}): #{inspect(exception)}"
+      )
+
+      :ok
+  end
+
+  # design §3.1/§3.2 -- after_state shape. Deliberately EXCLUDES headers
+  # (config.headers) and decoded_body (the HTTP response, already covered by
+  # SERVICE_TASK_COMPLETED) -- see the design's §3.1 "Deliberately excluded"
+  # list. Never add either without a fresh SECURITY-REVIEWER pass.
+  @spec service_task_outbound_audit_state(context :: outbound_audit_context()) :: %{
+          required(String.t()) => String.t() | non_neg_integer() | boolean() | nil
+        }
+  defp service_task_outbound_audit_state(%{} = context) do
+    base = %{
+      "dispatch_id" => context.dispatch_id,
+      "node_id" => context.node_id,
+      "attempt_index" => context.attempt_index,
+      "route_kind" => Atom.to_string(context.route_kind),
+      "method" => Atom.to_string(context.method),
+      "rendered_url" => context.rendered_url
+    }
+
+    Map.merge(base, body_preview_fields(context.rendered_body))
+  end
+
+  defp body_preview_fields(nil) do
+    %{
+      "request_body_present" => false,
+      "request_body_byte_size" => 0,
+      "request_body_truncated" => false,
+      "request_body_preview" => nil
+    }
+  end
+
+  defp body_preview_fields(rendered_body) when is_binary(rendered_body) do
+    {preview, truncated?} = redact_and_cap_body_preview(rendered_body)
+
+    %{
+      "request_body_present" => true,
+      "request_body_byte_size" => byte_size(rendered_body),
+      "request_body_truncated" => truncated?,
+      "request_body_preview" => preview
+    }
+  end
+
+  # design §3.2 -- the redaction/capping helper, exact spec:
+  #   1. Attempt Jason.decode/1. On success, if the decoded value is a map,
+  #      walk its TOP-LEVEL keys only (no recursion into nested
+  #      objects/arrays -- design §4 OQ-1) and replace the value of any key
+  #      whose name matches the secret-shaped pattern below with the literal
+  #      string "[REDACTED]". Re-encode via Jason.encode!/1. On decode
+  #      failure (not JSON, or not a map at the top level), skip redaction
+  #      and hand the raw string through unchanged (design §4 OQ-2).
+  #   2. Truncate the (possibly redacted) string to the first 2000 Unicode
+  #      codepoints (String.slice/2-safe, never mid-codepoint).
+  #      truncated? is true iff the pre-truncation string was longer than
+  #      2000 codepoints.
+  @secret_key_pattern ~r/secret|token|password|api[_-]?key|authorization|bearer|credential/i
+  @body_preview_codepoint_cap 2000
+
+  @spec redact_and_cap_body_preview(rendered_body :: String.t()) ::
+          {preview :: String.t(), truncated? :: boolean()}
+  defp redact_and_cap_body_preview(rendered_body) when is_binary(rendered_body) do
+    rendered_body
+    |> redact_top_level_json_keys()
+    |> cap_to_codepoints(@body_preview_codepoint_cap)
+  end
+
+  defp redact_top_level_json_keys(rendered_body) do
+    case Jason.decode(rendered_body) do
+      {:ok, decoded} when is_map(decoded) ->
+        decoded
+        |> Enum.map(fn {key, value} ->
+          if Regex.match?(@secret_key_pattern, to_string(key)) do
+            {key, "[REDACTED]"}
+          else
+            {key, value}
+          end
+        end)
+        |> Map.new()
+        |> Jason.encode!()
+
+      _not_a_json_object ->
+        rendered_body
+    end
+  end
+
+  defp cap_to_codepoints(string, cap) do
+    length = String.length(string)
+
+    if length > cap do
+      {String.slice(string, 0, cap), true}
+    else
+      {string, false}
     end
   end
 

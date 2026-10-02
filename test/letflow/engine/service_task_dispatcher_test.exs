@@ -37,6 +37,7 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
 
   import Ecto.Query
 
+  alias Letflow.Audit.Entry
   alias Letflow.Engine.ServiceTask
   alias Letflow.Engine.ServiceTaskDispatcher
   alias Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch
@@ -1217,6 +1218,267 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
       # failure to THIS test -- which discriminates a regression in THIS
       # FIXTURE IDIOM ITSELF (see the scope note above for what that does
       # and does not cover).
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0946 -- SERVICE_TASK outbound-request audit (design
+  # lib/letflow/design/iss0946-service-task-audit-decision.md §3.6). One
+  # Letflow.Audit entry (action "service_task.outbound_request_sent") per
+  # genuine outbound attempt, written strictly after attempt_dispatch/2's own
+  # Repo.transaction/1 has returned.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0946 -- service_task.outbound_request_sent audit" do
+    defp audit_rows_for(schema_name, action) do
+      Entry
+      |> where([e], e.action == ^action)
+      |> order_by([e], asc: e.timestamp)
+      |> Repo.all(prefix: schema_name)
+    end
+
+    setup do
+      Application.put_env(:letflow, :service_task_ssrf_validation_enabled, false)
+      on_exit(fn -> Application.delete_env(:letflow, :service_task_ssrf_validation_enabled) end)
+      :ok
+    end
+
+    test "1. happy path emits exactly one audit row per attempt" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"result":"ok"}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      rendered_body = ~s({"reason":"sla_breach_30_days","review_id":"rev-1"})
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot:
+            config_snapshot(%{"rendered_url" => server_url, "rendered_body" => rendered_body})
+        })
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert [entry] = audit_rows_for(schema_name, "service_task.outbound_request_sent")
+      assert entry.resource_type == "instance"
+      assert entry.resource_id == instance_id
+      assert entry.after_state["dispatch_id"] == dispatch.id
+      assert entry.after_state["node_id"] == dispatch.node_id
+      assert entry.after_state["attempt_index"] == 0
+      assert entry.after_state["route_kind"] == "inline_url"
+      assert entry.after_state["method"] == "POST"
+      assert entry.after_state["rendered_url"] == server_url
+      assert entry.after_state["request_body_preview"] =~ "sla_breach_30_days"
+    end
+
+    test "2. :request_build_error writes no audit row (SSRF-blocked and malformed-snapshot both)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      # Gate back ON for this sub-case, deliberately -- the SSRF block itself
+      # is what must produce :request_build_error here, not the test seam.
+      Application.delete_env(:letflow, :service_task_ssrf_validation_enabled)
+
+      blocked_dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot:
+            config_snapshot(%{"rendered_url" => "https://169.254.169.254/latest/meta-data"})
+        })
+
+      assert {:ok, {:give_up, _error_attrs}} =
+               ServiceTaskDispatcher.attempt_dispatch(blocked_dispatch.id, schema_name)
+
+      malformed_dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot: config_snapshot(%{"route_kind" => "bogus_route_kind"})
+        })
+
+      assert {:ok, {:give_up, _error_attrs}} =
+               ServiceTaskDispatcher.attempt_dispatch(malformed_dispatch.id, schema_name)
+
+      assert audit_rows_for(schema_name, "service_task.outbound_request_sent") == []
+    end
+
+    test "3. headers never appear in any audit row" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot:
+            config_snapshot(%{
+              "rendered_url" => server_url,
+              "headers" => %{"Authorization" => "Bearer test-secret-value"}
+            })
+        })
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert [entry] = audit_rows_for(schema_name, "service_task.outbound_request_sent")
+      serialized = Jason.encode!(entry.after_state)
+      refute serialized =~ "test-secret-value"
+      refute serialized =~ "Authorization"
+    end
+
+    test "4. top-level JSON-key redaction replaces secret-shaped values, leaves others legible" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      rendered_body = ~s({"reason":"sla_breach_30_days","api_key":"super-secret-123"})
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot:
+            config_snapshot(%{"rendered_url" => server_url, "rendered_body" => rendered_body})
+        })
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert [entry] = audit_rows_for(schema_name, "service_task.outbound_request_sent")
+      preview = entry.after_state["request_body_preview"]
+      assert preview =~ "[REDACTED]"
+      assert preview =~ "sla_breach_30_days"
+      refute preview =~ "super-secret-123"
+    end
+
+    test "5. body preview is capped at 2000 codepoints, byte_size records the true original size" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      rendered_body = String.duplicate("a", 2500)
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot:
+            config_snapshot(%{"rendered_url" => server_url, "rendered_body" => rendered_body})
+        })
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert [entry] = audit_rows_for(schema_name, "service_task.outbound_request_sent")
+      assert entry.after_state["request_body_truncated"] == true
+      assert String.length(entry.after_state["request_body_preview"]) == 2000
+      assert entry.after_state["request_body_byte_size"] == byte_size(rendered_body)
+    end
+
+    test "6. retries each get their own audit row, one per attempt_index" do
+      refused_url = WebhookTestServer.refused_url()
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"result":"ok"}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot: config_snapshot(%{"rendered_url" => refused_url, "retry_limit" => 3})
+        })
+
+      assert {:ok, :retry_scheduled} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      # Swap the frozen rendered_url for the next attempt directly -- a real
+      # activation-time caller (REQ-215) would never do this (the whole
+      # point of freeze-at-INSERT is that it never changes), but this test
+      # only needs attempt 2 to be a genuine, distinct outbound call that
+      # succeeds, to prove each attempt gets its own audit row.
+      ServiceTaskDispatch
+      |> where([d], d.id == ^dispatch.id)
+      |> Repo.update_all(
+        [set: [config_snapshot: config_snapshot(%{"rendered_url" => server_url})]],
+        prefix: schema_name
+      )
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      entries = audit_rows_for(schema_name, "service_task.outbound_request_sent")
+      assert length(entries) == 2
+      assert Enum.map(entries, & &1.after_state["attempt_index"]) |> Enum.sort() == [0, 1]
+    end
+
+    test "7a. a changeset-validation failure inside audit_outbound_request/2 is swallowed, never raises" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Deliberately incomplete outbound_audit_context()-shaped map -- nil
+      # instance_id becomes a nil resource_id, which Letflow.Audit.Entry's
+      # own @required_fields rejects at the Ecto-changeset level, without
+      # ever reaching Postgres. This class is not reachable through a real
+      # dispatch row (every field do_attempt_dispatch/2 supplies is always
+      # present and well-typed), so it is exercised directly here.
+      context = %{
+        dispatch_id: Ecto.UUID.generate(),
+        instance_id: nil,
+        node_id: "n1",
+        attempt_index: 0,
+        route_kind: :inline_url,
+        method: :POST,
+        rendered_url: "https://example.test/notice",
+        rendered_body: nil
+      }
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert :ok = ServiceTaskDispatcher.audit_outbound_request(context, schema_name)
+        end)
+
+      assert log =~ "service_task.outbound_request_sent"
+      assert audit_rows_for(schema_name, "service_task.outbound_request_sent") == []
+    end
+
+    test "7b. a genuine Postgres-level audit-insert failure never blocks the dispatch" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"result":"ok"}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot: config_snapshot(%{"rendered_url" => server_url})
+        })
+
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, {:advance, _decoded_body}} =
+                   ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+        end)
+
+      assert log =~ "service_task.outbound_request_sent"
+
+      reloaded = reload!(schema_name, dispatch.id)
+      assert reloaded.status == "advanced"
+      assert reloaded.dispatched_at != nil
     end
   end
 end

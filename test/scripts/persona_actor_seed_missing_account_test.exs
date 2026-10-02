@@ -71,9 +71,27 @@ defmodule Letflow.Scripts.PersonaActorSeedMissingAccountTest do
         |> String.split("\n")
         |> Enum.filter(&(String.contains?(&1, "POST") and &1 =~ "/members"))
 
-      # 8 existing personas -> TASK_WORKER (8) + role groups for sabine/stefan/karl (3); dirk none.
-      assert length(member_posts) == 11
+      # Derived from the seed script's own PERSONAS table: every persona except the one
+      # without an account gets TASK_WORKER (implicit) plus one membership per held role.
+      assert length(member_posts) == expected_member_posts("actor-vortex-dirk")
     end
+  end
+
+  defp expected_member_posts(missing_user) do
+    lines = @script |> File.read!() |> String.split(~r{\r?\n})
+
+    [_open | rest] = Enum.drop_while(lines, &(&1 != "PERSONAS=("))
+
+    rest
+    |> Enum.take_while(&(&1 != ")"))
+    |> Enum.map(fn line ->
+      [_, entry] = Regex.run(~r/^\s*"([^"]*)"\s*$/, line)
+      entry
+    end)
+    |> Enum.map(&String.split(&1, "|", parts: 2))
+    |> Enum.reject(fn [user, _roles] -> user == missing_user end)
+    |> Enum.map(fn [_user, roles] -> 1 + length(String.split(roles, ",", trim: true)) end)
+    |> Enum.sum()
   end
 
   defp path_sep, do: if(match?({:win32, _}, :os.type()), do: ";", else: ":")

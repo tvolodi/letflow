@@ -1,0 +1,79 @@
+{
+  "handoff_id": "5c2a9d7e-41b8-4e63-9f0a-7d3e6b1a8c24",
+  "run_id": "WF03-Q929-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q929-20261001/step-02b-code-design-validator.json",
+  "created_at": "2026-10-02T07:40:00Z",
+  "started_at": null,
+  "completed_at": "2026-10-02T07:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0929": "queue Q-929 / GH #2115: vortex/supplier-quality-deviation-critical goes to ERROR SUB_PROCESS_DEFINITION_NOT_FOUND on severity=critical (SUB_PROCESS node has no definition_name; no 8D child definition exists; role-procurement-manager unseeded). Scenario EO-002 (8D task assigned to role-procurement-manager) and EO-003 (instance COMPLETED at end-closed). No QA data changes."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md",
+      "docs/issues/ISS-0929.yaml",
+      "handoffs/WF03-Q929-20261001/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-Q929-20261001/step-02-code-designer.json",
+      "test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-critical.yaml"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-a5c794b4cbceb277a",
+    "branch_name": "feature/WF03-Q929-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 2b hard gate on CODE-DESIGNER's design for ISS-0929/Q-929. Independently verify the proposed lib fix (sub_process.ex build_completion_multi_from_merge discarding pending events) is correct, minimal, transaction-safe, covers SERVICE_TASK and TIMER after SUB_PROCESS, no tenant/authz change; fixture/seed/test items unambiguous; no implementation code; persona-seed/drift flips complete; scope does not touch QA data.",
+    "acceptance_criteria": [
+      "Design covers every required outcome (EO-002, EO-003)",
+      "Proposed lib fix verified against code",
+      "Fixture/seed/test edit items unambiguous",
+      "No implementation code",
+      "Explicit PASS/FAIL with issues list"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Validated lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md. Code reads: build_completion_multi_from_merge/12 (sub_process.ex ~824-905) does bind advance_until_stable's third element to _more_pending and the first Transition.transition result to _pending_events, so dispatch/timer/escalation events are indeed dropped on the sub-process completion path; build_completion_write_steps/12 writes only task activation, token reconciliation, SUB_PROCESS_COMPLETED event, parent projection and grandparent cascade. Engine.complete_task/3 (engine.ex ~3735-3775 and ~4060-4115) consumes the same events via prepare_timer_arms/4 + prepare_service_task_dispatch_for_completion/8 and build_timer_arms_multi/4 + build_service_task_dispatch_multi/5 with an identity id_map (tenant_id from TenantProvisioning.tenant_id_for_schema_name/1, step name keyed by token_record_id), which is exactly what the design proposes to reuse, so the fix is correct and minimal (one @doc false public wrapper in Engine, one extra parameter on a private SubProcess function; no helper renamed). Timer arms and dispatch rows both covered (E1 SERVICE_TASK, E2 TIMER, E3 escalation HUMAN_TASK, E6 real fixtures). Transaction-safe: all inserts are Multi steps appended after the reconciliation step (TokenRecord FK satisfied), same schema prefix, no new transaction boundary; errors map to the existing to_error_args activation_failed channel handled by the callers' ExecutionError fallback. advance_until_stable/4 (engine.ex ~1413) accumulates only its own hops' events, so concatenating the first-transition events with the hop events does not duplicate the dispatch. No route, authz, response-shape, or tenant-derivation change; SECURITY-REVIEWER skip rationale is sound but ORCH decides. Persona flips complete: grep of test/ for role-procurement-manager finds only persona_actor_seed_drift_test.exs (lines 163-164 refute, M2 at 178-186) plus doc mentions; literal count 4 appears at drift-test lines 30 (@tenants vortex count), 184 (M2) and 217 (M6); the ROLES-held-by-nobody check is satisfied once felix holds the role; no other test reads vortex ROLES. EO-002/EO-003 map to design sections 4-5, 7, E1, E6. ISS-0929 scope touches no QA data (section 0, 9). Design contains JSON fixture shapes and one @spec only, no function bodies. Not run: the design's section 2 probe was not re-executed (the probe file was deleted; findings are consistent with the code read) and the new test files do not exist yet.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Drift-test count literals not enumerated: ELIXIR-DEV/TEST-DESIGNER must update lines 30 (count: 4 -> 5), 184 (M2, rewritten) and 217 (M6, roles_errors(..., 4) -> 5). Design says 'search for every literal 4', which suffices, but these are the three sites.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Ambiguity to resolve at build time: section 3.1 says 'two Multi.merge steps' but the section 3.2 wrapper is eager (returns {:ok, multi} | {:error, _}) and errors must be returned from build_completion_multi_from_merge/12. Implement as: run the wrapper eagerly while building the write steps (build_completion_write_steps must be split or return a tagged tuple so the error becomes the existing to_error_args activation_failed shape); do not use lazy Multi.merge for the prepare phase, or the error cannot be routed. Section 3.1 dedupe by {tag, token_id, node_id} is stated as conditional; if a duplicate is ever observed it must be deduped unconditionally because duplicate step names raise.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Stale prose beyond the single sentence the design lists: lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md also states procurement absent at lines ~110, 187, 197, 236, and test/specs/ISS-0931.md line 7. Optional doc cleanup; not a gate item.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Follow-up issues ORCH must file (as the design states): SUB_PROCESS directly after a completed SUB_PROCESS not activated (3.4); SERVICE_TASK body_template not rendered (Q-926); stale HUMAN_TASK escalation timer. The sync-child (START-to-END) Multi-collision caveat is out of scope. started_at null on this handoff left per protocol.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q929-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: proceed to ELIXIR-DEV with the design; pass the MINOR build notes (eager prepare + error routing, unconditional dedupe if needed, drift-test lines 30/184/217)."
+  }
+}

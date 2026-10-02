@@ -1,0 +1,60 @@
+{
+  "handoff_id": "34474004-79b1-4aae-8a7f-7903bcbef35f",
+  "run_id": "WF03-Q928-20261001",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q928-20261001/step-02b-code-design-validator.json",
+  "created_at": "2026-10-01T20:59:33Z",
+  "started_at": "2026-10-01T20:59:33Z",
+  "completed_at": "2026-10-01T21:00:42Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0928": "id: ISS-0928 (queue Q-928, GH-2114, local file docs/issues/ISS-0928.yaml exists ONLY on open PR #2129 branch origin/pr2129 -- view with git show origin/pr2129:docs/issues/ISS-0928.yaml; do not touch PR #2129). Title: Meridian Loan Origination: SERVICE_TASK kyc-aml-check inside PARALLEL_GATEWAY fork never dispatched; instance stalls ACTIVE (UAT WF05-FULL3-20261001 F1). Severity MAJOR. Symptom: meridian Loan Origination v1.1 on QA: after credit-memo-review (ben) and risk-assessment (miriam) complete, current_nodes=[kyc-aml-check]; instance ACTIVE >6.5min (past 300s timeout_ms) with no task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row; endpoint answers 200 directly; top-level service tasks complete in 2-6s. Suspect SERVICE_TASK activation inside PARALLEL_GATEWAY fork branch (cf. ISS-0398 walk_to_gateway, resolved): likely no service_task_dispatches row armed on the fork/join walk path (Letflow.Engine fork activation / arm_service_task_dispatch call sites / TaskActivation). ALSO: kyc-routing has no unconditional edge and the stub endpoint returns no kyc_status, so the token may stall at kyc-routing even once dispatched -- assess whether fixture/process-definition issue (test/fixtures/qa/ meridian loan origination definition); handle or file separately. Acceptance: SERVICE_TASK nodes on a PARALLEL_GATEWAY branch are dispatched and recorded; meridian loan-origination scenarios reach committee/L1 routing and complete; regression test fail-first reproducing the stall at engine level. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml (on PR #2129 branch origin/pr2129 only). Q-926 (body_template rendering) is DONE and merged on main -- build on it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/WF03-ISS0928-fix-design.md",
+      "handoffs/WF03-Q928-20261001/step-01-issue-fixer-diagnose.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0928-parallel-fork-service-task-Q928"
+  },
+  "task": {
+    "description": "WF-03 Step 2b: validate lib/letflow/design/WF03-ISS0928-fix-design.md against the diagnosis (step-01) and issue acceptance: covers every criterion, no implementation code, unambiguous, transaction semantics sound (verify claims by reading engine.ex persist_service_task_advance and the human-task completion path yourself). Also rule on the four open questions. Edit only your handoff; result.status PASS/FAIL with reasons; real completed_at.",
+    "acceptance_criteria": [
+      "Each acceptance criterion mapped",
+      "No implementation code",
+      "Transaction semantics verified against code",
+      "Open questions ruled"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. (1) AC mapping: design sec.7 maps all criteria; issue AC 'SERVICE_TASK on fork branch dispatched and recorded' is satisfied by pre-existing behaviour, pinned by T2 (consistent with step-01 repro); 'Meridian scenarios reach committee/L1' -> sec.4 default edge + v1.2 + T3/T8; 'fail-first engine-level regression' -> T1/T2. No TBD/deferral language: the four OQs each carry a stated default. (2) No implementation code: only signatures/prose (build_no_matching_gateway_edge_error_args/6, record_service_task_advance_failure_audit/5 specs; no bodies). (3) Transaction semantics verified against code by direct read: advance_after_service_task_outcome/4 (engine.ex L3220-3227) wraps advance_service_task_dispatch in one repo.transaction and rolls back on {:error,_}; persist_service_task_advance/10 error arms at L3374-3379 are exactly bare {:transition_failed,_}; dispatch row 'advanced' is committed earlier by handle_success (comment L3195-3205); fetch_and_lock_instance_projection (L2465-2475) FOR UPDATE-locks and returns {:error,{:instance_not_active,status}} for :error (sec.1.5 holds); ExecutionError.append_multi/3 accepts locked_projection and calls Repo.transaction nowhere (execution_error.ex L192-212), writes event + dlq_entries + projection->:error (sec.1.4 write list correct); human path dispatch_task_completion_hop_chain arms (L3857-3889) produce identical error_args shape and both no_matching_edge shapes are really emitted, so the shared-builder extraction is behaviour-preserving; nested repo.transaction(multi) joining the outer transaction is the pattern do_persist_service_task_advance already relies on (L3492); {:ok,:error_set} is already in advance_after_service_task_outcome's @spec and mapped to {:give_up,:applied} at dispatcher L583-584 (sec.1.6 correct); dispatcher L614 catch-all is the silent swallow (fold_attempt_result L653 drops it); ServiceTaskDispatch has node_id so the audit re-fetch in sec.2 is feasible; record_task_activation_rejection_audit/5 (L4693) is the correct precedent. Fixture: kyc-routing edges e9/e10/e11 confirmed conditioned-only, version 1.1, seed script header says v1.1; CHK-15 enforced in graph.ex L1238.",
+    "rulings_on_open_questions": {
+      "OQ-1": "ACCEPT default: no snapshot after the execution-error commit (replay from the log is authoritative; no AC requires it).",
+      "OQ-2": "ACCEPT default: reuse the :given_up counter via the existing {:ok,:error_set} -> {:give_up,:applied} mapping; no summary-type change. Note in a code comment.",
+      "OQ-3": "ACCEPT default: residual re-entry errors are logged+audited only, not made terminal; never revert the dispatch row (at-most-once). ORCH should queue a follow-up issue for making them terminal.",
+      "OQ-4": "ACCEPT default: absent kyc_status passes through to assessment-join for the QA fixture only; v1.2 bump keeps it reversible; flag to BA-MERIDIAN for production definitions."
+    },
+    "binding_clarifications_for_implementation": [
+      "Logging contradiction between sec.2 ('message containing ONLY dispatch_id, tenant_schema, tag') and sec.6 ('dispatch id, instance id, node id and atom tag'): sec.2 governs for the dispatcher Logger.error (dispatch_id, tenant_schema, tag only). Instance id/node id go only in the audit row.",
+      "record_service_task_advance_failure_audit/5 must NOT copy the inspect(insert_reason) in record_task_activation_rejection_audit/5's Logger.warning (engine.ex L4712-4715); log only instance id, node id, tag.",
+      "Classifier tag mapping is by tuple head: {:transition_failed,_}, {:variable_merge_rejected,_}, {:unknown_token_id,_}, {:event_append_failed,_} -> same-named atoms; {:execution_error_not_supported_for_service_task_advance,_} (engine.ex L3516) -> :execution_error_not_supported; {:instance_not_active,_} -> debug-only, no audit; everything else (including :instance_not_found, {:instance_already_error,_}, {:dlq_enqueue_failed,_}) -> :other.",
+      "T6 relies on removing a token row to force {:unknown_token_id,_}; acceptable as test-only setup."
+    ],
+    "gaps": [],
+    "security_reviewer": "Agree REQUIRED (new audit/EXECUTION_ERROR/DLQ writes on a tenant data path).",
+    "artifacts_out": [],
+    "owned_modules": ["Letflow.Engine", "Letflow.Engine.ServiceTaskDispatcher"],
+    "next_action": "ORCH: commit handoffs, route to ELIXIR-DEV (fail-first tests T1-T8 first, then engine.ex + service_task_dispatcher.ex + fixture + seed script header + anti-patterns entry), then SECURITY-REVIEWER (required), REVIEWER."
+  }
+}

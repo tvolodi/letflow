@@ -1,0 +1,18 @@
+process_id: proc-vortex-8d-corrective-action
+definition_name: "8D Corrective Action"
+company_id: vortex
+seed_script: scripts/seed_vortex_definition.sh
+fixture: test/fixtures/qa/vortex_8d_corrective_action_definition.json
+issue_ref: ISS-0929
+recorded_by: CODE-DESIGNER
+recorded_at: "2026-10-02"
+reason: >
+  The scenario corpus (test/fixtures/uat/scenarios/vortex/
+  supplier-quality-deviation-critical.yaml, EO-002) refers to the 8D
+  corrective-action child by a synthetic id only in detail text;
+  process_definitions has no key/slug column, so the real identifier is
+  the free-text definition name "8D Corrective Action", which the parent
+  SUB_PROCESS node (corrective-action-subprocess) late-binds via its
+  definition_name attribute. This sidecar maps the corpus id to that name
+  (same rationale as proc-vortex-supplier-quality-deviation.yaml).
+  See lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md.

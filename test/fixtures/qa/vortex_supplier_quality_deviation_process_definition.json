@@ -1,6 +1,6 @@
 {
   "name": "Supplier Quality Deviation",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Raised when incoming goods fail inspection. Quality Manager classifies severity. For CRITICAL a sub-process is spawned. Exercises: sub-process spawn, severity-driven branching, compensation.",
   "graph": {
     "nodes": [
@@ -43,7 +43,10 @@
       },
       {
         "id": "corrective-action-subprocess",
-        "node_type": "SUB_PROCESS"
+        "node_type": "SUB_PROCESS",
+        "attributes": {
+          "definition_name": "8D Corrective Action"
+        }
       },
       {
         "id": "default-to-major",

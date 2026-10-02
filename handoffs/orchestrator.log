@@ -2672,3 +2672,19 @@
 2026-10-01T16:40:41Z | INFO | WF03-Q915-20261001 | step-05-close-issue | ORCH | ISS-0932 resolved; follow-ups ISS-0925/Q-925/GH-2105 and ISS-0926/Q-926/GH-2106 filed (also an accidental probe task Q-927/GH-2107 created and closed)
 2026-10-01T17:34:01Z | RUN_DONE | WF03-Q915-20261001 | ORCH | DONE -- PR #2108 (b6a4773d) squash-merged. ISS-0932/Q-915/GH-2066: meridian regulatory review fixture v1.2 arms P21D escalation timer on risk-evaluation, fallback edge -> regulatory-auto-escalation, e3 condition true; lib/ unchanged. Gates: ISSUE-FIXER, CODE-DESIGNER, CODE-DESIGN-VALIDATOR PASS, ELIXIR-DEV, SECURITY-REVIEWER skipped (fixture-only, no tenant-data path), REVIEWER PASS, TEST-DESIGNER (fail-first 11/24 red), TEST-DESIGN-VALIDATOR PASS (independent), TEST-RUNNER PASS, RELEASE-VALIDATOR PASS. CI 4/4 green on 19126744. Follow-ups Q-925/GH-2105, Q-926/GH-2106. release_lock 915 done (agent tvolo-win11-orch-uat); GH#2066 closed.
 2026-10-01T17:34:01Z | RELEASE_LOCK | WF03-Q915-20261001 | ORCH | task 915 released status=done, locked_by=null
+2026-10-01T20:53:43Z | DISPATCH | WF03-Q928-20261001 | step-01-issue-fixer-diagnose | ORCH -> ISSUE-FIXER | PENDING
+2026-10-01T20:56:57Z | DISPATCH | WF03-Q928-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-10-01T20:59:33Z | DISPATCH | WF03-Q928-20261001 | step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-10-01T21:01:13Z | DISPATCH | WF03-Q928-20261001 | step-03-elixir-dev | ORCH -> ELIXIR-DEV | PENDING
+2026-10-01T21:10:37Z | DISPATCH | WF03-Q928-20261001 | step-03c-security-reviewer | ORCH -> SECURITY-REVIEWER | PENDING
+2026-10-01T21:10:37Z | DISPATCH | WF03-Q928-20261001 | step-03d-reviewer | ORCH -> REVIEWER | PENDING
+2026-10-01T21:11:24Z | DISPATCH | WF03-Q928-20261001 | step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
+2026-10-01T21:27:42Z | DISPATCH | WF03-Q928-20261001 | step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-10-01T21:32:34Z | DISPATCH | WF03-Q928-20261001 | step-04c-test-runner | ORCH -> TEST-RUNNER | PENDING
+2026-10-01T21:32:34Z | DISPATCH | WF03-Q928-20261001 | step-05-close-issue | ORCH -> ISSUE-FIXER | PENDING
+2026-10-01T21:34:53Z | INFO | WF03-Q928-20261001 | step-05-close-issue | ORCH | ISS-0928 resolved locally; PR pending; lock 928 held for parent
+2026-10-01T21:34:53Z | DISPATCH | WF03-Q928-20261001 | step-04d-release-validator | ORCH -> RELEASE-VALIDATOR | PENDING
+2026-10-01T19:46:35Z | DISPATCH | WF03-Q929-20261001 | step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-10-01T20:10:00Z | INFO | WF03-Q929-20261001 | step-03b-security-reviewer | ORCH | SKIPPED -- engine post-subprocess dispatch wrapper + fixtures/seeds; no API route, authz, tenant derivation, migration, secrets or response shaping touched (tenant from schema prefix as complete_task/3 already does)
+2026-10-01T21:25:00Z | INFO | WF03-Q929-20261001 | step-final | ORCH | gates PASS (ISSUE-FIXER, CODE-DESIGNER, CODE-DESIGN-VALIDATOR, ELIXIR-DEV, SECURITY-REVIEWER skipped, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR); PR opened, merge held for supervisor; lock 929 kept
+2026-10-01T23:40:00Z | INFO | WF03-Q929-20261001 | rework | ORCH | CI failure persona_actor_seed_missing_account_test (hard-coded 11 vs 12 after role-procurement-manager); count now derived from PERSONAS table

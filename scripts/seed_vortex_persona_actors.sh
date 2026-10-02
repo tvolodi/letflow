@@ -3,7 +3,7 @@
 #
 # Provisions the letflow-side (Part B) of the Vortex persona actors (ISS-0931):
 #   - Creates process-routing role groups + tenant_role bindings for every role
-#     referenced by the Vortex QA definitions (4 roles)
+#     referenced by the Vortex QA definitions (5 roles)
 #   - Adds each persona actor to TASK_WORKER (implicit) and to its role groups
 #
 # Prerequisites:
@@ -25,8 +25,8 @@
 # a BA may amend the PERSONAS table only.
 # TASK_WORKER is implicit for every persona and never listed below.
 #
-# role-procurement-manager is deliberately NOT seeded: no Vortex definition
-# references it (scenario/definition mismatch; flagged to BA-VORTEX).
+# role-procurement-manager is seeded because the 8D Corrective Action child
+# definition (ISS-0929) routes its HUMAN_TASK to it.
 #
 # Design: lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md
 
@@ -37,6 +37,7 @@ ROLES=(
   "role-controller"
   "role-quality-manager"
   "role-ceo"
+  "role-procurement-manager"
 )
 PERSONAS=(
   "actor-vortex-sabine|role-production-manager"
@@ -45,7 +46,7 @@ PERSONAS=(
   "actor-vortex-dirk|role-ceo"
   "actor-vortex-anna|"
   "actor-vortex-nina|"
-  "actor-vortex-felix|"
+  "actor-vortex-felix|role-procurement-manager"
   "actor-vortex-max|"
   "actor-vortex-claudia|"
 )

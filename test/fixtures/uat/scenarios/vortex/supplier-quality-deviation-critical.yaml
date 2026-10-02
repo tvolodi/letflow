@@ -7,6 +7,14 @@
 # synthetic fixtures under test/fixtures/simulation/<company>/scenarios/ instead. Do
 # not edit the ported content below except to keep it byte-identical to a re-pull of
 # the same commit.
+#
+# EXCEPTION (ISS-0970, 2026-10-02): EO-004 below is rewritten and no longer
+# byte-identical to the ported source. R-Co's EO-004 asserted ordering via
+# event-type names ("TASK_COMPLETED"/"TASK_CREATED") that don't exist in this
+# codebase's real event vocabulary, and via a tasks-row-vs-event timestamp
+# comparison this codebase's write path cannot guarantee provably correct
+# (lib/letflow/design/iss0970-event-ordering-decision.md). Redefined on
+# sequence_number instead -- see that design doc for the full reasoning.
 ---
 id: vortex-supplier-quality-deviation-critical
 company_id: vortex
@@ -139,12 +147,21 @@ expected_outcomes:
   - id: EO-004
     description: >
       The quarantine-before-classification ordering is confirmed in the
-      audit trail for downstream compliance reporting
+      instance's history by sequence number, for downstream compliance
+      reporting
     verification:
-      method: audit_event
+      method: audit_event_ordering
       detail: >
-        Audit log ordering: TASK_COMPLETED for quarantine-batch event
-        timestamp is earlier than TASK_CREATED for severity-classification
+        GET /instances/{instance_id}/history: the SERVICE_TASK_COMPLETED
+        event for quarantine-batch has the lowest sequence_number of any
+        event in the stream after INSTANCE_STARTED -- i.e. no other history
+        event for this instance precedes it. This proves quarantine ran
+        before any other recorded instance activity (including before
+        severity-classification's task could be acted on), via
+        sequence_number rather than created_at/timestamp comparison, which
+        this codebase's write path (lib/letflow/design/iss0970-event-ordering-decision.md
+        §0) does not guarantee is causally ordered across an events row and
+        a tasks row in the same transaction.
     on_fail:
       severity: MAJOR
       business_impact: >

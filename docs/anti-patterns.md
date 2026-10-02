@@ -4385,3 +4385,29 @@ from whatever `HEAD` happens to be. A doc-only or docs/issues-only change that s
 conflicts in unrelated `.ex` files during `git merge origin/main` is itself the tell that
 the branch point was wrong -- stop and re-derive the branch from `origin/main` rather than
 resolving the conflict by hand.
+
+## A ported UAT fixture asserted event-type names that were never real in this codebase's own event registry, undetected until a live UAT-RUNNER pass tried to verify them (2026-10-02, UAT-RUNNER/CODE-DESIGNER, ISS-0970)
+
+**What happened.** `test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-critical.yaml`
+was ported byte-identical from R-Co and declared so in its own header. Its EO-004 criterion
+asserted ordering via `TASK_COMPLETED`/`TASK_CREATED` event-type names -- R-Co's names for the
+phenomenon it was describing, not Letflow's: the quarantine-batch node here is a `SERVICE_TASK`,
+whose completion event is `SERVICE_TASK_COMPLETED`, and no `TASK_CREATED` event exists in this
+codebase at all (`tasks` activation never calls `EventStore.append/2`). `mix
+letflow.check_uat_scenario_schema` passed throughout (it only checks top-level shape -- `id`,
+`scope`, `steps`-vs-`branches` -- never the semantic content of a `verification.detail` prose
+string), and nothing else in the pipeline mechanically cross-checks a fixture's named event
+types against `tenant_provisioning.ex`'s `@platform_event_type_seed_attrs` registry. The mismatch
+only surfaced when UAT-RUNNER actually ran the scenario against a live instance and tried to
+locate those event types in `GET /instances/:id/history`.
+
+**Correct alternative.** A "ported byte-identical" fixture inherits the source system's
+assertions, including any that silently assume the source system's own vocabulary -- event-type
+names, status enums, field names -- carries over unchanged. Porting verbatim is right for
+preserving scenario *behavior*, but any assertion naming a system-specific identifier (not just
+event types) should be spot-checked by grep against the target codebase's own registry/schema
+*before* it is trusted to run live, not left for a UAT pass to discover by failing to resolve a
+query. Where a mechanical schema check already exists for a fixture family (here,
+`check_uat_scenario_schema`), remember it validates *structure*, not *content* -- it will pass a
+file whose prose asserts something the codebase cannot do, and that gap is by design, not an
+oversight to route around.

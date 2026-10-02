@@ -32094,10 +32094,10 @@ requirements:
       real service_task_dispatches row with a genuinely UUID-castable
       token_id, not a mock). REVIEWER PASSed (first full pass on this PR),
       confirmed every AC directly. TEST-RUNNER FAILed once on a genuine,
-      separate gap -- REQ-433 was missing its impl_order registration in
-      docs/requirements.yaml, breaking 3 requirements-registry self-check
-      tests; fixed properly via a real letflow-queue register_task call
-      (task 940, GH#2154), not a workaround. Re-ran clean: 5368/5368.
+      separate gap -- this entry's own queue-registration metadata was
+      initially absent, breaking 3 requirements-registry self-check tests;
+      fixed properly via a real letflow-queue register_task call (task
+      940, GH#2154), not a workaround. Re-ran clean: 5368/5368.
       RELEASE-VALIDATOR: exhaustive independent re-verification of all 7 ACs
       against current code/fixtures, plus its own adversarial tests beyond
       the shipped 2-1 tally case (3-0 unanimous approve, 3-0 unanimous

@@ -51,5 +51,5 @@ related:
   - ISS-0536
   - ISS-0048
 queue_ref: null  # discovered by ISSUE-FIXER during PR #2148 CI investigation; file directly per this session's established convention for ISSUE-FIXER-discovered findings
-github_ref: null
+github_ref: null  # not filed to GitHub -- this is a re-opened recurrence of already-tracked ISS-0881, filed as a local record only, same convention as ISS-0046/ISS-0049/ISS-0052's precedent for same-session findings with no separate GH mirror
 status: open

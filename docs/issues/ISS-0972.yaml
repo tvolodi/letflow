@@ -1,0 +1,26 @@
+id: ISS-0972
+title: "test/support/simulation/runner.ex's :audit_event_ordering verification method shares ISS-0970's timestamp-only fragility and may exercise dead/unreachable logic"
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0970-20261002
+discovered_at: "2026-10-02T04:30:00Z"
+severity: MINOR
+owner: "ISSUE-FIXER (diagnosis first)"
+description: >
+  Flagged during ISS-0970's review (history event ordering only provable
+  via sequence_number/global_seq, not timestamp, for events written in the
+  same transaction as a following task row). test/support/simulation/
+  runner.ex implements a separate :audit_event_ordering verification
+  method (see its handle_verification/2 clause around line 661 and the
+  shared resource_type helper around line 694) that compares events by
+  timestamp the same way ISS-0970's EO-004 did before its fix -- same
+  fragility, different fixture family. Not yet confirmed whether any
+  live-run scenario still calls this method (it may be dead/unreachable
+  code at this point), so this needs ISSUE-FIXER's diagnosis before
+  deciding between a timestamp->sequence_number rewrite and removal.
+acceptance_criteria:
+  - "Confirm whether any scenario still invokes :audit_event_ordering; if live, rework it to order via sequence_number/global_seq per ISS-0970's precedent; if dead, remove it"
+source_reports:
+  - docs/issues/ISS-0970.yaml
+related:
+  - ISS-0970
+status: open

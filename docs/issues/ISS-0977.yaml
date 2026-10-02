@@ -52,4 +52,53 @@ related:
   - ISS-0048
 queue_ref: null  # discovered by ISSUE-FIXER during PR #2148 CI investigation; file directly per this session's established convention for ISSUE-FIXER-discovered findings
 github_ref: null  # not filed to GitHub -- this is a re-opened recurrence of already-tracked ISS-0881, filed as a local record only, same convention as ISS-0046/ISS-0049/ISS-0052's precedent for same-session findings with no separate GH mirror
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0977-sandbox-pool-rt6-flake
+resolved_at: "2026-10-02T12:29:41Z"
+resolution:
+  root_cause: >
+    lib/letflow/sandbox_pool.ex's drop_schema/1 retried a failed DROP SCHEMA
+    only once for "no live owner" purposes, leaving a documented, accepted
+    leak-on-exhaustion trade-off (ISS-0048) that test/letflow/sandbox_pool_test.exs's
+    RT-6 test asserted against unconditionally -- a recurrence of the
+    already-"resolved" ISS-0881.
+  design: >
+    lib/letflow/design/iss0977-sandbox-pool-rt6-flake.md, 2
+    CODE-DESIGN-VALIDATOR revision cycles -- 1st FAILed on a missing
+    provision_sandbox/2 rescue-clause call site (resolved via a new
+    :provisioning_rescue purpose atom); 2nd PASSed.
+  fix: >
+    drop_schema/1 widened to drop_schema/2 (purpose-aware), with a wider
+    retry/backoff schedule for all four confirmed "no live owner" purposes
+    (:orphan, :release_orphaned, :provisioning_rescue, :reclaim). New
+    deterministic tests (reusing the existing ISS-0226 :sys.replace_state/2
+    fault-injection idiom) lock in the exhausted-retry contract for :orphan
+    and :reclaim. RT-6 itself left untouched (not loosened, per the issue's
+    own explicit warning against "suppressed, not fixed").
+  reviewer: >
+    2 passes -- 1st FAILed on :reclaim being silently excluded from the
+    widened-budget set despite the design explicitly grouping it there
+    (ELIXIR-DEV fixed by re-verifying :reclaim's code path and adding it + a
+    test); 2nd PASSed, empirically testing the new tests' discrimination by
+    reverting the fix (found the fault-injection test family proves the
+    exhausted-retry bookkeeping contract but not retry count specifically --
+    flagged, not blocking); added 2 anti-patterns entries.
+  test_runner: >
+    full suite clean except 4 pre-existing failures on main confirmed via
+    diff-scope to be unrelated (fixed separately via PR #2159: ISS-0977's own
+    missing github_ref comment, and REQ-433's completion_note prose confusing
+    a registry classifier).
+  release_validator: >
+    exhaustive independent re-verification, including an original
+    telemetry-based verification script (:telemetry.attach on [:letflow,
+    :repo, :query], real Postgres ACCESS EXCLUSIVE lock contention, real
+    owner-kill-triggered :DOWN/:reclaim) that EMPIRICALLY PROVED the retry
+    count genuinely widened through the real code path (:release = 2 real
+    attempts, :reclaim = 4 real attempts) -- directly closing the gap
+    REVIEWER flagged but didn't resolve. Confirmed RT-6 byte-for-byte
+    untouched, confirmed diff-scope, re-ran targeted tests fresh (26/26).
+  queue: >
+    This is an ISSUE closure, not a REQ. No letflow-queue task to release
+    (discovered by ISSUE-FIXER during PR #2148's CI investigation, filed
+    directly; queue_ref: null).
+  pr: "PR #2158, final commit 8394668c"

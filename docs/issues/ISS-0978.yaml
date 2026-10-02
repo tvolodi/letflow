@@ -1,0 +1,30 @@
+id: ISS-0978
+title: "scripts/test_parallel.sh's per-partition watchdog leaves orphaned sleep processes after a run completes"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0972-20261002 (PR #2163 full-suite run)
+discovered_at: "2026-10-02T16:30:00Z"
+severity: MINOR
+owner: ELIXIR-DEV
+description: >
+  scripts/test_parallel.sh's per-partition watchdog teardown kills the
+  watchdog subshell PID but not its un-exec'd `sleep 1800` child, leaving
+  orphaned sleep processes that keep a `| tail -400`-style pipe's write end
+  open after the real run has already finished and printed its own
+  `combined: ...` summary line. Observed directly: the already-complete,
+  correct result only flushed through after manually killing the orphaned
+  sleep PIDs (diagnosed via /proc/<pid>/fd). Did not affect correctness of
+  any test result in the run where this was found -- purely a process-
+  hygiene / tooling-ergonomics gap that forces whoever invokes this script
+  to manually clean up orphans rather than the script's own watchdog doing
+  it. Likely traces to ISS-0917's own watchdog mechanism (see that issue
+  for the original teardown logic this builds on).
+acceptance_criteria:
+  - "Watchdog teardown kills its own sleep child (not just the subshell PID), e.g. via a trap or an exec'd sleep so there is no separate child to orphan"
+  - "A full test_parallel.sh run leaves zero stray processes behind, verified by checking for lingering sleep/watchdog PIDs after the script exits"
+related:
+  - ISS-0917
+source_reports:
+  - test/reports/report-20261002-PR2163-ISS0972-20261002.yaml
+queue_ref: null  # filed directly by ORCH from TEST-RUNNER's own report, not via get_next_task
+github_ref: null  # local-only tooling follow-up
+status: open

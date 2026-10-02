@@ -651,11 +651,16 @@ defmodule Letflow.Simulation.Runner do
 
   # REQ-207 design §3.2 -- new 4th verification.method. Resolves "first" and
   # "second" each via the same audit_event lookup logic as the clause above
-  # (find_audit_entry/2, shared rather than duplicated), then compares real
-  # queried `timestamp` fields. :pass iff both entries were found AND
-  # first.timestamp < second.timestamp; :fail otherwise, with `observed`
-  # always carrying both real entries (or nil for whichever was not found) --
-  # same "always carry real queried state, never infer PASS from absence of
+  # (find_audit_entry/2, shared rather than duplicated), guards both sides
+  # resolve to the same tenant prefix (chain order is only meaningful within
+  # one tenant's chain), then walks the real queried hash-chain linkage via
+  # Audit.chain_precedes?/3 (ISS-0972 -- audit_entries has no
+  # sequence_number/global_seq-equivalent column, unlike ISS-0970's `events`
+  # precedent, so chain-walking replaces timestamp comparison rather than
+  # reusing it). :pass iff both entries were found, both sides share a
+  # prefix, AND the chain walk proves first precedes second; :fail
+  # otherwise, with `observed` always carrying both real entries -- same
+  # "always carry real queried state, never infer PASS from absence of
   # error" discipline the other three methods already follow.
   defp verify_outcome(
          %{verification: %{method: :audit_event_ordering, args: args}} = expected,
@@ -663,13 +668,12 @@ defmodule Letflow.Simulation.Runner do
        ) do
     with {:ok, first_args} <- fetch_ordering_side(args, "first"),
          {:ok, second_args} <- fetch_ordering_side(args, "second"),
+         {:ok, first_prefix} <- fetch_prefix(first_args),
+         {:ok, second_prefix} <- fetch_prefix(second_args),
+         :ok <- require_same_prefix(first_prefix, second_prefix),
          {:ok, first_entry} <- find_audit_entry(first_args, produces),
          {:ok, second_entry} <- find_audit_entry(second_args, produces) do
-      outcome =
-        if first_entry && second_entry &&
-             DateTime.compare(first_entry.timestamp, second_entry.timestamp) == :lt,
-           do: :pass,
-           else: :fail
+      outcome = ordering_outcome(first_prefix, first_entry, second_entry)
 
       %{
         expected_outcome: expected,
@@ -679,6 +683,26 @@ defmodule Letflow.Simulation.Runner do
     else
       {:error, reason} ->
         %{expected_outcome: expected, outcome: :fail, observed: {:error, reason}}
+    end
+  end
+
+  @spec require_same_prefix(String.t(), String.t()) ::
+          :ok | {:error, {:prefix_mismatch, String.t(), String.t()}}
+  defp require_same_prefix(prefix, prefix), do: :ok
+
+  defp require_same_prefix(first_prefix, second_prefix),
+    do: {:error, {:prefix_mismatch, first_prefix, second_prefix}}
+
+  @spec ordering_outcome(String.t(), Audit.Entry.t() | nil, Audit.Entry.t() | nil) ::
+          :pass | :fail
+  defp ordering_outcome(_prefix, nil, _second_entry), do: :fail
+  defp ordering_outcome(_prefix, _first_entry, nil), do: :fail
+
+  defp ordering_outcome(prefix, first_entry, second_entry) do
+    case Audit.chain_precedes?(prefix, first_entry, second_entry) do
+      {:ok, true} -> :pass
+      {:ok, false} -> :fail
+      {:error, _reason} -> :fail
     end
   end
 

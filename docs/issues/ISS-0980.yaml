@@ -1,0 +1,64 @@
+id: ISS-0980
+title: "Two router-level best-effort audit writes (tenant_settings.ex, instances.ex) lack ISS-0969/ISS-0946's rescue-hardening"
+discovered_by: REVIEWER
+discovered_in_run: fix/ISS-0969-audit-rescue-hardening (PR #2166 review)
+discovered_at: "2026-10-02T00:00:00Z"
+severity: MINOR
+owner: ELIXIR-DEV
+description: >
+  Non-blocking follow-up flagged during PR #2166's REVIEWER pass, in direct
+  response to that review's own instruction to check for a further
+  undiscovered call site sharing ISS-0969's gap. Grepping every
+  Letflow.Audit.insert_entry/3 call site in lib/letflow/ turns up two more
+  functions with the identical "best-effort, log-and-swallow, must never let
+  an audit-write failure change the caller's already-decided outcome" intent
+  as engine.ex's two ISS-0969 sites, but with no rescue clause at all:
+
+    - Letflow.Routers.TenantSettings.maybe_record_rejected_keys/5
+      (lib/letflow/routers/tenant_settings.ex:143) -- its own comment states
+      the write "does NOT fail the HTTP response ... must not appear to have
+      failed because of an unrelated audit-write hiccup," but a raise from
+      Audit.insert_entry/3 (e.g. the same undefined_table/Postgrex.Error
+      class ISS-0969's regression tests reproduce) would propagate straight
+      through the Plug pipeline and turn the settings-mutation response into
+      a 500, exactly what the comment says must not happen.
+
+    - Letflow.Routers.Instances.record_attachment_access_denied_audit/5
+      (lib/letflow/routers/instances.ex:1328) -- comment states the write
+      "must never turn this already-decided 404 into a 500." Same gap: no
+      rescue, so a raise would do precisely that.
+
+  Both call Audit.insert_entry/3 directly (not wrapped in Repo.transaction/1,
+  since neither is itself transactional -- these are intentionally
+  out-of-band best-effort writes), so the fix shape will differ slightly
+  from ISS-0969's `case Repo.transaction(...) do ... end rescue ... end`
+  pattern (there is no Repo.transaction/1 wrapper to rescue around here) --
+  it would be a bare `case Audit.insert_entry(...) do ... end rescue ... end`
+  at the function level instead. Not confirmed whether Ecto/Postgrex can
+  actually raise through this particular code path in production (vs. only
+  the DROP TABLE fault-injection technique ISS-0969's tests use) -- filed as
+  a consistency/robustness gap worth a dedicated look, same as ISS-0969 was
+  itself filed non-blocking off PR #2142.
+
+  Other Audit.insert_entry/3 call sites checked and NOT included here because
+  they are a different class (same-transaction audit writes that are
+  intentionally allowed to roll back the whole operation on failure, not
+  best-effort decoupled writes): lib/letflow/definitions.ex
+  (record_definition_audit/5, called inside a transaction whose caller
+  already has a function-level `rescue -> {:error, {:transaction_failed,
+  exception}}` wrapper), lib/letflow/definitions/promotion.ex
+  (write_target_definition/5, audit write is inside the same
+  Repo.transaction/1 and rolls back via Repo.rollback/1 on failure by
+  design), and lib/letflow/engine/task_activation.ex
+  (record_task_create_audit/3, same-transaction-rollback shape as
+  definitions.ex).
+acceptance_criteria:
+  - "Decide whether maybe_record_rejected_keys/5 and record_attachment_access_denied_audit/5 need the same rescue-hardening discipline as ISS-0969's two engine.ex sites, or whether their HTTP-handler context (e.g. an existing Plug-level exception->error-response boundary) already makes the stated 'must never become a 500/404-turned-500' invariant safe without a local rescue"
+  - "If hardening is needed: apply the function-level rescue pattern (no Repo.transaction/1 wrapper to rescue around, since these are non-transactional best-effort writes) with the same log-and-swallow convention, and add a regression test using the same DROP TABLE fault-injection technique ISS-0969's tests established"
+  - "If not needed: record why in this issue's resolution, with the specific reasoning traced against each call site (e.g. citing the actual Plug error-handling boundary that already prevents the stated bad outcome)"
+related:
+  - ISS-0969
+  - ISS-0946
+queue_ref: null
+github_ref: null
+status: open

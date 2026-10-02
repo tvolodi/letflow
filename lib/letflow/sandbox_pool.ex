@@ -734,13 +734,13 @@ defmodule Letflow.SandboxPool do
 
     # :reclaim | :orphan | :release_orphaned: no `from` to reply to, and the `active`
     # entry is already absent -- with no live owner there is nobody to retry, so the
-    # slot is never held hostage by a DROP that failed (INV-SP-DOWN-3). For
-    # :orphan/:release_orphaned this point is reached only after drop_schema/2's
-    # widened retry budget (ISS-0977 -- orphan_drop_retry_schedule/0, default 4
-    # attempts / [25, 75, 200]ms backoff) is exhausted, not after a single failed
-    # attempt as before. The schema may still leak; that residual is ISS-0048's
-    # existing, accepted trade -- slot before schema -- now narrowed, not
-    # eliminated, by the wider budget. See
+    # slot is never held hostage by a DROP that failed (INV-SP-DOWN-3). This point is
+    # reached only after drop_schema/2's widened retry budget (ISS-0977 --
+    # orphan_drop_retry_schedule/0, default 4 attempts / [25, 75, 200]ms backoff) is
+    # exhausted, not after a single failed attempt as before -- all three purposes
+    # share the wide path (@wide_retry_purposes). The schema may still leak; that
+    # residual is ISS-0048's existing, accepted trade -- slot before schema -- now
+    # narrowed, not eliminated, by the wider budget. See
     # lib/letflow/design/iss0977-sandbox-pool-rt6-flake.md §3.3.
     %{state | in_flight: nil}
   end
@@ -980,12 +980,16 @@ defmodule Letflow.SandboxPool do
   end
 
   # Purposes with no other recovery path if this DROP ultimately fails (ISS-0977 §3.1):
-  # no live owner (:orphan, :release_orphaned) or no op/in_flight record at all
-  # (:provisioning_rescue) will ever get a second chance at this schema. These get the
-  # widened retry budget; :release (INV-SP-5 -- the live owner can retry release/2
-  # itself) and :reclaim (already a one-shot reaction to a :DOWN) keep today's single
-  # retry.
-  @wide_retry_purposes [:orphan, :release_orphaned, :provisioning_rescue]
+  # no live owner (:orphan, :release_orphaned, :reclaim) or no op/in_flight record at
+  # all (:provisioning_rescue) will ever get a second chance at this schema. These get
+  # the widened retry budget. :reclaim is driven by a :DOWN the pool already observed
+  # once -- same no-live-owner case as :orphan (the `active` entry is deleted in the
+  # same :DOWN callback that enqueues this op, before the DROP ever runs -- see clause
+  # B case 5), so it folds into the same widened path rather than keeping the old
+  # single retry. Only :release is excluded: INV-SP-5 gives it a real other recovery
+  # path (the live owner can retry release/2 itself) that none of the widened purposes
+  # have.
+  @wide_retry_purposes [:orphan, :release_orphaned, :provisioning_rescue, :reclaim]
 
   # `schema_name` here is only ever either freshly minted by mint_sandbox_identity/0
   # or read back out of state.active by sandbox_id (never directly caller-supplied)
@@ -1004,6 +1008,8 @@ defmodule Letflow.SandboxPool do
       else
         # Today's existing behavior: one retry, no backoff -- expressed as the same
         # schedule shape with a 2-attempt floor and an empty backoff list (ISS-0536).
+        # Only :release reaches this branch now (INV-SP-5 -- the live owner can retry
+        # release/2 itself).
         {2, []}
       end
 
@@ -1033,8 +1039,8 @@ defmodule Letflow.SandboxPool do
   # attempt number: the first RETRY is backoff_ms's 1st element), reusing the list's
   # last element once the list is shorter than the number of retries needed (ISS-0977
   # §3.2/§7 open question -- a configurability-without-exact-sizing tradeoff). An empty
-  # backoff_ms (the :release/:reclaim 2-attempt path) retries with no sleep at all,
-  # matching today's existing behavior exactly.
+  # backoff_ms (the :release 2-attempt path) retries with no sleep at all, matching
+  # today's existing behavior exactly.
   @spec retry_sleep_ms(attempt :: pos_integer(), backoff_ms :: [non_neg_integer()]) ::
           non_neg_integer()
   defp retry_sleep_ms(_attempt, []), do: 0

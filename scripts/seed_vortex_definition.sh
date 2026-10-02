@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # seed_vortex_definition.sh
 #
-# Deploys the two Vortex ProcessDefinitions to a live Letflow QA instance:
+# Deploys the three Vortex ProcessDefinitions to a live Letflow QA instance:
 #   1. "Production Order Release" v1.1  (proc-vortex-production-order-release)
-#   2. "Supplier Quality Deviation" v1.1 (proc-vortex-supplier-quality-deviation,
+#   2. "8D Corrective Action" v1.0 (proc-vortex-8d-corrective-action; child of
+#       Supplier Quality Deviation, late-bound by name at SUB_PROCESS spawn, ISS-0929)
+#   3. "Supplier Quality Deviation" v1.2 (proc-vortex-supplier-quality-deviation,
 #       proc-vortex-quality-deviation -- both aliases resolve to this same
 #       definition; see decision C in
 #       lib/letflow/design/iss0897-meridian-vortex-definition-seeding.md)
@@ -40,7 +42,8 @@
 # Payload sources of truth:
 #   test/fixtures/simulation/vortex/process_quality_check.yaml (-> Production Order Release)
 #   test/fixtures/simulation/vortex/process_work_order.yaml    (-> Supplier Quality Deviation)
-# Issue: ISS-0897
+#   (8D Corrective Action has no simulation YAML counterpart)
+# Issues: ISS-0897, ISS-0929
 
 set -euo pipefail
 
@@ -163,6 +166,12 @@ seed_definition \
   "Production+Order+Release" \
   "test/fixtures/qa/vortex_production_order_release_process_definition.json" \
   "proc-vortex-production-order-release"
+
+seed_definition \
+  "8D Corrective Action" \
+  "8D+Corrective+Action" \
+  "test/fixtures/qa/vortex_8d_corrective_action_definition.json" \
+  "proc-vortex-8d-corrective-action"
 
 seed_definition \
   "Supplier Quality Deviation" \

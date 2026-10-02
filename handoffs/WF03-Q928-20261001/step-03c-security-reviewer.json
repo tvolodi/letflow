@@ -1,0 +1,56 @@
+{
+  "handoff_id": "5f16be3a-3bda-4f1e-a8a9-f7351de4e3de",
+  "run_id": "WF03-Q928-20261001",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-Q928-20261001/step-03c-security-reviewer.json",
+  "created_at": "2026-10-01T21:10:37Z",
+  "started_at": "2026-10-01T21:10:37Z",
+  "completed_at": "2026-10-01T21:11:01Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0928": "id: ISS-0928 (queue Q-928, GH-2114, local file docs/issues/ISS-0928.yaml exists ONLY on open PR #2129 branch origin/pr2129 -- view with git show origin/pr2129:docs/issues/ISS-0928.yaml; do not touch PR #2129). Title: Meridian Loan Origination: SERVICE_TASK kyc-aml-check inside PARALLEL_GATEWAY fork never dispatched; instance stalls ACTIVE (UAT WF05-FULL3-20261001 F1). Severity MAJOR. Symptom: meridian Loan Origination v1.1 on QA: after credit-memo-review (ben) and risk-assessment (miriam) complete, current_nodes=[kyc-aml-check]; instance ACTIVE >6.5min (past 300s timeout_ms) with no task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row; endpoint answers 200 directly; top-level service tasks complete in 2-6s. Suspect SERVICE_TASK activation inside PARALLEL_GATEWAY fork branch (cf. ISS-0398 walk_to_gateway, resolved): likely no service_task_dispatches row armed on the fork/join walk path (Letflow.Engine fork activation / arm_service_task_dispatch call sites / TaskActivation). ALSO: kyc-routing has no unconditional edge and the stub endpoint returns no kyc_status, so the token may stall at kyc-routing even once dispatched -- assess whether fixture/process-definition issue (test/fixtures/qa/ meridian loan origination definition); handle or file separately. Acceptance: SERVICE_TASK nodes on a PARALLEL_GATEWAY branch are dispatched and recorded; meridian loan-origination scenarios reach committee/L1 routing and complete; regression test fail-first reproducing the stall at engine level. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml (on PR #2129 branch origin/pr2129 only). Q-926 (body_template rendering) is DONE and merged on main -- build on it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0928-parallel-fork-service-task-Q928"
+  },
+  "task": {
+    "description": "WF-03 Step 3c: review commit HEAD (git show HEAD, diff vs origin/main) against docs/agents/instructions/security-invariants.md INV-1..INV-8: tenant schema scoping of new execution-error/DLQ/audit writes, no sensitive data in logs/audit. Edit only your handoff; PASS/FAIL, real completed_at.",
+    "acceptance_criteria": [
+      "INV-1..8 each addressed",
+      "Tenant scoping of writes verified",
+      "No sensitive data in logs"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope": "IN SCOPE: tenant-scoped writes (execution-error event, DLQ row, projection update, audit row) in lib/letflow/engine.ex and lib/letflow/engine/service_task_dispatcher.ex. Fixture/seed-script change touches no tenant data path.",
+    "invariants": {
+      "INV-1": "APPLIES - PASS. (a) persist_service_task_no_matching_edge passes the tenant prefix to ExecutionError.append_multi(prefix:, locked_projection:), which scopes EventStore.append, Dlq.enqueue and projection update via prefix (execution_error.ex lines 199-337). record_service_task_advance_failure_audit calls Audit.insert_entry(Repo, attrs, prefix) with prefix = tenant_schema from the dispatcher; the dispatch re-fetch uses Repo.get(..., prefix: tenant_schema). (b) No migration. (c) No tenant_id field is caller-supplied; actor is EventStore.platform_actor_id().",
+      "INV-2": "NOT-APPLICABLE - no API response shaping changed.",
+      "INV-3": "NOT-APPLICABLE - no Lua/WASM host capability changed.",
+      "INV-4": "APPLIES - PASS. No secret resolution added. Logger.error/debug lines contain only dispatch_id, tenant_schema and a classified atom tag (never inspect(reason)); audit after_state holds only node_id and atom reason tag. Note (non-blocking, pre-existing pattern): the EXECUTION_ERROR event carries instance variables, identical to the existing human-task path via the shared build_no_matching_gateway_edge_error_args; no new exposure class.",
+      "INV-5": "NOT-APPLICABLE - no lookup-by-ID endpoint added.",
+      "INV-6": "This handoff is the scoping proof (INV-1 above).",
+      "INV-7": "APPLIES - PASS. No Repo.query or interpolated SQL in the diff (grep clean); Ecto API only.",
+      "INV-8": "APPLIES - PASS. Change replaces a silent swallow with typed case/tagged-tuple handling; classify_advance_failure has an :other fallback; audit writer handles all transaction outcomes and never raises. No bare {:ok, _} = matches added (grep clean)."
+    },
+    "tenant_scoping_of_writes": "Verified: all four new writes (EXECUTION_ERROR event, DLQ row, projection->error, audit row) are prefix-scoped to the tenant schema.",
+    "sensitive_data_in_logs": "None found.",
+    "issues": [],
+    "route_back_to": null
+  }
+}

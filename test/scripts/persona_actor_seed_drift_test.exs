@@ -25,9 +25,10 @@ defmodule Letflow.Scripts.PersonaActorSeedDriftTest do
       script: "scripts/seed_vortex_persona_actors.sh",
       fixtures: [
         "test/fixtures/qa/vortex_production_order_release_process_definition.json",
-        "test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json"
+        "test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json",
+        "test/fixtures/qa/vortex_8d_corrective_action_definition.json"
       ],
-      count: 4
+      count: 5
     }
   }
 
@@ -159,9 +160,6 @@ defmodule Letflow.Scripts.PersonaActorSeedDriftTest do
         s = src(t)
         assert s =~ ~r{^source\s+".*lib/seed_persona_actors_base\.sh"}m
         assert s =~ ~r/^persona_run #{t}$/m
-
-        refute s =~ ~r/^\s*"role-procurement-manager"/m,
-               "role-procurement-manager must not be seeded: no definition references it (ISS-0931)"
       end
     end
   end
@@ -175,15 +173,12 @@ defmodule Letflow.Scripts.PersonaActorSeedDriftTest do
       assert msg =~ "missing_in_script=[\"role-loan-ops\"]"
     end
 
-    test "M2: adding role-procurement-manager to vortex ROLES is detected" do
+    test "M2: removing role-procurement-manager from vortex ROLES is detected" do
       s =
-        String.replace(src("vortex"), "ROLES=(\n", "ROLES=(\n  \"role-procurement-manager\"\n",
-          global: false
-        )
+        String.replace(src("vortex"), "  \"role-procurement-manager\"\n", "", global: false)
 
-      assert [msg | _] = roles_errors(s, fx("vortex"), 4)
-      assert msg =~ "extra_in_script=[\"role-procurement-manager\"]"
-      assert s =~ ~r/^\s*"role-procurement-manager"/m
+      assert [msg | _] = roles_errors(s, fx("vortex"), 5)
+      assert msg =~ "missing_in_script=[\"role-procurement-manager\"]"
     end
 
     test "M3: persona referencing an unseeded role is detected" do
@@ -214,7 +209,7 @@ defmodule Letflow.Scripts.PersonaActorSeedDriftTest do
       File.write!(extra, ~s({"nodes":[{"type":"HUMAN_TASK","config":{"role":"role-new-thing"}}]}))
       on_exit(fn -> File.rm(extra) end)
       set = fixture_roles(@tenants["vortex"].fixtures ++ [extra])
-      assert [msg | _] = roles_errors(src("vortex"), set, 4)
+      assert [msg | _] = roles_errors(src("vortex"), set, 5)
       assert msg =~ "role-new-thing"
     end
 

@@ -1,0 +1,26 @@
+id: ISS-0954
+title: "seed_vortex_entities.sh sends no body on entity-definition activate; API now requires rationale (422), leaves inactive production_batch draft on QA (UAT WF05-FULL3)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001
+severity: MAJOR
+owner: "FRONTEND-DEV / ELIXIR-DEV (scripts)"
+description: >
+  Running scripts/seed_vortex_entities.sh against QA created the production_batch
+  entity definition (inactive draft) and then aborted at activate with HTTP 422
+  "rationale: field is required". A re-run skipped the existing draft without
+  activating it, so shipment_manifest was never attempted and
+  vortex/entity-list-filter-and-page stayed ENV_BLOCKED.
+affected_files:
+  - scripts/seed_vortex_entities.sh
+queue_ref: Q-931  # queue issue_ref ISS-0931 collides with an unrelated local issue; local number ISS-0954 (next free on origin/main and all open PRs)
+github_ref: GH-2117
+status: resolved
+resolved_in_run: fix/ISS-0954-vortex-entities-activate-rationale
+resolved_at: "2026-10-02T06:30:00Z"
+resolution: >
+  New activate_definition() posts {"rationale": ...} and prints the HTTP status/body
+  on failure. An existing definition whose status is "inactive" is now activated
+  (resume after an aborted run); an active one is left alone. Stub-curl tests in
+  seed_vortex_entities_activate_test.exs. Not run against QA -- letflow-2 owns that
+  environment; re-running the script there should activate the leftover
+  production_batch draft and seed shipment_manifest.

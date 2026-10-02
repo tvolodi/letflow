@@ -12,4 +12,78 @@ related:
   - ISS-0932
 queue_ref: Q-926
 github_ref: GH-2106
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0926-service-task-body-template-rendering
+resolved_at: "2026-10-01T21:37:43Z"
+resolution: >
+  PR #2113, branch fix/ISS-0926-service-task-body-template-rendering, commit
+  cc698812, merged to main. Root cause: Letflow.Engine rendered only the
+  SERVICE_TASK url_template ({{variables.KEY}} substitution); body_template
+  was parsed/stored but never rendered -- sent raw to the HTTP body, so
+  regulatory-notice reasons never actually reached the compliance endpoint
+  (UAT EO-002). The shared node regulatory-auto-escalation was also reachable
+  via two edges needing different static reasons, which a single
+  body_template couldn't express.
+
+  Design: lib/letflow/design/iss0926-service-task-body-template-rendering.md,
+  CODE-DESIGN-VALIDATOR PASSed, and explicitly overrode the design's own
+  "SECURITY-REVIEWER not required" self-assessment to make it a required hard
+  gate (JSON-injection-adjacent risk on unescaped substitution).
+
+  Fix: renamed render_service_task_url/2 -> render_service_task_template/2
+  (byte-identical, used for url_template only); added new
+  render_service_task_body_template/2 + json_string_escape/1
+  (Jason.encode!/1 then strip outer quotes) used only for body_template;
+  config_snapshot gained a "rendered_body" key alongside the raw
+  "body_template" key (mirrors existing rendered_url/url_template pairing);
+  ServiceTaskDispatcher now sends config_snapshot["rendered_body"] instead of
+  the raw template. QA fixture split the shared regulatory-auto-escalation
+  node (id preserved, load-bearing for EO-001's audit-trail check) into two
+  nodes since the engine has no edge-level variable-assignment mechanism: the
+  original node keeps its one remaining inbound edge (sla_breach_30_days
+  reason), and a new sibling node remediation-unresolved-escalation (reason
+  remediation_unresolved) takes over edge e10, with a new edge e18 to
+  end-closed.
+
+  SECURITY-REVIEWER: FAILed first pass with a concrete, reproduced
+  proof-of-concept -- an adversarial review_id value containing a literal
+  quote could inject arbitrary JSON fields or produce a duplicate "reason"
+  key (parser-dependent resolution), letting an attacker's fabricated reason
+  potentially override the legitimate regulatory reason sent to the BaFin
+  compliance endpoint. Routed back to ELIXIR-DEV, fixed via the escaping
+  helper above, re-reviewed and PASSed on the same agent instance with an
+  exhaustive 9-adversarial-value check.
+
+  REVIEWER: PASSed; fixed a mix format violation directly (committed
+  alongside); added a docs/anti-patterns.md entry: "Generalizing an existing
+  template-rendering function to a new field without re-checking the new
+  field's own output-format escaping needs."
+
+  TEST-RUNNER: full suite clean, 5319/5319.
+
+  RELEASE-VALIDATOR: exhaustive independent re-verification -- hand-traced
+  the escaping logic, confirmed the URL-path renderer is byte-identical to
+  pre-change via direct diff, ran 6 of its own NEW adversarial cases beyond
+  SECURITY-REVIEWER's 9 (including literal {{ }} sequences, a 10,000-char
+  value, JSON object/array-literal strings) all passing, ran a mutation test
+  reverting the escaping helper that correctly reproduced the vulnerability
+  via 5 failing regression tests (proving the tests are load-bearing),
+  confirmed the fixture graph structurally sound (regulatory-auto-escalation's
+  e10 removed, remediation-unresolved-escalation correctly wired via
+  e10->it->e18->end-closed), confirmed the EO-001 audit-event test untouched
+  and passing, re-ran the full engine test subset fresh (1089/1089), and ran
+  two independent full-suite runs via scripts/test_parallel.sh (N=8 and N=3)
+  whose only failures were the known too_many_connections Postgres-pool-
+  exhaustion host-contention issue in tests completely unrelated to this PR
+  (confirmed via grep, zero overlap with SERVICE_TASK/engine/body_template
+  code). mix letflow.check.test hit the already-documented ISS-0939
+  report_partition_failures/1 hang bug (unrelated, known); killed per
+  established mitigation since it shells out to the same script already
+  covered by the two direct test_parallel.sh runs. Verdict: PASS.
+
+  This is an ISSUE closure, not a REQ -- docs/requirements.yaml untouched.
+  queue_ref Q-926 / github_ref GH-2106 above are this issue's own metadata
+  fields from when it was filed; this issue was discovered by CODE-DESIGNER
+  during WF03-Q915-20261001, not claimed via get_next_task, so there is no
+  live letflow-queue task tied to issue_ref ISS-0926 to release -- DOC-UPDATER
+  does not call the queue in any case.

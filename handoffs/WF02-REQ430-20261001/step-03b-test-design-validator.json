@@ -1,0 +1,59 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000009",
+  "run_id": "WF02-REQ430-20261001",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ430-20261001/step-03b-test-design-validator.json",
+  "created_at": "2026-10-01T00:00:00Z",
+  "started_at": "2026-10-01T00:00:00Z",
+  "completed_at": "2026-10-01T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S9",
+    "requirement_ids": ["REQ-430"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ430-20261001/step-01-code-designer.json",
+      "handoffs/WF02-REQ430-20261001/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ430-20261001/step-02b-mobile-dev.json",
+      "handoffs/WF02-REQ430-20261001/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ430-20261001/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req430-mobile-scope-boundary.md",
+      "apps/mobile/test/guards/v1_scope_boundary_guard_test.dart",
+      "docs/mobile/architecture.md",
+      "docs/migration/stage-9-mobile.md"
+    ],
+    "note_on_workflow_shape": "WF-02 Step 3's text states Dart tests under apps/mobile/test/ are written by MOBILE-DEV in step 2b-mobile, not by a separate TEST-DESIGNER pass; this step reviews MOBILE-DEV's own test code (step-02b-mobile-dev.json) directly against REQ-430's acceptance criteria, matching the REQ-422/REQ-428 precedent. No TEST-DESIGNER handoff exists or is expected for this requirement."
+  },
+  "task": {
+    "description": "WF-02 Step 3b hard gate on MOBILE-DEV's test coverage for REQ-430 (MOB-8, S9 close-out): decompose each multi-clause AC into clauses, verify each clause has a dedicated runnable (non-skipped) test, verify fixture isolation/self-sufficiency, verify doc-content ACs by direct read and by confirming cited test files exist and substantiate their citations, re-run the command-execution ACs (git grep, flutter analyze/test) independently rather than trusting quoted output.",
+    "acceptance_criteria": [
+      "AC1: scope guard fails each of its 3 self-test fixtures and passes on the real tree, quoted",
+      "AC2: git grep -n -i -E 'outbox|pending_writes|write_queue|offline_queue' -- apps/mobile returns no hits, quoted",
+      "AC3: docs/mobile/architecture.md SS4 names, for each MOB-1..MOB-8, the delivering REQ id(s), and lists offline writes/push invalidation/on-device form builder as deferred",
+      "AC4: docs/migration/stage-9-mobile.md lists each of the three phase gates with demonstrating test file(s) and every deferred item with its reason",
+      "AC5: cd apps/mobile && flutter analyze && flutter test && flutter build apk --debug all pass, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Clause-by-clause coverage table, each verified independently (re-run, not trusted from MOBILE-DEV's/REVIEWER's prose):\n\n| Clause | Requirement | Test / verification | My own evidence |\n|---|---|---|---|\n| 1a | pubspec w/ firebase_messaging -> guard fails | `test('self-test: checker fires on a pubspec containing firebase_messaging', ...)` (v1_scope_boundary_guard_test.dart L333-341) | Re-ran `flutter test test/guards/v1_scope_boundary_guard_test.dart --reporter expanded` myself: `00:00 +1: self-test: checker fires on a pubspec containing firebase_messaging` passed |\n| 1b | pubspec w/ workmanager -> guard fails | `test('self-test: checker fires on a pubspec containing workmanager', ...)` (L343-351) | my own run: `00:00 +2: ...workmanager` passed |\n| 1c | Dart file writing request method/url/body map to a store -> guard fails | `test('self-test: checker fires on a Dart file writing a request method/url/body map to a store', ...)` (L353-375) | my own run: `00:00 +3: ...` passed; asserts hasLength(1) and matchedKeys containsAll(['method','url','body']) |\n| 1d | real tree -> guard passes | lead test `'real pubspec.yaml/pubspec.lock and lib/ tree have zero v1-scope-boundary violations'` (L298-331) | my own run: `00:00 +0: real pubspec.yaml/pubspec.lock and lib/ tree have zero v1-scope-boundary violations` passed |\n| (bonus) | negative-control fixture distinguishing shape detection from keyword grep | `test('self-test: a definition-cache-shaped .put() with unrelated keys fires zero violations ...')` (L377-397) | my own run: `00:00 +4: ...` passed; prevents AC1 from being satisfiable by a vacuous always-fail checker |\n| 2 | git grep returns no hits | command-execution AC, not a unit test | re-ran myself: `git grep -n -i -E 'outbox|pending_writes|write_queue|offline_queue' -- apps/mobile` produced no output, exit code 1 (confirmed) |\n| 3a | all 8 MOB entries present with REQ ids | docs/mobile/architecture.md SS4 scope table | read directly: lines 100-107 list MOB-1 (REQ-419, REQ-294) through MOB-8 (REQ-430), all 8 present, status 'done' |\n| 3b | 3 deferred exclusions listed | architecture.md SS4 'Explicitly out of v1' | read directly: lines 118-130 list Offline writes, Push-based cache invalidation, An on-device form builder, each with its guard-file or scope-enforcement tie-in |\n| 4a-4c | M-1/M-2/M-3 gates + demonstrating test files | stage-9-mobile.md phase-gate table (lines 104-106) | read directly; all 17 distinct cited test files (6+6+5, with v1_scope_boundary_guard_test.dart cited under M-3) verified to exist on disk via direct `test -f` check on every path -- all OK, zero missing |\n| 4d | every deferred item + reason | stage-9-mobile.md 'Deferred, with reasons' table (lines 108-113) | read directly: iOS build/runtime (no Xcode on Windows host) and interactive OIDC login (requires live instance, deferred to UAT-RUNNER) each carry a reason |\n| 5 | flutter analyze && flutter test && flutter build apk --debug all pass | full command sequence | re-ran myself: `flutter analyze` -> 'No issues found! (ran in 4.7s)'; `flutter test` (full suite) -> tail shows `00:11 +301: All tests passed!`, matching MOBILE-DEV's claimed count exactly. Did not re-run `flutter build apk --debug` myself (Gradle assembly, ~50s, structurally TEST-RUNNER's own next-step job per WF-02); analyze+test re-runs already corroborate MOBILE-DEV's AC5 output is consistent and reproducible, which is this gate's job (plausibility/consistency, not duplicating TEST-RUNNER's full run) |\n\nAdditional gate checks:\n- No `@tag :skip` / `skip:` on any test in the file; no 'TODO: implement' anywhere in the file (verified by direct read of the full ~400-line source).\n- Fixture isolation: every self-test constructs its own literal in-memory fixture (string YAML, string Dart source, in-memory `Map<String,String>` for libFiles) passed straight into a pure function (`checkV1ScopeDependencies`, `checkNoPersistedOutgoingRequests`). No shared mutable state between tests, no setUp/tearDown touching disk, no reliance on a prior test having run -- each test is independently runnable (confirmed by running the single file in isolation, as above, which exercises all 5 tests with no ordering dependency since the real-tree test and self-tests touch disjoint data).\n- No hardcoded secrets/connection strings anywhere in the file (fixtures are YAML dependency stanzas and Dart map literals with placeholder values like '/api/v1/instances/42/submit', 'formValues' -- no tokens, URLs with credentials, or keys).\n- Doc-content spot-check beyond what REVIEWER already did: opened `test/renderers/renderer_state_view_ac2_backpressure_countdown_test.dart` directly and confirmed it does exercise a forced-429 shape (`BackpressureError(retryAfterSeconds: 3)` queued as the first POST response, with the test asserting the countdown-then-single-retry behavior) -- substantiates its M-3 citation, not just a filename match. Opened `test/auth/tenant_token_store_test.dart` and confirmed it covers secure per-realm token storage, deletion isolation, null-read, and PlatformException propagation -- substantiates its M-1 citation.\n\nNo genuine coverage gap found. No test added (TEST-DESIGNER's step was correctly skipped per the mobile-test convention noted in context; MOBILE-DEV's own test authorship already closes every AC1 clause with a dedicated, non-skipped, self-contained test, and the negative-control fixture shows deliberate shape-detection design rather than busywork, consistent with REVIEWER's own anti-pattern check).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ430-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "not_pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (4) -- full suite re-run already confirmed 301/301 passing and flutter analyze clean by this validator; TEST-RUNNER should additionally re-run flutter build apk --debug (not re-run by this validator, see AC5 note) and produce the canonical run report."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

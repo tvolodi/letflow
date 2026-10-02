@@ -171,6 +171,19 @@ defmodule Letflow.Routers.TasksTest do
     |> Repo.update!(prefix: tenant.schema_name)
   end
 
+  # ISS-0944: directly force an InstanceProjection row's status column --
+  # used only to construct an already-ERROR fixture (the engine's own
+  # :active -> :error transition is driven by dispatch/execution failures
+  # deep inside complete_task/3, not something this router-layer test needs
+  # to reproduce end-to-end; same direct-fixture-write rationale as
+  # force_task_status!/3 above).
+  defp force_instance_status!(tenant, instance_id, status) do
+    InstanceProjection
+    |> Repo.get!(instance_id, prefix: tenant.schema_name)
+    |> Ecto.Changeset.change(%{status: status})
+    |> Repo.update!(prefix: tenant.schema_name)
+  end
+
   defp unique_name(prefix \\ "req085-def") do
     prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
   end
@@ -1425,6 +1438,35 @@ defmodule Letflow.Routers.TasksTest do
 
       assert after_projection.status == before_projection.status
       assert after_projection.variables == before_projection.variables
+    end
+  end
+
+  # ── ISS-0944 -- completing a task whose owning instance is not :active ──
+
+  describe "ISS-0944: completing a task owned by a non-active instance returns 409, not 500" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0944-ac1")}
+
+    test "owning instance in :error status -> 409 Conflict with a problem-document body (not 500)",
+         %{tenant: tenant} do
+      task = insert_task!(tenant, %{})
+      force_instance_status!(tenant, task.instance_id, :error)
+
+      conn =
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        |> dispatch()
+
+      assert conn.status == 409
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["detail"] == "instance is error"
+
+      # Unchanged -- no second transition was attempted.
+      after_task = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert after_task.status == :pending
+
+      after_projection =
+        Repo.get!(InstanceProjection, task.instance_id, prefix: tenant.schema_name)
+
+      assert after_projection.status == :error
     end
   end
 

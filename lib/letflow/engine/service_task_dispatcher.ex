@@ -85,6 +85,8 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
 
   import Ecto.Query
 
+  require Logger
+
   alias Letflow.Engine.ServiceTask
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
@@ -550,8 +552,10 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
   # {:give_up, _} outcomes call into Letflow.Engine.advance_after_service_task_outcome/4.
   # An {:error, _} result from that call folds the same defensive way
   # fold_attempt_result/2's own {:error, _reason} clause already does --
-  # counted in neither :advanced nor :given_up, not a new failure mode this
-  # module surfaces further.
+  # counted in neither :advanced nor :given_up. Since ISS-0928 such errors are
+  # no longer silent: call_advance_after_service_task_outcome/3 logs and audits
+  # them, and a no_matching_edge after the node is routed to an ExecutionError
+  # by the engine ({:ok, :error_set}, counted under :given_up).
   defp maybe_advance_after_outcome(
          {:ok, {:advance, _decoded_body}} = outcome,
          dispatch_id,
@@ -611,8 +615,65 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
 
         error
 
-      {:error, reason} ->
-        {:error, reason}
+      # ISS-0928 -- an already-terminal/errored/cancelled instance is a benign
+      # race: debug only, no audit.
+      {:error, {:instance_not_active, _status}} = error ->
+        Logger.debug(
+          "service_task advance skipped, instance not active: dispatch_id=#{dispatch_id} " <>
+            "tenant_schema=#{tenant_schema}"
+        )
+
+        error
+
+      # ISS-0928 -- previously a silent swallow (the dispatch row is already
+      # committed "advanced", so the poller never re-claims it). Now loud:
+      # log + best-effort audit. Log content is ONLY dispatch id, tenant schema
+      # and a classified atom tag -- never `inspect(reason)` (it can carry
+      # instance variables and the HTTP response body). The dispatch row is
+      # deliberately NOT reverted to retry (at-most-once HTTP dispatch).
+      # Note: `{:ok, :error_set}` above counts under :given_up in the poll
+      # summary (accepted; no summary-type change).
+      {:error, reason} = error ->
+        tag = classify_advance_failure(reason)
+
+        Logger.error(
+          "service_task advance failed: dispatch_id=#{dispatch_id} " <>
+            "tenant_schema=#{tenant_schema} reason=#{tag}"
+        )
+
+        maybe_audit_service_task_advance_failure(dispatch_id, tag, tenant_schema)
+
+        error
+    end
+  end
+
+  # ISS-0928 -- classifier by tuple head; `:other` is the fallback so an
+  # unrecognized shape still produces a log + audit row rather than a crash.
+  defp classify_advance_failure({:transition_failed, _}), do: :transition_failed
+  defp classify_advance_failure({:variable_merge_rejected, _}), do: :variable_merge_rejected
+  defp classify_advance_failure({:unknown_token_id, _}), do: :unknown_token_id
+  defp classify_advance_failure({:event_append_failed, _}), do: :event_append_failed
+
+  defp classify_advance_failure({:execution_error_not_supported_for_service_task_advance, _}),
+    do: :execution_error_not_supported
+
+  defp classify_advance_failure(_other), do: :other
+
+  # Re-fetches the dispatch row (no lock) to recover instance_id/node_id,
+  # exactly like `maybe_audit_task_activation_rejection/4`; nil row is a no-op.
+  defp maybe_audit_service_task_advance_failure(dispatch_id, tag, tenant_schema) do
+    case Repo.get(ServiceTaskDispatch, dispatch_id, prefix: tenant_schema) do
+      nil ->
+        :ok
+
+      %ServiceTaskDispatch{instance_id: instance_id, node_id: node_id} ->
+        Letflow.Engine.record_service_task_advance_failure_audit(
+          instance_id,
+          node_id,
+          tag,
+          EventStore.platform_actor_id(),
+          tenant_schema
+        )
     end
   end
 
@@ -716,7 +777,7 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
     case config_from_snapshot(row) do
       {:ok, %ServiceTask.Config{route_kind: :inline_url} = config} ->
         rendered_url = row.config_snapshot["rendered_url"]
-        rendered_body = row.config_snapshot["body_template"]
+        rendered_body = row.config_snapshot["rendered_body"]
 
         raw_outcome = http_transport(config, rendered_url, rendered_body)
 
@@ -738,7 +799,7 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
       {:ok, %ServiceTask.Config{route_kind: :catalog_service} = config} ->
         case row.config_snapshot["rendered_url"] do
           rendered_url when is_binary(rendered_url) and rendered_url != "" ->
-            rendered_body = row.config_snapshot["body_template"]
+            rendered_body = row.config_snapshot["rendered_body"]
 
             case ServiceTask.classify_failure_kind(
                    http_transport(config, rendered_url, rendered_body)

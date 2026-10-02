@@ -1,0 +1,36 @@
+{
+  "name": "8D Corrective Action",
+  "version": "1.0",
+  "description": "8D corrective-action child process spawned by Supplier Quality Deviation for CRITICAL severity; Procurement completes it.",
+  "graph": {
+    "nodes": [
+      {
+        "id": "start",
+        "node_type": "START"
+      },
+      {
+        "id": "corrective-action-8d",
+        "node_type": "HUMAN_TASK",
+        "attributes": {
+          "role": "role-procurement-manager"
+        }
+      },
+      {
+        "id": "end",
+        "node_type": "END"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "source": "start",
+        "target": "corrective-action-8d"
+      },
+      {
+        "id": "e1",
+        "source": "corrective-action-8d",
+        "target": "end"
+      }
+    ]
+  }
+}

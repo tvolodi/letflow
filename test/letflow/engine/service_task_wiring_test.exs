@@ -198,6 +198,33 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
     }
   end
 
+  # ISS-0926 -- same shape as graph_service_task_end/1 but the SERVICE_TASK
+  # node also carries a body_template attribute, so a test can prove
+  # Letflow.Engine renders body_template the same way it renders
+  # url_template (same {{variables.KEY}} regex/value logic,
+  # render_service_task_template/2 shared between both fields).
+  defp graph_service_task_end_with_body(endpoint, body_template) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{
+            "endpoint" => endpoint,
+            "timeout_ms" => 5_000,
+            "body_template" => body_template
+          }
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "svc"},
+        %{"id" => "e2", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
   defp dispatches_for(schema_name, instance_id) do
     ServiceTaskDispatch
     |> where([d], d.instance_id == ^instance_id)
@@ -1138,6 +1165,203 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0926 -- body_template is now rendered too, not just url_template,
+  # through its own render_service_task_body_template/2 (sibling of
+  # render_service_task_template/2, same {{variables.KEY}} regex/value logic).
+  # These tests mirror the "minimal {{variables.KEY}} renderer" describe block
+  # above, proving config_snapshot_map/4's new "rendered_body" key is
+  # populated while the raw "body_template" key is preserved unchanged, and
+  # that ServiceTaskDispatcher actually sends the RENDERED body (not the raw
+  # template) as the real HTTP request body. A SECURITY-REVIEWER fail on
+  # PR #2113 found that the original shared-renderer version did this
+  # substitution unescaped, which is a JSON-injection vulnerability for
+  # body_template specifically (a URL has no JSON-string quoting to break) --
+  # render_service_task_body_template/2 JSON-string-escapes every substituted
+  # value; the last test below reproduces that exact adversarial proof.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0926: body_template rendering" do
+    test "body_template renders, config_snapshot keeps raw+rendered, dispatcher sends the rendered body" do
+      enable_ssrf_bypass()
+      test_pid = self()
+
+      %{url: server_url} =
+        WebhookTestServer.start_with_responder(fn request ->
+          send(test_pid, {:received_request, request})
+          {200, ~s({"ok":true})}
+        end)
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body_template = ~s({"reason":"sla_breach_30_days","review_id":"{{variables.review_id}}"})
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_end_with_body(server_url, body_template)
+        )
+
+      assert {:ok, result} =
+               Engine.create(
+                 base_attrs(definition, %{initial_variables: %{"review_id" => "REV-42"}}),
+                 prefix: schema_name
+               )
+
+      instance_id = result.instance_id
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+
+      expected_rendered = ~s({"reason":"sla_breach_30_days","review_id":"REV-42"})
+
+      # config_snapshot_map/4's new derived key is populated with the
+      # rendered body ...
+      assert dispatch.config_snapshot["rendered_body"] == expected_rendered
+      # ... while the raw template is preserved unchanged, exactly mirroring
+      # url_template/rendered_url's own raw/derived pairing (design §2.3).
+      assert dispatch.config_snapshot["body_template"] == body_template
+
+      # And the dispatcher must have actually sent the RENDERED body, not
+      # the raw template, as the real HTTP request body -- the whole point
+      # of ISS-0926 (previously the dispatcher read "body_template" raw off
+      # the snapshot and sent the unrendered placeholder text verbatim).
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:received_request, %{body: body}}, 2_000
+      assert body == expected_rendered
+      refute body =~ "{{"
+    end
+
+    test "a missing variable in body_template renders to the empty string, not the placeholder text" do
+      enable_ssrf_bypass()
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body_template = ~s({"reason":"remediation_unresolved","review_id":"{{variables.missing}}"})
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_end_with_body(server_url, body_template)
+        )
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+
+      assert dispatch.config_snapshot["rendered_body"] ==
+               ~s({"reason":"remediation_unresolved","review_id":""})
+
+      refute dispatch.config_snapshot["rendered_body"] =~ "{{"
+      refute dispatch.config_snapshot["rendered_body"] =~ "}}"
+    end
+
+    test "a nil body_template renders to nil at both the config_snapshot and dispatched-body level" do
+      enable_ssrf_bypass()
+      test_pid = self()
+
+      %{url: server_url} =
+        WebhookTestServer.start_with_responder(fn request ->
+          send(test_pid, {:received_request, request})
+          {200, ~s({"ok":true})}
+        end)
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_service_task_end(server_url))
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+      assert dispatch.config_snapshot["rendered_body"] == nil
+      assert dispatch.config_snapshot["body_template"] == nil
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:received_request, %{body: body}}, 2_000
+      assert body == ""
+    end
+
+    # SECURITY-REVIEWER fail on PR #2113 -- render_service_task_template/2's
+    # plain substitution let a `"` in an unconstrained free-text variable
+    # (review_id has no variable_schema registered, so it is genuinely
+    # unconstrained) close the surrounding JSON string early and inject
+    # attacker-controlled sibling keys, or forge a duplicate key whose
+    # resolution is parser-dependent. The fix: body_template now renders
+    # through render_service_task_body_template/2, which JSON-string-escapes
+    # every substituted value before splicing it between the template's own
+    # quotes. This test reproduces SECURITY-REVIEWER's exact adversarial
+    # review_id and proves the rendered body is valid JSON with review_id
+    # as a single harmless string value -- no injected "reviewer_override"
+    # key, and no duplicate "reason" key shadowing the legitimate one.
+    test "a `\"`-containing review_id cannot inject sibling keys or shadow an existing key" do
+      enable_ssrf_bypass()
+      test_pid = self()
+
+      %{url: server_url} =
+        WebhookTestServer.start_with_responder(fn request ->
+          send(test_pid, {:received_request, request})
+          {200, ~s({"ok":true})}
+        end)
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body_template = ~s({"reason":"sla_breach_30_days","review_id":"{{variables.review_id}}"})
+
+      adversarial_review_id = ~s(x","reviewer_override":"approved_by_attacker","notes":"n)
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_end_with_body(server_url, body_template)
+        )
+
+      assert {:ok, result} =
+               Engine.create(
+                 base_attrs(definition, %{
+                   initial_variables: %{"review_id" => adversarial_review_id}
+                 }),
+                 prefix: schema_name
+               )
+
+      instance_id = result.instance_id
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+
+      rendered_body = dispatch.config_snapshot["rendered_body"]
+
+      # The rendered body must still be valid JSON (the injection, if it had
+      # succeeded, would also still be syntactically valid JSON -- that was
+      # the whole danger -- so the real proof is in the decoded shape below,
+      # not merely that decoding succeeds).
+      assert {:ok, decoded} = Jason.decode(rendered_body)
+
+      # The legitimate "reason" field must be untouched -- no duplicate key
+      # shadowed it with the attacker's own "all_clear"-style value.
+      assert decoded["reason"] == "sla_breach_30_days"
+
+      # review_id must decode back to EXACTLY the adversarial string, as one
+      # harmless scalar value -- proving the `"` characters inside it were
+      # escaped, not interpreted as JSON structure.
+      assert decoded["review_id"] == adversarial_review_id
+
+      # No attacker-controlled key was injected into the JSON object.
+      refute Map.has_key?(decoded, "reviewer_override")
+      refute Map.has_key?(decoded, "notes")
+      assert Map.keys(decoded) |> Enum.sort() == ["reason", "review_id"]
+
+      # And the dispatcher sends this same safely-escaped body over the wire.
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert_receive {:received_request, %{body: body}}, 2_000
+      assert body == rendered_body
+      assert {:ok, ^decoded} = Jason.decode(body)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # ISS-0784 site 4 -- `do_persist_service_task_advance/10`'s inline
   # `{:error, _failed_step, reason, _changes}` clause (design §2 row 4).
   # TEST-DESIGNER's own root-cause writeup (`test/specs/ISS-0784.md`) named
@@ -1211,6 +1435,467 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
                "code" => "not_well_formed",
                "path" => ["properties"]
              }
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0928 / Q-928 -- a SERVICE_TASK whose outcome hops into an EXCLUSIVE_GATEWAY
+  # with no matching condition and no default edge used to stall the instance
+  # ACTIVE forever: the dispatch row was already committed "advanced" by
+  # `handle_success/3`, the re-entry rolled back with a bare
+  # `{:error, {:transition_failed, _}}`, and the dispatcher dropped it silently.
+  # The fix routes it to an EXECUTION_ERROR (event + DLQ row + status :error) in
+  # the same transaction, and makes the residual re-entry errors loud (log +
+  # `service_task.advance_failed` audit). See `test/specs/ISS-0928.md`.
+  #
+  # Helpers below take every argument explicitly (anti-patterns.md ISS-0069).
+  # ---------------------------------------------------------------------------------
+
+  # START -> svc -> xg(EXCLUSIVE_GATEWAY) -> end. `xg` carries ONE conditioned
+  # edge (kyc_status == 'clear') and, when `with_default?` is true, an
+  # unconditioned is_default edge to the same END.
+  defp graph_svc_xg_end(endpoint, with_default?) do
+    default_edges =
+      if with_default?,
+        do: [%{"id" => "e-def", "source" => "xg", "target" => "end", "is_default" => true}],
+        else: []
+
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{"endpoint" => endpoint, "timeout_ms" => 5_000}
+        },
+        %{"id" => "xg", "node_type" => "EXCLUSIVE_GATEWAY"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" =>
+        [
+          %{"id" => "e1", "source" => "start", "target" => "svc"},
+          %{"id" => "e2", "source" => "svc", "target" => "xg"},
+          %{
+            "id" => "e3",
+            "source" => "xg",
+            "target" => "end",
+            "condition" => "variables.kyc_status == 'clear'"
+          }
+        ] ++ default_edges
+    }
+  end
+
+  # START -> fork(PARALLEL) -> {h1 HUMAN_TASK, svc SERVICE_TASK};
+  # svc -> xg -> join(PARALLEL) <- h1; join -> end.
+  # The reported Meridian topology. `xg`: conditioned edge to the join, plus an
+  # is_default edge to the join when `with_default?`.
+  defp graph_fork_human_and_svc_xg_join(endpoint, with_default?) do
+    default_edges =
+      if with_default?,
+        do: [%{"id" => "e-def", "source" => "xg", "target" => "join", "is_default" => true}],
+        else: []
+
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "fork", "node_type" => "PARALLEL_GATEWAY"},
+        %{"id" => "h1", "node_type" => "HUMAN_TASK", "attributes" => %{"role" => "role-any"}},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{"endpoint" => endpoint, "timeout_ms" => 5_000}
+        },
+        %{"id" => "xg", "node_type" => "EXCLUSIVE_GATEWAY"},
+        %{"id" => "join", "node_type" => "PARALLEL_GATEWAY"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" =>
+        [
+          %{"id" => "e1", "source" => "start", "target" => "fork"},
+          %{"id" => "e2", "source" => "fork", "target" => "h1"},
+          %{"id" => "e3", "source" => "fork", "target" => "svc"},
+          %{"id" => "e4", "source" => "svc", "target" => "xg"},
+          %{
+            "id" => "e5",
+            "source" => "xg",
+            "target" => "join",
+            "condition" => "variables.kyc_status == 'clear'"
+          },
+          %{"id" => "e6", "source" => "h1", "target" => "join"},
+          %{"id" => "e7", "source" => "join", "target" => "end"}
+        ] ++ default_edges
+    }
+  end
+
+  # START -> svc -> xg -> {clear -> end, hit -> review(HUMAN_TASK) -> end, default -> end}.
+  defp graph_svc_xg_hit_review_default(endpoint) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{"endpoint" => endpoint, "timeout_ms" => 5_000}
+        },
+        %{"id" => "xg", "node_type" => "EXCLUSIVE_GATEWAY"},
+        %{
+          "id" => "review",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "role-compliance"}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "svc"},
+        %{"id" => "e2", "source" => "svc", "target" => "xg"},
+        %{
+          "id" => "e3",
+          "source" => "xg",
+          "target" => "end",
+          "condition" => "variables.kyc_status == 'clear'"
+        },
+        %{
+          "id" => "e4",
+          "source" => "xg",
+          "target" => "review",
+          "condition" => "variables.kyc_status == 'hit'"
+        },
+        %{"id" => "e5", "source" => "review", "target" => "end"},
+        %{"id" => "e-def", "source" => "xg", "target" => "end", "is_default" => true}
+      ]
+    }
+  end
+
+  defp execution_error_events_for(schema_name, instance_id) do
+    Event
+    |> where([e], e.instance_id == ^instance_id and e.event_type == "EXECUTION_ERROR")
+    |> Repo.all(prefix: schema_name)
+  end
+
+  defp dlq_entries_for(schema_name, instance_id) do
+    Letflow.Dlq.Entry
+    |> where([d], d.instance_id == ^instance_id)
+    |> Repo.all(prefix: schema_name)
+  end
+
+  defp tasks_for(schema_name, instance_id) do
+    EngineTask
+    |> where([t], t.instance_id == ^instance_id)
+    |> Repo.all(prefix: schema_name)
+  end
+
+  defp timers_for(schema_name, instance_id) do
+    Letflow.Scheduler.Timer
+    |> where([t], t.instance_id == ^instance_id)
+    |> Repo.all(prefix: schema_name)
+  end
+
+  defp tokens_for(schema_name, instance_id) do
+    TokenRecord
+    |> where([t], t.instance_id == ^instance_id)
+    |> order_by([t], t.id)
+    |> Repo.all(prefix: schema_name)
+  end
+
+  defp audit_entries_for(schema_name, action) do
+    Audit.Entry
+    |> Repo.all(prefix: schema_name)
+    |> Enum.filter(&(&1.action == action))
+  end
+
+  # Starts the instance, resolves the SERVICE_TASK dispatch row against the test
+  # server and calls the re-entry function the way the poller does. Returns
+  # `{instance_id, dispatch_id, advance_result}`.
+  defp create_dispatch_and_advance(schema_name, graph, body_json) do
+    definition = active_definition!(schema_name, graph)
+    assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+    instance_id = result.instance_id
+
+    assert [dispatch] = dispatches_for(schema_name, instance_id)
+    assert dispatch.status == "pending"
+    assert dispatch.node_id == "svc"
+
+    assert {:ok, {:advance, decoded_body}} =
+             ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+    assert decoded_body == Jason.decode!(body_json)
+
+    advance_result =
+      Engine.advance_after_service_task_outcome(
+        dispatch.id,
+        {:advance, decoded_body},
+        Repo,
+        schema_name
+      )
+
+    {instance_id, dispatch.id, advance_result}
+  end
+
+  describe "ISS-0928: no_matching_edge after SERVICE_TASK" do
+    test "T1: top-level SERVICE_TASK -> unmatched EXCLUSIVE_GATEWAY records an EXECUTION_ERROR, DLQ row and :error status (no silent stall)" do
+      enable_ssrf_bypass()
+      body = ~s({"ok":true})
+      %{url: server_url} = WebhookTestServer.start(200, body)
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      {instance_id, dispatch_id, advance_result} =
+        create_dispatch_and_advance(schema_name, graph_svc_xg_end(server_url, false), body)
+
+      assert advance_result == {:ok, :error_set}
+
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert projection.status == :error
+
+      assert [event] = execution_error_events_for(schema_name, instance_id)
+      assert event.payload["error_type"] == "no_matching_gateway_edge"
+      # affected is the GATEWAY node, not the SERVICE_TASK node.
+      assert inspect(event.payload["affected"]) =~ "xg"
+      refute inspect(event.payload["affected"]) =~ "svc"
+      assert event.idempotency_key == "service_task_dispatch:#{dispatch_id}"
+      # merged variables (incl. the HTTP body keys) are in the error record.
+      assert event.payload["variables"]["ok"] == true
+
+      assert [_one_dlq_row] = dlq_entries_for(schema_name, instance_id)
+
+      assert service_task_completed_events_for(schema_name, instance_id) == []
+
+      # at-most-once: the dispatch row stays "advanced", never re-armed.
+      assert [%ServiceTaskDispatch{status: "advanced"}] = dispatches_for(schema_name, instance_id)
+
+      # token stays parked at the SERVICE_TASK node.
+      assert [%TokenRecord{node_id: "svc", status: :active}] =
+               tokens_for(schema_name, instance_id)
+
+      # redelivery of the same outcome writes nothing more (instance not active).
+      assert {:error, {:instance_not_active, :error}} =
+               Engine.advance_after_service_task_outcome(
+                 dispatch_id,
+                 {:advance, %{"ok" => true}},
+                 Repo,
+                 schema_name
+               )
+
+      assert [_] = execution_error_events_for(schema_name, instance_id)
+      assert [_] = dlq_entries_for(schema_name, instance_id)
+    end
+
+    test "T2: SERVICE_TASK on a PARALLEL_GATEWAY fork branch -> unmatched gateway errors the instance; sibling human task untouched" do
+      enable_ssrf_bypass()
+      body = ~s({"ok":true})
+      %{url: server_url} = WebhookTestServer.start(200, body)
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(schema_name, graph_fork_human_and_svc_xg_join(server_url, false))
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      # Pins that dispatch itself was never the bug: the fork-branch dispatch row
+      # is armed `pending` at create time and the sibling human task exists.
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+      assert dispatch.status == "pending"
+      assert dispatch.node_id == "svc"
+
+      assert [%EngineTask{node_id: "h1", status: :pending} = h1] =
+               tasks_for(schema_name, instance_id)
+
+      assert {:ok, {:advance, decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert {:ok, :error_set} =
+               Engine.advance_after_service_task_outcome(
+                 dispatch.id,
+                 {:advance, decoded_body},
+                 Repo,
+                 schema_name
+               )
+
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert projection.status == :error
+
+      assert [event] = execution_error_events_for(schema_name, instance_id)
+      assert event.payload["error_type"] == "no_matching_gateway_edge"
+      assert inspect(event.payload["affected"]) =~ "xg"
+      assert event.idempotency_key == "service_task_dispatch:#{dispatch.id}"
+      assert [_] = dlq_entries_for(schema_name, instance_id)
+      assert service_task_completed_events_for(schema_name, instance_id) == []
+
+      # The sibling branch's human task is untouched.
+      assert [%EngineTask{id: h1_id, status: :pending}] = tasks_for(schema_name, instance_id)
+      assert h1_id == h1.id
+    end
+
+    test "T3: with an unconditioned is_default edge the fork-branch SERVICE_TASK advances, the join fires after the human task, and the instance completes" do
+      enable_ssrf_bypass()
+      body = ~s({"ok":true})
+      %{url: server_url} = WebhookTestServer.start(200, body)
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      {instance_id, dispatch_id, advance_result} =
+        create_dispatch_and_advance(
+          schema_name,
+          graph_fork_human_and_svc_xg_join(server_url, true),
+          body
+        )
+
+      assert advance_result == {:ok, :advanced}
+
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert projection.status == :active
+
+      assert [event] = service_task_completed_events_for(schema_name, instance_id)
+      assert event.payload["dispatch_id"] == dispatch_id
+      assert execution_error_events_for(schema_name, instance_id) == []
+      assert dlq_entries_for(schema_name, instance_id) == []
+
+      assert [%EngineTask{node_id: "h1", status: :pending} = h1] =
+               tasks_for(schema_name, instance_id)
+
+      assert {:ok, _} = Engine.complete_task(h1.id, complete_attrs(), prefix: schema_name)
+
+      final = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert final.status == :completed
+    end
+
+    test "T4: an explicit matching condition still wins over the default edge" do
+      enable_ssrf_bypass()
+      body = ~s({"kyc_status":"hit"})
+      %{url: server_url} = WebhookTestServer.start(200, body)
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      {instance_id, _dispatch_id, advance_result} =
+        create_dispatch_and_advance(
+          schema_name,
+          graph_svc_xg_hit_review_default(server_url),
+          body
+        )
+
+      assert advance_result == {:ok, :advanced}
+
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      # routed to the conditioned HUMAN_TASK edge, not the default edge to END.
+      assert projection.status == :active
+      assert projection.current_nodes == ["review"]
+
+      assert [%EngineTask{node_id: "review", status: :pending}] =
+               tasks_for(schema_name, instance_id)
+
+      assert execution_error_events_for(schema_name, instance_id) == []
+    end
+
+    test "T5: the failed advance leaves no residue -- no token/task/timer/dispatch rows changed, merged variables not persisted" do
+      enable_ssrf_bypass()
+      body = ~s({"kyc_marker":"merged-body-value"})
+      %{url: server_url} = WebhookTestServer.start(200, body)
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(schema_name, graph_fork_human_and_svc_xg_join(server_url, false))
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      tokens_before = tokens_for(schema_name, instance_id)
+      tasks_before = tasks_for(schema_name, instance_id)
+      timers_before = timers_for(schema_name, instance_id)
+      variables_before = Repo.get!(InstanceProjection, instance_id, prefix: schema_name).variables
+
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+
+      assert {:ok, {:advance, decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert {:ok, :error_set} =
+               Engine.advance_after_service_task_outcome(
+                 dispatch.id,
+                 {:advance, decoded_body},
+                 Repo,
+                 schema_name
+               )
+
+      assert tokens_for(schema_name, instance_id) == tokens_before
+      assert tasks_for(schema_name, instance_id) == tasks_before
+      assert timers_for(schema_name, instance_id) == timers_before
+      # only the original dispatch row; no new one was armed.
+      assert [%ServiceTaskDispatch{id: dispatch_id}] = dispatches_for(schema_name, instance_id)
+      assert dispatch_id == dispatch.id
+
+      projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert projection.variables == variables_before
+      refute Map.has_key?(projection.variables, "kyc_marker")
+
+      # ...but the error record itself shows why the gateway failed.
+      assert [event] = execution_error_events_for(schema_name, instance_id)
+      assert event.payload["variables"]["kyc_marker"] == "merged-body-value"
+    end
+
+    test "T6: a residual re-entry error is no longer silent -- one error log (ids and tag only, no variables) and one service_task.advance_failed audit row; poll summary unchanged" do
+      enable_ssrf_bypass()
+      secret_body_text = "SECRET-RESPONSE-BODY-7f3a"
+      body = ~s({"leak":"#{secret_body_text}"})
+      %{url: server_url} = WebhookTestServer.start(200, body)
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition = active_definition!(schema_name, graph_service_task_end(server_url))
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+      assert [dispatch] = dispatches_for(schema_name, instance_id)
+
+      # Force {:unknown_token_id, _} from the re-entry: remove the token row the
+      # dispatch row refers to.
+      {1, _} =
+        TokenRecord
+        |> where([t], t.instance_id == ^instance_id)
+        |> Repo.delete_all(prefix: schema_name)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          # re-entry fails -> folded as {:error, _}: counted in neither :advanced nor
+          # :given_up (contract unchanged by ISS-0928), and poll_and_dispatch/1 does not raise.
+          assert %{claimed: 1, advanced: 0, retried: 0, given_up: 0} =
+                   ServiceTaskDispatcher.poll_and_dispatch(schema_name)
+        end)
+
+      error_lines =
+        log
+        |> String.split("\n")
+        |> Enum.filter(&(&1 =~ "service_task advance failed"))
+
+      assert [line] = error_lines
+      assert line =~ "dispatch_id=#{dispatch.id}"
+      assert line =~ "tenant_schema=#{schema_name}"
+      assert line =~ "reason=unknown_token_id"
+      refute log =~ secret_body_text
+
+      assert [entry] = audit_entries_for(schema_name, "service_task.advance_failed")
+      assert entry.resource_type == "instance"
+      assert entry.resource_id == instance_id
+      assert entry.actor_id == EventStore.platform_actor_id()
+      assert entry.before_state == nil
+      assert entry.after_state == %{"node_id" => "svc", "reason" => "unknown_token_id"}
+
+      # dispatch row is deliberately NOT reverted (at-most-once HTTP dispatch).
+      assert [%ServiceTaskDispatch{status: "advanced"}] = dispatches_for(schema_name, instance_id)
+      assert Repo.get!(InstanceProjection, instance_id, prefix: schema_name).status == :active
+    end
+
+    test "T6b: the audit helper writes the audit row and returns :ok for any tag, including a nil node_id" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+
+      assert :ok =
+               Engine.record_service_task_advance_failure_audit(
+                 instance_id,
+                 nil,
+                 :other,
+                 EventStore.platform_actor_id(),
+                 schema_name
+               )
+
+      assert [entry] = audit_entries_for(schema_name, "service_task.advance_failed")
+      assert entry.resource_id == instance_id
+      assert entry.after_state == %{"node_id" => nil, "reason" => "other"}
     end
   end
 end

@@ -1,0 +1,43 @@
+id: ISS-0929
+title: "vortex/supplier-quality-deviation-critical: classifying severity critical sends the instance to ERROR SUB_PROCESS_DEFINITION_NOT_FOUND (SUB_PROCESS node has no definition_name; no 8D child definition exists)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MAJOR
+owner: "ORCH"
+description: >
+  Scenario vortex/supplier-quality-deviation-critical (EO-002) expects an 8D corrective
+  action child process assigned to role-procurement-manager after severity=critical. The QA
+  fixture's corrective-action-subprocess SUB_PROCESS node has no attributes, so
+  Letflow.Engine.SubProcess.resolve_child_definition/2 returns
+  {:definition_not_found, {:missing_definition_name_attribute, node_id}} and the instance goes
+  to ERROR SUB_PROCESS_DEFINITION_NOT_FOUND. Independently, no 8D child definition exists in
+  test/fixtures/qa or scripts/seed_vortex_definition.sh, and role-procurement-manager is
+  deliberately unseeded (scripts/seed_vortex_persona_actors.sh, ISS-0931).
+  Source: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml (may exist only
+  on another branch).
+source_reports:
+  - test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml
+related:
+  - ISS-0931
+  - ISS-0897
+  - ISS-0930
+queue_ref: Q-929
+github_ref: GH-2115
+status: resolved
+resolved_in_run: WF03-Q929-20261001
+resolved_at: "2026-10-01T21:15:00Z"
+resolution: >
+  Two causes. (1) Fixture/seed: corrective-action-subprocess had no definition_name and no 8D
+  child definition or role existed. Fix: new child fixture test/fixtures/qa/vortex_8d_corrective_action_definition.json
+  ("8D Corrective Action" v1.0, START -> HUMAN_TASK role-procurement-manager -> END); parent fixture v1.2 sets
+  definition_name; seed_vortex_definition.sh seeds the child first; seed_vortex_persona_actors.sh seeds
+  role-procurement-manager for actor-vortex-felix; alias proc-vortex-8d-corrective-action added.
+  (2) Engine (found by fail-first probe): SubProcess.build_completion_multi_from_merge discarded the pending
+  events produced when the parent advanced past a completed SUB_PROCESS, so a SERVICE_TASK/TIMER directly
+  after it (close-deviation) never got a dispatch/timer row and the parent never reached end-closed. Fix:
+  keep the events and arm them via the new Engine.append_pending_event_arms_multi/7 inside the same
+  transaction. Regression tests: test/letflow/engine/sub_process_service_task_after_test.exs,
+  test/letflow/scripts/vortex_8d_subprocess_fixture_test.exs. Needs a QA re-seed (definitions, then persona
+  actors) as an ops step. Known remaining gap: a SUB_PROCESS directly after a completed SUB_PROCESS is
+  not spawned (out of scope).

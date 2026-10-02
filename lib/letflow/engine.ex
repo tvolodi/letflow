@@ -970,17 +970,26 @@ defmodule Letflow.Engine do
         {:error, {:config_parse_failed, node_id, reason}}
 
       {:ok, %ServiceTask.Config{route_kind: :inline_url} = config} ->
-        rendered_url = render_service_task_url(config.url_template, variables)
+        rendered_url = render_service_task_template(config.url_template, variables)
+        rendered_body = render_service_task_body_template(config.body_template, variables)
 
         with {:ok, arm_attrs} <-
-               finish_service_task_arm_attrs(config, node_id, instance_id, rendered_url, now) do
+               finish_service_task_arm_attrs(
+                 config,
+                 node_id,
+                 instance_id,
+                 rendered_url,
+                 rendered_body,
+                 now
+               ) do
           {:ok, arm_attrs, ctx}
         end
 
       {:ok, %ServiceTask.Config{route_kind: :catalog_service} = config} ->
         case resolve_catalog_version(config, ctx) do
           {:ok, resolved, ctx} ->
-            rendered_url = render_service_task_url(resolved.endpoint_url, variables)
+            rendered_url = render_service_task_template(resolved.endpoint_url, variables)
+            rendered_body = render_service_task_body_template(config.body_template, variables)
 
             with {:ok, arm_attrs} <-
                    finish_service_task_arm_attrs(
@@ -988,6 +997,7 @@ defmodule Letflow.Engine do
                      node_id,
                      instance_id,
                      rendered_url,
+                     rendered_body,
                      now,
                      resolved
                    ) do
@@ -1070,6 +1080,7 @@ defmodule Letflow.Engine do
          node_id,
          instance_id,
          rendered_url,
+         rendered_body,
          now,
          catalog_version \\ nil
        ) do
@@ -1081,7 +1092,8 @@ defmodule Letflow.Engine do
         arm_attrs = %{
           instance_id: instance_id,
           node_id: node_id,
-          config_snapshot: config_snapshot_map(config, rendered_url, catalog_version),
+          config_snapshot:
+            config_snapshot_map(config, rendered_url, rendered_body, catalog_version),
           attempt_index: 0,
           next_attempt_at: now,
           created_at: now
@@ -1092,7 +1104,8 @@ defmodule Letflow.Engine do
   end
 
   # design doc §2.2 -- plain map projection of ServiceTask.Config.t() plus
-  # the one derived key "rendered_url", matching exactly the field set
+  # the derived keys "rendered_url" and "rendered_body" (ISS-0926 added the
+  # latter, mirroring the former), matching exactly the field set
   # ServiceTaskDispatcher's own config_from_snapshot/1 reads back
   # (service_task_dispatcher.ex:630-648). String-keyed, matching
   # ServiceTaskDispatch.config_snapshot()'s own @type.
@@ -1106,9 +1119,15 @@ defmodule Letflow.Engine do
   @spec config_snapshot_map(
           ServiceTask.Config.t(),
           rendered_url :: String.t() | nil,
+          rendered_body :: String.t() | nil,
           ServiceCatalog.resolved_service_version() | nil
         ) :: map()
-  defp config_snapshot_map(%ServiceTask.Config{} = config, rendered_url, catalog_version) do
+  defp config_snapshot_map(
+         %ServiceTask.Config{} = config,
+         rendered_url,
+         rendered_body,
+         catalog_version
+       ) do
     base = %{
       "route_kind" => to_string(config.route_kind),
       "url_template" => config.url_template,
@@ -1118,7 +1137,8 @@ defmodule Letflow.Engine do
       "headers" => config.headers,
       "timeout_ms" => config.timeout_ms,
       "retry_limit" => config.retry_limit,
-      "rendered_url" => rendered_url
+      "rendered_url" => rendered_url,
+      "rendered_body" => rendered_body
     }
 
     case catalog_version do
@@ -1137,22 +1157,63 @@ defmodule Letflow.Engine do
 
   # REQ-215 design doc §2.3 -- the minimal inline {{variables.KEY}} template
   # renderer. Scoped to exactly the {{variables.KEY}} syntax the R-Co design
-  # doc names (src/design/ext-01-service-task-node.md:20, {{variables.order_id}}), and
-  # to url_template only (body_template rendering is out of this
-  # requirement's own scope, §7 Open Question 2). No existing rendering
-  # mechanism was found anywhere in this codebase to reuse (§0.1) -- this
-  # function is deliberately new, deliberately minimal, and is NOT the
-  # intended long-term shape for template rendering in this codebase: a
-  # future requirement needing richer syntax (nested paths, escaping,
-  # body_template rendering) should replace this function with a real one.
-  @spec render_service_task_url(template :: String.t() | nil, variables :: map()) ::
+  # doc names (src/design/ext-01-service-task-node.md:20, {{variables.order_id}}).
+  # Used for url_template only -- a URL has no JSON-string-literal quoting to
+  # protect, so substitution stays plain (this IS the pre-ISS-0926 behavior;
+  # it is a separate, lower-severity risk class and intentionally untouched
+  # by the SECURITY-REVIEWER fix below). No existing rendering mechanism was
+  # found anywhere in this codebase to reuse (§0.1) -- this function is
+  # deliberately new, deliberately minimal, and is NOT the intended long-term
+  # shape for template rendering in this codebase: a future requirement
+  # needing richer syntax (nested paths, escaping, conditionals) should
+  # replace this function with a real one.
+  @spec render_service_task_template(template :: String.t() | nil, variables :: map()) ::
           String.t() | nil
-  defp render_service_task_url(nil, _variables), do: nil
+  defp render_service_task_template(nil, _variables), do: nil
 
-  defp render_service_task_url(template, variables) when is_binary(template) do
+  defp render_service_task_template(template, variables) when is_binary(template) do
     Regex.replace(~r/\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}/, template, fn _match, key ->
       variables |> Map.get(key) |> render_service_task_value()
     end)
+  end
+
+  # SECURITY-REVIEWER fail on PR #2113 (ISS-0926 follow-up) -- body_template
+  # splices its substituted values into a JSON-string-literal position inside
+  # the fixture's raw JSON text (e.g. `"review_id":"{{variables.review_id}}"`).
+  # Unlike url_template above, an unescaped substitution here lets a `"` in
+  # the variable's value close the surrounding JSON string early and inject
+  # sibling keys, or forge a duplicate key that shadows a legitimate field
+  # (proof: a `review_id` of `x","reviewer_override":"approved_by_attacker",
+  # "notes":"n` renders a `"reviewer_override"` key that was never in the
+  # template; a value like `x","reason":"all_clear` produces a duplicate
+  # `"reason"` key whose resolution is parser-dependent). This sibling
+  # function is identical to render_service_task_template/2 except every
+  # substituted value is JSON-string-escaped (json_string_escape/1) before
+  # splicing, so a `"` or control character in the value can never terminate
+  # the enclosing JSON string. variables.body_template stays a plain string
+  # (ServiceTask.parse_config_from_node_attributes/1 reads it as-is off node
+  # attributes, matching §0.1's existing "no new syntax" scope) -- escaping
+  # individual substituted values, not switching to map-then-Jason.encode!/1,
+  # is the natural fix for that representation.
+  @spec render_service_task_body_template(template :: String.t() | nil, variables :: map()) ::
+          String.t() | nil
+  defp render_service_task_body_template(nil, _variables), do: nil
+
+  defp render_service_task_body_template(template, variables) when is_binary(template) do
+    Regex.replace(~r/\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}/, template, fn _match, key ->
+      variables |> Map.get(key) |> render_service_task_value() |> json_string_escape()
+    end)
+  end
+
+  # JSON-string-content escaping (quotes, backslashes, control characters)
+  # for a value about to be spliced between a JSON template's own existing
+  # quotes -- equivalent to Jason.encode!/1'ing the raw string and stripping
+  # the outer quote pair it adds, so the result is safe to place INSIDE an
+  # already-quoted JSON string literal (not a standalone JSON string itself).
+  @spec json_string_escape(String.t()) :: String.t()
+  defp json_string_escape(value) when is_binary(value) do
+    encoded = Jason.encode!(value)
+    String.slice(encoded, 1, String.length(encoded) - 2)
   end
 
   defp render_service_task_value(nil), do: ""
@@ -2834,20 +2895,38 @@ defmodule Letflow.Engine do
   def advance_after_escalation_timer_fired(%Timer{} = timer, repo, prefix) do
     with {:ok, projection} <- fetch_and_lock_instance_projection(repo, timer.instance_id, prefix),
          {:ok, snapshot_and_state} <-
-           build_snapshot_and_state_for_timer(repo, timer, projection, prefix),
-         {:ok, advanced_state, pending_events} <-
-           dispatch_escalation_timer_fired_hop_chain(snapshot_and_state),
-         {:ok, _changes} <-
-           persist_escalation_timer_fired_advance(
-             repo,
-             timer,
-             projection,
-             snapshot_and_state,
-             advanced_state,
-             pending_events,
-             prefix
-           ) do
-      {:ok, :advanced}
+           build_snapshot_and_state_for_timer(repo, timer, projection, prefix) do
+      if escalation_timer_stale?(timer, snapshot_and_state) do
+        # ISS-0925: the token is no longer at the node this timer was armed for
+        # (its HUMAN_TASK completed and the token moved on). Never act on a
+        # different node -- the timer is simply consumed as a no-op.
+        {:ok, :advanced}
+      else
+        with {:ok, advanced_state, pending_events} <-
+               dispatch_escalation_timer_fired_hop_chain(snapshot_and_state),
+             {:ok, _changes} <-
+               persist_escalation_timer_fired_advance(
+                 repo,
+                 timer,
+                 projection,
+                 snapshot_and_state,
+                 advanced_state,
+                 pending_events,
+                 prefix
+               ) do
+          {:ok, :advanced}
+        end
+      end
+    end
+  end
+
+  defp escalation_timer_stale?(%Timer{node_id: node_id}, %{
+         original_active_tokens: records,
+         own_token_id: own_token_id
+       }) do
+    case Enum.find(records, &(to_string(&1.id) == own_token_id)) do
+      %{node_id: current} -> current != node_id
+      nil -> false
     end
   end
 
@@ -3101,6 +3180,72 @@ defmodule Letflow.Engine do
     end
   end
 
+  # ISS-0929 -- public entry point for Letflow.Engine.SubProcess's completion
+  # path, which (unlike complete_task/3) previously discarded the hop chain's
+  # pending events, so a TIMER / escalation HUMAN_TASK / SERVICE_TASK reached
+  # right after a SUB_PROCESS never got its timers/dispatch rows. Resolves the
+  # events eagerly (so a failure can be routed as a typed error by the caller)
+  # and appends the resulting Scheduler / ServiceTaskDispatch Multi steps to
+  # `multi`. Every token_id in `pending_events` must already be a persisted
+  # TokenRecord id (identity id_map), same as complete_task/3. Tenant id is
+  # derived from the schema prefix (INV-PD-7), never from caller input.
+  @doc false
+  @spec append_pending_event_arms_multi(
+          Multi.t(),
+          [Transition.pending_event()],
+          Graph.t(),
+          instance_id :: Ecto.UUID.t(),
+          variables :: map(),
+          now :: DateTime.t(),
+          prefix :: String.t()
+        ) :: {:ok, Multi.t()} | {:error, term()}
+  def append_pending_event_arms_multi(
+        multi,
+        pending_events,
+        graph,
+        instance_id,
+        variables,
+        now,
+        prefix
+      ) do
+    catalog_ctx = %{
+      pin_source: {:reconstruct, instance_id, prefix},
+      tenant_id: {:schema_prefix, prefix}
+    }
+
+    with {:ok, prepared_timers} <- prepare_timer_arms(pending_events, graph, instance_id, now),
+         {:ok, prepared_dispatches} <-
+           prepare_service_task_dispatch_abort_on_empty_url(
+             pending_events,
+             graph,
+             instance_id,
+             variables,
+             now,
+             catalog_ctx
+           ),
+         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      timer_id_map = Map.new(prepared_timers, fn {token_id, _attrs} -> {token_id, token_id} end)
+
+      dispatch_id_map =
+        Map.new(prepared_dispatches, fn %{token_id: token_id} -> {token_id, token_id} end)
+
+      arms_multi =
+        Multi.new()
+        |> then(&build_timer_arms_multi(&1, prepared_timers, timer_id_map, prefix))
+        |> then(
+          &build_service_task_dispatch_multi(
+            &1,
+            prepared_dispatches,
+            dispatch_id_map,
+            tenant_id,
+            prefix
+          )
+        )
+
+      {:ok, Multi.append(multi, arms_multi)}
+    end
+  end
+
   # =========================================================================
   # advance_after_service_task_outcome/4 (REQ-215, design doc §3) -- the
   # SERVICE_TASK dispatcher poller's re-entry into the engine's own
@@ -3292,13 +3437,111 @@ defmodule Letflow.Engine do
               prefix
             )
 
+          {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
+            persist_service_task_no_matching_edge(
+              repo,
+              dispatch,
+              projection,
+              state_with_merged_variables,
+              node_id,
+              evaluated_conditions,
+              prefix
+            )
+
           {:error, reason} ->
             {:error, {:transition_failed, reason}}
         end
 
-      {:error, reason} ->
-        {:error, {:transition_failed, reason}}
+      {:error, {:no_matching_edge, node_id, evaluated_conditions}} ->
+        persist_service_task_no_matching_edge(
+          repo,
+          dispatch,
+          projection,
+          state_with_merged_variables,
+          node_id,
+          evaluated_conditions,
+          prefix
+        )
+
+        # No generic `{:error, reason}` arm here: `Transition.advance_off_completed_node/4`
+        # only ever returns `{:error, {:no_matching_edge, _, _}}` (the type checker
+        # rejects a catch-all as unreachable).
     end
+  end
+
+  # ISS-0928 -- the hop chain that follows a completed SERVICE_TASK reached an
+  # EXCLUSIVE_GATEWAY with no matching condition and no default edge. The
+  # dispatch row was already committed "advanced" by
+  # `ServiceTaskDispatcher.handle_success/3` in an earlier transaction, so
+  # rolling back here (the old bare `{:transition_failed, _}`) left the
+  # instance ACTIVE forever with no event/DLQ row. Mirror the human-task
+  # path (`dispatch_task_completion_hop_chain/7`): write the ExecutionError
+  # records inside the ALREADY-OPEN outer transaction (the projection is
+  # already FOR UPDATE-locked) and let it COMMIT. Writes: EXECUTION_ERROR
+  # event + DLQ row + projection -> :error. Deliberately NOT written: no
+  # SERVICE_TASK_COMPLETED, no token/task/timer/dispatch changes, no variable
+  # merge persistence; the dispatch row stays "advanced" (never re-armed, so
+  # at-most-once HTTP dispatch is preserved). No snapshot (log replay is
+  # authoritative).
+  defp persist_service_task_no_matching_edge(
+         repo,
+         %ServiceTaskDispatch{} = dispatch,
+         %InstanceProjection{} = projection,
+         %InstanceState{} = state_with_merged_variables,
+         node_id,
+         evaluated_conditions,
+         prefix
+       ) do
+    error_args =
+      build_no_matching_gateway_edge_error_args(
+        projection.instance_id,
+        node_id,
+        evaluated_conditions,
+        state_with_merged_variables.variables,
+        EventStore.platform_actor_id(),
+        "service_task_dispatch:#{dispatch.id}"
+      )
+
+    multi =
+      Multi.new()
+      |> ExecutionError.append_multi(error_args, prefix: prefix, locked_projection: projection)
+
+    case repo.transaction(multi) do
+      {:ok, _changes} -> {:ok, :error_set}
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
+  # Shared by the human-task completion path and the SERVICE_TASK re-entry
+  # path so the ExecutionError shape for `:no_matching_gateway_edge` cannot
+  # drift between them.
+  @spec build_no_matching_gateway_edge_error_args(
+          Ecto.UUID.t(),
+          String.t(),
+          term(),
+          map(),
+          Ecto.UUID.t() | nil,
+          String.t()
+        ) :: ExecutionError.error_args()
+  defp build_no_matching_gateway_edge_error_args(
+         instance_id,
+         node_id,
+         evaluated_conditions,
+         variables,
+         actor_id,
+         idempotency_key
+       ) do
+    %{
+      instance_id: instance_id,
+      error_type: :no_matching_gateway_edge,
+      affected: {:node, node_id},
+      reason:
+        "no outgoing edge matched conditions and no default edge configured for gateway node '#{node_id}'",
+      variables: variables,
+      details: %{evaluated_conditions: evaluated_conditions},
+      actor_id: actor_id,
+      idempotency_key: idempotency_key
+    }
   end
 
   defp do_persist_service_task_advance(
@@ -3776,17 +4019,15 @@ defmodule Letflow.Engine do
             end
 
           {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
-            error_args = %{
-              instance_id: projection.instance_id,
-              error_type: :no_matching_gateway_edge,
-              affected: {:node, node_id},
-              reason:
-                "no outgoing edge matched conditions and no default edge configured for gateway node '#{node_id}'",
-              variables: state_with_merged_variables.variables,
-              details: %{evaluated_conditions: evaluated_conditions},
-              actor_id: actor_id,
-              idempotency_key: idempotency_key
-            }
+            error_args =
+              build_no_matching_gateway_edge_error_args(
+                projection.instance_id,
+                node_id,
+                evaluated_conditions,
+                state_with_merged_variables.variables,
+                actor_id,
+                idempotency_key
+              )
 
             {:ok, {:execution_error, error_args}}
 
@@ -3795,17 +4036,15 @@ defmodule Letflow.Engine do
         end
 
       {:error, {:no_matching_edge, node_id, evaluated_conditions}} ->
-        error_args = %{
-          instance_id: projection.instance_id,
-          error_type: :no_matching_gateway_edge,
-          affected: {:node, node_id},
-          reason:
-            "no outgoing edge matched conditions and no default edge configured for gateway node '#{node_id}'",
-          variables: state_with_merged_variables.variables,
-          details: %{evaluated_conditions: evaluated_conditions},
-          actor_id: actor_id,
-          idempotency_key: idempotency_key
-        }
+        error_args =
+          build_no_matching_gateway_edge_error_args(
+            projection.instance_id,
+            node_id,
+            evaluated_conditions,
+            state_with_merged_variables.variables,
+            actor_id,
+            idempotency_key
+          )
 
         {:ok, {:execution_error, error_args}}
 
@@ -4098,6 +4337,18 @@ defmodule Letflow.Engine do
         normalized_changes.task,
         actor_id,
         output_variables,
+        completed_at,
+        prefix
+      )
+    end)
+    |> Multi.run(:cancel_escalation_timers, fn repo, _changes ->
+      # ISS-0925: a normally-completed HUMAN_TASK must not leave its escalation
+      # timer pending (it would fire later against whatever node the token is on).
+      TaskActivation.cancel_pending_escalation_timers(
+        repo,
+        normalized_changes.task.instance_id,
+        normalized_changes.task.token_id,
+        normalized_changes.task.node_id,
         completed_at,
         prefix
       )
@@ -4629,6 +4880,61 @@ defmodule Letflow.Engine do
         Logger.warning(
           "Repo.transaction/1 failed recording task_activation.rejected for instance " <>
             "#{instance_id} (node #{node_id}): #{inspect(rollback_reason)}"
+        )
+
+        :ok
+    end
+  end
+
+  # ISS-0928 -- best-effort audit for a SERVICE_TASK re-entry failure that is
+  # NOT routed to an ExecutionError (hop limit, unknown token, variable-merge
+  # rejection, DB failure ...). Called by
+  # `ServiceTaskDispatcher.call_advance_after_service_task_outcome/3` strictly
+  # after `advance_after_service_task_outcome/4` has returned, same
+  # post-return rule and log-and-swallow, never-raise contract as
+  # `record_task_activation_rejection_audit/5`. Stores/logs only ids and an
+  # atom tag, never the failure reason (it can hold variables / response body).
+  @doc false
+  @spec record_service_task_advance_failure_audit(
+          instance_id :: Ecto.UUID.t(),
+          node_id :: String.t() | nil,
+          reason_tag :: atom(),
+          actor_id :: Ecto.UUID.t() | nil,
+          prefix :: String.t()
+        ) :: :ok
+  def record_service_task_advance_failure_audit(
+        instance_id,
+        node_id,
+        reason_tag,
+        actor_id,
+        prefix
+      ) do
+    attrs = %{
+      actor_id: actor_id,
+      action: "service_task.advance_failed",
+      resource_type: "instance",
+      resource_id: instance_id,
+      before_state: nil,
+      after_state: %{"node_id" => node_id, "reason" => Atom.to_string(reason_tag)},
+      trace_id: nil
+    }
+
+    case Repo.transaction(fn -> Audit.insert_entry(Repo, attrs, prefix) end) do
+      {:ok, {:ok, _entry}} ->
+        :ok
+
+      {:ok, {:error, _insert_reason}} ->
+        Logger.warning(
+          "Letflow.Audit.insert_entry/3 failed recording service_task.advance_failed for " <>
+            "instance #{instance_id} (node #{node_id}, reason #{reason_tag})"
+        )
+
+        :ok
+
+      {:error, _rollback_reason} ->
+        Logger.warning(
+          "Repo.transaction/1 failed recording service_task.advance_failed for instance " <>
+            "#{instance_id} (node #{node_id}, reason #{reason_tag})"
         )
 
         :ok

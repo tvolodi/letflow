@@ -1,0 +1,33 @@
+id: ISS-0967
+title: "platform/instance-pin-survives-catalog-change spec unrunnable on QA: hard-coded admin-pass login (401) and task-complete 403 assigned to a different user (UAT WF05-FULL3)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001
+severity: MAJOR
+owner: "FRONTEND-DEV"
+description: >
+  The pin-survives spec logged in with a hard-coded admin-pass (401 on QA Keycloak).
+  With only the credential changed, step 04b got 403 "task is assigned to a different
+  user" completing a task seeded as assigned to the same user.
+affected_files:
+  - web/tests/e2e/pipeline.ts
+  - web/tests/e2e/pipelines/platform-instance-pin-survives-catalog-change.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/platform-definition-promotion-approved.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/platform-definition-promotion-conflict-rejected.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts
+queue_ref: Q-936  # queue issue_ref ISS-0936 collides with an unrelated local issue; local number ISS-0967 (next free on origin/main and all open PRs)
+github_ref: GH-2124
+status: resolved
+resolved_in_run: fix/ISS-0967-pin-spec-local-user-id
+resolved_at: "2026-10-02T07:30:00Z"
+resolution: >
+  Root cause of the 403 (verified in code): Tasks.apply_completion_authz/3 compares a
+  USER task's assignee_ref with auth_context.user_id, which is the LOCAL users.id set
+  by JIT provisioning (Identity.provision_oidc_user; the Keycloak sub is stored in
+  users.external_id) -- NOT the JWT sub. ISS-0951 (Q-924) seeded jwtSubject(token),
+  which can never match. Fix: new pipeline.ts resolveLocalUserId() (exact-username
+  GET /api/v1/identity/users); the pin spec and the three promotion specs that ISS-0951
+  touched now seed that id. The pin spec also takes the admin password via
+  resolveCredential('UAT_QA_ADMIN_PASSWORD', ...) like its sibling specs. NOT run
+  against QA (letflow-2 owns it): re-run platform/instance-pin-survives-catalog-change
+  there. attachment-cross-tenant (ISS-0951) still seeds a literal assignee in another
+  realm and never completes the task; left unchanged.

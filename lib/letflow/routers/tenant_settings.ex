@@ -158,6 +158,21 @@ defmodule Letflow.Routers.TenantSettings do
 
         :ok
     end
+  rescue
+    exception ->
+      # ISS-0980: no Repo.transaction/1 wrapper to rescue around here (this
+      # write is intentionally non-transactional/best-effort), but a raise
+      # from Audit.insert_entry/3 itself (e.g. a DROP TABLE-class fault) must
+      # be caught at the function level for the same reason the {:error,
+      # reason} branch above exists -- the settings mutation already
+      # committed and must not turn into a generic 500 because of an
+      # unrelated audit-write hiccup. Same INV-4-bounded logging discipline.
+      Logger.error(
+        "tenant_settings.reject_unrecognized_keys audit write raised " <>
+          "(tenant_id=#{tenant.id}): #{inspect(exception)}"
+      )
+
+      :ok
   end
 
   defp changeset_error_message(changeset) do

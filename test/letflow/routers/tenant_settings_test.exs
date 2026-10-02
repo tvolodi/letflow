@@ -467,4 +467,51 @@ defmodule Letflow.Routers.TenantSettingsTest do
       assert Repo.get!(Tenant, tenant.tenant_id) == before
     end
   end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # ISS-0980 — maybe_record_rejected_keys/5 is rescue-hardened, never raises
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "ISS-0980: maybe_record_rejected_keys/5 is rescue-hardened, never raises" do
+    test "a genuine Postgres-level audit-insert failure during a PATCH with a rejected key is logged and swallowed -- the settings mutation still returns 200, not 500" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0980-ts-a")
+
+      Repo.query!(~s(DROP TABLE "#{tenant.schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{tenant.schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          resp =
+            patch_settings(tenant,
+              body: %{"app_name" => "ISS-0980 App", "not_a_real_key" => "x"}
+            )
+
+          assert resp.status == 200
+          assert Jason.decode!(resp.resp_body)["settings"]["app_name"] == "ISS-0980 App"
+        end)
+
+      assert log =~ "tenant_settings.reject_unrecognized_keys audit write raised"
+      assert log =~ "#{tenant.tenant_id}"
+      assert log =~ "Postgrex.Error"
+    end
+  end
 end

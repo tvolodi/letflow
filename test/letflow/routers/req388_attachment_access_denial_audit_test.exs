@@ -223,4 +223,57 @@ defmodule Letflow.Routers.Req388AttachmentAccessDenialAuditTest do
       assert Jason.decode!(audit_resp.resp_body)["count"] == 0
     end
   end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0980 -- record_attachment_access_denied_audit/5 is rescue-hardened,
+  # never raises
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "ISS-0980: record_attachment_access_denied_audit/5 is rescue-hardened, never raises" do
+    test "a genuine Postgres-level audit-insert failure during a denied attachment fetch is logged and swallowed -- the response is still 404, not 500" do
+      tenant = provisioned_tenant("iss0980-ia")
+      instance_id = Ecto.UUID.generate()
+      never_issued_id = Ecto.UUID.generate()
+
+      Repo.query!(~s(DROP TABLE "#{tenant.schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{tenant.schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          resp =
+            build_conn(
+              :get,
+              "/#{instance_id}/attachments/#{never_issued_id}",
+              tenant,
+              roles: ["PLATFORM_ADMIN"]
+            )
+            |> dispatch()
+
+          assert resp.status == 404
+        end)
+
+      assert log =~ "attachment.access_denied audit write raised"
+      assert log =~ instance_id
+      assert log =~ "Postgrex.Error"
+    end
+  end
 end

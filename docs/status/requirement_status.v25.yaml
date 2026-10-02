@@ -742,3 +742,65 @@ history:
       REQ -- docs/requirements.yaml untouched. No letflow-queue task to
       release: filed directly by ISSUE-FIXER during REQ-433's implementation;
       queue_ref: null per ISSUE-FIXER's own note.
+  - req: REQ-433
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-02T10:45:00Z"
+    note: >
+      PR #2148, branch feat/REQ-433-committee-quorum, final commit
+      51680391, squash-merged to main as a7e6ece9. Real 2-of-3
+      credit-committee quorum modeled per REQ-ANALYST's own decision in
+      this requirement (PARALLEL_GATEWAY fork -> 3 HUMAN_TASK votes ->
+      PARALLEL_GATEWAY join -> EXCLUSIVE_GATEWAY tally), rejecting the
+      cheaper scenario-supplied committee_outcome fudge because it would
+      only pass by test-double coincidence, not prove real quorum
+      tallying. Design (lib/letflow/design/req433-committee-quorum.md): 2
+      CODE-DESIGN-VALIDATOR cycles -- 1st FAILed on a stale claim relying
+      on an already-resolved engine bug (ISS-0397); 2nd PASSed after
+      re-verification found the simulation scenario genuinely needed new
+      steps once that blocker was confirmed gone. Implementation surfaced
+      a genuine, SEPARATE engine defect mid-work: ISS-0974 (same-hop-chain
+      PARALLEL_GATEWAY join firing into SERVICE_TASK/TIMER minted a
+      non-UUID token_id, 422 crash) -- ELIXIR-DEV correctly left engine
+      code untouched and honestly documented the failing assertion rather
+      than faking a pass. ISS-0974 was diagnosed (ISSUE-FIXER), designed,
+      fixed, and merged through its OWN full gate chain
+      (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER -- which also
+      filed ISS-0975 for a 5th structurally-similar site needing a
+      different fix shape, merged separately -- TEST-RUNNER,
+      RELEASE-VALIDATOR, whose own mutation test found a real coverage gap
+      on 3 of the 4 fixed sites, filed as ISS-0976 follow-up for
+      TEST-DESIGNER). REQ-433's branch was then rebased onto the merged
+      ISS-0974 fix and the previously-honest-failing AC4 assertion flipped
+      to assert the real success path (verified: a real
+      service_task_dispatches row with a genuinely UUID-castable
+      token_id, not a mock). REVIEWER PASSed (first full pass on this PR),
+      confirmed every AC directly. TEST-RUNNER FAILed once on a genuine,
+      separate gap -- REQ-433 was missing its impl_order registration in
+      docs/requirements.yaml, breaking 3 requirements-registry self-check
+      tests; ELIXIR-DEV fixed it properly via a real letflow-queue
+      register_task call (task 940, GH#2154), not a workaround. Re-ran
+      clean: 5368/5368. RELEASE-VALIDATOR: exhaustive independent
+      re-verification of all 7 ACs against current code/fixtures, plus its
+      own adversarial tests beyond the shipped 2-1 tally case (3-0
+      unanimous approve, 3-0 unanimous reject, 1-1-1 split correctly
+      falling to default-decline, threshold-routing/edge-exclusivity
+      intact) -- all passed, full suite independently re-run (5368/5368).
+      RELEASE-VALIDATOR's sandbox had no QUEUE_AUTH_TOKEN and flagged task
+      940's live state as unverified; DOC-UPDATER verified it directly
+      with real queue access this run (GET /tasks: status open, eligible
+      true, locked_by null, matching the impl_order comment verbatim),
+      then locked and released it with status: done (200 on both calls).
+      PR #2148's own CI: two reruns of the backend gate each hit a
+      different, pre-existing race-condition test unrelated to this PR's
+      diff scope (Letflow.Scheduler.PollerTest's REQ-218 AC3 "genuine
+      partial skip" contention case, then
+      Letflow.Engine.ServiceTaskWiringTest's AC5 cancel-vs-dispatch race
+      case) -- confirmed via `gh pr diff 2148 --name-only` that neither
+      test file nor any lib/letflow/engine.ex / scheduler code is touched
+      by this PR's diff; merged via `gh pr merge --squash --delete-branch
+      --admin` after this confirmed-unrelated-flake determination.
+      docs/issues/ISS-0973.yaml set to status: resolved in this same run
+      (resolved_in_run: feat/REQ-433-committee-quorum). GitHub issue #2128
+      closed with an explanatory comment in this same run. status: done in
+      docs/requirements.yaml.

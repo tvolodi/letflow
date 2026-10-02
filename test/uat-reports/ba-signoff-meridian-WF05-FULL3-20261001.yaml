@@ -1,0 +1,83 @@
+report_id: ba-signoff-meridian-WF05-FULL3-20261001
+run_id: WF05-FULL3-20261001
+vertical: meridian
+solution_pack: meridian
+generated_at: "2026-10-01T19:00:00Z"
+persona: Thomas Reiter (Chief Risk Officer, Meridian Bank), with Eva Kremer (CEO) and Julia Hartmann (Credit Director)
+source_uat_report: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml
+
+scenarios_reviewed: 3
+domain_verdict: FAIL
+
+scenario_verdicts:
+  - scenario_id: meridian-loan-origination-above-threshold
+    title: "Large loan (EUR 750k) routed through full credit committee with quorum 2-of-3"
+    persona_verdict: FAIL
+    business_note: >
+      The credit manager and the risk manager each received their review and
+      completed it, but the identity and money-laundering screening step then
+      never finished and nothing told anyone. The loan sat open with no one
+      assigned, so it never reached the credit committee and was never
+      disbursed. A large loan that silently stops is not acceptable to us.
+    issues: [BA-MERIDIAN-001, BA-MERIDIAN-003]
+
+  - scenario_id: meridian-loan-origination-below-threshold
+    title: "Small loan (EUR 50k) approved at L2 without committee"
+    persona_verdict: FAIL
+    business_note: >
+      Both assessments were completed, but the same screening step stalled and
+      the approval task for the loan officer was never created. A small loan
+      that should be the quick path is stuck just like the large one, so
+      the correct approval level could not be confirmed at all.
+    issues: [BA-MERIDIAN-001]
+
+  - scenario_id: meridian-regulatory-compliance-review-bafin
+    title: "30-day SLA breach triggers BaFin regulatory notification"
+    persona_verdict: PARTIAL
+    business_note: >
+      Good progress: when the risk evaluation is not answered in time, the
+      review is escalated automatically, the open task is closed and the
+      regulatory notice step runs, so the case is not left hanging. However,
+      the notice that goes out does not state the reason (a breach of the
+      30-day deadline), which BaFin expects to see. The timing and closure
+      are right; the content of the notice is not.
+    issues: [BA-MERIDIAN-002]
+
+domain_issues:
+  - id: BA-MERIDIAN-001
+    severity: BLOCKER
+    business_description: >
+      In loan origination, the identity and money-laundering screening runs
+      alongside the credit and risk reviews, but after those reviews are done
+      it never completes. The loan stays open with nobody assigned and no
+      error or alert, so neither large nor small loans can be approved or
+      disbursed. Loans would stall silently, with compliance exposure.
+    affected_scenario: meridian-loan-origination-above-threshold
+    suggested_action: route_to_wf03
+  - id: BA-MERIDIAN-002
+    severity: MAJOR
+    business_description: >
+      The regulatory notice sent to BaFin after a missed 30-day deadline does
+      not carry the reason for the escalation. The notice is sent on time
+      but is incomplete, which is a regulatory reporting gap. This is a
+      known open problem that was already raised earlier; its priority
+      should be raised given the regulatory impact.
+    affected_scenario: meridian-regulatory-compliance-review-bafin
+    suggested_action: route_to_wf03
+  - id: BA-MERIDIAN-003
+    severity: MAJOR
+    business_description: >
+      The large-loan process has no way to record a two-out-of-three
+      committee vote; the committee step expects a single outcome that the
+      scenario never supplies. Even once screening is fixed, the committee
+      rule we rely on is not demonstrated by the process as built.
+    affected_scenario: meridian-loan-origination-above-threshold
+    suggested_action: route_to_req_analyst
+
+overall_note: >
+  Not ready for release. Neither loan path can currently complete because
+  the screening step stalls without warning, which on its own blocks
+  Meridian. The BaFin escalation timing now works, which is real progress,
+  but the notice content must also be fixed before we can rely on it with the
+  regulator. Note: the fix for the deadline escalation from the previous run
+  is confirmed working.

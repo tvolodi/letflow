@@ -1,0 +1,12 @@
+id: ISS-0965
+title: "platform/renderer-permission-denied-surface step 5 still fails on QA after ISS-0907 remediation"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T20:10:38Z"
+severity: MAJOR
+owner: "ISSUE-FIXER"
+description: >
+  ISS-0907 (closed_not_applicable) attributed the FULL2 failure to missing QA memberships (ISS-0886/ISS-0910) and asked for a re-run. Re-run still fails at step 5: after revoking PROCESS_OPERATOR membership My Tasks shows PermissionDenied and task-inbox-list never attaches. Either operator-user still lacks a TASK_WORKER-granting membership on QA or the ISS-0907 diagnosis is wrong. Needs live trace of GET /tasks/inbox for operator-user post-revoke. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-PLATFORM-B.yaml
+queue_ref: Q-938  # queue issue_ref ISS-0938 collides with an existing local file; local filename ISS-0965
+github_ref: GH-2126
+status: open

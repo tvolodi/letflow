@@ -1,0 +1,12 @@
+id: ISS-0963
+title: "platform/instance-pin-survives-catalog-change spec unrunnable on QA: hard-coded admin-pass login (401) and task-complete 403 assigned to a different user"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T20:10:38Z"
+severity: MAJOR
+owner: "FRONTEND-DEV"
+description: >
+  Pipeline spec logs in with hard-coded admin-pass (401 on QA). With only the credential changed steps 01-04 pass; step 04b gets 403 task is assigned to a different user for the same admin-user token (expected 200); seeded assignee likely does not match the actor id used by the completion check. Same family as ISS-0951 (resolved), ISS-0942, ISS-0924; ISS-0951 never ran these specs live. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-PLATFORM-A.yaml
+queue_ref: Q-936  # queue issue_ref ISS-0936 collides with an existing local file; local filename ISS-0963
+github_ref: GH-2124
+status: open

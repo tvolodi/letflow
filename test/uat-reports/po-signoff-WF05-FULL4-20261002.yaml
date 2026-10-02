@@ -1,0 +1,69 @@
+report_id: po-signoff-WF05-FULL4-20261002
+run_id: WF05-FULL4-20261002
+generated_at: "2026-10-02T12:00:00Z"
+scope: "BilimBaga vertical ONLY, against the QA environment. Vortex, Meridian, SwiftRoute and platform scenarios were deliberately excluded by the requester. This is NOT a full-platform release gate and says nothing about the excluded verticals."
+
+ba_verdicts:
+  bilimbaga: PASS
+  # swiftroute, meridian, vortex, platform: out of scope for this run by instruction;
+  # no verdict is implied for them.
+
+criteria_coverage:
+  # Scope is the single BilimBaga scenario and its three expected outcomes
+  # (timed exam, immediate score, accurate score); all three passed with evidence.
+  must_criteria_this_batch: 3
+  covered_by_passing_scenario: 3
+  uncovered: []
+
+cross_vertical_findings:
+  - id: PO-001
+    description: >
+      Only one vertical took part in this run, so there is nothing to compare
+      across verticals and no disagreement to rule on.
+    severity: MINOR
+    affected_verticals: [bilimbaga]
+    ruling: "No arbitration needed."
+    rationale: "A single sign-off cannot conflict with itself."
+
+blocker_overrides: []
+
+release_recommendation: APPROVED
+release_rationale: >
+  For the BilimBaga vertical only, we recommend shipping the timed
+  certification exam experience: the environment was confirmed ready before the
+  run, the candidate saw a ticking countdown, and after submitting received an
+  immediate and correct score with a clear "Passed" result. The approval is
+  conditional on candidates being given links that carry the BilimBaga
+  organization marker, because candidates who open the site the ordinary way
+  land on the wrong sign-in page and are told their correct password is
+  invalid; this is the already-documented way of working and must be fixed
+  before candidates are expected to find the site unaided. This recommendation
+  covers BilimBaga alone, says nothing about Vortex, Meridian, SwiftRoute or the
+  platform-level checks, and is not a full-platform release gate. The exact
+  build that was tested could not be read from the site itself and was
+  confirmed by checking the QA server directly.
+
+issues:
+  - id: PO-002
+    severity: MAJOR
+    description: >
+      Candidates who open the QA address without the BilimBaga marker are sent to
+      the wrong organization's sign-in and rejected. Not a blocker while all
+      candidate links carry the marker; it must be resolved before unaided
+      rollout. This is the known, documented resolution (standardize the marker
+      in the test dispatch), so no new issue is raised.
+    suggested_action: none
+    related_issues: [ISS-0727]
+  - id: PO-003
+    severity: MINOR
+    description: >
+      The side panel shows "Unknown workspace" instead of the organization name.
+      Cosmetic; unchanged from the previous run and already tracked.
+    suggested_action: none
+    related_issues: [ISS-0727]
+  - id: PO-004
+    severity: MINOR
+    description: >
+      The running build cannot be read from the site (no place exposes it), so
+      the tested version relies on a manual check of the QA server.
+    suggested_action: none

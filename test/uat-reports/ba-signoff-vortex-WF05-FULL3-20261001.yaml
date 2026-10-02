@@ -1,0 +1,105 @@
+report_id: ba-signoff-vortex-WF05-FULL3-20261001
+run_id: WF05-FULL3-20261001
+vertical: vortex
+solution_pack: vortex
+generated_at: "2026-10-02T09:00:00Z"
+persona: Sabine Keller (Production Manager, Vortex Manufacturing)
+source_uat_report: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml
+
+scenarios_reviewed: 4
+domain_verdict: FAIL
+
+scenario_verdicts:
+  - scenario_id: vortex/production-order-above-threshold
+    title: "Production order above EUR 10,000 threshold approved by Financial Controller"
+    persona_verdict: PARTIAL
+    business_note: >
+      A 15,000 euro order went through capacity review and then to the
+      controller for budget approval, and it was released and the planner was
+      told. The approval path is right. However, the production line we chose
+      (Line-A) was not passed on to the planning system, so the order is
+      released on paper but the shop floor is not told which line to use.
+    issues: [BA-VORTEX-002]
+
+  - scenario_id: vortex/supplier-quality-deviation-critical
+    title: "Supplier quality deviation: CRITICAL path with 8D corrective action"
+    persona_verdict: FAIL
+    business_note: >
+      The affected batch was quarantined straight away, which is correct. But
+      as soon as the quality manager classified the deviation as critical, the
+      case broke down: no corrective-action (8D) case was opened, nobody in
+      procurement was asked to act, and the deviation was left stuck in an
+      error state. A critical supplier problem is exactly the one we cannot
+      have drop on the floor.
+    issues: [BA-VORTEX-001, BA-VORTEX-003, BA-VORTEX-004]
+
+  - scenario_id: vortex/supplier-quality-deviation-false-positive
+    title: "Supplier quality deviation: false positive, batch released from quarantine"
+    persona_verdict: PASS
+    business_note: >
+      The batch was quarantined on report, the quality manager judged it a
+      false alarm, and the batch was released and the case closed. This is how
+      we expect a false alarm to be handled, with no manual clean-up needed.
+    issues: []
+
+  - scenario_id: vortex/entity-list-filter-and-page
+    title: "The quality manager filters the batch list to find every quarantined batch from one supplier"
+    persona_verdict: PARTIAL
+    business_note: >
+      Not assessed. The batch records were never set up in the test
+      environment, so there was nothing to search through and I have no view
+      on whether the quality manager can find quarantined batches by supplier.
+    issues: [BA-VORTEX-005]
+
+domain_issues:
+  - id: BA-VORTEX-001
+    severity: BLOCKER
+    business_description: >
+      A critical supplier quality deviation does not open the 8D corrective
+      action. The case ends in an error, nothing is assigned to procurement,
+      and the quality manager's classification step is left hanging. Critical
+      supplier problems would not be followed up, which we cannot accept.
+    affected_scenario: vortex/supplier-quality-deviation-critical
+    suggested_action: route_to_wf03
+  - id: BA-VORTEX-002
+    severity: MAJOR
+    business_description: >
+      When a production order is released, the production line chosen during
+      capacity review is not communicated to the planning system. The order
+      shows as released but the line assignment is lost, so planners would
+      have to re-enter it by hand.
+    affected_scenario: vortex/production-order-above-threshold
+    suggested_action: route_to_wf03
+  - id: BA-VORTEX-003
+    severity: MAJOR
+    business_description: >
+      The supporting setup for the 8D case is missing for Vortex: there is no
+      procurement manager role and no corrective-action process defined, so
+      even once the break is fixed there is nobody to hand the work to.
+    affected_scenario: vortex/supplier-quality-deviation-critical
+    suggested_action: route_to_req_analyst
+  - id: BA-VORTEX-004
+    severity: MINOR
+    business_description: >
+      In the history of a quarantine, the record of the quarantine action
+      appears to be time-stamped slightly after the next task was handed to
+      the quality manager. The order of events is correct but the clock times
+      look reversed, which would confuse an auditor.
+    affected_scenario: vortex/supplier-quality-deviation-critical
+    suggested_action: route_to_wf03
+  - id: BA-VORTEX-005
+    severity: MINOR
+    business_description: >
+      The batch list check could not run because the batch records could not
+      be loaded into the test environment, and the screen check for it has
+      not been built. Coverage gap, not a defect finding.
+    affected_scenario: vortex/entity-list-filter-and-page
+    suggested_action: route_to_req_analyst
+
+overall_note: >
+  Not ready for release. A critical supplier deviation, the case Vortex can
+  least afford to mishandle, breaks down after classification, and released
+  production orders lose their line assignment. The false-alarm path and the
+  order approval chain behave as we want. One further approver role, the
+  CEO group, is still empty in the test environment, though none of the
+  checks reached it.

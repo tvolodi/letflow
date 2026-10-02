@@ -1,0 +1,52 @@
+run_id: WF05-FULL4-20261002-BILIMBAGA
+date: "2026-10-02"
+agent: UAT-RUNNER
+slice: bilimbaga
+environment:
+  base_url: https://qa.bizdala.com
+  environment: qa
+  idp: https://auth.qa.bizdala.com
+  qa_build: "b84035fb (== origin/main per dispatch; no endpoint exposes a build SHA, preflight deployed_sha UNKNOWN, owner ai-dala-infra)"
+  credential_source: ai-dala-infra/scripts/qa-uat-env.sh platform (account candidate-user, realm bilimbaga; used in-process only, never recorded)
+  preflight_report: test/uat-reports/preflight-2026-10-02-qa-bilimbaga.txt (ENV_READY, 0 GAP, 1 UNKNOWN = deployed_sha)
+  readiness: "preflight: GET https://qa.bizdala.com/health -> 200"
+result_overall: PASS
+scenarios:
+  - id: bilimbaga-candidate-timed-exam-autograde
+    file: test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    verdict: PASS
+    driver: "npx playwright test tests/e2e/pipelines/bilimbaga-candidate-timed-exam.pipeline.e2e.spec.ts --retries=0 (from web/, E2E_BASE_URL=BPM_TEST_URL=https://qa.bizdala.com, BPM_IDP_BASE_URL=https://auth.qa.bizdala.com, real headless Chromium) -> 1 passed (11.8s)"
+    steps:
+      step_1: "PASS - after loginWithToken (token minted against bilimbaga realm) + navigateSpa('/exam'), exam-list-page and exam-list rendered; spec asserted no '[object Object]' / '[object LocalizedText]' in titles."
+      step_2: "PASS - clicking exam-list-start-<id> opened exam-session-page (session created on real QA)."
+      step_3: "PASS - both MCQ questions answered, submitted; exam-result-page rendered."
+    expected_outcomes:
+      EO-001:
+        verdict: PASS
+        evidence: "Step-2 screenshot shows 'Time remaining: 29:57' on the exam screen; spec asserted the title matches mm:ss and that a reading taken 2s later differs (countdown ticks)."
+      EO-002:
+        verdict: PASS
+        evidence: "After submit the page shows 'Exam result', 'Score: 2 / 2 (100%)' and 'Passed' (step-3 screenshot), with no navigation away and no pending-grade placeholder."
+      EO-003:
+        verdict: PASS
+        evidence: "Questions answered with the known-correct options (Red / Evacuate via the nearest exit); the result served by the real backend reads 2/2, 100%, Passed, matching a correct grading. Verified through the result screen fed by GET exam-session, not a direct DB read (is_correct is redacted from all callers by design)."
+    cleanup: "Session submitted by the UI in step 3; no open session left."
+    evidence_files:
+      - web/tests/screenshots/pipelines/bilimbaga-candidate-timed-exam-step-1--sign-in-and-open-the-list-of-available-exams.png
+      - web/tests/screenshots/pipelines/bilimbaga-candidate-timed-exam-step-2--start-a-timed-certification-exam-session.png
+      - web/tests/screenshots/pipelines/bilimbaga-candidate-timed-exam-step-3--answer-every-question-and-submit-before-time-runs-out.png
+    screenshot_secret_check: "Reviewed step-2 and step-3 screenshots: contain only username 'candidate-user' and role names; no password/token. (Screenshots are untracked output; ORCH to decide whether to commit.)"
+realm_param_finding:
+  question: "Is ?realm=bilimbaga still needed on qa.bizdala.com (ISS-0727)?"
+  answer: "YES - still required. ISS-0727 is NOT fixed on this QA build."
+  evidence:
+    - "GET https://qa.bizdala.com/api/tenant-config?host=qa.bizdala.com -> oidc_authority https://auth.qa.bizdala.com/realms/bpm-default (wrong realm)"
+    - "GET https://qa.bizdala.com/api/tenant-config?host=qa.bizdala.com&realm=bilimbaga -> oidc_authority https://auth.qa.bizdala.com/realms/bilimbaga"
+    - "Real browser, no param: https://qa.bizdala.com/ redirected to Keycloak realm bpm-default ('LETFLOW DEFAULT REALM'); signing in as candidate-user failed with 'Invalid username or password.' (valid bilimbaga credential rejected by the wrong realm)."
+    - "Real browser, https://qa.bizdala.com/?realm=bilimbaga: redirected to Keycloak realm bilimbaga; candidate-user sign-in succeeded and landed on qa.bizdala.com/ showing the 'Exams' nav entry, user 'candidate-user' with roles offline_access, CANDIDATE, uma_authorization, default-roles-bilimbaga."
+  note: "The pipeline spec does not exercise host-based realm resolution (it mints the token against the bilimbaga realm and injects it), so its PASS is independent of this gap; the probe above was run separately. The sidebar header still reads 'UNKNOWN WORKSPACE' even with the param (cosmetic, same ISS-0727 root, not re-filed)."
+observations:
+  - "Preflight protocol mismatch: the qa-uat-env.sh registry holds only account 'candidate-user', not the scenario actor id 'actor-bilimbaga-candidate', so the qa-uat-env protocol flags actor-bilimbaga-candidate NO_PASSWORD (spurious GAP; see preflight-2026-10-02-qa-bilimbaga-quaenv-protocol-spurious-gap.txt). The qa-login protocol resolves it and credential validity was OK. Actor-id vs account-name mapping is the gap."
+  - "ISS-0963 / ISS-0964 / ISS-0965 (Q-938 renderer permission surface): docs/issues/ISS-0963..0965.yaml are not present in this worktree (checkout predates their filing), so relevance could not be read here. No failure was observed in this scenario that would map to them; none re-filed."
+known_open_issues_cited: [ISS-0727, ISS-0726, ISS-0729, ISS-0963, ISS-0964, ISS-0965]
+env_blocked: []

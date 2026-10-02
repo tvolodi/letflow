@@ -1,0 +1,53 @@
+id: ISS-0976
+title: "ISS-0974 fix sites 2-4 (timer-fired/escalation-timer-fired/service-task-advance join-dispatch id_map) have zero independent regression coverage"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-ISS0974-closure (fix/ISS-0974-join-dispatch-id-map, PR #2151)
+discovered_at: "2026-10-02T07:20:29Z"
+severity: MINOR
+owner: "TEST-DESIGNER"
+description: >
+  During RELEASE-VALIDATOR's independent re-verification of ISS-0974's fix (4
+  sibling Multi.merge/2 sites in lib/letflow/engine.ex that each needed to read
+  the real hop-chain id_map instead of rebuilding a wrong identity map), a
+  mutation test was run that reverted sites 2, 3, and 4 --
+  persist_timer_fired_advance/7, persist_escalation_timer_fired_advance/7, and
+  do_persist_service_task_advance/10 -- back to their pre-fix identity-map
+  logic, while leaving site 1 (build_complete_task_tail_multi/6) fixed.
+
+  The full 91-test broader regression suite still passed with sites 2-4
+  reverted. This proves those 3 sites currently have ZERO independent
+  regression coverage in CI -- their correctness today rests entirely on
+  code-symmetry with site 1 (confirmed correct only by hand-trace and this
+  one-off mutation test), not on anything that would catch a future
+  regression at any of those 3 sites.
+
+  ISS-0974's own regression test, test/letflow/iss0974_join_dispatch_id_map_test.exs,
+  covers only site 1's two shapes (a same-hop-chain join firing into
+  SERVICE_TASK, and into TIMER, both reached via build_complete_task_tail_multi/6
+  from a task-completion event). It does not exercise a same-hop-chain join
+  whose next hop is driven by persist_timer_fired_advance/7 (timer-fired
+  advance), persist_escalation_timer_fired_advance/7 (escalation-timer-fired
+  advance), or do_persist_service_task_advance/10 (service-task-completion
+  advance).
+
+  RELEASE-VALIDATOR explicitly ruled this is NOT a blocker to ISS-0974's own
+  closure -- the fix itself is correct and was independently traced/verified --
+  but said the gap "must not be silently dropped," hence this follow-up issue.
+affected_files:
+  - lib/letflow/engine.ex (persist_timer_fired_advance/7)
+  - lib/letflow/engine.ex (persist_escalation_timer_fired_advance/7)
+  - lib/letflow/engine.ex (do_persist_service_task_advance/10)
+  - test/letflow/iss0974_join_dispatch_id_map_test.exs
+acceptance_criteria:
+  - "A new regression test fixture drives a same-hop-chain PARALLEL_GATEWAY join whose next hop advances via persist_timer_fired_advance/7 into a SERVICE_TASK or TIMER-start node, fails pre-fix (reverting site 2 alone) with a real Ecto.UUID cast error, and passes post-fix"
+  - "A new regression test fixture drives the same shape through persist_escalation_timer_fired_advance/7 (site 3), fails pre-fix (reverting site 3 alone), passes post-fix"
+  - "A new regression test fixture drives the same shape through do_persist_service_task_advance/10 (site 4), fails pre-fix (reverting site 4 alone), passes post-fix"
+  - "A mutation test reverting sites 2-4 together (mirroring RELEASE-VALIDATOR's own ISS-0974 mutation test) now fails the regression suite, closing the coverage gap RELEASE-VALIDATOR found"
+related:
+  - ISS-0974
+source_reports:
+  - PR #2151 (fix/ISS-0974-join-dispatch-id-map), RELEASE-VALIDATOR's own mutation test finding
+queue_ref: null  # Filed directly by DOC-UPDATER per this run's explicit task instruction,
+                 # mirroring ISS-0974's own direct-filing precedent -- DOC-UPDATER does not
+                 # call the letflow-queue service.
+status: open

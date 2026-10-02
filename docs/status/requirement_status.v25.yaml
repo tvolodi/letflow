@@ -700,3 +700,45 @@ history:
       letflow-queue service was unreachable from this sandbox (no
       QUEUE_AUTH_TOKEN configured) so this could not be independently
       re-confirmed by direct query this run.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-02T07:20:29Z"
+    note: >
+      ISS-0974 resolved (PARALLEL_GATEWAY join firing same-hop-chain directly
+      into a SERVICE_TASK or TIMER-start node minted a non-UUID synthetic
+      token_id, 422). PR #2151, branch fix/ISS-0974-join-dispatch-id-map, final
+      commit 5ce31010. Root cause: 4 sibling Multi.merge/2 blocks in
+      lib/letflow/engine.ex (build_complete_task_tail_multi/6,
+      persist_timer_fired_advance/7, persist_escalation_timer_fired_advance/7,
+      do_persist_service_task_advance/10) each independently rebuilt a wrong,
+      pure-identity token-id map instead of reusing the real id_map
+      insert_hop_chain_new_token_records/5 already computed earlier in the
+      same transaction -- found during REQ-433's implementation (committee
+      quorum voting), which needs exactly this shape. Design:
+      lib/letflow/design/iss0974-join-dispatch-id-map-fix.md,
+      CODE-DESIGN-VALIDATOR PASSed after independently tracing Ecto.Multi's
+      own source to confirm cross-merge `changes` visibility and proving the
+      identity-fallback logically exhaustive/safe. Fix: each of the 4 sites
+      now reads the real id_map via Map.fetch!(changes,
+      {:hop_chain_token_records, instance_id}) and builds a sparse real map
+      with identity fallback instead of the pure-identity map.
+      SECURITY-REVIEWER PASSed via a full independent INV-1/INV-6/INV-8 trace
+      (brought into scope as a tenant-scoped write-path correctness fix).
+      REVIEWER PASSed, confirmed idiomatic consistency across all 4 sites,
+      filed ISS-0975 (merged via PR #2152) for a structurally-identical but
+      differently-shaped 5th instance in append_pending_event_arms_multi/7,
+      and added a docs/anti-patterns.md grep-for-siblings entry. TEST-RUNNER:
+      full suite 5368/5368 green, including 2 new regression cases
+      (SERVICE_TASK and TIMER, site 1). RELEASE-VALIDATOR: exhaustive
+      independent re-verification, hand-traced all 4 sites, ran its own
+      mutation test reverting sites 2/3/4 and found those 3 sites have ZERO
+      independent regression coverage (91 broader tests still passed) --
+      explicitly ruled NOT a blocker to this PR but required a follow-up
+      issue, filed as ISS-0976 (owner TEST-DESIGNER) in this same commit;
+      independently re-ran the full suite (5368/5368) and confirmed
+      docs/requirements.yaml untouched. docs/issues/ISS-0974.yaml set to
+      status: resolved in this same commit. This is an ISSUE closure, not a
+      REQ -- docs/requirements.yaml untouched. No letflow-queue task to
+      release: filed directly by ISSUE-FIXER during REQ-433's implementation;
+      queue_ref: null per ISSUE-FIXER's own note.

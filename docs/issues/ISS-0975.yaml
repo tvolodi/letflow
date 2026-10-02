@@ -1,0 +1,74 @@
+id: ISS-0975
+title: "append_pending_event_arms_multi/7 (ISS-0929's sub-process/pending-event re-entry) carries the same identity-id_map bug ISS-0974 fixed in its 4 Multi.merge sibling sites"
+discovered_by: REVIEWER
+discovered_in_run: WF02-ISS0974-review-20261002 (PR #2151 review, fix/ISS-0974-join-dispatch-id-map)
+discovered_at: "2026-10-02T00:00:00Z"
+severity: MAJOR
+owner: "CODE-DESIGNER"
+description: >
+  ISS-0974 (resolved by PR #2151) fixed 4 `Multi.merge/2` call sites in
+  lib/letflow/engine.ex that each built `prepared_timers`/
+  `prepared_service_task_dispatches`'s id_map as a pure IDENTITY map
+  (`Map.new(prepared, fn t -> {t, t} end)`), on the stale assumption that
+  every token_id reaching them is already a real, persisted TokenRecord id.
+  That assumption breaks when a PARALLEL_GATEWAY join fires within the same
+  hop chain and its own outgoing edge leads directly into a SERVICE_TASK or
+  TIMER node -- the join-merged token's id is still a synthetic,
+  not-yet-persisted string at that point, which Ecto.UUID rejects (422).
+
+  A 5th, textually near-identical instance of the exact same mistake exists
+  in the same file, in `append_pending_event_arms_multi/7` (~lines 3224-3269,
+  specifically `timer_id_map` at line 3249 and `dispatch_id_map` at lines
+  3251-3252) -- ISS-0929's public entry point for
+  Letflow.Engine.SubProcess's pending-event re-entry path (a SERVICE_TASK /
+  TIMER / escalation HUMAN_TASK reached right after a SUB_PROCESS
+  completes). Both ELIXIR-DEV and SECURITY-REVIEWER flagged this site
+  during ISS-0974's own implementation/review but it was correctly left out
+  of that PR's scope: ISS-0974's diagnosis and design doc named only the 4
+  `Multi.merge/2` sites reached via a hop-chain tail where `changes` already
+  holds `{:hop_chain_token_records, instance_id}` (computed earlier in the
+  same transaction by `insert_hop_chain_new_token_records/5`).
+  `append_pending_event_arms_multi/7` takes a bare `multi` argument with no
+  accumulated `changes` map to read a real id_map back out of -- it is not
+  inside a `Multi.merge/2` at all, so ISS-0974's one-line
+  `Map.fetch!(changes, {:hop_chain_token_records, instance_id})` fix does
+  not directly apply; this site needs the real id_map threaded in some
+  other way (as a parameter from the caller, which would itself need to
+  either compute or already hold it, or by restructuring this function to
+  run inside a `Multi.merge/2` with access to `changes`).
+
+  Confirmed via `grep -n '{token_id, token_id}' lib/letflow/engine.ex`
+  against origin/main (pre-ISS-0974-merge) and against ISS-0974's own
+  branch post-fix -- 2 of this grep's hits (lines 3249/3252) are the
+  append_pending_event_arms_multi/7 site, unchanged by ISS-0974's PR.
+  Reproducing the actual crash would require a PARALLEL_GATEWAY join firing
+  same-hop-chain whose downstream reaches a SERVICE_TASK/TIMER via the
+  sub-process pending-event re-entry path specifically (not the plain
+  complete_task/3 tail ISS-0974's own regression test exercises) -- not yet
+  confirmed against a live instance, filed from direct code-reading
+  (REVIEWER's own grep + reading, per the shared bug-class), same
+  confidence basis ISS-0974's own filing used for its "not SERVICE_TASK-
+  specific" / TIMER-path claim before a dedicated fixture existed for it.
+affected_files:
+  - lib/letflow/engine.ex (append_pending_event_arms_multi/7, ~lines 3224-3269)
+acceptance_criteria:
+  - "A PARALLEL_GATEWAY join firing same-hop-chain, reached via the sub-process/pending-event re-entry path (append_pending_event_arms_multi/7), into a SERVICE_TASK or TIMER node creates a real dispatch/timer row (real TokenRecord-backed token_id), not a 422"
+  - "CODE-DESIGNER confirms the threading mechanism for this site specifically -- it has no `changes` map to read from, unlike ISS-0974's 4 sites, so the fix shape is necessarily different (e.g. passing the real id_map in as a parameter from the caller, or restructuring to run inside a Multi.merge/2)"
+  - "Regression test fails pre-fix (real 422/UUID cast error) and passes post-fix, exercising the sub-process pending-event re-entry path specifically, not just the complete_task/3 tail ISS-0974's own test already covers"
+  - "No change to the normal (non-join, non-sub-process) pending-event arming path"
+related:
+  - ISS-0974
+  - ISS-0929
+  - ISS-0408
+source_reports:
+  - PR #2151 (fix/ISS-0974-join-dispatch-id-map), REVIEWER gate pass, ISS-0974 resolved
+queue_ref: null  # not called by this agent -- REVIEWER does not call letflow-queue's
+                 # functions per core-directives.md's "No Agent Discretion Over Task
+                 # Selection or Locking" (only ORCH may). Filed directly per this run's
+                 # explicit task-instruction discretion grant, mirroring ISS-0970/
+                 # ISS-0973/ISS-0974's own direct-filing precedent in this repo. ORCH
+                 # may adopt this GitHub issue into letflow-queue later via
+                 # register_task's github_issue_number field.
+github_ref: null  # no `gh` PR/issue creation performed by this review pass; ORCH or a
+                  # later run may open the GitHub-side issue and backfill this field.
+status: open

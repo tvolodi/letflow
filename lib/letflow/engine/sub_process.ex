@@ -864,7 +864,7 @@ defmodule Letflow.Engine.SubProcess do
              error_idempotency_key
            )}
 
-        {:ok, new_instance_state, _pending_events} ->
+        {:ok, new_instance_state, transition_pending_events} ->
           newly_pending =
             Letflow.Engine.tokens_needing_dispatch(
               state_with_merged.tokens,
@@ -891,24 +891,43 @@ defmodule Letflow.Engine.SubProcess do
                  error_idempotency_key
                )}
 
-            {:ok, final_instance_state, _more_pending} ->
-              multi_with_steps =
-                build_completion_write_steps(
-                  multi,
-                  child_instance_id,
-                  parent_token,
-                  graph,
-                  seed_state,
-                  token_records,
-                  final_instance_state,
-                  merge_variables,
-                  merge_events,
-                  actor_id,
-                  idempotency_key,
-                  prefix
-                )
+            {:ok, final_instance_state, hop_pending_events} ->
+              # ISS-0929: keep the hop chain's pending events (timer / escalation /
+              # service-task-dispatch requests) instead of discarding them, so a node
+              # reached right after the sub-process gets its timers / dispatch rows.
+              # Deduplicated by identity: duplicate Multi step names would raise.
+              completion_pending_events =
+                Enum.uniq(transition_pending_events ++ hop_pending_events)
 
-              {:ok, multi_with_steps}
+              case build_completion_write_steps(
+                     multi,
+                     child_instance_id,
+                     parent_token,
+                     graph,
+                     seed_state,
+                     token_records,
+                     final_instance_state,
+                     completion_pending_events,
+                     merge_variables,
+                     merge_events,
+                     actor_id,
+                     idempotency_key,
+                     prefix
+                   ) do
+                {:ok, multi_with_steps} ->
+                  {:ok, multi_with_steps}
+
+                {:error, reason} ->
+                  {:error,
+                   to_error_args(
+                     {:definition_not_found, {:activation_failed, reason}},
+                     parent_token.instance_id,
+                     parent_token.node_id,
+                     state_with_merged.variables,
+                     actor_id,
+                     error_idempotency_key
+                   )}
+              end
           end
       end
     else
@@ -954,6 +973,7 @@ defmodule Letflow.Engine.SubProcess do
          seed_state,
          token_records,
          final_instance_state,
+         completion_pending_events,
          merge_variables,
          merge_events,
          actor_id,
@@ -967,24 +987,75 @@ defmodule Letflow.Engine.SubProcess do
     projection_key = {:sub_process_parent_projection, parent_token.id}
     cascade_lookup_key = {:sub_process_grandparent_lookup, parent_instance_id}
 
-    multi
-    |> TaskActivation.append_multi_from_existing_records(
-      parent_instance_id,
-      graph,
-      seed_state.pending_task_nodes,
-      final_instance_state,
-      prefix,
-      parent_token.id
-    )
-    |> Multi.run(reconciliation_key, fn repo, _changes ->
-      reconcile_parent_tokens(
-        repo,
-        token_records,
-        final_instance_state.tokens,
-        completed_at,
-        prefix
+    reconciled_multi =
+      multi
+      |> TaskActivation.append_multi_from_existing_records(
+        parent_instance_id,
+        graph,
+        seed_state.pending_task_nodes,
+        final_instance_state,
+        prefix,
+        parent_token.id
       )
-    end)
+      |> Multi.run(reconciliation_key, fn repo, _changes ->
+        reconcile_parent_tokens(
+          repo,
+          token_records,
+          final_instance_state.tokens,
+          completed_at,
+          prefix
+        )
+      end)
+
+    # ISS-0929: timer / escalation / service-task-dispatch rows for the pending
+    # events the post-sub-process hop chain produced. Placed after the token
+    # reconciliation step (real TokenRecord ids exist) and resolved eagerly so a
+    # failure surfaces as an error the caller maps to activation_failed.
+    with {:ok, armed_multi} <-
+           Letflow.Engine.append_pending_event_arms_multi(
+             reconciled_multi,
+             completion_pending_events,
+             graph,
+             parent_instance_id,
+             final_instance_state.variables,
+             completed_at,
+             prefix
+           ) do
+      {:ok,
+       armed_multi
+       |> append_completion_tail_steps(
+         event_key,
+         projection_key,
+         cascade_lookup_key,
+         child_instance_id,
+         parent_instance_id,
+         final_instance_state,
+         merge_variables,
+         merge_events,
+         actor_id,
+         idempotency_key,
+         completed_at,
+         prefix
+       )}
+    end
+  end
+
+  defp append_completion_tail_steps(
+         multi,
+         event_key,
+         projection_key,
+         cascade_lookup_key,
+         child_instance_id,
+         parent_instance_id,
+         final_instance_state,
+         merge_variables,
+         merge_events,
+         actor_id,
+         idempotency_key,
+         completed_at,
+         prefix
+       ) do
+    multi
     |> Multi.run(event_key, fn _repo, _changes ->
       append_sub_process_completed_event(
         parent_instance_id,

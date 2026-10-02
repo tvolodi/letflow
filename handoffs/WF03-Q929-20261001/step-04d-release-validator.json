@@ -1,0 +1,69 @@
+{
+  "handoff_id": "cd7ab0ca-27ac-47f9-835a-c0a8b6616397",
+  "run_id": "WF03-Q929-20261001",
+  "workflow_id": "WF-03",
+  "step": "04d",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-Q929-20261001/step-04d-release-validator.json",
+  "created_at": "2026-10-01T20:30:00Z",
+  "started_at": null,
+  "completed_at": "2026-10-01T20:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0929": "vortex critical-deviation scenario must reach COMPLETED via corrective-action sub-process (Q-929)"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0929.yaml",
+      "lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md",
+      "test/letflow/engine/sub_process_service_task_after_test.exs",
+      "test/letflow/scripts/vortex_8d_subprocess_fixture_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-a5c794b4cbceb277a",
+    "branch_name": "feature/WF03-Q929-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4d: independently re-verify ISS-0929 before issue close.",
+    "acceptance_criteria": [
+      "Source re-derivation of fixture shape",
+      "Independent test re-run counts",
+      "Outcome vs issue verified",
+      "lib unchanged confirmed",
+      "Out-of-scope residue stated",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Re-derived from source: parent Supplier Quality Deviation fixture v1.2 with corrective-action-subprocess attributes.definition_name '8D Corrective Action' (simulation process_work_order.yaml mirrored); child fixture '8D Corrective Action' v1.0 START->HUMAN_TASK(role-procurement-manager)->END; alias sidecar proc-vortex-8d-corrective-action maps to that name; seed_vortex_definition.sh seeds the child before the parent (header says v1.2), bash -n OK for both seed scripts; seed_vortex_persona_actors.sh adds role-procurement-manager and maps actor-vortex-felix to it (drift test updated). Independent runs: new two files 'Result: 21 passed' (E6 = real Vortex fixtures critical -> 8D child -> close-deviation dispatch -> COMPLETED); test/letflow/scripts + persona_actor_seed_drift_test + qa_fixture_service_task_endpoints 'Result: 94 passed'; test/letflow/engine 'Result: 1036 passed'; mix compile --warnings-as-errors clean; mix letflow.lint_handoffs OK 0 new violations; mix letflow.check.test: runs 1 and 2 each failed on one or two unrelated timing-flaky tests (SandboxPoolTest RT-6 reclaim; ServiceCatalogReaperTest concurrent-invocation; GraphTest lib grep) that pass in isolation (sandbox_pool 24 passed; graph+reaper 81 passed); run 3 exit 0, 'combined: 5326 tests, 8 properties, 0 failures (5334/5334 passed) -- 16/16 partitions reported'. lib/ diff limited to engine.ex (new public append_pending_event_arms_multi wrapper) and engine/sub_process.ex (completion path keeps hop pending events, split tail helper, error mapped to activation_failed) plus untracked design doc; no QA data or DB touched.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Live QA instance still needs scripts/seed_vortex_definition.sh and seed_vortex_persona_actors.sh run (8D child + parent v1.2 + role-procurement-manager/felix binding) before UAT re-run closes the scenario; no QA data changed here.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "mix letflow.check.test is intermittently flaky on unrelated tests (SandboxPoolTest RT-6, ServiceCatalogReaperTest concurrent guard, GraphTest lib grep) under parallel load on this host; consider a follow-up issue.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q929-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to WF-03 commit/PR; file follow-ups for out-of-scope residue."
+  }
+}

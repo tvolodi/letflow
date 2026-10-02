@@ -1,0 +1,65 @@
+{
+  "handoff_id": "8b1d4f6a-27c3-4e95-b0a8-5f3e9c2d7a41",
+  "run_id": "WF03-Q929-20261001",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-Q929-20261001/step-03-elixir-dev.json",
+  "created_at": "2026-10-02T07:56:00Z",
+  "started_at": "2026-10-02T07:57:00Z",
+  "completed_at": "2026-10-02T08:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0929": "queue Q-929 / GH #2115: vortex/supplier-quality-deviation-critical goes to ERROR SUB_PROCESS_DEFINITION_NOT_FOUND on severity=critical (SUB_PROCESS node has no definition_name; no 8D child definition exists; role-procurement-manager unseeded). Scenario EO-002 (8D task assigned to role-procurement-manager) and EO-003 (instance COMPLETED at end-closed). No QA data changes."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md",
+      "handoffs/WF03-Q929-20261001/step-02b-code-design-validator.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-a5c794b4cbceb277a",
+    "branch_name": "feature/WF03-Q929-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 3 implement the validated design lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md exactly (fixtures, seed scripts, persona seed, drift-test flips, alias file, minimal sub_process.ex + engine.ex fix). Do not write the new test files.",
+    "acceptance_criteria": [
+      "Implementation matches design",
+      "Existing affected tests green (quote results)",
+      "mix compile --warnings-as-errors and mix format clean",
+      "No QA data change; no new test files"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented the design. Fixtures: new 8D child (vortex_8d_corrective_action_definition.json), parent v1.2 with definition_name on corrective-action-subprocess, simulation yaml parity. Seeds: child seeded before parent in seed_vortex_definition.sh; role-procurement-manager added to ROLES and felix in seed_vortex_persona_actors.sh. New alias sidecar. Drift test: vortex fixtures +1, count 4->5, refute removed, M2 rewritten as removal/missing_in_script, M6 count 5. lib fix: Engine.append_pending_event_arms_multi/7 (@doc false public wrapper over existing private prepare/build helpers, eager, tenant from schema prefix); SubProcess.build_completion_multi_from_merge now keeps transition + hop pending events (Enum.uniq deduped), build_completion_write_steps returns {:ok, multi} | {:error, _} (errors mapped to the existing activation_failed to_error_args shape) and appends timer/dispatch steps after the token reconciliation step; the tail steps moved to append_completion_tail_steps/13. Stale ISS-0931 design doc and test/specs/ISS-0931.md text updated (note 3). Verification: a throwaway probe test (deleted) with the real fixtures showed dispatches [quarantine-batch advanced, close-deviation pending] (exactly one close-deviation row) after the child 8D task completed, then parent {:completed, []} after the stub advance. Existing affected tests: 793 passed, 0 failed (engine_test, engine_sub_process_test, engine/*sub_process/transition/reconstruction/pin/service_task_routing/regulatory_review_timer_path, definitions/, tenant_provisioning_event_seed, simulation/, letflow/scripts, scripts/ incl. persona_actor_seed_drift and qa_fixture_service_task_endpoints). mix format --check-formatted clean; mix compile --warnings-as-errors --force clean. Not done by design: new test files (TEST-DESIGNER), commit, QA data. Known gap left as designed: second SUB_PROCESS directly after a completed SUB_PROCESS is still not spawned (design 3.4).",
+    "artifacts_out": [
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "test/fixtures/qa/vortex_8d_corrective_action_definition.json",
+      "test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json",
+      "test/fixtures/simulation/vortex/process_work_order.yaml",
+      "test/fixtures/uat/process-definition-aliases/proc-vortex-8d-corrective-action.yaml",
+      "scripts/seed_vortex_definition.sh",
+      "scripts/seed_vortex_persona_actors.sh",
+      "test/scripts/persona_actor_seed_drift_test.exs",
+      "lib/letflow/design/iss0931-meridian-vortex-persona-actor-provisioning.md",
+      "test/specs/ISS-0931.md"
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q929-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "SECURITY-REVIEWER (optional per design 3) and REVIEWER, then TEST-DESIGNER writes the fixture test and engine test."
+  }
+}

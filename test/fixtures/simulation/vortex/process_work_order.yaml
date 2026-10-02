@@ -30,6 +30,8 @@ graph:
       node_type: EXCLUSIVE_GATEWAY
     - id: corrective-action-subprocess
       node_type: SUB_PROCESS
+      attributes:
+        definition_name: 8D Corrective Action
     - id: default-to-major
       node_type: SERVICE_TASK
       attributes:

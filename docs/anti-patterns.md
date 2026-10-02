@@ -4411,3 +4411,34 @@ query. Where a mechanical schema check already exists for a fixture family (here
 `check_uat_scenario_schema`), remember it validates *structure*, not *content* -- it will pass a
 file whose prose asserts something the codebase cannot do, and that gap is by design, not an
 oversight to route around.
+
+## ISS-0974's identity-id_map fix covered the 4 sites its diagnosis named but left a structurally identical 5th instance of the same bug-class unfixed in the same file (2026-10-02, REVIEWER, ISS-0974/ISS-0929)
+
+**What happened.** ISS-0974 diagnosed a stale assumption -- `Map.new(prepared, fn t -> {t, t}
+end)`, a pure identity id_map for `prepared_timers`/`prepared_service_task_dispatches` -- in 4
+`Multi.merge/2` call sites in `lib/letflow/engine.ex`, all reached through the hop-chain-tail
+pipe that already computes the real id_map via `insert_hop_chain_new_token_records/5`. The fix
+(PR for ISS-0974) correctly threaded the real id_map into all 4. A 5th, textually near-identical
+instance of the exact same mistake -- `timer_id_map = Map.new(prepared_timers, fn {token_id,
+_attrs} -> {token_id, token_id} end)` and the matching `prepared_dispatches` line, in
+`append_pending_event_arms_multi/7` (ISS-0929's entry point for the sub-process/pending-event
+re-entry path) -- sits in the same file and was correctly flagged by both ELIXIR-DEV and
+SECURITY-REVIEWER during this PR's own review, but was explicitly left out of scope because
+ISS-0974's diagnosis and design doc named only the 4 `Multi.merge/2` sites reachable from a
+hop-chain tail with `changes` already in scope -- `append_pending_event_arms_multi/7` takes a
+bare `multi` with no accumulated `changes` to read an id_map back out of, so the identical
+one-line fix doesn't apply there; it needs its own (different-shaped) threading mechanism. A
+plain `grep -n '{token_id, token_id}' lib/letflow/engine.ex`, run once the bug-class was
+understood, would have surfaced all 5 instances in one command -- 2 of the 5 lines are in the
+file this PR already edited.
+
+**Correct alternative.** When a bug-class fix is diagnosed as "this exact wrong expression,
+copy-pasted across N call sites," grep for the *literal expression shape* (not just the named
+call sites) across the whole module before fixing, and treat every hit as a candidate instance,
+even one that needs a differently-shaped fix because its surrounding code lacks the same
+scaffolding (here: no `Ecto.Multi` `changes` map to read from). A site needing a different fix
+shape is still the same bug and belongs in the same issue's acceptance criteria or a filed
+follow-up issue -- not silently left for the next person to rediscover by reproducing the crash.
+Confirming "my fix's named sites are internally consistent" is necessary but not sufficient;
+confirming "no other site shares my bug's root expression" is a separate, five-second check
+worth always doing before closing out a bug-class fix.

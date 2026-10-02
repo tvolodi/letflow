@@ -305,4 +305,123 @@ defmodule Letflow.AuditTest do
                )
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0972 -- chain_precedes?/3: a genuine, structural (not timestamp-based)
+  # ordering primitive, walking `prev_chain_hash` backward from `later` looking
+  # for `earlier`'s id.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0972 -- chain_precedes?/3" do
+    test "returns {:ok, true} when earlier genuinely chain-precedes later" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, %Entry{} = first} =
+               Audit.insert_entry(Repo, base_attrs(resource_id: "res-1"), schema_name)
+
+      assert {:ok, %Entry{} = second} =
+               Audit.insert_entry(Repo, base_attrs(resource_id: "res-2"), schema_name)
+
+      assert {:ok, true} = Audit.chain_precedes?(schema_name, first, second)
+    end
+
+    test "returns {:ok, false} when the arguments are reversed (later does not precede earlier)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, %Entry{} = first} =
+               Audit.insert_entry(Repo, base_attrs(resource_id: "res-1"), schema_name)
+
+      assert {:ok, %Entry{} = second} =
+               Audit.insert_entry(Repo, base_attrs(resource_id: "res-2"), schema_name)
+
+      assert {:ok, false} = Audit.chain_precedes?(schema_name, second, first)
+    end
+
+    test "returns {:ok, false} when both arguments are the same entry (not meaningfully ordered)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, %Entry{} = entry} =
+               Audit.insert_entry(Repo, base_attrs(resource_id: "res-1"), schema_name)
+
+      assert {:ok, false} = Audit.chain_precedes?(schema_name, entry, entry)
+    end
+
+    test "returns {:error, {:broken_chain_link, chain_hash}} when later's prev_chain_hash points nowhere" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, %Entry{} = earlier} =
+               Audit.insert_entry(Repo, base_attrs(resource_id: "res-1"), schema_name)
+
+      # A hand-built `later` entry (never persisted) whose prev_chain_hash
+      # points at a chain_hash that does not exist in this tenant's table --
+      # exactly the corruption case the immutability triggers should make
+      # impossible in practice, but chain_precedes?/3 must report rather than
+      # crash on.
+      missing_hash = "deadbeef" <> String.duplicate("00", 28)
+
+      later = %Entry{
+        id: Ecto.UUID.generate(),
+        prev_chain_hash: missing_hash
+      }
+
+      assert {:error, {:broken_chain_link, ^missing_hash}} =
+               Audit.chain_precedes?(schema_name, earlier, later)
+    end
+
+    test "returns {:error, {:max_hops_exceeded, bound}} when the chain between the two entries is deeper than the walk bound" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Build a long linked chain directly via Repo.insert_all/3 (bypassing
+      # Audit.insert_entry/3's per-row transaction/hash-tail-fetch overhead,
+      # and the immutability triggers only guard UPDATE/DELETE, not INSERT) --
+      # chain_precedes?/3 only cares about id/chain_hash/prev_chain_hash
+      # linkage, not hash-content correctness, so the chain_hash values here
+      # are arbitrary unique strings, not real SHA-256 digests.
+      entry_count = 10_020
+      now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+      naive_now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      ids = for _ <- 1..entry_count, do: Ecto.UUID.generate()
+      hashes = for n <- 1..entry_count, do: "synthetic-chain-hash-#{n}"
+
+      rows =
+        Enum.zip([ids, hashes, 0..(entry_count - 1)])
+        |> Enum.map(fn {id, hash, index} ->
+          prev_hash = if index == 0, do: nil, else: Enum.at(hashes, index - 1)
+
+          %{
+            id: id,
+            tenant_id: Ecto.UUID.generate(),
+            actor_id: nil,
+            action: "definition.create",
+            resource_type: "definition",
+            resource_id: "res-#{index}",
+            timestamp: now,
+            before_state: nil,
+            after_state: nil,
+            trace_id: nil,
+            chain_hash: hash,
+            prev_chain_hash: prev_hash,
+            inserted_at: naive_now
+          }
+        end)
+
+      # Chunked: Postgres caps a single statement at 65535 bound parameters,
+      # and this schema's row shape (11 fields) times entry_count exceeds
+      # that in one insert_all/3 call.
+      rows
+      |> Enum.chunk_every(1_000)
+      |> Enum.each(fn chunk -> Repo.insert_all(Entry, chunk, prefix: schema_name) end)
+
+      earlier = %Entry{id: Enum.at(ids, 0), prev_chain_hash: nil}
+
+      later = %Entry{
+        id: Enum.at(ids, entry_count - 1),
+        prev_chain_hash: Enum.at(hashes, entry_count - 2)
+      }
+
+      assert {:error, {:max_hops_exceeded, 10_000}} =
+               Audit.chain_precedes?(schema_name, earlier, later)
+    end
+  end
 end

@@ -420,6 +420,70 @@ defmodule Letflow.Audit do
     end
   end
 
+  @doc """
+  Reports whether `earlier` was chain-committed strictly before `later`,
+  within the tenant chain named by `prefix`, by walking `later.prev_chain_hash`
+  backward until it either reaches `earlier.id` or runs out of chain
+  (ISS-0972). This is a narrower, two-entry question than `verify_chain/2`'s
+  whole-chain verification -- it answers "does this chain's linkage prove
+  `earlier` precedes `later`", not "is this chain internally consistent."
+
+  `audit_entries` has no `sequence_number`/`global_seq`-equivalent column
+  (unlike `events`, ISS-0970's precedent) -- `id` is a random UUID, not a
+  sequence, and `inserted_at` is strictly less precise than `timestamp`
+  itself. The one genuinely monotonic, non-timestamp ordering primitive this
+  table offers is the `chain_hash`/`prev_chain_hash` hash-chain linkage
+  itself: a structural, backward-linked-list fact about what each row's
+  `prev_chain_hash` points to, not an inference from any clock reading.
+
+  Returns `{:ok, false}` both when `earlier` is `later`'s own descendant (it
+  was inserted *after* `later`) and when `earlier` does not appear anywhere
+  in `later`'s ancestry at all (e.g. a different tenant's chain entirely --
+  callers are expected to have already guarded same-prefix membership, same
+  as `require_same_prefix/2` does at this function's one call site today).
+  `earlier.id == later.id` is handled as a defensive `{:ok, false}` guard (an
+  entry does not precede itself) rather than assumed never to happen.
+
+  Bounded by `@max_chain_walk_hops` so a malformed/corrupted chain reports an
+  error instead of looping unboundedly; a broken link (a `prev_chain_hash`
+  pointing at a `chain_hash` with no matching row -- which the table's own
+  immutability triggers should make impossible in practice) reports an error
+  rather than raising.
+  """
+  @max_chain_walk_hops 10_000
+
+  @spec chain_precedes?(prefix :: String.t(), earlier :: Entry.t(), later :: Entry.t()) ::
+          {:ok, boolean()}
+          | {:error, {:max_hops_exceeded, pos_integer()}}
+          | {:error, {:broken_chain_link, chain_hash :: String.t()}}
+  def chain_precedes?(prefix, %Entry{} = earlier, %Entry{} = later) when is_binary(prefix) do
+    if earlier.id == later.id do
+      {:ok, false}
+    else
+      walk_chain_for_ancestor(prefix, later.prev_chain_hash, earlier.id, 0)
+    end
+  end
+
+  defp walk_chain_for_ancestor(_prefix, nil, _earlier_id, _hops), do: {:ok, false}
+
+  defp walk_chain_for_ancestor(_prefix, _chain_hash, _earlier_id, hops)
+       when hops >= @max_chain_walk_hops do
+    {:error, {:max_hops_exceeded, @max_chain_walk_hops}}
+  end
+
+  defp walk_chain_for_ancestor(prefix, chain_hash, earlier_id, hops) do
+    case Repo.get_by(Entry, [chain_hash: chain_hash], prefix: prefix) do
+      nil ->
+        {:error, {:broken_chain_link, chain_hash}}
+
+      %Entry{id: ^earlier_id} ->
+        {:ok, true}
+
+      %Entry{prev_chain_hash: next_chain_hash} ->
+        walk_chain_for_ancestor(prefix, next_chain_hash, earlier_id, hops + 1)
+    end
+  end
+
   defp fields_from_entry(%Entry{} = entry) do
     %{
       id: entry.id,

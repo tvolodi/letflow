@@ -892,16 +892,27 @@ defmodule Letflow.Simulation.Req207VortexTest do
              "Expected severity-classification task assignee_ref to be 'role-quality-manager'; observed: #{inspect(eo_task_assigned.observed)}"
 
       # EO-001 ordering: quarantine-batch's task.create precedes severity-classification's
-      # task.create -- real timestamp comparison via the new :audit_event_ordering method.
-      # Both task.create events already exist by this point (steps 2a/3a), independent of
-      # the child's own completion below.
+      # task.create -- verified via real audit hash-chain linkage via `prev_chain_hash`
+      # (ISS-0972), not timestamp comparison: audit_entries has no sequence_number/
+      # global_seq-equivalent column, so ordering is proven by walking the chain rather
+      # than comparing `timestamp`. Both task.create events already exist by this point
+      # (steps 2a/3a), independent of the child's own completion below.
       assert eo_ordering.outcome == :pass,
-             "audit_event_ordering (quarantine task.create < severity task.create) failed — observed: #{inspect(eo_ordering.observed)}"
+             "audit_event_ordering (quarantine task.create precedes severity task.create) failed — observed: #{inspect(eo_ordering.observed)}"
 
-      assert %{first: %{timestamp: first_ts}, second: %{timestamp: second_ts}} =
+      assert %{
+               first: %Letflow.Audit.Entry{} = first_entry,
+               second: %Letflow.Audit.Entry{} = second_entry
+             } =
                eo_ordering.observed
 
-      assert DateTime.compare(first_ts, second_ts) == :lt
+      assert first_entry.id != second_entry.id
+
+      # Independent re-derivation of the ordering claim (don't just trust the flag) --
+      # a second, independent call against real DB state, re-proving the claim via the
+      # same chain-walk primitive the runner itself now uses.
+      assert {:ok, true} =
+               Letflow.Audit.chain_precedes?(schema_name, first_entry, second_entry)
 
       # Sub-process spawn verification (OQ-2): a real child instance exists, parented to
       # this instance, real (non-nil) status, :active -- waiting on its own pending

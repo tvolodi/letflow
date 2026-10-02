@@ -1,0 +1,83 @@
+id: ISS-0981
+title: "promotion.ex's write_target_definition/5 (and possibly task_activation.ex's record_task_create_audit/3) can let an Audit.insert_entry/3 raise propagate uncaught, unlike definitions.ex's equivalent same-transaction audit writes"
+discovered_by: REVIEWER
+discovered_in_run: fix/ISS-0980-router-audit-rescue-hardening (PR #2170 review)
+discovered_at: "2026-10-02T00:00:00Z"
+severity: MINOR
+owner: ELIXIR-DEV
+description: >
+  Follow-up flagged during PR #2170's REVIEWER pass, re-running ISS-0980's
+  own "grep for a third undiscovered Audit.insert_entry/3 call site"
+  instruction. ISS-0980's own description (docs/issues/ISS-0980.yaml)
+  explicitly checked and dismissed two same-transaction call sites as "a
+  different class ... allowed to roll back the whole operation on failure,
+  not best-effort decoupled writes":
+
+    - lib/letflow/definitions/promotion.ex's write_target_definition/5
+      (Audit.insert_entry/3 called inside write_target_definition's own
+      Repo.transaction/1, {:error, reason} -> Repo.rollback(reason) on a
+      typed failure)
+    - lib/letflow/engine/task_activation.ex's record_task_create_audit/3
+      (same same-transaction-rollback shape, called from do_insert/3)
+
+  That dismissal reasoned correctly about the *typed* {:error, reason}
+  return from Audit.insert_entry/3 (Repo.rollback/1 does cleanly convert
+  that into {:error, ...} from Repo.transaction/1), but did not separately
+  check what happens on a genuine *raise* (the same DROP TABLE/Postgrex.Error
+  class ISS-0969's and ISS-0980's own regression tests reproduce).
+  `Repo.transaction/1` only intercepts `Repo.rollback/1` calls -- any other
+  raised exception inside the function it wraps propagates out of
+  `Repo.transaction/1` to its caller, same as it would with no transaction
+  at all.
+
+  lib/letflow/definitions.ex's own analogous same-transaction audit write
+  (record_definition_audit/5, ISS-0980's cited comparison point) is safe
+  from this specifically because each of its *callers* (activate/2, etc.)
+  has its own function-level `rescue -> {:error, {:transaction_failed,
+  exception}}` wrapper around the whole Repo.transaction/1 call (confirmed:
+  grep -n "rescue" lib/letflow/definitions.ex finds ~10 such wrappers one
+  per lifecycle function) -- a raise there never reaches the Plug boundary
+  unhandled.
+
+  lib/letflow/definitions/promotion.ex has *no* `rescue` anywhere in the
+  file (grep -n "rescue" returns nothing), and neither does either of its
+  two router callers (lib/letflow/routers/promotions.ex,
+  lib/letflow/routers/tenants.ex calling promote_active_definition/4 at
+  tenants.ex:401) -- so a raise from write_target_definition/5's
+  Audit.insert_entry/3 call would propagate all the way to
+  Plug.ErrorHandler.handle_errors/2 (cleanup-only, unconditionally
+  re-raises, same boundary iss0980-router-audit-rescue-hardening.md's
+  design traced), producing exactly the generic-500 outcome this whole
+  ISS-0946/ISS-0969/ISS-0980 arc has been fixing elsewhere -- just via a
+  different failure *shape* (raise vs. typed error) than the already-fixed
+  sites, and arguably more surprising here because the written contract
+  ("rolls back cleanly, same pattern as activate_draft_row/4") implies a
+  controlled failure, not a raw crash.
+
+  lib/letflow/engine/task_activation.ex's record_task_create_audit/3 is
+  flagged as a second candidate needing the same check rather than asserted
+  as broken: engine.ex's own Ecto.Multi-based transition pipelines that call
+  TaskActivation.append_multi/6 and append_multi_from_existing_records/6
+  (several call sites, e.g. engine.ex:1695, 2792, 3091, 3629, 4640) do not
+  appear to have an enclosing function-level `rescue` either (engine.ex's
+  only two `rescue` clauses are the ISS-0969 sites, both textually distant
+  from these), but this needs the same call-chain tracing CODE-DESIGNER did
+  for ISS-0969 before concluding it's a live gap rather than one guarded by
+  something this review didn't see.
+
+  Not confirmed whether this can actually fire in production (vs. only the
+  DROP TABLE fault-injection technique the sibling issues' tests use) --
+  filed as a consistency/robustness gap worth a dedicated look, same
+  non-blocking standing ISS-0969 and ISS-0980 were each filed with.
+acceptance_criteria:
+  - "Trace promote_definition/3's and promote_active_definition/4's full call chains (both router entry points) and confirm whether a raise from write_target_definition/5's Audit.insert_entry/3 call is genuinely uncaught today, or whether something this review missed (e.g. a Plug-level boundary with different behavior than api_pipeline.ex's) already prevents a generic 500"
+  - "Separately trace at least one engine.ex caller of TaskActivation.append_multi/6 or append_multi_from_existing_records/6 all the way to its router entry point and confirm whether record_task_create_audit/3's raise is similarly uncaught"
+  - "If either is a live gap: decide the right fix shape -- likely a function-level rescue converting the raise into the same {:error, {:transaction_failed, exception}}-style typed return definitions.ex's lifecycle functions already use, rather than a bare log-and-swallow (these are transactional, not best-effort, writes -- the operation SHOULD fail, just not by raw crash) -- and add a DROP TABLE-style regression test per site"
+  - "If not a live gap: record why in this issue's resolution, with the specific call-chain reasoning traced per site, and correct ISS-0980's description if its dismissal needs amending"
+related:
+  - ISS-0980
+  - ISS-0969
+  - ISS-0946
+queue_ref: null   # filed directly by REVIEWER during PR #2170's review, not via get_next_task
+github_ref: null  # not filed on GitHub; local-only follow-up, same as ISS-0969/ISS-0980
+status: open

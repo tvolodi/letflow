@@ -50,29 +50,35 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   threshold.yaml` now carries 9 real steps (through the remaining assessment
   branch, both gateways, and all three committee votes) instead of 3.
 
-  **The first 7 steps are real and pass**: 2 of 3 committee votes complete
-  for real, reaching 2-of-3 quorum at the variable level (the join has not
-  fired yet -- one branch still outstanding). **Step 8 (the 3rd, join-firing
-  vote) reproduces a genuine, newly-discovered, previously-undocumented
-  engine limitation** (full mechanism documented at that assertion's own
-  comment, below): a `PARALLEL_GATEWAY` join whose own downstream edge
-  leads directly to a `SERVICE_TASK`, when that join fires within the same
-  hop chain as the triggering task completion, cannot create that
+  **All 9 steps are now real and pass.** 2 of 3 committee votes complete for
+  real (steps 6/7), reaching 2-of-3 quorum at the variable level (the join
+  has not fired yet -- one branch still outstanding). Step 8 (the 3rd,
+  join-firing vote) used to reproduce a genuine, newly-discovered engine
+  limitation: a `PARALLEL_GATEWAY` join whose own downstream edge leads
+  directly to a `SERVICE_TASK`, when that join fires within the same hop
+  chain as the triggering task completion, could not create that
   `SERVICE_TASK`'s dispatch row (`build_complete_task_tail_multi/6`'s
-  identity-`id_map` assumption for `prepared_service_task_dispatches` does
-  not hold for a hop-chain-local, join-minted token -- confirmed by direct
-  reproduction and source read, not guessed). REQ-433's own OUT OF SCOPE
-  clause and AC6 forbid fixing `lib/letflow/engine/` here, so this describe
-  block documents the real, reproducible failure (a 422) rather than
-  fabricating a pass -- matching this same file's own established
-  discipline for the pre-ISS-0397 defect it used to document the same way.
-  This is a NEW platform-wide finding (every `PARALLEL_GATEWAY` join
-  exercised anywhere else in this codebase routes into another gateway or a
-  `HUMAN_TASK`, never a bare `SERVICE_TASK`) requiring its own
-  CODE-DESIGNER-sized follow-up fix before REQ-433's AC4 can be genuinely
-  closed end to end. The "meridian-loan-origination-below-threshold"
-  describe block is NOT touched -- that scenario never reaches the
-  committee branch at all.
+  identity-`id_map` assumption for `prepared_service_task_dispatches` did
+  not hold for a hop-chain-local, join-minted token). That finding was filed
+  as **ISS-0974** and is now **FIXED** (merged to `main` at `a53858e0`,
+  `lib/letflow/design/iss0974-join-dispatch-id-map-fix.md`) -- the real
+  hop-chain `id_map` is now threaded into the timer-arm/service-task-dispatch
+  `Multi.merge` siblings, so a join-minted continuation token resolves to a
+  real, persisted id. Step 8's own assertion (below) is flipped accordingly,
+  over this moduledoc's own prior note, to lock in the fix rather than keep
+  documenting the now-closed defect (same "a later fix flips the assertion
+  that used to document the bug" discipline this file's own ISS-0397 section
+  above already established): the join fires, `committee-tally` structurally
+  tallies 2-of-3 approve, and the token parks for real at `create-facility`
+  (a real, pending `service_task_dispatches` row) -- REQ-433's AC4 is closed
+  by this describe block for the test-local graph's own honest stopping
+  point (create-facility, per REQ-215's own no-auto-traversal precedent and
+  this requirement's own design §4.2 call); AC4's "reaches `end-disbursed`"
+  text names the separate real UAT scenario (design §4.1) against
+  `process_claim_intake.yaml`, not this Runner-driven test-local-graph
+  describe block. The "meridian-loan-origination-below-threshold" describe
+  block is NOT touched -- that scenario never reaches the committee branch
+  at all.
 
   ## CLOSED by REQ-215 (2026-09-03) -- the SERVICE_TASK dispatch gap itself
 
@@ -942,7 +948,7 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   # ─── AC1: meridian-loan-origination-above-threshold ──────────────────────
 
   describe "meridian-loan-origination-above-threshold" do
-    test "2 of 3 committee votes reach quorum for real; the 3rd (join-firing) vote reproduces a new, documented engine defect (REQ-433)",
+    test "real 2-of-3 committee quorum: all 3 votes complete, join fires, committee-tally routes to create-facility (REQ-433, ISS-0974 fix)",
          %{schema_name: schema_name, actors: actors, definitions: %{loan: definition}} do
       scenario_raw =
         ScenarioFixture.load!(Path.join(@scenarios_dir, "loan-origination-above-threshold.yaml"))
@@ -1055,101 +1061,86 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       # Step 8 -- the third committee member dissents, the 3rd-of-3 arrival
       # at committee-vote-join (a set-based wait-for-all-expected join).
       #
-      # NEW ELIXIR-DEV FINDING (confirmed this session, reproduced directly
-      # against a real running instance -- not a guess; reported for ORCH
-      # allocation since this platform defect is NEW, checked first against
-      # every already-filed issue this test module's own moduledoc names
-      # (ISS-0388..0397/0408/0925/0942/0945) and matching none of them):
+      # FIXED by ISS-0974 (2026-10-02, `a53858e0`,
+      # `lib/letflow/design/iss0974-join-dispatch-id-map-fix.md`) -- the
+      # previously-documented defect this step used to assert (a join firing
+      # within the same hop chain as its own triggering completion, cascading
+      # straight into a SERVICE_TASK, minted a non-persisted token_id that
+      # `build_complete_task_tail_multi/6`'s identity `id_map` could not
+      # resolve, surfacing as a real 422/`Ecto.UUID` cast failure) is gone:
+      # ISS-0974 threads the real hop-chain `id_map` (built from
+      # `insert_hop_chain_new_token_records/5`'s own rewritten ids) into the
+      # timer-arm/service-task-dispatch `Multi.merge` siblings, so a
+      # join-minted continuation token is now a real, resolvable id by the
+      # time `create-facility`'s dispatch row is built. Re-run against this
+      # exact graph shape (confirmed this session, not assumed): step 8 now
+      # succeeds for real.
       #
-      # `committee-vote-join` firing HERE mints a brand-new, not-yet-persisted
-      # token_id (`Transition.fire_join/5`'s own `"<origin>/<join_node>/
-      # joined"` string) that, in THIS SAME hop chain, immediately continues
-      # through `committee-tally` (EXCLUSIVE_GATEWAY pass-through) onto
-      # `create-facility`, a real SERVICE_TASK requiring a
-      # `service_task_dispatches` row. `engine.ex`'s
-      # `build_complete_task_tail_multi/6` builds that row's `id_map` as an
-      # IDENTITY map (`Map.new(prepared_service_task_dispatches, fn
-      # %{token_id: token_id} -> {token_id, token_id} end)`), on the explicit,
-      # documented assumption (REQ-215 design doc §2.1 point 1, restated at
-      # this exact call site's own comment) that "every token_id in
-      # prepared_service_task_dispatches is already a real, persisted
-      # TokenRecord id at this point in the hop chain." That assumption holds
-      # for every case exercised so far (a SERVICE_TASK reached from a plain,
-      # already-persisted token, as this same file's REQ-215 AC2 describe
-      # block below proves) -- it does NOT hold here: `prepared_service_task_
-      # dispatches` is computed from the hop chain's `final_instance_state`
-      # BEFORE `insert_hop_chain_new_token_records/5` mints a real TokenRecord
-      # for the join's own synthetic continuation token, and
-      # `rewrite_token_ids/2` (which DOES fix up `final_instance_state.tokens`/
-      # `.pending_task_nodes` for exactly this reason, per its own ISS-0408
-      # moduledoc) never touches `prepared_service_task_dispatches` (or
-      # `prepared_timers`, same bug, unexercised here) at all. The result: a
-      # real `Ecto.Changeset` cast failure
-      # (`token_id: {"is invalid", [type: Ecto.UUID, validation: :cast]}`)
-      # building the `ServiceTaskDispatch` row, surfaced to the HTTP caller as
-      # a real `422 Unprocessable Entity` ("validation failed").
-      #
-      # This is a genuine, previously-undiscovered engine limitation: "a
-      # PARALLEL_GATEWAY join whose own downstream edge leads directly to a
-      # SERVICE_TASK, when that join fires within the same hop chain as the
-      # triggering task completion, cannot create that SERVICE_TASK's
-      # dispatch row." REQ-433's committee-vote-join -> committee-tally ->
-      # create-facility subgraph is the first shape in this codebase to
-      # combine those two properties (every existing PARALLEL_GATEWAY join's
-      # own downstream target has so far always been another gateway or a
-      # HUMAN_TASK, never a bare SERVICE_TASK) -- confirmed by a repo-wide
-      # structural check, not assumed.
-      #
-      # REQ-433's own OUT OF SCOPE clause and AC6 (`git diff` must show zero
-      # changes under `lib/letflow/engine/`) forbid fixing this here -- per
-      # this role's own instructions ("it must stop and get a fresh
-      # CODE-DESIGNER pass, not patch lib/letflow/engine/ under cover of this
-      # fixture-only design"), this is documented as a confirmed, reproducible
-      # defect rather than patched or silently papered over. The fixture/
-      # scenario data REQ-433 adds is still structurally correct (REQ-433's
-      # own ACs 1/2/3/5/6/7 do not depend on this call succeeding); only the
-      # very last real hop (committee-vote-join firing into a SERVICE_TASK in
-      # one call) is blocked, platform-wide, until a follow-up requirement
-      # fixes `build_complete_task_tail_multi/6`'s (and its 3 sibling call
-      # sites') identical-shaped identity-id_map construction to also account
-      # for a hop-chain-local join-minted token.
-      assert step8.outcome == :error,
-             "step 8 (3rd committee vote) was expected to reproduce the newly-found " <>
-               "join-into-SERVICE_TASK dispatch defect (see comment above) -- instead got " <>
-               "outcome #{inspect(step8.outcome)}, detail: #{inspect(step8.detail)}"
+      # `committee-vote-join` fires (3 of 3 received), cascades through
+      # `committee-tally` (EXCLUSIVE_GATEWAY pass-through -- e39's condition,
+      # "2 of 3 == 'approve'", is true even with this dissent) onto
+      # `create-facility`, a real SERVICE_TASK. Per REQ-215's own AC2 describe
+      # block (below), a SERVICE_TASK parks the token with no automatic
+      # outgoing traversal -- this is the real, honestly-reached end state for
+      # this test-local graph (REQ-433's own design doc §4.2 calls this out
+      # explicitly: this Runner-driven scenario format has no step primitive
+      # to resolve a pending SERVICE_TASK dispatch, so it stops here by
+      # design, not truncation; `end-disbursed` is reached only by the
+      # separate real UAT scenario against `process_claim_intake.yaml`,
+      # REQ-433's design §4.1).
+      assert step8.outcome == :ok, "step 8 (3rd committee vote) — #{inspect(step8.detail)}"
 
-      assert %{status: 422} = step8.detail
+      assert %{
+               "current_nodes" => ["create-facility"],
+               "instance_status" => "ACTIVE"
+             } = step8.detail
 
-      # Real-state evidence the failure is clean (INV-EE48-7's own "typed,
-      # non-crashing failure, not silent data corruption" characterization,
-      # same discipline this file's pre-ISS-0397 history already established
-      # for the analogous assessment-join defect): the whole transaction
-      # rolled back, so the 3rd committee-vote-* task stays PENDING (not
-      # completed), and current_nodes still shows exactly that one
-      # outstanding node -- quorum was never structurally evaluated.
+      assert %{
+               "committee_vote_cro" => "approve",
+               "committee_vote_director" => "approve",
+               "committee_vote_ceo" => "reject"
+             } =
+               Map.take(step8.detail["variables"], [
+                 "committee_vote_cro",
+                 "committee_vote_director",
+                 "committee_vote_ceo"
+               ])
+
+      # Real-state evidence the join genuinely fired and committee-tally's
+      # structural 2-of-3 quorum tally (not a supplied committee_outcome
+      # variable, per REQ-433's own AC2) routed the token to create-facility
+      # for real: current_nodes shows exactly that one SERVICE_TASK, all
+      # three committee_vote_* variables are persisted (2 approve, 1 reject),
+      # and a real, pending service_task_dispatches row exists for it with a
+      # genuine, persisted (UUID-valid) token_id -- the exact field ISS-0974
+      # fixed.
       {:ok, final_projection} = Instances.get_by_id(instance_id, prefix: schema_name)
       assert final_projection.status == :active
+      assert final_projection.current_nodes == ["create-facility"]
 
-      assert final_projection.current_nodes in [
-               ["committee-vote-cro"],
-               ["committee-vote-director"],
-               ["committee-vote-ceo"]
-             ],
-             "Expected current_nodes to still show exactly the one committee-vote-* task " <>
-               "step 8's rolled-back attempt never completed; got #{inspect(final_projection.current_nodes)}"
+      assert %{
+               "committee_vote_cro" => "approve",
+               "committee_vote_director" => "approve",
+               "committee_vote_ceo" => "reject"
+             } =
+               Map.take(final_projection.variables, [
+                 "committee_vote_cro",
+                 "committee_vote_director",
+                 "committee_vote_ceo"
+               ])
 
-      refute Map.has_key?(final_projection.variables, "committee_vote_ceo") and
-               Map.has_key?(final_projection.variables, "committee_vote_cro") and
-               Map.has_key?(final_projection.variables, "committee_vote_director"),
-             "Expected only 2 of the 3 committee_vote_* variables set (step 8's own " <>
-               "variable never merged, rolled back with everything else)"
-
-      assert [] ==
+      assert [dispatch] =
                ServiceTaskDispatch
                |> Ecto.Query.where([d], d.instance_id == ^instance_id)
                |> Repo.all(prefix: schema_name),
-             "Expected zero service_task_dispatches rows -- the one step 8 attempted to " <>
-               "insert must have rolled back along with everything else in its transaction"
+             "Expected exactly one real service_task_dispatches row for create-facility, " <>
+               "the join's own continuation token now being a real, persisted token_id " <>
+               "(ISS-0974's fix) rather than failing the Ecto.UUID cast as it did before"
+
+      assert dispatch.node_id == "create-facility"
+      assert dispatch.status == "pending"
+      assert dispatch.instance_id == instance_id
+      assert {:ok, _} = Ecto.UUID.cast(dispatch.token_id)
     end
   end
 

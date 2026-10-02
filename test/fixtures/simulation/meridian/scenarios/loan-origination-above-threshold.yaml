@@ -19,26 +19,22 @@
 # authority-routing, and 2 of 3 committee-vote-* HUMAN_TASK completions (2-of-3
 # quorum reached at the variable level).
 #
-# NEW ELIXIR-DEV FINDING (REQ-433, 2026-10-02, reproduced directly against a real
-# running instance -- not a guess): step 8 (the 3rd, join-firing committee vote)
-# does NOT complete successfully. `committee-vote-join` firing mints a brand-new,
-# not-yet-persisted token_id in the SAME hop chain that immediately continues
-# through `committee-tally` onto `create-facility` (a real SERVICE_TASK) --
-# `lib/letflow/engine.ex`'s `build_complete_task_tail_multi/6` builds that
-# SERVICE_TASK's own dispatch-row `id_map` as an IDENTITY map, on the documented
-# assumption (REQ-215 design doc §2.1 point 1) that every token_id involved is
-# already a real, persisted TokenRecord id -- true for every case exercised so far,
-# NOT true for a join that fires and routes straight into a SERVICE_TASK within one
-# hop chain (full mechanism in req208_meridian_test.exs's own "meridian-loan-
-# origination-above-threshold" describe block comment). Real result: a 422 on step
-# 8's own `POST .../complete` call, not the clean create-facility park this file's
-# header previously (and incorrectly) assumed. This is a genuine, previously-
-# undiscovered, platform-wide engine limitation -- out of REQ-433's own OUT OF
-# SCOPE clause and AC6 to fix here; flagged for a follow-up CODE-DESIGNER-sized fix.
-# This scenario's own step list is left as REQ-433 designed it (steps 1-8, the real
-# attempt a real operator would make) rather than truncated to hide the failure --
-# req208_meridian_test.exs's own describe block is this file's load-bearing,
-# asserted proof of exactly where and how step 8 fails.
+# ELIXIR-DEV FINDING, FIXED (REQ-433 / ISS-0974, 2026-10-02): step 8 (the 3rd,
+# join-firing committee vote) used to fail with a 422 -- `committee-vote-join`
+# firing minted a brand-new, not-yet-persisted token_id in the SAME hop chain that
+# immediately continued through `committee-tally` onto `create-facility` (a real
+# SERVICE_TASK), and `lib/letflow/engine.ex`'s `build_complete_task_tail_multi/6`
+# built that SERVICE_TASK's own dispatch-row `id_map` as an IDENTITY map, on the
+# documented assumption (REQ-215 design doc §2.1 point 1) that every token_id
+# involved was already a real, persisted TokenRecord id -- not true for a join that
+# fires and routes straight into a SERVICE_TASK within one hop chain (full mechanism
+# in req208_meridian_test.exs's own "meridian-loan-origination-above-threshold"
+# describe block comment). ISS-0974 (merged to main at `a53858e0`) fixed this by
+# threading the real hop-chain id_map into the timer-arm/service-task-dispatch
+# Multi.merge siblings. Step 8 now completes for real: the join fires, 2-of-3
+# approve, and the token parks at `create-facility` (a real, pending SERVICE_TASK
+# dispatch) -- req208_meridian_test.exs's own describe block asserts this real
+# success path directly.
 #
 # requested_amount_eur: 750000 (> 500000 threshold) forces authority-routing's
 # committee-vote-fork branch, never l1-approval.

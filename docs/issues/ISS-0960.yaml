@@ -1,0 +1,12 @@
+id: ISS-0960
+title: "History event ordering: SERVICE_TASK_COMPLETED stamped after the next task row is created; ordering unprovable by timestamp"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T19:58:01Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  vortex/supplier-quality-deviation-critical EO-004 (and swiftroute): quarantine-batch SERVICE_TASK_COMPLETED stamped 17:49:35.635Z, next severity-classification task created 17:49:35.631Z; no task-created history event and no audit row for the service task. Event timestamp appears to be insert time after the following task insert in the same transaction. Decide: stamp with transaction logical time / emit task-created events, or define ordering by sequence number and amend the scenario. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml
+queue_ref: Q-930  # queue issue_ref ISS-0930 may collide with an existing local file; local filename ISS-0960
+github_ref: GH-2116
+status: open

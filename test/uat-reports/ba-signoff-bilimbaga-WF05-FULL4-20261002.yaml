@@ -1,0 +1,78 @@
+report_id: ba-signoff-bilimbaga-WF05-FULL4-20261002
+run_id: WF05-FULL4-20261002
+vertical: bilimbaga
+solution_pack: bilimbaga
+generated_at: "2026-10-02T00:00:00Z"
+persona: Ainur Zhaksybekova (Head of Learning & Assessment)
+source_uat_report: test/uat-reports/uat-2026-10-02-WF05-FULL4-20261002-BILIMBAGA.yaml
+
+scope_note: >
+  This sign-off covers the BilimBaga vertical only. By instruction, the other
+  organizations and the platform-level checks were deliberately left out of
+  this run, and this sign-off makes no statement about their readiness.
+
+scenarios_reviewed: 1
+domain_verdict: PASS
+
+scenario_verdicts:
+  - scenario_id: bilimbaga-candidate-timed-exam-autograde
+    title: "Candidate takes a timed certification exam and receives an auto-graded score"
+    persona_verdict: PASS
+    business_note: >
+      I looked at the saved screens myself. At the start of the exam the
+      candidate sees "Time remaining: 29:57" with the first safety question,
+      and after submitting the screen reads "Score: 2 / 2 (100%)" and
+      "Passed". The candidate picked the correct answers, so the score shown
+      is the score a correct marking should give, and nothing was left
+      pending. This confirms the second consecutive clean run of the core
+      candidate journey on the live QA site.
+    issues:
+      - BA-BILIMBAGA-004
+      - BA-BILIMBAGA-005
+
+domain_issues:
+  - id: BA-BILIMBAGA-004
+    severity: MINOR
+    business_description: >
+      The side panel still shows "Unknown workspace" where the organization
+      name should appear (visible on both the exam screen and the result
+      screen). It does not affect taking the exam or seeing the result, but a
+      candidate may wonder whether they are in the right place. This is the
+      same label I raised in the previous sign-off and it has not changed.
+    affected_scenario: bilimbaga-candidate-timed-exam-autograde
+    suggested_action: route_to_req_analyst
+
+  - id: BA-BILIMBAGA-005
+    severity: MAJOR
+    business_description: >
+      A candidate who opens the QA address the ordinary way, without the
+      BilimBaga organization marker added to the web address, is sent to the
+      wrong organization's sign-in page, and their correct username and
+      password are rejected as invalid. Only when the address carries the
+      BilimBaga marker does the candidate reach the right sign-in page and get
+      in. For a real candidate this looks exactly like a forgotten or broken
+      password, and they would have no way to know a special link is needed.
+      The exam journey itself, once signed in, is unaffected.
+    affected_scenario: bilimbaga-candidate-timed-exam-autograde
+    suggested_action: route_to_wf03
+
+realm_marker_note: >
+  Does the sign-in marker requirement change my verdict? It does not change
+  the verdict on the exam scenario, because the exam flow was exercised with
+  a correctly signed-in BilimBaga candidate and behaved exactly as promised
+  (timed, saved, immediately and accurately scored). It does, however, limit
+  how I can recommend releasing: until candidates are directed to the correct
+  sign-in automatically, every invitation, bookmark or emailed link to the
+  exams must include the BilimBaga marker, otherwise candidates will be
+  locked out and will blame their credentials. I rate this MAJOR rather than
+  BLOCKER because a working path exists and can be controlled by how we
+  distribute links; it becomes a BLOCKER for any rollout where candidates
+  find the site on their own.
+
+overall_note: >
+  The BilimBaga exam promise is verified again: timed exam, accurate and
+  immediate score, clear "Passed" wording. I am comfortable with the exam
+  experience itself shipping, on the condition that candidate links are
+  issued with the BilimBaga marker and that automatic organization
+  recognition at sign-in is fixed before candidates are expected to find
+  the site unaided. The organization-name label is a polish item.

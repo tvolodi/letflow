@@ -1,0 +1,50 @@
+run_id: WF05-FULL3-20261001-BILIMBAGA
+date: "2026-10-01"
+agent: UAT-RUNNER
+slice: bilimbaga
+environment:
+  base_url: https://qa.bizdala.com
+  environment: qa
+  idp: https://auth.qa.bizdala.com
+  credential_source: ai-dala-infra/scripts/qa-uat-env.sh (platform + token candidate-user; used in-process, not recorded)
+  preflight_report: test/uat-reports/preflight-2026-10-01-qa-FULL3.txt
+  preflight_note: >
+    Preflight lists actors GAP for this scenario (actor-bilimbaga-candidate NO_PASSWORD) and tenant/app_roles UNKNOWN.
+    This is a naming mismatch, not a missing account: the scenario's pipeline spec (and the FULL2 run) authenticates as the
+    seeded realm-bilimbaga user candidate-user, whose registry role in qa-uat-env.sh is CANDIDATE. Observed JWT roles for
+    candidate-user: offline_access, CANDIDATE, uma_authorization, default-roles-bilimbaga. The scenario's actor
+    (actor-bilimbaga-candidate, role CANDIDATE) is therefore faithfully represented by candidate-user; same treatment as the
+    FULL2 run, which executed and passed. Scenario was run, not blocked.
+  readiness: "GET https://qa.bizdala.com/health -> 200"
+  realm_note: "Spec mints token directly against the bilimbaga realm (ISS-0727 workaround built into the spec); ISS-0727 not re-tested here."
+result_overall: PASS
+scenarios:
+  - id: bilimbaga-candidate-timed-exam-autograde
+    file: test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    verdict: PASS
+    driver: "npx playwright test tests/e2e/pipelines/bilimbaga-candidate-timed-exam.pipeline.e2e.spec.ts --retries=0 (from web/) -> 1 passed (14.7s)"
+    prior_state_verification:
+      - "candidate-user token (bilimbaga realm) roles: offline_access, CANDIDATE, uma_authorization, default-roles-bilimbaga"
+      - "GET /api/v1/me/modules with that token -> 200 {installed_modules:[{module_id: exam, version: 0.1.0}]}"
+    steps:
+      step_1: "PASS - exam-list page rendered after loginWithToken + navigateSpa('/exam')"
+      step_2: "PASS - exam-session page opened from the list; session created on real QA"
+      step_3: "PASS - both MCQ questions answered, submitted; exam result page rendered"
+    expected_outcomes:
+      EO-001:
+        verdict: PASS
+        evidence: "Screenshot step-2 shows 'Time remaining: 29:57' with Question 1 of 2; spec asserts mm:ss title and that a later reading differs (countdown ticks)."
+      EO-002:
+        verdict: PASS
+        evidence: "After submit, screenshot step-3 shows 'Exam result', 'Score: 2 / 2 (100%)' and 'Passed' on the same page without delay."
+      EO-003:
+        verdict: PASS
+        evidence: "Both questions answered with the known-correct options (Red / Evacuate via the nearest exit); result 100% / Passed matches a correct grading (spec asserts /100 ?%/). Verified via the result screen served by GET exam-session; is_correct is redacted to all callers by design, so no direct key comparison."
+    minor_observation: "Sidebar header still reads 'UNKNOWN WORKSPACE' on the bilimbaga session (cosmetic; likely ISS-0727 related, not re-filed)."
+    evidence_files:
+      - web/tests/screenshots/pipelines/bilimbaga-candidate-timed-exam-step-1--sign-in-and-open-the-list-of-available-exams.png
+      - web/tests/screenshots/pipelines/bilimbaga-candidate-timed-exam-step-2--start-a-timed-certification-exam-session.png
+      - web/tests/screenshots/pipelines/bilimbaga-candidate-timed-exam-step-3--answer-every-question-and-submit-before-time-runs-out.png
+    cleanup: "Session was submitted by the UI in step 3; no open session left."
+known_open_issues_cited: [ISS-0727, ISS-0726, ISS-0729]
+env_blocked: []

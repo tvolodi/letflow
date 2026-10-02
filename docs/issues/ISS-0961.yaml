@@ -1,0 +1,12 @@
+id: ISS-0961
+title: "seed_vortex_entities.sh sends no body on entity-definition activate; API requires rationale (422); leaves inactive production_batch draft on QA"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T19:58:01Z"
+severity: MINOR
+owner: "ELIXIR-DEV"
+description: >
+  Running scripts/seed_vortex_entities.sh on QA created entity definition production_batch (id 5ff4a90f-f1ca-45a1-b21e-77dec78db948, inactive draft) then aborted at activate with 422 rationale: field is required. ISS-0935 (resolved) predates the rationale requirement. Fix: send a rationale and resume/activate an existing draft idempotently. vortex/entity-list-filter-and-page stays ENV_BLOCKED until seeded.
+queue_ref: Q-931  # queue issue_ref ISS-0931 may collide with an existing local file; local filename ISS-0961
+github_ref: GH-2117
+status: open

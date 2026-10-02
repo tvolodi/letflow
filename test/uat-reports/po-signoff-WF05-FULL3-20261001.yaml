@@ -1,0 +1,165 @@
+report_id: po-signoff-WF05-FULL3-20261001
+run_id: WF05-FULL3-20261001
+generated_at: "2026-10-02T10:00:00Z"
+scope: "Full UAT run against the QA environment (31 scenarios: platform 19, BilimBaga 1, SwiftRoute 4, Meridian 3, Vortex 4)"
+
+ba_verdicts:
+  bilimbaga: PASS
+  swiftroute: PARTIAL
+  meridian: FAIL
+  vortex: FAIL
+  # platform: no business-analyst persona by design.
+
+criteria_coverage:
+  # Counts are not computed: the run is not evaluable (overall status ENV_NOT_READY).
+  # Scenario tally across all four UAT reports: 31 scenarios, 6 passed
+  # (1 BilimBaga, 1 Vortex, 4 platform), 8 failed (5 narrative, 3 platform),
+  # 8 unbuilt-feature (2 SwiftRoute, 6 platform), 9 environment-blocked
+  # (3 narrative, 6 platform).
+  must_criteria_this_batch: null
+  covered_by_passing_scenario: null
+  uncovered:
+    - requirement_id: "meridian (all 3 scenarios)"
+      criterion: "No passing scenario: both loan paths stall at screening; the regulatory review scenario fails on notice content"
+    - requirement_id: "vortex (3 of 4 scenarios)"
+      criterion: "Production order release loses the line assignment, critical supplier deviation ends in error, and the batch list check was environment-blocked; only the false-positive path passed"
+    - requirement_id: "swiftroute (all 4 scenarios)"
+      criterion: "No fully passing scenario: two confirmed only through a back-up route (screens not built), two environment-blocked"
+    - requirement_id: "platform (15 of 19 scenarios)"
+      criterion: "3 failed, 6 environment-blocked, 6 unbuilt-feature; only 4 platform scenarios passed"
+
+cross_vertical_findings:
+  - id: PO-001
+    description: >
+      Meridian and Vortex both report that automated outbound calls from a
+      process step are sent without their content (Vortex: the production
+      line is lost; Meridian: the regulatory notice lacks its reason). This is
+      one shared platform behaviour seen from two business angles.
+    severity: MAJOR
+    affected_verticals: [meridian, vortex]
+    ruling: >
+      Treated as a single platform defect, already known and still open.
+      Both verticals' expectations are correct: the content they configured
+      must be delivered.
+    rationale: >
+      Both organizations expect what they configured in a process step to be
+      sent along with the call; the platform currently sends nothing.
+  - id: PO-002
+    description: >
+      BilimBaga's positive verdict and the other verticals' negative or
+      partial verdicts do not conflict. They concern different organizations
+      and different business rules.
+    severity: MINOR
+    affected_verticals: [bilimbaga, swiftroute, meridian, vortex]
+    ruling: "No arbitration needed; each vertical's verdict stands within its own domain."
+    rationale: "No shared behaviour was interpreted differently by two sign-offs."
+
+blocker_overrides: []
+
+release_recommendation: BLOCKED
+release_rationale: >
+  This run cannot be approved. The test environment was still not fully ready
+  (missing logins, checks that cannot run on the QA site, features not yet
+  built), so the run as a whole cannot be evaluated, and a run in that state
+  is never approved. Separately, two organizations raised release-blocking
+  concerns: Meridian's loans, large and small, stall silently at the
+  identity and money-laundering screening step, and Vortex's critical supplier
+  problems end in an error with no corrective action started. SwiftRoute's
+  earlier routing problem is fixed and BilimBaga's timed exam is ready, but
+  neither makes up for the blockers. Re-run once the environment is prepared
+  and the blocking defects are fixed.
+
+issues:
+  - id: PO-003
+    severity: BLOCKER
+    description: >
+      Run not evaluable: the environment was not ready. Missing logins,
+      unavailable administrator credentials, checks that exist only for a
+      local machine, and screen checks without an automated test left many
+      scenarios unexecuted. Approval is not permitted for such a run.
+    suggested_action: route_to_uat_runner
+    related_issues: [ISS-0888, ISS-0890, ISS-0896, ISS-0962, ISS-0953]
+  - id: PO-004
+    severity: BLOCKER
+    description: >
+      Meridian: the identity and money-laundering screening step in loan
+      origination never starts after the parallel reviews finish. Large and
+      small loans stall silently, so neither can be approved or disbursed.
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0928]
+  - id: PO-005
+    severity: BLOCKER
+    description: >
+      Vortex: a critical supplier quality deviation ends in an error because
+      the corrective-action process it hands off to is not defined; nobody in
+      procurement is asked to act.
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0929]
+  - id: PO-006
+    severity: MAJOR
+    description: >
+      Automated outbound calls from process steps are sent without their
+      configured content. Effects: Vortex releases orders without telling
+      planning which line to use; Meridian's regulator notice omits the
+      reason for the missed deadline.
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0926]
+  - id: PO-007
+    severity: MAJOR
+    description: >
+      Meridian: the large-loan process cannot record a two-out-of-three
+      committee vote, so the committee rule is not demonstrated even once
+      screening is fixed. No issue is filed for this yet.
+    suggested_action: route_to_req_analyst
+  - id: PO-008
+    severity: MAJOR
+    description: >
+      Vortex: the procurement manager role and the corrective-action setup
+      are missing, and the chief-executive approver group is empty, so work
+      for those roles has nobody to go to. Also, the batch-list check could
+      not run (batch records not loaded, no screen check built).
+    suggested_action: route_to_req_analyst
+    related_issues: [ISS-0929, ISS-0961, ISS-0962]
+  - id: PO-009
+    severity: MAJOR
+    description: >
+      SwiftRoute: the manager approval, CEO co-sign and release steps, and
+      the CEO step after a timeout, were confirmed only through a back-up
+      route and not through the screens people use. Delivery-note attachment
+      and new-tenant onboarding were not checked. The two-approval promise
+      is not yet accepted from a user's point of view.
+    suggested_action: route_to_req_analyst
+    related_issues: [ISS-0890]
+  - id: PO-010
+    severity: MAJOR
+    description: >
+      Failed platform checks remain open: the branding colour saved for an
+      organization is not shown on the QA site, the permission-denied screen
+      still fails after its earlier fix, and the check that a running process
+      keeps its original definition after a catalogue change cannot run.
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0964, ISS-0965, ISS-0963]
+  - id: PO-011
+    severity: MAJOR
+    description: >
+      Platform checks for features not yet built or without an automated
+      check remain uncovered, as do those blocked by the environment
+      (definition promotion, migrations, retention, tenant onboarding and
+      similar).
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0890, ISS-0888, ISS-0896]
+  - id: PO-012
+    severity: MINOR
+    description: >
+      Audit history shows some completed steps time-stamped slightly after
+      the next task already exists (SwiftRoute, Vortex); the completion of a
+      shipment approval has no entry of its own. Outcomes are correct but the
+      trail is harder for an auditor to read.
+    suggested_action: route_to_wf03
+    related_issues: [ISS-0960]
+  - id: PO-013
+    severity: MINOR
+    description: >
+      BilimBaga: the side panel still shows "Unknown workspace" instead of
+      the organization name (raised in the previous run and not fixed).
+    suggested_action: route_to_req_analyst

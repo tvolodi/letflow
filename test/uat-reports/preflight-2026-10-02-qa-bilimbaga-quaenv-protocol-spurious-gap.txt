@@ -1,0 +1,31 @@
+UAT PREFLIGHT  environment=qa  base_url=https://qa.bizdala.com  idp=https://auth.qa.bizdala.com
+expected build (origin/main): b84035fb
+scenarios: 1   corpus: test/fixtures/uat/scenarios/bilimbaga
+
+== MANIFEST ==
+tenants needed        : bilimbaga
+keycloak realms needed: bilimbaga, bpm-default
+actors (login)        : actor-bilimbaga-candidate
+process definitions   : 
+pipeline specs        : 1 declared
+seeded usernames      : actor-bilimbaga-candidate
+credential validity   : none checked
+
+== GLOBAL CHECKS ==
+base_url       OK       GET /health -> 200
+deployed_sha   UNKNOWN  no version endpoint exposes a build SHA (tried /health, /api/v1/version)   [owner: ai-dala-infra (expose build SHA)]
+
+== GAP TABLE (scenario x check) ==
+scenario                                  spec        local_deps  feature     tenant      realm       actors      app_roles   definitions  env_limitation
+bilimbaga-candidate-timed-exam-autograde  OK          OK          OK          UNKNOWN     OK          GAP         UNKNOWN     OK          OK        
+
+== DETAIL (non-OK) ==
+[UNKNOWN] GLOBAL/deployed_sha: no version endpoint exposes a build SHA (tried /health, /api/v1/version)  -> owner: ai-dala-infra (expose build SHA)
+[UNKNOWN] bilimbaga-candidate-timed-exam-autograde/tenant: no valid PLATFORM_ADMIN token (credential check failed)  -> owner: letflow (fix credentials first)
+[GAP] bilimbaga-candidate-timed-exam-autograde/actors: login failed: actor-bilimbaga-candidate(NO_PASSWORD)  -> owner: ai-dala-infra (Keycloak users) + letflow-seed (scripts/seed_*_actors.sh)
+[UNKNOWN] bilimbaga-candidate-timed-exam-autograde/app_roles: no authenticated actor token available for this tenant to check app-side role binding  -> owner: -
+
+== SUMMARY ==
+checks: OK=7 GAP=1 UNKNOWN=3
+scenarios with >=1 GAP: 1 of 1
+RESULT: ENV_NOT_READY

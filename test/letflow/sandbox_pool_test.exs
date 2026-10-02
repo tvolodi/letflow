@@ -170,12 +170,15 @@ defmodule Letflow.SandboxPoolTest do
   # design doc §8.2): an attempt count is an implicit time bound that silently changes
   # meaning if the 5ms poll interval ever changes. The default deadline is derived from
   # SandboxPool.release_call_timeout/0 -- the same single source of truth every other
-  # bound in this file derives from -- rather than from a second, separately-derived
-  # polling constant. The assertion is unchanged: on expiry this still flunks with the
-  # same message, and a dropped schema still returns :ok.
+  # bound in this file derives from -- plus the worst-case added latency of ISS-0977's
+  # widened orphan-drop retry budget (SandboxPool.orphan_drop_retry_schedule/0's own
+  # backoff_ms, summed), rather than a hand-maintained multiplier that could silently
+  # drift out of sync with that budget. The assertion is unchanged: on expiry this
+  # still flunks with the same message, and a dropped schema still returns :ok.
   defp wait_until_schema_dropped(
          schema_name,
-         timeout_ms \\ SandboxPool.release_call_timeout() * 2
+         timeout_ms \\ SandboxPool.release_call_timeout() * 2 +
+           (SandboxPool.orphan_drop_retry_schedule() |> elem(1) |> Enum.sum())
        ) do
     poll_until_schema_dropped(schema_name, System.monotonic_time(:millisecond) + timeout_ms)
   end
@@ -1535,6 +1538,159 @@ defmodule Letflow.SandboxPoolTest do
 
       # A SUBSEQUENT claim/release ROUND-TRIP STILL WORKS.
       assert {:ok, %SandboxClaim{sandbox_id: new_id}} = SandboxPool.claim(1_000, pool)
+      assert :ok = SandboxPool.release(new_id, pool)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0977 regression: complete_op/3's :orphan branch, exhausted-retry contract.
+  # RT-6 can only trigger drop_schema/2's widened retry budget being exhausted by
+  # hoping for real CI Postgres contention, so it structurally cannot provide
+  # regression coverage for this branch -- this test reaches it deterministically via
+  # the same :sys.replace_state/2 + fabricated task_ref injection idiom the ISS-0226
+  # block above already uses, simulating the exact worker-result shape
+  # drop_schema/2 returns once its budget is exhausted ({:error, :release_failed})
+  # rather than actually exhausting four real DROP attempts. See
+  # lib/letflow/design/iss0977-sandbox-pool-rt6-flake.md §4.
+  # ---------------------------------------------------------------------------------
+
+  describe "complete_op/3 :orphan branch, exhausted-retry contract (ISS-0977 regression)" do
+    test "an exhausted orphan drop leaves the pool alive, clears in_flight, does not re-enqueue, and genuinely leaks the schema" do
+      pool = start_pool!(max_concurrent: 1)
+
+      # This test owns this schema's entire lifecycle -- created directly, outside the
+      # pool, with the pool's own naming convention so it is indistinguishable from a
+      # pool-minted one for every assertion below.
+      sandbox_id = Ecto.UUID.generate()
+      schema_name = "sandbox_" <> String.replace(sandbox_id, "-", "")
+      create_schema!(schema_name)
+      on_exit(fn -> drop_schema!(schema_name) end)
+
+      assert schema_exists?(schema_name)
+
+      drop_op = {
+        :drop,
+        %{
+          schema_name: schema_name,
+          sandbox_id: sandbox_id,
+          from: nil,
+          owner_ref: nil,
+          purpose: :orphan
+        }
+      }
+
+      fake_task_ref = make_ref()
+
+      injected_in_flight = %{
+        op: drop_op,
+        task_ref: fake_task_ref,
+        task_pid: self()
+      }
+
+      :sys.replace_state(pool, fn state -> %{state | in_flight: injected_in_flight} end)
+
+      # The exact worker-result shape drop_schema/2 returns once its widened (ISS-0977)
+      # retry budget is exhausted -- injected directly rather than actually exhausting
+      # four real attempts, per the design's deterministic-fault-injection decision.
+      send(pool, {fake_task_ref, {:error, :release_failed}})
+
+      # THE POOL SURVIVES an exhausted orphan drop.
+      assert Process.alive?(pool)
+
+      # BOOKKEEPING CLEARS.
+      state = :sys.get_state(pool)
+      assert state.in_flight == nil
+
+      # NO RE-ENQUEUE on exhaustion -- complete_op/3's :orphan branch does not retry
+      # further (INV-SP-DOWN-3: the slot is freed regardless, never held hostage by a
+      # stuck DROP), so this must not be an infinite-retry loop in disguise.
+      assert drop_ops_for_sandbox(state, sandbox_id) == []
+
+      # THE SCHEMA STILL EXISTS -- the accepted leak (ISS-0048) is genuinely reached,
+      # exactly what complete_op/3's updated comment documents. This assertion would
+      # catch a future change that silently started retrying forever (an availability
+      # risk) just as readily as one that silently stopped freeing the slot (the
+      # original ISS-0048/ISS-0224 regression shape).
+      assert schema_exists?(schema_name)
+
+      # THE SLOT GENUINELY CAME BACK despite the schema leak: a subsequent
+      # claim/release round-trip still works.
+      assert {:ok, %SandboxClaim{sandbox_id: new_id, schema_name: new_schema}} =
+               SandboxPool.claim(1_000, pool)
+
+      on_exit(fn -> drop_schema!(new_schema) end)
+      assert :ok = SandboxPool.release(new_id, pool)
+    end
+
+    # REVIEWER gap (PR #2158 on ISS-0977): the first pass of this fix left :reclaim on
+    # the old narrow 1-retry path, with an inline justification that did not survive
+    # re-reading handle_info/2's :DOWN clause 5 (~line 517) -- a :reclaim op is created
+    # with from: nil, owner_ref: nil, and its `active` entry already deleted in the
+    # SAME :DOWN callback that enqueues it, before drop_schema/2 ever runs. That is the
+    # identical "no live owner, nobody left to retry" shape as :orphan, not a
+    # distinguishable case, matching design doc §3.1's explicit "folds into the same
+    # widened path" reasoning for :reclaim. @wide_retry_purposes now includes :reclaim;
+    # this test proves it deterministically, mirroring the :orphan test above exactly.
+    test "an exhausted reclaim drop leaves the pool alive, clears in_flight, does not re-enqueue, and genuinely leaks the schema" do
+      pool = start_pool!(max_concurrent: 1)
+
+      sandbox_id = Ecto.UUID.generate()
+      schema_name = "sandbox_" <> String.replace(sandbox_id, "-", "")
+      create_schema!(schema_name)
+      on_exit(fn -> drop_schema!(schema_name) end)
+
+      assert schema_exists?(schema_name)
+
+      drop_op = {
+        :drop,
+        %{
+          schema_name: schema_name,
+          sandbox_id: sandbox_id,
+          from: nil,
+          owner_ref: nil,
+          purpose: :reclaim
+        }
+      }
+
+      fake_task_ref = make_ref()
+
+      injected_in_flight = %{
+        op: drop_op,
+        task_ref: fake_task_ref,
+        task_pid: self()
+      }
+
+      :sys.replace_state(pool, fn state -> %{state | in_flight: injected_in_flight} end)
+
+      # The exact worker-result shape drop_schema/2 returns once its widened (ISS-0977)
+      # retry budget is exhausted for a :reclaim-purpose drop -- injected directly
+      # rather than actually exhausting four real attempts, per the design's
+      # deterministic-fault-injection decision.
+      send(pool, {fake_task_ref, {:error, :release_failed}})
+
+      # THE POOL SURVIVES an exhausted reclaim drop.
+      assert Process.alive?(pool)
+
+      # BOOKKEEPING CLEARS.
+      state = :sys.get_state(pool)
+      assert state.in_flight == nil
+
+      # NO RE-ENQUEUE on exhaustion -- complete_op/3's :reclaim branch does not retry
+      # further (INV-SP-DOWN-3: the slot is freed regardless, never held hostage by a
+      # stuck DROP).
+      assert drop_ops_for_sandbox(state, sandbox_id) == []
+
+      # THE SCHEMA STILL EXISTS -- the accepted leak (ISS-0048) is genuinely reached
+      # for :reclaim too, now gated by the SAME widened budget as :orphan rather than
+      # the old single retry.
+      assert schema_exists?(schema_name)
+
+      # THE SLOT GENUINELY CAME BACK despite the schema leak: a subsequent
+      # claim/release round-trip still works.
+      assert {:ok, %SandboxClaim{sandbox_id: new_id, schema_name: new_schema}} =
+               SandboxPool.claim(1_000, pool)
+
+      on_exit(fn -> drop_schema!(new_schema) end)
       assert :ok = SandboxPool.release(new_id, pool)
     end
   end

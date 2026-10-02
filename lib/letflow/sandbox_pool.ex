@@ -628,7 +628,8 @@ defmodule Letflow.SandboxPool do
     provision_sandbox(sandbox_id, schema_name)
   end
 
-  defp run_op({:drop, %{schema_name: schema_name}}), do: drop_schema(schema_name)
+  defp run_op({:drop, %{schema_name: schema_name, purpose: purpose}}),
+    do: drop_schema(schema_name, purpose)
 
   # ISS-0226 §3.2/§4.3: the single enforcement point for worker_result()'s closed
   # type. Total over (op(), term()) -- the four legal (op-kind, result) pairings
@@ -733,8 +734,14 @@ defmodule Letflow.SandboxPool do
 
     # :reclaim | :orphan | :release_orphaned: no `from` to reply to, and the `active`
     # entry is already absent -- with no live owner there is nobody to retry, so the
-    # slot is never held hostage by a DROP that failed (INV-SP-DOWN-3). The schema may
-    # leak; that is ISS-0048's existing, accepted trade -- slot before schema.
+    # slot is never held hostage by a DROP that failed (INV-SP-DOWN-3). This point is
+    # reached only after drop_schema/2's widened retry budget (ISS-0977 --
+    # orphan_drop_retry_schedule/0, default 4 attempts / [25, 75, 200]ms backoff) is
+    # exhausted, not after a single failed attempt as before -- all three purposes
+    # share the wide path (@wide_retry_purposes). The schema may still leak; that
+    # residual is ISS-0048's existing, accepted trade -- slot before schema -- now
+    # narrowed, not eliminated, by the wider budget. See
+    # lib/letflow/design/iss0977-sandbox-pool-rt6-flake.md §3.3.
     %{state | in_flight: nil}
   end
 
@@ -962,10 +969,27 @@ defmodule Letflow.SandboxPool do
     _exception ->
       # Best-effort compensating cleanup -- swallow its own failure, this is
       # cleanup, not the primary error path (design doc §4.4 step 4e). It reuses the
-      # worker's own checkout, so it costs no extra connection.
-      drop_schema(schema_name)
+      # worker's own checkout, so it costs no extra connection. `:provisioning_rescue`
+      # (ISS-0977): this schema never reached `state.active` and was never enqueued as
+      # a tracked `:drop` op, so nothing in this module gets a second chance at it if
+      # this DROP fails -- same "no live owner, no other recovery path" class as
+      # `:orphan`/`:release_orphaned`, so it earns the same widened retry budget (see
+      # drop_schema/2 and lib/letflow/design/iss0977-sandbox-pool-rt6-flake.md §3.1).
+      drop_schema(schema_name, :provisioning_rescue)
       {:error, :provision_failed}
   end
+
+  # Purposes with no other recovery path if this DROP ultimately fails (ISS-0977 §3.1):
+  # no live owner (:orphan, :release_orphaned, :reclaim) or no op/in_flight record at
+  # all (:provisioning_rescue) will ever get a second chance at this schema. These get
+  # the widened retry budget. :reclaim is driven by a :DOWN the pool already observed
+  # once -- same no-live-owner case as :orphan (the `active` entry is deleted in the
+  # same :DOWN callback that enqueues this op, before the DROP ever runs -- see clause
+  # B case 5), so it folds into the same widened path rather than keeping the old
+  # single retry. Only :release is excluded: INV-SP-5 gives it a real other recovery
+  # path (the live owner can retry release/2 itself) that none of the widened purposes
+  # have.
+  @wide_retry_purposes [:orphan, :release_orphaned, :provisioning_rescue, :reclaim]
 
   # `schema_name` here is only ever either freshly minted by mint_sandbox_identity/0
   # or read back out of state.active by sandbox_id (never directly caller-supplied)
@@ -973,18 +997,121 @@ defmodule Letflow.SandboxPool do
   # provision_sandbox/2 above (INV-7).
   #
   # RUNS INSIDE THE WORKER TASK, never in a pool callback (ISS-0224).
-  defp drop_schema(schema_name) do
+  @spec drop_schema(
+          schema_name :: String.t(),
+          purpose :: :release | :reclaim | :orphan | :release_orphaned | :provisioning_rescue
+        ) :: drop_result()
+  defp drop_schema(schema_name, purpose) do
+    {max_attempts, backoff_ms} =
+      if purpose in @wide_retry_purposes do
+        orphan_drop_retry_schedule()
+      else
+        # Today's existing behavior: one retry, no backoff -- expressed as the same
+        # schedule shape with a 2-attempt floor and an empty backoff list (ISS-0536).
+        # Only :release reaches this branch now (INV-SP-5 -- the live owner can retry
+        # release/2 itself).
+        {2, []}
+      end
+
+    drop_schema_with_retry(schema_name, max_attempts, backoff_ms, 1)
+  end
+
+  @spec drop_schema_with_retry(
+          schema_name :: String.t(),
+          max_attempts :: pos_integer(),
+          backoff_ms :: [non_neg_integer()],
+          attempt :: pos_integer()
+        ) :: drop_result()
+  defp drop_schema_with_retry(schema_name, max_attempts, backoff_ms, attempt) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
     :ok
   rescue
-    # Retry once on transient Postgrex/DBConnection errors under concurrent load
-    # (ISS-0536 -- same pattern as test/letflow/sandbox_pool_test.exs retry_query_once/1).
-    _first ->
-      try do
-        Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-        :ok
-      rescue
-        _exception -> {:error, :release_failed}
+    _exception ->
+      if attempt < max_attempts do
+        attempt |> retry_sleep_ms(backoff_ms) |> sleep_if_positive()
+        drop_schema_with_retry(schema_name, max_attempts, backoff_ms, attempt + 1)
+      else
+        {:error, :release_failed}
       end
+  end
+
+  # The Nth retry's backoff is backoff_ms's Nth element (1-indexed by retry number, not
+  # attempt number: the first RETRY is backoff_ms's 1st element), reusing the list's
+  # last element once the list is shorter than the number of retries needed (ISS-0977
+  # §3.2/§7 open question -- a configurability-without-exact-sizing tradeoff). An empty
+  # backoff_ms (the :release 2-attempt path) retries with no sleep at all, matching
+  # today's existing behavior exactly.
+  @spec retry_sleep_ms(attempt :: pos_integer(), backoff_ms :: [non_neg_integer()]) ::
+          non_neg_integer()
+  defp retry_sleep_ms(_attempt, []), do: 0
+
+  defp retry_sleep_ms(attempt, backoff_ms) do
+    index = min(attempt, length(backoff_ms)) - 1
+    Enum.at(backoff_ms, index)
+  end
+
+  defp sleep_if_positive(ms) when is_integer(ms) and ms > 0, do: Process.sleep(ms)
+  defp sleep_if_positive(_ms), do: :ok
+
+  @default_orphan_drop_max_attempts 4
+  @default_orphan_drop_backoff_ms [25, 75, 200]
+
+  @doc """
+  The retry schedule a no-live-owner schema drop (`:orphan`, `:release_orphaned`,
+  `:provisioning_rescue` -- see the moduledoc and ISS-0977) uses: `max_attempts` total
+  attempts (including the first) and one backoff-in-milliseconds entry per retry after
+  the first, reusing the list's last element if it is shorter than needed.
+
+  Defaults to #{@default_orphan_drop_max_attempts} attempts /
+  #{inspect(@default_orphan_drop_backoff_ms)} ms backoff; override with
+  `config :letflow, :sandbox_pool, orphan_drop_max_attempts: n` and
+  `config :letflow, :sandbox_pool, orphan_drop_backoff_ms: [n1, n2, ...]`.
+
+  Public so tests (and any future caller needing to bound a wait on this path, e.g.
+  RT-6's `wait_until_schema_dropped/2`) derive their own timeouts from this one source
+  of truth rather than re-deriving a second number that can drift out of sync -- the
+  same rationale as `provision_timeout_ms/0`. See
+  `lib/letflow/design/iss0977-sandbox-pool-rt6-flake.md` §3.2.
+  """
+  @spec orphan_drop_retry_schedule() ::
+          {max_attempts :: pos_integer(), backoff_ms :: [non_neg_integer()]}
+  def orphan_drop_retry_schedule do
+    config = Application.get_env(:letflow, :sandbox_pool, [])
+
+    max_attempts =
+      case config[:orphan_drop_max_attempts] do
+        nil ->
+          @default_orphan_drop_max_attempts
+
+        n when is_integer(n) and n > 0 ->
+          n
+
+        other ->
+          raise ArgumentError,
+                "config :letflow, :sandbox_pool, orphan_drop_max_attempts: expects a " <>
+                  "positive integer, got: #{inspect(other)}"
+      end
+
+    backoff_ms =
+      case config[:orphan_drop_backoff_ms] do
+        nil ->
+          @default_orphan_drop_backoff_ms
+
+        list when is_list(list) ->
+          if Enum.all?(list, &(is_integer(&1) and &1 >= 0)) do
+            list
+          else
+            raise ArgumentError,
+                  "config :letflow, :sandbox_pool, orphan_drop_backoff_ms: expects a " <>
+                    "list of non-negative integers, got: #{inspect(list)}"
+          end
+
+        other ->
+          raise ArgumentError,
+                "config :letflow, :sandbox_pool, orphan_drop_backoff_ms: expects a list " <>
+                  "of non-negative integers (milliseconds), got: #{inspect(other)}"
+      end
+
+    {max_attempts, backoff_ms}
   end
 end

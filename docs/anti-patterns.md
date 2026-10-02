@@ -4470,3 +4470,43 @@ indistinguishable, from the reader's side, from a comment that is simply wrong; 
 was not "trust the prose, adjust the list" but "re-read `handle_info/2` clause 5 line by line"
 -- the same five-minute check that should have happened before the exclusion was written, not
 after a reviewer flagged it.
+
+## A three-PR arc (ISS-0946 -> ISS-0969 -> ISS-0980) fixed audit-write rescue-hardening one discovered call site at a time, and the third pass's own triage still misclassified a fourth call site as safe (2026-10-02, REVIEWER, ISS-0980/ISS-0981)
+
+**What happened.** ISS-0946 added rescue-hardening around one new `Letflow.Audit.insert_entry/3`
+call (a best-effort write whose own comment promised "never turns the caller's already-decided
+outcome into a 500/404-turned-500"). Its own REVIEWER pass noted two *pre-existing* `engine.ex`
+call sites shared the identical unprotected shape and filed that as ISS-0969 rather than fixing
+it inline. ISS-0969's own REVIEWER pass, closing that out, grepped wider and found two more
+unprotected sites in `lib/letflow/routers/` and filed ISS-0980. ISS-0980's own description went
+further and *did* grep every `Letflow.Audit.insert_entry/3` call site in `lib/`, but classified
+two of them (`promotion.ex`'s `write_target_definition/5`, `task_activation.ex`'s
+`record_task_create_audit/3`) as "a different class -- same-transaction audit writes allowed to
+roll back the whole operation on failure, not best-effort decoupled writes" and excluded them.
+That reasoning covered only the *typed* `{:error, reason}` return path (`Repo.rollback/1` does
+cleanly convert that into `{:error, ...}`) -- it never checked the *raise* path separately, and
+`Repo.transaction/1` only intercepts `Repo.rollback/1`; any other raised exception propagates
+through it exactly as if there were no transaction at all. `promotion.ex` (and its two router
+callers) has zero `rescue` clauses anywhere, unlike `definitions.ex`'s structurally identical
+same-transaction audit write, which is protected because *its* callers each carry a
+function-level `rescue -> {:error, {:transaction_failed, exception}}` wrapper that
+`promotion.ex` never adopted. Filed as ISS-0981 during PR #2170's (ISS-0980's own fix) REVIEWER
+pass -- a fourth round of the same discovery-one-PR-at-a-time cadence the first three rounds
+already established as a pattern.
+
+**Correct alternative.** `docs/anti-patterns.md`'s existing ISS-0974 entry ("grep for the literal
+expression shape, not just the named call sites") is necessary here but not sufficient: this
+arc's grep *did* find every call site in one pass as early as ISS-0980, and the bug-class still
+escaped detection on a site it explicitly looked at, because the classification step applied a
+single-return-path mental model (`{:error, reason}` tuple) to a function whose real contract
+needs checking against a different failure mode (a raise) that the same grep does not
+distinguish by construction. When a call-site audit's output is "N sites fixed, M sites excluded
+because they're a different class," the exclusion reasoning itself needs the same evidence bar
+as the fix: trace each excluded site's *actual* enclosing boundary (does a rescue/try genuinely
+sit between this call and the process/HTTP edge, or was that only inferred by analogy to a
+sibling site that happens to have one) rather than accepting "this looks like the other
+same-transaction case" as proof the other case's protection is also present. A grep that finds
+every instance of a call target is not the same thing as a grep that verifies a safety property
+holds at every instance -- the former is mechanical, the latter requires tracing each call
+chain to its actual boundary, and skipping that per-site trace is how a fourth PASS-then-FAIL
+round keeps happening in the same arc.

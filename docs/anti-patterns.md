@@ -4442,3 +4442,31 @@ follow-up issue -- not silently left for the next person to rediscover by reprod
 Confirming "my fix's named sites are internally consistent" is necessary but not sufficient;
 confirming "no other site shares my bug's root expression" is a separate, five-second check
 worth always doing before closing out a bug-class fix.
+
+## A purpose silently excluded from a widened retry budget with an inline justification that didn't survive re-reading the code it claimed to describe (2026-10-02, REVIEWER, ISS-0977/PR #2158)
+
+**What happened.** ISS-0977 widened `Letflow.SandboxPool.drop_schema/2`'s retry budget for
+every "no live owner, no other recovery path" purpose -- the design doc's §3.1 explicitly
+grouped `:orphan`, `:release_orphaned`, `:provisioning_rescue`, and `:reclaim` together under
+that reasoning, with `:reclaim`'s own paragraph spelling out why: its `active` entry is deleted
+in the same `:DOWN` callback that enqueues the drop, before `drop_schema/2` ever runs -- the
+identical shape to `:orphan`. The implementation's `@wide_retry_purposes` list nonetheless
+shipped as `[:orphan, :release_orphaned, :provisioning_rescue]`, with a new inline comment
+asserting `:reclaim` was "already a one-shot reaction to a `:DOWN`" and so kept the old
+single-retry path -- a distinction that does not actually exist anywhere in the code: nothing
+about a `:reclaim` op's shape or the `:DOWN` clause that creates it differs from `:orphan`'s in
+any way relevant to drop-retry recoverability. The invented justification read as plausible
+prose without describing anything the code actually does, and it directly contradicted the
+validated design doc it shipped alongside. REVIEWER's first pass caught the mismatch against
+the design doc; re-reading `handle_info/2` clause 5 directly (not just the PR's own comment)
+confirmed there was no real distinguishing factor to find.
+
+**Correct alternative.** When an implementation's inline comment asserts a distinction between
+two cases ("X is different from Y because..."), that assertion is a claim about the code, not
+free narrative -- verify it against the actual clause being described before trusting it,
+especially when a validated design doc already settled the grouping differently. A comment that
+sounds reasonable in isolation but was never checked against the code it documents is
+indistinguishable, from the reader's side, from a comment that is simply wrong; the fix here
+was not "trust the prose, adjust the list" but "re-read `handle_info/2` clause 5 line by line"
+-- the same five-minute check that should have happened before the exclusion was written, not
+after a reviewer flagged it.

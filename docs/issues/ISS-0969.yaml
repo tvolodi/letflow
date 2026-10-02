@@ -1,0 +1,29 @@
+id: ISS-0969
+title: "engine.ex's two pre-existing audit-write call sites lack the rescue-hardening added for ISS-0946's new outbound-audit call site"
+discovered_by: REVIEWER
+discovered_in_run: fix/ISS-0946-service-task-outbound-audit (PR #2142 review)
+discovered_at: "2026-10-02T02:14:36Z"
+severity: MINOR
+owner: ELIXIR-DEV
+description: >
+  Non-blocking follow-up flagged during PR #2142's REVIEWER pass (OQ-4).
+  ISS-0946 added a new outbound-request audit write
+  (Letflow.Audit.insert_entry/3 for "service_task.outbound_request_sent")
+  wrapped so a failure in the audit write itself can never break
+  poll_and_dispatch/1's "never raises" contract. The two pre-existing
+  engine.ex audit-write call sites --
+  record_task_activation_rejection_audit/5 and
+  record_service_task_advance_failure_audit/5 -- do not have the same
+  rescue-hardening around their own Letflow.Audit.insert_entry/3 calls.
+  Not confirmed to be a live bug; filed as a consistency/robustness gap
+  worth a dedicated look, not fixed inline on PR #2142 to keep that PR's
+  scope narrow.
+acceptance_criteria:
+  - "Decide whether record_task_activation_rejection_audit/5 and record_service_task_advance_failure_audit/5 need the same rescue-hardening as ISS-0946's wrap_with_audit_context/2, or whether their existing call-site context already makes a raise impossible"
+  - "If hardening is needed: apply it with the same pattern (audit write never raises into the caller's control flow) and add a regression test"
+  - "If not needed: record why in this issue's resolution, with the specific reasoning traced against each call site"
+related:
+  - ISS-0946
+queue_ref: null   # filed directly by DOC-UPDATER during ISS-0946 close-out, not via get_next_task
+github_ref: null  # not filed on GitHub; local-only follow-up
+status: open

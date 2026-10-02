@@ -587,3 +587,60 @@ history:
       set to status: resolved (resolved_in_run: superseded-by-ISS-0929) in
       this same commit. Reference GH-2123. This is an ISSUE closure, not a
       REQ -- docs/requirements.yaml untouched.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-02T02:20:00Z"
+    note: >
+      ISS-0946 resolved (SERVICE_TASK outbound request was not audited; UAT
+      EO-002 unobservable as worded). PR #2142, branch
+      fix/ISS-0946-service-task-outbound-audit, final commit 5efeece5.
+      Decision: audited the outbound request (Option A) rather than
+      rewording EO-002 to read the completion payload (Option B) --
+      CODE-DESIGNER's reasoning: the completion payload only carries the
+      notice reason today because the QA seed target happens to be an
+      echoing endpoint, so rewording would only pass by test-double
+      coincidence. Design: lib/letflow/design/iss0946-service-task-audit-decision.md,
+      3 CODE-DESIGN-VALIDATOR cycles (1st FAILed on a nested-transaction
+      SAVEPOINT hazard per ISS-0873's design doc §7; 2nd FAILed on two
+      mechanical gaps -- missing handle_failure/4 threading, unaddressed
+      composition with an existing BLOCKER-fix try/rescue; 3rd PASSed via a
+      minimal wrap_with_audit_context/2 helper, audit write run strictly
+      after attempt_dispatch/2's own transaction returns). Fix: new audit
+      action "service_task.outbound_request_sent" via
+      Letflow.Audit.insert_entry/3 (dispatch_id/node_id/attempt_index/
+      route_kind/method/rendered_url/redacted+capped
+      request_body_preview); EO-002 reworded in
+      test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml
+      to check the new audit action. SECURITY-REVIEWER FAILed first pass
+      with two reproduced secret-leak findings (nested-key redaction only
+      walked top-level keys; non-JSON bodies passed through unredacted) --
+      fixed via full unbounded-depth recursive redaction for JSON bodies and,
+      for non-JSON bodies, dropping request_body_preview entirely (only
+      request_body_present/request_body_byte_size persisted) rather than a
+      regex heuristic judged unsafe for a security-sensitive audit surface;
+      re-reviewed and PASSed against SECURITY-REVIEWER's own adversarial
+      nested/list cases. REVIEWER PASSed (confirmed no conflict with the
+      concurrently-merged ISS-0929 sub_process.ex fix), flagged a
+      non-blocking follow-up (OQ-4: engine.ex's two pre-existing audit
+      precedents lack the same rescue-hardening added here) for a separate
+      future issue. TEST-RUNNER: full suite 5366/5366, directly confirmed a
+      real persisted audit row shows nested-key redaction working.
+      RELEASE-VALIDATOR: exhaustive independent re-verification -- hand-traced
+      all 3 acceptance criteria against the actual code, confirmed the
+      Letflow.Audit.insert_entry/3 call site matches reworded EO-002
+      field-for-field, ran its own adversarial redaction probe finding one
+      INHERENT non-blocking residual limitation (a secret-shaped VALUE with
+      no enclosing JSON key isn't key-based-redacted; judged non-blocking --
+      rendered_body is tenant-authored, the audit view stays scoped to that
+      same tenant, and headers -- the real credential channel -- are
+      unconditionally excluded), independently re-traced
+      poll_and_dispatch/1's call site confirming zero caller-visible
+      contract change, independently re-ran the full suite (5366/5366,
+      matching TEST-RUNNER). docs/issues/ISS-0946.yaml set to status:
+      resolved in this same commit. This is an ISSUE closure, not a REQ --
+      docs/requirements.yaml untouched. No letflow-queue task to release:
+      discovered by CODE-DESIGNER mid-run during ISS-0926's design, filed
+      directly; queue_ref Q-934/github_ref GH-2122 are filing metadata
+      only -- confirmed no live queue task tied to issue_ref ISS-0946
+      exists to release.

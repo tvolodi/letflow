@@ -1,0 +1,26 @@
+id: ISS-0946
+title: "SERVICE_TASK outbound request is not audited; UAT EO-002 (regulatory notice payload reason) unobservable"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-Q926-20261001 (ISS-0926 design)
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MINOR
+owner: "CODE-DESIGNER (decision first)"
+description: >
+  Engine writes no audit event for the outbound SERVICE_TASK HTTP
+  request/body (found in ISS-0926 run WF03-Q926-20261001). sla_breach_30_days
+  is visible only inside the SERVICE_TASK_COMPLETED payload decoded_body, and
+  only for echoing endpoints (httpbin). Scenario
+  regulatory-compliance-review-bafin.yaml EO-002 (verification method
+  audit_event) stays unmet as worded. Options: audit an outbound-request
+  event with a redacted/size-capped body, or BA reword EO-002 to read the
+  completed payload. Do not log variable values beyond what rendered_url
+  exposes without a SECURITY-REVIEWER pass.
+acceptance_criteria:
+  - "Decision recorded: audit outbound request vs reword EO-002"
+  - "If audit: event emitted with capped body, SECURITY-REVIEWER PASS, test"
+  - "EO-002 verifiable"
+related:
+  - ISS-0926
+queue_ref: Q-934  # queue allocated issue_ref ISS-0934, which collides with an existing (deleted-as-duplicate) local filename; local filename kept as ISS-0946 (next free on origin/main) and GH-2122 retitled to match
+github_ref: GH-2122
+status: open

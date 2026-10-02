@@ -4363,3 +4363,25 @@ reason}` that a caller then folds away uncounted is the same defect. When diagno
 ACTIVE, no events" symptom, check the error arms of the re-entry before blaming topology.
 Related fixture lesson: an EXCLUSIVE_GATEWAY after an external call needs an `is_default`
 edge when the call's response may omit the routed key.
+
+## ORCH created a new branch from a stale local branch instead of `main` in a shared working directory
+
+**What happened.** This repo's working directory is shared across many concurrent agent
+sessions on the same host. After a PR was closed without merging (ISS-0945, superseded by
+ISS-0929), the local checkout was still sitting on that now-abandoned feature branch
+(`fix/ISS-0945-subprocess-pending-dispatch`). The next housekeeping task (`git checkout -b
+chore/dedup-iss-0933`) branched from `HEAD` without first checking what `HEAD` actually was
+-- it silently forked off the stale feature branch instead of `main`, carrying its entire
+(already-superseded) diff along. The PR this produced showed spurious conflicts against
+`origin/main` on files (`lib/letflow/engine.ex`, `lib/letflow/engine/sub_process.ex`) the
+housekeeping change never touched, which is what surfaced the mistake -- it would have gone
+undetected if that collision hadn't happened to land on already-conflicting content.
+
+**Correct alternative.** In a shared working directory, never assume `HEAD`/the current
+branch is `main` just because the previous task finished. Before `git checkout -b <new
+branch>`, always `git fetch origin main` and either `git checkout main` first, or branch
+explicitly from `origin/main` (`git checkout -b <new branch> origin/main`) rather than
+from whatever `HEAD` happens to be. A doc-only or docs/issues-only change that shows
+conflicts in unrelated `.ex` files during `git merge origin/main` is itself the tell that
+the branch point was wrong -- stop and re-derive the branch from `origin/main` rather than
+resolving the conflict by hand.

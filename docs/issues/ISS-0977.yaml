@@ -1,0 +1,55 @@
+id: ISS-0977
+title: >
+  SandboxPoolTest "ISS-0224 regression RT-6 (death path c)" recurred as a
+  live CI gate blocker (re-opens ISS-0881)
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-REQ433-20261002 (PR #2148 CI gate)
+discovered_at: "2026-10-02T10:30:54Z"
+tags:
+  - backend
+  - test-flake
+  - shared-db-isolation
+  - sandbox-pool
+severity: MAJOR
+description: >
+  Same test, same file/line, same assertion as ISS-0881 (marked `resolved`
+  2026-09-29): test/letflow/sandbox_pool_test.exs:1087 ("provisioning does
+  not block the pool's mailbox (ISS-0224 regression) RT-6 (death path c)"),
+  assertion `refute MapSet.member?(final, o_schema)` at ~line 1129, failed
+  under `mix letflow.check`'s full-parallel-suite load in GitHub Actions CI
+  for PR #2148 (REQ-433/ISS-0973, commit 51680391) -- `gh run view
+  36988116990`. Confirmed via `git diff --name-only` zero overlap with PR
+  #2148's own changes (docs/requirements.yaml, design doc, Meridian QA
+  fixtures, req208_meridian_test.exs only); confirmed unreproducible in 6
+  standalone local seeds (0-5) plus a full test/letflow/engine/ directory
+  run. ISS-0881's own fix (converting other RT cases' platform-wide-equality
+  leak checks to scoped membership checks) does not close this mechanism --
+  RT-6's assertion was already a scoped single-schema `MapSet.member?` check.
+
+  Root cause per ISSUE-FIXER's trace: lib/letflow/sandbox_pool.ex's
+  drop_schema/1 (~lines 976-986) retries a failed DROP SCHEMA exactly once
+  on a transient Postgrex/DBConnection error (ISS-0536 precedent); if both
+  attempts fail, complete_op/3's :orphan-purpose branch (~line 730)
+  explicitly does not retry further, with an inline comment accepting the
+  leak as ISS-0048's existing slot-before-schema trade-off. RT-6 asserts
+  zero-leak unconditionally, with no tolerance for this documented, accepted
+  edge case under heavy concurrent Postgres load (many async test modules
+  creating/dropping tenant and sandbox schemas simultaneously on CI
+  runners).
+
+  Severity bumped from ISS-0881's original MINOR to MAJOR: this is now a
+  live CI gate blocker on a real PR's merge, not an incidental
+  RELEASE-VALIDATOR finding.
+acceptance_criteria:
+  - "Decide: widen RT-6's assertion to tolerate the documented accepted-leak edge case (e.g. retry a bounded number of times before asserting, or assert leak rate stays below a threshold under injected contention), or increase drop_schema/1's retry budget for the orphan-purpose path, or another fix that closes the gap without just disabling the test"
+  - "Root cause genuinely addressed, not just the flake suppressed by loosening the assertion to the point of not testing anything"
+source_reports:
+  - "CI run 36988116990 (gh run view), PR #2148 commit 51680391"
+related:
+  - ISS-0881
+  - ISS-0224
+  - ISS-0536
+  - ISS-0048
+queue_ref: null  # discovered by ISSUE-FIXER during PR #2148 CI investigation; file directly per this session's established convention for ISSUE-FIXER-discovered findings
+github_ref: null
+status: open

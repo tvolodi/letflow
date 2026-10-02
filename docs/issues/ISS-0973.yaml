@@ -1,0 +1,22 @@
+id: ISS-0973
+title: "Meridian loan committee 2-of-3 quorum vote not modelled in Loan Origination definition (BA-MERIDIAN-003)"
+discovered_by: BA-MERIDIAN
+discovered_in_run: WF05-FULL3-20261001
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MINOR
+owner: "REQ-ANALYST (decision first)"
+description: >
+  meridian Loan Origination v1.1 models credit-committee-vote as a single
+  HUMAN_TASK keyed on a committee_outcome variable that scenario inputs
+  never supply; there is no 2-of-3 committee quorum mechanism, so the
+  above-threshold scenario cannot record or tally committee votes. Needs a
+  requirement decision (REQ-ANALYST): model committee quorum (parallel
+  votes + threshold) or amend the scenario.
+  Source: test/uat-reports/ba-signoff-meridian-WF05-FULL3-20261001.yaml.
+acceptance_criteria:
+  - "Requirement decided: committee quorum modelled or scenario amended"
+source_reports:
+  - test/uat-reports/ba-signoff-meridian-WF05-FULL3-20261001.yaml
+queue_ref: Q-939  # queue allocated issue_ref ISS-0939, which collides with an existing (still-open, different-topic) local filename; local filename kept as ISS-0973 (next free on origin/main) and GH-2128 retitled to match
+github_ref: GH-2128
+status: open

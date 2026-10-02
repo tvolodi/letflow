@@ -61,4 +61,68 @@ related:
   - ISS-0946
 queue_ref: null   # filed directly by REVIEWER during PR #2166's review, not via get_next_task
 github_ref: null  # not filed on GitHub; local-only follow-up, same as its sibling ISS-0969
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0980-router-audit-rescue-hardening
+resolved_at: "2026-10-02T21:29:32Z"
+resolution:
+  root_cause: >
+    Direct sibling of ISS-0969 -- Letflow.Routers.TenantSettings.
+    maybe_record_rejected_keys/5 and Letflow.Routers.Instances.
+    record_attachment_access_denied_audit/5 both call
+    Letflow.Audit.insert_entry/3 directly (non-transactional best-effort
+    writes) with no rescue-hardening, despite each having its own comment
+    stating the write must never turn an already-decided HTTP response
+    into a 500. CODE-DESIGNER confirmed the only Plug-level boundary in
+    the caller chain is cleanup-only and unconditionally re-raises, so a
+    raise genuinely produces a generic 500.
+  design: >
+    lib/letflow/design/iss0980-router-audit-rescue-hardening.md, went
+    through 3 CODE-DESIGN-VALIDATOR revision cycles -- 1st FAILed on wrong
+    test-file placement (pointed to a nonexistent test block in
+    instances_test.exs instead of the actual precedent file,
+    req388_attachment_access_denial_audit_test.exs); 2nd FAILed on a
+    crashing test step (a post-DROP-table audit read-back that would
+    itself raise since the audit-read path has no rescue of its own); 3rd
+    PASSed after both fixed. Substance (the Plug-boundary reasoning, both
+    fix shapes) was correct from the first pass throughout.
+  fix: >
+    Function-level `rescue exception -> Logger.error(...); :ok end`
+    wrapped around each existing unchanged 2-clause case, mirroring
+    ISS-0969's established pattern exactly. New tests in
+    tenant_settings_test.exs and
+    req388_attachment_access_denial_audit_test.exs, DROP TABLE fault
+    injection, dispatched through the real router call/2 path, asserting
+    response status (200/404) unaffected and rescue log fired.
+  review: >
+    REVIEWER: PASSed; confirmed a design-doc test-data inaccuracy (a
+    non-existent settings key used as an example) was correctly fixed by
+    ELIXIR-DEV; while sweeping for a third undiscovered audit call site,
+    found YET ANOTHER sibling gap in lib/letflow/definitions/promotion.ex's
+    write_target_definition/5 (zero rescue coverage anywhere in its call
+    chain, unlike its sibling definitions.ex which has an outer
+    transaction-failure rescue) -- correctly filed as non-blocking ISS-0981
+    rather than expanding this PR's scope; added a docs/anti-patterns.md
+    entry on this 4-round arc's lesson (an exclusion in a call-site audit
+    needs the same evidence bar as a fix -- trace each excluded site's
+    actual boundary, don't reason by analogy to a sibling).
+  test_runner: >
+    Full suite effectively clean (5383/5384 -- the 1 failure was a
+    brand-new, previously-undocumented flake in an unrelated WASM
+    plugin-handler test, confirmed via diff-scope and a clean re-run, filed
+    separately as ISS-0982).
+  release_validator: >
+    Exhaustive independent re-verification -- hand-traced both rescue
+    clauses against ISS-0969's pattern, independently reproduced the
+    pre-fix violation itself (reverted the fix in a worktree, confirmed
+    the real Postgrex.Error propagating as a Plug.Conn.WrapperError,
+    restored), constructed its own adversarial check confirming the bare
+    rescue clause catches any exception class (not just Postgrex),
+    confirmed both ISS-0981 and ISS-0982 are correctly non-blocking and
+    out of this PR's scope, confirmed docs/requirements.yaml untouched,
+    independently re-ran the full suite fresh (5384/5384, the WASM flake
+    did not reproduce that run, confirming it's load-dependent).
+  queue: >
+    This is an ISSUE closure, not a REQ. No letflow-queue task to release
+    (owner: ELIXIR-DEV, filed directly by REVIEWER during PR #2166's
+    review; queue_ref: null).
+  pr: "PR #2170, final commit e8b7f2d5."

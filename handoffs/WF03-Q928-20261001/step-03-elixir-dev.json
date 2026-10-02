@@ -1,0 +1,48 @@
+{
+  "handoff_id": "bbeb8d51-0bf5-4264-a980-1307f9c6da3d",
+  "run_id": "WF03-Q928-20261001",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-Q928-20261001/step-03-elixir-dev.json",
+  "created_at": "2026-10-01T21:01:13Z",
+  "started_at": "2026-10-01T21:01:13Z",
+  "completed_at": "2026-10-01T21:10:23Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0928": "id: ISS-0928 (queue Q-928, GH-2114, local file docs/issues/ISS-0928.yaml exists ONLY on open PR #2129 branch origin/pr2129 -- view with git show origin/pr2129:docs/issues/ISS-0928.yaml; do not touch PR #2129). Title: Meridian Loan Origination: SERVICE_TASK kyc-aml-check inside PARALLEL_GATEWAY fork never dispatched; instance stalls ACTIVE (UAT WF05-FULL3-20261001 F1). Severity MAJOR. Symptom: meridian Loan Origination v1.1 on QA: after credit-memo-review (ben) and risk-assessment (miriam) complete, current_nodes=[kyc-aml-check]; instance ACTIVE >6.5min (past 300s timeout_ms) with no task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row; endpoint answers 200 directly; top-level service tasks complete in 2-6s. Suspect SERVICE_TASK activation inside PARALLEL_GATEWAY fork branch (cf. ISS-0398 walk_to_gateway, resolved): likely no service_task_dispatches row armed on the fork/join walk path (Letflow.Engine fork activation / arm_service_task_dispatch call sites / TaskActivation). ALSO: kyc-routing has no unconditional edge and the stub endpoint returns no kyc_status, so the token may stall at kyc-routing even once dispatched -- assess whether fixture/process-definition issue (test/fixtures/qa/ meridian loan origination definition); handle or file separately. Acceptance: SERVICE_TASK nodes on a PARALLEL_GATEWAY branch are dispatched and recorded; meridian loan-origination scenarios reach committee/L1 routing and complete; regression test fail-first reproducing the stall at engine level. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml (on PR #2129 branch origin/pr2129 only). Q-926 (body_template rendering) is DONE and merged on main -- build on it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/WF03-ISS0928-fix-design.md",
+      "handoffs/WF03-Q928-20261001/step-02b-code-design-validator.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0928-parallel-fork-service-task-Q928"
+  },
+  "task": {
+    "description": "WF-03 Step 3 implement the validated design lib/letflow/design/WF03-ISS0928-fix-design.md sections 1-4, honoring the binding clarifications in step-02b result (log content per section 2 only ids/tag; no inspect in audit; reason-tag mapping; instance_not_active debug only). Change: lib/letflow/engine.ex, lib/letflow/engine/service_task_dispatcher.ex, test/fixtures/qa/meridian_loan_origination_process_definition.json (default edge e9-default kyc-routing->assessment-join, version 1.2), scripts/seed_meridian_definition.sh header comment, docs/anti-patterns.md entry. Do NOT write the regression tests (TEST-DESIGNER does, later) but do run mix compile --warnings-as-errors and scoped existing tests (service_task_wiring_test, engine tests touching task completion no_matching_gateway_edge). Machine is shared: scoped tests only. Do not commit. Fill handoff result, COMPLETED, real completed_at.",
+    "acceptance_criteria": [
+      "Design sections 1-4 implemented",
+      "compile clean with no warnings",
+      "Existing scoped tests green, output quoted",
+      "Only owned files changed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design sections 1-4 implemented. engine.ex: persist_service_task_advance/10 routes both no_matching_edge shapes via new persist_service_task_no_matching_edge (ExecutionError.append_multi with locked_projection inside the open outer txn; returns {:ok,:error_set}); shared build_no_matching_gateway_edge_error_args/6 now used by the human path (2 sites) and new path; new @doc false record_service_task_advance_failure_audit/5 (logs only ids+tag). service_task_dispatcher.ex: require Logger, instance_not_active debug-only, catch-all error arm logs (dispatch_id, tenant_schema, tag only) + audits, classify_advance_failure by tuple head. Fixture: e9-default is_default edge, version 1.2; seed script header v1.2; anti-patterns entry. Note: dropped the generic {:error,_} arm after advance_off_completed_node because the type checker flagged it unreachable (--warnings-as-errors). mix compile --warnings-as-errors clean. Scoped tests: service_task_wiring, engine_execution_error, transition, service_task_dispatcher -> 112 passed (1 property, 111 tests), 0 failures. No regression tests written (TEST-DESIGNER). No commit.",
+    "owned_modules": [
+      "Letflow.Engine",
+      "Letflow.Engine.ServiceTaskDispatcher"
+    ],
+    "next_action": "SECURITY-REVIEWER (required), then REVIEWER"
+  }
+}

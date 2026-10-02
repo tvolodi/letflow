@@ -1,0 +1,60 @@
+{
+  "handoff_id": "09466287-65cd-4c69-b296-45372dc24764",
+  "run_id": "WF03-Q928-20261001",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-Q928-20261001/step-02-code-designer.json",
+  "created_at": "2026-10-01T20:56:57Z",
+  "started_at": "2026-10-01T20:56:57Z",
+  "completed_at": "2026-10-01T20:59:21Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0928": "id: ISS-0928 (queue Q-928, GH-2114, local file docs/issues/ISS-0928.yaml exists ONLY on open PR #2129 branch origin/pr2129 -- view with git show origin/pr2129:docs/issues/ISS-0928.yaml; do not touch PR #2129). Title: Meridian Loan Origination: SERVICE_TASK kyc-aml-check inside PARALLEL_GATEWAY fork never dispatched; instance stalls ACTIVE (UAT WF05-FULL3-20261001 F1). Severity MAJOR. Symptom: meridian Loan Origination v1.1 on QA: after credit-memo-review (ben) and risk-assessment (miriam) complete, current_nodes=[kyc-aml-check]; instance ACTIVE >6.5min (past 300s timeout_ms) with no task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row; endpoint answers 200 directly; top-level service tasks complete in 2-6s. Suspect SERVICE_TASK activation inside PARALLEL_GATEWAY fork branch (cf. ISS-0398 walk_to_gateway, resolved): likely no service_task_dispatches row armed on the fork/join walk path (Letflow.Engine fork activation / arm_service_task_dispatch call sites / TaskActivation). ALSO: kyc-routing has no unconditional edge and the stub endpoint returns no kyc_status, so the token may stall at kyc-routing even once dispatched -- assess whether fixture/process-definition issue (test/fixtures/qa/ meridian loan origination definition); handle or file separately. Acceptance: SERVICE_TASK nodes on a PARALLEL_GATEWAY branch are dispatched and recorded; meridian loan-origination scenarios reach committee/L1 routing and complete; regression test fail-first reproducing the stall at engine level. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml (on PR #2129 branch origin/pr2129 only). Q-926 (body_template rendering) is DONE and merged on main -- build on it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-Q928-20261001/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "test/fixtures/qa/meridian_loan_origination_process_definition.json"
+    ],
+    "owned_modules": [
+      "Letflow.Engine",
+      "Letflow.Engine.ServiceTaskDispatcher"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0928-parallel-fork-service-task-Q928"
+  },
+  "task": {
+    "description": "WF-03 Step 2 fix design for ISS-0928/Q-928. Read the step-01 diagnosis (handoffs/WF03-Q928-20261001/step-01-issue-fixer-diagnose.json result.summary). Produce design artefact under lib/letflow/design/ (design only, no implementation code): (1) engine.ex persist_service_task_advance error arms -> record ExecutionError no_matching_gateway_edge exactly as the human-task completion path (dispatch_task_completion_hop_chain) does, with the transaction semantics decided explicitly (dispatch row must not stay 'advanced' with token parked and no record; state precisely what is persisted and committed); (2) service_task_dispatcher.ex L614 no silent swallow (log + audit); (3) check timer re-entry path (~L2949) for same shape; (4) fixture: default edge kyc-routing -> assessment-join in test/fixtures/qa/meridian_loan_origination_process_definition.json with version bump (and mirror in test/fixtures/simulation/meridian/ if a copy exists), scenario/test impact; (5) fail-first test plan incl. fork-branch and top-level; (6) tenant isolation/security notes. Edit only the design file(s) and your handoff; fill result and set COMPLETED with real completed_at.",
+    "acceptance_criteria": [
+      "Design covers each of the six items",
+      "No implementation code",
+      "Unambiguous transaction semantics",
+      "Files-to-change list with owned_modules"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Design written to lib/letflow/design/WF03-ISS0928-fix-design.md covering all six items. Decisions: (1) persist_service_task_advance/10 unwraps both no_matching_edge shapes into ExecutionError.append_multi (locked_projection reuse) inside the single outer advance_after_service_task_outcome transaction, which COMMITS: EXECUTION_ERROR event + dlq row + projection :error; no SERVICE_TASK_COMPLETED, tokens/variables unchanged, dispatch row stays 'advanced' (never reverted: at-most-once HTTP); returns {:ok,:error_set}; shared error_args builder extracted. (2) dispatcher L614 arm: Logger.error + best-effort independent audit service_task.advance_failed with atom reason tag only (no payload). (3) timer path checked: bounded by fire_error_count retries -> ExecutionError+DLQ, no change. (4) fixture: add unconditioned is_default edge e9-default kyc-routing->assessment-join, version 1.1->1.2, seed script header comment; no simulation/meridian loan copy exists; scenarios need no edit. (5) tests T1-T8, fail-first, top-level and fork-branch. (6) tenant/security notes; SECURITY-REVIEWER marked REQUIRED. Open questions OQ-1..4 listed with defaults. Nothing was run (design only).",
+    "artifacts_out": [
+      "lib/letflow/design/WF03-ISS0928-fix-design.md"
+    ],
+    "owned_modules": [
+      "Letflow.Engine",
+      "Letflow.Engine.ServiceTaskDispatcher"
+    ],
+    "issues": [
+      "OQ-3: residual re-entry failures (hop limit, unknown token, merge rejection) are only logged/audited, instance stays ACTIVE; recommend follow-up issue.",
+      "OQ-4: absent kyc_status -> pass-through is a QA business assumption to confirm with BA-MERIDIAN."
+    ],
+    "next_action": "CODE-DESIGN-VALIDATOR, then ELIXIR-DEV, then SECURITY-REVIEWER (required) and REVIEWER."
+  }
+}

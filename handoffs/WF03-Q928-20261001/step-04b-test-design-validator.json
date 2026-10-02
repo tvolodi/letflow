@@ -1,0 +1,46 @@
+{
+  "handoff_id": "62214da6-0ee0-4c07-93ba-4f367eb4d870",
+  "run_id": "WF03-Q928-20261001",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q928-20261001/step-04b-test-design-validator.json",
+  "created_at": "2026-10-01T21:27:42Z",
+  "started_at": "2026-10-01T21:27:42Z",
+  "completed_at": "2026-10-01T21:32:16Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0928": "id: ISS-0928 (queue Q-928, GH-2114, local file docs/issues/ISS-0928.yaml exists ONLY on open PR #2129 branch origin/pr2129 -- view with git show origin/pr2129:docs/issues/ISS-0928.yaml; do not touch PR #2129). Title: Meridian Loan Origination: SERVICE_TASK kyc-aml-check inside PARALLEL_GATEWAY fork never dispatched; instance stalls ACTIVE (UAT WF05-FULL3-20261001 F1). Severity MAJOR. Symptom: meridian Loan Origination v1.1 on QA: after credit-memo-review (ben) and risk-assessment (miriam) complete, current_nodes=[kyc-aml-check]; instance ACTIVE >6.5min (past 300s timeout_ms) with no task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row; endpoint answers 200 directly; top-level service tasks complete in 2-6s. Suspect SERVICE_TASK activation inside PARALLEL_GATEWAY fork branch (cf. ISS-0398 walk_to_gateway, resolved): likely no service_task_dispatches row armed on the fork/join walk path (Letflow.Engine fork activation / arm_service_task_dispatch call sites / TaskActivation). ALSO: kyc-routing has no unconditional edge and the stub endpoint returns no kyc_status, so the token may stall at kyc-routing even once dispatched -- assess whether fixture/process-definition issue (test/fixtures/qa/ meridian loan origination definition); handle or file separately. Acceptance: SERVICE_TASK nodes on a PARALLEL_GATEWAY branch are dispatched and recorded; meridian loan-origination scenarios reach committee/L1 routing and complete; regression test fail-first reproducing the stall at engine level. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml (on PR #2129 branch origin/pr2129 only). Q-926 (body_template rendering) is DONE and merged on main -- build on it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/ISS-0928.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0928-parallel-fork-service-task-Q928"
+  },
+  "task": {
+    "description": "WF-03 Step 4b: validate HEAD tests (test/letflow/engine/service_task_wiring_test.exs ISS-0928 describe; test/letflow/scripts/meridian_loan_origination_fixture_test.exs; test/specs/ISS-0928.md) against design section 5 and the issue acceptance. INDEPENDENTLY reproduce fail-first (throwaway git worktree at the fix commit's parent with only the new tests copied in) and independently APPLY at least one mutant in a throwaway worktree and run it; quote counts. Never mutate the main checkout. Scoped tests only. Edit only your handoff; PASS/FAIL, legal status, real completed_at.",
+    "acceptance_criteria": [
+      "Every acceptance criterion has a test",
+      "Fail-first independently reproduced",
+      "One mutant independently applied",
+      "Main checkout untouched"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "criteria_coverage": "AC1 (service task in fork branch dispatched/recorded): T2 pins fork-branch dispatch armed pending and drives the error path; T3 completes fork->svc->default->join. AC2 (kyc routing reaches next stage / no stall): T1,T2,T3,T4 + fixture tests (version 1.2, single unconditioned is_default e9-default, e9/e10/e11 unchanged, Graph validation clean). AC3 (engine-level fail-first regression): T1,T2,T5. Item 2 no silent swallow: T6,T6b. No @tag :skip/TODO in spec or either test file.",
+    "fail_first_independent": "Throwaway worktree at 34c95322 (parent of fix abe82e3b) with only the two test files copied in: Result 32/39 passed, 7 failed: fixture version 1.2, fixture default edge, T1, T2, T5, T6, T6b. T1/T2/T5 fail on behavioural assertions (got {:error,{:transition_failed,{:activation_failed,{:no_matching_edge,\"xg\",...}}}} vs expected {:ok,:error_set}), not compile/undefined errors. T3/T4 pass pre-fix (declared guard tests).",
+    "mutant_independent": "Throwaway worktree at HEAD a554b6be: replaced idempotency key \"service_task_dispatch:#{dispatch.id}\" with \"mutant-key\" in engine.ex (two occurrences, build_no_matching_gateway_edge_error_args arg and idempotency_key). Both test files: 37/39 passed, 2 failed (T1, T2). Reverted via git checkout in the worktree; worktree then removed. A second fixture mutant (strip is_default) did not apply (sed pattern mismatch) and is not claimed; fixture discrimination is evidenced by the pre-fix failures instead.",
+    "cleanup": "Both worktrees removed, git worktree prune; git worktree list shows only main checkout; git status --porcelain lib/ test/ empty. Remaining status: handoffs/orchestrator.log (M), this handoff and letflow-3.code-workspace (untracked), pre-existing.",
+    "notes": "Not run: whole-suite. T7 omitted, design section 3 marks it droppable; acceptable."
+  }
+}

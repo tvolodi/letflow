@@ -1,0 +1,69 @@
+{
+  "handoff_id": "370b1698-e95a-465d-880a-66c764053df2",
+  "run_id": "WF03-Q928-20261001",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-Q928-20261001/step-04-test-designer.json",
+  "created_at": "2026-10-01T21:11:24Z",
+  "started_at": "2026-10-01T21:11:24Z",
+  "completed_at": "2026-10-01T21:27:27Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0928": "id: ISS-0928 (queue Q-928, GH-2114, local file docs/issues/ISS-0928.yaml exists ONLY on open PR #2129 branch origin/pr2129 -- view with git show origin/pr2129:docs/issues/ISS-0928.yaml; do not touch PR #2129). Title: Meridian Loan Origination: SERVICE_TASK kyc-aml-check inside PARALLEL_GATEWAY fork never dispatched; instance stalls ACTIVE (UAT WF05-FULL3-20261001 F1). Severity MAJOR. Symptom: meridian Loan Origination v1.1 on QA: after credit-memo-review (ben) and risk-assessment (miriam) complete, current_nodes=[kyc-aml-check]; instance ACTIVE >6.5min (past 300s timeout_ms) with no task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row; endpoint answers 200 directly; top-level service tasks complete in 2-6s. Suspect SERVICE_TASK activation inside PARALLEL_GATEWAY fork branch (cf. ISS-0398 walk_to_gateway, resolved): likely no service_task_dispatches row armed on the fork/join walk path (Letflow.Engine fork activation / arm_service_task_dispatch call sites / TaskActivation). ALSO: kyc-routing has no unconditional edge and the stub endpoint returns no kyc_status, so the token may stall at kyc-routing even once dispatched -- assess whether fixture/process-definition issue (test/fixtures/qa/ meridian loan origination definition); handle or file separately. Acceptance: SERVICE_TASK nodes on a PARALLEL_GATEWAY branch are dispatched and recorded; meridian loan-origination scenarios reach committee/L1 routing and complete; regression test fail-first reproducing the stall at engine level. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml (on PR #2129 branch origin/pr2129 only). Q-926 (body_template rendering) is DONE and merged on main -- build on it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/WF03-ISS0928-fix-design.md",
+      "test/letflow/engine/service_task_wiring_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0928-parallel-fork-service-task-Q928"
+  },
+  "task": {
+    "description": "WF-03 Step 4: write regression tests T1-T8 from design section 5 (lib/letflow/design/WF03-ISS0928-fix-design.md), mainly in test/letflow/engine/service_task_wiring_test.exs (+ fixture validation test for meridian_loan_origination v1.2 incl. e9-default; and a test that the dispatcher audit/log path is exercised). FAIL-FIRST PROOF REQUIRED: the fix is committed at HEAD~? (commit 'fix(ISS-0928)'); create a THROWAWAY git worktree (outside the repo dir, e.g. under the scratchpad/temp) at the pre-fix commit (parent of the fix commit) with your new test files copied in, run them there, quote the failures (T1,T2 and fixture test must fail pre-fix), then pass at HEAD. Scoped test runs only (shared CI-saturated machine). Remove the worktree after. Mutation testing, if any, only in a throwaway worktree. Do not commit; leave the main checkout otherwise untouched. Fill handoff, status COMPLETED (legal statuses only), real completed_at.",
+    "acceptance_criteria": [
+      "T1-T8 written",
+      "Fail-first output quoted pre-fix, pass post-fix",
+      "Worktree removed, git status clean aside from new tests"
+    ]
+  },
+  "result": {
+    "artifacts_out": [
+      "test/letflow/engine/service_task_wiring_test.exs",
+      "test/letflow/scripts/meridian_loan_origination_fixture_test.exs",
+      "test/specs/ISS-0928.md"
+    ],
+    "tests_written": "T1,T2,T3,T4,T5,T6,T6b in wiring test (describe ISS-0928: no_matching_edge after SERVICE_TASK); T8 as 4 fixture tests (version, single unconditioned default edge, e9/e10/e11 unchanged + conditioned, Graph validation clean). T7 omitted per design section 3 (optional/droppable).",
+    "fail_first": "Pre-fix worktree at 34c95322 (parent of fix abe82e3b): 32/39 passed; FAIL: fixture version, fixture default-edge, T1, T2, T5, T6, T6b. T3/T4 pass pre-fix (guard tests). At HEAD: 39 passed.",
+    "mutants": [
+      {
+        "mutant": "service_task_dispatcher classify_advance_failure({:unknown_token_id,_}) -> :other",
+        "failed": 1,
+        "tests": [
+          "T6"
+        ],
+        "reverted": true
+      },
+      {
+        "mutant": "persist_service_task_no_matching_edge returns {:error, :mutant} instead of {:ok, :error_set}",
+        "failed": 3,
+        "tests": [
+          "T1",
+          "T2",
+          "T5"
+        ],
+        "reverted": true
+      }
+    ],
+    "check_test_note": "Full mix letflow.check.test (whole-suite parallel runner) not run: scoped-only instruction on a saturated machine. Equivalent scoped check: touched files, mix test --warnings-as-errors on both files exit 0, 39 passed, 0 occurrences of \"default values for the optional arguments\", mix format --check-formatted clean. No test helper uses default args.",
+    "worktree_removed": true
+  }
+}

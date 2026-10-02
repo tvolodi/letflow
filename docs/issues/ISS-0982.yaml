@@ -1,0 +1,37 @@
+id: ISS-0982
+title: "Letflow.Engine.Wasm.PluginHandlerTest AC7 (no new OS ports) flakes under concurrent async test execution"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0980-20261002 (PR #2170 full-suite run)
+discovered_at: "2026-10-02T20:40:00Z"
+severity: MINOR
+tags:
+  - backend
+  - test-flake
+description: >
+  test/letflow/engine/wasm/plugin_handler_test.exs's AC7 ("invoking the
+  guest opens no new OS ports (no external process/IPC boundary)")
+  intermittently fails under full-parallel-suite load:
+  `assert ports_after -- ports_before == []` sees a port from an unrelated
+  concurrent test, since `:erlang.ports()` is a VM-global resource list, not
+  test-scoped -- under async execution any other test opening a port in the
+  before/after window makes the diff non-empty.
+
+  Confirmed via diff-scope: this PR (#2170, lib/letflow/routers/instances.ex
+  + tenant_settings.ex only) does not touch the WASM plugin handler or
+  anything port-related. Re-ran the failing test file alone immediately
+  after: 9 passed, 0 failures -- confirms it is load/timing-dependent, not a
+  genuine regression from any in-flight change.
+
+  This is a new, previously-undocumented flake class (distinct from the
+  three already-tracked families: Scheduler.PollerTest ISS-0453, EventStore
+  ordering ISS-0937/38/39/40, Obs.AlertsTest AC-8, and SandboxPoolTest RT-6
+  ISS-0881/ISS-0977).
+acceptance_criteria:
+  - "Decide: scope the port-count assertion to only ports this test itself can plausibly open (e.g. filter :erlang.ports() by owner pid or port_info type), or move this check to a non-async/isolated test context, or accept and document the flake if a scoped fix isn't practical"
+  - "If fixed: regression test or reasoning showing the check no longer false-positives under concurrent port activity from unrelated tests"
+source_reports:
+  - test/reports/report-20261002-PR2170-ISS0980-20261002.yaml
+related: []
+queue_ref: null  # filed directly by ORCH from TEST-RUNNER's own report, not via get_next_task
+github_ref: null  # local-only flake-tracking follow-up
+status: open

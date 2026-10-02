@@ -32237,3 +32237,11 @@ requirements:
       - "git diff shows zero changes under lib/letflow/engine/ -- confirming this requirement added no new engine behavior, per its own OUT OF SCOPE"
       - "scripts/seed_meridian_definition.sh's version-aware idempotency still succeeds against the bumped fixture version on a clean QA instance (or the equivalent ExUnit seed path if QA is unreachable from this sandbox), with real output quoted"
     depends_on: []
+    impl_order: 940  # letflow-queue task id, GH#2154. Registered 2026-10-02T09:07:41Z by
+      # ELIXIR-DEV (direct register_task call -- REQ-433 was implemented outside the
+      # formal queue claim flow, picked up directly from REQ-ANALYST decision ISS-0973
+      # / queue task 939; registered now to close the real registration-registry gap
+      # TEST-RUNNER FAILed PR #2148 on, T-REG-STILL-GREEN / T-LIVE-INVARIANTS /
+      # T-LIVE-GREEN). status stays pending here until DOC-UPDATER flips it at the
+      # requirement's own closure; the queue task is left unlocked/open for that same
+      # later closure to claim and release as done.

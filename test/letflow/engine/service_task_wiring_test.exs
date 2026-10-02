@@ -1898,4 +1898,105 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
       assert entry.after_state == %{"node_id" => nil, "reason" => "other"}
     end
   end
+
+  describe "ISS-0969: record_service_task_advance_failure_audit/5 is rescue-hardened, never raises" do
+    test "a genuine Postgres-level audit-insert failure is logged and swallowed, returns :ok" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      instance_id = Ecto.UUID.generate()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert :ok =
+                   Engine.record_service_task_advance_failure_audit(
+                     instance_id,
+                     "svc",
+                     :other,
+                     EventStore.platform_actor_id(),
+                     schema_name
+                   )
+        end)
+
+      assert log =~ "service_task.advance_failed"
+      assert log =~ "#{instance_id}"
+      assert log =~ "Postgrex.Error"
+    end
+  end
+
+  describe "ISS-0969: poll_and_dispatch/1 does not raise when the service_task-advance-failure audit write itself fails" do
+    test "a residual re-entry error AND a failed audit write still leave poll_and_dispatch/1 returning a well-formed summary" do
+      enable_ssrf_bypass()
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"result":"ok"}))
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition = active_definition!(schema_name, graph_service_task_end(server_url))
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+      assert [_dispatch] = dispatches_for(schema_name, instance_id)
+
+      # Force {:unknown_token_id, _} from the re-entry, same as T6.
+      {1, _} =
+        TokenRecord
+        |> where([t], t.instance_id == ^instance_id)
+        |> Repo.delete_all(prefix: schema_name)
+
+      # ... and make the service_task.advance_failed audit write itself raise
+      # a genuine Postgres-level failure -- before ISS-0969's fix, this would
+      # propagate out of call_advance_after_service_task_outcome/3, out of
+      # poll_and_dispatch/1's Enum.reduce/3 pipeline, violating its own
+      # "Never raises (INV-STD-5)" @doc contract (service_task_dispatcher.ex:508-510).
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          # Does NOT raise out of the test process.
+          assert %{claimed: 1, advanced: 0, retried: 0, given_up: 0} =
+                   ServiceTaskDispatcher.poll_and_dispatch(schema_name)
+        end)
+
+      assert log =~ "service_task.advance_failed"
+    end
+  end
 end

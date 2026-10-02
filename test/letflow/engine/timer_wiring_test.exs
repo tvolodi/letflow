@@ -952,4 +952,62 @@ defmodule Letflow.Engine.TimerWiringTest do
              }
     end
   end
+
+  describe "ISS-0969: poll_and_fire/1 does not raise when the task-activation-rejection audit write itself fails" do
+    test "a timer-fired cascade whose form_schema rejection AND audit write both fail still returns a well-formed poll_result" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_timer_then_malformed_form_schema_task_end(
+            "P0D",
+            %{"properties" => "not-an-object"}
+          )
+        )
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [%Timer{status: "pending"}] = timers_for(schema_name, instance_id)
+
+      # Make the task-activation-rejection audit write itself raise (a
+      # genuine Postgres-level failure, not just a changeset-validation
+      # {:error, _}), so this test exercises the actual bug ISS-0969 traced:
+      # without the rescue clause, this raise would propagate out of
+      # attempt_fire/2 and abort poll_and_fire/1's entire Enum.reduce/3
+      # loop, not just this one timer.
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          # Does NOT raise out of the test process -- poll_and_fire/1's own
+          # "Never raises" @doc contract (scheduler.ex:203-207) now holds for
+          # this path too.
+          assert %{errored: 1, fired: 0} = Scheduler.poll_and_fire(schema_name)
+        end)
+
+      assert log =~ "task_activation.rejected"
+    end
+  end
 end

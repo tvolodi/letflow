@@ -863,3 +863,39 @@ history:
       GitHub issue #2156 closed with an explanatory comment in this same
       run. docs/issues/ISS-0977.yaml set to status: resolved in this same
       commit.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-02T13:40:00Z"
+    note: >
+      ISS-0976 resolved (ISS-0974 fix sites 2-4 -- persist_timer_fired_advance/7,
+      persist_escalation_timer_fired_advance/7, do_persist_service_task_advance/10
+      -- had zero independent regression coverage). PR #2161, branch
+      test/ISS-0976-join-dispatch-coverage, final commit 87b0b99e. Root cause:
+      ISS-0974's own regression test,
+      test/letflow/iss0974_join_dispatch_id_map_test.exs, covered only site 1
+      (build_complete_task_tail_multi/6) -- confirmed by RELEASE-VALIDATOR's own
+      mutation test during ISS-0974's closure, which reverted sites 2/3/4 and
+      found the full 91-test broader suite still passed. Fix: TEST-DESIGNER
+      added 3 new regression tests to the same test file, each constructing a
+      real engine-level scenario reaching one specific site (timer fire,
+      escalation timer fire, service-task-dispatch advance respectively), each
+      confirmed via hand-revert to fail with the exact pre-fix Ecto.UUID cast
+      error and pass once restored. No production code touched
+      (lib/letflow/engine.ex diff empty). TEST-DESIGN-VALIDATOR PASSed,
+      independently re-verified one site's fail/pass claim, then hand-reverted
+      all 3 sites simultaneously confirming exactly those 3 new tests fail while
+      site 1's pre-existing tests remain unaffected -- directly satisfying the
+      issue's own combined-revert acceptance criterion. TEST-RUNNER: full suite
+      clean, 5373/5373, fixed one minor pre-existing-in-branch formatting issue
+      (commit 87b0b99e). RELEASE-VALIDATOR: proportionate (test-only PR)
+      independent re-verification -- its own hand-revert spot-check on one site
+      reproducing the exact claimed fail/pass behavior, confirmed
+      lib/letflow/engine.ex diff empty, confirmed docs/requirements.yaml
+      untouched, re-ran the targeted file fresh. docs/issues/ISS-0976.yaml set
+      to status: resolved in this same commit. This is an ISSUE closure, not a
+      REQ -- docs/requirements.yaml untouched. No letflow-queue task to release
+      (owner TEST-DESIGNER, filed directly during ISS-0974's own closure;
+      queue_ref: null). ISS-0976 was filed directly (not via GitHub) -- no
+      github_ref present in docs/issues/ISS-0976.yaml, so no GitHub issue-close
+      step applies.

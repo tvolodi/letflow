@@ -50,4 +50,48 @@ source_reports:
 queue_ref: null  # Filed directly by DOC-UPDATER per this run's explicit task instruction,
                  # mirroring ISS-0974's own direct-filing precedent -- DOC-UPDATER does not
                  # call the letflow-queue service.
-status: open
+status: resolved
+resolved_in_run: test/ISS-0976-join-dispatch-coverage
+resolved_at: "2026-10-02T13:40:00Z"
+resolution:
+  root_cause: >
+    ISS-0974's fix touched 4 sibling Multi.merge/2 sites in lib/letflow/engine.ex
+    (build_complete_task_tail_multi/6, persist_timer_fired_advance/7,
+    persist_escalation_timer_fired_advance/7, do_persist_service_task_advance/10),
+    but its own regression test, test/letflow/iss0974_join_dispatch_id_map_test.exs,
+    had independent coverage for only site 1
+    (build_complete_task_tail_multi/6). RELEASE-VALIDATOR's own mutation test
+    during ISS-0974's closure reverted sites 2 (persist_timer_fired_advance/7),
+    3 (persist_escalation_timer_fired_advance/7), and 4
+    (do_persist_service_task_advance/10) back to their pre-fix identity-map
+    logic and found the full 91-test broader regression suite still passed --
+    proving those 3 sites had ZERO independent regression coverage, their
+    correctness resting only on code-symmetry with site 1.
+  fix: >
+    TEST-DESIGNER added 3 new regression tests to
+    test/letflow/iss0974_join_dispatch_id_map_test.exs, each constructing a
+    real engine-level scenario reaching one specific site (timer fire,
+    escalation timer fire, service-task-dispatch advance respectively). Each
+    new test was confirmed via hand-revert of its own site to fail with the
+    exact pre-fix Ecto.UUID cast error, and to pass once the site was
+    restored. No production code touched -- lib/letflow/engine.ex's diff is
+    empty.
+  test_design_validator: >
+    PASSed. Independently re-verified one site's fail/pass claim itself, then
+    went further and hand-reverted all 3 sites simultaneously, confirming
+    exactly those 3 new tests fail while site 1's pre-existing tests remain
+    unaffected -- directly satisfying the issue's own combined-revert
+    acceptance criterion.
+  test_runner: >
+    Full suite clean, 5373/5373. Fixed one minor pre-existing-in-branch
+    formatting issue (commit 87b0b99e).
+  release_validator: >
+    Proportionate (test-only PR) independent re-verification -- its own
+    hand-revert spot-check on one site reproducing the exact claimed fail/pass
+    behavior, confirmed lib/letflow/engine.ex's diff empty, confirmed
+    docs/requirements.yaml untouched, re-ran the targeted test file fresh.
+  queue_note: >
+    This is an ISSUE closure, not a REQ. No letflow-queue task to release
+    (owner: TEST-DESIGNER, filed directly during ISS-0974's own closure;
+    queue_ref: null).
+  pr: "PR #2161, final commit 87b0b99e"

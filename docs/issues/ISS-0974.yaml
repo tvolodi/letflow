@@ -1,0 +1,149 @@
+id: ISS-0974
+title: "PARALLEL_GATEWAY join firing into SERVICE_TASK (or TIMER) within the same hop chain mints a dispatch row with a non-UUID token_id, 422"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ433-20261001 (feat/REQ-433-committee-quorum, PR #2148)
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MAJOR
+owner: "CODE-DESIGNER"
+description: >
+  A PARALLEL_GATEWAY join whose own downstream edge leads directly to a SERVICE_TASK
+  (or a node reached via a TIMER arm), when that join fires within the SAME hop chain
+  as the triggering task completion, mints a brand-new, hop-chain-local, not-yet-
+  persisted synthetic token id (Transition.fire_join/5's own "<origin>/<join_node>/
+  joined" string). lib/letflow/engine.ex's build_complete_task_tail_multi/6 (and 3
+  structurally-identical sibling tail-building call sites around engine.ex:2740-2833,
+  2980-3111, 3563-3636) build the prepared_service_task_dispatches/prepared_timers
+  id_map as an IDENTITY map (Map.new(prepared_*, fn {token_id, _} -> {token_id,
+  token_id} end)), on the explicit, now-stale assumption that every such token_id is
+  already a real, persisted TokenRecord id at that point in the hop chain. That
+  assumption held for every case exercised before REQ-433 (SERVICE_TASK/TIMER reached
+  from an already-persisted token) and does not hold for a join-minted token reached
+  the same hop chain as its own split's last arrival.
+
+  Confirmed root cause directly: build_task_activation_and_reconciliation_multi/4
+  already solves this exact invariant violation for task-activation/token-
+  reconciliation (ISS-0408's fix, resolved and still holding) via
+  insert_hop_chain_new_token_records/5 + rewrite_token_ids/2, run first in the same
+  transaction. The sibling Multi.merge/2 blocks for prepared_timers
+  (build_timer_arms_multi/4) and prepared_service_task_dispatches
+  (build_service_task_dispatch_multi/5), built immediately afterward in the same
+  pipe chain, never consult that real id_map -- each independently rebuilds its own
+  (wrong) identity map. build_service_task_dispatch_multi/5's
+  Map.fetch!(id_map, token_id) then hands the raw synthetic string straight to
+  ServiceTaskDispatch.arm_changeset/2's token_id field, which Ecto.UUID rejects,
+  surfaced as a real HTTP 422 (token_id: {"is invalid", [type: Ecto.UUID, validation:
+  :cast]}). Reproduced directly against a real running instance -- not guessed.
+
+  Not SERVICE_TASK-specific: the identical identity-id_map pattern exists in all 4
+  tail-building call sites (complete_task/3, advance_after_timer_fired/3, create/2,
+  and a 4th sibling), and build_timer_arms_multi/4 has the exact same
+  Map.fetch!(id_map, token_id) shape, so a join firing into a TIMER-start node same-
+  hop-chain would hit the identical crash, unexercised so far only because no
+  existing fixture combines that shape. A plain gateway-to-gateway join continuation
+  is unaffected (no dispatch-prep code path runs for it). Every other existing
+  PARALLEL_GATEWAY join's downstream has so far always been another gateway or a
+  HUMAN_TASK (both go through the already-fixed task-activation/reconciliation path)
+  -- REQ-433's committee-vote-join -> committee-tally -> create-facility subgraph is
+  the first shape in this codebase to combine "join fires same-hop-chain" with "join's
+  immediate downstream is an immediate-dispatch node type."
+
+  This is a gap the ISS-0408 fix (resolved) left behind in two sibling code paths it
+  did not touch, not a regression of that fix -- checked against docs/issues/ for a
+  matching resolved entry (ISS-0397, ISS-0408, ISS-0925, ISS-0929, ISS-0945, ISS-0946);
+  none match this exact code path, confirming this is a new finding, not a recurrence.
+
+  Suggested fix shape (surgical, not deep engine surgery): thread the real id_map that
+  insert_hop_chain_new_token_records/5 already produces (inside
+  build_task_activation_and_reconciliation_multi/4's own nested Multi.merge/2) out to
+  the sibling timer-arm/service-task-dispatch merges at all 4 call sites, instead of
+  each re-deriving its own (wrong) identity map -- mirrors how rewrite_token_ids/2 is
+  already reused across call sites. CODE-DESIGNER to confirm exact threading mechanism
+  (reading prior Multi `changes`, vs. restructuring the merge nesting) for all 4 sites.
+affected_files:
+  - lib/letflow/engine.ex (build_complete_task_tail_multi/6)
+  - lib/letflow/engine.ex (build_service_task_dispatch_multi/5)
+  - lib/letflow/engine.ex (build_timer_arms_multi/4)
+  - lib/letflow/engine.ex (advance_after_timer_fired/3 tail, ~2740-2833)
+  - lib/letflow/engine.ex (create/2 tail, ~2980-3111)
+  - lib/letflow/engine.ex (4th sibling tail, ~3563-3636)
+acceptance_criteria:
+  - "A PARALLEL_GATEWAY join firing same-hop-chain directly into a SERVICE_TASK creates a real service_task_dispatches row (real TokenRecord-backed token_id), not a 422"
+  - "Same fix (or its generalized form) covers the structurally-identical prepared_timers/build_timer_arms_multi/4 path, not just SERVICE_TASK"
+  - "Regression test fails pre-fix (test/letflow/simulation/req208_meridian_test.exs's existing 'meridian-loan-origination-above-threshold' describe block's step 8, currently asserting the 422, is the fail-first baseline) and passes post-fix (step 8 must then assert success, full quorum tally, dispatch row created)"
+  - "REQ-433's AC4 unblocked: the full above-threshold scenario reaches create-facility and the quorum tally for real"
+related:
+  - ISS-0408
+source_reports:
+  - PR #2148 (feat/REQ-433-committee-quorum), not yet merged
+blocks:
+  - "REQ-433 AC4"
+queue_ref: null  # letflow-queue not called by this agent -- ISSUE-FIXER does not call the
+                 # queue's functions per core-directives.md's "No Agent Discretion Over Task
+                 # Selection or Locking" (only ORCH may). Filed directly per this run's
+                 # explicit task instruction, mirroring ISS-0970/ISS-0973's own direct-filing
+                 # precedent in this repo. ORCH may adopt this GitHub issue into
+                 # letflow-queue later via register_task's github_issue_number field.
+github_ref: GH-2149
+status: resolved
+resolved_in_run: fix/ISS-0974-join-dispatch-id-map
+resolved_at: "2026-10-02T07:20:29Z"
+resolution:
+  root_cause: >
+    A PARALLEL_GATEWAY join firing within the same hop chain as the triggering
+    completion minted a new, hop-chain-local synthetic token id with no real
+    persisted TokenRecord id yet. Four sibling Multi.merge/2 blocks in
+    lib/letflow/engine.ex (build_complete_task_tail_multi/6,
+    persist_timer_fired_advance/7, persist_escalation_timer_fired_advance/7,
+    do_persist_service_task_advance/10) each independently rebuilt a wrong,
+    pure-identity token-id map instead of reusing the real id_map
+    insert_hop_chain_new_token_records/5 already computed earlier in the same
+    transaction -- causing an Ecto.UUID cast failure (422) whenever such a join
+    fired directly into a SERVICE_TASK or TIMER-start node. Found during
+    REQ-433's implementation (committee quorum voting), which needs exactly
+    this shape.
+  design: >
+    lib/letflow/design/iss0974-join-dispatch-id-map-fix.md, CODE-DESIGN-VALIDATOR
+    PASSed after independently tracing Ecto.Multi's own source to confirm
+    cross-merge `changes` visibility, and independently proving the
+    identity-fallback is logically exhaustive/safe.
+  fix: >
+    Each of the 4 sites now reads the real id_map via
+    Map.fetch!(changes, {:hop_chain_token_records, <instance_id>}) and builds a
+    sparse real map with identity fallback (Map.get(hop_chain_id_map, token_id,
+    token_id)) instead of the pure-identity map.
+  security_reviewer: >
+    PASSed via a full independent INV-1/INV-6/INV-8 trace (brought the change
+    into scope despite not literally matching the agent's 5-bullet scope test,
+    reasoning it's a tenant-scoped write-path correctness fix) -- confirmed
+    key-scoping correctness, identity-fallback exhaustiveness, and fail-closed
+    Map.fetch! behavior.
+  reviewer: >
+    PASSed; confirmed idiomatic consistency across all 4 sites; filed ISS-0975
+    (merged via PR #2152) for a structurally-identical but differently-shaped
+    5th instance in append_pending_event_arms_multi/7 (not inside a
+    Multi.merge, needs a different fix shape); added a docs/anti-patterns.md
+    entry (grep-for-siblings lesson).
+  test_runner: >
+    Full suite 5368/5368 green, including both new regression test cases
+    (SERVICE_TASK and TIMER, for site 1 specifically).
+  release_validator: >
+    Exhaustive independent re-verification -- hand-traced all 4 sites' key-
+    matching and identity-fallback logic, ran its OWN mutation test reverting
+    sites 2/3/4 while leaving site 1 fixed, and found a REAL coverage gap: all
+    91 broader regression tests still passed with sites 2-4 broken, proving
+    those 3 sites currently have ZERO independent regression coverage (their
+    correctness rests only on code-symmetry with site 1, confirmed by
+    hand-trace/mutation test, not by anything in CI). RELEASE-VALIDATOR
+    explicitly ruled this is NOT a blocker to merging THIS PR (the fix itself
+    is correct and traced) but said it "must not be silently dropped" -- filed
+    as follow-up issue ISS-0976 for TEST-DESIGNER to add TIMER-fired/
+    escalation-TIMER-fired/SERVICE_TASK-advance join-dispatch regression cases
+    mirroring test/letflow/iss0974_join_dispatch_id_map_test.exs's existing
+    shape for sites 2/3/4. Independently re-ran the full suite (5368/5368,
+    matching TEST-RUNNER) and confirmed docs/requirements.yaml untouched.
+  queue_note: >
+    This is an ISSUE closure, not a REQ. No letflow-queue task to release
+    (filed directly by ISSUE-FIXER during REQ-433's implementation;
+    queue_ref: null per ISSUE-FIXER's own note -- ISSUE-FIXER isn't permitted
+    to call the queue).
+  pr: "PR #2151, final commit 5ce31010"

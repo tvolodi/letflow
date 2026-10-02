@@ -1087,6 +1087,52 @@ defmodule Letflow.EngineTest do
     end
   end
 
+  describe "ISS-0969: record_task_activation_rejection_audit/5 is rescue-hardened, never raises" do
+    test "a genuine Postgres-level audit-insert failure is logged and swallowed, returns :ok" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      instance_id = Ecto.UUID.generate()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert :ok =
+                   Engine.record_task_activation_rejection_audit(
+                     instance_id,
+                     "task",
+                     {:not_well_formed, []},
+                     Letflow.EventStore.platform_actor_id(),
+                     schema_name
+                   )
+        end)
+
+      assert log =~ "task_activation.rejected"
+      assert log =~ "#{instance_id}"
+      assert log =~ "Postgrex.Error"
+    end
+  end
+
   describe "create/2 (REQ-273 AC4) -- form_schema is pinned to the version the task was created against" do
     test "promoting a new definition version with a different form_schema does not change the already-created task's form_schema" do
       %{schema_name: schema_name} = provisioned_tenant()

@@ -4940,6 +4940,14 @@ defmodule Letflow.Engine do
 
         :ok
     end
+  rescue
+    exception ->
+      Logger.warning(
+        "Repo.transaction/1 raised recording task_activation.rejected for instance " <>
+          "#{instance_id} (node #{node_id}): #{inspect(exception)}"
+      )
+
+      :ok
   end
 
   # ISS-0928 -- best-effort audit for a SERVICE_TASK re-entry failure that is
@@ -4995,6 +5003,14 @@ defmodule Letflow.Engine do
 
         :ok
     end
+  rescue
+    exception ->
+      Logger.warning(
+        "Repo.transaction/1 raised recording service_task.advance_failed for instance " <>
+          "#{instance_id} (node #{node_id}, reason #{reason_tag}): #{inspect(exception)}"
+      )
+
+      :ok
   end
 
   # ISS-0784 design §4.2 -- exhaustive encoder over

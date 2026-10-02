@@ -644,3 +644,59 @@ history:
       directly; queue_ref Q-934/github_ref GH-2122 are filing metadata
       only -- confirmed no live queue task tied to issue_ref ISS-0946
       exists to release.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-02T04:30:00Z"
+    note: >
+      ISS-0970 resolved (vortex/supplier-quality-deviation-critical EO-004 and
+      swiftroute: history event ordering unprovable by timestamp alone --
+      SERVICE_TASK_COMPLETED event stamped ~4ms after the next task row's
+      creation in the same transaction). PR #2145, branch
+      fix/ISS-0970-event-ordering-eo004, final commit 8f82d388. Decision:
+      Option B (sequence-based ordering, not a new timestamp mechanism).
+      Root cause: EO-004 asserted TASK_COMPLETED/TASK_CREATED event-type
+      names -- TASK_CREATED doesn't exist in this codebase's event-type
+      registry at all, and TASK_COMPLETED (while real) was the wrong event
+      type for this SERVICE_TASK node. The events table already has a
+      genuinely monotonic, DB-assigned ordering primitive (sequence_number
+      per-instance under FOR UPDATE lock, global_seq tenant-wide bigserial),
+      already correctly used by a sibling scenario (sim-dev-fp-001 EO-001).
+      Design: lib/letflow/design/iss0970-event-ordering-decision.md,
+      CODE-DESIGN-VALIDATOR PASSed after independently confirming the
+      ordering columns are real/monotonic via direct schema read, confirming
+      the root-cause claim via direct grep of the event-type registry, and
+      explicitly ruling SECURITY-REVIEWER not needed (pure test-fixture
+      change, zero lib/letflow/ code touched). Fix: EO-004's description/
+      verification block reworded to verify ordering via sequence_number/
+      global_seq instead of timestamps; a required exception note added to
+      the fixture file's own byte-identical-to-ported-R-Co header comment
+      (first deviation of its kind in that file). REVIEWER PASSed, confirmed
+      diff scoped to exactly one fixture file, confirmed replacement text
+      matched the design doc byte-for-byte, added a docs/anti-patterns.md
+      entry ("a ported UAT fixture's assertions silently inherited the
+      source system's own event-type vocabulary, undetected until live
+      execution"). TEST-RUNNER: full suite 5366/5366 green, mix
+      letflow.check_uat_scenario_schema 32/32. RELEASE-VALIDATOR:
+      independently traced the full data path end-to-end -- confirmed
+      sequence_number genuinely flows from the events table column through
+      EventStore.read/2 -> Instances.history/3 -> the real
+      GET /instances/:id/history HTTP response body, confirming EO-004 as
+      worded is genuinely satisfiable against a live instance; confirmed
+      full semantic verification against a live/seeded instance is an
+      honest, irreducible limitation of this environment (no integration
+      test exists that exercises UAT-RUNNER's own history-reading logic);
+      confirmed docs/requirements.yaml untouched. Two low-priority
+      follow-ups flagged but explicitly ruled out of this issue's scope:
+      production-order-above-threshold.yaml's EO-004 has the same
+      stamping-order phenomenon but is currently passing (non-blocking);
+      test/support/simulation/runner.ex's :audit_event_ordering method
+      shares the same timestamp-only fragility in a different fixture
+      family and may be exercising dead/unreachable logic. docs/issues/
+      ISS-0970.yaml set to status: resolved in this same commit. This is an
+      ISSUE closure, not a REQ -- docs/requirements.yaml untouched. No
+      letflow-queue task to release: filed directly from a UAT finding;
+      queue_ref Q-930/github_ref GH-2116 are filing metadata only -- the
+      letflow-queue service was unreachable from this sandbox (no
+      QUEUE_AUTH_TOKEN configured) so this could not be independently
+      re-confirmed by direct query this run.

@@ -1,0 +1,28 @@
+id: ISS-0971
+title: "production-order-above-threshold.yaml EO-004 has the same timestamp-ordering phenomenon as ISS-0970 but is currently passing (non-blocking)"
+discovered_by: CODE-DESIGN-VALIDATOR
+discovered_in_run: WF03-ISS0970-20261002 (ISS-0970 design review)
+discovered_at: "2026-10-02T04:30:00Z"
+severity: MINOR
+owner: "CODE-DESIGNER (decision first)"
+description: >
+  While validating ISS-0970's fix (history event ordering only provable
+  via sequence_number/global_seq, not timestamp, because the owning
+  SERVICE_TASK_COMPLETED event and the following task row are written in
+  the same transaction with the task row's Multi step running first),
+  CODE-DESIGN-VALIDATOR noted
+  test/fixtures/uat/scenarios/vortex/production-order-above-threshold.yaml's
+  own EO-004 asserts the same kind of timestamp-based event ordering and
+  is structurally exposed to the identical stamping-order phenomenon.
+  Unlike supplier-quality-deviation-critical's EO-004, this one is
+  currently passing against live data (observed during ISS-0970's own UAT
+  run) -- not a confirmed-broken assertion today, just the same latent
+  fragility, worth a lightweight look/reword on its own schedule rather
+  than urgently.
+acceptance_criteria:
+  - "production-order-above-threshold.yaml's EO-004 reviewed and, if it asserts ordering via timestamp comparison, either confirmed non-fragile or reworded to verify ordering via sequence_number/global_seq per ISS-0970's precedent"
+source_reports:
+  - docs/issues/ISS-0970.yaml
+related:
+  - ISS-0970
+status: open

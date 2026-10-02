@@ -26,4 +26,58 @@ related:
   - ISS-0946
 queue_ref: null   # filed directly by DOC-UPDATER during ISS-0946 close-out, not via get_next_task
 github_ref: null  # not filed on GitHub; local-only follow-up
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0969-audit-rescue-hardening
+resolved_at: "2026-10-02T20:13:50Z"
+resolution:
+  root_cause: >
+    CODE-DESIGNER traced each call site independently and found BOTH
+    record_task_activation_rejection_audit/5 (called from
+    Scheduler.attempt_fire/2, outside that function's own try/rescue) and
+    record_service_task_advance_failure_audit/5 (called from
+    poll_and_dispatch/1's reduce pipeline, after attempt_dispatch/2's own
+    rescue boundary has closed) genuinely violated their respective
+    callers' documented "Never raises" contracts (poll_and_fire/1,
+    poll_and_dispatch/1 / INV-STD-5) -- independently confirmed as a real,
+    currently-violated contract by CODE-DESIGN-VALIDATOR tracing the actual
+    call chains, not a hypothetical.
+  design: >
+    lib/letflow/design/iss0969-audit-rescue-consistency.md, PASSed on first
+    pass (unusual for this session -- most designs needed at least one
+    revision). CODE-DESIGN-VALIDATOR independently verified every factual
+    claim (call-site locations, Repo.transaction/1's actual
+    raise-propagation behavior, the router-path "separately safe" claim)
+    against the real code rather than trusting the narrative.
+  fix: >
+    Applied ISS-0946's exact established rescue pattern (case
+    Repo.transaction/1 do ... end + function-level rescue exception ->
+    Logger.warning(...); :ok) to both functions. 4 new tests (2 unit-level
+    drop-table fault injection, 2 integration-level poll_and_fire/1 /
+    poll_and_dispatch/1 checks) -- ELIXIR-DEV confirmed via real
+    before/after proof (reverted the fix, reproduced the actual
+    Postgrex.Error propagating, restored).
+  review: >
+    REVIEWER: PASSed; while checking for other undiscovered call sites with
+    the same gap, found TWO more genuine instances (router-level
+    best-effort audit writes in tenant_settings.ex/instances.ex) --
+    correctly filed as a separate non-blocking follow-up (ISS-0980) rather
+    than silently expanding this PR's scope, same discipline as ISS-0974's
+    5th-site follow-up earlier this session.
+  test_runner: "Full suite clean (5382/5382)."
+  release_validator: >
+    Exhaustive independent re-verification -- hand-traced both rescue
+    clauses against ISS-0946's established pattern, independently
+    REPRODUCED the pre-fix bug itself (reverted the fix, confirmed the real
+    raise, restored), constructed its OWN adversarial test beyond shipped
+    coverage (forced an ArgumentError rather than the shipped
+    Postgrex.Error test case, confirming the bare rescue exception ->
+    genuinely catches any exception class rather than being accidentally
+    scoped to one), confirmed ISS-0980's scoping is genuinely correct
+    (different call shape, no Repo.transaction/1 wrapper, separable),
+    confirmed docs/requirements.yaml untouched, independently re-ran the
+    full suite (5382/5382, matching TEST-RUNNER).
+  queue: >
+    This is an ISSUE closure, not a REQ. No letflow-queue task to release
+    (owner: ELIXIR-DEV, filed directly by DOC-UPDATER during ISS-0946's own
+    closure; queue_ref: null).
+  pr: "PR #2166, final commit 71f7dd19."

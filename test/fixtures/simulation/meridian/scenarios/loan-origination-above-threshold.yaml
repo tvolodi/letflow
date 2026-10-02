@@ -8,40 +8,40 @@
 # (@simple_loan_origination_graph, test/letflow/simulation/req208_meridian_test.exs --
 # SERVICE_TASK nodes elided/replaced per design §3.1).
 #
-# CRITICAL ELIXIR-DEV FINDING, over the design's own §3.1/§4.1 plan (full detail in the
-# test module's own comment above @simple_loan_origination_graph, and in this run's
-# result.issues -- a NEW finding, not covered by ISS-0388..0393, reported to ORCH for
-# allocation since ELIXIR-DEV does not self-assign issue ids per ISSUE_QUEUE.md):
-# `Letflow.Engine.complete_task/3`'s real, per-call state-rebuild
-# (`lib/letflow/engine.ex`'s `build_instance_state/3`) hardcodes `join_counters: %{}`
-# on EVERY call -- confirmed by direct code comment there ("§6.5, §11 INV-EE48-7, MAJOR
-# OQ-3): no table persists JoinCounter state across calls today") and independently
-# reproduced this session against a real running instance. This means a
-# `PARALLEL_GATEWAY` join can only ever fire within the SAME hop-chain call as its own
-# split -- the instant a real, separate HTTP call (a HUMAN_TASK completion on one
-# branch) tries to route through the join, it fails with a real HTTP 500
-# (`{:error, {:activation_failed, {:unknown_branch_id, _}}}` internally, mapped to
-# INV-4's no-detail 500 at the API boundary). REQ-054 (SnapshotWriter, status: done)
-# DOES serialize join_counters correctly into `instance_state_snapshots` -- but
-# `Engine.complete_task/3`'s own hot path never reads that table at all; it always
-# rebuilds state fresh from `tokens`/`tasks` directly. This is a genuine, pre-existing,
-# previously-undocumented-as-a-tracked-issue platform BLOCKER affecting every process
-# with a PARALLEL_GATEWAY split whose branches require separate task completions --
-# not something introduced or fixable within REQ-208's own scope (fixing it is
-# Engine-core work, its own CODE-DESIGNER-sized task).
+# FIXED by ISS-0397 (status: resolved, 2026-09-01): the `join_counters`-not-persisted-
+# across-calls defect this file's header used to describe here is gone --
+# `lib/letflow/engine.ex` durably round-trips `join_counters` via
+# `SnapshotWriter.serialize_join_counters/1`/`deserialize_join_counters/1` at every
+# write/read site; no site hardcodes `join_counters: %{}` anymore. REQ-433
+# (lib/letflow/design/req433-committee-quorum.md §4.2) confirmed this directly and
+# extended this scenario past the old stopping point: steps 1-7 now run for real
+# through the remaining assessment branch, the join, eligibility-gate,
+# authority-routing, and 2 of 3 committee-vote-* HUMAN_TASK completions (2-of-3
+# quorum reached at the variable level).
 #
-# CONSEQUENCE FOR THIS SCENARIO: steps past the first parallel-branch task completion
-# cannot be exercised for real. This scenario therefore runs for real only through the
-# point that reproduces the defect (steps 1/2a/2b), rather than fabricating a
-# passing result for steps that cannot actually execute. See the test module's own
-# describe block for the full real-state verification (current_nodes/task-list
-# evidence both before and after the failed call, confirming the failure is clean --
-# no partial commit, matching INV-EE48-7's own "typed, non-crashing failure, not
-# silent data corruption" characterization).
+# NEW ELIXIR-DEV FINDING (REQ-433, 2026-10-02, reproduced directly against a real
+# running instance -- not a guess): step 8 (the 3rd, join-firing committee vote)
+# does NOT complete successfully. `committee-vote-join` firing mints a brand-new,
+# not-yet-persisted token_id in the SAME hop chain that immediately continues
+# through `committee-tally` onto `create-facility` (a real SERVICE_TASK) --
+# `lib/letflow/engine.ex`'s `build_complete_task_tail_multi/6` builds that
+# SERVICE_TASK's own dispatch-row `id_map` as an IDENTITY map, on the documented
+# assumption (REQ-215 design doc §2.1 point 1) that every token_id involved is
+# already a real, persisted TokenRecord id -- true for every case exercised so far,
+# NOT true for a join that fires and routes straight into a SERVICE_TASK within one
+# hop chain (full mechanism in req208_meridian_test.exs's own "meridian-loan-
+# origination-above-threshold" describe block comment). Real result: a 422 on step
+# 8's own `POST .../complete` call, not the clean create-facility park this file's
+# header previously (and incorrectly) assumed. This is a genuine, previously-
+# undiscovered, platform-wide engine limitation -- out of REQ-433's own OUT OF
+# SCOPE clause and AC6 to fix here; flagged for a follow-up CODE-DESIGNER-sized fix.
+# This scenario's own step list is left as REQ-433 designed it (steps 1-8, the real
+# attempt a real operator would make) rather than truncated to hide the failure --
+# req208_meridian_test.exs's own describe block is this file's load-bearing,
+# asserted proof of exactly where and how step 8 fails.
 #
-# requested_amount_eur: 750000 (> 500000 threshold) would have forced authority-routing's
-# credit-committee-vote branch, never l1-approval -- this routing logic itself is never
-# reached given the finding above.
+# requested_amount_eur: 750000 (> 500000 threshold) forces authority-routing's
+# committee-vote-fork branch, never l1-approval.
 id: meridian-loan-origination-above-threshold
 company_id: meridian
 process_id: DEFINITION_NAME
@@ -49,6 +49,8 @@ process_id: DEFINITION_NAME
 actors:
   actor-meridian-lars: {}
   actor-meridian-julia: {}
+  actor-meridian-thomas: {}
+  actor-meridian-eva: {}
 
 preconditions:
   - check: process_definition_active
@@ -75,20 +77,113 @@ steps:
     produces: credit_memo_task_list
     actor: actor-meridian-julia
 
-  # Step 2b — credit manager reviews credit memo. Real dispatch -- this is the exact
-  # call that reproduces the join_counters-not-persisted-across-calls defect (see
-  # header): the hop-chain from credit-memo-review attempts to route through
-  # assessment-join (a real PARALLEL_GATEWAY join, in-degree 3), and
-  # Engine.complete_task/3's freshly-rebuilt InstanceState has join_counters: %{},
-  # so Transition.dispatch_parallel_join/4 cannot recognize this branch's arrival.
-  # Real HTTP 500, asserted explicitly in the test module (not treated as a harness
-  # malfunction -- this is real, reproducible platform behavior).
+  # Step 2b — credit manager reviews credit memo. Real dispatch -- post-ISS-0397
+  # this durably joins one of the 3 expected branches into assessment-join's
+  # cohort (join does not fire yet, 2 of 3 outstanding).
+  #
+  # DEVIATION from lib/letflow/design/req433-committee-quorum.md §4.2's own
+  # literal YAML (recorded, not silent): the design's own text nested each
+  # completion payload under an `output_variables:` key
+  # (`params: {output_variables: {...}}`). Empirically (confirmed this
+  # session, re-running against a real instance) `POST /api/v1/tasks/:id/
+  # complete`'s handler (`lib/letflow/routers/tasks.ex`'s `handle_complete/3`)
+  # takes `output_variables = conn.body_params` -- the ENTIRE request body IS
+  # the output-variables map, with no `output_variables` wrapper key. The
+  # design's own nested shape silently merges a single `output_variables` map
+  # variable into instance state instead of the intended flat keys
+  # (`variables.credit_decision` never actually gets set -- only
+  # `variables.output_variables.credit_decision` does), which this scenario's
+  # OLD 3-step truncation never exercised far enough to surface (the join
+  # never fully fired, so eligibility-gate's real condition was never
+  # evaluated). REQ-433's own extension through to eligibility-gate/
+  # authority-routing is the first thing that actually surfaces it --
+  # reproduced directly (`no_matching_gateway_edge` at `eligibility-gate`)
+  # before this fix. Every vortex/swiftroute scenario fixture already uses
+  # the correct flat shape (e.g.
+  # test/fixtures/simulation/vortex/scenarios/production-order-above-threshold.yaml);
+  # this file (and its below-threshold sibling, left as-is per this
+  # requirement's own OUT OF SCOPE for that file) is the one place this
+  # latent, pre-existing wrapping mistake slipped in. Fixed here rather than
+  # faithfully reproducing a design typo that would otherwise make this
+  # scenario's own real run fail.
   - via: api
     action: "POST /api/v1/tasks/{{produces.credit_memo_task_list.items.0.id}}/complete"
     params:
-      output_variables:
-        credit_decision: pass
+      credit_decision: pass
     produces: credit_memo_result
     actor: actor-meridian-julia
+
+  # Step 3 — look up the one remaining pending assessment task (credit-memo-review;
+  # risk-assessment and the KYC/AML track's immediate edge are already closed by
+  # step 2b/create — see that step's own "items.0" note). Real.
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: remaining_assessment_task_list
+    actor: actor-meridian-julia
+
+  # Step 4 — completes the last assessment branch. Real: fires assessment-join
+  # (3 of 3 received) and cascades, in this one call, through eligibility-gate and
+  # authority-routing (750000 > 500000 -> committee-vote-fork), landing 3 real
+  # HUMAN_TASKs (committee-vote-cro/director/ceo) in one hop-chain -- the same
+  # single-call multi-hop cascade req208_meridian_test.exs's own REQ-215 AC2
+  # describe block already proves against this exact gateway shape.
+  # risk_rating: "acceptable" pairs with the credit_decision: "pass" step 2b already
+  # set (output_variables are instance-global, not validated against the completing
+  # task's own node id) to reuse exactly the eligibility-gate input pair REQ-215's
+  # own test already proved passes.
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.remaining_assessment_task_list.items.0.id}}/complete"
+    params:
+      risk_rating: acceptable
+    produces: last_assessment_result
+    actor: actor-meridian-julia
+
+  # Step 5 — look up the 3 committee-vote-* tasks created by step 4's cascade. Real.
+  # Order is NOT assumed to correspond to a specific node id (the Runner's template
+  # substitution is purely positional, no filter-by-node_id capability). This does
+  # not matter: output_variables are instance-global and unvalidated against the
+  # completing task's own node id (same property step 2b already relies on), so
+  # assigning the 3 required committee_vote_* variable names to whichever 3 tasks
+  # come back in whatever order still produces the exact same quorum tally
+  # (2 approve, 1 reject) regardless of which physical committee-vote-{cro,
+  # director,ceo} node each one structurally is.
+  - via: api
+    action: "GET /api/v1/tasks?instance_id={{produces.instance.instance_id}}&status=PENDING"
+    produces: committee_task_list
+    actor: actor-meridian-thomas
+
+  # Step 6 — first committee member votes approve. Real.
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.committee_task_list.items.0.id}}/complete"
+    params:
+      committee_vote_cro: approve
+    produces: committee_vote_1_result
+    actor: actor-meridian-thomas
+
+  # Step 7 — second committee member votes approve, reaching 2-of-3 quorum. Real.
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.committee_task_list.items.1.id}}/complete"
+    params:
+      committee_vote_director: approve
+    produces: committee_vote_2_result
+    actor: actor-meridian-julia
+
+  # Step 8 — third committee member dissents. Real: this is the 3rd-of-3 arrival at
+  # committee-vote-join (a set-based wait-for-all-expected join, per
+  # join_counter.ex's own moduledoc -- quorum is only evaluated once all three have
+  # voted, not released early on the 2nd approve). Fires committee-vote-join ->
+  # committee-tally (e39: 2 of 3 == 'approve' is true even with this dissent) ->
+  # create-facility, a real SERVICE_TASK. The token PARKS there (no automatic
+  # outgoing traversal -- req208_meridian_test.exs's own REQ-215 AC2 describe block
+  # proves this property directly): this is the real, honestly-reached end state for
+  # this scenario, proving the quorum tally fired correctly without needing to
+  # resolve the SERVICE_TASK dispatch itself (out of scope here, same as REQ-215
+  # already found for this file format).
+  - via: api
+    action: "POST /api/v1/tasks/{{produces.committee_task_list.items.2.id}}/complete"
+    params:
+      committee_vote_ceo: reject
+    produces: committee_vote_3_result
+    actor: actor-meridian-eva
 
 expected_outcomes: []

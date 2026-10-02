@@ -36,6 +36,44 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   written (§0.8/§3 below, a platform-wide gap REQ-206/207 already found,
   unrelated to ISS-0397).
 
+  ## REQ-433 (2026-10-02) -- the "meridian-loan-origination-above-threshold"
+  describe block IS rewritten, over this file's own prior "not rewritten"
+  note above -- and surfaces a NEW, previously-undiscovered engine defect
+  `lib/letflow/design/req433-committee-quorum.md`'s own §4.2 "Required
+  follow-on" flagged this test module by name: the old single-HUMAN_TASK
+  `credit-committee-vote`/`committee_outcome` shape is gone from both real
+  fixtures and from `@simple_loan_origination_graph` below, replaced by a
+  real 2-of-3 quorum subgraph (`committee-vote-fork`/
+  `committee-vote-{cro,director,ceo}`/`committee-vote-join`/
+  `committee-tally`). The extended
+  `test/fixtures/simulation/meridian/scenarios/loan-origination-above-
+  threshold.yaml` now carries 9 real steps (through the remaining assessment
+  branch, both gateways, and all three committee votes) instead of 3.
+
+  **The first 7 steps are real and pass**: 2 of 3 committee votes complete
+  for real, reaching 2-of-3 quorum at the variable level (the join has not
+  fired yet -- one branch still outstanding). **Step 8 (the 3rd, join-firing
+  vote) reproduces a genuine, newly-discovered, previously-undocumented
+  engine limitation** (full mechanism documented at that assertion's own
+  comment, below): a `PARALLEL_GATEWAY` join whose own downstream edge
+  leads directly to a `SERVICE_TASK`, when that join fires within the same
+  hop chain as the triggering task completion, cannot create that
+  `SERVICE_TASK`'s dispatch row (`build_complete_task_tail_multi/6`'s
+  identity-`id_map` assumption for `prepared_service_task_dispatches` does
+  not hold for a hop-chain-local, join-minted token -- confirmed by direct
+  reproduction and source read, not guessed). REQ-433's own OUT OF SCOPE
+  clause and AC6 forbid fixing `lib/letflow/engine/` here, so this describe
+  block documents the real, reproducible failure (a 422) rather than
+  fabricating a pass -- matching this same file's own established
+  discipline for the pre-ISS-0397 defect it used to document the same way.
+  This is a NEW platform-wide finding (every `PARALLEL_GATEWAY` join
+  exercised anywhere else in this codebase routes into another gateway or a
+  `HUMAN_TASK`, never a bare `SERVICE_TASK`) requiring its own
+  CODE-DESIGNER-sized follow-up fix before REQ-433's AC4 can be genuinely
+  closed end to end. The "meridian-loan-origination-below-threshold"
+  describe block is NOT touched -- that scenario never reaches the
+  committee branch at all.
+
   ## CLOSED by REQ-215 (2026-09-03) -- the SERVICE_TASK dispatch gap itself
 
   `Letflow.Engine.Transition.dispatch_node/4` now has a real `:SERVICE_TASK`
@@ -144,14 +182,24 @@ defmodule Letflow.Simulation.Req208MeridianTest do
 
   # ── §3.1: @simple_loan_origination_graph ──────────────────────────────────
   # Derived from process_claim_intake.yaml (design §0.2), SERVICE_TASK nodes
-  # elided/replaced: credit-memo-timeout/risk-assessment-timeout/kyc-timeout/
-  # committee-timeout (on_timeout fallbacks) elided entirely; create-facility
-  # replaced by a direct edge from l2-approval's approve branch /
-  # credit-committee-vote's approved branch straight to disburse-loan;
-  # decline-application replaced by a direct edge to end-declined. Every
-  # HUMAN_TASK/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY node and every condition
-  # string on the real, exercised path kept verbatim -- EXCEPT the KYC/AML
-  # branch, per the ELIXIR-DEV finding below.
+  # elided/replaced: credit-memo-timeout/risk-assessment-timeout/kyc-timeout
+  # (on_timeout fallbacks) elided entirely; l2-approval's approve branch
+  # replaced by a direct edge straight to disburse-loan; decline-application
+  # replaced by a direct edge to end-declined. Every HUMAN_TASK/
+  # EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY node and every condition string on the
+  # real, exercised path kept verbatim -- EXCEPT the KYC/AML branch, per the
+  # ELIXIR-DEV finding below.
+  #
+  # REQ-433 update: the old single-HUMAN_TASK `credit-committee-vote`/
+  # `committee_outcome` shape is replaced by the real 2-of-3 quorum subgraph
+  # (`committee-vote-fork`/`committee-vote-{cro,director,ceo}`/
+  # `committee-vote-join`/`committee-tally`), mirroring
+  # lib/letflow/design/req433-committee-quorum.md §2 exactly (minus the
+  # per-voter timeout SERVICE_TASK siblings, elided consistent with this
+  # graph's own convention). `create-facility` is the one exception to this
+  # graph's SERVICE_TASK elision: it is kept real so the committee-tally
+  # approve path (`e39`) parks there for real, matching
+  # @loan_origination_graph_with_service_task's own already-proven shape.
   #
   # ELIXIR-DEV finding, over the design's own §3.1 plan (design proposed
   # replacing kyc-aml-check with a direct edge from parallel-assessment-fork
@@ -209,10 +257,39 @@ defmodule Letflow.Simulation.Req208MeridianTest do
         "node_type" => "HUMAN_TASK",
         "attributes" => %{"role" => "role-credit-director"}
       },
+      %{"id" => "committee-vote-fork", "node_type" => "PARALLEL_GATEWAY"},
       %{
-        "id" => "credit-committee-vote",
+        "id" => "committee-vote-cro",
         "node_type" => "HUMAN_TASK",
         "attributes" => %{"role" => "role-committee-member"}
+      },
+      %{
+        "id" => "committee-vote-director",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-committee-member"}
+      },
+      %{
+        "id" => "committee-vote-ceo",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-committee-member"}
+      },
+      %{"id" => "committee-vote-join", "node_type" => "PARALLEL_GATEWAY"},
+      %{"id" => "committee-tally", "node_type" => "EXCLUSIVE_GATEWAY"},
+      # Unlike every other SERVICE_TASK in this simplified graph, create-facility
+      # is kept REAL (not elided) here -- REQ-433's own test-local-graph follow-on
+      # requires the committee-tally approve path to park at a real SERVICE_TASK
+      # (current_nodes == ["create-facility"], a real pending ServiceTaskDispatch
+      # row) rather than cascading straight to disburse-loan, matching
+      # @loan_origination_graph_with_service_task's own already-proven
+      # create-facility shape below.
+      %{
+        "id" => "create-facility",
+        "node_type" => "SERVICE_TASK",
+        "attributes" => %{
+          "endpoint" => "https://httpbin.org/anything/core-banking/facilities",
+          "method" => "POST",
+          "timeout_ms" => 300_000
+        }
       },
       %{
         "id" => "disburse-loan",
@@ -255,7 +332,7 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       %{
         "id" => "e18",
         "source" => "authority-routing",
-        "target" => "credit-committee-vote",
+        "target" => "committee-vote-fork",
         "condition" => "variables.requested_amount_eur > 500000"
       },
       %{
@@ -282,39 +359,62 @@ defmodule Letflow.Simulation.Req208MeridianTest do
         "target" => "end-declined",
         "condition" => "variables.l2_decision == 'reject'"
       },
+      # REQ-433: real 2-of-3 committee quorum subgraph (committee-vote-fork ->
+      # 3 real HUMAN_TASKs -> committee-vote-join -> committee-tally), mirroring
+      # the same node/edge ids and edge conditions §2/§2.3 of
+      # lib/letflow/design/req433-committee-quorum.md add to both real fixtures
+      # -- per-voter SERVICE_TASK timeout siblings are elided here, consistent
+      # with this graph's own existing elision convention for every other
+      # SERVICE_TASK (credit-memo-timeout/risk-assessment-timeout/kyc-timeout
+      # above). create-facility is the one SERVICE_TASK kept real in this graph
+      # (see its own node comment above) so the committee-tally approve path
+      # (e39) parks there for real, exactly like REQ-433's own extended
+      # simulation scenario expects.
+      %{"id" => "e29", "source" => "committee-vote-fork", "target" => "committee-vote-cro"},
+      %{"id" => "e30", "source" => "committee-vote-fork", "target" => "committee-vote-director"},
+      %{"id" => "e31", "source" => "committee-vote-fork", "target" => "committee-vote-ceo"},
+      %{"id" => "e32", "source" => "committee-vote-cro", "target" => "committee-vote-join"},
+      %{"id" => "e33", "source" => "committee-vote-director", "target" => "committee-vote-join"},
+      %{"id" => "e34", "source" => "committee-vote-ceo", "target" => "committee-vote-join"},
+      %{"id" => "e38", "source" => "committee-vote-join", "target" => "committee-tally"},
       %{
-        "id" => "e23",
-        "source" => "credit-committee-vote",
-        "target" => "disburse-loan",
-        "condition" => "variables.committee_outcome == 'approved'"
+        "id" => "e39",
+        "source" => "committee-tally",
+        "target" => "create-facility",
+        "condition" =>
+          "(variables.committee_vote_cro == 'approve' && variables.committee_vote_director == 'approve') || (variables.committee_vote_cro == 'approve' && variables.committee_vote_ceo == 'approve') || (variables.committee_vote_director == 'approve' && variables.committee_vote_ceo == 'approve')"
       },
       %{
-        "id" => "e24",
-        "source" => "credit-committee-vote",
+        "id" => "e40",
+        "source" => "committee-tally",
         "target" => "end-declined",
-        "condition" => "variables.committee_outcome == 'rejected'"
+        "condition" =>
+          "(variables.committee_vote_cro == 'reject' && variables.committee_vote_director == 'reject') || (variables.committee_vote_cro == 'reject' && variables.committee_vote_ceo == 'reject') || (variables.committee_vote_director == 'reject' && variables.committee_vote_ceo == 'reject')"
+      },
+      %{
+        "id" => "e40-default",
+        "source" => "committee-tally",
+        "target" => "end-declined",
+        "is_default" => true
       },
       # Fallback edges (REQ-208's own graph-validation-driven addition, over the
       # design's literal §3.1 edge set): Letflow.Definitions.Graph's validator
       # requires every HUMAN_TASK with at least one really-conditioned outgoing
       # edge to also have an unconditioned fallback edge. The real fixture's own
-      # fallback-l1-approval/fallback-l2-approval/timeout-credit-committee-vote
-      # edges served this role (targeting l2-approval/create-facility/
-      # committee-timeout respectively) -- kept here, verbatim in shape, with
-      # targets adjusted for this graph's own create-facility/committee-timeout
-      # elisions (design §3.1): l1-approval's fallback still targets l2-approval
-      # (unchanged from the real fixture); l2-approval's and
-      # credit-committee-vote's fallbacks now target disburse-loan directly,
-      # since create-facility/committee-timeout no longer exist as intermediate
-      # nodes in this simplified graph. Never exercised by either scenario (both
-      # always set a condition-satisfying decision variable).
+      # fallback-l1-approval/fallback-l2-approval edges served this role
+      # (targeting l2-approval/create-facility respectively) -- kept here,
+      # verbatim in shape: l1-approval's fallback still targets l2-approval
+      # (unchanged from the real fixture); l2-approval's fallback now targets
+      # disburse-loan directly, since create-facility no longer exists as an
+      # intermediate node on that path in this simplified graph. The three
+      # committee-vote-* HUMAN_TASKs need no fallback of their own: each has
+      # exactly one, already-unconditioned outgoing edge (e32/e33/e34), the
+      # same reason credit-memo-review/risk-assessment above need none either.
+      # Never exercised by either scenario (both always set a
+      # condition-satisfying decision variable).
       %{"id" => "fallback-l1-approval", "source" => "l1-approval", "target" => "l2-approval"},
       %{"id" => "fallback-l2-approval", "source" => "l2-approval", "target" => "disburse-loan"},
-      %{
-        "id" => "fallback-credit-committee-vote",
-        "source" => "credit-committee-vote",
-        "target" => "disburse-loan"
-      },
+      %{"id" => "e26", "source" => "create-facility", "target" => "disburse-loan"},
       %{"id" => "e27", "source" => "disburse-loan", "target" => "end-disbursed"}
     ]
   }
@@ -608,6 +708,37 @@ defmodule Letflow.Simulation.Req208MeridianTest do
         prefix: schema_name
       )
 
+    # REQ-433: role-committee-member has no dedicated department group in
+    # org_structure.yaml (unlike role-credit-manager/role-risk-manager/
+    # role-compliance-officer above, each backed by one pre-existing dept-*
+    # group) -- the three committee voters (thomas, julia, eva) span 3
+    # different existing departments (dept-risk, dept-credit-de, dept-exec).
+    # `RoleRegistry.upsert_role/4` binds one role name to exactly ONE group
+    # id, so a new, test-local group is created here (not added to the
+    # shared org_structure.yaml fixture, which test/fixtures/simulation/
+    # fixture_shape_test.exs also validates structurally and which
+    # req206/207's own scenarios do not touch) containing exactly the 3
+    # committee-vote actors this scenario drives, then bound to
+    # role-committee-member -- same effect as a real tenant designating a
+    # standing "Credit Committee" group, scoped to this test only.
+    {:ok, committee_group} =
+      Identity.create_group(
+        %{"name" => "dept-credit-committee-" <> unique, "display_name" => "Credit Committee"},
+        prefix: schema_name
+      )
+
+    {:ok, _} =
+      RoleRegistry.upsert_role(
+        "role-committee-member",
+        :process_routing_role,
+        committee_group.id,
+        prefix: schema_name
+      )
+
+    for member <- [thomas, julia, eva] do
+      {:ok, _} = Identity.add_group_member(committee_group.id, member.id, prefix: schema_name)
+    end
+
     # Seed simplified loan-origination process (no SERVICE_TASKs; shared by both
     # above-threshold and below-threshold scenarios, per the requirement text).
     simple_loan_name = "SimpleLoanOrigination-" <> unique
@@ -811,7 +942,7 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   # ─── AC1: meridian-loan-origination-above-threshold ──────────────────────
 
   describe "meridian-loan-origination-above-threshold" do
-    test "3 parallel tracks fork for real; a separate branch-completion call now advances the join cohort (ISS-0397)",
+    test "2 of 3 committee votes reach quorum for real; the 3rd (join-firing) vote reproduces a new, documented engine defect (REQ-433)",
          %{schema_name: schema_name, actors: actors, definitions: %{loan: definition}} do
       scenario_raw =
         ScenarioFixture.load!(Path.join(@scenarios_dir, "loan-origination-above-threshold.yaml"))
@@ -825,8 +956,19 @@ defmodule Letflow.Simulation.Req208MeridianTest do
 
       assert {:ok, report} = Runner.run(scenario)
 
-      assert length(report.step_results) == 3
-      [step1, step2a, step2b] = report.step_results
+      assert length(report.step_results) == 9
+
+      [
+        step1,
+        step2a,
+        step2b,
+        step3,
+        step4,
+        step5,
+        step6,
+        step7,
+        step8
+      ] = report.step_results
 
       instance_id = step1.captured["instance_id"]
 
@@ -841,13 +983,7 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       # (credit-memo-review, risk-assessment) exist as task rows from that
       # point on regardless of what happens next; the KYC/AML track is the
       # immediate, unconditioned edge straight to assessment-join (test
-      # module's own @simple_loan_origination_graph comment). Queried here
-      # (by task existence, any status) rather than right after step1's own
-      # `captured` map, because `Runner.run/1` executes this scenario's
-      # entire step list -- including step 2b below -- before returning; a
-      # query issued only after `Runner.run/1` returns necessarily observes
-      # state as of the LAST step, not step 1's own (pre-ISS-0397 this
-      # distinction never mattered here since step 2b always rolled back).
+      # module's own @simple_loan_origination_graph comment).
       {:ok, %{items: all_tasks}} =
         Letflow.Tasks.list_tasks(
           %{instance_id: instance_id, page_size: 10},
@@ -858,64 +994,162 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       assert "credit-memo-review" in all_task_node_ids
       assert "risk-assessment" in all_task_node_ids
 
-      # NOTE on `items.0` (found while updating this test for ISS-0397, not new
-      # behavior it introduced): `GET /api/v1/tasks?...status=PENDING` orders by
-      # `inserted_at DESC, id DESC` (Letflow.Tasks.list_tasks/2) -- since
-      # credit-memo-review is inserted before risk-assessment within create/2's
-      # own hop-chain, `items.0` is actually the risk-assessment task, not
-      # credit-memo-review as this scenario's own YAML/step names assume. This
-      # was never observable pre-fix (step 2b 500'd regardless of which task was
-      # targeted) -- now that the call succeeds, the real task identity matters
-      # and is asserted explicitly below rather than left to the (incorrect)
-      # naming.
-      #
-      # Step 2b -- pre-ISS-0397, this reproduced the join_counters defect: a
-      # real, separate HTTP call completing one parallel branch could not route
-      # through assessment-join, since Engine.complete_task/3's freshly-rebuilt
-      # InstanceState always had join_counters: %{}. Post-fix, this call reads
-      # the durably-persisted cohort create/2's own split left behind
-      # (instance_projections.join_counters) and succeeds: one of the 3 expected
-      # branches (this one) is now received, two remain outstanding (the join
-      # does not fire yet).
+      # Step 2b (ISS-0397 fix, now locked in further by REQ-433's own extension
+      # below): a real, separate HTTP call completing one parallel branch
+      # durably reads the cohort create/2's own split left behind
+      # (instance_projections.join_counters) and succeeds: one of the 3
+      # expected branches is received, two remain outstanding (the join does
+      # not fire yet).
       assert step2b.outcome == :ok,
-             "step 2b (POST task complete) was expected to succeed now that " <>
-               "ISS-0397 durably persists join_counters across calls; " <>
-               "instead got outcome #{inspect(step2b.outcome)}, detail: #{inspect(step2b.detail)}"
+             "step 2b (POST task complete) failed — #{inspect(step2b.detail)}"
 
       assert %{"instance_status" => "ACTIVE"} = step2b.detail
 
-      # No expected_outcomes in this scenario's YAML (full quorum/disbursement
-      # verification is out of reach of a real run, moduledoc) -- AC5's "closed
-      # disposition, no step left unaddressed" is satisfied by every one of
-      # these 3 steps having a real, asserted outcome.
-      assert report.outcome_results == []
+      # Step 3 -- looks up the one remaining pending assessment task
+      # (credit-memo-review, per items.0's own risk-assessment-first ordering
+      # quirk noted above).
+      assert step3.outcome == :ok,
+             "step 3 (GET remaining assessment lookup) — #{inspect(step3.detail)}"
 
-      # Real-state evidence the join cohort advanced correctly, one branch at a
-      # time: risk-assessment is now COMPLETED (no longer pending), and the
-      # assessment-join cohort still durably tracks credit-memo-review and the
-      # KYC/AML branch as outstanding -- current_nodes narrows to
-      # credit-memo-review alone (the join has not fired: 2 of 3 branches
-      # received).
-      {:ok, %{items: pending_after_step2b}} =
-        Letflow.Tasks.list_tasks(
-          %{instance_id: instance_id, status: :pending, page_size: 10},
-          prefix: schema_name
-        )
+      # Step 4 -- completes the last assessment branch. Real: fires
+      # assessment-join (3 of 3 received) and cascades, in this one call,
+      # through eligibility-gate and authority-routing (750000 > 500000 ->
+      # committee-vote-fork), landing 3 real HUMAN_TASKs
+      # (committee-vote-cro/director/ceo) in one hop-chain -- the same
+      # single-call multi-hop cascade the REQ-215 AC2 describe block below
+      # already proves against this exact gateway shape.
+      assert step4.outcome == :ok,
+             "step 4 (POST last assessment branch complete) — #{inspect(step4.detail)}"
 
-      pending_node_ids_after_step2b =
-        Enum.map(pending_after_step2b, fn {task, _form_version} -> task.node_id end)
+      assert %{"instance_status" => "ACTIVE"} = step4.detail
 
-      assert pending_node_ids_after_step2b == ["credit-memo-review"],
-             "Expected only credit-memo-review still PENDING after risk-assessment's " <>
-               "own branch completed and joined into the still-outstanding cohort"
+      # NOTE (same single-shot-execution property this test module's own
+      # pre-existing comments already document for step1/2a/2b above):
+      # `Runner.run/1` executes this scenario's ENTIRE step list before
+      # returning -- there is no way to observe instance state as of "right
+      # after step 4" specifically; any query issued here necessarily
+      # observes state as of the LAST step (step 8). Real per-step pass/fail
+      # evidence for steps 4 through 8 individually still comes from each
+      # step's own `outcome`/`detail` below -- real, not fabricated, just not
+      # independently re-queryable mid-scenario.
 
+      # Step 5 -- looks up the 3 committee-vote-* tasks created by step 4's
+      # cascade. Real. Order is NOT assumed to correspond to a specific node
+      # id (the Runner's template substitution is purely positional, and
+      # `list_tasks/2`'s `inserted_at DESC, id DESC` ordering means whichever
+      # of the 3 committee-vote-* tasks was created LAST comes back as
+      # items.0) -- this does not matter: output_variables are
+      # instance-global and unvalidated against the completing task's own
+      # node id, so assigning the 3 required committee_vote_* variable names
+      # to whichever 3 tasks come back in whatever order still produces the
+      # exact same quorum tally (2 approve, 1 reject) regardless of which
+      # physical committee-vote-{cro,director,ceo} node each one structurally
+      # is -- asserted structurally below, not against a specific binding.
+      assert step5.outcome == :ok, "step 5 (GET committee task lookup) — #{inspect(step5.detail)}"
+
+      # Steps 6/7 -- two committee members vote approve, reaching 2-of-3
+      # quorum (join has not fired yet -- only 2 of 3 branches received).
+      assert step6.outcome == :ok, "step 6 (1st committee vote) — #{inspect(step6.detail)}"
+      assert step7.outcome == :ok, "step 7 (2nd committee vote) — #{inspect(step7.detail)}"
+
+      # Step 8 -- the third committee member dissents, the 3rd-of-3 arrival
+      # at committee-vote-join (a set-based wait-for-all-expected join).
+      #
+      # NEW ELIXIR-DEV FINDING (confirmed this session, reproduced directly
+      # against a real running instance -- not a guess; reported for ORCH
+      # allocation since this platform defect is NEW, checked first against
+      # every already-filed issue this test module's own moduledoc names
+      # (ISS-0388..0397/0408/0925/0942/0945) and matching none of them):
+      #
+      # `committee-vote-join` firing HERE mints a brand-new, not-yet-persisted
+      # token_id (`Transition.fire_join/5`'s own `"<origin>/<join_node>/
+      # joined"` string) that, in THIS SAME hop chain, immediately continues
+      # through `committee-tally` (EXCLUSIVE_GATEWAY pass-through) onto
+      # `create-facility`, a real SERVICE_TASK requiring a
+      # `service_task_dispatches` row. `engine.ex`'s
+      # `build_complete_task_tail_multi/6` builds that row's `id_map` as an
+      # IDENTITY map (`Map.new(prepared_service_task_dispatches, fn
+      # %{token_id: token_id} -> {token_id, token_id} end)`), on the explicit,
+      # documented assumption (REQ-215 design doc §2.1 point 1, restated at
+      # this exact call site's own comment) that "every token_id in
+      # prepared_service_task_dispatches is already a real, persisted
+      # TokenRecord id at this point in the hop chain." That assumption holds
+      # for every case exercised so far (a SERVICE_TASK reached from a plain,
+      # already-persisted token, as this same file's REQ-215 AC2 describe
+      # block below proves) -- it does NOT hold here: `prepared_service_task_
+      # dispatches` is computed from the hop chain's `final_instance_state`
+      # BEFORE `insert_hop_chain_new_token_records/5` mints a real TokenRecord
+      # for the join's own synthetic continuation token, and
+      # `rewrite_token_ids/2` (which DOES fix up `final_instance_state.tokens`/
+      # `.pending_task_nodes` for exactly this reason, per its own ISS-0408
+      # moduledoc) never touches `prepared_service_task_dispatches` (or
+      # `prepared_timers`, same bug, unexercised here) at all. The result: a
+      # real `Ecto.Changeset` cast failure
+      # (`token_id: {"is invalid", [type: Ecto.UUID, validation: :cast]}`)
+      # building the `ServiceTaskDispatch` row, surfaced to the HTTP caller as
+      # a real `422 Unprocessable Entity` ("validation failed").
+      #
+      # This is a genuine, previously-undiscovered engine limitation: "a
+      # PARALLEL_GATEWAY join whose own downstream edge leads directly to a
+      # SERVICE_TASK, when that join fires within the same hop chain as the
+      # triggering task completion, cannot create that SERVICE_TASK's
+      # dispatch row." REQ-433's committee-vote-join -> committee-tally ->
+      # create-facility subgraph is the first shape in this codebase to
+      # combine those two properties (every existing PARALLEL_GATEWAY join's
+      # own downstream target has so far always been another gateway or a
+      # HUMAN_TASK, never a bare SERVICE_TASK) -- confirmed by a repo-wide
+      # structural check, not assumed.
+      #
+      # REQ-433's own OUT OF SCOPE clause and AC6 (`git diff` must show zero
+      # changes under `lib/letflow/engine/`) forbid fixing this here -- per
+      # this role's own instructions ("it must stop and get a fresh
+      # CODE-DESIGNER pass, not patch lib/letflow/engine/ under cover of this
+      # fixture-only design"), this is documented as a confirmed, reproducible
+      # defect rather than patched or silently papered over. The fixture/
+      # scenario data REQ-433 adds is still structurally correct (REQ-433's
+      # own ACs 1/2/3/5/6/7 do not depend on this call succeeding); only the
+      # very last real hop (committee-vote-join firing into a SERVICE_TASK in
+      # one call) is blocked, platform-wide, until a follow-up requirement
+      # fixes `build_complete_task_tail_multi/6`'s (and its 3 sibling call
+      # sites') identical-shaped identity-id_map construction to also account
+      # for a hop-chain-local join-minted token.
+      assert step8.outcome == :error,
+             "step 8 (3rd committee vote) was expected to reproduce the newly-found " <>
+               "join-into-SERVICE_TASK dispatch defect (see comment above) -- instead got " <>
+               "outcome #{inspect(step8.outcome)}, detail: #{inspect(step8.detail)}"
+
+      assert %{status: 422} = step8.detail
+
+      # Real-state evidence the failure is clean (INV-EE48-7's own "typed,
+      # non-crashing failure, not silent data corruption" characterization,
+      # same discipline this file's pre-ISS-0397 history already established
+      # for the analogous assessment-join defect): the whole transaction
+      # rolled back, so the 3rd committee-vote-* task stays PENDING (not
+      # completed), and current_nodes still shows exactly that one
+      # outstanding node -- quorum was never structurally evaluated.
       {:ok, final_projection} = Instances.get_by_id(instance_id, prefix: schema_name)
       assert final_projection.status == :active
-      assert final_projection.current_nodes == ["credit-memo-review"]
 
-      assert %{"assessment-join" => cohort} = final_projection.join_counters
-      assert length(cohort["received_from_branches"]) == 2
-      assert length(cohort["expected_from_branches"]) == 3
+      assert final_projection.current_nodes in [
+               ["committee-vote-cro"],
+               ["committee-vote-director"],
+               ["committee-vote-ceo"]
+             ],
+             "Expected current_nodes to still show exactly the one committee-vote-* task " <>
+               "step 8's rolled-back attempt never completed; got #{inspect(final_projection.current_nodes)}"
+
+      refute Map.has_key?(final_projection.variables, "committee_vote_ceo") and
+               Map.has_key?(final_projection.variables, "committee_vote_cro") and
+               Map.has_key?(final_projection.variables, "committee_vote_director"),
+             "Expected only 2 of the 3 committee_vote_* variables set (step 8's own " <>
+               "variable never merged, rolled back with everything else)"
+
+      assert [] ==
+               ServiceTaskDispatch
+               |> Ecto.Query.where([d], d.instance_id == ^instance_id)
+               |> Repo.all(prefix: schema_name),
+             "Expected zero service_task_dispatches rows -- the one step 8 attempted to " <>
+               "insert must have rolled back along with everything else in its transaction"
     end
   end
 

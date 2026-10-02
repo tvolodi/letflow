@@ -313,3 +313,12 @@ recommended_actions:
   - "File F1, F2 and D; raise ISS-0926 priority (fails two EOs: BLOCKER-impact regulatory notice reason, MAJOR MES line assignment)."
   - "Fix scripts/seed_vortex_entities.sh activate call to send the required rationale; the draft production_batch definition must be activated or skipped, then re-run it; then re-run vortex/entity-list-filter-and-page (GUI leg still UNBUILT)."
   - "FRONTEND-DEV/BA: author pipeline_tests (or document an API leg) for swiftroute shipment-high-value-happy steps 2-3 and shipment-ops-timeout-escalation step 3; the supplementary API chain passes today."
+
+# Evidence note for ISS-0928 (issue file on main is the resolved version, root-caused as a
+# silent rollback on no_matching_edge at a downstream EXCLUSIVE_GATEWAY, not a PARALLEL_GATEWAY
+# dispatch problem). Original FULL3 observation, kept here as UAT evidence: meridian Loan
+# Origination v1.1 on QA, after credit-memo-review and risk-assessment completed,
+# current_nodes=[kyc-aml-check]; instance stayed ACTIVE 6.5+ min (past 300s timeout_ms) with no
+# task, no SERVICE_TASK_COMPLETED event, no EXECUTION_ERROR, no DLQ row, while httpbin answered
+# 200 directly and top-level service tasks completed in 2-6s. Severity at filing: BLOCKER.
+# Original issue filed as GH-2114 / Q-928.

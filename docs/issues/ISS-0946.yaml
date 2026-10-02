@@ -23,4 +23,81 @@ related:
   - ISS-0926
 queue_ref: Q-934  # queue allocated issue_ref ISS-0934, which collides with an existing (deleted-as-duplicate) local filename; local filename kept as ISS-0946 (next free on origin/main) and GH-2122 retitled to match
 github_ref: GH-2122
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0946-service-task-outbound-audit
+resolved_at: "2026-10-02T02:20:00Z"
+resolution: >
+  Decision: audited the outbound SERVICE_TASK request (Option A) rather than
+  rewording EO-002 to read the completion payload (Option B). CODE-DESIGNER's
+  reasoning: the completion payload only carries the notice reason today
+  because the QA seed target happens to be an echoing endpoint; a real
+  endpoint would return its own response, not an echo, so rewording would
+  only pass by test-double coincidence rather than proving the notice was
+  actually filed.
+
+  Design: lib/letflow/design/iss0946-service-task-audit-decision.md, went
+  through 3 CODE-DESIGN-VALIDATOR revision cycles: 1st FAILed on a
+  nested-transaction SAVEPOINT hazard (citing this repo's own prior
+  documented lesson, ISS-0873's design doc §7); 2nd FAILed on two narrower
+  mechanical gaps (incomplete function-threading spec missing
+  handle_failure/4, unaddressed composition with an existing BLOCKER-fix
+  try/rescue); 3rd PASSed after both were closed via a minimal
+  wrap_with_audit_context/2 helper wrapping all six do_attempt_dispatch/2
+  return branches, with the audit write moved to run strictly after
+  attempt_dispatch/2's own transaction returns (matching this codebase's
+  own existing audit-precedent convention) rather than nested inside it.
+
+  Fix: new audit action "service_task.outbound_request_sent" via
+  Letflow.Audit.insert_entry/3, carrying dispatch_id/node_id/attempt_index/
+  route_kind/method/rendered_url and a redacted+capped
+  request_body_preview; EO-002's verification criterion reworded in
+  test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml
+  to check this new audit action instead of the completion payload.
+
+  SECURITY-REVIEWER: FAILed first pass with two concrete, reproduced
+  secret-leak findings -- a secret nested one level deep under a
+  non-matching top-level JSON key escaped redaction (only top-level keys
+  were checked), and a non-JSON body was passed through completely
+  unredacted. Routed back to ELIXIR-DEV, which chose the more conservative
+  of two offered fixes: full unbounded-depth recursive redaction for
+  JSON-decodable bodies, and for non-JSON bodies, persisting NO body
+  content at all (only request_body_present/request_body_byte_size) rather
+  than attempting a regex-based heuristic redaction judged not
+  safe-by-construction for a security-sensitive audit surface. Re-reviewed
+  and PASSed with SECURITY-REVIEWER's own independently-constructed
+  adversarial cases (2-levels-deep nesting, lists of objects,
+  lists-of-lists-of-maps) confirming genuinely unbounded-depth coverage.
+
+  REVIEWER: PASSed (idiom, scope, confirmed no conflict with the
+  concurrently-merged ISS-0929 fix in the sibling sub_process.ex file);
+  flagged a non-blocking follow-up observation (OQ-4: the two pre-existing
+  engine.ex audit precedents lack the same rescue-hardening this fix added
+  for its own call site) worth a separate future issue, not fixed here.
+
+  TEST-RUNNER: full suite 5366/5366 green, directly confirmed via trace log
+  that a real persisted audit row shows the nested-key redaction working
+  (not just a green test name).
+
+  RELEASE-VALIDATOR: exhaustive independent re-verification -- hand-traced
+  all three acceptance criteria against the actual code (not the design
+  doc's narrative), read the exact Letflow.Audit.insert_entry/3 call site
+  and confirmed its persisted attrs map matches the reworded EO-002
+  criterion's expectations field-for-field, ran its own adversarial
+  redaction probe (mixed-case secret keys, deeply nested lists-of-lists)
+  finding one INHERENT, non-blocking residual limitation (a secret-shaped
+  VALUE with no enclosing JSON key -- e.g. a bare string in an array --
+  isn't caught by key-based redaction; explicitly judged non-blocking
+  given rendered_body is entirely tenant-authored content, the audit
+  surface stays scoped to that same tenant's own :AuditRead view, and
+  headers -- the actual credential channel -- are unconditionally excluded
+  regardless of shape), independently re-traced poll_and_dispatch/1's call
+  site to confirm zero caller-visible contract change, and independently
+  re-ran the full suite (5366/5366, matching TEST-RUNNER).
+
+  This is an ISSUE closure, not a REQ -- docs/requirements.yaml untouched.
+  No letflow-queue task to release: discovered by CODE-DESIGNER mid-run
+  during ISS-0926's design, filed directly; queue_ref: Q-934/github_ref:
+  GH-2122 are filing metadata only, confirmed no live queue task exists
+  tied to issue_ref ISS-0946.
+
+  PR #2142, final commit 5efeece5.

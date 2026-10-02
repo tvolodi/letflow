@@ -32064,7 +32064,53 @@ requirements:
   - id: REQ-433
     title: "Meridian Loan Origination: real 2-of-3 credit-committee quorum vote (PARALLEL_GATEWAY fan-out + tally gateway), replacing the unsuppliable committee_outcome HUMAN_TASK"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
+    completion_note: >
+      PR #2148, branch feat/REQ-433-committee-quorum, commit 51680391,
+      merged to main. Implements the real 2-of-3 committee-quorum subgraph
+      exactly per this requirement's own sketch: committee-vote-fork
+      (PARALLEL_GATEWAY) -> committee-vote-cro/_director/_ceo (3 HUMAN_TASK
+      votes) -> committee-vote-join (PARALLEL_GATEWAY) -> committee-tally
+      (EXCLUSIVE_GATEWAY), applied identically to
+      test/fixtures/qa/meridian_loan_origination_process_definition.json and
+      test/fixtures/simulation/meridian/process_claim_intake.yaml. Design
+      (lib/letflow/design/req433-committee-quorum.md): 2 CODE-DESIGN-VALIDATOR
+      cycles -- 1st FAILed on a stale claim relying on an already-resolved
+      engine bug (ISS-0397); 2nd PASSed after re-verification found the
+      simulation scenario genuinely needed new steps once that blocker was
+      confirmed gone. Implementation surfaced a genuine, separate engine
+      defect mid-work: ISS-0974 (same-hop-chain PARALLEL_GATEWAY join firing
+      into SERVICE_TASK/TIMER minted a non-UUID token_id, 422 crash) --
+      ELIXIR-DEV correctly left engine code untouched and honestly documented
+      the failing assertion rather than faking a pass. ISS-0974 was
+      diagnosed, designed, fixed, and merged through its own full gate chain
+      (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER -- which also filed
+      ISS-0975 for a 5th structurally-similar site needing a different fix
+      shape, merged separately -- TEST-RUNNER, RELEASE-VALIDATOR, whose own
+      mutation test found a real coverage gap on 3 of the 4 fixed sites,
+      filed as ISS-0976 follow-up for TEST-DESIGNER). This branch was then
+      rebased onto the merged ISS-0974 fix and the previously-honest-failing
+      AC4 assertion flipped to assert the real success path (verified: a
+      real service_task_dispatches row with a genuinely UUID-castable
+      token_id, not a mock). REVIEWER PASSed (first full pass on this PR),
+      confirmed every AC directly. TEST-RUNNER FAILed once on a genuine,
+      separate gap -- REQ-433 was missing its impl_order registration in
+      docs/requirements.yaml, breaking 3 requirements-registry self-check
+      tests; fixed properly via a real letflow-queue register_task call
+      (task 940, GH#2154), not a workaround. Re-ran clean: 5368/5368.
+      RELEASE-VALIDATOR: exhaustive independent re-verification of all 7 ACs
+      against current code/fixtures, plus its own adversarial tests beyond
+      the shipped 2-1 tally case (3-0 unanimous approve, 3-0 unanimous
+      reject, 1-1-1 split correctly falling to default-decline,
+      threshold-routing/edge-exclusivity intact) -- all passed. Independently
+      re-ran the full suite (5368/5368, matching TEST-RUNNER). letflow-queue
+      task 940 (GH#2154) locked and released as done by DOC-UPDATER at this
+      closure (RELEASE-VALIDATOR's sandbox had no QUEUE_AUTH_TOKEN and could
+      not independently verify the task's live state; DOC-UPDATER confirmed
+      it directly via real queue access -- GET /tasks showed status: open,
+      eligible: true, locked_by: null before this close-out, then
+      lock+release(status=done) both returned 200). docs/issues/ISS-0973.yaml
+      set to status: resolved in this same run.
     stage: S7
     description: >
       Filed from ISS-0973 (REQ-ANALYST decision issue), itself filed from
@@ -32242,6 +32288,6 @@ requirements:
       # formal queue claim flow, picked up directly from REQ-ANALYST decision ISS-0973
       # / queue task 939; registered now to close the real registration-registry gap
       # TEST-RUNNER FAILed PR #2148 on, T-REG-STILL-GREEN / T-LIVE-INVARIANTS /
-      # T-LIVE-GREEN). status stays pending here until DOC-UPDATER flips it at the
-      # requirement's own closure; the queue task is left unlocked/open for that same
-      # later closure to claim and release as done.
+      # T-LIVE-GREEN). Closed out: DOC-UPDATER locked and released task 940 as
+      # status=done at this requirement's own closure (verified live via GET /tasks
+      # before locking: status open, eligible true, locked_by null).

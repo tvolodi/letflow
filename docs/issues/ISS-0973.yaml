@@ -19,4 +19,69 @@ source_reports:
   - test/uat-reports/ba-signoff-meridian-WF05-FULL3-20261001.yaml
 queue_ref: Q-939  # queue allocated issue_ref ISS-0939, which collides with an existing (still-open, different-topic) local filename; local filename kept as ISS-0973 (next free on origin/main) and GH-2128 retitled to match
 github_ref: GH-2128
-status: open
+status: resolved
+resolved_in_run: feat/REQ-433-committee-quorum
+resolved_at: "2026-10-02T10:30:00Z"
+resolution: >
+  REQ-433 filed from this issue's own REQ-ANALYST decision: model a real
+  2-of-3 committee quorum (PARALLEL_GATEWAY fork -> 3 HUMAN_TASK votes ->
+  PARALLEL_GATEWAY join -> EXCLUSIVE_GATEWAY tally), rejecting a cheaper
+  scenario-supplied committee_outcome fudge because the fudge would only
+  pass by test-double coincidence, not prove real quorum tallying.
+
+  Design (lib/letflow/design/req433-committee-quorum.md): 2
+  CODE-DESIGN-VALIDATOR revision cycles -- 1st FAILed on a stale claim
+  relying on an already-resolved engine bug (ISS-0397); 2nd PASSed after
+  re-verification found the simulation scenario genuinely needed new steps
+  once that blocker was confirmed gone.
+
+  Implementation surfaced a genuine, SEPARATE engine defect mid-work:
+  ISS-0974 (same-hop-chain PARALLEL_GATEWAY join firing into
+  SERVICE_TASK/TIMER minted a non-UUID token_id, 422 crash) -- ELIXIR-DEV
+  correctly left engine code untouched and honestly documented the failing
+  assertion rather than faking a pass. ISS-0974 was diagnosed (ISSUE-FIXER),
+  designed, fixed, and merged through its OWN full gate chain
+  (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER -- which also filed
+  ISS-0975 for a 5th structurally-similar site needing a different fix
+  shape, merged separately -- TEST-RUNNER, RELEASE-VALIDATOR, whose own
+  mutation test found a real coverage gap on 3 of the 4 fixed sites, filed
+  as ISS-0976 follow-up for TEST-DESIGNER).
+
+  REQ-433's branch was then rebased onto the merged ISS-0974 fix and the
+  previously-honest-failing AC4 assertion flipped to assert the real
+  success path (verified: a real service_task_dispatches row with a
+  genuinely UUID-castable token_id, not a mock).
+
+  REVIEWER: PASSed (first full pass on this PR), confirmed every AC
+  directly.
+
+  TEST-RUNNER: FAILed once on a genuine, separate gap -- REQ-433 was
+  missing its impl_order registration in docs/requirements.yaml, breaking 3
+  requirements-registry self-check tests. ELIXIR-DEV fixed it properly via
+  a real letflow-queue register_task call (task 940, GH#2154), not a
+  workaround (confirmed via the actual check-script logic that a deferral
+  marker would have been immediately flagged STALE instead). Re-ran clean:
+  5368/5368.
+
+  RELEASE-VALIDATOR: exhaustive independent re-verification of all 7 ACs
+  against current code/fixtures (not narrative), plus its OWN adversarial
+  tests beyond the shipped 2-1 tally case (3-0 unanimous approve, 3-0
+  unanimous reject, 1-1-1 split correctly falling to default-decline,
+  threshold-routing/edge-exclusivity intact) -- all passed. Independently
+  re-ran the full suite (5368/5368, matching TEST-RUNNER). Confirmed
+  impl_order: 940's static form is correctly constructed per
+  TASK_QUEUE.md's convention, though it honestly could not verify the
+  task's LIVE state (no queue auth in its sandbox) -- flagged for
+  DOC-UPDATER to verify with real queue access before releasing task 940.
+
+  DOC-UPDATER verified task 940 directly against the live letflow-queue
+  service: GET /tasks showed id 940, status: open, locked_by: null,
+  eligible: true, github_issue_number: 2154, matching
+  docs/requirements.yaml's impl_order comment. Locked it
+  (agent_id doc-updater-req433, 200) then released it with status: done
+  (200) -- released cleanly, best-effort-closing GH#2154 per
+  release_lock's own documented semantics.
+
+  PR #2148, final commit 51680391, merged to main. GitHub issue #2128
+  closed with an explanatory comment in this same run.
+

@@ -1,0 +1,50 @@
+{
+  "handoff_id": "7a1e5c90-3b2d-4f68-9c47-e2d81a6b0f35",
+  "run_id": "WF03-Q929-20261001",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q929-20261001/step-04b-test-design-validator.json",
+  "created_at": "2026-10-02T08:55:00Z",
+  "started_at": "2026-10-02T08:56:00Z",
+  "completed_at": "2026-10-02T09:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0929": "queue Q-929 / GH #2115: vortex supplier-quality-deviation-critical SUB_PROCESS_DEFINITION_NOT_FOUND; 8D child definition + role-procurement-manager seeding + engine post-subprocess pending-event fix. Scenario EO-002 (8D sub-process assigned to Procurement Manager) and EO-003 (deviation closed, COMPLETED at end-closed)."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/scripts/vortex_8d_subprocess_fixture_test.exs",
+      "test/letflow/engine/sub_process_service_task_after_test.exs",
+      "test/specs/ISS-0929.md",
+      "handoffs/WF03-Q929-20261001/step-04-test-designer.json",
+      "lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-a5c794b4cbceb277a",
+    "branch_name": "feature/WF03-Q929-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4b hard gate on TEST-DESIGNER: independently reproduce fail-first, independently apply at least two mutants in a throwaway worktree, assess the surviving Enum.uniq mutant, check coverage and isolation.",
+    "acceptance_criteria": [
+      "Fail-first independently reproduced with counts",
+      "At least 2 mutants independently applied with counts",
+      "Fixed tree green",
+      "Coverage of every criterion, no skipped or vacuous tests",
+      "Tree left unchanged",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. (1) Fixed tree: mix test of both files (MIX_ENV=test, LETFLOW_DB_PORT=51929) = 21 passed, rc=0. (2) Fail-first reproduced by me in a throwaway detached worktree of origin/main 5d0a7013 (deps/_build copied, MIX_TEST_PARTITION=tdvf) with only the 2 new test files: 3/21 pass, 18 fail (F1-F7, M-a, M-b, M-c, M-c2, M-c3, M-f, E1, E2, E3, E5, E6); the 3 green are M-d, M-e (mutants of an already-absent shape) and E4, matching the spec. (3) Mutants applied by me in a second throwaway worktree (HEAD 30d7b47b plus the full working-tree changes, MIX_TEST_PARTITION=tdvm; baseline there 21 passed), each reverted and cmp-verified identical to the working checkout: Enum.uniq(...) -> [] in sub_process.ex = 16/21 pass, 5 red (E1,E2,E3,E5,E6); drop dispatch arm (engine.ex new wrapper passes [] to prepare_service_task_dispatch_abort_on_empty_url) = 18/21, 3 red (E1,E5,E6); drop timer arm (prepare_timer_arms([],...) in the wrapper) = 19/21, 2 red (E2,E3); wrong role in child fixture (role-quality-manager) = 20/21, 1 red (F4). All match TEST-DESIGNER's reported counts. (4) Surviving mutant, removing Enum.uniq (plain concatenation): I reproduced 21 passed. Assessment: acceptable. It is a purely defensive dedupe (duplicate Multi step names would raise) and no tested graph yields duplicate pending events from the transition and the hop chain, so the mutant is behaviour-equivalent on every reachable test input; the spec documents it honestly as unreached. Not blocking. (5) Coverage: EO-002 (definition_name resolves, child HUMAN_TASK role-procurement-manager, child seeded before parent, alias sidecar) by F1-F7 + E6; EO-003 (deviation closes, close-deviation dispatch with rendered URL, COMPLETED, SUB_PROCESS_COMPLETED present, no EXECUTION_ERROR) by E1, E6; engine arms for TIMER / escalation HUMAN_TASK / empty-URL error by E2, E3, E5; no over-arming by E4. No @tag :skip, no TODO, no secrets or connection strings in the test files. Isolation: pure test is async true with file reads only; DB test is async false, Sandbox.mode(:auto) in setup, per-test TenantFixture.provisioned_tenant! with unique keys, same convention as regulatory_review_timer_path_test.exs; each test self-sufficient. (6) Cleanup: both throwaway worktrees removed and pruned; git worktree list shows no residue; git status --porcelain identical to before (only the intended ISS-0929/ISS-0931 modified files and untracked new files, no mutant residue in lib/ or test/); no test files edited, nothing committed.",
+    "issues": [],
+    "route_back": null
+  }
+}

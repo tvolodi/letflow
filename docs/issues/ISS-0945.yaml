@@ -1,0 +1,28 @@
+id: ISS-0945
+title: "Sub-process completion discards pending SERVICE_TASK dispatch events: nodes after a SUB_PROCESS never dispatch"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-Q926-20261001 (ISS-0926 design, section 3.6)
+discovered_at: "2026-10-01T00:00:00Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  lib/letflow/engine/sub_process.ex ~877-894 discards pending events
+  (_more_pending) after a sub-process completes, so a SERVICE_TASK reached
+  right after a sub-process (meridian regulatory review:
+  remediation-subprocess -> post-remediation-check -> e10 ->
+  regulatory-remediation-escalation) creates no dispatch row. Pre-existing,
+  out of ISS-0926's own scope -- filed separately per that design doc's
+  section 3.6. Fix: carry the pending service-task events through the
+  sub-process completion hop and dispatch them; add a DB-backed regression
+  test.
+acceptance_criteria:
+  - SERVICE_TASK reached after sub-process completion creates a dispatch row
+  - Regression test fails pre-fix
+  - No change to normal (non-sub-process) completion paths
+affected_files:
+  - lib/letflow/engine/sub_process.ex
+related:
+  - ISS-0926
+queue_ref: Q-935  # queue allocated issue_ref ISS-0935, which collides with an existing (already-resolved) local file, a different, unrelated vortex-entity-seeding issue; local filename kept as ISS-0945 (next free on origin/main) and GH-2123 retitled to match
+github_ref: GH-2123
+status: open

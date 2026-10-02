@@ -17,7 +17,7 @@ ISS-0761 sections 2-3 specify. Payload/idempotency semantics are inherited, not 
 
 Out of scope: D1 (ISS-0930), D4, D5 (complete does not enforce ROLE; separate security
 triage), Keycloak account creation (Part A), the role-procurement-manager scenario
-mismatch (no definition references it; do NOT seed it; flag to BA-VORTEX). Nothing is run
+mismatch (originally unseeded; superseded by ISS-0929, which adds the 8D child definition and seeds it). Nothing is run
 against QA by the pipeline; QA execution is a post-merge ops step and the QA symptom is
 not claimed cleared until UAT-RUNNER re-runs the scenarios.
 
@@ -105,9 +105,9 @@ Source of role sets: `role` attributes of HUMAN_TASK nodes in
 `role-credit-manager`, `role-risk-manager`, `role-compliance-officer`,
 `role-credit-director`, `role-committee-member`, `role-loan-ops`, `role-cro`, `role-ceo`.
 
-### Vortex `ROLES` (4, exact)
-`role-production-manager`, `role-controller`, `role-quality-manager`, `role-ceo`.
-`role-procurement-manager` is NOT in the list.
+### Vortex `ROLES` (5, exact; was 4 before ISS-0929)
+`role-production-manager`, `role-controller`, `role-quality-manager`, `role-ceo`,
+`role-procurement-manager` (added by ISS-0929: the 8D child definition routes to it).
 
 ### Meridian `PERSONAS`
 | Username | Roles (plus implicit TASK_WORKER) |
@@ -184,8 +184,7 @@ Tests (all four for each tenant, generated via `for tenant <- [...]`):
 3. `"<tenant>: script passes bash -n"`: `System.cmd("bash", ["-n", script])` exit 0; same
    for `scripts/lib/seed_persona_actors_base.sh`.
 4. `"<tenant>: script sources the shared lib and calls persona_run"`: regex presence
-   check, plus `role-procurement-manager` absent from the vortex script (explicit pin
-   with the reason in the assertion message).
+   check, (the original "procurement absent" pin was removed by ISS-0929).
 5. `"swiftroute script untouched contract"` is NOT added (out of scope).
 
 ### Mutation targets for TEST-DESIGNER (each must make the guard FAIL; pre-fix state = files
@@ -194,7 +193,7 @@ fail-first)
 Tests must apply mutations to an in-memory/temp copy of the script text (via the
 `parse_*` helpers taking source strings), never edit repo files:
 - M1: remove `"role-loan-ops"` from meridian ROLES -> test 1 fails (missing_in_script).
-- M2: add `"role-procurement-manager"` to vortex ROLES -> test 1 fails (extra_in_script)
+- M2 (rewritten by ISS-0929): remove `"role-procurement-manager"` from vortex ROLES -> test 1 fails (missing_in_script)
   and test 4 fails.
 - M3: persona entry references a role not in ROLES (e.g. `actor-vortex-karl|role-qa-lead`)
   -> test 2 fails.
@@ -233,7 +232,7 @@ the meridian/vortex siblings next to each hit).
 | Diagnosis item | Element |
 |---|---|
 | Two new scripts mirroring swiftroute | sections 2, 5 |
-| Exact roles = fixtures (8 / 4; no procurement) | section 4, tests 1 and 4 |
+| Exact roles = fixtures (8 / 5 after ISS-0929) | section 4, tests 1 and 4 |
 | TASK_WORKER for all, idempotent, abort if actor missing | section 2 (`persona_run`, `lookup_user_id`), 5 |
 | Shared helper vs duplicate | section 2 decision |
 | Machine-parsable tables + drift test | sections 3, 6, mutations M1-M8 |

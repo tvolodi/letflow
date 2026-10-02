@@ -1,0 +1,61 @@
+{
+  "handoff_id": "94251b05-7d2a-431a-ac9c-454d809a07d1",
+  "run_id": "WF03-Q929-20261001",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-Q929-20261001/step-04c-test-runner.json",
+  "created_at": "2026-10-01T20:32:54Z",
+  "started_at": null,
+  "completed_at": "2026-10-01T20:32:54Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0929": "queue Q-929 / GH #2115: vortex supplier-quality-deviation-critical SUB_PROCESS_DEFINITION_NOT_FOUND; 8D child definition + role-procurement-manager seeding + engine post-subprocess pending-event fix. Scenario EO-002 (8D sub-process assigned to Procurement Manager) and EO-003 (deviation closed, COMPLETED at end-closed)."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/scripts/vortex_8d_subprocess_fixture_test.exs",
+      "test/letflow/engine/sub_process_service_task_after_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-a5c794b4cbceb277a",
+    "branch_name": "feature/WF03-Q929-20261001"
+  },
+  "task": {
+    "description": "WF-03 Step 4c: run the two new test files, then mix letflow.check (full backend gate), mix compile --warnings-as-errors --force, mix format --check-formatted.",
+    "acceptance_criteria": [
+      "Compile warnings clean",
+      "format clean",
+      "Scoped tests run with real counts",
+      "Failures attributed",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. New tests (vortex_8d_subprocess_fixture_test.exs + sub_process_service_task_after_test.exs): 'Result: 21 passed', 0 failures. mix compile --warnings-as-errors --force: exit 0. mix format --check-formatted: exit 0. Full backend gate `mix letflow.check` (MIX_ENV=test, own Postgres port 51929; runs toolchain/requirements-registration/req-id-collision/deferral-staleness/lint_handoffs/async-sandbox/issue-refs/uat-scenario-schema/format/compile/check_boundaries/check.test): exit 0; 'combined: 5326 tests, 8 properties, 0 failures (5334/5334 passed) -- 16/16 partitions reported'; 'mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings'; isolated :lua_wallclock_race run also passed. No failures, so no isolation reruns needed. No test/reports yaml written (gate-driven run).",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "No test/reports yaml written; evidence is the quoted mix letflow.check output. started_at left null per HANDOFF_PROTOCOL 1.2.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q929-20261001",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to step 04d RELEASE-VALIDATOR."
+  }
+}

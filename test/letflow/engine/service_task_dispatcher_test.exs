@@ -1348,13 +1348,59 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
       refute preview =~ "super-secret-123"
     end
 
+    test "4b. SECURITY-REVIEWER OQ-1 -- nested JSON secret is redacted, not just top-level" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      rendered_body = Jason.encode!(%{"data" => %{"api_key" => "sk-super-secret-123"}})
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot:
+            config_snapshot(%{"rendered_url" => server_url, "rendered_body" => rendered_body})
+        })
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert [entry] = audit_rows_for(schema_name, "service_task.outbound_request_sent")
+      preview = entry.after_state["request_body_preview"]
+      assert preview =~ "[REDACTED]"
+      refute preview =~ "sk-super-secret-123"
+    end
+
+    test "4c. SECURITY-REVIEWER OQ-2 -- non-JSON body with embedded credential is not persisted" do
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = insert_instance_projection!(schema_name, :active)
+
+      rendered_body = "password=hunter2&client_id=svc-42"
+
+      dispatch =
+        insert_dispatch!(schema_name, instance_id, %{
+          config_snapshot:
+            config_snapshot(%{"rendered_url" => server_url, "rendered_body" => rendered_body})
+        })
+
+      assert {:ok, {:advance, _decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert [entry] = audit_rows_for(schema_name, "service_task.outbound_request_sent")
+      assert entry.after_state["request_body_preview"] == nil
+      assert entry.after_state["request_body_present"] == true
+      assert entry.after_state["request_body_byte_size"] == byte_size(rendered_body)
+    end
+
     test "5. body preview is capped at 2000 codepoints, byte_size records the true original size" do
       %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
 
       %{schema_name: schema_name} = provisioned_tenant()
       instance_id = insert_instance_projection!(schema_name, :active)
 
-      rendered_body = String.duplicate("a", 2500)
+      rendered_body = Jason.encode!(%{"data" => String.duplicate("a", 2500)})
 
       dispatch =
         insert_dispatch!(schema_name, instance_id, %{

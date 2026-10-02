@@ -1051,25 +1051,53 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
   end
 
   defp body_preview_fields(rendered_body) when is_binary(rendered_body) do
-    {preview, truncated?} = redact_and_cap_body_preview(rendered_body)
-
-    %{
+    base = %{
       "request_body_present" => true,
-      "request_body_byte_size" => byte_size(rendered_body),
-      "request_body_truncated" => truncated?,
-      "request_body_preview" => preview
+      "request_body_byte_size" => byte_size(rendered_body)
     }
+
+    case redact_and_cap_body_preview(rendered_body) do
+      {:ok, preview, truncated?} ->
+        Map.merge(base, %{
+          "request_body_truncated" => truncated?,
+          "request_body_preview" => preview
+        })
+
+      :not_json ->
+        # SECURITY-REVIEWER fix (PR #2142, OQ-2) -- a body that isn't valid
+        # JSON has no key-shaped structure for `redact_secret_shaped_terms/1`
+        # to walk, so there is no safe-by-construction way to redact it.
+        # Rather than hand a raw, unredacted string through (the prior,
+        # vulnerable behavior -- a plaintext credential in a form-encoded
+        # body landed verbatim in the audit log) or lean on a regex
+        # heuristic that can't enumerate every secret-bearing shape, we
+        # record presence/size only and omit body content entirely. This is
+        # the more conservative of SECURITY-REVIEWER's two offered fixes,
+        # chosen deliberately over the regex-redaction alternative.
+        Map.merge(base, %{
+          "request_body_truncated" => false,
+          "request_body_preview" => nil
+        })
+    end
   end
 
-  # design §3.2 -- the redaction/capping helper, exact spec:
-  #   1. Attempt Jason.decode/1. On success, if the decoded value is a map,
-  #      walk its TOP-LEVEL keys only (no recursion into nested
-  #      objects/arrays -- design §4 OQ-1) and replace the value of any key
-  #      whose name matches the secret-shaped pattern below with the literal
-  #      string "[REDACTED]". Re-encode via Jason.encode!/1. On decode
-  #      failure (not JSON, or not a map at the top level), skip redaction
-  #      and hand the raw string through unchanged (design §4 OQ-2).
-  #   2. Truncate the (possibly redacted) string to the first 2000 Unicode
+  # design §3.2 -- the redaction/capping helper, revised spec (SECURITY-REVIEWER
+  # fix, PR #2142):
+  #   1. Attempt Jason.decode/1. On success (map, list, or scalar), walk the
+  #      FULL decoded structure recursively -- including nested objects and
+  #      arrays-of-objects at any depth (design §4 OQ-1, now resolved) -- and
+  #      replace the value of any object key whose name matches the
+  #      secret-shaped pattern below with the literal string "[REDACTED]".
+  #      Re-encode via Jason.encode!/1.
+  #   2. On decode failure (not valid JSON), do NOT hand any body content
+  #      through (design §4 OQ-2, now resolved the conservative way): the
+  #      caller records `request_body_present`/`request_body_byte_size` only
+  #      and leaves `request_body_preview` nil. A regex-based key=value
+  #      redaction pass was considered and rejected here -- it is a
+  #      heuristic that can never enumerate every secret-bearing shape a
+  #      non-JSON body might take, which is not an acceptable trade-off for
+  #      an audit trail readable via `:AuditRead`.
+  #   3. Truncate the (possibly redacted) string to the first 2000 Unicode
   #      codepoints (String.slice/2-safe, never mid-codepoint).
   #      truncated? is true iff the pre-truncation string was longer than
   #      2000 codepoints.
@@ -1077,31 +1105,46 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
   @body_preview_codepoint_cap 2000
 
   @spec redact_and_cap_body_preview(rendered_body :: String.t()) ::
-          {preview :: String.t(), truncated? :: boolean()}
+          {:ok, preview :: String.t(), truncated? :: boolean()} | :not_json
   defp redact_and_cap_body_preview(rendered_body) when is_binary(rendered_body) do
-    rendered_body
-    |> redact_top_level_json_keys()
-    |> cap_to_codepoints(@body_preview_codepoint_cap)
-  end
-
-  defp redact_top_level_json_keys(rendered_body) do
     case Jason.decode(rendered_body) do
-      {:ok, decoded} when is_map(decoded) ->
-        decoded
-        |> Enum.map(fn {key, value} ->
-          if Regex.match?(@secret_key_pattern, to_string(key)) do
-            {key, "[REDACTED]"}
-          else
-            {key, value}
-          end
-        end)
-        |> Map.new()
-        |> Jason.encode!()
+      {:ok, decoded} ->
+        {preview, truncated?} =
+          decoded
+          |> redact_secret_shaped_terms()
+          |> Jason.encode!()
+          |> cap_to_codepoints(@body_preview_codepoint_cap)
 
-      _not_a_json_object ->
-        rendered_body
+        {:ok, preview, truncated?}
+
+      {:error, _reason} ->
+        :not_json
     end
   end
+
+  # Recurses into maps and lists so a secret-shaped key is redacted no
+  # matter how deeply it's nested (object, array-of-objects, array of
+  # arrays, ...). Scalars pass through unchanged. A matched key's value is
+  # replaced outright -- it is never itself recursed into, since
+  # "[REDACTED]" already is the final value.
+  @spec redact_secret_shaped_terms(term()) :: term()
+  defp redact_secret_shaped_terms(%{} = map) do
+    map
+    |> Enum.map(fn {key, value} ->
+      if Regex.match?(@secret_key_pattern, to_string(key)) do
+        {key, "[REDACTED]"}
+      else
+        {key, redact_secret_shaped_terms(value)}
+      end
+    end)
+    |> Map.new()
+  end
+
+  defp redact_secret_shaped_terms(list) when is_list(list) do
+    Enum.map(list, &redact_secret_shaped_terms/1)
+  end
+
+  defp redact_secret_shaped_terms(other), do: other
 
   defp cap_to_codepoints(string, cap) do
     length = String.length(string)

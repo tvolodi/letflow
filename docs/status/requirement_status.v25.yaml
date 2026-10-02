@@ -539,3 +539,51 @@ history:
       was discovered by CODE-DESIGNER during WF03-Q915-20261001, not claimed
       via get_next_task, so no live letflow-queue task is tied to issue_ref
       ISS-0926 to release.
+  - req: SCOPE-CHANGE
+    event: cancelled
+    agent: DOC-UPDATER
+    at: "2026-10-02T00:00:00Z"
+    note: >
+      ISS-0945 closed as SUPERSEDED, not fixed via its own route. PR #2136
+      (branch fix/ISS-0945-subprocess-pending-dispatch, "carry pending
+      SERVICE_TASK dispatch through sub-process completion") is closed
+      WITHOUT merging -- no code change lands from it. Its branch, plus two
+      orphan local-only branches tied to its gate chain (pr-2136-check,
+      pr-2136-review), are deleted. ISSUE-FIXER independently diagnosed and
+      empirically confirmed (clean worktree test run against origin/main,
+      real Postgres) that commit 57fa8234 (PR #2132, "fix(ISS-0929/Q-929):
+      vortex supplier quality deviation 8D corrective-action sub-process +
+      post-subprocess service-task dispatch"), already merged to main before
+      PR #2136 could land, independently fixed the exact same root cause
+      (Letflow.Engine.SubProcess discarding pending events -- including
+      SERVICE_TASK dispatch requests -- after sub-process completion) via a
+      different, more general mechanism
+      (Letflow.Engine.append_pending_event_arms_multi/7 +
+      prepare_service_task_dispatch_abort_on_empty_url/6, arming timers and
+      service-task dispatch together) than PR #2136's own narrower
+      dedicated-function approach. Confirmed empirically: (1) ISS-0945's own
+      acceptance criteria are fully satisfied by origin/main as it stands --
+      ISS-0945's own happy-path test ported into a clean worktree against
+      main passes, full test/letflow/engine/engine_sub_process_test.exs (18
+      tests) green; (2) origin/main's mechanism does NOT carry the
+      idempotency-key-collision KeyError crash bug RELEASE-VALIDATOR found in
+      PR #2136's own first-attempt fix (docs/anti-patterns.md, "A new error
+      branch passed the raw, collision-prone variable instead of the
+      sibling-derived anti-collision one", 2026-10-01) -- reproducing the
+      adversarial misconfigured-SERVICE_TASK scenario directly against main
+      gives a clean :error-status landing, no crash, exactly one
+      EXECUTION_ERROR event; main's code was correct from the start on this
+      point (uses the already-derived error_idempotency_key at a single
+      top-level wrap point). PR #2136's gate chain (two full
+      RELEASE-VALIDATOR passes) is not wasted -- it surfaced, and REVIEWER
+      already recorded in docs/anti-patterns.md, that real crash-bug class in
+      this exact code region. test/letflow/engine/sub_process_service_task_after_test.exs
+      (ISS-0929's own regression suite, already on main) test E5 already
+      covers the misconfigured-SERVICE_TASK-after-sub-process scenario end to
+      end (asserts :error status, no pending dispatch, exactly one
+      EXECUTION_ERROR) -- ISSUE-FIXER assessed porting PR #2136's own
+      adversarial test as optional/non-blocking and genuinely already
+      covered, so no additional test PR was made. docs/issues/ISS-0945.yaml
+      set to status: resolved (resolved_in_run: superseded-by-ISS-0929) in
+      this same commit. Reference GH-2123. This is an ISSUE closure, not a
+      REQ -- docs/requirements.yaml untouched.

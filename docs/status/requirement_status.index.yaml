@@ -5826,8 +5826,16 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 17
+    entries: 18
     note: >
+      Incremented to 18 by DOC-UPDATER's own ISS-0945 SCOPE-CHANGE
+      cancelled-event append (2026-10-02T00:00:00Z -- ISS-0945 closed as
+      SUPERSEDED by ISS-0929/PR #2132 commit 57fa8234, already merged to
+      main; PR #2136 closed without merging, no code change lands) --
+      `grep -c "^  - req:" docs/status/requirement_status.v25.yaml` = 18
+      on-disk entries; 589 lines / 36143 bytes, well under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
+
       Incremented to 17 by DOC-UPDATER's own ISS-0926 SCOPE-CHANGE done-event
       append (fix/ISS-0926-service-task-body-template-rendering, 2026-10-01T
       21:37:43Z -- SERVICE_TASK body_template rendering fix, PR #2113/commit

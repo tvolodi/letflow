@@ -25,4 +25,61 @@ related:
   - ISS-0926
 queue_ref: Q-935  # queue allocated issue_ref ISS-0935, which collides with an existing (already-resolved) local file, a different, unrelated vortex-entity-seeding issue; local filename kept as ISS-0945 (next free on origin/main) and GH-2123 retitled to match
 github_ref: GH-2123
-status: open
+status: resolved
+resolved_in_run: superseded-by-ISS-0929
+resolved_at: "2026-10-02T00:00:00Z"
+resolution: >
+  Superseded, not fixed by this issue's own route. This issue's root cause --
+  Letflow.Engine.SubProcess discarding pending events (including SERVICE_TASK
+  dispatch requests, the `_more_pending` binding at the cited
+  sub_process.ex line range) after a sub-process completes -- was
+  independently found and fixed by ISS-0929/Q-929 (PR #2132, commit
+  57fa8234, "fix(ISS-0929/Q-929): vortex supplier quality deviation 8D
+  corrective-action sub-process + post-subprocess service-task dispatch"),
+  merged to origin/main before this issue's own fix (PR #2136,
+  fix/ISS-0945-subprocess-pending-dispatch) could land. ISS-0929's fix is
+  more general than this issue's own dedicated-function approach: it carries
+  pending events through the sub-process completion hop and arms them via
+  the new Letflow.Engine.append_pending_event_arms_multi/7 (service-task
+  dispatches and timers together), rather than this issue's narrower
+  SERVICE_TASK-only helper.
+
+  ISSUE-FIXER independently diagnosed and empirically confirmed this via a
+  clean worktree test run against origin/main (real Postgres, not just
+  diff-reading): (1) this issue's own acceptance criteria -- SERVICE_TASK
+  reached after sub-process completion gets a dispatch row; no change to
+  the normal (non-sub-process) completion path -- are fully satisfied by
+  origin/main as it stands, confirmed by porting this issue's own happy-path
+  test into a clean worktree against main (passes) and running the full
+  test/letflow/engine/engine_sub_process_test.exs suite (18 tests, green);
+  (2) origin/main's already-merged mechanism does NOT carry the
+  idempotency-key-collision KeyError crash bug that RELEASE-VALIDATOR found
+  in this issue's own PR #2136 first-attempt fix (see
+  docs/anti-patterns.md's "A new error branch passed the raw, collision-prone
+  variable instead of the sibling-derived anti-collision one" entry,
+  2026-10-01) -- confirmed by reproducing the adversarial misconfigured-
+  SERVICE_TASK-after-sub-process scenario directly against main: a clean
+  :error-status landing, no crash, exactly one EXECUTION_ERROR event. Main's
+  code was correct from the start on this point (it reads the already-derived
+  error_idempotency_key at a single top-level wrap point), unlike PR #2136's
+  sibling implementation, which needed that same-day follow-up fix.
+
+  test/letflow/engine/sub_process_service_task_after_test.exs (ISS-0929's own
+  regression suite, already on main) test E5 ("SERVICE_TASK after SUB_PROCESS
+  with an empty rendered endpoint is routed to an ERROR, not a hang or
+  crash") already covers the misconfigured-SERVICE_TASK-after-sub-process
+  scenario end to end -- asserts no pending dispatch row, parent flipped to
+  :error, and exactly one EXECUTION_ERROR event. No additional regression
+  test was ported from PR #2136; ISSUE-FIXER assessed this as optional/
+  non-blocking and genuinely already covered.
+
+  PR #2136 itself is closed without merging -- no code change lands from it.
+  Its gate chain (two full RELEASE-VALIDATOR passes) is not wasted: it
+  surfaced, and the project's REVIEWER recorded in docs/anti-patterns.md, a
+  real idempotency-key-collision crash-bug class in this exact code region
+  (prepare_service_task_dispatch_for_completion/8 call sites inside
+  build_completion_multi_from_merge/12 must pass the sibling-derived
+  error_idempotency_key, not the raw idempotency_key, when writing an error
+  event in the same transaction as an already-consumed key) -- a class that
+  could recur in other code touching this region regardless of which PR
+  introduced the fix. Reference GH-2123.

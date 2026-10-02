@@ -1,0 +1,42 @@
+id: ISS-0979
+title: "Letflow.Audit's chain-tail selection query has no row lock, allowing a theoretical concurrent-write chain fork"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF03-ISS0972-20261002
+discovered_at: "2026-10-02T16:14:01Z"
+severity: MINOR
+owner: ELIXIR-DEV (decision first)
+description: >
+  Flagged during ISS-0972's release verification. fetch_chain_tail/2's
+  tail-selection query (used by insert_entry/3 to find the current chain
+  head before computing a new entry's prev_chain_hash/chain_hash) takes no
+  row lock. Under true concurrent writers to the same tenant's audit chain,
+  two inserts could theoretically race: both read the same tail, both
+  compute a chain_hash/prev_chain_hash pair against it, and both insert --
+  forking the chain into two entries that both claim the same prev_chain_hash
+  instead of a single linear sequence. This is pre-existing insert_entry/3
+  behavior, untouched by ISS-0972's own PR (#2163) and explicitly out of
+  scope for that issue's acceptance criteria -- filed separately per
+  RELEASE-VALIDATOR's own non-blocking observation.
+
+  Not yet confirmed whether this is a real production concern (depends on
+  whether any actual code path performs genuinely concurrent writes to the
+  same tenant's audit chain, or whether writes are already serialized by
+  some other means -- e.g. a single calling process, an existing
+  transaction boundary, or low enough write volume that the race window
+  never matters in practice) or purely theoretical given this project's
+  actual write patterns. ELIXIR-DEV should make that determination before
+  deciding whether a row lock (e.g. FOR UPDATE on the tail query, mirroring
+  ISS-0970's precedent for the events table) is warranted, or whether this
+  is acceptable as documented residual risk.
+acceptance_criteria:
+  - "Decide: is concurrent writing to the same tenant's audit chain a genuine live possibility in this codebase's actual call sites, or theoretical only -- cite the call sites checked either way"
+  - "If genuine: add a row lock (or equivalent serialization) to the chain-tail selection query so two concurrent inserts cannot fork the chain, with a regression test proving the fork is prevented under injected concurrency"
+  - "If theoretical only: document the reasoning and the assumption being relied on (e.g. single-writer-per-tenant invariant) so a future change that breaks that assumption has something to check against"
+related:
+  - ISS-0972
+  - ISS-0970
+source_reports:
+  - docs/issues/ISS-0972.yaml
+queue_ref: null  # filed directly by DOC-UPDATER from RELEASE-VALIDATOR's own flagged observation during ISS-0972's closure
+github_ref: null  # local-only follow-up, not yet mirrored to GitHub
+status: open

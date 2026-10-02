@@ -32060,3 +32060,188 @@ requirements:
       - "the frontend test suite passes, with real output quoted"
     depends_on: [REQ-373, REQ-399]
     impl_order: 906  # letflow-queue task id, GH#2044. Registered 2026-09-30T08:46:56Z by ORCH (WF-01 Step 3).
+
+  - id: REQ-433
+    title: "Meridian Loan Origination: real 2-of-3 credit-committee quorum vote (PARALLEL_GATEWAY fan-out + tally gateway), replacing the unsuppliable committee_outcome HUMAN_TASK"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    description: >
+      Filed from ISS-0973 (REQ-ANALYST decision issue), itself filed from
+      BA-MERIDIAN-003 in
+      test/uat-reports/ba-signoff-meridian-WF05-FULL3-20261001.yaml: the
+      meridian "Loan Origination" process definition models
+      `credit-committee-vote` as a single HUMAN_TASK (role
+      role-committee-member) gated on a `variables.committee_outcome`
+      value (edges e23/e24 in
+      test/fixtures/qa/meridian_loan_origination_process_definition.json
+      and the identical block in
+      test/fixtures/simulation/meridian/process_claim_intake.yaml) that no
+      scenario step, seed, or task-completion call ever supplies -- there
+      is no real 2-of-3 committee-quorum voting mechanism (three
+      independent committee-member votes, tallied against a threshold),
+      so the committee route cannot actually be exercised end to end.
+
+      DECISION (REQ-ANALYST, this requirement): model real quorum voting
+      (Path A), not a scenario-supplied `committee_outcome` fudge (Path
+      B) -- REJECTED. Reasoning: the above-threshold UAT scenario
+      (test/uat-reports/... and
+      test/fixtures/uat/scenarios/meridian/loan-origination-above-threshold.yaml)
+      is explicit prose, not incidental: its title is "quorum 2-of-3",
+      its description states "This scenario verifies that the committee
+      route and multi-voter quorum mechanism work correctly", it names
+      three distinct committee-member actors
+      (committee_member_cro/_director/_ceo), and its own EO-003 asserts
+      "the credit committee mechanism is... correctly counting votes or
+      reaching quorum" with a BLOCKER business-impact framed entirely
+      around real vote-tallying. Replacing that with a single
+      scenario-supplied outcome variable would gut the scenario's own
+      stated purpose rather than fix the gap it demonstrates, and MINOR
+      severity does not license silently weakening what BA-MERIDIAN
+      itself wrote as the acceptance bar. This is also NOT disproportionate
+      effort for a MINOR UAT gap: confirmed by direct source read that
+      this engine already has everything the quorum pattern needs with
+      zero new engine code --
+      PARALLEL_GATEWAY split/join (REQ-044/REQ-051,
+      `lib/letflow/engine/transition.ex`, `lib/letflow/engine/join_counter.ex`)
+      is a mature, exercised feature, used for exactly this fan-out/join
+      shape THREE times already in this same process definition (the
+      credit-memo-review / risk-assessment / kyc-aml-check
+      parallel-assessment-fork -> assessment-join block); EXCLUSIVE_GATEWAY
+      edge conditions over `variables.*` with boolean `&&`/`||`/`==`
+      (`lib/letflow/engine/expr.ex`, REQ-050/REQ-197) are equally mature
+      and already used for multi-variable boolean composition in this
+      same definition's `eligibility-gate` node. No new node type, no new
+      join semantics, no engine code change -- this is purely a
+      process-definition/fixture-and-scenario change.
+
+      ONE REAL CONSTRAINT THIS REQUIREMENT MUST NOT PAPER OVER: the
+      above-threshold scenario's current step narrative has only 2 of 3
+      committee members vote (steps 4-5, cro and director) and proceeds
+      directly to disbursement (step 6) without the third member
+      (committee_member_ceo / actor-meridian-eva) ever acting --
+      i.e. true *early-exit-before-the-third-vote* release. Confirmed by
+      reading `lib/letflow/engine/join_counter.ex`'s own moduledoc: a
+      PARALLEL_GATEWAY join is a **set-based wait-for-all-expected-branches**
+      join (EE-07) with no N-of-M/quorum/early-release primitive anywhere
+      in the engine or its design doc
+      (`lib/letflow/design/req051-parallel-gateway-split-join.md`).
+      Building genuine early-release-before-every-branch-completes join
+      semantics WOULD be new, cross-cutting engine-core work (new gateway
+      behavior touching `Transition.dispatch_parallel_join/4` and
+      `JoinCounter`, affecting every other PARALLEL_GATEWAY consumer) --
+      disproportionate for a MINOR gap. RESOLUTION: amend the scenario's
+      own narrative (not its purpose) to have all three committee members
+      cast a real vote before the join releases -- quorum is still
+      genuinely tallied (2 of 3 approve is sufficient for an "approved"
+      outcome even when the third member dissents), it is only the
+      "don't wait for the straggler" early-exit framing that is dropped,
+      and that framing was never a PARALLEL_GATEWAY-join promise the
+      engine could already keep.
+
+      CONCRETE PROCESS-DEFINITION SKETCH (apply identically to both
+      test/fixtures/qa/meridian_loan_origination_process_definition.json
+      and test/fixtures/simulation/meridian/process_claim_intake.yaml --
+      keep both fixtures byte-identical in this subgraph the way the rest
+      of the file already is):
+      - DELETE node `credit-committee-vote` (single HUMAN_TASK) and its
+        edges e23/e24/timeout-credit-committee-vote.
+      - ADD nodes: `committee-vote-fork` (PARALLEL_GATEWAY),
+        `committee-vote-cro` / `committee-vote-director` /
+        `committee-vote-ceo` (each HUMAN_TASK, attributes.role:
+        role-committee-member -- same role for all three, distinguished
+        by which actor claims/completes the task, matching how
+        credit-memo-review/risk-assessment already distinguish actors by
+        role-scoped claim, not a per-actor node),
+        `committee-vote-join` (PARALLEL_GATEWAY), `committee-tally`
+        (EXCLUSIVE_GATEWAY).
+      - ADD edges: `authority-routing` -> `committee-vote-fork`
+        (condition identical to the old e18:
+        "variables.requested_amount_eur > 500000"); `committee-vote-fork`
+        -> each of the three vote tasks (3 edges, unconditional, mirroring
+        `parallel-assessment-fork`'s own 3-way split e1/e2/e3); each vote
+        task -> `committee-vote-join` (3 edges, unconditional, mirroring
+        assessment-join's e4/e6); keep each vote task's own
+        SERVICE_TASK timeout sibling + timeout edge into
+        `committee-vote-join`, exactly mirroring
+        credit-memo-review/credit-memo-timeout's existing pattern (reuses
+        `committee-timeout`'s SERVICE_TASK shape, one instance per voter);
+        `committee-vote-join` -> `committee-tally` (unconditional).
+      - ADD `committee-tally`'s two outgoing conditional edges plus a
+        default, replacing e23/e24, using only the already-supported
+        `==`/`&&`/`||` grammar (no arithmetic vote-counting, which the
+        expr evaluator does not coerce booleans into):
+        edge to `create-facility`, condition:
+        "(variables.committee_vote_cro == 'approve' && variables.committee_vote_director == 'approve') || (variables.committee_vote_cro == 'approve' && variables.committee_vote_ceo == 'approve') || (variables.committee_vote_director == 'approve' && variables.committee_vote_ceo == 'approve')"
+        edge to `decline-application`, condition:
+        "(variables.committee_vote_cro == 'reject' && variables.committee_vote_director == 'reject') || (variables.committee_vote_cro == 'reject' && variables.committee_vote_ceo == 'reject') || (variables.committee_vote_director == 'reject' && variables.committee_vote_ceo == 'reject')"
+        default edge (`is_default: true`) to `decline-application` (fail-safe:
+        no 2-of-3 agreement in either direction, e.g. a 1-1-1 split or a
+        timed-out voter, declines rather than hangs or silently approves).
+        This removes `variables.committee_outcome` entirely -- the tally
+        is computed structurally by the gateway condition, not stored as
+        a pre-decided variable, which is the actual fix for "a
+        committee_outcome variable that scenario inputs never supply."
+      - Each vote task's completion payload carries its own output
+        variable (`committee_vote_cro`, `committee_vote_director`,
+        `committee_vote_ceo`), set to `'approve'` or `'reject'` by that
+        task's completion call -- same output-variable-per-HUMAN_TASK
+        convention this definition already uses (credit_decision,
+        risk_rating, l1_decision, l2_decision).
+
+      SCENARIO/FIXTURE CHANGES (apply to
+      test/fixtures/uat/scenarios/meridian/loan-origination-above-threshold.yaml,
+      test/fixtures/simulation/meridian/scenarios/loan-origination-above-threshold.yaml,
+      and scripts/seed_meridian_definition.sh's version bump):
+      - Add a step 5b: committee_member_ceo (actor-meridian-eva) casts a
+        vote too (input: `vote: reject`, to demonstrate quorum genuinely
+        overrides a dissent, not merely a unanimous/convenient case) --
+        renumber the existing step 6 (disbursement) to step 7.
+      - Update EO-003's detail to assert the structural tally directly
+        (no more `variables.committee_outcome == 'approved'`; instead
+        something checkable against the real output variables, e.g.
+        "committee_vote_cro == 'approve' AND committee_vote_director ==
+        'approve', quorum reached despite committee_vote_ceo == 'reject'"),
+        and note in the scenario's own description that quorum is
+        evaluated once all three members have voted (parallel tasks,
+        full join), not the instant the second vote lands.
+      - Bump the fixture `version` field (process_claim_intake.yaml and
+        the qa/*.json fixture) per
+        scripts/seed_meridian_definition.sh's own version-aware
+        idempotency contract (a 409 means bump the version, never edit
+        an already-seeded one in place).
+      - test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml
+        needs no change: it never reaches the committee branch (amount
+        below threshold) and its own EO-002 ("no credit-committee-vote
+        task assigned") still holds unchanged against the new 3-task
+        fan-out (none of the three committee-vote-* tasks exist either,
+        for the same reason).
+
+      OUT OF SCOPE: any engine code change under lib/letflow/engine/ (no
+      new node type, no join-semantics change, no new expr builtin);
+      BA-MERIDIAN-001 (the KYC/AML screening stall that independently
+      blocks this same scenario upstream of the committee branch --
+      already its own separate issue/fix, not this requirement's
+      problem); BA-MERIDIAN-002 (BaFin notice content gap, unrelated
+      process). An early-release ("don't wait for the straggler")
+      quorum-join primitive is explicitly NOT built here -- if a future
+      requirement genuinely needs that, it is new CODE-DESIGNER-sized
+      engine-core scope, not a silent extension smuggled into this
+      fixture-only requirement.
+    acceptance_criteria:
+      - "test/fixtures/qa/meridian_loan_origination_process_definition.json and test/fixtures/simulation/meridian/process_claim_intake.yaml both replace the single credit-committee-vote HUMAN_TASK with the committee-vote-fork/committee-vote-cro/committee-vote-director/committee-vote-ceo/committee-vote-join/committee-tally subgraph described above, kept identical to each other in this subgraph, and both fixtures still pass whatever structural/schema validation this engine already runs on process-definition fixtures"
+      - "committee-tally's edge conditions use only variables.*, ==, &&, || (REQ-050/REQ-197 grammar) -- no committee_outcome variable appears anywhere in either fixture's committee subgraph"
+      - "committee-tally has exactly one is_default edge, targeting decline-application, so a non-quorum vote split never leaves the instance stuck pending a human or produces an unhandled-gateway error"
+      - "the above-threshold UAT scenario is updated with the committee_member_ceo vote step and revised EO-003 per this requirement's own sketch, and a real (non-mocked) run reaches end-disbursed with all three committee-vote-* tasks completed, 2 of 3 approve, one reject, proving genuine multi-voter quorum tallying rather than a supplied outcome"
+      - "the below-threshold UAT scenario's EO-002 (no credit-committee-vote task assigned) is re-verified true against the new 3-task subgraph by name (none of committee-vote-cro/_director/_ceo assigned) for a below-threshold instance"
+      - "git diff shows zero changes under lib/letflow/engine/ -- confirming this requirement added no new engine behavior, per its own OUT OF SCOPE"
+      - "scripts/seed_meridian_definition.sh's version-aware idempotency still succeeds against the bumped fixture version on a clean QA instance (or the equivalent ExUnit seed path if QA is unreachable from this sandbox), with real output quoted"
+    depends_on: []
+    impl_order: 940  # letflow-queue task id, GH#2154. Registered 2026-10-02T09:07:41Z by
+      # ELIXIR-DEV (direct register_task call -- REQ-433 was implemented outside the
+      # formal queue claim flow, picked up directly from REQ-ANALYST decision ISS-0973
+      # / queue task 939; registered now to close the real registration-registry gap
+      # TEST-RUNNER FAILed PR #2148 on, T-REG-STILL-GREEN / T-LIVE-INVARIANTS /
+      # T-LIVE-GREEN). status stays pending here until DOC-UPDATER flips it at the
+      # requirement's own closure; the queue task is left unlocked/open for that same
+      # later closure to claim and release as done.

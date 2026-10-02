@@ -132,11 +132,13 @@ expected_outcomes:
 
   - id: EO-002
     description: >
-      No credit committee vote task is created because the requested
+      No credit committee vote tasks are created because the requested
       amount (€50,000) is below the €500,000 threshold
     verification:
       method: task_assigned
-      detail: "task type 'credit-committee-vote' is NOT assigned to any actor"
+      detail: >
+        task types 'committee-vote-cro', 'committee-vote-director', and
+        'committee-vote-ceo' are NOT assigned to any actor
     on_fail:
       severity: BLOCKER
       business_impact: >

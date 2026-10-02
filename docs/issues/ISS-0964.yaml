@@ -1,0 +1,12 @@
+id: ISS-0964
+title: "Tenant branding saved via PATCH not served by host-based tenant-config on qa.bizdala.com; SPA shows default colour"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T20:10:38Z"
+severity: MAJOR
+owner: "ELIXIR-DEV / ai-dala-infra (QA host config)"
+description: >
+  ISS-0887 write side verified live (PATCH persists; GET /api/tenant-config?realm=bpm-default returns saved colour) but ?host=qa.bizdala.com and no-param return default #228be6; SPA uses ?host=<hostname>, so tenant-branding-applied EO-003/EO-005 fail (--color-brand-600 #228be6 not #1864ab). Host-to-tenant mapping on QA resolves to default (family of resolved ISS-0727, not identical). Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-PLATFORM-B.yaml
+queue_ref: Q-937  # queue issue_ref ISS-0937 collides with an existing local file; local filename ISS-0964
+github_ref: GH-2125
+status: open

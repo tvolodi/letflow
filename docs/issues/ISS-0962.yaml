@@ -1,0 +1,12 @@
+id: ISS-0962
+title: "[ai-dala-infra] Provision missing QA Keycloak persona accounts actor-meridian-oliver, actor-vortex-dirk/max/claudia (vortex role-ceo empty)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T19:58:01Z"
+severity: MINOR
+owner: "ai-dala-infra (not letflow code)"
+description: >
+  Accounts for simulation org-structure personas actor-meridian-oliver, actor-vortex-dirk (role-ceo), actor-vortex-max, actor-vortex-claudia do not exist on QA: absent from ai-dala-infra qa-uat-env.sh registry (T-0150 provisioned only scenario-referenced actors). Naming is consistent (actor-<realm>-<name>); truly absent, not misnamed. Letflow persona seeds skip them (ISS-0953); vortex role-ceo group stays empty so vortex paths routed to role-ceo cannot be claimed. No current UAT scenario references these actors. Request: provision (dirk then joins role-ceo on persona-seed re-run) and add to qa-uat-env.sh, or declare them out of QA scope and drop them from the seed PERSONAS tables.
+queue_ref: Q-933  # queue issue_ref ISS-0933 may collide with an existing local file; local filename ISS-0962
+github_ref: GH-2120
+status: open

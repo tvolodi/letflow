@@ -1,0 +1,107 @@
+run_id: WF05-FULL3-20261001-PLATFORM-A
+date: "2026-10-01"
+agent: UAT-RUNNER
+scope: "Slice PLATFORM-A (10 scenarios of test/fixtures/uat/scenarios/platform/) against live QA"
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  idp_base_url: "https://auth.qa.bizdala.com"
+  environment: qa
+  credential_source: "ai-dala-infra/scripts/qa-uat-env.sh (token / platform modes), held in-process only"
+  preflight_report: test/uat-reports/preflight-2026-10-01-qa-FULL3.txt
+summary: {total: 10, pass: 2, fail: 1, env_blocked: 4, unbuilt_feature: 3, result_overall: ENV_NOT_READY}
+substitution_note: >
+  actor-platform-admin has no seeded user (preflight GAP). Specs that need a single PLATFORM_ADMIN ran as admin-user
+  (bpm-default PLATFORM_ADMIN), which satisfies the required role; scenarios needing a SECOND admin were not substituted.
+
+scenarios:
+  - id: platform-definition-type-error-blocked
+    verdict: PASS
+    evidence: >
+      NOTE (ISS-0527) is stale: web/tests/e2e/pipelines/platform-definition-type-error-blocked.pipeline.e2e.spec.ts
+      exists. Run against QA (--retries=0): 2 passed (1.3m) - both the main test (typo'd field ref + type-incompatible
+      comparison reported together, naming each rule, submit-for-release blocked, re-checked fresh) and the EO-005 clean
+      happy path (fresh check, definition activates). Screenshots under web/tests/screenshots/pipelines/platform-definition-type-error-blocked-*.png.
+      Substitution: spec authenticates as admin-user (bpm-default PLATFORM_ADMIN) in place of actor-platform-admin.
+
+  - id: platform-definition-promotion-rollback
+    verdict: PASS
+    evidence: >
+      Spec exists and ran against QA (--retries=0): first run 1 passed (10.9s), then --repeat-each=4: 4 passed (46.7s);
+      5/5 overall. The FULL2 recurrence (start-definition-version field empty, ISS-0891) did not reproduce.
+      Substitution: admin-user for actor-platform-admin.
+
+  - id: platform-instance-pin-survives-catalog-change
+    verdict: FAIL
+    evidence: >
+      NOTE (ISS-0527) is stale: the spec exists. As shipped it cannot authenticate to QA: it calls
+      getKeycloakToken(request) at line 184, which hard-codes password 'admin-pass' with no env override
+      -> Keycloak 401 invalid_grant. With only that credential argument changed (temporary copy using the QA
+      admin-user password, copy deleted afterwards; no assertion touched) the run passed steps 01-04 (pins panel shows
+      version 1 / "Chosen automatically", case stays ACTIVE after publish/retire) and FAILED at step 04b
+      (scenario step 3 / EO-001/EO-004): POST /api/v1/tasks/<id>/complete as the same admin-user token the HUMAN_TASK was
+      assigned to returned HTTP 403 {"title":"Forbidden","detail":"task is assigned to a different user"}; spec expects 200
+      (ISS-0917 acceptance: in-flight step completes and dispatches the PINNED catalog version). EO-001/EO-004 completion leg
+      therefore unverified/contradicted on QA.
+    diagnosis_hint: >
+      Tasks.apply_completion_authz/3 (ISS-0942) compares the task's assignee_ref (spec seeds it with the token JWT sub
+      149aea82-...) to auth_context.user_id from auth_pipeline.ex:371; the 403 means those differ on QA (user_id is likely not
+      the raw sub, or the engine rewrites assignee_ref). ISS-0951 (resolved) cited this spec as the working example but states
+      the e2e specs were not executed on a live stack. Also spec defect: hard-coded 'admin-pass' should use
+      resolveCredential('UAT_QA_ADMIN_PASSWORD', ...) like sibling specs.
+    maps_to_existing_issue: "none exact; related ISS-0942 / ISS-0951 / ISS-0924 (open, same family: pipeline-spec task assignee vs completion authz)"
+
+  - id: platform-definition-promotion-approved
+    verdict: ENV_BLOCKED
+    reason: CREDENTIALS_MISSING
+    evidence: >
+      Needs a second PLATFORM_ADMIN (proposer) because self-approval is forbidden. qa-uat-env.sh token promo-proposer-uat
+      -> "missing secret" (re-verified this run). admin-user as both sides would defeat the scenario; not substituted.
+    issue_ref: ISS-0888
+
+  - id: platform-definition-promotion-conflict-rejected
+    verdict: ENV_BLOCKED
+    reason: CREDENTIALS_MISSING
+    evidence: "Same: qa-uat-env.sh token uat-promo-conflict-proposer -> missing secret (re-verified). Not run."
+    issue_ref: ISS-0888
+
+  - id: platform-attachment-cross-tenant-probe
+    verdict: ENV_BLOCKED
+    reason: CREDENTIALS_MISSING
+    security_note: "Tenant-isolation scenario. NOT verified; no failure observed. Cross-tenant attachment isolation on QA remains unverified by UAT."
+    evidence: >
+      Preflight shows OK but the spec imports getMasterAdminToken (Keycloak master realm, KC_ADMIN_USER/PASSWORD not provided
+      by the credential source) and bindTenantIdpRealm from db-exec.ts (docker compose psql); it creates throwaway realms,
+      which is out of bounds on QA. Not run.
+    issue_ref: ISS-0888, ISS-0896
+
+  - id: platform-migration-partial-failure-resume
+    verdict: ENV_BLOCKED
+    reason: ENV_NOT_SUPPORTED
+    evidence: >
+      Preflight local_deps GAP: spec shells to docker compose psql via db-exec.ts. Not run. NOTE (ISS-0527) is stale (spec exists)
+      but the env limitation stands. GET /api/v1/platform-migrations/rollouts -> 404 with admin-user.
+    issue_ref: ISS-0890
+
+  - id: platform-agent-artifact-resubmit-idempotent
+    verdict: UNBUILT_FEATURE
+    reason: NOT_APPLICABLE_TO_LETFLOW
+    evidence: >
+      No pipeline_test; NOTE (ISS-0740, closed_not_applicable): runtime-agent subsystem never adopted. Probed with admin-user:
+      GET /api/v1/agent-artifacts, /agent-requests, /agent-artifacts/x/review all 404.
+    issue_ref: ISS-0740
+
+  - id: platform-frontend-guard-selfcheck
+    verdict: UNBUILT_FEATURE
+    reason: NO_INSTANCE_SURFACE
+    evidence: >
+      All six steps are via:system build-gate actions; no pipeline_test; GET /api/v1/definitions/sys-frontend-guards -> 404.
+      Per ISS-0900 this is covered in CI (a11y-gate, bundle-scan, meta-control specs), a tier mismatch rather than a product gap.
+    issue_ref: ISS-0900
+
+  - id: platform-out-of-order-effect-completion
+    verdict: UNBUILT_FEATURE
+    reason: NO_INSTANCE_SURFACE
+    evidence: >
+      All steps are system-actor internals; no pipeline_test; /api/v1/effects and /ordering -> 404. Per ISS-0900 covered by
+      test/letflow/ordering_test.exs (ExUnit tier), not a product gap.
+    issue_ref: ISS-0900

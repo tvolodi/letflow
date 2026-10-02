@@ -1,0 +1,65 @@
+id: ISS-0928
+title: "Service-task re-entry hitting no_matching_edge at a downstream EXCLUSIVE_GATEWAY rolled back silently: instance stays ACTIVE with no task, event, error or DLQ row (originally filed as a PARALLEL_GATEWAY fork dispatch problem)"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF05-FULL3-20261001 (filed by ORCH)
+discovered_at: "2026-10-01T19:58:01Z"
+severity: MAJOR
+owner: "ELIXIR-DEV"
+description: >
+  Originally filed as: meridian Loan Origination v1.1 on QA, SERVICE_TASK kyc-aml-check inside a
+  PARALLEL_GATEWAY fork never dispatched; after credit-memo-review and risk-assessment complete,
+  current_nodes=[kyc-aml-check], instance ACTIVE 6.5+ min with no task, no SERVICE_TASK_COMPLETED,
+  no EXECUTION_ERROR, no DLQ row. Blocked meridian/loan-origination-above-threshold and
+  -below-threshold. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml
+  (on PR #2129 branch only).
+  Diagnosis (WF03-Q928-20261001): the PARALLEL_GATEWAY hypothesis was wrong. The service task IS
+  armed and dispatched correctly inside the fork, and the HTTP call succeeds. The defect is not
+  fork-specific (a top-level SERVICE_TASK behaves identically). After a successful dispatch,
+  Engine.advance_after_service_task_outcome/4 follows the outgoing edge into kyc-routing, an
+  EXCLUSIVE_GATEWAY with only conditioned edges (no default), and the stub endpoint returns no
+  kyc_status, so activation fails with {:no_matching_edge, ...}. persist_service_task_advance/10
+  returned that as a bare {:error, {:transition_failed, ...}} instead of routing it into an
+  ExecutionError (the human-task completion path already did, as :no_matching_gateway_edge), so
+  the transaction rolled back. Meanwhile ServiceTaskDispatcher.handle_success had already committed
+  the dispatch row as "advanced" in its own transaction, so the poller never re-claimed it, and the
+  dispatcher folded the {:error, _} silently (no count, log or audit). Net: token parked forever at
+  the SERVICE_TASK node.
+affected_files:
+  - lib/letflow/engine.ex
+  - lib/letflow/engine/service_task_dispatcher.ex
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - scripts/seed_meridian_definition.sh
+queue_ref: Q-928  # queue issue_ref ISS-0928; local filename ISS-0928
+github_ref: GH-2114
+status: resolved
+resolved_in_run: WF03-Q928-20261001
+resolved_at: "2026-10-01T21:35:00Z"
+resolution: >
+  (1) engine.ex: persist_service_task_advance/10 now routes both no_matching_edge shapes through
+  new persist_service_task_no_matching_edge (ExecutionError.append_multi inside the open outer
+  transaction), so the instance goes to error with error_type :no_matching_gateway_edge instead of
+  rolling back silently; build_no_matching_gateway_edge_error_args/6 is shared with the human-task
+  path. (2) service_task_dispatcher.ex: the catch-all advance-failure arm now logs (ids and reason
+  tag only) and audits via record_service_task_advance_failure_audit/5, with
+  classify_advance_failure by tuple head; instance_not_active is debug-only. (3) Fixture: Meridian
+  loan-origination definition gains default edge e9-default (kyc-routing -> assessment-join),
+  version 1.2; seed script header updated. (4) docs/anti-patterns.md entry added. Regression tests
+  in test/letflow/engine/service_task_wiring_test.exs and
+  test/letflow/engine/meridian_loan_origination_fixture_test.exs (spec test/specs/ISS-0928.md).
+  Scoped tests after the fix: service_task_wiring, engine_execution_error, transition,
+  service_task_dispatcher -> 112 passed, 0 failures. Design:
+  lib/letflow/design/WF03-ISS0928-fix-design.md.
+follow_ups:
+  - >
+    Other re-entry failures remain silent in the same way: any non-no_matching_edge
+    {:transition_failed | :activation_failed} from the service-task re-entry path (e.g. hop limit)
+    still rolls back and leaves the instance ACTIVE (now logged and audited, but the instance is not
+    moved to error). The dispatch-row-committed-before-advance gap (documented in engine.ex near
+    handle_success) is the underlying cause. Propose a follow-up issue to route all advance failures
+    into an ExecutionError, or to make dispatch-row "advanced" and the advance atomic. The timer
+    re-entry path should be re-checked for the same shape.
+  - >
+    Production Meridian definitions: the fixture fix adds a kyc-routing default edge only to the
+    QA/test fixture (v1.2). Whether production definitions' kyc-routing should have a default edge
+    (and where it should route when kyc_status is absent) is a business-rule question for
+    BA-MERIDIAN, not an engineering decision.

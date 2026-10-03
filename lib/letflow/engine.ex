@@ -5303,6 +5303,7 @@ defmodule Letflow.Engine do
           | {:error, {:instance_already_terminal, status :: :completed | :cancelled}}
           | {:error, {:event_append_failed, term()}}
           | {:error, Ecto.Changeset.t()}
+          | {:error, {:transaction_failed, Exception.t()}}
           | {:error, term()}
 
   @type cancel_result :: %{
@@ -5393,75 +5394,79 @@ defmodule Letflow.Engine do
   # ---------------------------------------------------------------------
 
   defp run_cancel_instance(instance_id, actor_id, idempotency_key, cancelled_at, prefix) do
-    Multi.new()
-    |> Multi.run(:open_tasks, fn repo, _changes ->
-      fetch_and_lock_open_tasks(repo, instance_id, prefix)
-    end)
-    |> Multi.run(:timer_cancellations, fn repo, _changes ->
-      # REQ-187 design doc §6.1-§6.2 -- positioned here, between :open_tasks
-      # and :instance_projection, NOT grouped with :task_cancellations/
-      # :token_cancellations after :eligibility as its topical grouping
-      # might suggest. This ordering is load-bearing, not cosmetic: it
-      # makes cancel_instance/3 acquire the `timers` lock before the
-      # `instance_projections` lock, uniformly matching
-      # Letflow.Scheduler.fire_timer/2's own (`timers` then
-      # `instance_projections`, via advance_after_timer_fired/3) lock
-      # order -- avoiding the AB-BA Postgres deadlock two code paths
-      # locking the same two tables in opposite order would otherwise
-      # produce. Running before :eligibility (M3) has confirmed the
-      # instance isn't already terminal is intentional: an ineligible
-      # cancel_instance/3 call still executes this update_all, but
-      # Ecto.Multi rolls back the entire transaction the moment
-      # :eligibility later returns {:error, _}, so no row is left changed
-      # by an ineligible attempt.
-      TaskActivation.cancel_pending_timers(
-        repo,
-        instance_id,
-        cancelled_at,
-        "instance_cancelled",
-        prefix
-      )
-    end)
-    |> Multi.run(:service_task_dispatch_cancellations, fn repo, _changes ->
-      # REQ-215 design doc §4 -- positioned identically to
-      # :timer_cancellations immediately above, for the identical
-      # lock-ordering reason: acquire the service_task_dispatches lock
-      # before the instance_projections lock, matching every other code
-      # path's lock order (avoids an AB-BA Postgres deadlock).
-      ServiceTaskDispatcher.cancel_pending_dispatches(repo, instance_id, cancelled_at, prefix)
-    end)
-    |> Multi.run(:instance_projection, fn repo, _changes ->
-      fetch_and_lock_instance_projection_for_cancel(repo, instance_id, prefix)
-    end)
-    |> Multi.run(:eligibility, fn _repo, %{instance_projection: projection} ->
-      check_cancel_eligibility(projection)
-    end)
-    |> Multi.run(:task_cancellations, fn repo, %{open_tasks: open_tasks} ->
-      cancel_task_rows(repo, open_tasks, cancelled_at, prefix)
-    end)
-    |> Multi.run(:live_tokens, fn repo, _changes ->
-      fetch_and_lock_live_tokens(repo, instance_id, prefix)
-    end)
-    |> Multi.run(:token_cancellations, fn repo, %{live_tokens: live_tokens} ->
-      cancel_token_rows(repo, live_tokens, cancelled_at, prefix)
-    end)
-    |> Multi.run(:event, fn _repo, changes ->
-      append_instance_cancelled_event(
-        instance_id,
-        changes,
-        actor_id,
-        idempotency_key,
-        prefix
-      )
-    end)
-    |> Multi.run(:projection, fn repo, %{instance_projection: projection} ->
-      cancel_instance_projection(repo, projection, cancelled_at, prefix)
-    end)
-    |> Multi.merge(fn changes ->
-      record_instance_cancel_audit(changes, instance_id, actor_id, prefix)
-    end)
-    |> Repo.transaction()
-    |> interpret_cancel_result(instance_id, cancelled_at)
+    try do
+      Multi.new()
+      |> Multi.run(:open_tasks, fn repo, _changes ->
+        fetch_and_lock_open_tasks(repo, instance_id, prefix)
+      end)
+      |> Multi.run(:timer_cancellations, fn repo, _changes ->
+        # REQ-187 design doc §6.1-§6.2 -- positioned here, between :open_tasks
+        # and :instance_projection, NOT grouped with :task_cancellations/
+        # :token_cancellations after :eligibility as its topical grouping
+        # might suggest. This ordering is load-bearing, not cosmetic: it
+        # makes cancel_instance/3 acquire the `timers` lock before the
+        # `instance_projections` lock, uniformly matching
+        # Letflow.Scheduler.fire_timer/2's own (`timers` then
+        # `instance_projections`, via advance_after_timer_fired/3) lock
+        # order -- avoiding the AB-BA Postgres deadlock two code paths
+        # locking the same two tables in opposite order would otherwise
+        # produce. Running before :eligibility (M3) has confirmed the
+        # instance isn't already terminal is intentional: an ineligible
+        # cancel_instance/3 call still executes this update_all, but
+        # Ecto.Multi rolls back the entire transaction the moment
+        # :eligibility later returns {:error, _}, so no row is left changed
+        # by an ineligible attempt.
+        TaskActivation.cancel_pending_timers(
+          repo,
+          instance_id,
+          cancelled_at,
+          "instance_cancelled",
+          prefix
+        )
+      end)
+      |> Multi.run(:service_task_dispatch_cancellations, fn repo, _changes ->
+        # REQ-215 design doc §4 -- positioned identically to
+        # :timer_cancellations immediately above, for the identical
+        # lock-ordering reason: acquire the service_task_dispatches lock
+        # before the instance_projections lock, matching every other code
+        # path's lock order (avoids an AB-BA Postgres deadlock).
+        ServiceTaskDispatcher.cancel_pending_dispatches(repo, instance_id, cancelled_at, prefix)
+      end)
+      |> Multi.run(:instance_projection, fn repo, _changes ->
+        fetch_and_lock_instance_projection_for_cancel(repo, instance_id, prefix)
+      end)
+      |> Multi.run(:eligibility, fn _repo, %{instance_projection: projection} ->
+        check_cancel_eligibility(projection)
+      end)
+      |> Multi.run(:task_cancellations, fn repo, %{open_tasks: open_tasks} ->
+        cancel_task_rows(repo, open_tasks, cancelled_at, prefix)
+      end)
+      |> Multi.run(:live_tokens, fn repo, _changes ->
+        fetch_and_lock_live_tokens(repo, instance_id, prefix)
+      end)
+      |> Multi.run(:token_cancellations, fn repo, %{live_tokens: live_tokens} ->
+        cancel_token_rows(repo, live_tokens, cancelled_at, prefix)
+      end)
+      |> Multi.run(:event, fn _repo, changes ->
+        append_instance_cancelled_event(
+          instance_id,
+          changes,
+          actor_id,
+          idempotency_key,
+          prefix
+        )
+      end)
+      |> Multi.run(:projection, fn repo, %{instance_projection: projection} ->
+        cancel_instance_projection(repo, projection, cancelled_at, prefix)
+      end)
+      |> Multi.merge(fn changes ->
+        record_instance_cancel_audit(changes, instance_id, actor_id, prefix)
+      end)
+      |> Repo.transaction()
+      |> interpret_cancel_result(instance_id, cancelled_at)
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
+    end
   end
 
   # REQ-195 -- cancel_instance/3's own actor_id (attrs[:actor_id], already an

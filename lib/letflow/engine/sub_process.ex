@@ -987,24 +987,61 @@ defmodule Letflow.Engine.SubProcess do
     projection_key = {:sub_process_parent_projection, parent_token.id}
     cascade_lookup_key = {:sub_process_grandparent_lookup, parent_instance_id}
 
+    # ISS-0975 fix (design doc §1.2): a PARALLEL_GATEWAY join firing within
+    # the child's own last hop chain (the completion that got us here) can
+    # mint a token_id that is not yet a real, persisted TokenRecord id --
+    # reconcile_parent_tokens/5's own guard would otherwise reject it
+    # outright. Port ISS-0408's insert-before-reconcile treatment here: a
+    # leading Multi.merge/2 inserts real TokenRecord rows for any such
+    # hop-chain-local-new token first, rewrites final_instance_state to
+    # reference the real ids, and only then runs task activation and
+    # reconciliation against the rewritten state and a widened "already
+    # known" token set. Keyed by {parent_instance_id, parent_token.id} (a
+    # 3-tuple with the leading atom) rather than {parent_instance_id} alone,
+    # since this function can run once per sibling SUB_PROCESS child of the
+    # same parent within one Multi (same reason
+    # TaskActivation.append_multi_from_existing_records/6's own
+    # key_disambiguator parameter exists).
+    hop_chain_key = {:sub_process_hop_chain_token_records, parent_instance_id, parent_token.id}
+
     reconciled_multi =
       multi
-      |> TaskActivation.append_multi_from_existing_records(
-        parent_instance_id,
-        graph,
-        seed_state.pending_task_nodes,
-        final_instance_state,
-        prefix,
-        parent_token.id
-      )
-      |> Multi.run(reconciliation_key, fn repo, _changes ->
-        reconcile_parent_tokens(
-          repo,
-          token_records,
-          final_instance_state.tokens,
-          completed_at,
-          prefix
-        )
+      |> Multi.merge(fn _changes ->
+        Multi.new()
+        |> Multi.run(hop_chain_key, fn repo, _changes ->
+          Letflow.Engine.insert_hop_chain_new_token_records(
+            repo,
+            parent_instance_id,
+            token_records,
+            final_instance_state.tokens,
+            prefix
+          )
+        end)
+        |> Multi.merge(fn changes ->
+          {id_map, hop_chain_new_records} = Map.fetch!(changes, hop_chain_key)
+
+          resolved_final_instance_state =
+            Letflow.Engine.rewrite_token_ids(final_instance_state, id_map)
+
+          Multi.new()
+          |> TaskActivation.append_multi_from_existing_records(
+            parent_instance_id,
+            graph,
+            seed_state.pending_task_nodes,
+            resolved_final_instance_state,
+            prefix,
+            parent_token.id
+          )
+          |> Multi.run(reconciliation_key, fn repo, _changes ->
+            reconcile_parent_tokens(
+              repo,
+              hop_chain_new_records ++ token_records,
+              resolved_final_instance_state.tokens,
+              completed_at,
+              prefix
+            )
+          end)
+        end)
       end)
 
     # ISS-0929: timer / escalation / service-task-dispatch rows for the pending
@@ -1019,7 +1056,8 @@ defmodule Letflow.Engine.SubProcess do
              parent_instance_id,
              final_instance_state.variables,
              completed_at,
-             prefix
+             prefix,
+             hop_chain_key
            ) do
       {:ok,
        armed_multi

@@ -118,6 +118,27 @@ already rejects any token not present in the original records
 (`{:new_token_during_resume_not_supported, ...}`), so every token in `final_instance_state` is
 a persisted TokenRecord id.
 
+> **CORRECTION (CODE-DESIGNER, 2026-10-03, ISS-0975):** the paragraph above is now stale and
+> superseded. ISS-0975 (`lib/letflow/design/iss0975-subprocess-join-reentry-id-map.md`) found
+> that `reconcile_parent_tokens/5`'s own rejection guard is exactly the same
+> `do_reconcile_token_records/5`-style guard ISS-0408 had already shown needs a prior insert
+> step, not a bare rejection, for the one case this reasoning doesn't cover: a
+> `PARALLEL_GATEWAY` join firing within the SAME hop chain this function's own
+> `advance_until_stable/4` call advances through, whose own outgoing edge leads directly into
+> a SERVICE_TASK/TIMER node. For that case, the join-merged token is genuinely **not yet** a
+> persisted `TokenRecord` id when `append_pending_event_arms_multi/7`'s own identity id_map
+> runs — the rejection this paragraph relies on to make that id_map "correct" fires *before*
+> reaching it instead (with `{:new_token_during_resume_not_supported, token_id}}`), which is
+> itself the bug ISS-0975 fixes, not a safety net that made the identity id_map actually
+> correct. ISS-0975's own design widens `reconcile_parent_tokens/5`'s known-token set (by
+> prepending newly-inserted hop-chain-local-new `TokenRecord` rows, mirroring ISS-0408's own
+> `build_task_activation_and_reconciliation_multi/4` treatment) and replaces
+> `append_pending_event_arms_multi/7`'s identity id_map with a real one read back from the
+> transaction's own `changes`, exactly as ISS-0974 already did for `Letflow.Engine`'s own 4
+> sibling sites. This correction note does not change anything else in this design doc —
+> the vortex 8D fixture/seed/test changes below are unaffected; they simply never happened to
+> exercise a same-hop-chain join in their own child graph.
+
 Error handling: any `{:error, _}` from the prepare step (unknown node, empty rendered URL,
 catalog unresolved, invalid timer duration, multiple deadline timers) must be returned from
 `build_completion_multi_from_merge/12` as the existing

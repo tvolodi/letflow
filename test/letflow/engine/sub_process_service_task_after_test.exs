@@ -21,6 +21,53 @@ defmodule Letflow.Engine.SubProcessServiceTaskAfterTest do
   No HTTP: the dispatcher is not run; the test performs the poller's re-entry (`mark advanced` +
   `advance_after_service_task_outcome/4`) itself, as `regulatory_review_timer_path_test.exs` does.
   Real Postgres, `async: false`. See `test/specs/ISS-0929.md`.
+
+  ## E7 / E8 -- ISS-0975 (`lib/letflow/design/iss0975-subprocess-join-reentry-id-map.md`)
+
+  A `PARALLEL_GATEWAY` join positioned in the PARENT's own graph, straddling a `SUB_PROCESS`
+  branch and a plain `HUMAN_TASK` branch, can fire INSIDE
+  `Letflow.Engine.SubProcess.build_completion_write_steps/13`'s own hop chain -- the parent's
+  own advance past its `SUB_PROCESS` node, triggered by the child completing -- when the
+  sibling `HUMAN_TASK` branch already arrived at the join in an earlier, unrelated hop chain.
+  The join mints a synthetic, not-yet-persisted token id that is then handed straight to
+  `Letflow.Engine.append_pending_event_arms_multi/7`'s own identity id_map (the ISS-0974 bug's
+  5th, un-ported sibling) to arm the following SERVICE_TASK/TIMER.
+
+  Graph shape (`parent_graph_split_sub_and_task/2`):
+
+  ```
+  START -> PARALLEL_GATEWAY(split) -> SUB_PROCESS(child) / HUMAN_TASK(task_a)
+         -> PARALLEL_GATEWAY(join) -> SERVICE_TASK|TIMER -> END
+  child:  START -> HUMAN_TASK(child-task) -> END
+  ```
+
+  Fail-then-pass proof (WF-02 Step 2a) -- EMPIRICALLY CONFIRMED, not assumed:
+  `git stash push -- lib/letflow/engine.ex lib/letflow/engine/sub_process.ex` (restoring both to
+  `origin/main`, pre-ISS-0975) and running both E7 and E8 showed the pre-fix failure mode is
+  **NOT** `{:error, {:new_token_during_resume_not_supported, token_id}}` -- this design doc's own
+  §0 diagnosis, predicting `reconcile_parent_tokens/5`'s guard fires first, does **not** hold for
+  this graph shape: a join whose own outgoing edge leads directly to a SERVICE_TASK/TIMER node
+  produces a `Transition.pending_event()`, which is NEVER a member of
+  `final_instance_state.tokens` (same reason a join-then-HUMAN_TASK token moves into
+  `.pending_task_nodes` instead, per `rewrite_token_ids/2`'s own comment) -- so
+  `reconcile_parent_tokens/5`'s `.tokens`-only guard never sees it and never rejects it. The
+  ACTUAL pre-fix failure, verbatim from both E7 and E8's own runs, is the raw `Ecto.Changeset`
+  cast error ISS-0975 originally assumed before this design doc's own "corrected" diagnosis:
+
+  ```
+  {:error, %Ecto.Changeset{errors: [token_id: {"is invalid", [type: Ecto.UUID, validation: :cast]}], ...}}
+  ```
+
+  (`Letflow.Scheduler.Timer`'s changeset for E8, `ServiceTaskDispatcher.ServiceTaskDispatch`'s for
+  E7) -- i.e. Part B's bug (`append_pending_event_arms_multi/7`'s identity id_map) is the one
+  actually reachable for this test's own graph shape; Part A's insert step is still structurally
+  required regardless (it is what creates the real `TokenRecord` row the dispatch/timer's own
+  `token_id` FK references, and what populates the `id_map` Part B reads back), but
+  `reconcile_parent_tokens/5`'s own rejection guard specifically never fires on this path. Both
+  tests were re-run with the fix restored and now pass: the child's own task completion
+  succeeds, a real dispatch/timer row is armed keyed to a real, newly-inserted `TokenRecord.id`,
+  and both the child and parent instances reach `:completed`. See this run's own final report
+  for the verbatim command output.
   """
 
   use Letflow.DataCase, async: false
@@ -33,6 +80,7 @@ defmodule Letflow.Engine.SubProcessServiceTaskAfterTest do
   alias Letflow.Engine.Reconstruction
   alias Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch
   alias Letflow.Engine.Task, as: EngineTask
+  alias Letflow.Engine.TokenRecord
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Scheduler.Timer
   alias Letflow.TenantFixture
@@ -394,5 +442,158 @@ defmodule Letflow.Engine.SubProcessServiceTaskAfterTest do
     types = event_types(schema, parent_id)
     assert "SUB_PROCESS_COMPLETED" in types
     refute "EXECUTION_ERROR" in types
+  end
+
+  # ---------------------------------------------------------------------------------
+  # E7 / E8 -- ISS-0975: a join straddling a SUB_PROCESS branch and a plain
+  # HUMAN_TASK branch, firing inside build_completion_write_steps/13's own
+  # hop chain.
+  # ---------------------------------------------------------------------------------
+
+  # START -> PARALLEL_GATEWAY(split) -> SUB_PROCESS(child_name) / HUMAN_TASK(task_a)
+  #        -> PARALLEL_GATEWAY(join) -> after_node -> END
+  defp parent_graph_split_sub_and_task(child_name, after_node) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "split", "node_type" => "PARALLEL_GATEWAY"},
+        %{
+          "id" => "sub",
+          "node_type" => "SUB_PROCESS",
+          "attributes" => %{"definition_name" => child_name}
+        },
+        %{
+          "id" => "task_a",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "role-join-a"}
+        },
+        %{"id" => "join", "node_type" => "PARALLEL_GATEWAY"},
+        after_node,
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "q0", "source" => "start", "target" => "split"},
+        %{"id" => "q1", "source" => "split", "target" => "sub"},
+        %{"id" => "q2", "source" => "split", "target" => "task_a"},
+        %{"id" => "q3", "source" => "sub", "target" => "join"},
+        %{"id" => "q4", "source" => "task_a", "target" => "join"},
+        %{"id" => "q5", "source" => "join", "target" => after_node["id"]},
+        %{"id" => "q6", "source" => after_node["id"], "target" => "end"}
+      ]
+    }
+  end
+
+  defp timer_node_after do
+    %{
+      "id" => "after",
+      "node_type" => "TIMER",
+      "attributes" => %{"duration_iso8601" => "PT1H"}
+    }
+  end
+
+  # Provisions a tenant, activates child + parent, starts the parent (which fires the
+  # initial split immediately: the SUB_PROCESS branch spawns the child, the task_a branch
+  # dispatches a pending HUMAN_TASK), and returns the schema, parent id, task_a's own pending
+  # task, and the child's own pending task. Neither is completed yet.
+  defp parent_with_split_child!(after_node) do
+    schema = provision!()
+    child_name = unique("iss0975-child")
+    create_active!(schema, child_name, "1.0", child_graph())
+
+    parent =
+      create_active!(
+        schema,
+        unique("iss0975-parent"),
+        "1.0",
+        parent_graph_split_sub_and_task(child_name, after_node)
+      )
+
+    parent_id = start!(schema, parent, %{"deviation_id" => "dev-1"})
+    task_a = pending_task!(schema, parent_id, "task_a")
+    child_task = child_task!(schema, parent_id, "child-task")
+    {schema, parent_id, task_a, child_task}
+  end
+
+  defp token_records(schema, instance_id) do
+    TokenRecord |> where([t], t.instance_id == ^instance_id) |> Repo.all(prefix: schema)
+  end
+
+  test "E7 join straddling SUB_PROCESS + HUMAN_TASK branches -> SERVICE_TASK: child completion fires the join inside build_completion_write_steps/13, real dispatch row created" do
+    {schema, parent_id, task_a, child_task} =
+      parent_with_split_child!(
+        service_node("https://example.test/after/{{variables.deviation_id}}")
+      )
+
+    # Branch task_a completes first -- arrives at the join, which does not fire
+    # yet (the SUB_PROCESS branch hasn't arrived). Parent stays :active. This is
+    # a plain complete_task/3 hop chain on the parent instance, unrelated to
+    # Letflow.Engine.SubProcess.
+    complete!(schema, task_a, %{})
+    assert projection(schema, parent_id).status == :active
+
+    # Completing the child's own task is what satisfies the join's last missing
+    # branch -- the join fires INSIDE Letflow.Engine.SubProcess.build_completion_write_steps/13's
+    # own hop chain (the parent's advance past its SUB_PROCESS node), not via
+    # complete_task/3's own plain tail (ISS-0974's already-fixed path, exercised
+    # by task_a's own completion above and left untouched by this design).
+    assert {:ok, after_child} =
+             Engine.complete_task(
+               child_task.id,
+               %{
+                 output_variables: %{},
+                 actor_id: Ecto.UUID.generate(),
+                 idempotency_key: unique("iss0975-complete")
+               },
+               prefix: schema
+             )
+
+    assert after_child.instance_status == :completed
+
+    # Post-fix: the parent advanced past the join onto "after", with a real
+    # dispatch row keyed to a real, newly-inserted TokenRecord id -- not the
+    # join's own synthetic "<origin>/join/joined" string.
+    assert [dispatch] = dispatches(schema, parent_id)
+    assert dispatch.node_id == "after"
+    assert dispatch.status == "pending"
+    assert {:ok, _} = Ecto.UUID.cast(dispatch.token_id)
+
+    records = token_records(schema, parent_id)
+    assert [joined_record] = Enum.filter(records, &(&1.node_id == "after"))
+    assert joined_record.id == dispatch.token_id
+    assert joined_record.status == :active
+
+    stub_advance!(schema, dispatch)
+
+    assert projection(schema, parent_id).status == :completed
+  end
+
+  test "E8 join straddling SUB_PROCESS + HUMAN_TASK branches -> TIMER: child completion fires the join inside build_completion_write_steps/13, real timer row created" do
+    {schema, parent_id, task_a, child_task} = parent_with_split_child!(timer_node_after())
+
+    complete!(schema, task_a, %{})
+    assert projection(schema, parent_id).status == :active
+
+    assert {:ok, after_child} =
+             Engine.complete_task(
+               child_task.id,
+               %{
+                 output_variables: %{},
+                 actor_id: Ecto.UUID.generate(),
+                 idempotency_key: unique("iss0975-complete")
+               },
+               prefix: schema
+             )
+
+    assert after_child.instance_status == :completed
+
+    assert [%Timer{} = timer] = timers(schema, parent_id)
+    assert timer.node_id == "after"
+    assert timer.status == "pending"
+    assert {:ok, _} = Ecto.UUID.cast(timer.token_id)
+
+    records = token_records(schema, parent_id)
+    assert [joined_record] = Enum.filter(records, &(&1.node_id == "after"))
+    assert joined_record.id == timer.token_id
+    assert joined_record.status == :active
   end
 end

@@ -115,4 +115,4 @@ resolution:
         exactly 1 file/1 line.
   branch: fix/ISS-0979-audit-chain-lock
   final_commit: 219989c3
-  pr: null  # filled in once opened
+  pr: 2177

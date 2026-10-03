@@ -639,7 +639,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_925_000_001, Letflow.Repo.Migrations.CreateTenantModules,
      "20260925000001_create_tenant_modules.exs"},
     {20_260_926_010_001, Letflow.Repo.Migrations.BackfillExamTenantModules,
-     "20260926010001_backfill_exam_tenant_modules.exs"}
+     "20260926010001_backfill_exam_tenant_modules.exs"},
+    {20_261_003_000_001, Letflow.Repo.Migrations.CreateAuditChainLocks,
+     "20261003000001_create_audit_chain_locks.exs"}
   ]
 
   @doc """

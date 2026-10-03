@@ -39,4 +39,80 @@ source_reports:
   - docs/issues/ISS-0972.yaml
 queue_ref: null  # filed directly by DOC-UPDATER from RELEASE-VALIDATOR's own flagged observation during ISS-0972's closure
 github_ref: null  # local-only follow-up, not yet mirrored to GitHub
-status: open
+status: resolved
+resolution:
+  decided_at: "2026-10-03T00:00:00Z"
+  decision: >
+    Genuine concurrency risk, not theoretical. ELIXIR-DEV traced all call sites
+    of Audit.insert_entry/3 and append_multi/4 (19 sites across the codebase)
+    and confirmed that concurrent writers to the same tenant's audit chain are
+    a real, reachable possibility -- not serialized by any existing invariant
+    (no single-writer-per-tenant guarantee, no pre-existing transaction
+    boundary covering the tail read). The fork risk described in the issue is
+    therefore live and required a fix, not documentation of residual risk.
+  fix: >
+    Added a new per-tenant sentinel lock table (audit_chain_locks, migration
+    priv/repo/migrations/20261003000001_create_audit_chain_locks.exs) and a
+    new Letflow.Audit.ChainLock module (lib/letflow/audit/chain_lock.ex).
+    insert_entry/3 (lib/letflow/audit.ex) now wraps the chain-tail read in
+    Repo.transaction/1, first performing an insert-if-absent on the tenant's
+    sentinel row followed by a SELECT FOR UPDATE on that row, before reading
+    the chain tail -- mirroring Letflow.EventStore's established
+    instance_sequence insert-if-absent + SELECT FOR UPDATE pattern (the same
+    precedent ISS-0970 used for the events table). This serializes concurrent
+    inserts per tenant without serializing across tenants. tenant_fixture.ex's
+    fixture-count oracle was updated 48 -> 49 to account for the new table.
+  design_doc: lib/letflow/design/iss0979-audit-chain-lock.md
+  gates:
+    - gate: CODE-DESIGN-VALIDATOR
+      verdict: PASS (1 cycle)
+      note: >
+        Confirmed the design's new per-tenant sentinel lock table mirrors
+        EventStore's insert-if-absent + SELECT FOR UPDATE pattern.
+    - gate: SECURITY-REVIEWER
+      verdict: PASS
+      note: >
+        Full INV sweep: tenant isolation confirmed (lock is per-tenant, no
+        cross-tenant leakage), no secrets introduced, the test-only delay seam
+        used to prove serialization is confirmed not production-reachable, and
+        the two non-transactional ISS-0980 call sites' rescue contract is
+        preserved unchanged. Flagged lock-hold-duration as an informational,
+        forward-looking note only -- explicitly non-blocking.
+    - gate: REVIEWER
+      verdict: PASS
+      note: >
+        Verified the two-step lock protocol (insert-if-absent, then SELECT FOR
+        UPDATE) matches the EventStore precedent exactly. Confirmed the
+        tenant_fixture.ex oracle update (48 -> 49). Confirmed the new
+        concurrency test genuinely proves serialization via a delay-injection
+        elapsed-time assertion, not a weaker proxy. Confirmed the
+        non-transactional sites' correctness via their own ISS-0980 regression
+        tests. No scope creep.
+    - gate: TEST-RUNNER
+      verdict: PASS
+      note: >
+        Independently confirmed 5400/5400 full suite clean, plus the
+        new/updated tests passing (19/19). No test-DB pollution observed.
+    - gate: RELEASE-VALIDATOR
+      verdict: "FAIL (1st pass) -> fix -> PASS (re-check)"
+      note: >
+        First pass FAILed on a genuine ISS-0069-class warning: an unused
+        default argument (`\\ []`) on the new test file's base_attrs/1,
+        surfaced by mix letflow.check.test, which the earlier gates had not
+        run. That same first pass independently traced 3+ call sites, verified
+        the lock protocol against EventStore side-by-side, and constructed an
+        original adversarial scenario confirming a same-transaction
+        re-entrant lock acquisition (task_activation.ex's
+        insert_newly_pending/5 calling insert_entry/3 multiple times inside
+        one outer transaction) is SAFE under Postgres's own lock semantics --
+        filed as a documentation/test-coverage gap, not a functional defect,
+        and deliberately not actioned. ELIXIR-DEV fixed the warning with a
+        1-line change (commit 219989c3, dropped the dead `\\ []` default).
+        RELEASE-VALIDATOR's focused re-check then PASSed: confirmed the exact
+        fix, independently re-ran mix letflow.check.test clean (full gate:
+        main suite 5400/5400 + isolated wasm_hang + isolated lua_wallclock_race,
+        zero FAILED/zero ISS-0069 warnings), confirmed the diff scope was
+        exactly 1 file/1 line.
+  branch: fix/ISS-0979-audit-chain-lock
+  final_commit: 219989c3
+  pr: 2177

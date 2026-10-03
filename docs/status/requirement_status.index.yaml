@@ -6030,7 +6030,7 @@ volumes:
     path: docs/status/requirement_status.v26.yaml
     status: current
     opened: 2026-10-03
-    entries: 1
+    entries: 2
     note: >
       Opened by DOC-UPDATER's own ISS-0983 closing SCOPE-CHANGE append,
       successor to volume 25 (closed at 29 entries / 1211 frozen-prefix
@@ -6044,6 +6044,12 @@ volumes:
       docs/status/requirement_status.v26.yaml` = 1 on-disk entry; 79 lines /
       4511 bytes, well under the 1200-line/120000-byte roll ceiling, no
       roll triggered.
+
+      Incremented to 2 by DOC-UPDATER's own ISS-0979 closing SCOPE-CHANGE
+      append (2026-10-03T09:30:00Z) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v26.yaml` = 2 on-disk entries; 128
+      lines / 7615 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

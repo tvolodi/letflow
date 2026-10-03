@@ -87,4 +87,113 @@ related:
   - ISS-0946
 queue_ref: null   # filed directly by REVIEWER during PR review, not via get_next_task
 github_ref: null  # not filed on GitHub; local-only follow-up, same as ISS-0969/ISS-0980/ISS-0981
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0983-audit-append-multi-hardening
+resolved_at: "2026-10-03T06:00:00Z"
+resolution:
+  root_cause: >
+    Eight functions (six in lib/letflow/identity.ex -- create_user/2,
+    update_user_profile/3, update_user_status/3, create_group/2,
+    create_token/3, revoke_token/2 -- plus
+    Letflow.Repository.Activation.activate_group/5 and
+    Letflow.PublicRead.issue_handle/3) each fold
+    Letflow.Audit.append_multi/4 into their own Ecto.Multi, then call
+    Repo.transaction/1 on the combined Multi, with no function-level
+    rescue anywhere in the call chain. append_multi/4 is a thin
+    Multi.run/3 wrapper around insert_entry/3 -- the same function
+    ISS-0981 rescue-hardened at six other call sites that call
+    insert_entry/3 directly inside their own Repo.transaction/1. The
+    defect class is identical: a genuine raise from insert_entry/3
+    (the Postgrex.Error/undefined_table class ISS-0969/ISS-0980/
+    ISS-0981's own DROP TABLE audit_entries fault-injection tests
+    reproduce) has no Multi-level catch -- Multi.run/3's callback has
+    no rescue of its own, and Repo.transaction/1 only intercepts a
+    {:error, _} *return* from a step, not a raise -- so it propagated
+    uncaught through Repo.transaction/1, out of the owning context
+    function, out of its router-reachable caller, to
+    Plug.ErrorHandler's cleanup-only passthrough boundary, producing a
+    raw, unstructured 500 instead of the typed
+    {:error, {:transaction_failed, exception}} shape
+    Letflow.Definitions.activate/2 and ISS-0981's six sites already
+    return in this situation. All eight site/router-reachability claims
+    in this issue's own description were independently re-confirmed by
+    the call-chain trace during design, including the two
+    special-scoping sites (insert_token/3, issue_handle/4) later
+    re-verified end-to-end by RELEASE-VALIDATOR.
+  fix: >
+    Function-level try/rescue -> {:error, {:transaction_failed,
+    exception}} added at all 8 sites, matching the ISS-0981/
+    definitions.ex established pattern exactly. Because seven of these
+    eight sites (every identity.ex router handler plus
+    public_read_handles.ex's handle_issue/1) build an exhaustive,
+    catch-all-free case/pattern match over their callee's today-finite
+    error union, introducing the new tuple shape without a matching
+    clause would have produced a CaseClauseError -- a new, worse crash
+    site the fix itself would have created. 7 new router case clauses
+    were added (lib/letflow/routers/identity.ex x6,
+    lib/letflow/routers/public_read_handles.ex x1) to map the new
+    {:transaction_failed, exception} tuple to a clean 500 without
+    shadowing any existing clause; only activate_group/5's own result
+    path already had a catch-all and needed no router change. A
+    doc-only moduledoc correction was also made to lib/letflow/tasks.ex
+    (AC3): its "Error handling" section's claim that
+    assign_task/3/reassign_task/4 being left un-rescued "matches
+    Identity's own established precedent" no longer held once
+    identity.ex's write paths were rescue-hardened here, so the comment
+    was corrected to state plainly that this is now a standing, separate
+    decision rather than precedent-matching -- tasks.ex's actual
+    behavior was deliberately left unchanged, per this issue's own AC3
+    wording. Letflow.PublicRead's PublicRead.Handle schema reference was
+    also corrected during implementation to the actual global (non
+    tenant-prefixed) schema per the real migration, an unrelated-but-
+    adjacent accuracy fix caught by REVIEWER. 8 new DROP TABLE-style
+    fault-injection regression tests added, one per site, each with
+    rollback assertions.
+  design: >
+    lib/letflow/design/iss0983-audit-append-multi-hardening.md.
+    CODE-DESIGN-VALIDATOR: 2 cycles -- 1st FAILed on 2 literal
+    implementation code blocks present in the design doc instead of
+    specs/prose (mechanical only, substance correct both times); 2nd
+    PASSed.
+  security_reviewer: >
+    PASS. Ran the full INV-1..INV-8 sweep despite the design doc's own
+    "SECURITY-REVIEWER not required" self-assessment -- overridden for
+    consistency with ISS-0981's own precedent of treating this class of
+    change as security-relevant. No tenant-isolation, leak, or authz
+    issues found; no secret leakage via the new
+    {:transaction_failed, exception} tuple (the raw exception struct is
+    logged/returned only to the same code paths ISS-0981's six sites
+    already use, never serialized into an HTTP response body).
+  review: >
+    REVIEWER: PASS. Verified rescue-shape consistency across all 8
+    sites against the ISS-0981/definitions.ex pattern; verified all 7
+    new router case clauses are non-shadowing (each added after the
+    existing finite clause set, matching only the new tuple shape);
+    verified PublicRead.Handle's global-schema correction against the
+    actual migration file rather than trusting the claim; confirmed
+    genuine (non-vacuous) DROP-TABLE test coverage with real rollback
+    assertions at all 8 sites. Filed one non-blocking follow-up,
+    docs/issues/ISS-0984.yaml (Letflow.Engine.cancel_instance/3's own
+    run_cancel_instance/5 shares the same gap -- the 6th round of this
+    audit arc), explicitly out of scope here.
+  test_runner: >
+    PASS. Independently confirmed 5397/5397 full suite clean (note:
+    5397, not 5400 -- a benign discrepancy, 3 tests tagged
+    :high_pool_demand excluded by test_parallel.sh's pool-size
+    threshold on this host, confirmed by RELEASE-VALIDATOR as not a
+    regression), plus all 8 new tests passing individually by name.
+  release_validator: >
+    PASS. Independently re-traced 3 of the 8 sites end-to-end,
+    including both special-scoping sites (insert_token/3,
+    issue_handle/4); investigated and resolved the 5397-vs-5400
+    test-count delta (the same 3 :high_pool_demand-tagged tests,
+    confirmed excluded by pool-size threshold, not a regression);
+    constructed an original adversarial scenario confirming 2
+    pre-existing error cases (duplicate username, duplicate group
+    name) still hit their original, unshadowed clauses after the 7 new
+    router case clauses were added; confirmed docs/requirements.yaml
+    untouched; confirmed ISS-0984 is correctly out of this PR's scope;
+    independently re-ran the full suite 3 times via different paths
+    (scripts/test_parallel.sh N=2, mix letflow.check.test N=8, targeted
+    test files), all clean at 5397/5397.
+  pr: "#TBD"

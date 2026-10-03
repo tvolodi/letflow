@@ -4510,3 +4510,22 @@ every instance of a call target is not the same thing as a grep that verifies a 
 holds at every instance -- the former is mechanical, the latter requires tracing each call
 chain to its actual boundary, and skipping that per-site trace is how a fourth PASS-then-FAIL
 round keeps happening in the same arc.
+
+**Fifth round, same blind spot, different literal (2026-10-03, REVIEWER, ISS-0981/ISS-0983).**
+ISS-0981 fixed all six direct `Letflow.Audit.insert_entry/3` same-transaction call sites this
+arc had been chasing -- correctly, with a per-site DROP-TABLE regression test each. But
+`Letflow.Audit.append_multi/4` (`lib/letflow/audit.ex:188`) is a second, thinner wrapper around
+the exact same `insert_entry/3` call, folded into a caller's own `Ecto.Multi` as one more step,
+with the identical raise-through-`Repo.transaction/1` exposure -- and it does not match a grep
+for the literal string `insert_entry`. Six call sites in `lib/letflow/identity.ex` (all six
+router-reachable: `create_user/2`, `update_user_profile/3`, `update_user_status/3`,
+`create_group/2`, `create_token/3`, `revoke_token/2`) plus one each in
+`lib/letflow/repository/activation.ex` (`activate_group/5`) and `lib/letflow/public_read.ex`
+(`issue_handle/3`) share the defect, undiscovered across all four prior rounds because every
+prior round's grep anchored on the direct call, not the underlying failure mode. Filed as
+ISS-0983. The generalizable lesson ISS-0974's entry already states ("grep for the literal
+expression shape, not just the named call sites") needs one more turn of the screw: when a
+helper function wraps the risky call (`append_multi/4` wrapping `insert_entry/3`), the callers
+of the *helper* are just as exposed as callers of the thing it wraps, and a literal-string grep
+for the inner call's name will not find them -- the sweep has to follow the wrapper's own
+callers, not just its own definition.

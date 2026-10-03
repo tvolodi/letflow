@@ -69,6 +69,131 @@ queue_ref: null  # not called by this agent -- REVIEWER does not call letflow-qu
                  # ISS-0973/ISS-0974's own direct-filing precedent in this repo. ORCH
                  # may adopt this GitHub issue into letflow-queue later via
                  # register_task's github_issue_number field.
-github_ref: null  # no `gh` PR/issue creation performed by this review pass; ORCH or a
-                  # later run may open the GitHub-side issue and backfill this field.
-status: open
+github_ref: null  # PR not yet opened at the time this resolution block was written;
+                  # backfilled immediately below once opened, per Step 5.
+status: resolved
+resolution:
+  resolved_at: "2026-10-03T22:30:00Z"
+  resolved_by: DOC-UPDATER
+  branch: fix/ISS-0975-subprocess-join-reentry-id-map
+  final_commit: 01d06acf
+  pr: null  # backfilled once opened
+  root_cause: >
+    append_pending_event_arms_multi/7's timer_id_map (line ~3249) and
+    dispatch_id_map (lines ~3251-3252) were built as pure IDENTITY maps
+    (`Map.new(prepared, fn t -> {t, t} end)`), a 5th instance of ISS-0974's bug
+    class, unfixed by ISS-0974's own PR #2151 because this site is reached via
+    Letflow.Engine.SubProcess's pending-event re-entry path (ISS-0929) rather
+    than through a `Multi.merge/2` call with an accumulated `changes` map to
+    read a real id_map back out of -- ISS-0974's one-line
+    `Map.fetch!(changes, {:hop_chain_token_records, instance_id})` fix did not
+    directly apply here. When a PARALLEL_GATEWAY join fires within the same
+    hop chain and its outgoing edge leads into a SERVICE_TASK or TIMER node
+    reached through this sub-process re-entry path, the join-merged token's id
+    is still a synthetic, not-yet-persisted string, and the identity id_map
+    fed it straight into an already-cast-invalid Ecto.Changeset.
+  fix: >
+    Two parts, per the design doc. Part A ports ISS-0408's insert-before-
+    reconcile treatment into lib/letflow/engine/sub_process.ex (previously
+    only present in engine.ex's 4 ISS-0974-fixed sites): hop-chain-local join
+    tokens are now inserted as real TokenRecord rows before
+    reconcile_parent_tokens/5 runs, so a real id exists to read back. Part B
+    fixes append_pending_event_arms_multi/7's timer_id_map/dispatch_id_map to
+    read real ids from changes (the now-inserted records) instead of
+    identity-mapping the synthetic token_id, mirroring ISS-0974's pattern.
+    reconcile_parent_tokens/5's input was widened to still be correct for
+    other graph shapes (confirmed by REVIEWER). A fresh grep sweep confirmed
+    no 6th site of this bug class exists.
+  design_doc: lib/letflow/design/iss0975-subprocess-join-reentry-id-map.md
+  design_validator_cycles: 2
+  design_validator_note: >
+    1st cycle FAILed on mechanical/literal-code issues in the design doc
+    (not a conceptual gap); 2nd cycle PASSed.
+  mechanism_correction_story: >
+    The pre-fix crash's predicted shape was wrong twice before its actual
+    mechanism was found and independently cross-verified by two separate
+    gates. (1) The original design doc predicted
+    `{:error, {:new_token_during_resume_not_supported, token_id}}` from
+    reconcile_parent_tokens/5's guard. ELIXIR-DEV ran the pre-fix tree
+    empirically and found the real pre-fix failure is a raw Ecto.Changeset
+    cast error instead, not that guard -- correctly caught by running the
+    actual code rather than trusting the prediction. (2) The *explanation*
+    offered for why the guard didn't fire (ELIXIR-DEV's test moduledoc and
+    the design doc's own first correction note: "a join into
+    SERVICE_TASK/TIMER produces a pending_event that's never a member of
+    final_instance_state.tokens, unlike HUMAN_TASK") was itself unverified
+    and also wrong -- Transition.fire_join/5 places the join-merged token
+    into .tokens identically regardless of node type. REVIEWER traced the
+    actual mechanism by instrumenting the real pre-fix call path
+    (temporary, uncommitted IO.inspect, plus reading
+    deps/ecto/lib/ecto/multi.ex's own source): Ecto.Multi.__apply__/4's
+    pre-flight check_operations_valid/1 scan rejects an invalid changeset
+    within the same Multi.merge/2-produced sub-list before any Multi.run/3
+    callback in that sub-list executes, so the reconciliation guard (an
+    earlier-declared Multi.run in that same sub-list) never gets a turn --
+    regardless of which InstanceState field the token lives in.
+    RELEASE-VALIDATOR independently re-traced this same mechanism by
+    reading the identical deps/ecto/lib/ecto/multi.ex source directly
+    (not trusting REVIEWER's claim), confirming it, while flagging that
+    the first-drafted anti-patterns.md wording overclaimed the scope as
+    "anywhere in the whole composed Multi" when it is only true within
+    the same Multi.merge-produced sub-list (DOC-UPDATER corrected this
+    wording in docs/anti-patterns.md at close-out). Both the test
+    moduledoc and the design doc's correction notes were updated in place
+    with the verified mechanism; docs/anti-patterns.md gained a new entry
+    on verifying a mechanism, not just a symptom.
+  gates:
+    CODE-DESIGN-VALIDATOR: >
+      PASS after 2 cycles (1st FAILed on literal/mechanical issues in the
+      design doc, not conceptual). Confirmed the two-part fix shape:
+      Part A ports ISS-0408's insert-before-reconcile treatment into
+      sub_process.ex; Part B fixes append_pending_event_arms_multi/7's
+      identity id_maps to read real ids from changes, mirroring ISS-0974.
+    SECURITY-REVIEWER: >
+      PASS. Full INV sweep, tenant isolation confirmed, no new crash path
+      introduced, public-function exposure checked safe, 3-tuple key
+      disambiguation confirmed correct, tests confirmed to exercise real
+      tenant-scoped data.
+    REVIEWER: >
+      PASS. Independently re-derived the pre-fix failure and traced the
+      actual root mechanism (see mechanism_correction_story above) rather
+      than accepting the plausible-sounding but wrong explanation already
+      on file. Confirmed Part A's insert step remains structurally
+      necessary regardless of the mechanism's exact shape. Confirmed the
+      widened reconcile_parent_tokens/5 input is still correct for other
+      graph shapes. Confirmed via a fresh grep sweep that no 6th site of
+      this bug class exists. Added the docs/anti-patterns.md entry on
+      verifying a mechanism, not just a symptom. Fixed the test moduledoc
+      and design doc correction notes for accuracy.
+    TEST-RUNNER: >
+      PASS. Independently confirmed 5403/5403 full suite clean, plus all
+      targeted test files passing.
+    RELEASE-VALIDATOR: >
+      PASS. Independently re-traced the Ecto.Multi mechanism from
+      deps/ecto/lib/ecto/multi.ex's own source, confirming REVIEWER's
+      claim while noting the anti-patterns.md entry slightly overclaimed
+      the mechanism's scope (true only within the same Multi.merge-
+      produced sub-list, not Multi-wide) -- a non-blocking wording nit at
+      the time, since corrected by DOC-UPDATER at close-out. Independently
+      reproduced the fail-then-pass proof by reverting to origin/main and
+      re-running the new tests (6/8 passed pre-fix, with E7/E8 failing
+      with the exact documented cast error). Constructed an original
+      adversarial check confirming AC4 (the non-join path is byte-
+      identical pre/post fix). Ran mix letflow.check.test twice
+      independently (2 unrelated pre-existing parallel-suite flakes, both
+      confirmed passing in isolation, not regressions). Confirmed
+      requirements.yaml untouched and queue_ref/github_ref accurate.
+  docs_touched:
+    - docs/anti-patterns.md (new entry on verifying a mechanism, not just a
+      symptom; wording nit on check_operations_valid/1's scope corrected at
+      DOC-UPDATER close-out)
+    - lib/letflow/design/iss0975-subprocess-join-reentry-id-map.md (design
+      doc, 2 validator cycles)
+    - lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md
+      (correction notes, corrected twice per mechanism_correction_story)
+  code_touched:
+    - lib/letflow/engine.ex (append_pending_event_arms_multi/7's
+      timer_id_map/dispatch_id_map)
+    - lib/letflow/engine/sub_process.ex (Part A insert-before-reconcile)
+  tests_touched:
+    - test/letflow/engine/sub_process_service_task_after_test.exs

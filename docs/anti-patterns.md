@@ -4583,10 +4583,14 @@ pre-fix call path (temporary, uncommitted `IO.inspect`s) rather than trusting th
 sounding prose. The *real* mechanism: the pre-fix identity id_map feeds the still-synthetic
 token_id into an eagerly-built, already-cast-invalid `Ecto.Changeset`, passed to `Multi.insert/4`
 at Multi-*build* time; `Ecto.Multi.__apply__/4`'s own pre-flight validity scan
-(`check_operations_valid/1`) rejects any invalid changeset anywhere in the whole composed Multi
-*before* running a single `Multi.run/3` callback, so the reconciliation guard -- an earlier-
-declared `Multi.run` step -- never gets a turn to run at all, regardless of which `InstanceState`
-field the token lives in. Two independent authors (ELIXIR-DEV's test moduledoc and
+(`check_operations_valid/1`) rejects any invalid changeset anywhere within the same
+`Multi.merge/2`-produced sub-list *before* running a single `Multi.run/3` callback in that
+sub-list -- `__apply__/4` recurses per merge, re-running `check_operations_valid/1` freshly on
+each nested Multi's own operations as that merge is reached in sequence, so this is not a single
+upfront scan across the whole top-level composed Multi -- so the reconciliation guard -- an
+earlier-declared `Multi.run` step in the same sub-list -- never gets a turn to run at all,
+regardless of which `InstanceState` field the token lives in. Two independent authors
+(ELIXIR-DEV's test moduledoc and
 CODE-DESIGNER's own correction note) reached for the same wrong-but-plausible explanation
 without tracing the actual mechanism, because the *symptom* (a different error than predicted)
 had already been verified and it is easy to stop there. The lesson: confirming a predicted

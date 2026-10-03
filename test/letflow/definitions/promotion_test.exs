@@ -581,5 +581,58 @@ defmodule Letflow.Definitions.PromotionTest do
       assert [entry] = Repo.all(Entry, prefix: target_schema)
       assert entry.action == "definition.promote"
     end
+
+    test "ISS-0981: a failed audit insert rolls back the whole version-pointer swap, not just the audit write" do
+      %{tenant_id: source_tenant_id, schema_name: source_schema} = provisioned_tenant()
+      %{tenant_id: target_tenant_id, schema_name: target_schema} = provisioned_tenant()
+
+      process_key = unique_process_key()
+
+      source_def =
+        insert_active_definition!(source_schema, %{
+          name: process_key,
+          version: "1.0.0",
+          graph: %{"nodes" => [], "edges" => []}
+        })
+
+      plan = %{
+        source_tenant_id: source_tenant_id,
+        target_tenant_id: target_tenant_id,
+        process_key: process_key,
+        source_definition_id: source_def.id,
+        target_definition_id: nil,
+        base_version: nil,
+        entries: []
+      }
+
+      review = review_for(plan)
+      actor_id = Ecto.UUID.generate()
+
+      Repo.query!(~s(DROP TABLE "#{target_schema}".audit_entries))
+
+      # ISS-0981: write_target_definition/5 is now rescue-hardened -- a raise
+      # from step 8(c)'s same-transaction Audit.insert_entry/3 call, forced
+      # here by dropping the TARGET schema's own audit_entries table (step
+      # 8(c) writes there, per write_target_definition/5's own moduledoc),
+      # converts into {:error, {:transaction_failed, exception}} instead of
+      # escaping uncaught.
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               Promotion.promote_definition(actor_id, review,
+                 permission_checker: allow(),
+                 event_appender: fn _event_attrs, _prefix ->
+                   {:ok, %{event_id: Ecto.UUID.generate()}}
+                 end
+               )
+
+      # The whole version-pointer swap (new row insert, deprecate-previous,
+      # activate-new) rolled back along with the failed audit insert -- zero
+      # :active rows for this process_key in the target schema.
+      active_count =
+        ProcessDefinition
+        |> where([d], d.name == ^process_key and d.status == :active)
+        |> Repo.aggregate(:count, prefix: target_schema)
+
+      assert active_count == 0
+    end
   end
 end

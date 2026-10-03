@@ -373,6 +373,7 @@ defmodule Letflow.Definitions.Promotion do
         ) ::
           {:ok, ProcessDefinition.t()}
           | {:error, :duplicate_version | Ecto.Changeset.t() | term()}
+          | {:error, {:transaction_failed, Exception.t()}}
   defp write_target_definition(source_row, process_key, actor_id, target_prefix, audit_context) do
     attrs = %{
       name: process_key,
@@ -383,38 +384,42 @@ defmodule Letflow.Definitions.Promotion do
       created_by: actor_id
     }
 
-    Repo.transaction(fn ->
-      %ProcessDefinition{}
-      |> ProcessDefinition.create_changeset(attrs)
-      |> Repo.insert(prefix: target_prefix)
-      |> case do
-        {:ok, new_row} ->
-          deprecate_previous_active(process_key, target_prefix)
-          activated_row = activate_new_definition(new_row, target_prefix)
+    try do
+      Repo.transaction(fn ->
+        %ProcessDefinition{}
+        |> ProcessDefinition.create_changeset(attrs)
+        |> Repo.insert(prefix: target_prefix)
+        |> case do
+          {:ok, new_row} ->
+            deprecate_previous_active(process_key, target_prefix)
+            activated_row = activate_new_definition(new_row, target_prefix)
 
-          case Audit.insert_entry(
-                 Repo,
-                 promotion_audit_attrs(
-                   actor_id,
-                   activated_row,
-                   source_row,
-                   process_key,
-                   audit_context
-                 ),
-                 target_prefix
-               ) do
-            {:ok, _entry} -> activated_row
-            {:error, reason} -> Repo.rollback(reason)
-          end
+            case Audit.insert_entry(
+                   Repo,
+                   promotion_audit_attrs(
+                     actor_id,
+                     activated_row,
+                     source_row,
+                     process_key,
+                     audit_context
+                   ),
+                   target_prefix
+                 ) do
+              {:ok, _entry} -> activated_row
+              {:error, reason} -> Repo.rollback(reason)
+            end
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          if duplicate_version_error?(changeset) do
-            Repo.rollback(:duplicate_version)
-          else
-            Repo.rollback(changeset)
-          end
-      end
-    end)
+          {:error, %Ecto.Changeset{} = changeset} ->
+            if duplicate_version_error?(changeset) do
+              Repo.rollback(:duplicate_version)
+            else
+              Repo.rollback(changeset)
+            end
+        end
+      end)
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
+    end
   end
 
   # ISS-0733 design §1.4 -- reuses append_promotion_event/9's own

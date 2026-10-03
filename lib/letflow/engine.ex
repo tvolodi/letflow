@@ -1580,154 +1580,158 @@ defmodule Letflow.Engine do
        ) do
     current_node_ids = Enum.map(new_instance_state.tokens, & &1.node_id)
 
-    Multi.new()
-    |> Multi.run(:instance_projection, fn repo, _changes ->
-      # M1 always inserts :active, even when the landing-node dispatch above
-      # already completed the instance (design doc §9 OQ-1a's :END success
-      # case): Letflow.EventStore.append/2's own active_instance_guard (its
-      # M1, run as part of M3 below) requires the instance_projections row
-      # to be non-terminal at INSTANCE_STARTED append time -- the same
-      # ordering EventStore.append/2 already enforces for every other
-      # event. M4 (:finalize) below flips the row to its true final status
-      # immediately after the event append succeeds, still inside this same
-      # Multi.
-      #
-      # Bugfix discovered while implementing ISS-0396 (see
-      # lib/letflow/design/iss0396-task-records-multi-sibling-fix.md's own
-      # test scenario, §5 -- the first test in the codebase where a ROOT
-      # instance's own SUB_PROCESS children complete synchronously enough,
-      # within THIS SAME create/2 transaction, to advance the ROOT itself
-      # all the way to :completed via a PARALLEL_GATEWAY join): M3 (:event,
-      # this root instance's own INSTANCE_STARTED append) used to sit AFTER
-      # the `build_sub_process_children_multi/6` merge below, on the
-      # (previously untested) assumption that nothing before M3 could ever
-      # change this row's status away from the :active this step just wrote.
-      # That assumption is false once a synchronously-completing SUB_PROCESS
-      # cascade is in the mix: `Letflow.Engine.SubProcess.
-      # reconcile_parent_projection/5` (sub_process.ex) writes this SAME
-      # row's status directly (not through `EventStore.append/2`, so not
-      # gated by its own active_instance_guard) from *inside* that merge,
-      # ahead of M3 -- flipping the row to :completed before M3 ever runs.
-      # M3 then hits `active_instance_guard`'s own terminal check and fails
-      # with `{:instance_terminated, :completed}`, rejecting the ROOT
-      # instance's own founding INSTANCE_STARTED event. M3 is moved here,
-      # immediately after M1 and before :token_record/the children merge, so
-      # it always runs while the row is still the :active this step just
-      # inserted -- nothing between M1 and M3 reads `changes[:token_record]`
-      # or `changes[:event]`, so this reordering is safe. Flagged for
-      # REVIEWER: this is a `persist/8`-wide Multi-step-ordering change,
-      # outside iss0396-task-records-multi-sibling-fix.md's own stated
-      # file-touch list (§6), and the largest of the three bugs surfaced by
-      # that design's own regression test -- worth its own extra scrutiny,
-      # and a candidate for being split into its own follow-up issue if
-      # REVIEWER judges it too large for this branch.
-      insert_instance_projection(
-        repo,
+    try do
+      Multi.new()
+      |> Multi.run(:instance_projection, fn repo, _changes ->
+        # M1 always inserts :active, even when the landing-node dispatch above
+        # already completed the instance (design doc §9 OQ-1a's :END success
+        # case): Letflow.EventStore.append/2's own active_instance_guard (its
+        # M1, run as part of M3 below) requires the instance_projections row
+        # to be non-terminal at INSTANCE_STARTED append time -- the same
+        # ordering EventStore.append/2 already enforces for every other
+        # event. M4 (:finalize) below flips the row to its true final status
+        # immediately after the event append succeeds, still inside this same
+        # Multi.
+        #
+        # Bugfix discovered while implementing ISS-0396 (see
+        # lib/letflow/design/iss0396-task-records-multi-sibling-fix.md's own
+        # test scenario, §5 -- the first test in the codebase where a ROOT
+        # instance's own SUB_PROCESS children complete synchronously enough,
+        # within THIS SAME create/2 transaction, to advance the ROOT itself
+        # all the way to :completed via a PARALLEL_GATEWAY join): M3 (:event,
+        # this root instance's own INSTANCE_STARTED append) used to sit AFTER
+        # the `build_sub_process_children_multi/6` merge below, on the
+        # (previously untested) assumption that nothing before M3 could ever
+        # change this row's status away from the :active this step just wrote.
+        # That assumption is false once a synchronously-completing SUB_PROCESS
+        # cascade is in the mix: `Letflow.Engine.SubProcess.
+        # reconcile_parent_projection/5` (sub_process.ex) writes this SAME
+        # row's status directly (not through `EventStore.append/2`, so not
+        # gated by its own active_instance_guard) from *inside* that merge,
+        # ahead of M3 -- flipping the row to :completed before M3 ever runs.
+        # M3 then hits `active_instance_guard`'s own terminal check and fails
+        # with `{:instance_terminated, :completed}`, rejecting the ROOT
+        # instance's own founding INSTANCE_STARTED event. M3 is moved here,
+        # immediately after M1 and before :token_record/the children merge, so
+        # it always runs while the row is still the :active this step just
+        # inserted -- nothing between M1 and M3 reads `changes[:token_record]`
+        # or `changes[:event]`, so this reordering is safe. Flagged for
+        # REVIEWER: this is a `persist/8`-wide Multi-step-ordering change,
+        # outside iss0396-task-records-multi-sibling-fix.md's own stated
+        # file-touch list (§6), and the largest of the three bugs surfaced by
+        # that design's own regression test -- worth its own extra scrutiny,
+        # and a candidate for being split into its own follow-up issue if
+        # REVIEWER judges it too large for this branch.
+        insert_instance_projection(
+          repo,
+          instance_id,
+          definition,
+          correlation_key,
+          :active,
+          current_node_ids,
+          initial_variables,
+          new_instance_state.join_counters,
+          prefix
+        )
+      end)
+      |> Multi.run(:event, fn _repo, _changes ->
+        append_instance_started_event(
+          instance_id,
+          definition,
+          correlation_key,
+          initial_variables,
+          pins,
+          conflicts,
+          attrs,
+          prefix
+        )
+      end)
+      |> Multi.run(:token_record, fn repo, _changes ->
+        insert_token_records(repo, instance_id, new_instance_state.tokens, prefix)
+      end)
+      |> Multi.merge(fn changes ->
+        # req062 design doc §3.3 -- appends each prepared sub-process child's
+        # own creation steps, keyed off the just-inserted parent :token_record
+        # rows (must run after M2 above -- the parent token row referenced by
+        # each child's own parent_token_id FK must already exist in this same
+        # transaction).
+        build_sub_process_children_multi(
+          changes,
+          instance_id,
+          new_instance_state,
+          prepared_children,
+          attrs,
+          prefix
+        )
+      end)
+      |> Multi.merge(fn changes ->
+        # REQ-187 design doc §3.2 -- positioned immediately after :token_record
+        # (the step that resolves real TokenRecord ids) and before :finalize,
+        # matching exactly where build_sub_process_children_multi/5 sits.
+        id_map =
+          TaskActivation.token_id_to_record_id(
+            new_instance_state.tokens,
+            Map.fetch!(changes, :token_record)
+          )
+
+        build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+      end)
+      |> Multi.merge(fn changes ->
+        # REQ-215 design doc §2.1/§2.5 -- positioned alongside the timer-arms
+        # merge above (same "resolves real TokenRecord ids" precondition).
+        id_map =
+          TaskActivation.token_id_to_record_id(
+            new_instance_state.tokens,
+            Map.fetch!(changes, :token_record)
+          )
+
+        build_service_task_dispatch_multi(
+          Multi.new(),
+          prepared_service_task_dispatches,
+          id_map,
+          tenant_id,
+          prefix
+        )
+      end)
+      |> TaskActivation.append_multi(
+        instance_id,
+        graph,
+        # create/2's own call site always starts from a freshly-constructed
+        # InstanceState (pending_task_nodes: []), so every entry in
+        # new_instance_state.pending_task_nodes is "newly pending" by
+        # construction (req047 design §5.1) -- a future EE-04 caller is
+        # expected to pass that instance's own pending_task_nodes value, read
+        # at the start of its own call, instead of [].
+        [],
+        new_instance_state,
+        prefix
+      )
+      |> Multi.run(:finalize, fn repo, %{instance_projection: projection} ->
+        finalize_instance_projection(
+          repo,
+          projection,
+          new_instance_state.status,
+          prefix,
+          instance_id
+        )
+      end)
+      |> Multi.merge(fn changes ->
+        record_instance_create_audit(changes, instance_id, attrs, prefix)
+      end)
+      |> Repo.transaction()
+      |> maybe_snapshot_after_create(instance_id, new_instance_state, prefix)
+      |> interpret_create_result(
         instance_id,
         definition,
-        correlation_key,
-        :active,
+        new_instance_state.status,
         current_node_ids,
         initial_variables,
-        new_instance_state.join_counters,
+        Map.get(attrs, :actor_id),
         prefix
       )
-    end)
-    |> Multi.run(:event, fn _repo, _changes ->
-      append_instance_started_event(
-        instance_id,
-        definition,
-        correlation_key,
-        initial_variables,
-        pins,
-        conflicts,
-        attrs,
-        prefix
-      )
-    end)
-    |> Multi.run(:token_record, fn repo, _changes ->
-      insert_token_records(repo, instance_id, new_instance_state.tokens, prefix)
-    end)
-    |> Multi.merge(fn changes ->
-      # req062 design doc §3.3 -- appends each prepared sub-process child's
-      # own creation steps, keyed off the just-inserted parent :token_record
-      # rows (must run after M2 above -- the parent token row referenced by
-      # each child's own parent_token_id FK must already exist in this same
-      # transaction).
-      build_sub_process_children_multi(
-        changes,
-        instance_id,
-        new_instance_state,
-        prepared_children,
-        attrs,
-        prefix
-      )
-    end)
-    |> Multi.merge(fn changes ->
-      # REQ-187 design doc §3.2 -- positioned immediately after :token_record
-      # (the step that resolves real TokenRecord ids) and before :finalize,
-      # matching exactly where build_sub_process_children_multi/5 sits.
-      id_map =
-        TaskActivation.token_id_to_record_id(
-          new_instance_state.tokens,
-          Map.fetch!(changes, :token_record)
-        )
-
-      build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
-    end)
-    |> Multi.merge(fn changes ->
-      # REQ-215 design doc §2.1/§2.5 -- positioned alongside the timer-arms
-      # merge above (same "resolves real TokenRecord ids" precondition).
-      id_map =
-        TaskActivation.token_id_to_record_id(
-          new_instance_state.tokens,
-          Map.fetch!(changes, :token_record)
-        )
-
-      build_service_task_dispatch_multi(
-        Multi.new(),
-        prepared_service_task_dispatches,
-        id_map,
-        tenant_id,
-        prefix
-      )
-    end)
-    |> TaskActivation.append_multi(
-      instance_id,
-      graph,
-      # create/2's own call site always starts from a freshly-constructed
-      # InstanceState (pending_task_nodes: []), so every entry in
-      # new_instance_state.pending_task_nodes is "newly pending" by
-      # construction (req047 design §5.1) -- a future EE-04 caller is
-      # expected to pass that instance's own pending_task_nodes value, read
-      # at the start of its own call, instead of [].
-      [],
-      new_instance_state,
-      prefix
-    )
-    |> Multi.run(:finalize, fn repo, %{instance_projection: projection} ->
-      finalize_instance_projection(
-        repo,
-        projection,
-        new_instance_state.status,
-        prefix,
-        instance_id
-      )
-    end)
-    |> Multi.merge(fn changes ->
-      record_instance_create_audit(changes, instance_id, attrs, prefix)
-    end)
-    |> Repo.transaction()
-    |> maybe_snapshot_after_create(instance_id, new_instance_state, prefix)
-    |> interpret_create_result(
-      instance_id,
-      definition,
-      new_instance_state.status,
-      current_node_ids,
-      initial_variables,
-      Map.get(attrs, :actor_id),
-      prefix
-    )
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
+    end
   end
 
   # REQ-195 -- create/2's own actor_id (attrs[:actor_id], already an
@@ -2264,96 +2268,100 @@ defmodule Letflow.Engine do
          completed_at,
          prefix
        ) do
-    Multi.new()
-    |> Multi.run(:task, fn repo, _changes -> fetch_and_lock_task(repo, task_id, prefix) end)
-    |> Multi.run(:instance_projection, fn repo, %{task: task} ->
-      fetch_and_lock_instance_projection(repo, task.instance_id, prefix)
-    end)
-    |> Multi.run(:snapshot_and_state, fn repo, %{task: task, instance_projection: projection} ->
-      build_snapshot_and_state(repo, task, projection, prefix)
-    end)
-    |> Multi.run(:form_expression_reevaluation, fn _repo,
-                                                   %{
-                                                     task: task,
-                                                     snapshot_and_state: %{
-                                                       seed_instance_state: seed_state
-                                                     }
-                                                   } ->
-      # Multi.run/3's own contract: the callback itself must always succeed
-      # structurally -- reevaluate/3's domain result (which can itself be an
-      # {:error, reevaluation_error()} rejection) is carried INSIDE this
-      # {:ok, _} payload and inspected explicitly by the :merge step below,
-      # the same discipline merge_output_variables/7's own
-      # {:execution_error, _} tagging already uses (design doc §2).
-      {:ok,
-       FormExpressionReevaluation.reevaluate(
-         task.form_schema,
-         seed_state.variables,
-         output_variables
-       )}
-    end)
-    |> Multi.run(:merge, fn repo,
-                            %{
-                              snapshot_and_state: %{seed_instance_state: seed_state},
-                              instance_projection: projection,
-                              form_expression_reevaluation: reevaluation_result
-                            } ->
-      case reevaluation_result do
-        {:error, reevaluation_error} ->
-          error_args =
-            build_reevaluation_execution_error_args(
-              reevaluation_error,
-              projection,
+    try do
+      Multi.new()
+      |> Multi.run(:task, fn repo, _changes -> fetch_and_lock_task(repo, task_id, prefix) end)
+      |> Multi.run(:instance_projection, fn repo, %{task: task} ->
+        fetch_and_lock_instance_projection(repo, task.instance_id, prefix)
+      end)
+      |> Multi.run(:snapshot_and_state, fn repo, %{task: task, instance_projection: projection} ->
+        build_snapshot_and_state(repo, task, projection, prefix)
+      end)
+      |> Multi.run(:form_expression_reevaluation, fn _repo,
+                                                     %{
+                                                       task: task,
+                                                       snapshot_and_state: %{
+                                                         seed_instance_state: seed_state
+                                                       }
+                                                     } ->
+        # Multi.run/3's own contract: the callback itself must always succeed
+        # structurally -- reevaluate/3's domain result (which can itself be an
+        # {:error, reevaluation_error()} rejection) is carried INSIDE this
+        # {:ok, _} payload and inspected explicitly by the :merge step below,
+        # the same discipline merge_output_variables/7's own
+        # {:execution_error, _} tagging already uses (design doc §2).
+        {:ok,
+         FormExpressionReevaluation.reevaluate(
+           task.form_schema,
+           seed_state.variables,
+           output_variables
+         )}
+      end)
+      |> Multi.run(:merge, fn repo,
+                              %{
+                                snapshot_and_state: %{seed_instance_state: seed_state},
+                                instance_projection: projection,
+                                form_expression_reevaluation: reevaluation_result
+                              } ->
+        case reevaluation_result do
+          {:error, reevaluation_error} ->
+            error_args =
+              build_reevaluation_execution_error_args(
+                reevaluation_error,
+                projection,
+                actor_id,
+                idempotency_key,
+                seed_state.variables
+              )
+
+            {:ok, {:execution_error, error_args}}
+
+          {:ok, %{output_variables: corrected_output_variables, events: form_events}} ->
+            projection
+            |> merge_output_variables(
               actor_id,
               idempotency_key,
-              seed_state.variables
+              seed_state.variables,
+              corrected_output_variables,
+              repo,
+              prefix
             )
-
-          {:ok, {:execution_error, error_args}}
-
-        {:ok, %{output_variables: corrected_output_variables, events: form_events}} ->
-          projection
-          |> merge_output_variables(
-            actor_id,
-            idempotency_key,
-            seed_state.variables,
-            corrected_output_variables,
-            repo,
-            prefix
-          )
-          |> prepend_form_expression_events(form_events)
-      end
-    end)
-    |> Multi.run(:transition, fn _repo,
-                                 %{
-                                   snapshot_and_state: snapshot_and_state,
-                                   merge: merge_outcome,
-                                   instance_projection: projection
-                                 } ->
-      dispatch_task_completion_hop_chain(
-        snapshot_and_state,
-        projection,
-        actor_id,
-        idempotency_key,
-        merge_outcome,
-        completed_at,
-        prefix
-      )
-    end)
-    |> Multi.merge(fn changes ->
-      build_complete_task_tail_multi(
-        changes,
-        actor_id,
-        output_variables,
-        completed_at,
-        idempotency_key,
-        prefix
-      )
-    end)
-    |> Repo.transaction()
-    |> maybe_snapshot_after_complete_task(prefix)
-    |> emit_task_completed_telemetry(prefix)
-    |> interpret_complete_result(actor_id, prefix)
+            |> prepend_form_expression_events(form_events)
+        end
+      end)
+      |> Multi.run(:transition, fn _repo,
+                                   %{
+                                     snapshot_and_state: snapshot_and_state,
+                                     merge: merge_outcome,
+                                     instance_projection: projection
+                                   } ->
+        dispatch_task_completion_hop_chain(
+          snapshot_and_state,
+          projection,
+          actor_id,
+          idempotency_key,
+          merge_outcome,
+          completed_at,
+          prefix
+        )
+      end)
+      |> Multi.merge(fn changes ->
+        build_complete_task_tail_multi(
+          changes,
+          actor_id,
+          output_variables,
+          completed_at,
+          idempotency_key,
+          prefix
+        )
+      end)
+      |> Repo.transaction()
+      |> maybe_snapshot_after_complete_task(prefix)
+      |> emit_task_completed_telemetry(prefix)
+      |> interpret_complete_result(actor_id, prefix)
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
+    end
   end
 
   # REQ-194 (design req194-prometheus-metrics.md §7, OBS-02 family 2): fires
@@ -2736,155 +2744,159 @@ defmodule Letflow.Engine do
     idempotency_key = "timer_fired:#{timer.id}"
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
-    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
-         {:ok, prepared_timers} <-
-           prepare_timer_arms(pending_events, graph, timer.instance_id, now),
-         {:ok, prepared_service_task_dispatches} <-
-           prepare_service_task_dispatch_abort_on_empty_url(
-             pending_events,
-             graph,
-             timer.instance_id,
-             advanced_state.variables,
-             now,
-             %{pin_source: {:reconstruct, timer.instance_id, prefix}, tenant_id: tenant_id}
-           ),
-         {:ok, sub_process_outcome} <-
-           prepare_sub_process_children_for_completion(
-             advanced_state,
-             original_active_tokens,
-             graph,
-             pending_events,
-             projection,
-             actor_id,
-             idempotency_key,
-             prefix
-           ) do
-      case sub_process_outcome do
-        {:advanced, final_instance_state, prepared_children} ->
-          multi =
-            Multi.new()
-            |> Multi.merge(fn _changes ->
-              # ISS-0408 fix (design doc §3.5) -- identical restructuring to
-              # build_task_activation_and_reconciliation_multi/4: the insert
-              # step and its final_instance_state rewrite must run, inside
-              # the transaction, before append_multi_from_existing_records/6
-              # or reconcile_token_records/5 see final_instance_state, for
-              # the TIMER-path hop chain (a join can fire here too, when the
-              # join's last outstanding branch is satisfied by a timer
-              # firing rather than a task completing).
+    try do
+      with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+           {:ok, prepared_timers} <-
+             prepare_timer_arms(pending_events, graph, timer.instance_id, now),
+           {:ok, prepared_service_task_dispatches} <-
+             prepare_service_task_dispatch_abort_on_empty_url(
+               pending_events,
+               graph,
+               timer.instance_id,
+               advanced_state.variables,
+               now,
+               %{pin_source: {:reconstruct, timer.instance_id, prefix}, tenant_id: tenant_id}
+             ),
+           {:ok, sub_process_outcome} <-
+             prepare_sub_process_children_for_completion(
+               advanced_state,
+               original_active_tokens,
+               graph,
+               pending_events,
+               projection,
+               actor_id,
+               idempotency_key,
+               prefix
+             ) do
+        case sub_process_outcome do
+          {:advanced, final_instance_state, prepared_children} ->
+            multi =
               Multi.new()
-              |> Multi.run({:hop_chain_token_records, timer.instance_id}, fn repo, _changes ->
-                insert_hop_chain_new_token_records(
-                  repo,
-                  timer.instance_id,
-                  original_active_tokens,
-                  final_instance_state.tokens,
-                  prefix
-                )
+              |> Multi.merge(fn _changes ->
+                # ISS-0408 fix (design doc §3.5) -- identical restructuring to
+                # build_task_activation_and_reconciliation_multi/4: the insert
+                # step and its final_instance_state rewrite must run, inside
+                # the transaction, before append_multi_from_existing_records/6
+                # or reconcile_token_records/5 see final_instance_state, for
+                # the TIMER-path hop chain (a join can fire here too, when the
+                # join's last outstanding branch is satisfied by a timer
+                # firing rather than a task completing).
+                Multi.new()
+                |> Multi.run({:hop_chain_token_records, timer.instance_id}, fn repo, _changes ->
+                  insert_hop_chain_new_token_records(
+                    repo,
+                    timer.instance_id,
+                    original_active_tokens,
+                    final_instance_state.tokens,
+                    prefix
+                  )
+                end)
+                |> Multi.merge(fn changes ->
+                  {id_map, hop_chain_new_records} =
+                    Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
+                  resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+
+                  Multi.new()
+                  |> TaskActivation.append_multi_from_existing_records(
+                    timer.instance_id,
+                    graph,
+                    seed_state.pending_task_nodes,
+                    resolved_final_instance_state,
+                    prefix
+                  )
+                  |> reconcile_token_records(
+                    hop_chain_new_records ++ original_active_tokens,
+                    resolved_final_instance_state,
+                    now,
+                    prefix
+                  )
+                end)
               end)
               |> Multi.merge(fn changes ->
-                {id_map, hop_chain_new_records} =
+                # ISS-0974 fix: same real-id_map reasoning as the hop-chain
+                # merge above -- a same-hop-chain join can mint a token_id not
+                # yet persisted. Read the real mapping back out of `changes`
+                # rather than assuming identity.
+                {hop_chain_id_map, _hop_chain_new_records} =
                   Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
 
-                resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+                id_map =
+                  Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
+                    {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+                  end)
 
-                Multi.new()
-                |> TaskActivation.append_multi_from_existing_records(
-                  timer.instance_id,
-                  graph,
-                  seed_state.pending_task_nodes,
-                  resolved_final_instance_state,
-                  prefix
-                )
-                |> reconcile_token_records(
-                  hop_chain_new_records ++ original_active_tokens,
-                  resolved_final_instance_state,
-                  now,
+                build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+              end)
+              |> Multi.merge(fn changes ->
+                # REQ-215 design doc §2.1 point 2/§2.5 -- ISS-0974 fix: use the
+                # real hop-chain id_map (same as the timer-arms merge above)
+                # instead of assuming every token_id in
+                # prepared_service_task_dispatches is already persisted.
+                {hop_chain_id_map, _hop_chain_new_records} =
+                  Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
+                id_map =
+                  Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
+                    {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+                  end)
+
+                build_service_task_dispatch_multi(
+                  Multi.new(),
+                  prepared_service_task_dispatches,
+                  id_map,
+                  tenant_id,
                   prefix
                 )
               end)
-            end)
-            |> Multi.merge(fn changes ->
-              # ISS-0974 fix: same real-id_map reasoning as the hop-chain
-              # merge above -- a same-hop-chain join can mint a token_id not
-              # yet persisted. Read the real mapping back out of `changes`
-              # rather than assuming identity.
-              {hop_chain_id_map, _hop_chain_new_records} =
-                Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
-
-              id_map =
-                Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
-                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
-                end)
-
-              build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
-            end)
-            |> Multi.merge(fn changes ->
-              # REQ-215 design doc §2.1 point 2/§2.5 -- ISS-0974 fix: use the
-              # real hop-chain id_map (same as the timer-arms merge above)
-              # instead of assuming every token_id in
-              # prepared_service_task_dispatches is already persisted.
-              {hop_chain_id_map, _hop_chain_new_records} =
-                Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
-
-              id_map =
-                Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
-                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
-                end)
-
-              build_service_task_dispatch_multi(
-                Multi.new(),
-                prepared_service_task_dispatches,
-                id_map,
-                tenant_id,
+              |> append_sub_process_children_creation_multi(
+                prepared_children,
+                timer.instance_id,
+                actor_id,
+                idempotency_key,
                 prefix
               )
-            end)
-            |> append_sub_process_children_creation_multi(
-              prepared_children,
-              timer.instance_id,
-              actor_id,
-              idempotency_key,
-              prefix
-            )
-            |> Multi.run(:projection, fn inner_repo, _changes ->
-              reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)
-            end)
+              |> Multi.run(:projection, fn inner_repo, _changes ->
+                reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)
+              end)
 
-          case repo.transaction(multi) do
-            {:ok, changes} ->
-              {:ok, changes}
+            case repo.transaction(multi) do
+              {:ok, changes} ->
+                {:ok, changes}
 
-            {:error, _failed_step, reason, _changes} ->
-              # ISS-0784 follow-up fix (ISS-0784, root-caused by
-              # TEST-DESIGNER against real Postgres): this function's own
-              # `repo.transaction(multi)` call above is NOT the outermost
-              # transaction boundary on this call path -- it is called from
-              # `Letflow.Scheduler.fire_timer/2`'s own already-open
-              # `Repo.transaction/1` (a real Postgres SAVEPOINT here, per
-              # that function's own moduledoc note), which is still open
-              # when this clause runs. Calling
-              # `record_task_activation_rejection_audit/5` from here would
-              # only ever write into that same still-open outer
-              # transaction/connection, not a genuinely independent one --
-              # it would be rolled back right along with everything else
-              # once `fire_timer/2`'s own `case do {:error, reason} ->
-              # Repo.rollback(reason) end` fires. The audit write is
-              # therefore issued by `Letflow.Scheduler.attempt_fire/2`
-              # instead, strictly after `fire_timer/2`'s own
-              # `Repo.transaction/1` has fully returned (see that module).
-              # Any `reason` shape here is byte-identical to before ISS-0784.
-              {:error, reason}
-          end
+              {:error, _failed_step, reason, _changes} ->
+                # ISS-0784 follow-up fix (ISS-0784, root-caused by
+                # TEST-DESIGNER against real Postgres): this function's own
+                # `repo.transaction(multi)` call above is NOT the outermost
+                # transaction boundary on this call path -- it is called from
+                # `Letflow.Scheduler.fire_timer/2`'s own already-open
+                # `Repo.transaction/1` (a real Postgres SAVEPOINT here, per
+                # that function's own moduledoc note), which is still open
+                # when this clause runs. Calling
+                # `record_task_activation_rejection_audit/5` from here would
+                # only ever write into that same still-open outer
+                # transaction/connection, not a genuinely independent one --
+                # it would be rolled back right along with everything else
+                # once `fire_timer/2`'s own `case do {:error, reason} ->
+                # Repo.rollback(reason) end` fires. The audit write is
+                # therefore issued by `Letflow.Scheduler.attempt_fire/2`
+                # instead, strictly after `fire_timer/2`'s own
+                # `Repo.transaction/1` has fully returned (see that module).
+                # Any `reason` shape here is byte-identical to before ISS-0784.
+                {:error, reason}
+            end
 
-        {:execution_error, error_args} ->
-          # No Letflow.Engine.ExecutionError wiring added for the timer-fire
-          # path (design doc §8.3/§8.4 -- out of this requirement's named
-          # scope): a SubProcess prepare failure here simply rolls back this
-          # whole attempt, same as any other advance_after_timer_fired/3
-          # failure.
-          {:error, {:execution_error_not_supported_for_timer_fire, error_args}}
+          {:execution_error, error_args} ->
+            # No Letflow.Engine.ExecutionError wiring added for the timer-fire
+            # path (design doc §8.3/§8.4 -- out of this requirement's named
+            # scope): a SubProcess prepare failure here simply rolls back this
+            # whole attempt, same as any other advance_after_timer_fired/3
+            # failure.
+            {:error, {:execution_error_not_supported_for_timer_fire, error_args}}
+        end
       end
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
     end
   end
 
@@ -2985,179 +2997,184 @@ defmodule Letflow.Engine do
     idempotency_key = "escalation_timer_fired:#{timer.id}"
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
-    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
-         {:ok, prepared_timers} <-
-           prepare_timer_arms(pending_events, graph, timer.instance_id, now),
-         {:ok, prepared_service_task_dispatches} <-
-           prepare_service_task_dispatch_abort_on_empty_url(
-             pending_events,
-             graph,
-             timer.instance_id,
-             advanced_state.variables,
-             now,
-             %{pin_source: {:reconstruct, timer.instance_id, prefix}, tenant_id: tenant_id}
-           ),
-         {:ok, sub_process_outcome} <-
-           prepare_sub_process_children_for_completion(
-             advanced_state,
-             original_active_tokens,
-             graph,
-             pending_events,
-             projection,
-             actor_id,
-             idempotency_key,
-             prefix
-           ) do
-      case sub_process_outcome do
-        {:advanced, final_instance_state, prepared_children} ->
-          multi =
-            Multi.new()
-            # ISS-0906: fetch+lock the original HUMAN_TASK row first (mirrors
-            # cancel_task_rows/4's fetch_and_lock_open_tasks/3 precedent), so
-            # the following :cancel_original_task step can use
-            # Task.complete_changeset/2 (changeset-backed Repo.update/2, which
-            # bumps updated_at) instead of update_all/3 (which bypassed it).
-            |> Multi.run(:original_task_row, fn inner_repo, _changes ->
-              Letflow.Engine.Task
-              |> where([t], t.token_id == ^timer.token_id and t.status == :pending)
-              |> lock("FOR UPDATE")
-              |> inner_repo.one(prefix: prefix)
-              |> case do
-                nil -> {:ok, :no_pending_task}
-                %Letflow.Engine.Task{} = task -> {:ok, {:found, task}}
-              end
-            end)
-            # AC-3c: cancel the original HUMAN_TASK before creating the new task.
-            |> Multi.run(:cancel_original_task, fn inner_repo, %{original_task_row: row_result} ->
-              case row_result do
-                :no_pending_task ->
-                  {:ok, :no_pending_task}
+    try do
+      with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+           {:ok, prepared_timers} <-
+             prepare_timer_arms(pending_events, graph, timer.instance_id, now),
+           {:ok, prepared_service_task_dispatches} <-
+             prepare_service_task_dispatch_abort_on_empty_url(
+               pending_events,
+               graph,
+               timer.instance_id,
+               advanced_state.variables,
+               now,
+               %{pin_source: {:reconstruct, timer.instance_id, prefix}, tenant_id: tenant_id}
+             ),
+           {:ok, sub_process_outcome} <-
+             prepare_sub_process_children_for_completion(
+               advanced_state,
+               original_active_tokens,
+               graph,
+               pending_events,
+               projection,
+               actor_id,
+               idempotency_key,
+               prefix
+             ) do
+        case sub_process_outcome do
+          {:advanced, final_instance_state, prepared_children} ->
+            multi =
+              Multi.new()
+              # ISS-0906: fetch+lock the original HUMAN_TASK row first (mirrors
+              # cancel_task_rows/4's fetch_and_lock_open_tasks/3 precedent), so
+              # the following :cancel_original_task step can use
+              # Task.complete_changeset/2 (changeset-backed Repo.update/2, which
+              # bumps updated_at) instead of update_all/3 (which bypassed it).
+              |> Multi.run(:original_task_row, fn inner_repo, _changes ->
+                Letflow.Engine.Task
+                |> where([t], t.token_id == ^timer.token_id and t.status == :pending)
+                |> lock("FOR UPDATE")
+                |> inner_repo.one(prefix: prefix)
+                |> case do
+                  nil -> {:ok, :no_pending_task}
+                  %Letflow.Engine.Task{} = task -> {:ok, {:found, task}}
+                end
+              end)
+              # AC-3c: cancel the original HUMAN_TASK before creating the new task.
+              |> Multi.run(:cancel_original_task, fn inner_repo,
+                                                     %{original_task_row: row_result} ->
+                case row_result do
+                  :no_pending_task ->
+                    {:ok, :no_pending_task}
 
-                {:found, task} ->
-                  task
-                  |> Letflow.Engine.Task.complete_changeset(%{
-                    status: :cancelled,
-                    cancelled_at: now
-                  })
-                  |> inner_repo.update(prefix: prefix)
-                  |> case do
-                    {:ok, updated} -> {:ok, {:cancelled, task, updated}}
-                    {:error, reason} -> {:error, reason}
-                  end
-              end
-            end)
-            # ISS-0906: audit the cancellation (task.cancel), mirroring
-            # record_task_complete_audit/4 / record_task_assign_audit/2.
-            |> Multi.merge(fn %{cancel_original_task: outcome} ->
-              case outcome do
-                :no_pending_task ->
-                  Multi.new()
+                  {:found, task} ->
+                    task
+                    |> Letflow.Engine.Task.complete_changeset(%{
+                      status: :cancelled,
+                      cancelled_at: now
+                    })
+                    |> inner_repo.update(prefix: prefix)
+                    |> case do
+                      {:ok, updated} -> {:ok, {:cancelled, task, updated}}
+                      {:error, reason} -> {:error, reason}
+                    end
+                end
+              end)
+              # ISS-0906: audit the cancellation (task.cancel), mirroring
+              # record_task_complete_audit/4 / record_task_assign_audit/2.
+              |> Multi.merge(fn %{cancel_original_task: outcome} ->
+                case outcome do
+                  :no_pending_task ->
+                    Multi.new()
 
-                {:cancelled, before_task, updated_task} ->
-                  Audit.append_multi(
-                    Multi.new(),
-                    :cancel_original_task_audit,
-                    %{
-                      actor_id: actor_id,
-                      action: "task.cancel",
-                      resource_type: "task",
-                      resource_id: before_task.id,
-                      before_state: Audit.struct_state(before_task),
-                      after_state: Audit.struct_state(updated_task),
-                      trace_id: nil
-                    },
+                  {:cancelled, before_task, updated_task} ->
+                    Audit.append_multi(
+                      Multi.new(),
+                      :cancel_original_task_audit,
+                      %{
+                        actor_id: actor_id,
+                        action: "task.cancel",
+                        resource_type: "task",
+                        resource_id: before_task.id,
+                        before_state: Audit.struct_state(before_task),
+                        after_state: Audit.struct_state(updated_task),
+                        trace_id: nil
+                      },
+                      prefix
+                    )
+                end
+              end)
+              |> Multi.merge(fn _changes ->
+                Multi.new()
+                |> Multi.run({:hop_chain_token_records, timer.instance_id}, fn repo2, _changes ->
+                  insert_hop_chain_new_token_records(
+                    repo2,
+                    timer.instance_id,
+                    original_active_tokens,
+                    final_instance_state.tokens,
                     prefix
                   )
-              end
-            end)
-            |> Multi.merge(fn _changes ->
-              Multi.new()
-              |> Multi.run({:hop_chain_token_records, timer.instance_id}, fn repo2, _changes ->
-                insert_hop_chain_new_token_records(
-                  repo2,
-                  timer.instance_id,
-                  original_active_tokens,
-                  final_instance_state.tokens,
-                  prefix
-                )
+                end)
+                |> Multi.merge(fn changes ->
+                  {id_map, hop_chain_new_records} =
+                    Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
+                  resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+
+                  Multi.new()
+                  |> TaskActivation.append_multi_from_existing_records(
+                    timer.instance_id,
+                    graph,
+                    seed_state.pending_task_nodes,
+                    resolved_final_instance_state,
+                    prefix
+                  )
+                  |> reconcile_token_records(
+                    hop_chain_new_records ++ original_active_tokens,
+                    resolved_final_instance_state,
+                    now,
+                    prefix
+                  )
+                end)
               end)
               |> Multi.merge(fn changes ->
-                {id_map, hop_chain_new_records} =
+                # ISS-0974 fix: use the real hop-chain id_map instead of
+                # assuming identity -- a same-hop-chain join can mint a
+                # token_id not yet persisted.
+                {hop_chain_id_map, _hop_chain_new_records} =
                   Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
 
-                resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+                id_map =
+                  Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
+                    {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+                  end)
 
-                Multi.new()
-                |> TaskActivation.append_multi_from_existing_records(
-                  timer.instance_id,
-                  graph,
-                  seed_state.pending_task_nodes,
-                  resolved_final_instance_state,
-                  prefix
-                )
-                |> reconcile_token_records(
-                  hop_chain_new_records ++ original_active_tokens,
-                  resolved_final_instance_state,
-                  now,
+                build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+              end)
+              |> Multi.merge(fn changes ->
+                # ISS-0974 fix: same real-id_map reasoning as the timer-arms
+                # merge immediately above.
+                {hop_chain_id_map, _hop_chain_new_records} =
+                  Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
+                id_map =
+                  Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
+                    {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+                  end)
+
+                build_service_task_dispatch_multi(
+                  Multi.new(),
+                  prepared_service_task_dispatches,
+                  id_map,
+                  tenant_id,
                   prefix
                 )
               end)
-            end)
-            |> Multi.merge(fn changes ->
-              # ISS-0974 fix: use the real hop-chain id_map instead of
-              # assuming identity -- a same-hop-chain join can mint a
-              # token_id not yet persisted.
-              {hop_chain_id_map, _hop_chain_new_records} =
-                Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
-
-              id_map =
-                Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
-                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
-                end)
-
-              build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
-            end)
-            |> Multi.merge(fn changes ->
-              # ISS-0974 fix: same real-id_map reasoning as the timer-arms
-              # merge immediately above.
-              {hop_chain_id_map, _hop_chain_new_records} =
-                Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
-
-              id_map =
-                Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
-                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
-                end)
-
-              build_service_task_dispatch_multi(
-                Multi.new(),
-                prepared_service_task_dispatches,
-                id_map,
-                tenant_id,
+              |> append_sub_process_children_creation_multi(
+                prepared_children,
+                timer.instance_id,
+                actor_id,
+                idempotency_key,
                 prefix
               )
-            end)
-            |> append_sub_process_children_creation_multi(
-              prepared_children,
-              timer.instance_id,
-              actor_id,
-              idempotency_key,
-              prefix
-            )
-            |> Multi.run(:projection, fn inner_repo, _changes ->
-              reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)
-            end)
+              |> Multi.run(:projection, fn inner_repo, _changes ->
+                reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)
+              end)
 
-          case repo.transaction(multi) do
-            {:ok, changes} ->
-              {:ok, changes}
+            case repo.transaction(multi) do
+              {:ok, changes} ->
+                {:ok, changes}
 
-            {:error, _failed_step, reason, _changes} ->
-              {:error, reason}
-          end
+              {:error, _failed_step, reason, _changes} ->
+                {:error, reason}
+            end
 
-        {:execution_error, error_args} ->
-          {:error, {:execution_error_not_supported_for_timer_fire, error_args}}
+          {:execution_error, error_args} ->
+            {:error, {:execution_error_not_supported_for_timer_fire, error_args}}
+        end
       end
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
     end
   end
 
@@ -3581,139 +3598,149 @@ defmodule Letflow.Engine do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
     idempotency_key = "service_task_dispatch:#{dispatch.id}"
 
-    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
-         {:ok, prepared_timers} <-
-           prepare_timer_arms(pending_events, graph, dispatch.instance_id, now),
-         {:ok, prepared_service_task_dispatches} <-
-           prepare_service_task_dispatch_abort_on_empty_url(
-             pending_events,
-             graph,
-             dispatch.instance_id,
-             advanced_state.variables,
-             now,
-             %{pin_source: {:reconstruct, dispatch.instance_id, prefix}, tenant_id: tenant_id}
-           ),
-         {:ok, sub_process_outcome} <-
-           prepare_sub_process_children_for_completion(
-             advanced_state,
-             original_active_tokens,
-             graph,
-             pending_events,
-             projection,
-             EventStore.platform_actor_id(),
-             idempotency_key,
-             prefix
-           ) do
-      case sub_process_outcome do
-        {:advanced, final_instance_state, prepared_children} ->
-          multi =
-            Multi.new()
-            |> Multi.merge(fn _changes ->
+    try do
+      with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+           {:ok, prepared_timers} <-
+             prepare_timer_arms(pending_events, graph, dispatch.instance_id, now),
+           {:ok, prepared_service_task_dispatches} <-
+             prepare_service_task_dispatch_abort_on_empty_url(
+               pending_events,
+               graph,
+               dispatch.instance_id,
+               advanced_state.variables,
+               now,
+               %{pin_source: {:reconstruct, dispatch.instance_id, prefix}, tenant_id: tenant_id}
+             ),
+           {:ok, sub_process_outcome} <-
+             prepare_sub_process_children_for_completion(
+               advanced_state,
+               original_active_tokens,
+               graph,
+               pending_events,
+               projection,
+               EventStore.platform_actor_id(),
+               idempotency_key,
+               prefix
+             ) do
+        case sub_process_outcome do
+          {:advanced, final_instance_state, prepared_children} ->
+            multi =
               Multi.new()
-              |> Multi.run({:hop_chain_token_records, dispatch.instance_id}, fn repo, _changes ->
-                insert_hop_chain_new_token_records(
-                  repo,
-                  dispatch.instance_id,
-                  original_active_tokens,
-                  final_instance_state.tokens,
-                  prefix
-                )
+              |> Multi.merge(fn _changes ->
+                Multi.new()
+                |> Multi.run({:hop_chain_token_records, dispatch.instance_id}, fn repo,
+                                                                                  _changes ->
+                  insert_hop_chain_new_token_records(
+                    repo,
+                    dispatch.instance_id,
+                    original_active_tokens,
+                    final_instance_state.tokens,
+                    prefix
+                  )
+                end)
+                |> Multi.merge(fn changes ->
+                  {id_map, hop_chain_new_records} =
+                    Map.fetch!(changes, {:hop_chain_token_records, dispatch.instance_id})
+
+                  resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+
+                  Multi.new()
+                  |> TaskActivation.append_multi_from_existing_records(
+                    dispatch.instance_id,
+                    graph,
+                    seed_state.pending_task_nodes,
+                    resolved_final_instance_state,
+                    prefix
+                  )
+                  |> reconcile_token_records(
+                    hop_chain_new_records ++ original_active_tokens,
+                    resolved_final_instance_state,
+                    now,
+                    prefix
+                  )
+                end)
               end)
               |> Multi.merge(fn changes ->
-                {id_map, hop_chain_new_records} =
+                # ISS-0974 fix: use the real hop-chain id_map instead of
+                # assuming identity -- a same-hop-chain join can mint a
+                # token_id not yet persisted.
+                {hop_chain_id_map, _hop_chain_new_records} =
                   Map.fetch!(changes, {:hop_chain_token_records, dispatch.instance_id})
 
-                resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+                id_map =
+                  Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
+                    {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+                  end)
 
-                Multi.new()
-                |> TaskActivation.append_multi_from_existing_records(
-                  dispatch.instance_id,
-                  graph,
-                  seed_state.pending_task_nodes,
-                  resolved_final_instance_state,
-                  prefix
-                )
-                |> reconcile_token_records(
-                  hop_chain_new_records ++ original_active_tokens,
-                  resolved_final_instance_state,
-                  now,
+                build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+              end)
+              |> Multi.merge(fn changes ->
+                # ISS-0974 fix: same real-id_map reasoning as the timer-arms
+                # merge immediately above.
+                {hop_chain_id_map, _hop_chain_new_records} =
+                  Map.fetch!(changes, {:hop_chain_token_records, dispatch.instance_id})
+
+                id_map =
+                  Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
+                    {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+                  end)
+
+                build_service_task_dispatch_multi(
+                  Multi.new(),
+                  prepared_service_task_dispatches,
+                  id_map,
+                  tenant_id,
                   prefix
                 )
               end)
-            end)
-            |> Multi.merge(fn changes ->
-              # ISS-0974 fix: use the real hop-chain id_map instead of
-              # assuming identity -- a same-hop-chain join can mint a
-              # token_id not yet persisted.
-              {hop_chain_id_map, _hop_chain_new_records} =
-                Map.fetch!(changes, {:hop_chain_token_records, dispatch.instance_id})
-
-              id_map =
-                Map.new(prepared_timers, fn {token_id, _arm_attrs} ->
-                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
-                end)
-
-              build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
-            end)
-            |> Multi.merge(fn changes ->
-              # ISS-0974 fix: same real-id_map reasoning as the timer-arms
-              # merge immediately above.
-              {hop_chain_id_map, _hop_chain_new_records} =
-                Map.fetch!(changes, {:hop_chain_token_records, dispatch.instance_id})
-
-              id_map =
-                Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
-                  {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
-                end)
-
-              build_service_task_dispatch_multi(
-                Multi.new(),
-                prepared_service_task_dispatches,
-                id_map,
-                tenant_id,
+              |> append_sub_process_children_creation_multi(
+                prepared_children,
+                dispatch.instance_id,
+                EventStore.platform_actor_id(),
+                idempotency_key,
                 prefix
               )
-            end)
-            |> append_sub_process_children_creation_multi(
-              prepared_children,
-              dispatch.instance_id,
-              EventStore.platform_actor_id(),
-              idempotency_key,
-              prefix
-            )
-            |> Multi.run(:service_task_completed_event, fn _repo, _changes ->
-              append_service_task_completed_event(dispatch, decoded_body, idempotency_key, prefix)
-            end)
-            |> Multi.run(:projection, fn inner_repo, _changes ->
-              reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)
-            end)
+              |> Multi.run(:service_task_completed_event, fn _repo, _changes ->
+                append_service_task_completed_event(
+                  dispatch,
+                  decoded_body,
+                  idempotency_key,
+                  prefix
+                )
+              end)
+              |> Multi.run(:projection, fn inner_repo, _changes ->
+                reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)
+              end)
 
-          case repo.transaction(multi) do
-            {:ok, _changes} ->
-              {:ok, :advanced}
+            case repo.transaction(multi) do
+              {:ok, _changes} ->
+                {:ok, :advanced}
 
-            {:error, _failed_step, reason, _changes} ->
-              # ISS-0784 follow-up fix (ISS-0784, same root cause as
-              # persist_timer_fired_advance/7's own sibling clause above):
-              # this function's own `repo.transaction(multi)` call runs
-              # nested inside `advance_after_service_task_outcome/4`'s own
-              # already-open `repo.transaction(fn -> ... end)` (same `repo`
-              # module, same process/connection) -- NOT a genuinely
-              # independent transaction. Recording the rejection audit here
-              # would roll back right along with `advance_after_service_task_outcome/4`'s
-              # own `repo.rollback(reason)` once this `{:error, reason}`
-              # propagates up through `advance_service_task_dispatch/4`.
-              # The audit write is issued instead by
-              # `Letflow.Engine.ServiceTaskDispatcher.call_advance_after_service_task_outcome/3`,
-              # strictly after `advance_after_service_task_outcome/4`'s own
-              # `repo.transaction/1` has fully returned (see that module).
-              # Any `reason` shape here is byte-identical to before ISS-0784.
-              {:error, reason}
-          end
+              {:error, _failed_step, reason, _changes} ->
+                # ISS-0784 follow-up fix (ISS-0784, same root cause as
+                # persist_timer_fired_advance/7's own sibling clause above):
+                # this function's own `repo.transaction(multi)` call runs
+                # nested inside `advance_after_service_task_outcome/4`'s own
+                # already-open `repo.transaction(fn -> ... end)` (same `repo`
+                # module, same process/connection) -- NOT a genuinely
+                # independent transaction. Recording the rejection audit here
+                # would roll back right along with `advance_after_service_task_outcome/4`'s
+                # own `repo.rollback(reason)` once this `{:error, reason}`
+                # propagates up through `advance_service_task_dispatch/4`.
+                # The audit write is issued instead by
+                # `Letflow.Engine.ServiceTaskDispatcher.call_advance_after_service_task_outcome/3`,
+                # strictly after `advance_after_service_task_outcome/4`'s own
+                # `repo.transaction/1` has fully returned (see that module).
+                # Any `reason` shape here is byte-identical to before ISS-0784.
+                {:error, reason}
+            end
 
-        {:execution_error, error_args} ->
-          {:error, {:execution_error_not_supported_for_service_task_advance, error_args}}
+          {:execution_error, error_args} ->
+            {:error, {:execution_error_not_supported_for_service_task_advance, error_args}}
+        end
       end
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
     end
   end
 

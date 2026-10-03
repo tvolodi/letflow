@@ -298,6 +298,42 @@ defmodule Letflow.Engine.TimerWiringTest do
     }
   end
 
+  # ISS-0981 site 5 fixture -- START -> orig-task (HUMAN_TASK, escalation
+  # timer armed via escalation_timer_duration) -> escalated-task (HUMAN_TASK,
+  # well-formed -- no form_schema attribute) -> END. No escalation-timer
+  # graph helper already existed in this file (searched -- confirmed absent),
+  # so this one is added locally, mirroring
+  # `test/letflow/engine/human_task_escalation_test.exs`'s own
+  # `escalation_graph/0` fixture, per this project's established
+  # per-test-file self-sufficiency convention.
+  defp graph_escalation_timer_human_task_end(duration) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "orig-task",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{
+            "role" => "approver",
+            "escalation_timer_duration" => duration,
+            "escalation_role" => "role-escalation"
+          }
+        },
+        %{
+          "id" => "escalated-task",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "role-escalation"}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "orig-task"},
+        %{"id" => "e2", "source" => "orig-task", "target" => "escalated-task"},
+        %{"id" => "e3", "source" => "escalated-task", "target" => "end"}
+      ]
+    }
+  end
+
   defp timers_for(schema_name, instance_id) do
     Timer
     |> where([t], t.instance_id == ^instance_id)
@@ -1008,6 +1044,112 @@ defmodule Letflow.Engine.TimerWiringTest do
         end)
 
       assert log =~ "task_activation.rejected"
+    end
+  end
+
+  describe "ISS-0981: persist_timer_fired_advance/7's task-activation audit raise is rescue-hardened" do
+    test "a timer-fired cascade whose task-activation audit write itself fails returns a well-formed poll_result, not a raise" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition = active_definition!(schema_name, graph_timer_human_task_end("P0D"))
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [%Timer{status: "pending"}] = timers_for(schema_name, instance_id)
+
+      # Deliberately well-formed form_schema (none at all here) -- unlike
+      # "ISS-0784 site 3"/"ISS-0969" above, this test needs the timer-fire
+      # cascade to reach TaskActivation.append_multi_from_existing_records/6's
+      # own SUCCESSFUL insert path (record_task_create_audit/3's
+      # same-transaction Audit.insert_entry/3 call), not the
+      # {:invalid_form_schema, _} rejection branch those sibling tests
+      # exercise.
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      # persist_timer_fired_advance/7 is now rescue-hardened (ISS-0981) --
+      # the raise from the dropped audit_entries table converts to
+      # {:error, {:transaction_failed, exception}}, which Scheduler's own
+      # generic-error accounting tallies the same as any other typed error
+      # (same %{errored: _, fired: _} idiom the "ISS-0969"/"ISS-0784 site 3"
+      # describe blocks above already assert).
+      assert %{errored: 1, fired: 0} = Scheduler.poll_and_fire(schema_name)
+
+      # The whole nested transaction rolled back: no HUMAN_TASK "task" row
+      # ever committed, and the timer itself is still "pending", not "fired".
+      refute Enum.any?(Repo.all(EngineTask, prefix: schema_name), &(&1.node_id == "task"))
+      assert [%Timer{status: "pending"}] = timers_for(schema_name, instance_id)
+    end
+  end
+
+  describe "ISS-0981: persist_escalation_timer_fired_advance/7's task-activation audit raise is rescue-hardened" do
+    test "an escalation-timer-fired cascade whose task-activation audit write itself fails returns a well-formed poll_result, not a raise" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition = active_definition!(schema_name, graph_escalation_timer_human_task_end("P0D"))
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [%Timer{status: "pending", timer_type: "escalation"}] =
+               timers_for(schema_name, instance_id)
+
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      assert %{errored: 1, fired: 0} = Scheduler.poll_and_fire(schema_name)
+
+      # The whole nested transaction rolled back: the original task is still
+      # pending (never cancelled), no new escalated-task row ever committed,
+      # and the escalation timer itself is still "pending", not "fired".
+      refute Enum.any?(
+               Repo.all(EngineTask, prefix: schema_name),
+               &(&1.node_id == "escalated-task")
+             )
+
+      assert [%EngineTask{node_id: "orig-task", status: :pending}] =
+               Repo.all(EngineTask, prefix: schema_name)
+
+      assert [%Timer{status: "pending"}] = timers_for(schema_name, instance_id)
     end
   end
 end

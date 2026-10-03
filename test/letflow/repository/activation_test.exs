@@ -975,7 +975,10 @@ defmodule Letflow.Repository.ActivationTest do
                )
 
       assert Repo.aggregate(ActivationGroup, :count, prefix: schema) == 0
-      assert Activation.resolve(:definition, version.artifact_name, schema) == {:error, :not_activated}
+
+      assert Activation.resolve(:definition, version.artifact_name, schema) ==
+               {:error, :not_activated}
+
       assert Repo.aggregate(ActivationHistory, :count, prefix: schema) == 0
     end
   end

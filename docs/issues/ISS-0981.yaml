@@ -80,4 +80,90 @@ related:
   - ISS-0946
 queue_ref: null   # filed directly by REVIEWER during PR #2170's review, not via get_next_task
 github_ref: null  # not filed on GitHub; local-only follow-up, same as ISS-0969/ISS-0980
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0981-audit-raise-hardening
+resolved_at: "2026-10-03T00:01:28Z"
+resolution:
+  root_cause: >
+    Six same-transaction call sites -- lib/letflow/definitions/promotion.ex's
+    write_target_definition/5 plus five lib/letflow/engine.ex Multi-building
+    boundary functions (persist/14, run_complete_task/6,
+    persist_timer_fired_advance/7, persist_escalation_timer_fired_advance/7,
+    do_persist_service_task_advance/10) -- each call
+    Letflow.Audit.insert_entry/3 directly inside their own already-open
+    Repo.transaction/1, with no enclosing function-level `rescue`. The
+    original ISS-0980 dismissal of these two call-chain candidates reasoned
+    correctly about the *typed* {:error, reason} return (Repo.rollback/1
+    does cleanly convert that into {:error, ...}) but did not separately
+    check a genuine *raise* -- Repo.transaction/1 only intercepts
+    Repo.rollback/1 calls, so any other raised exception (the same
+    DROP-TABLE/Postgrex.Error class ISS-0969's and ISS-0980's own
+    regression tests reproduce) propagates straight through to
+    Plug.ErrorHandler's cleanup-only, unconditionally-re-raising boundary,
+    producing a generic 500 instead of the controlled, typed failure the
+    written contract implies -- unlike lib/letflow/definitions.ex's
+    analogous record_definition_audit/5, which is safe only because each
+    of ITS callers (activate/2, etc.) already has its own function-level
+    rescue wrapper. Both acceptance-criteria call chains (promote_definition/3
+    and promote_active_definition/4's router entry points, plus at least one
+    engine.ex caller of TaskActivation.append_multi/6/
+    append_multi_from_existing_records/6) were traced end-to-end and
+    confirmed live gaps, not already-guarded by some unseen Plug-level
+    boundary.
+  design: >
+    lib/letflow/design/iss0981-audit-raise-hardening.md. CODE-DESIGN-VALIDATOR
+    PASSed, independently confirming the call-chain-raise claim (not just the
+    typed-error dismissal) against the real code for all 6 sites before
+    sign-off.
+  fix: >
+    Function-level `try/rescue -> {:error, {:transaction_failed, exception}}`
+    wrapped around each of the 6 call sites' existing Repo.transaction/1
+    call, mirroring lib/letflow/definitions.ex's own established
+    activate/2-style pattern exactly -- same shape this whole ISS-0946/
+    ISS-0969/ISS-0980 arc has used at every prior site, just the
+    transactional/typed-return variant rather than the best-effort/:ok
+    variant. engine.ex's surrounding code was reformatted at these sites
+    with zero logic change (confirmed by REVIEWER). One existing test that
+    had encoded the pre-fix raise as expected behavior
+    (audit_capture_test.exs's task-completion AC3 case) was updated to match
+    the new typed-error contract. New DROP-TABLE fault-injection regression
+    tests added per site, each with rollback assertions proving the
+    transaction cleanly rolls back rather than crashing.
+  security_reviewer: >
+    PASS. No tenant-isolation, leak, or authz issues; confirmed the broad
+    `rescue exception ->` clause is safe at these 6 sites specifically
+    because there is no fail-open path inside any of the wrapped
+    transaction bodies -- a raise always converts to a clean
+    {:error, {:transaction_failed, exception}}, never to an implicit
+    success.
+  review: >
+    REVIEWER: PASSed. Confirmed the rescue shape is consistent across all
+    6 sites, confirmed the engine.ex reformatting at these sites is
+    zero-logic-change, and confirmed genuine DROP-TABLE test coverage with
+    real rollback assertions (not vacuous). While sweeping for another
+    undiscovered same-transaction audit-write call site, found a related but
+    structurally different gap: Letflow.Audit.append_multi/4 (a thinner
+    Ecto.Multi-step wrapper around the same insert_entry/3, used by 8
+    call sites across lib/letflow/identity.ex, lib/letflow/repository/
+    activation.ex, and lib/letflow/public_read.ex) shares the identical
+    raise-through-Repo.transaction/1 exposure but wasn't caught by this
+    arc's literal-string insert_entry greps. Correctly filed as a
+    non-blocking follow-up, ISS-0983, rather than expanding this PR's scope.
+    Also added a docs/anti-patterns.md addendum ("Fifth round, same blind
+    spot, different literal") generalizing the lesson: when a helper
+    function wraps the risky call, the helper's own callers are just as
+    exposed, and a literal-string grep for the inner call's name will not
+    find them -- the sweep has to follow the wrapper's own callers, not
+    just its definition.
+  test_runner: >
+    PASS. Independently confirmed 5389/5389 full suite clean on commit
+    34625b44.
+  release_validator: >
+    PASS. Independently re-traced 2 of 6 sites end-to-end, constructed an
+    adversarial breadth-of-rescue analysis (confirmed the bare rescue
+    clause is not a new risk and matches existing definitions.ex
+    precedent), independently re-ran the full suite twice (5389/5389 clean
+    after resolving a transient cross-agent test-interference
+    false-positive), confirmed docs/requirements.yaml untouched, and
+    confirmed ISS-0983 is correctly out of this PR's scope.
+  pr: "#2176"

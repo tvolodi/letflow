@@ -4547,3 +4547,21 @@ index's separate, derived `entries:` field was kept in sync. The fix is mechanic
 *every* time a volume gets an append, not only when a roll is suspected -- append and
 index-count-increment are two edits to two different files describing the same fact, and
 forgetting the second one is invisible until the invariant test runs.
+
+**Resolution text citing a design doc that was never committed (2026-10-03, REVIEWER,
+ISS-0971 review, filed as ISS-0985).** ISS-0970's resolution text credits
+`lib/letflow/design/iss0970-event-ordering-decision.md` as the design artefact
+CODE-DESIGN-VALIDATOR PASSed, and that path is now cited by four separate files --
+`docs/issues/ISS-0970.yaml`, `docs/status/requirement_status.v25.yaml`, and two UAT fixture
+exception headers (`supplier-quality-deviation-critical.yaml`,
+`production-order-above-threshold.yaml`) -- but `git log --all` on that path returns nothing; it
+was never committed. ISS-0971's own rework mirrored the existing citation style in good faith
+(following established precedent is normally correct) and so propagated the same dangling
+reference to a fourth location without anyone noticing, because nothing in the review chain
+re-derives a cited design doc's existence -- REVIEWER/RELEASE-VALIDATOR re-verify the *claims*
+a design doc makes (sequence_number is real and monotonic, the event-type names are real) but
+not that the cited file backing those claims is actually on disk. The fix going forward: when a
+PASS or resolution note cites a `lib/letflow/design/*.md` path, `git log --all -- <path>` it
+once before citing it elsewhere, and if the only version of the file is a workspace-local draft
+that never got `git add`ed, either commit it or cite the issue number instead of a path that
+looks committed but isn't.

@@ -4529,3 +4529,21 @@ helper function wraps the risky call (`append_multi/4` wrapping `insert_entry/3`
 of the *helper* are just as exposed as callers of the thing it wraps, and a literal-string grep
 for the inner call's name will not find them -- the sweep has to follow the wrapper's own
 callers, not just its own definition.
+
+**Appending a run-history entry without incrementing the index's own `entries:` count
+(2026-10-03, DOC-UPDATER, ISS-0981 close-out, PR #2174).** Appended a new entry to
+`docs/status/requirement_status.v25.yaml` correctly (append-only, no rewrite, timestamp from the
+clock) but forgot the index-side bookkeeping: `docs/status/requirement_status.index.yaml`'s
+`volumes:` entry for volume 25 still declared `entries: 27` after the file actually held 28
+on-disk `- req:` entries. `test/docs/requirement_status_invariants_test.exs`'s A9 check ("every
+indexed volume's declared entries: count equals what is actually on disk") caught this in PR
+#2174's own CI run (Backend gate failure, 1264/1265), not before push -- the append procedure's
+own "HOW TO APPEND" steps include confirming the volume's note/`entries:` field is updated, but
+skipping straight to `git diff --numstat` (checking deletions == 0) without re-reading the
+index's own declared count for that volume lets this specific gap through unnoticed, since the
+numstat check only proves the volume file wasn't rewritten -- it says nothing about whether the
+index's separate, derived `entries:` field was kept in sync. The fix is mechanical
+(`grep -c "^  - req:" <volume file>` against the index's `entries:` value) but needs to run
+*every* time a volume gets an append, not only when a roll is suspected -- append and
+index-count-increment are two edits to two different files describing the same fact, and
+forgetting the second one is invisible until the invariant test runs.

@@ -5826,8 +5826,19 @@ volumes:
     path: docs/status/requirement_status.v25.yaml
     status: current
     opened: 2026-09-30
-    entries: 27
+    entries: 28
     note: >
+      Incremented to 28 by DOC-UPDATER's own ISS-0981 SCOPE-CHANGE done-event
+      append (2026-10-03T02:32:36Z -- ISS-0981 resolved, PR #2174, commit
+      34625b44), recounted from the composed file (28 on-disk `- req:`
+      entries in requirement_status.v25.yaml; 1152 lines / 73361 bytes, well
+      under the 1200-line/120000-byte roll ceiling, no roll triggered). This
+      increment was initially missed on the first append pass, caught by
+      `mix test test/docs/requirement_status_invariants_test.exs`'s A9 check
+      failing in PR #2174's own CI (Backend gate), fixed in a follow-up
+      commit on the same branch before merge -- see
+      docs/anti-patterns.md for the general form of this mistake.
+
       Incremented to 27 by DOC-UPDATER's own ISS-0980 SCOPE-CHANGE done-event
       append (2026-10-02T21:29:32Z -- ISS-0980 resolved, PR #2170, final
       commit e8b7f2d5), recounted from the composed file (27 on-disk

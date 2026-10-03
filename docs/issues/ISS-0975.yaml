@@ -69,15 +69,14 @@ queue_ref: null  # not called by this agent -- REVIEWER does not call letflow-qu
                  # ISS-0973/ISS-0974's own direct-filing precedent in this repo. ORCH
                  # may adopt this GitHub issue into letflow-queue later via
                  # register_task's github_issue_number field.
-github_ref: null  # PR not yet opened at the time this resolution block was written;
-                  # backfilled immediately below once opened, per Step 5.
+github_ref: "#2182"  # PR opened and merged closing this issue; see resolution below.
 status: resolved
 resolution:
   resolved_at: "2026-10-03T22:30:00Z"
   resolved_by: DOC-UPDATER
   branch: fix/ISS-0975-subprocess-join-reentry-id-map
   final_commit: 01d06acf
-  pr: null  # backfilled once opened
+  pr: "#2182"
   root_cause: >
     append_pending_event_arms_multi/7's timer_id_map (line ~3249) and
     dispatch_id_map (lines ~3251-3252) were built as pure IDENTITY maps

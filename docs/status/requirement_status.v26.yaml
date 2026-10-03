@@ -164,3 +164,31 @@ history:
       entry on the generalizable lesson. Branch
       fix/ISS-0971-production-order-eo004-reword, final commit f5d9ea33.
       PR number recorded in docs/issues/ISS-0971.yaml once opened.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-03T18:20:00Z"
+    note: >
+      Closed ISS-0985 (lib/letflow/design/iss0970-event-ordering-decision.md
+      cited by path in four already-merged locations but never actually
+      committed -- confirmed via git log --all returning nothing). Chose
+      Path A (retroactive stub) over Path B (strip the path references):
+      preserves all four existing citations verbatim and the issue's own
+      framing already treats this as documentation of a shipped decision,
+      not a new design, so no CODE-DESIGN-VALIDATOR cycle applies. Wrote
+      lib/letflow/design/iss0970-event-ordering-decision.md capturing the
+      Option-B/sequence_number decision already paraphrased in
+      ISS-0970.yaml's resolution text plus the confirmed facts
+      (sequence_number/global_seq are real monotonic DB-assigned columns;
+      TASK_CREATED absent from the event-type registry;
+      SERVICE_TASK_COMPLETED real at lib/letflow/tenant_provisioning.ex:1149
+      and lib/letflow/engine.ex:3766). Verified post-write: repo-wide grep
+      for the filename shows all eight referencing files now point to a
+      path that exists on disk. No fixture files edited.
+      mix letflow.check_uat_scenario_schema 32/32 OK, mix compile
+      --warnings-as-errors clean. Documentation-only change; no
+      SECURITY-REVIEWER/REVIEWER/TEST-RUNNER/RELEASE-VALIDATOR cycle
+      run, per this issue's own MINOR/low-risk framing. Branch
+      fix/ISS-0985-dangling-design-doc-citation. PR number and merge
+      commit recorded in docs/issues/ISS-0985.yaml once opened.

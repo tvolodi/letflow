@@ -273,6 +273,7 @@ defmodule Letflow.Routers.Identity do
           {:ok, user} -> Response.created(conn, user_map(user))
           {:error, :duplicate_username} -> Response.conflict(conn, "username already exists")
           {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
+          {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
         end
     end
   end
@@ -384,6 +385,7 @@ defmodule Letflow.Routers.Identity do
               {:ok, user} -> Response.ok(conn, user_map(user))
               {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
               {:error, :not_found} -> Response.not_found(conn)
+              {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
             end
         end
     end
@@ -417,6 +419,7 @@ defmodule Letflow.Routers.Identity do
               {:ok, user} -> Response.ok(conn, user_map(user))
               {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
               {:error, :not_found} -> Response.not_found(conn)
+              {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
             end
         end
     end
@@ -459,6 +462,7 @@ defmodule Letflow.Routers.Identity do
           {:ok, group} -> Response.created(conn, group_map(group))
           {:error, :duplicate_group_name} -> Response.conflict(conn, "group name already exists")
           {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
+          {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
         end
     end
   end
@@ -630,6 +634,9 @@ defmodule Letflow.Routers.Identity do
 
               {:error, %Ecto.Changeset{}} ->
                 Response.unprocessable(conn, "validation failed")
+
+              {:error, {:transaction_failed, _exception}} ->
+                Response.internal_error(conn)
             end
         end
     end
@@ -658,6 +665,7 @@ defmodule Letflow.Routers.Identity do
     case Identity.revoke_token(id, opts) do
       {:ok, token} -> Response.ok(conn, token_map(token))
       {:error, :not_found} -> Response.not_found(conn)
+      {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
     end
   end
 

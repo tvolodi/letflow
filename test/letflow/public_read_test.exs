@@ -19,7 +19,10 @@ defmodule Letflow.PublicReadTest do
 
   use Letflow.DataCase, async: false
 
+  import Ecto.Query
+
   alias Letflow.PublicRead
+  alias Letflow.PublicRead.Handle
   alias Letflow.PublicReadFixtureSupport
 
   # Named (not anonymous) telemetry handler, matching the established
@@ -73,6 +76,55 @@ defmodule Letflow.PublicReadTest do
 
       refute record.handle_hash == plaintext
       assert record.handle_hash == :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0983 -- issue_handle/4 is rescue-hardened against a Postgres-level
+  # audit-write failure. Same DROP TABLE fault-injection idiom established by
+  # ISS-0969/ISS-0980/ISS-0981 (see test/letflow/engine_test.exs's "ISS-0969"
+  # describe block for the exact DDL recreated below). Uses a real,
+  # syntactically-valid tenant_id from provision_tenant!/0 so this exercises
+  # the {:ok, prefix} -> prefix branch of issue_handle/4's own case, never the
+  # deliberate ArgumentError raise branch for an invalid tenant_id (out of
+  # scope for this fix, must keep raising uncaught).
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0983: issue_handle/4 is rescue-hardened against a Postgres-level audit-write failure" do
+    test "a genuine Postgres-level audit-insert failure rolls back the handle insert" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        PublicReadFixtureSupport.provision_tenant!()
+
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               PublicRead.issue_handle(
+                 tenant_id,
+                 PublicReadFixtureSupport.kind(),
+                 Ecto.UUID.generate()
+               )
+
+      assert Repo.aggregate(from(h in Handle, where: h.tenant_id == ^tenant_id), :count) == 0
     end
   end
 

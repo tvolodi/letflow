@@ -5824,10 +5824,29 @@ volumes:
 
   - volume: 25
     path: docs/status/requirement_status.v25.yaml
-    status: current
+    status: closed
     opened: 2026-09-30
-    entries: 28
+    closed: 2026-10-03
+    entries: 29
+    lines: 1223
+    bytes_working_tree: 77755
+    frozen_prefix_lines: 1211
+    frozen_prefix_sha256: "99988fb222a6ca37db1090e542403910246a1a1e7d8b7cd7728ca16a7595046c"
     note: >
+      Closed by DOC-UPDATER after appending ISS-0983's closing SCOPE-CHANGE
+      done-event (2026-10-03T06:37:17Z -- ISS-0983 resolved, branch
+      fix/ISS-0983-audit-append-multi-hardening, commit 5a54047b).
+      Recounted directly: `grep -c "^  - req:"
+      docs/status/requirement_status.v25.yaml` = 29 on-disk entries. 1211
+      lines / 77094 bytes -- over the 1200-line/120000-byte roll ceiling, so
+      this append triggered the roll: closure footer appended
+      (frozen_prefix_sha256 computed BEFORE the footer, over exactly the
+      1211 frozen-prefix lines via `head -n 1211 | sha256sum`), volume 26
+      opened with the same header text and an empty entry list, and this
+      volume's status set to closed in the same commit. `git diff
+      --numstat` on this file for the ISS-0983 append itself showed 59
+      insertions, 0 deletions, before the closure footer was added.
+
       Incremented to 28 by DOC-UPDATER's own ISS-0981 SCOPE-CHANGE done-event
       append (2026-10-03T02:32:36Z -- ISS-0981 resolved, PR #2174, commit
       34625b44), recounted from the composed file (28 on-disk `- req:`
@@ -6006,6 +6025,19 @@ volumes:
       own `done` event (DOC-UPDATER's Step 6 commit did not touch this
       counter either -- fixed here, at Step Final conflict resolution,
       rather than repeating the same gap a second time on this same run).
+
+  - volume: 26
+    path: docs/status/requirement_status.v26.yaml
+    status: current
+    opened: 2026-10-03
+    entries: 0
+    note: >
+      Opened by DOC-UPDATER's own ISS-0983 closing SCOPE-CHANGE append,
+      successor to volume 25 (closed at 29 entries / 1211 frozen-prefix
+      lines, over the 1200-line roll ceiling). Created with volume 25's
+      header text verbatim (volume number, opening date and predecessor
+      path updated) and an empty entry list, per this index's
+      `roll_rule.on_exceed` procedure.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

@@ -1150,3 +1150,74 @@ history:
       (filed directly by REVIEWER during PR #2170's review, not via
       get_next_task, and not filed on GitHub) -- confirmed still accurate,
       no queue/GH release step applies.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-03T06:37:17Z"
+    note: >
+      ISS-0983 resolved (identity.ex's 6 Letflow.Audit.append_multi/4-wrapped
+      write functions, plus Repository.Activation.activate_group/5 and
+      PublicRead.issue_handle/3, shared ISS-0981's same uncaught-raise-
+      through-Repo.transaction gap, via append_multi/4 rather than
+      insert_entry/3 directly). Branch
+      fix/ISS-0983-audit-append-multi-hardening, commit 5a54047b. Root
+      cause: append_multi/4 is a thin Multi.run/3 wrapper around
+      insert_entry/3 -- a raise from insert_entry/3 has no Multi-level
+      catch and propagates uncaught through Repo.transaction/1 to
+      Plug.ErrorHandler's cleanup-only boundary, same defect class
+      ISS-0981 fixed for insert_entry/3's direct callers. Fix:
+      function-level try/rescue -> {:error, {:transaction_failed,
+      exception}} at all 8 sites, matching the ISS-0981/definitions.ex
+      pattern, plus 7 new router case clauses (6 in
+      routers/identity.ex, 1 in routers/public_read_handles.ex) to avoid
+      introducing a CaseClauseError from the new tuple shape, plus a
+      tasks.ex moduledoc doc-only correction (its "matches Identity's own
+      established precedent" claim no longer held once identity.ex's
+      write paths were rescue-hardened here; tasks.ex's actual behavior
+      deliberately left unchanged). Design:
+      lib/letflow/design/iss0983-audit-append-multi-hardening.md, 2
+      CODE-DESIGN-VALIDATOR cycles (1st FAILed on 2 literal code blocks in
+      the design doc, mechanical only; 2nd PASSed). SECURITY-REVIEWER:
+      PASS, ran the full INV-1..INV-8 sweep despite the design doc's own
+      "not required" self-assessment -- overridden for consistency with
+      ISS-0981 -- no tenant-isolation/leak/authz issues, no secret
+      leakage via the new exception tuple. REVIEWER: PASS, verified
+      rescue-shape consistency across all 8 sites, verified all 7 new
+      router case clauses non-shadowing, verified PublicRead.Handle's
+      global-schema correction against the actual migration, confirmed
+      genuine DROP-TABLE test coverage with rollback assertions. Filed
+      one non-blocking follow-up, docs/issues/ISS-0984.yaml
+      (Letflow.Engine.cancel_instance/3, 6th round of this audit arc),
+      out of scope here. TEST-RUNNER: PASS, independently confirmed
+      5397/5397 full suite clean (5397 not 5400 -- 3 tests tagged
+      :high_pool_demand excluded by test_parallel.sh's pool-size
+      threshold, confirmed by RELEASE-VALIDATOR as not a regression),
+      plus all 8 new tests passing by name. RELEASE-VALIDATOR: PASS,
+      independently re-traced 3 sites end-to-end (including both
+      special-scoping sites insert_token/3 and issue_handle/4),
+      investigated and resolved the test-count delta, constructed an
+      original adversarial scenario confirming 2 pre-existing error
+      cases (duplicate username, duplicate group name) still hit their
+      original clauses unshadowed by the new ones, confirmed
+      docs/requirements.yaml untouched and ISS-0984 correctly out of
+      scope, independently re-ran the full suite 3 times via different
+      paths (test_parallel.sh N=2, mix letflow.check.test N=8, targeted
+      test files), all clean at 5397/5397. docs/issues/ISS-0983.yaml set
+      to status: resolved in this same commit. This is an ISSUE closure,
+      not a REQ -- docs/requirements.yaml untouched. No letflow-queue
+      task and no GitHub issue to release/close: queue_ref/github_ref
+      both null per this issue's own filing metadata (filed directly by
+      REVIEWER during PR #2174's review, not via get_next_task, and not
+      filed on GitHub).
+# VOLUME 25 — CLOSED 2026-10-03. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-30 through
+# 2026-10-03 (29 entries, 1211 frozen-prefix lines before this closure footer).
+# It is frozen: every line above this comment is preserved byte-for-byte. Closed
+# by DOC-UPDATER's own ISS-0983 closing SCOPE-CHANGE append, which brought this
+# file to 1211 lines -- over the declared roll_rule ceiling (1200 lines /
+# 120000 bytes). No entry above this footer was moved, edited or deleted.
+#
+# Successor:
+#   docs/status/requirement_status.v26.yaml
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none introduced by this closure.

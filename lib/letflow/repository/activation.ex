@@ -259,52 +259,57 @@ defmodule Letflow.Repository.Activation do
           | {:error, :invalid_schema_name}
           | {:error, {:group, Ecto.Changeset.t()}}
           | {:error, {atom(), Ecto.Changeset.t()}}
+          | {:error, {:transaction_failed, Exception.t()}}
   def activate_group(activations, activator_user_id, rationale, prefix, opts \\ [])
       when is_list(activations) and is_binary(prefix) and is_list(opts) do
-    with :ok <- validate_non_empty_group(activations),
-         :ok <- validate_no_duplicate_artifacts(activations),
-         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
-      activated_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
-      group_id = Ecto.UUID.generate()
+    try do
+      with :ok <- validate_non_empty_group(activations),
+           :ok <- validate_no_duplicate_artifacts(activations),
+           {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+        activated_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+        group_id = Ecto.UUID.generate()
 
-      group_changeset =
-        ActivationGroup.changeset(%ActivationGroup{}, %{
-          group_id: group_id,
-          tenant_id: tenant_id,
-          activated_at: activated_at,
-          activator_user_id: activator_user_id,
-          rationale: rationale
-        })
+        group_changeset =
+          ActivationGroup.changeset(%ActivationGroup{}, %{
+            group_id: group_id,
+            tenant_id: tenant_id,
+            activated_at: activated_at,
+            activator_user_id: activator_user_id,
+            rationale: rationale
+          })
 
-      if group_changeset.valid? do
-        multi =
-          Multi.new()
-          |> Multi.insert(:group, group_changeset, prefix: prefix)
+        if group_changeset.valid? do
+          multi =
+            Multi.new()
+            |> Multi.insert(:group, group_changeset, prefix: prefix)
 
-        multi =
-          activations
-          |> Enum.with_index(1)
-          |> Enum.reduce(multi, fn {activation, index}, acc ->
-            acc
-            |> add_activation_steps(
-              activation,
-              index,
-              tenant_id,
-              activator_user_id,
-              rationale,
-              activated_at,
-              group_id,
-              prefix
-            )
-            |> maybe_add_test_pause_step(index, opts)
-          end)
+          multi =
+            activations
+            |> Enum.with_index(1)
+            |> Enum.reduce(multi, fn {activation, index}, acc ->
+              acc
+              |> add_activation_steps(
+                activation,
+                index,
+                tenant_id,
+                activator_user_id,
+                rationale,
+                activated_at,
+                group_id,
+                prefix
+              )
+              |> maybe_add_test_pause_step(index, opts)
+            end)
 
-        multi
-        |> Repo.transaction()
-        |> format_activate_group_result(activations)
-      else
-        {:error, {:group, group_changeset}}
+          multi
+          |> Repo.transaction()
+          |> format_activate_group_result(activations)
+        else
+          {:error, {:group, group_changeset}}
+        end
       end
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
     end
   end
 

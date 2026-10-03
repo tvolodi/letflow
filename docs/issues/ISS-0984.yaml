@@ -1,0 +1,78 @@
+id: ISS-0984
+title: "lib/letflow/engine.ex's cancel_instance/3 (via run_cancel_instance/5's own Audit.append_multi/4 step) shares the same uncaught-raise-through-Repo.transaction gap ISS-0969/ISS-0980/ISS-0981/ISS-0983 have been closing elsewhere, and was missed by all four prior rounds"
+discovered_by: REVIEWER
+discovered_in_run: fix/ISS-0983-audit-append-multi-hardening (PR review)
+discovered_at: "2026-10-03T00:00:00Z"
+severity: MINOR
+owner: ELIXIR-DEV
+description: >
+  Found during REVIEWER's standard "sweep for another same-class
+  Audit.append_multi/4 or Audit.insert_entry/3 call site" pass while
+  reviewing the ISS-0983 PR (branch
+  fix/ISS-0983-audit-append-multi-hardening, commit 5a54047b).
+
+  `grep -n "Audit.append_multi\|Audit.insert_entry" lib/` over this
+  branch's `lib/` tree, followed by a direct trace of every call site
+  back to its public entry point, confirmed every prior round's fix
+  (ISS-0969/ISS-0980/ISS-0981's five `Letflow.Engine` boundaries --
+  `persist/14`, `run_complete_task/6`, `persist_timer_fired_advance/7`,
+  `persist_escalation_timer_fired_advance/7`,
+  `do_persist_service_task_advance/10` -- plus ISS-0983's eight
+  `Letflow.Identity`/`Letflow.Repository.Activation`/`Letflow.PublicRead`
+  sites, plus ISS-0980's three best-effort non-transactional sites in
+  `routers/tenant_settings.ex`/`routers/instances.ex`/
+  `engine/service_task_dispatcher.ex`) is a live, correctly-scoped
+  `try/rescue`, with one exception:
+
+  `Letflow.Engine.cancel_instance/3` (`lib/letflow/engine.ex:5350-5366`,
+  `POST /instances/:id/cancel`,
+  `lib/letflow/routers/instances.ex:635`'s `handle_cancel/2` ->
+  `render_cancel/2`) delegates to the private `run_cancel_instance/5`
+  (`lib/letflow/engine.ex:5395-5465`), which builds one `Ecto.Multi`
+  across several steps (open-task/timer/service-task-dispatch/token
+  cancellations, the instance-projection update, the cancellation
+  event) and folds in its own audit entry via
+  `Multi.merge(fn changes -> record_instance_cancel_audit(changes,
+  instance_id, actor_id, prefix) end)` (line 5460-5462), where
+  `record_instance_cancel_audit/4` (line 5472) calls
+  `Audit.append_multi/4` (line 5476) exactly like every other site this
+  arc has fixed. The combined `Multi` runs via `Repo.transaction()`
+  (line 5463). Neither `cancel_instance/3` nor `run_cancel_instance/5`
+  has a `try/rescue` anywhere -- confirmed by direct read of both
+  function bodies in full, and by `grep -n "rescue" lib/letflow/engine.ex`
+  showing no match inside either function's line range. A genuine
+  Postgres-level audit-write failure (the same `DROP TABLE audit_entries`
+  / `Postgrex.Error` class every prior round's fault-injection test
+  reproduces) raises straight out of `Repo.transaction/1`, out of
+  `run_cancel_instance/5`, out of `cancel_instance/3`'s own `with`-tail
+  call, to `Plug.ErrorHandler`'s cleanup-only passthrough boundary --
+  never reaching `render_cancel/2`'s existing
+  `{:error, _internal} -> Response.internal_error(conn)` catch-all
+  (`lib/letflow/routers/instances.ex:666`), because that clause only
+  ever sees a *returned* `{:error, _}` tuple, not a raised exception.
+
+  Router-side note, unlike every one of ISS-0983's seven router-change
+  sites: `render_cancel/2` already has a catch-all clause, so **no
+  router change is needed** once `cancel_instance/3`/`run_cancel_instance/5`
+  gains the same `{:error, {:transaction_failed, exception}}` shape --
+  the existing `{:error, _internal}` clause already matches it. This
+  makes the fix shape even closer to ISS-0981's original (zero router
+  diff) than to ISS-0983's (seven router diffs).
+
+  Not independently re-verified beyond this direct read/grep trace --
+  ISSUE-FIXER should still re-derive the call chain with the same rigor
+  ISS-0983's own handoff applied, per this project's standard practice,
+  before CODE-DESIGNER starts.
+acceptance_criteria:
+  - "Confirm (or correct) the router-reachability and uncaught-raise claim above by independent call-chain trace, the same rigor ISS-0983's own design doc §1 applied"
+  - "If confirmed live: apply the same function-level try/rescue -> {:error, {:transaction_failed, exception}} shape as ISS-0981/ISS-0983's prior sites, wrapping cancel_instance/3's entire body (or run_cancel_instance/5's, whichever is cleaner given the with-tail-call shape -- ELIXIR-DEV/CODE-DESIGNER's call) and confirm no router change is actually needed given render_cancel/2's existing catch-all"
+  - "Add one DROP TABLE-audit_entries-style regression test asserting both the typed {:error, {:transaction_failed, %Postgrex.Error{}}} return and that the whole cancellation (projection, task/token/timer/service-task-dispatch-cancellation rows, the cancellation event) rolled back together, matching this arc's established proof-obligation shape"
+  - "Re-run the full grep sweep (Audit.append_multi/4, Audit.insert_entry/3) once this lands, and record explicitly whether it is now clean -- this would be the first clean sweep in this arc if so"
+related:
+  - ISS-0983
+  - ISS-0981
+  - ISS-0980
+  - ISS-0969
+queue_ref: null   # filed directly by REVIEWER during PR review, not via get_next_task
+github_ref: null  # not filed on GitHub; local-only follow-up, same as ISS-0969/ISS-0980/ISS-0981/ISS-0983
+status: open

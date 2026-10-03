@@ -39,4 +39,41 @@ source_reports:
 related:
   - ISS-0970
   - ISS-0971
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0985-dangling-design-doc-citation
+resolved_at: "2026-10-03T18:14:00Z"
+resolution: >
+  Chose Path A (write the design doc retroactively). Path A was cleaner
+  here: it preserves all four existing citations verbatim (no risk of
+  missing a fifth reference or subtly changing cited wording), and the
+  issue's own acceptance criteria already frame this as documentation of
+  a decision already made and shipped, not a new design -- so no
+  CODE-DESIGN-VALIDATOR cycle applies.
+
+  Wrote lib/letflow/design/iss0970-event-ordering-decision.md, a short
+  stub capturing: the Option-B/sequence_number decision already
+  paraphrased in docs/issues/ISS-0970.yaml's resolution text; the
+  confirmed facts that sequence_number/global_seq are real monotonic
+  DB-assigned columns (sequence_number per-instance under FOR UPDATE
+  lock, global_seq tenant-wide bigserial) and that TASK_CREATED does not
+  exist in the event-type registry while SERVICE_TASK_COMPLETED is the
+  correct, real, seeded event type
+  (lib/letflow/tenant_provisioning.ex:1149, lib/letflow/engine.ex:3766);
+  and the root-cause/fix summary already on record in ISS-0970's own
+  resolution text. No implementation work authorized or implied.
+
+  Verification: `git log --all -- lib/letflow/design/iss0970-event-ordering-decision.md`
+  confirmed empty before this commit (the dangling-citation premise);
+  after writing the stub, a repo-wide grep for the filename shows all
+  eight referencing files (the design doc itself,
+  docs/anti-patterns.md, docs/issues/ISS-0970.yaml,
+  docs/issues/ISS-0971.yaml, docs/issues/ISS-0985.yaml,
+  docs/status/requirement_status.v25.yaml,
+  docs/status/requirement_status.v26.yaml, and both vortex fixture
+  headers) now point to a path that exists on disk. No fixture files
+  were edited, so no scenario content changed.
+  mix letflow.check_uat_scenario_schema: 32/32 OK.
+  mix compile --warnings-as-errors: clean.
+
+  PR number recorded once opened; see run-history (docs/status/
+  requirement_status.v26.yaml) for the merge commit SHA.

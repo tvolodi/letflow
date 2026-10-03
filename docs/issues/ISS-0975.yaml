@@ -69,7 +69,7 @@ queue_ref: null  # not called by this agent -- REVIEWER does not call letflow-qu
                  # ISS-0973/ISS-0974's own direct-filing precedent in this repo. ORCH
                  # may adopt this GitHub issue into letflow-queue later via
                  # register_task's github_issue_number field.
-github_ref: "#2182"  # PR opened and merged closing this issue; see resolution below.
+github_ref: null  # no GitHub issue was ever filed for this (local-only, same as ISS-0969/ISS-0980/ISS-0981/ISS-0983/ISS-0984 precedent) -- the merged PR is recorded at resolution.pr above.
 status: resolved
 resolution:
   resolved_at: "2026-10-03T22:30:00Z"

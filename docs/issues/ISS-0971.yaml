@@ -98,4 +98,4 @@ resolution:
     (f5d9ea33).
   branch: fix/ISS-0971-production-order-eo004-reword
   final_commit: f5d9ea33
-  pr: null  # recorded once opened by DOC-UPDATER in the same close-out run
+  pr: 2178

@@ -113,6 +113,7 @@ defmodule Letflow.Audit do
   import Ecto.Query
 
   alias Ecto.Multi
+  alias Letflow.Audit.ChainLock
   alias Letflow.Audit.Entry
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
@@ -205,40 +206,116 @@ defmodule Letflow.Audit do
   `Letflow.Definitions`, `Letflow.Engine`, `Letflow.Tasks`,
   `Letflow.Identity` for both call shapes in use.
 
-  Implements the append algorithm (design §3.3): resolves `tenant_id` from
-  `prefix`, fetches the tenant's current chain tail inside this same
-  transaction, computes `chain_hash` per the canonical form (this module's
-  moduledoc §"Canonical hashed form"), and inserts the row.
+  Implements the append algorithm (design §3.3, ISS-0979): resolves
+  `tenant_id` from `prefix`, then -- inside one `repo.transaction/1` call --
+  locks the tenant's `audit_chain_locks` sentinel row (insert-if-absent, then
+  `SELECT ... FOR UPDATE`, mirroring `Letflow.EventStore.assign_sequence/3`'s
+  own two-step protocol verbatim) before fetching the tenant's current chain
+  tail, so two concurrent callers for the same tenant can never both observe
+  the same tail and fork the chain (ISS-0979). Computes `chain_hash` per the
+  canonical form (this module's moduledoc §"Canonical hashed form") and
+  inserts the row, still under the held lock.
+
+  `repo.transaction/1` here either nests inline inside a caller's own
+  already-open transaction (every `append_multi/4` call site, and the two
+  call sites that already wrap `insert_entry/3` in their own
+  `Repo.transaction/1`) or opens a brand-new, short-lived one (the two
+  call sites -- `tenant_settings.ex`, `instances.ex` -- that call
+  `insert_entry/3` directly with no surrounding transaction). Either way the
+  lock taken below is held until the outermost transaction commits or rolls
+  back. A raise from inside the transaction function propagates out of
+  `repo.transaction/1` and out of `insert_entry/3` exactly as it would have
+  before this change -- `repo.transaction/1` does not catch or convert
+  raises, it only guarantees the DB-side rollback happens first.
   """
   @spec insert_entry(repo :: module(), attrs :: entry_attrs(), prefix :: String.t()) ::
           {:ok, Entry.t()} | {:error, term()}
   def insert_entry(repo, attrs, prefix) when is_map(attrs) and is_binary(prefix) do
     with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
-      id = Ecto.UUID.generate()
-      timestamp = DateTime.utc_now() |> DateTime.truncate(:microsecond)
-      prev_chain_hash = fetch_chain_tail(repo, prefix)
+      case repo.transaction(fn -> do_insert_entry(repo, attrs, prefix, tenant_id) end) do
+        {:ok, result} -> result
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
 
-      fields = %{
-        id: id,
-        tenant_id: tenant_id,
-        actor_id: Map.get(attrs, :actor_id),
-        action: Map.fetch!(attrs, :action),
-        resource_type: Map.fetch!(attrs, :resource_type),
-        resource_id: Map.fetch!(attrs, :resource_id),
-        timestamp: timestamp,
-        before_state: Map.get(attrs, :before_state),
-        after_state: Map.get(attrs, :after_state),
-        trace_id: Map.get(attrs, :trace_id),
-        prev_chain_hash: prev_chain_hash
-      }
+  defp do_insert_entry(repo, attrs, prefix, tenant_id) do
+    lock_chain_tail!(repo, prefix, tenant_id)
 
-      chain_hash = compute_hash(fields)
+    id = Ecto.UUID.generate()
+    timestamp = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    prev_chain_hash = fetch_chain_tail(repo, prefix)
 
-      insert_attrs = Map.put(fields, :chain_hash, chain_hash)
+    fields = %{
+      id: id,
+      tenant_id: tenant_id,
+      actor_id: Map.get(attrs, :actor_id),
+      action: Map.fetch!(attrs, :action),
+      resource_type: Map.fetch!(attrs, :resource_type),
+      resource_id: Map.fetch!(attrs, :resource_id),
+      timestamp: timestamp,
+      before_state: Map.get(attrs, :before_state),
+      after_state: Map.get(attrs, :after_state),
+      trace_id: Map.get(attrs, :trace_id),
+      prev_chain_hash: prev_chain_hash
+    }
 
-      %Entry{}
-      |> Entry.changeset(insert_attrs)
-      |> repo.insert(prefix: prefix)
+    chain_hash = compute_hash(fields)
+
+    insert_attrs = Map.put(fields, :chain_hash, chain_hash)
+
+    %Entry{}
+    |> Entry.changeset(insert_attrs)
+    |> repo.insert(prefix: prefix)
+  end
+
+  # ISS-0979 -- the two-step "insert-if-absent, then re-SELECT-and-lock from
+  # the table itself" protocol, copied verbatim from
+  # Letflow.EventStore.assign_sequence/3 + lock_and_increment_sequence/3
+  # (lib/letflow/event_store.ex:598-636). Step (i) is one atomic statement,
+  # not a racy check-then-insert; whichever of two concurrent first-writers
+  # for a brand-new tenant loses the race gets `on_conflict: :nothing`'s
+  # silent no-op, not an error. Step (ii) locks the now-guaranteed-to-exist
+  # row -- never the insert's own possibly-stale returned struct -- via
+  # Ecto's `lock/2` query composition (INV-7: never a hand-written SQL
+  # string). This call blocks until any other transaction currently holding
+  # this same tenant's lock row commits or rolls back -- the serialization
+  # point that prevents the chain from forking (design §3.4).
+  defp lock_chain_tail!(repo, prefix, tenant_id) do
+    insert_changeset = ChainLock.insert_changeset(%ChainLock{}, %{tenant_id: tenant_id})
+
+    {:ok, _} =
+      repo.insert(insert_changeset,
+        on_conflict: :nothing,
+        conflict_target: :tenant_id,
+        prefix: prefix
+      )
+
+    %ChainLock{} =
+      ChainLock
+      |> where([l], l.tenant_id == ^tenant_id)
+      |> lock("FOR UPDATE")
+      |> repo.one(prefix: prefix)
+
+    maybe_apply_post_lock_delay()
+  end
+
+  # Test-only timing seam (ISS-0979 regression test, design §5.2) -- mirrors
+  # Letflow.Engine.ServiceTaskDispatcher.http_transport/3's own
+  # Application.get_env/3-based test seam idiom
+  # (lib/letflow/engine/service_task_dispatcher.ex:54,309): defaults to a
+  # no-op in every environment; only the regression test below ever sets
+  # `:audit_chain_lock_post_lock_delay_fun` to a `(-> any())` zero-arity
+  # function, scoped to individual tests via `Application.put_env/3` +
+  # `on_exit/1`. Called after the lock in lock_chain_tail!/3 is acquired and
+  # before fetch_chain_tail/2 reads the tail (between design §3.3 steps 4 and
+  # 5), so a test can force one racer to hold the lock for an artificially
+  # widened window and prove the other racers actually blocked at the lock
+  # rather than never having collided by chance.
+  defp maybe_apply_post_lock_delay do
+    case Application.get_env(:letflow, :audit_chain_lock_post_lock_delay_fun, nil) do
+      nil -> :ok
+      delay_fun when is_function(delay_fun, 0) -> delay_fun.()
     end
   end
 

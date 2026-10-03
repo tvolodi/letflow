@@ -42,3 +42,38 @@
 # set/order). A roll must never drop the `known_shape_anomalies:` declaration.
 
 history:
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-03T08:50:00Z"
+    note: >
+      Closed ISS-0984 (lib/letflow/engine.ex's run_cancel_instance/5 shared
+      the same uncaught-raise-through-Repo.transaction gap ISS-0969/ISS-0980/
+      ISS-0981/ISS-0983 had been closing elsewhere). Fix: function-level
+      try/rescue -> {:error, {:transaction_failed, exception}} around
+      run_cancel_instance/5's Multi/Repo.transaction/1 pipe, matching
+      run_complete_task/6's ISS-0981 precedent exactly; zero router change
+      (render_cancel/2's existing {:error, _internal} catch-all already
+      matches). Branch fix/ISS-0984-cancel-instance-audit-rescue, commit
+      c7fb7f14, design doc
+      lib/letflow/design/iss0984-cancel-instance-audit-rescue.md
+      (CODE-DESIGN-VALIDATOR: PASS after 2 cycles, 1st FAILed on an
+      incorrect "clean sweep" claim missing the tasks.ex exclusion).
+      SECURITY-REVIEWER PASS (full INV sweep, zero-diff on routers/
+      instances.ex confirmed). REVIEWER PASS (byte-for-byte match to
+      run_complete_task/6's shape, independently re-ran the FULL arc's grep
+      sweep and confirmed it genuinely clean modulo the known tasks.ex
+      exclusion -- the arc's actual final clean sweep; noted one
+      non-blocking doc-accuracy gap on engine.ex's create_error()/
+      complete_error() types, not acted on). TEST-RUNNER PASS (5398/5398
+      full suite plus the new test by name). RELEASE-VALIDATOR PASS
+      (independently re-traced the call chain, re-ran the grep sweep plus an
+      adversarial scenario, ran both scripts/test_parallel.sh and
+      mix letflow.check.test independently clean, full-arc meta-check
+      confirming ISS-0946/0969/0980/0981/0983 all genuinely resolved on
+      origin/main). This closes the entire 6-round audit-rescue-hardening
+      arc (ISS-0946 -> ISS-0969 -> ISS-0980 -> ISS-0981 -> ISS-0983 ->
+      ISS-0984); the one standing, deliberate exception is
+      lib/letflow/tasks.ex's assign_task/3/reassign_task/4, tracked
+      separately per ISS-0983. PR number recorded in docs/issues/ISS-0984.yaml
+      once opened.

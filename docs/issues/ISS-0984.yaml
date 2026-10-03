@@ -75,4 +75,94 @@ related:
   - ISS-0969
 queue_ref: null   # filed directly by REVIEWER during PR review, not via get_next_task
 github_ref: null  # not filed on GitHub; local-only follow-up, same as ISS-0969/ISS-0980/ISS-0981/ISS-0983
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-10-03T08:45:00Z"
+  resolved_by: ELIXIR-DEV
+  branch: fix/ISS-0984-cancel-instance-audit-rescue
+  commit: c7fb7f14
+  pr: 2176
+  root_cause: >
+    `Letflow.Engine.run_cancel_instance/5` (the private delegate behind
+    `cancel_instance/3`, reached via `POST /instances/:id/cancel`) built its
+    cancellation `Ecto.Multi` -- open-task/timer/service-task-dispatch/token
+    cancellations, the instance-projection update, the cancellation event --
+    and folded in its own audit entry via `Multi.merge(fn changes ->
+    record_instance_cancel_audit(changes, instance_id, actor_id, prefix)
+    end)`, where `record_instance_cancel_audit/4` calls
+    `Audit.append_multi/4` exactly like every other site this arc has fixed.
+    The combined Multi ran via `Repo.transaction/1` with no enclosing
+    `try/rescue` anywhere in either `cancel_instance/3` or
+    `run_cancel_instance/5` -- confirmed by direct read of both function
+    bodies and `grep -n "rescue" lib/letflow/engine.ex` showing no match in
+    either range. A genuine Postgres-level audit-write failure raised
+    straight out of `Repo.transaction/1`, past `Plug.ErrorHandler`'s
+    cleanup-only boundary, never reaching `render_cancel/2`'s existing
+    `{:error, _internal} -> Response.internal_error(conn)` catch-all,
+    because that clause only ever sees a *returned* `{:error, _}` tuple, not
+    a raised exception. This is the same class of gap ISS-0969/ISS-0980/
+    ISS-0981/ISS-0983 closed at every other `Audit.append_multi/4`/
+    `Audit.insert_entry/3` call site; `cancel_instance/3`'s boundary was
+    missed by all four prior rounds and surfaced only by REVIEWER's own
+    sweep during the ISS-0983 PR review.
+  fix: >
+    Wrapped `run_cancel_instance/5`'s entire Multi/`Repo.transaction/1` pipe
+    in a function-level `try/rescue -> {:error, {:transaction_failed,
+    exception}}`, matching `run_complete_task/6`'s ISS-0981 precedent
+    exactly. Added `{:error, {:transaction_failed, Exception.t()}}` to
+    `cancel_error()`'s `@spec` union for documentation parity;
+    `run_cancel_instance/5` itself stays un-spec'd, matching ISS-0981's
+    precedent for sibling private functions. No router change was needed --
+    `render_cancel/2`'s existing `{:error, _internal}` catch-all already
+    matches the new typed-error shape, confirmed zero-diff on
+    `lib/letflow/routers/instances.ex`. New regression test
+    (`engine_cancel_instance_test.exs`, ISS-0984 describe block) drops
+    `audit_entries` mid-test and asserts both the typed
+    `{:error, {:transaction_failed, %Postgrex.Error{}}}` return and full
+    pre-cancel-state rollback (tasks, tokens, projection, events all
+    unchanged).
+  design_doc: lib/letflow/design/iss0984-cancel-instance-audit-rescue.md
+  gates:
+    CODE-DESIGN-VALIDATOR: >
+      PASS after 2 cycles. 1st cycle FAILed on an incorrect "clean sweep"
+      claim that omitted the known tasks.ex exclusion (mechanical-ish
+      doc-accuracy fix only, no design-shape change). 2nd cycle PASSed.
+    SECURITY-REVIEWER: >
+      PASS. Full INV-1..INV-8 sweep, no tenant-isolation/leak/authz issues;
+      confirmed zero-diff on `routers/` and `instances.ex`.
+    REVIEWER: >
+      PASS. Rescue shape matches `run_complete_task/6`'s precedent
+      byte-for-byte; zero-diff claims confirmed; genuine DROP-TABLE test with
+      rollback assertion verified; independently re-ran the FULL arc's grep
+      sweep and confirmed it is genuinely clean modulo the known,
+      ISS-0983-documented `tasks.ex` exclusion -- this is the arc's actual
+      final clean sweep. Noted one minor non-blocking doc-accuracy gap:
+      `engine.ex`'s `create_error()`/`complete_error()` types never got the
+      documentation-parity treatment ISS-0981 proposed for them -- not
+      blocking, not acted on in this round.
+    TEST-RUNNER: >
+      PASS. Independently confirmed 5398/5398 full suite clean plus the new
+      regression test passing by name.
+    RELEASE-VALIDATOR: >
+      PASS. Independently re-traced the full call chain and re-ran the full
+      grep sweep plus an adversarial scenario (confirmed
+      `check_cancel_eligibility/1`'s legitimate error path is untouched by
+      the new rescue, since the rescue only catches raises, not returned
+      tuples); confirmed `requirements.yaml`/`tasks.ex` untouched; ran both
+      `scripts/test_parallel.sh` (5398/5398) and the stricter
+      `mix letflow.check.test` (OK, no ISS-0069 warnings) independently
+      clean; did a full-arc meta-check confirming ISS-0946/0969/0980/0981/
+      0983 are all genuinely resolved on `origin/main` with the `tasks.ex`
+      exclusion consistently documented across all of them.
+  arc_closure: >
+    This closes the entire 6-round audit-rescue-hardening arc: ISS-0946 ->
+    ISS-0969 -> ISS-0980 -> ISS-0981 -> ISS-0983 -> ISS-0984, all now
+    resolved on `origin/main`. Every `Audit.append_multi/4`/
+    `Audit.insert_entry/3` call site reachable from a router boundary across
+    `Letflow.Engine`, `Letflow.Identity`, `Letflow.Repository.Activation`,
+    and `Letflow.PublicRead` now rescues a same-transaction raise into a
+    typed `{:error, {:transaction_failed, exception}}` return. The one
+    standing, deliberate exception is `lib/letflow/tasks.ex`'s
+    `assign_task/3`/`reassign_task/4`, tracked as a separate, out-of-scope
+    decision per ISS-0983 and consistently documented as such across
+    ISS-0981/ISS-0983/ISS-0984 -- not a gap this arc left open by oversight.

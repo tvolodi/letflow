@@ -111,9 +111,25 @@ defmodule Letflow.Tasks do
   Every function below returns `{:ok, _} | {:error, atom}` for its *expected*
   failure modes (invalid UUID, not found, malformed cursor). A genuine
   DB/connection-level failure is not caught and converted anywhere in this
-  module — it propagates as a raised exception, matching `Letflow.Identity`'s
-  own established precedent for simple reads rather than inventing a new
-  blanket-rescue policy here.
+  module — it propagates as a raised exception. Only this module's three
+  *read* functions (`get_task/2`, `list_tasks/2`, `resolve_principal_scope/2`)
+  match `Letflow.Identity`'s own established precedent for simple reads —
+  `Letflow.Identity`'s read functions (`list_users/2`, `get_user/2`,
+  `list_groups/1`, `list_group_members/3`, `list_tokens/1`,
+  `verify_api_token/2`, and friends) are likewise left un-rescued.
+  `assign_task/3`/`reassign_task/4` are WRITE functions (each builds its own
+  `Ecto.Multi` with an `Audit.append_multi/4` step, same shape as
+  `Letflow.Identity`'s write functions used to have) and are deliberately
+  left un-rescued here too, but this is no longer "matching an established
+  Identity precedent" — ISS-0983 rescue-hardened every comparable
+  `Letflow.Identity` write path (`create_user/2`, `update_user_profile/3`,
+  `update_user_status/3`, `create_group/2`, `create_token/3`,
+  `revoke_token/2`), so there is no longer an un-rescued write-path precedent
+  on that module for these two functions to match. Leaving
+  `assign_task/3`/`reassign_task/4` un-rescued is now a standing, separate
+  decision specific to this module, not something inherited from elsewhere —
+  revisit as its own issue if that asymmetry needs closing, rather than
+  reading this comment as still justifying it by analogy.
 
   ## Tenant scoping (INV-1)
 

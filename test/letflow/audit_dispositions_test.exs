@@ -41,7 +41,10 @@ defmodule Letflow.AuditDispositionsTest do
   alias Letflow.Engine
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Identity
+  alias Letflow.Identity.ApiToken
+  alias Letflow.Identity.Group
   alias Letflow.Identity.Tenant
+  alias Letflow.Identity.User
   alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -509,6 +512,172 @@ defmodule Letflow.AuditDispositionsTest do
       refute Map.has_key?(revoke_entry.before_state, "token_hash")
       refute Map.has_key?(revoke_entry.after_state, "token_hash")
       assert revoked.revoked_at != nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0983 -- rescue-hardening for the six Letflow.Identity write paths that fold
+  # Audit.append_multi/4 into their own Ecto.Multi/Repo.transaction/1. Same
+  # DROP TABLE fault-injection idiom established by ISS-0969/ISS-0980/ISS-0981
+  # (see test/letflow/engine_test.exs's "ISS-0969" describe block for the exact
+  # DDL this file's own on_exit/1 callbacks below recreate).
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0983: Letflow.Identity write paths are rescue-hardened against a Postgres-level audit-write failure" do
+    defp drop_audit_entries!(schema_name) do
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      # No on_exit recreate here (unlike engine_test.exs's "ISS-0969" describe
+      # block): this file's own provisioned_tenant/0 wraps provisioning in
+      # `SandboxAutoMode.provision!/2`, which leaves the test running in
+      # dedicated (non-shared) :manual mode with a fresh per-test checkout --
+      # the DROP TABLE above runs inside that checkout's own sandbox
+      # transaction. When the test process exits, Ecto's sandbox ownership
+      # monitor automatically rolls that transaction back (reverting the
+      # DROP) before any on_exit callback runs -- confirmed empirically: a
+      # recreate attempt registered here hits `(Postgrex.Error) ERROR 42P07
+      # (duplicate_table)` because the table is already back by the time it
+      # runs. `engine_test.exs`'s own provisioned_tenant/0 does not use
+      # SandboxAutoMode and stays in DataCase's default `{:shared, self()}`
+      # mode instead, where the owning test process's death does not trigger
+      # the same automatic rollback-before-on_exit timing, so its recreate
+      # on_exit is both necessary and safe there -- not an applicable pattern
+      # to copy unmodified into this file's different sandbox-mode shape.
+    end
+
+    test "create_user/2 rolls back the user insert when the audit write fails" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      username = unique_name("iss0983-create-user")
+
+      drop_audit_entries!(schema_name)
+
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               Identity.create_user(
+                 %{
+                   "username" => username,
+                   "display_name" => "ISS-0983 Fault Injection",
+                   "email" => "#{username}@example.test"
+                 },
+                 prefix: schema_name
+               )
+
+      assert Repo.aggregate(from(u in User, where: u.username == ^username), :count,
+               prefix: schema_name
+             ) == 0
+    end
+
+    test "update_user_profile/3 rolls back the profile update when the audit write fails" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, user} =
+               Identity.create_user(
+                 %{
+                   "username" => unique_name("iss0983-update-profile"),
+                   "display_name" => "Original Name",
+                   "email" => "#{unique_name("iss0983-update-profile")}@example.test"
+                 },
+                 prefix: schema_name
+               )
+
+      drop_audit_entries!(schema_name)
+
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               Identity.update_user_profile(user.id, %{"display_name" => "New Name"},
+                 prefix: schema_name
+               )
+
+      reloaded = Repo.get!(User, user.id, prefix: schema_name)
+      assert reloaded.display_name == "Original Name"
+    end
+
+    test "update_user_status/3 rolls back the status update when the audit write fails" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, user} =
+               Identity.create_user(
+                 %{
+                   "username" => unique_name("iss0983-update-status"),
+                   "display_name" => "ISS-0983 Status Fixture",
+                   "email" => "#{unique_name("iss0983-update-status")}@example.test"
+                 },
+                 prefix: schema_name
+               )
+
+      assert user.status == :active
+
+      drop_audit_entries!(schema_name)
+
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               Identity.update_user_status(user.id, :inactive, prefix: schema_name)
+
+      reloaded = Repo.get!(User, user.id, prefix: schema_name)
+      assert reloaded.status == :active
+    end
+
+    test "create_group/2 rolls back the group insert when the audit write fails" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      group_name = unique_name("iss0983-create-group")
+
+      drop_audit_entries!(schema_name)
+
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               Identity.create_group(%{"name" => group_name}, prefix: schema_name)
+
+      assert Repo.aggregate(from(g in Group, where: g.name == ^group_name), :count,
+               prefix: schema_name
+             ) == 0
+    end
+
+    test "create_token/3 (via insert_token/3) rolls back the token insert when the audit write fails" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, user} =
+               Identity.create_user(
+                 %{
+                   "username" => unique_name("iss0983-create-token"),
+                   "display_name" => "ISS-0983 Token Owner",
+                   "email" => "#{unique_name("iss0983-create-token")}@example.test"
+                 },
+                 prefix: schema_name
+               )
+
+      drop_audit_entries!(schema_name)
+
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               Identity.create_token(user.id, %{roles: ["TASK_WORKER"], expires_at: nil},
+                 prefix: schema_name
+               )
+
+      assert Repo.aggregate(from(t in ApiToken, where: t.user_id == ^user.id), :count,
+               prefix: schema_name
+             ) == 0
+    end
+
+    test "revoke_token/2 rolls back the revocation when the audit write fails" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, user} =
+               Identity.create_user(
+                 %{
+                   "username" => unique_name("iss0983-revoke-token"),
+                   "display_name" => "ISS-0983 Revoke Fixture",
+                   "email" => "#{unique_name("iss0983-revoke-token")}@example.test"
+                 },
+                 prefix: schema_name
+               )
+
+      assert {:ok, %{token: token}} =
+               Identity.create_token(user.id, %{roles: ["TASK_WORKER"], expires_at: nil},
+                 prefix: schema_name
+               )
+
+      drop_audit_entries!(schema_name)
+
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               Identity.revoke_token(token.id, prefix: schema_name)
+
+      reloaded = Repo.get!(ApiToken, token.id, prefix: schema_name)
+      assert reloaded.revoked_at == nil
     end
   end
 

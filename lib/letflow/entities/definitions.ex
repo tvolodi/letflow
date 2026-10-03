@@ -407,6 +407,7 @@ defmodule Letflow.Entities.Definitions do
           | {:error, {:group, Ecto.Changeset.t()}}
           | {:error, {:persistence, Ecto.Changeset.t()}}
           | {:error, {atom(), Ecto.Changeset.t()}}
+          | {:error, {:transaction_failed, Exception.t()}}
   def activate_definition(name, activator_user_id, rationale, prefix)
       when is_binary(name) and is_binary(prefix) do
     with {:ok, entity_definition} <- get_definition_by_name(name, prefix),

@@ -54,6 +54,9 @@ defmodule Letflow.Routers.PublicReadHandles do
 
       {:error, %Ecto.Changeset{}} ->
         Response.bad_request(conn, "invalid public read handle request")
+
+      {:error, {:transaction_failed, _exception}} ->
+        Response.internal_error(conn)
     end
   end
 

@@ -49,6 +49,7 @@ defmodule Letflow.PublicRead do
         ) ::
           {:ok, %{handle: String.t(), record: Handle.t()}}
           | {:error, Ecto.Changeset.t()}
+          | {:error, {:transaction_failed, Exception.t()}}
   def issue_handle(tenant_id, kind, resource_id, opts \\ []) do
     prefix =
       case TenantProvisioning.schema_name_for_tenant(tenant_id) do
@@ -72,29 +73,33 @@ defmodule Letflow.PublicRead do
         expires_at: Keyword.get(opts, :expires_at)
       })
 
-    Multi.new()
-    |> Multi.insert(:handle, changeset)
-    |> Multi.merge(fn %{handle: handle} ->
-      Audit.append_multi(
-        Multi.new(),
-        :audit,
-        %{
-          actor_id: nil,
-          action: "public_read_handle.issue",
-          resource_type: kind,
-          resource_id: handle.resource_id,
-          before_state: nil,
-          after_state: Audit.struct_state(handle, [:handle_hash]),
-          trace_id: nil
-        },
-        prefix
-      )
-    end)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{handle: handle}} -> {:ok, %{handle: plaintext, record: handle}}
-      {:error, :handle, %Ecto.Changeset{} = changeset, _changes} -> {:error, changeset}
-      {:error, :audit, reason, _changes} -> {:error, reason}
+    try do
+      Multi.new()
+      |> Multi.insert(:handle, changeset)
+      |> Multi.merge(fn %{handle: handle} ->
+        Audit.append_multi(
+          Multi.new(),
+          :audit,
+          %{
+            actor_id: nil,
+            action: "public_read_handle.issue",
+            resource_type: kind,
+            resource_id: handle.resource_id,
+            before_state: nil,
+            after_state: Audit.struct_state(handle, [:handle_hash]),
+            trace_id: nil
+          },
+          prefix
+        )
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{handle: handle}} -> {:ok, %{handle: plaintext, record: handle}}
+        {:error, :handle, %Ecto.Changeset{} = changeset, _changes} -> {:error, changeset}
+        {:error, :audit, reason, _changes} -> {:error, reason}
+      end
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
     end
   end
 

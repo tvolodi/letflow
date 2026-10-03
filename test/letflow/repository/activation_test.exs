@@ -928,6 +928,59 @@ defmodule Letflow.Repository.ActivationTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0983 -- activate_group/5 is rescue-hardened against a Postgres-level
+  # audit-write failure. Same DROP TABLE fault-injection idiom established by
+  # ISS-0969/ISS-0980/ISS-0981 (see test/letflow/engine_test.exs's "ISS-0969"
+  # describe block for the exact DDL recreated below). This file's own
+  # provisioned_tenant/0 stays in real (:auto-mode, never restored) Postgres
+  # commits the whole test (per its own moduledoc comment above), so the
+  # DROP/recreate pair below runs as plain, immediately-committed SQL -- no
+  # sandbox-ownership complication to work around here.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0983: activate_group/5 is rescue-hardened against a Postgres-level audit-write failure" do
+    test "a genuine Postgres-level audit-insert failure rolls back the whole activation group" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      version = new_version!(schema, "iss0983-activate-fault")
+
+      Repo.query!(~s(DROP TABLE "#{schema}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               Activation.activate_group(
+                 [activation_input(version)],
+                 Ecto.UUID.generate(),
+                 "iss0983 fault injection",
+                 schema
+               )
+
+      assert Repo.aggregate(ActivationGroup, :count, prefix: schema) == 0
+      assert Activation.resolve(:definition, version.artifact_name, schema) == {:error, :not_activated}
+      assert Repo.aggregate(ActivationHistory, :count, prefix: schema) == 0
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC10 -- moduledoc content assertion: activation-history-vs-audit_entries
   # disambiguation text (mirrors REQ-202's AC5/AC6 precedent).
   # ---------------------------------------------------------------------------------

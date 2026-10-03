@@ -138,6 +138,49 @@ a persisted TokenRecord id.
 > sibling sites. This correction note does not change anything else in this design doc —
 > the vortex 8D fixture/seed/test changes below are unaffected; they simply never happened to
 > exercise a same-hop-chain join in their own child graph.
+>
+> **SECOND CORRECTION (REVIEWER, 2026-10-03, ISS-0975 WF-02 Step 2d gate):** the
+> paragraph immediately above is itself wrong about *why* the guard never fires for the
+> SERVICE_TASK/TIMER case, and the real mechanism is mundane, not node-type-specific.
+> Confirmed empirically by REVIEWER, two ways: (1) `git checkout main --
+> lib/letflow/engine.ex lib/letflow/engine/sub_process.ex`, re-running
+> `sub_process_service_task_after_test.exs`'s E7/E8 against that pre-fix tree — same raw
+> `Ecto.Changeset` cast error ELIXIR-DEV's own test moduledoc reports; (2) temporary
+> `IO.inspect`s (not committed) along the pre-fix call path, which showed
+> `final_instance_state.tokens` genuinely **does** contain the join-merged token
+> (confirming `Transition.fire_join/5`, `transition.ex:1337-1377`, places it there
+> regardless of the outgoing edge's node type — the first correction's own premise, that
+> SERVICE_TASK/TIMER is somehow `.tokens`-invisible, does not hold; neither
+> `dispatch_service_task/3` nor `dispatch_timer_arrival/3` ever removes it), and that
+> `reconcile_parent_tokens/5`'s own `Multi.run` callback is **never invoked at all**
+> pre-fix — not even to return the rejection error.
+>
+> The actual mechanism: `append_pending_event_arms_multi/7`'s pre-fix identity id_map
+> (`%{token_id => token_id}`) feeds the *still-synthetic* join token_id straight into
+> `ServiceTaskDispatch.arm_changeset/2` / `Scheduler.create/3` as `token_id`, and
+> `build_service_task_dispatch_multi/5` / `build_timer_arms_multi/4` add this already-cast-
+> invalid changeset via `Multi.insert/4` **eagerly, at Multi-build time** — before
+> `Repo.transaction/1` runs a single step. `Ecto.Multi.__apply__/4`
+> (`deps/ecto/lib/ecto/multi.ex:852-861`, `check_operations_valid/1`) scans **every**
+> changeset-bearing operation in the whole composed `Multi` for `valid?: false` *before*
+> executing any `Multi.run/3` callback, in any order, anywhere in the multi — a bad
+> changeset on a later-declared `Multi.insert` step aborts the entire transaction
+> pre-flight, so `:sub_process_parent_token_reconciliation`'s own `Multi.run` (an earlier
+> step, by declaration order) never gets a chance to run and reject the token itself. This
+> holds regardless of graph shape (parent-level join vs. a hypothetical child-level one) —
+> it is a property of `Ecto.Multi`'s own pre-validation pass, not of where the join sits or
+> which `InstanceState` field carries the token. Both this doc's own first correction and
+> `iss0975-subprocess-join-reentry-id-map.md`'s §0 diagnosis, and
+> `sub_process_service_task_after_test.exs`'s own moduledoc explanation (the
+> "`.tokens`-invisible" claim), state plausible-sounding but factually wrong mechanisms for
+> an empirically-correct observed error — see `docs/anti-patterns.md`'s new entry (added in
+> this same review pass) on verifying a design's predicted failure mode mechanism
+> empirically, not just its surface symptom, before relying on it in a second document.
+> Treat this paragraph, not either earlier correction's prose or the test moduledoc's own
+> explanation, as the accurate record of *why*; none of this changes ISS-0975's own fix
+> (Part A still must insert the real `TokenRecord` row before Part B's id_map lookup can
+> read a real id back out of `changes` — this was never in question, only the pre-fix
+> *symptom's own mechanism* was).
 
 Error handling: any `{:error, _}` from the prepare step (unknown node, empty rendered URL,
 catalog unresolved, invalid timer duration, multiple deadline timers) must be returned from

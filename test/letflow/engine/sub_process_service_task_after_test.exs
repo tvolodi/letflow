@@ -46,13 +46,22 @@ defmodule Letflow.Engine.SubProcessServiceTaskAfterTest do
   `origin/main`, pre-ISS-0975) and running both E7 and E8 showed the pre-fix failure mode is
   **NOT** `{:error, {:new_token_during_resume_not_supported, token_id}}` -- this design doc's own
   §0 diagnosis, predicting `reconcile_parent_tokens/5`'s guard fires first, does **not** hold for
-  this graph shape: a join whose own outgoing edge leads directly to a SERVICE_TASK/TIMER node
-  produces a `Transition.pending_event()`, which is NEVER a member of
-  `final_instance_state.tokens` (same reason a join-then-HUMAN_TASK token moves into
-  `.pending_task_nodes` instead, per `rewrite_token_ids/2`'s own comment) -- so
-  `reconcile_parent_tokens/5`'s `.tokens`-only guard never sees it and never rejects it. The
-  ACTUAL pre-fix failure, verbatim from both E7 and E8's own runs, is the raw `Ecto.Changeset`
-  cast error ISS-0975 originally assumed before this design doc's own "corrected" diagnosis:
+  this graph shape. REVIEWER's own re-trace (WF-02 Step 2d gate, 2026-10-03) found this
+  moduledoc's own earlier explanation for *why* ("the token is never a member of
+  `final_instance_state.tokens`") was itself wrong -- `Transition.fire_join/5` places the
+  join-merged token into `.tokens` identically regardless of the outgoing edge's node type
+  (confirmed by instrumenting the pre-fix call path directly), so that is not the reason. The
+  real mechanism: the pre-fix identity id_map hands the still-synthetic token_id straight to
+  `ServiceTaskDispatch.arm_changeset/2`/`Scheduler.create/3`, building an already-cast-invalid
+  changeset *at Multi-build time*; `Ecto.Multi.__apply__/4`'s own pre-flight validity scan
+  (`check_operations_valid/1`) rejects that invalid changeset before executing **any**
+  `Multi.run/3` callback in the whole composed Multi, so `reconcile_parent_tokens/5`'s own
+  `Multi.run` step (declared earlier) never even runs to reject anything -- see
+  `lib/letflow/design/q929-vortex-8d-corrective-action-subprocess.md`'s own §3.1 "SECOND
+  CORRECTION" for the full trace. The ACTUAL pre-fix failure itself, verbatim from both E7 and
+  E8's own runs, is the raw `Ecto.Changeset` cast error ISS-0975 originally assumed before this
+  design doc's own "corrected" diagnosis -- that symptom was always accurately reported here;
+  only the explanation of its mechanism was wrong and is now fixed:
 
   ```
   {:error, %Ecto.Changeset{errors: [token_id: {"is invalid", [type: Ecto.UUID, validation: :cast]}], ...}}

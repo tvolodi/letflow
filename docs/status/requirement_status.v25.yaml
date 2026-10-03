@@ -1086,3 +1086,67 @@ history:
       merged origin/main forward (merge commit 00c5859a) before CI's final
       green run; no conflicts on this volume/index (no concurrent append
       found via diff against origin/main at merge time).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-03T02:32:36Z"
+    note: >
+      ISS-0981 resolved (promotion.ex's write_target_definition/5 and five
+      engine.ex Multi-building boundary functions could let a
+      same-transaction Audit.insert_entry/3 raise propagate uncaught). PR
+      #2174, branch fix/ISS-0981-audit-raise-hardening, commit 34625b44.
+      Root cause: 6 same-transaction call sites (promotion.ex's
+      write_target_definition/5; engine.ex's persist/14,
+      run_complete_task/6, persist_timer_fired_advance/7,
+      persist_escalation_timer_fired_advance/7,
+      do_persist_service_task_advance/10) each called
+      Letflow.Audit.insert_entry/3 inside their own open Repo.transaction/1
+      with no enclosing rescue -- ISS-0980's own dismissal of these as
+      candidates reasoned correctly about the typed {:error, reason} ->
+      Repo.rollback/1 path but did not separately check a genuine raise,
+      which Repo.transaction/1 does not intercept and which propagated
+      straight to Plug.ErrorHandler's cleanup-only boundary, unlike
+      definitions.ex's equivalent writes (each guarded by a caller-level
+      rescue). Design: lib/letflow/design/iss0981-audit-raise-hardening.md,
+      CODE-DESIGN-VALIDATOR PASSed (1 cycle), independently confirming the
+      call-chain-raise claim for all 6 sites against the real code. Fix:
+      function-level try/rescue -> {:error, {:transaction_failed,
+      exception}} at all 6 sites, mirroring definitions.ex's established
+      activate/2-style pattern; engine.ex surrounding code reformatted at
+      these sites with zero logic change; one pre-existing test
+      (audit_capture_test.exs's task-completion AC3 case) updated to match
+      the new typed-error contract; DROP-TABLE fault-injection regression
+      tests with rollback assertions added per site. SECURITY-REVIEWER:
+      PASS -- no tenant-isolation/leak/authz issues, broad rescue judged
+      safe since no fail-open path exists inside any wrapped transaction
+      body. REVIEWER: PASS -- confirmed rescue-shape consistency across all
+      6 sites, zero-logic-change reformat, and genuine (non-vacuous)
+      DROP-TABLE coverage; while sweeping for another undiscovered call
+      site, found Letflow.Audit.append_multi/4 (a thinner Ecto.Multi-step
+      wrapper around the same insert_entry/3, 8 call sites across
+      identity.ex/repository/activation.ex/public_read.ex) shares the same
+      exposure but evaded this arc's literal-string insert_entry greps --
+      filed as non-blocking follow-up ISS-0983 rather than expanding this
+      PR's scope, plus a docs/anti-patterns.md addendum generalizing the
+      lesson (a wrapped call's own callers need the same sweep as the
+      wrapped call itself). TEST-RUNNER: PASS, independently confirmed
+      5389/5389 full suite clean on commit 34625b44. RELEASE-VALIDATOR:
+      PASS -- independently re-traced 2 of 6 sites end-to-end, built an
+      adversarial breadth-of-rescue analysis (confirmed not a new risk,
+      matches existing definitions.ex precedent), independently re-ran the
+      full suite twice (5389/5389 clean after resolving a transient
+      cross-agent test-interference false-positive), confirmed
+      docs/requirements.yaml untouched, confirmed ISS-0983 correctly out of
+      scope. docs/issues/ISS-0983.yaml (REVIEWER's follow-up filing) and
+      docs/anti-patterns.md's new addendum were sitting as uncommitted/
+      untracked changes in the shared main working directory at the start
+      of this close-out -- unrelated in content to ISS-0981's own code fix
+      but bundled into this same PR as a separate docs-only commit so they
+      don't remain stranded as uncommitted working-tree state.
+      docs/issues/ISS-0981.yaml set to status: resolved in this same
+      commit. This is an ISSUE closure, not a REQ -- docs/requirements.yaml
+      untouched. No letflow-queue task and no GitHub issue to release/close:
+      queue_ref/github_ref both null per this issue's own filing metadata
+      (filed directly by REVIEWER during PR #2170's review, not via
+      get_next_task, and not filed on GitHub) -- confirmed still accurate,
+      no queue/GH release step applies.

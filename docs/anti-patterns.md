@@ -4510,3 +4510,40 @@ every instance of a call target is not the same thing as a grep that verifies a 
 holds at every instance -- the former is mechanical, the latter requires tracing each call
 chain to its actual boundary, and skipping that per-site trace is how a fourth PASS-then-FAIL
 round keeps happening in the same arc.
+
+**Fifth round, same blind spot, different literal (2026-10-03, REVIEWER, ISS-0981/ISS-0983).**
+ISS-0981 fixed all six direct `Letflow.Audit.insert_entry/3` same-transaction call sites this
+arc had been chasing -- correctly, with a per-site DROP-TABLE regression test each. But
+`Letflow.Audit.append_multi/4` (`lib/letflow/audit.ex:188`) is a second, thinner wrapper around
+the exact same `insert_entry/3` call, folded into a caller's own `Ecto.Multi` as one more step,
+with the identical raise-through-`Repo.transaction/1` exposure -- and it does not match a grep
+for the literal string `insert_entry`. Six call sites in `lib/letflow/identity.ex` (all six
+router-reachable: `create_user/2`, `update_user_profile/3`, `update_user_status/3`,
+`create_group/2`, `create_token/3`, `revoke_token/2`) plus one each in
+`lib/letflow/repository/activation.ex` (`activate_group/5`) and `lib/letflow/public_read.ex`
+(`issue_handle/3`) share the defect, undiscovered across all four prior rounds because every
+prior round's grep anchored on the direct call, not the underlying failure mode. Filed as
+ISS-0983. The generalizable lesson ISS-0974's entry already states ("grep for the literal
+expression shape, not just the named call sites") needs one more turn of the screw: when a
+helper function wraps the risky call (`append_multi/4` wrapping `insert_entry/3`), the callers
+of the *helper* are just as exposed as callers of the thing it wraps, and a literal-string grep
+for the inner call's name will not find them -- the sweep has to follow the wrapper's own
+callers, not just its own definition.
+
+**Appending a run-history entry without incrementing the index's own `entries:` count
+(2026-10-03, DOC-UPDATER, ISS-0981 close-out, PR #2174).** Appended a new entry to
+`docs/status/requirement_status.v25.yaml` correctly (append-only, no rewrite, timestamp from the
+clock) but forgot the index-side bookkeeping: `docs/status/requirement_status.index.yaml`'s
+`volumes:` entry for volume 25 still declared `entries: 27` after the file actually held 28
+on-disk `- req:` entries. `test/docs/requirement_status_invariants_test.exs`'s A9 check ("every
+indexed volume's declared entries: count equals what is actually on disk") caught this in PR
+#2174's own CI run (Backend gate failure, 1264/1265), not before push -- the append procedure's
+own "HOW TO APPEND" steps include confirming the volume's note/`entries:` field is updated, but
+skipping straight to `git diff --numstat` (checking deletions == 0) without re-reading the
+index's own declared count for that volume lets this specific gap through unnoticed, since the
+numstat check only proves the volume file wasn't rewritten -- it says nothing about whether the
+index's separate, derived `entries:` field was kept in sync. The fix is mechanical
+(`grep -c "^  - req:" <volume file>` against the index's `entries:` value) but needs to run
+*every* time a volume gets an append, not only when a roll is suspected -- append and
+index-count-increment are two edits to two different files describing the same fact, and
+forgetting the second one is invisible until the invariant test runs.

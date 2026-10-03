@@ -1999,4 +1999,73 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
       assert log =~ "service_task.advance_failed"
     end
   end
+
+  describe "ISS-0981: do_persist_service_task_advance/10's task-activation audit raise is rescue-hardened" do
+    test "poll_and_dispatch/1 does not raise when the task-activation audit write itself fails" do
+      enable_ssrf_bypass()
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Deliberately well-formed form_schema (nil -- resolve_form_schema/1's
+      # own no-attribute success case) -- unlike "ISS-0784 site 4" above,
+      # this test needs the service-task-outcome cascade to reach
+      # TaskActivation.append_multi_from_existing_records/6's own SUCCESSFUL
+      # insert path (record_task_create_audit/3's same-transaction
+      # Audit.insert_entry/3 call), not the {:invalid_form_schema, _}
+      # rejection branch that sibling test exercises.
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_then_malformed_form_schema_task_end(server_url, nil)
+        )
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [%ServiceTaskDispatch{status: "pending"}] = dispatches_for(schema_name, instance_id)
+
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      # do_persist_service_task_advance/10 is now rescue-hardened (ISS-0981)
+      # -- the raise from the dropped audit_entries table converts to
+      # {:error, {:transaction_failed, exception}}, which
+      # call_advance_after_service_task_outcome/3's own residual-error
+      # handling (same generic path "ISS-0784 site 4"/"ISS-0969"'s sibling
+      # tests above already exercise -- a residual post-resolution error is
+      # logged, not tallied into any of advanced/retried/given_up) folds
+      # into poll_and_dispatch/1's own well-formed summary, never raising
+      # out of its own Enum.reduce/3 pipeline (INV-STD-5).
+      assert %{claimed: 1, advanced: 0, retried: 0, given_up: 0} =
+               ServiceTaskDispatcher.poll_and_dispatch(schema_name)
+
+      # INV-ISS0784-2-style check: the rolled-back attempt's own rows never
+      # reappear -- no HUMAN_TASK "task" row was ever committed. The
+      # dispatch row itself stays "advanced" (set by handle_success/3 inside
+      # attempt_dispatch/2's own, separate, already-committed transaction --
+      # untouched by this rollback).
+      refute Enum.any?(Repo.all(EngineTask, prefix: schema_name), &(&1.node_id == "task"))
+      assert [%ServiceTaskDispatch{status: "advanced"}] = dispatches_for(schema_name, instance_id)
+    end
+  end
 end

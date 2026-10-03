@@ -1,0 +1,90 @@
+id: ISS-0983
+title: "lib/letflow/identity.ex (6 sites) and lib/letflow/repository/activation.ex, lib/letflow/public_read.ex (1 site each) share the same uncaught-raise-through-Repo.transaction gap ISS-0981 just fixed, via Audit.append_multi/4 rather than Audit.insert_entry/3 directly"
+discovered_by: REVIEWER
+discovered_in_run: fix/ISS-0981-audit-raise-hardening (PR review)
+discovered_at: "2026-10-03T00:00:00Z"
+severity: MINOR
+owner: ELIXIR-DEV
+description: >
+  Follow-up from REVIEWER's own "sweep for another same-transaction
+  audit-write call site" instruction while reviewing PR for ISS-0981
+  (branch fix/ISS-0981-audit-raise-hardening, commit 34625b44).
+  ISS-0981 rescue-hardened six sites that call `Letflow.Audit.insert_entry/3`
+  *directly* inside their own `Repo.transaction/1` (promotion.ex,
+  engine.ex x5). `Letflow.Audit.append_multi/4`
+  (`lib/letflow/audit.ex:188`) is a second, thinner wrapper around the
+  exact same `insert_entry/3` call --
+
+      def append_multi(%Multi{} = multi, step_name, attrs, prefix) do
+        Multi.run(multi, step_name, fn repo, _changes -> insert_entry(repo, attrs, prefix) end)
+      end
+
+  -- folded into a caller's `Ecto.Multi` as one more step, with the same
+  "raises straight out of `Repo.transaction/1` to whatever called it"
+  behavior on a genuine DB-level failure (the same `Postgrex.Error`
+  class ISS-0969/ISS-0980/ISS-0981's own DROP-TABLE fault-injection
+  tests reproduce) -- `Multi.run/3`'s callback has no rescue of its own
+  and `Repo.transaction/1` only intercepts `Multi`-step `{:error, _}`
+  returns / `Repo.rollback/1`, not a raised exception.
+
+  Six confirmed router-reachable call sites in `lib/letflow/identity.ex`,
+  none with a function-level `rescue` (grep -n "rescue" lib/letflow/identity.ex
+  finds exactly one, `safe_get_tenant_by_slug/2`, unrelated -- a
+  different function entirely, already a deliberate never-raise
+  wrapper for two unauthenticated bootstrap routes, not a lifecycle
+  write):
+
+    - `create_user/2`        (`POST /users`,              lib/letflow/routers/identity.ex:272)
+    - `update_user_profile/3` (`PATCH /users/:id`,         lib/letflow/routers/identity.ex:383)
+    - `update_user_status/3`  (`POST /users/:id/status`,   lib/letflow/routers/identity.ex:416)
+    - `create_group/2`        (`POST /groups`,             lib/letflow/routers/identity.ex:458)
+    - `create_token/3`        (`POST /tokens`,              lib/letflow/routers/identity.ex:614)
+    - `revoke_token/2`        (`DELETE /tokens/:id`,        lib/letflow/routers/identity.ex:658)
+
+  Plus two more in different modules, same shape, both confirmed
+  router-reachable:
+
+    - `Letflow.Repository.Activation.activate_group/5`
+      (`lib/letflow/repository/activation.ex:262`, `Audit.append_multi/4`
+      call at line 413, `Repo.transaction()` at line 303) -- reached from
+      `lib/letflow/routers/entities.ex`'s activation-group handling.
+    - `Letflow.PublicRead.issue_handle/3` (`lib/letflow/public_read.ex:52`,
+      `Audit.append_multi/4` call at line 78, `Repo.transaction()` at
+      line 93) -- `POST /public-read-handles`
+      (`lib/letflow/routers/public_read_handles.ex:51`).
+
+  None of these eight functions has a `try/rescue` -- a raise from the
+  `Audit.append_multi/4`-wrapped `insert_entry/3` call propagates
+  uncaught through `Repo.transaction/1`, same generic-500-via-
+  `Plug.ErrorHandler` outcome ISS-0946/ISS-0969/ISS-0980/ISS-0981's
+  whole arc has been closing elsewhere.
+
+  Explicitly NOT included (checked, out of scope for this follow-up):
+  `lib/letflow/tasks.ex`'s `assign_task/3`/`reassign_task/4` (also
+  build an `Audit.append_multi/4` step into their own Multi, also
+  un-rescued) -- `tasks.ex`'s own moduledoc ("Error handling" section)
+  explicitly documents this as a *deliberate* decision ("a genuine
+  DB/connection-level failure is not caught and converted anywhere in
+  this module -- it propagates as a raised exception, matching
+  Letflow.Identity's own established precedent for simple reads rather
+  than inventing a new blanket-rescue policy here"). That stated
+  justification ("matching Identity's own established precedent") is
+  itself now in tension with this issue's finding -- identity.ex has no
+  such precedent for its *write* paths, only for the one unrelated
+  read-only `safe_get_tenant_by_slug/2` wrapper -- so tasks.ex's own
+  rationale may need correcting once this issue resolves, but tasks.ex
+  itself is deliberately left untouched here per that recorded
+  decision; flagged as AC3 below rather than silently reinterpreted.
+acceptance_criteria:
+  - "Confirm (or correct) each of the eight site/router-reachability claims above by independent call-chain trace, the same rigor ISS-0981's own design doc §1 applied"
+  - "If live gaps: decide the right fix shape (expected: the same function-level try/rescue -> {:error, {:transaction_failed, exception}} shape ISS-0981 just applied) and add one DROP TABLE-style regression test per site"
+  - "Re-examine lib/letflow/tasks.ex's moduledoc 'Error handling' section's stated justification in light of this issue's identity.ex findings -- correct the comment if its 'matching Identity's own established precedent' claim no longer holds once identity.ex's own write paths are rescue-hardened, without necessarily changing tasks.ex's actual behavior (that is a separate decision, not implied by a comment correction)"
+  - "If any of the eight sites turns out not to be a live gap, record why in this issue's resolution with the specific call-chain reasoning, same as ISS-0981's own §1b did for boundary #5"
+related:
+  - ISS-0981
+  - ISS-0980
+  - ISS-0969
+  - ISS-0946
+queue_ref: null   # filed directly by REVIEWER during PR review, not via get_next_task
+github_ref: null  # not filed on GitHub; local-only follow-up, same as ISS-0969/ISS-0980/ISS-0981
+status: open

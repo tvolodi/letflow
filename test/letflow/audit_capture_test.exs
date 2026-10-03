@@ -287,26 +287,26 @@ defmodule Letflow.AuditCaptureTest do
 
       Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
 
-      # Unlike Definitions.activate/2 (which wraps its transaction in its own
-      # try/rescue, per design §8's note that ELIXIR-DEV must not silently
-      # add exception-safety this codebase's existing functions don't
-      # already have), Engine.complete_task/3 has no try/rescue of its own
-      # today -- an unexpected DB-level failure at any Multi step already
-      # propagates as a raised exception, pre-existing behavior this
-      # requirement does not change. Ecto's Repo.transaction/1 still rolls
-      # back the DB transaction before re-raising (that rollback, not a
-      # clean {:error, _} return, is the AC3 guarantee this test checks).
-      assert_raise Postgrex.Error, ~r/audit_entries.*does not exist/, fn ->
-        Engine.complete_task(
-          task.id,
-          %{
-            output_variables: %{"decision" => "approved"},
-            actor_id: Ecto.UUID.generate(),
-            idempotency_key: unique_idempotency_key("complete-fail")
-          },
-          prefix: schema_name
-        )
-      end
+      # ISS-0981: Engine.run_complete_task/6 (the Multi-building boundary
+      # function behind complete_task/3) is now rescue-hardened the same way
+      # Definitions.activate/2 already was -- a raise from the
+      # same-transaction Audit.insert_entry/3 call no longer escapes
+      # uncaught, it converts into {:error, {:transaction_failed, exception}},
+      # mirroring the "definition activation" test immediately above. Ecto's
+      # Repo.transaction/1 still rolls back the DB transaction before the
+      # raise reaches this function's own rescue clause -- that rollback,
+      # not a clean {:error, _} return, remains the AC3 guarantee this test
+      # checks.
+      assert {:error, {:transaction_failed, _exception}} =
+               Engine.complete_task(
+                 task.id,
+                 %{
+                   output_variables: %{"decision" => "approved"},
+                   actor_id: Ecto.UUID.generate(),
+                   idempotency_key: unique_idempotency_key("complete-fail")
+                 },
+                 prefix: schema_name
+               )
 
       reloaded_task = Repo.get!(EngineTask, task.id, prefix: schema_name)
       assert reloaded_task.status == :pending
@@ -315,6 +315,31 @@ defmodule Letflow.AuditCaptureTest do
         Repo.get!(Letflow.EventStore.InstanceProjection, instance_id, prefix: schema_name)
 
       assert projection.status == :active
+    end
+
+    test "instance creation: a failed audit insert leaves no instance_projections/tokens rows" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition = draft_definition!(schema_name)
+
+      assert {:ok, %{definition: activated}} =
+               Definitions.activate(definition.id, prefix: schema_name)
+
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      # ISS-0981: Engine.persist/14 (the Multi-building boundary function
+      # behind create/2's own atomic phase) is now rescue-hardened the same
+      # way -- record_instance_create_audit/4's same-transaction
+      # Audit.insert_entry/3 call raises against the dropped table, and
+      # persist/14 converts that into {:error, {:transaction_failed,
+      # exception}} instead of letting it escape uncaught.
+      assert {:error, {:transaction_failed, _exception}} =
+               Engine.create(start_attrs(activated), prefix: schema_name)
+
+      assert Repo.aggregate(Letflow.EventStore.InstanceProjection, :count, prefix: schema_name) ==
+               0
+
+      assert Repo.aggregate(Letflow.Engine.TokenRecord, :count, prefix: schema_name) == 0
     end
   end
 end

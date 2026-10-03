@@ -126,3 +126,41 @@ history:
       deliberately not actioned. Branch fix/ISS-0979-audit-chain-lock, final
       commit 219989c3. PR number recorded in docs/issues/ISS-0979.yaml once
       opened.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-03T17:45:00Z"
+    note: >
+      Closed ISS-0971 (production-order-above-threshold.yaml's EO-004 had
+      the same timestamp-ordering fragility ISS-0970 fixed elsewhere,
+      currently-passing but latent). Fix: EO-004 reworded, mirroring
+      ISS-0970's precedent exactly, to verify ordering via sequence_number
+      (notify-planner's SERVICE_TASK_COMPLETED event has the highest
+      sequence_number in the instance's history stream) combined with
+      EO-002's instance_state terminal check, instead of a
+      created_at/timestamp comparison; exception note added to the
+      fixture's own byte-identical-to-ported-R-Co header. Fixture-only
+      change, no lib/ code touched. CODE-DESIGNER handled directly
+      (mechanical reword following an already-validated precedent, no
+      novel design decision, no separate CODE-DESIGN-VALIDATOR cycle).
+      REVIEWER PASS (independently confirmed notify-planner is genuinely
+      the process definition's last SERVICE_TASK before end-released,
+      confirmed SERVICE_TASK_COMPLETED is a real seeded event type,
+      confirmed the reworded verification genuinely asserts via
+      sequence_number not timestamp, confirmed exception-note style
+      matches ISS-0970's precedent, re-ran
+      mix letflow.check_uat_scenario_schema 32/32 OK). DOC-UPDATER
+      re-confirmed at close-out: mix letflow.check_uat_scenario_schema
+      32/32 OK, mix compile --warnings-as-errors clean, mix test
+      test/letflow/simulation/req207_vortex_test.exs (only test
+      referencing this fixture) 4/4 passed; full TEST-RUNNER/
+      RELEASE-VALIDATOR WF-03 cycle judged unnecessary given REVIEWER's
+      own independent verification already covers this change's full
+      scope. REVIEWER also found and filed ISS-0985 (non-blocking --
+      lib/letflow/design/iss0970-event-ordering-decision.md cited by four
+      files but never actually committed; citations' substance
+      independently re-verified regardless) plus a docs/anti-patterns.md
+      entry on the generalizable lesson. Branch
+      fix/ISS-0971-production-order-eo004-reword, final commit f5d9ea33.
+      PR number recorded in docs/issues/ISS-0971.yaml once opened.

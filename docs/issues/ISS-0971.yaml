@@ -25,4 +25,77 @@ source_reports:
   - docs/issues/ISS-0970.yaml
 related:
   - ISS-0970
-status: open
+status: resolved
+resolution:
+  decided_at: "2026-10-03T17:45:00Z"
+  decision: >
+    production-order-above-threshold.yaml's EO-004 originally asserted
+    ordering via a timestamp comparison ("Audit log shows notify-planner
+    service-task executed before the instance reaches the end-released
+    terminal state"), the same kind of comparison ISS-0970 found cannot be
+    relied on: the owning SERVICE_TASK_COMPLETED event and the instance's
+    own terminal-state field update are written in the same database
+    transaction, so their timestamps are not guaranteed causally ordered.
+    Per the issue's own acceptance criterion, confirmed this exposure is
+    real (not non-fragile) and reworded rather than left as-is.
+  fix: >
+    EO-004 reworded, mirroring ISS-0970's precedent exactly, to verify
+    ordering via sequence_number instead of created_at/timestamp: the
+    notify-planner SERVICE_TASK_COMPLETED event must have the highest
+    sequence_number of any event in the instance's history stream (no
+    later history event follows it), combined with EO-002's existing
+    instance_state terminal check (status == COMPLETED, end node ==
+    'end-released'). method changed from audit_event to
+    audit_event_ordering. An exception note was added to the fixture's own
+    "byte-identical to ported R-Co" header documenting the deliberate
+    deviation, matching the note style ISS-0970 added to
+    supplier-quality-deviation-critical.yaml.
+  gates:
+    - gate: CODE-DESIGNER
+      verdict: "handled directly (no separate design doc / validator cycle)"
+      note: >
+        Mechanical fixture reword following an already-validated precedent
+        (ISS-0970), no novel design decision -- within standard judgment for
+        this class of change; no separate CODE-DESIGN-VALIDATOR cycle run.
+    - gate: REVIEWER
+      verdict: PASS
+      note: >
+        Independently confirmed: (1) notify-planner is genuinely the
+        process definition's last SERVICE_TASK before end-released
+        (test/fixtures/qa/vortex_production_order_release_process_definition.json,
+        edge notify-planner -> end-released is the terminal edge); (2)
+        SERVICE_TASK_COMPLETED is a real, seeded event type
+        (lib/letflow/tenant_provisioning.ex:1149,
+        lib/letflow/engine.ex:3766); (3) the reworded verification
+        genuinely asserts via sequence_number rather than a
+        created_at/timestamp comparison; (4) the exception-note style
+        matches ISS-0970's precedent in
+        supplier-quality-deviation-critical.yaml; (5) re-ran
+        mix letflow.check_uat_scenario_schema, 32/32 OK. Found and filed
+        ISS-0985 (non-blocking, see follow_up below) plus a
+        docs/anti-patterns.md entry.
+    - gate: DOC-UPDATER (close-out re-confirmation)
+      verdict: PASS
+      note: >
+        mix letflow.check_uat_scenario_schema 32/32 OK; mix compile
+        --warnings-as-errors clean; mix test
+        test/letflow/simulation/req207_vortex_test.exs (the only test
+        referencing this fixture) 4/4 passed. No lib/ code changed, so a
+        full TEST-RUNNER/RELEASE-VALIDATOR WF-03 cycle was judged
+        unnecessary -- REVIEWER's own independent verification already
+        covers this change's full scope (fixture-only reword following an
+        already-validated precedent).
+  follow_up: >
+    REVIEWER found and filed ISS-0985 (non-blocking): the design doc
+    lib/letflow/design/iss0970-event-ordering-decision.md, cited by
+    ISS-0970's resolution text and now by this fix's exception-header note
+    too, was never actually committed to the repo (git log --all confirms
+    no such path). Not blocking here since the citations' underlying
+    substance (sequence_number/global_seq are real monotonic DB-assigned
+    columns, the event-type and process-definition facts cited above) was
+    independently re-verified regardless of the dangling path. A matching
+    docs/anti-patterns.md entry was added by REVIEWER in the same commit
+    (f5d9ea33).
+  branch: fix/ISS-0971-production-order-eo004-reword
+  final_commit: f5d9ea33
+  pr: 2178

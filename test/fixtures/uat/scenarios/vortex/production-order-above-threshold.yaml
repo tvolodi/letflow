@@ -7,6 +7,16 @@
 # synthetic fixtures under test/fixtures/simulation/<company>/scenarios/ instead. Do
 # not edit the ported content below except to keep it byte-identical to a re-pull of
 # the same commit.
+#
+# EXCEPTION (ISS-0971, 2026-10-03): EO-004 below is rewritten and no longer
+# byte-identical to the ported source. R-Co's EO-004 asserted the notify-planner
+# SERVICE_TASK_COMPLETED event ran before the instance reached its end-released
+# terminal state via a timestamp comparison between an events row and the
+# instance's own terminal-state field update -- the same same-transaction
+# stamping-order phenomenon ISS-0970 found this codebase's write path cannot
+# guarantee provably correct (lib/letflow/design/iss0970-event-ordering-decision.md).
+# Redefined on sequence_number instead, following ISS-0970's precedent -- see
+# that design doc for the full reasoning.
 ---
 id: vortex-production-order-above-threshold
 company_id: vortex
@@ -138,13 +148,26 @@ expected_outcomes:
 
   - id: EO-004
     description: >
-      The planner is notified that the order has been released, completing
-      the full approval-to-execution loop
+      The planner is notified that the order has been released, confirmed
+      to be the final recorded step before the instance reaches its
+      end-released terminal state, completing the full
+      approval-to-execution loop
     verification:
-      method: audit_event
+      method: audit_event_ordering
       detail: >
-        Audit log shows notify-planner service-task executed before the
-        instance reaches the end-released terminal state
+        GET /instances/{instance_id}/history: the SERVICE_TASK_COMPLETED
+        event for notify-planner has the highest sequence_number of any
+        event in the instance's history stream -- i.e. no other history
+        event for this instance follows it. Combined with EO-002's
+        instance_state check (status == COMPLETED, end node ==
+        'end-released'), this proves notify-planner executed as the last
+        recorded action before the instance reached its terminal state,
+        via sequence_number rather than created_at/timestamp comparison,
+        which this codebase's write path
+        (lib/letflow/design/iss0970-event-ordering-decision.md §0) does
+        not guarantee is causally ordered across an events row and the
+        instance's own terminal-state field update in the same
+        transaction.
     on_fail:
       severity: MINOR
       business_impact: >

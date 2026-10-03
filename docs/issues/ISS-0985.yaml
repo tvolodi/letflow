@@ -1,0 +1,42 @@
+id: ISS-0985
+title: "lib/letflow/design/iss0970-event-ordering-decision.md is cited by 4 files but was never actually committed"
+discovered_by: REVIEWER
+discovered_in_run: fix/ISS-0971-production-order-eo004-reword (REVIEWER gate)
+discovered_at: "2026-10-03T00:00:00Z"
+severity: MINOR
+owner: "CODE-DESIGNER (or DOC-UPDATER, whichever picks this up)"
+description: >
+  While reviewing fix/ISS-0971-production-order-eo004-reword (commit
+  8b15c4dc), confirmed `git log --all -- lib/letflow/design/iss0970-event-ordering-decision.md`
+  returns nothing -- the design doc ISS-0970's resolution text credits
+  ("Design: lib/letflow/design/iss0970-event-ordering-decision.md,
+  CODE-DESIGN-VALIDATOR PASSed after independently confirming...") was
+  never actually committed to the repo. It is cited by path in four
+  places that are already merged to main:
+    - docs/issues/ISS-0970.yaml (resolution text, twice)
+    - docs/status/requirement_status.v25.yaml
+    - test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-critical.yaml
+      (EO-004 exception header + verification detail)
+    - test/fixtures/uat/scenarios/vortex/production-order-above-threshold.yaml
+      (EO-004 exception header + verification detail, added by ISS-0971)
+  This predates ISS-0971's change (ISS-0971 only mirrored the existing,
+  already-dangling citation style) and is not a defect in ISS-0971's own
+  rework -- the sequence_number-based ordering claims in both fixtures
+  were independently re-verified against the live process definition
+  (test/fixtures/qa/vortex_production_order_release_process_definition.json's
+  edge e10: notify-planner -> end-released is genuinely the last edge
+  before the terminal node) and the event-type registry
+  (SERVICE_TASK_COMPLETED is a real, seeded event type:
+  lib/letflow/tenant_provisioning.ex:1149, lib/letflow/engine.ex:3766) --
+  the citations' substance holds, only the specific file path they point
+  to does not exist on disk.
+acceptance_criteria:
+  - "Either lib/letflow/design/iss0970-event-ordering-decision.md is written retroactively (short stub capturing the Option-B/sequence_number decision already paraphrased in ISS-0970.yaml's resolution text, and the already-confirmed facts: sequence_number/global_seq are real monotonic DB-assigned columns, TASK_CREATED does not exist in the event-type registry), or all four citing locations are edited to drop the specific file-path reference in favor of citing \"ISS-0970\" by issue number alone"
+  - "No remaining reference in the repo points to a design-doc path that git log --all confirms was never committed"
+source_reports:
+  - docs/issues/ISS-0970.yaml
+  - docs/issues/ISS-0971.yaml
+related:
+  - ISS-0970
+  - ISS-0971
+status: open

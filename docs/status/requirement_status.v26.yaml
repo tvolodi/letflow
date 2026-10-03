@@ -77,3 +77,52 @@ history:
       lib/letflow/tasks.ex's assign_task/3/reassign_task/4, tracked
       separately per ISS-0983. PR number recorded in docs/issues/ISS-0984.yaml
       once opened.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-03T09:30:00Z"
+    note: >
+      Closed ISS-0979 (Letflow.Audit's chain-tail selection query had no row
+      lock, allowing a theoretical concurrent-write chain fork). Decision:
+      genuine concurrency risk, not theoretical -- confirmed across all 19
+      call sites of Audit.insert_entry/3 and append_multi/4. Fix: new
+      per-tenant audit_chain_locks sentinel table (migration
+      20261003000001_create_audit_chain_locks.exs) plus a new
+      Letflow.Audit.ChainLock module; insert_entry/3 now wraps the
+      chain-tail read in Repo.transaction/1, doing insert-if-absent + SELECT
+      FOR UPDATE on the tenant's sentinel row before reading the chain tail --
+      mirroring Letflow.EventStore's established instance_sequence
+      insert-if-absent + SELECT FOR UPDATE precedent (same pattern ISS-0970
+      used for the events table). tenant_fixture.ex's fixture-count oracle
+      updated 48 -> 49. Design doc
+      lib/letflow/design/iss0979-audit-chain-lock.md (CODE-DESIGN-VALIDATOR
+      PASS, 1 cycle). SECURITY-REVIEWER PASS (full INV sweep: tenant
+      isolation confirmed, no secrets, test-only delay seam confirmed not
+      production-reachable, two non-transactional ISS-0980 sites' rescue
+      contract preserved; lock-hold-duration flagged informational/
+      non-blocking). REVIEWER PASS (two-step lock protocol verified against
+      EventStore side-by-side, tenant_fixture.ex oracle bump verified,
+      concurrency test verified to genuinely prove serialization via
+      delay-injection elapsed-time assertion, non-transactional sites'
+      correctness confirmed via their own ISS-0980 regression tests, no
+      scope creep). TEST-RUNNER PASS (5400/5400 full suite clean plus
+      19/19 new/updated tests, no test-DB pollution). RELEASE-VALIDATOR:
+      FAILed once on a genuine ISS-0069-class warning (unused default arg
+      `\\ []` on the new test file's base_attrs/1, caught by
+      mix letflow.check.test, which the earlier gates had not run) --
+      ELIXIR-DEV fixed with a 1-line change (commit 219989c3, dropped the
+      dead default); RELEASE-VALIDATOR's focused re-check then PASSed,
+      independently re-running mix letflow.check.test clean (main suite
+      5400/5400 + isolated wasm_hang + isolated lua_wallclock_race, zero
+      FAILED/zero ISS-0069 warnings) and confirming the diff scope was
+      exactly 1 file/1 line. That same first pass also independently traced
+      3+ call sites, verified the lock protocol against EventStore, and
+      constructed an original adversarial scenario confirming a
+      same-transaction re-entrant lock acquisition (task_activation.ex's
+      insert_newly_pending/5 calling insert_entry/3 multiple times in one
+      outer transaction) is SAFE under Postgres's own lock semantics --
+      flagged as a documentation/test-coverage gap, not a functional defect,
+      deliberately not actioned. Branch fix/ISS-0979-audit-chain-lock, final
+      commit 219989c3. PR number recorded in docs/issues/ISS-0979.yaml once
+      opened.

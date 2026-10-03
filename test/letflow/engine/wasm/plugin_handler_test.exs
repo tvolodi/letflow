@@ -305,13 +305,86 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
       end
     end
 
+    # ISS-0982: `:erlang.ports/0` is a VM-global resource list, not scoped to
+    # this test. Under the full async suite, any other concurrently-running
+    # test that opens (or closes) an unrelated port in the window between
+    # `ports_before` and `ports_after` makes a *raw* `ports_after --
+    # ports_before` diff non-empty for reasons that have nothing to do with
+    # this test's own guest call -- a false positive, since this module's
+    # `run_guest/3` calls synchronously (via `PluginInterface.invoke/2`'s
+    # `Task.yield/2`) and has long returned by the time any unrelated test
+    # elsewhere opens or closes a port of its own.
+    #
+    # Scope the check instead: every port this call could plausibly open
+    # (were AC7's "no IPC boundary" property to regress) would be opened
+    # either by this test process directly, or by `PluginInterface.invoke/2`'s
+    # own dispatched task -- and that task is synchronously joined (awaited)
+    # before `invoke/2` returns, so any port it opened and did not explicitly
+    # hand off to another still-living process would already be closed by
+    # the BEAM when its owning process exited (ports close with their owner
+    # unless ownership is transferred). The only way a genuine leak could
+    # still be observable in `ports_after` is if it ends up connected to this
+    # test process itself. Filtering `:erlang.ports/0` to `:connected ==
+    # self()` therefore keeps full sensitivity to a real regression while
+    # making the assertion immune to any unrelated process's ports.
+    defp own_ports do
+      Enum.filter(:erlang.ports(), fn port ->
+        match?({:connected, pid} when pid == self(), :erlang.port_info(port, :connected))
+      end)
+    end
+
     test "invoking the guest opens no new OS ports (no external process/IPC boundary)" do
-      ports_before = :erlang.ports()
+      ports_before = own_ports()
 
       assert {:complete, %{"answer" => 42}} = PluginInterface.invoke(PluginHandler, context())
 
-      ports_after = :erlang.ports()
+      ports_after = own_ports()
       assert ports_after -- ports_before == []
+    end
+
+    # ISS-0982 regression coverage: deliberately open a port from an
+    # unrelated process during this test's own before/after window --
+    # reproducing exactly the flake condition the fix above addresses --
+    # and prove the scoped assertion still reports no diff, while the
+    # raw/unscoped `:erlang.ports/0` diff this test used to use WOULD have
+    # seen it (and so would have failed).
+    test "the scoped port diff ignores a port opened by an unrelated concurrent process" do
+      # Snapshot "before" first, with no neighbor port open yet -- mirroring
+      # the exact flake window ISS-0982 describes: the neighbor's port must
+      # open and stay open strictly *between* this test's own before/after
+      # snapshots for the raw diff below to see it.
+      ports_before = own_ports()
+      raw_ports_before = :erlang.ports()
+
+      noisy_neighbor =
+        spawn(fn ->
+          port = Port.open({:spawn, "cat"}, [:binary])
+
+          receive do
+            :stop -> Port.close(port)
+          end
+        end)
+
+      # Give the neighbor's port time to actually open before we proceed.
+      Process.sleep(20)
+
+      assert {:complete, %{"answer" => 42}} = PluginInterface.invoke(PluginHandler, context())
+
+      ports_after = own_ports()
+      raw_ports_after = :erlang.ports()
+
+      # The scoped diff: unaffected by the neighbor's port, since it is
+      # connected to `noisy_neighbor`, not this test process.
+      assert ports_after -- ports_before == []
+
+      # Prove the flake condition was genuinely reproduced: the unscoped
+      # diff this test used to run DOES see the neighbor's port (because it
+      # was opened after `raw_ports_before` was taken and is still open at
+      # `raw_ports_after`) -- confirming a raw `:erlang.ports/0` diff would
+      # have false-positived here, exactly as ISS-0982 describes.
+      assert raw_ports_after -- raw_ports_before != []
+
+      send(noisy_neighbor, :stop)
     end
   end
 

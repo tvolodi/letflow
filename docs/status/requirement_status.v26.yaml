@@ -192,3 +192,40 @@ history:
       run, per this issue's own MINOR/low-risk framing. Branch
       fix/ISS-0985-dangling-design-doc-citation. PR number and merge
       commit recorded in docs/issues/ISS-0985.yaml once opened.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-03T19:50:00Z"
+    note: >
+      Closed ISS-0982 (PluginHandlerTest AC7's "no new OS ports" check
+      flaked under concurrent async test execution, since `:erlang.ports/0`
+      is a VM-global resource list, not test-scoped). Fix: test-only,
+      exactly one file
+      (test/letflow/engine/wasm/plugin_handler_test.exs) -- new `own_ports/0`
+      helper filters `:erlang.ports/0` to only ports whose
+      `:erlang.port_info(port, :connected)` owner is `self()`, sensitive to
+      a real leak because PluginInterface.invoke/2's Task.yield/2
+      synchronous join means any port this test's own call path could open
+      is already closed or still connected to this test process by the
+      time invoke/2 returns. New adversarial regression test spawns an
+      unrelated process opening a real OS port strictly inside this test's
+      own before/after window and proves the scoped diff ignores it while
+      a parallel raw/unscoped diff computed in the same test DOES see it --
+      genuinely reproducing the flake condition, not just asserting past
+      it. REVIEWER PASS (independently verified the port-ownership
+      filtering logic against real BEAM semantics, independently read
+      PluginInterface.invoke/2's actual code to confirm the
+      synchronous-join reasoning holds, confirmed the adversarial
+      regression test is race-free and genuinely proves the fix,
+      independently re-ran the test 6 times across different seeds with 0
+      failures, confirmed scope is exactly 1 file). ELIXIR-DEV's own
+      full-suite run: 5404/5404. DOC-UPDATER judged a separate
+      TEST-RUNNER/RELEASE-VALIDATOR cycle unnecessary given this narrow
+      test-only scope and verification depth already present;
+      re-confirmed at close-out:
+      mix test test/letflow/engine/wasm/plugin_handler_test.exs (10
+      passed, 0 failures, 3 excluded as expected) and
+      mix compile --warnings-as-errors (clean). Branch
+      fix/ISS-0982-wasm-port-count-flake, commit 3cc252f0. PR #2180,
+      merged -- see docs/issues/ISS-0982.yaml for merge commit.

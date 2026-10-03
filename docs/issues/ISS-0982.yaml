@@ -34,4 +34,66 @@ source_reports:
 related: []
 queue_ref: null  # filed directly by ORCH from TEST-RUNNER's own report, not via get_next_task
 github_ref: null  # local-only flake-tracking follow-up
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0982-wasm-port-count-flake
+resolved_at: "2026-10-03T19:50:00Z"
+resolution:
+  root_cause: >
+    AC7's "invoking the guest opens no new OS ports" assertion compared
+    `:erlang.ports/0` snapshots taken before and after the guest call, but
+    `:erlang.ports/0` is a VM-global resource list, not scoped to the
+    calling test -- under the full async suite, any unrelated concurrently
+    running test opening (or closing) a port in that same before/after
+    window makes the raw `ports_after -- ports_before` diff non-empty for
+    reasons that have nothing to do with this test's own guest call. The
+    test's own `run_guest/3` call goes through
+    `Letflow.Engine.Wasm.PluginInterface.invoke/2`, which dispatches to a
+    `Task` and synchronously joins it via `Task.yield/2` before returning --
+    so by the time `invoke/2` returns, any port this test's own call path
+    could plausibly have opened is already either closed (ports close with
+    their owner on exit, unless ownership is explicitly transferred) or
+    still connected to this test process. That made the check scopable
+    without losing sensitivity to a genuine leak.
+  fix: >
+    test/letflow/engine/wasm/plugin_handler_test.exs only (1 file). Added a
+    private `own_ports/0` helper filtering `:erlang.ports/0` to only those
+    ports whose `:erlang.port_info(port, :connected)` owner is `self()`,
+    and switched the AC7 test's before/after snapshots to use it instead of
+    the raw VM-global list. Added a second, adversarial regression test:
+    it spawns an unrelated process that opens a real OS port (`cat` via
+    `Port.open/2`) strictly between this test's own before/after
+    snapshots, then asserts the scoped diff still sees no change (proving
+    the fix is immune to the exact flake condition ISS-0982 describes)
+    while a parallel raw/unscoped `:erlang.ports/0` diff computed in the
+    same test DOES see the neighbor's port (proving the flake condition was
+    genuinely reproduced, not just asserted away, and that the old
+    unscoped check would have failed here).
+  review: >
+    REVIEWER: PASS. Independently verified the port-ownership filtering
+    logic (`own_ports/0`'s use of `:erlang.port_info(port, :connected)`
+    scoped to `self()`) against real BEAM semantics. Independently read
+    `PluginInterface.invoke/2`'s actual code and confirmed the
+    `Task.yield/2` synchronous-join reasoning the fix depends on genuinely
+    holds. Confirmed the adversarial regression test (spawning an
+    unrelated process that opens a real port, proving the scoped diff
+    ignores it while the old unscoped diff would have seen it) is
+    race-free -- the neighbor's port is opened and given time to settle
+    strictly between the test's own before/after snapshots, with no
+    timing window that could make the proof flaky itself -- and genuinely
+    proves the fix rather than merely asserting it. Independently re-ran
+    the test file 6 times across different random seeds, 0 failures.
+    Confirmed diff scope is exactly 1 file
+    (test/letflow/engine/wasm/plugin_handler_test.exs), no lib/ change.
+  test_runner: >
+    Not run as a separate WF-03 cycle -- ELIXIR-DEV's own full-suite run
+    (5404/5404) plus REVIEWER's 6 independent re-runs of the affected test
+    file across different seeds (0 failures) were judged sufficient
+    coverage for a test-only, single-file change; DOC-UPDATER additionally
+    re-ran test/letflow/engine/wasm/plugin_handler_test.exs once more at
+    close-out (10 passed, 0 failures, 3 excluded as expected) plus
+    `mix compile --warnings-as-errors` (clean) as a basic sanity check
+    before merging. Full TEST-RUNNER/RELEASE-VALIDATOR cycle judged
+    unnecessary given this verification depth; see this issue's
+    resolved_in_run note in the run-history volume for the explicit
+    judgment call.
+  pr: "#2180"

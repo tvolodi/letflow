@@ -9,4 +9,31 @@ description: >
   WF05-FULL3-20261001 BA-MERIDIAN-003. meridian Loan Origination v1.1 models credit-committee-vote as a single HUMAN_TASK keyed on a committee_outcome variable that scenario inputs never supply; there is no 2-of-3 committee quorum mechanism, so the above-threshold scenario cannot record or tally committee votes. Needs a requirement decision (REQ-ANALYST): model committee quorum (parallel votes + threshold) or amend the scenario. Evidence: test/uat-reports/ba-signoff-meridian-WF05-FULL3-20261001.yaml
 queue_ref: Q-939  # queue issue_ref collides with an existing local file; local filename ISS-0966
 github_ref: GH-2128
-status: open
+status: resolved
+resolved_in_run: superseded-by-ISS-0973
+resolved_at: "2026-10-03T00:00:00Z"
+resolution: >
+  Duplicate, not fixed by this issue's own route. Confirmed by reading both
+  files side by side: same discovered_by (BA-MERIDIAN), same
+  discovered_in_run (WF05-FULL3-20261001), same source evidence
+  (test/uat-reports/ba-signoff-meridian-WF05-FULL3-20261001.yaml, BA-MERIDIAN-003),
+  and the identical root-cause description -- meridian Loan Origination v1.1
+  models credit-committee-vote as a single HUMAN_TASK keyed on a
+  committee_outcome variable scenario inputs never supply, with no 2-of-3
+  committee quorum mechanism. This issue and ISS-0973 also share the same
+  queue_ref (Q-939) and github_ref (GH-2128), confirming they were filed
+  from the same underlying finding.
+
+  ISS-0973 was independently resolved: REQ-ANALYST decided to model a real
+  2-of-3 committee quorum (PARALLEL_GATEWAY fork -> 3 HUMAN_TASK votes ->
+  PARALLEL_GATEWAY join -> EXCLUSIVE_GATEWAY tally) as REQ-433, implemented,
+  reviewed, tested, and merged via PR #2148 (final commit 51680391). That
+  fix fully satisfies this issue's own description and acceptance need.
+
+  GitHub issue GH-2128 (shared by both issues) was already closed in
+  ISS-0973's own resolution run, with an explanatory comment referencing
+  REQ-433/PR #2148 -- confirmed directly via `gh issue view 2128`: state
+  CLOSED, sole comment "Resolved by REQ-433 (PR #2148, final commit
+  51680391, squash-merged to main as a7e6ece9)... docs/issues/ISS-0973.yaml
+  set to status: resolved." No further GitHub action needed; this is the
+  same GH issue number, not a second one requiring a separate close.

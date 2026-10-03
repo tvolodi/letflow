@@ -1094,7 +1094,7 @@ history:
       ISS-0981 resolved (promotion.ex's write_target_definition/5 and five
       engine.ex Multi-building boundary functions could let a
       same-transaction Audit.insert_entry/3 raise propagate uncaught). PR
-      #2176, branch fix/ISS-0981-audit-raise-hardening, commit 34625b44.
+      #2174, branch fix/ISS-0981-audit-raise-hardening, commit 34625b44.
       Root cause: 6 same-transaction call sites (promotion.ex's
       write_target_definition/5; engine.ex's persist/14,
       run_complete_task/6, persist_timer_fired_advance/7,

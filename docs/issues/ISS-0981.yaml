@@ -166,4 +166,4 @@ resolution:
     after resolving a transient cross-agent test-interference
     false-positive), confirmed docs/requirements.yaml untouched, and
     confirmed ISS-0983 is correctly out of this PR's scope.
-  pr: "#2176"
+  pr: "#2174"

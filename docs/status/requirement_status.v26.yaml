@@ -229,3 +229,32 @@ history:
       mix compile --warnings-as-errors (clean). Branch
       fix/ISS-0982-wasm-port-count-flake, commit 3cc252f0. PR #2180,
       merged -- see docs/issues/ISS-0982.yaml for merge commit.
+
+  - req: SCOPE-CHANGE
+    event: cancelled
+    agent: DOC-UPDATER
+    at: "2026-10-03T20:30:00Z"
+    note: >
+      Closed docs/issues/ISS-0966.yaml as a duplicate of ISS-0973 (status:
+      resolved, resolved_in_run: superseded-by-ISS-0973). Both issues were
+      filed from the same WF05-FULL3-20261001 BA-MERIDIAN-003 finding --
+      confirmed by reading both files side by side: identical
+      discovered_by/discovered_in_run, identical source evidence
+      (test/uat-reports/ba-signoff-meridian-WF05-FULL3-20261001.yaml),
+      identical committee-quorum root-cause description, and the same
+      queue_ref (Q-939) and github_ref (GH-2128). ISS-0973's own
+      REQ-ANALYST decision produced REQ-433 (real 2-of-3 committee quorum:
+      PARALLEL_GATEWAY fork -> 3 HUMAN_TASK votes -> PARALLEL_GATEWAY join
+      -> EXCLUSIVE_GATEWAY tally), implemented and merged via PR #2148
+      (final commit 51680391) -- fully satisfying ISS-0966's description
+      too. No separate requirement filed from ISS-0966 itself, so no
+      docs/requirements.yaml edit applies here.
+      GH-2128 was checked directly (`gh issue view 2128`): state CLOSED,
+      already carrying an explanatory comment from ISS-0973's own
+      resolution run pointing to REQ-433/PR #2148/merge commit a7e6ece9 --
+      same GitHub issue number both issues share, not a second issue
+      needing its own close, so no further GitHub action was taken here.
+      Doc-only change (docs/issues/ISS-0966.yaml), no code touched;
+      mix compile clean. Branch
+      fix/ISS-0966-duplicate-of-ISS-0973. PR number and merge commit
+      recorded in docs/issues/ISS-0966.yaml once opened.

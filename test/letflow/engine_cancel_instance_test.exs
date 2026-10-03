@@ -477,4 +477,74 @@ defmodule Letflow.EngineCancelInstanceTest do
       assert Code.ensure_loaded(Letflow.ApprovalSupervisor) == {:error, :nofile}
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0984
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0984: run_cancel_instance/5's audit raise is rescue-hardened" do
+    test "a genuine Postgres-level audit-insert failure returns {:error, {:transaction_failed, _}} and rolls back the whole transaction" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = start_instance!(schema_name, graph_parallel_split_two_tasks())
+
+      tasks_before = Repo.all(EngineTask, prefix: schema_name)
+      assert length(tasks_before) == 2
+      assert Enum.all?(tasks_before, &(&1.status == :pending))
+      assert Enum.all?(tasks_before, &(&1.cancelled_at == nil))
+      task_ids_before = Enum.map(tasks_before, & &1.id) |> Enum.sort()
+
+      tokens_before = Repo.all(TokenRecord, prefix: schema_name)
+      assert length(tokens_before) == 2
+      assert Enum.all?(tokens_before, &(&1.status != :cancelled))
+      token_ids_before = Enum.map(tokens_before, & &1.id) |> Enum.sort()
+
+      projection_before = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert projection_before.status == :active
+      assert projection_before.cancelled_at == nil
+
+      assert cancelled_events(schema_name, instance_id) == []
+
+      Repo.query!(~s(DROP TABLE "#{schema_name}".audit_entries))
+
+      on_exit(fn ->
+        Repo.query!(~s"""
+        CREATE TABLE "#{schema_name}".audit_entries (
+          id uuid PRIMARY KEY,
+          tenant_id uuid NOT NULL,
+          actor_id uuid,
+          action text NOT NULL,
+          resource_type text NOT NULL,
+          resource_id text NOT NULL,
+          "timestamp" timestamp(6) without time zone NOT NULL,
+          before_state jsonb,
+          after_state jsonb,
+          trace_id text,
+          chain_hash text NOT NULL,
+          prev_chain_hash text,
+          inserted_at timestamp(6) without time zone NOT NULL
+        )
+        """)
+      end)
+
+      assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
+               Engine.cancel_instance(instance_id, cancel_attrs(), prefix: schema_name)
+
+      tasks_after = Repo.all(EngineTask, prefix: schema_name)
+      assert length(tasks_after) == 2
+      assert Enum.all?(tasks_after, &(&1.status == :pending))
+      assert Enum.all?(tasks_after, &(&1.cancelled_at == nil))
+      assert Enum.map(tasks_after, & &1.id) |> Enum.sort() == task_ids_before
+
+      tokens_after = Repo.all(TokenRecord, prefix: schema_name)
+      assert length(tokens_after) == 2
+      assert Enum.all?(tokens_after, &(&1.status != :cancelled))
+      assert Enum.map(tokens_after, & &1.id) |> Enum.sort() == token_ids_before
+
+      projection_after = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
+      assert projection_after.status == :active
+      assert projection_after.cancelled_at == nil
+
+      assert cancelled_events(schema_name, instance_id) == []
+    end
+  end
 end

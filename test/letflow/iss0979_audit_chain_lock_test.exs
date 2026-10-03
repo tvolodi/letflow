@@ -85,7 +85,7 @@ defmodule Letflow.Iss0979AuditChainLockTest do
     %{tenant_id: tenant_id, schema_name: schema_name}
   end
 
-  defp base_attrs(overrides \\ []) do
+  defp base_attrs(overrides) do
     Map.merge(
       %{
         actor_id: nil,

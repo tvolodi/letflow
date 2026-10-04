@@ -347,5 +347,35 @@ history:
       needing its own close, so no further GitHub action was taken here.
       Doc-only change (docs/issues/ISS-0925.yaml), no code touched;
       mix compile clean. Branch fix/ISS-0925-duplicate-of-ISS-0952. PR
-      number and merge commit recorded in docs/issues/ISS-0925.yaml once
-      opened.
+      #2184, merge commit af9ed157.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-04T00:00:00Z"
+    note: >
+      Closed docs/issues/ISS-0960.yaml as a confirmed duplicate of
+      ISS-0970 (status: resolved). Both share queue_ref Q-930, github_ref
+      GH-2116, and the identical finding --
+      vortex/supplier-quality-deviation-critical EO-004's
+      SERVICE_TASK_COMPLETED history event stamped after the next task
+      row, same source report
+      test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml.
+      ISS-0970's own queue_ref comment already documents the collision
+      ("queue allocated issue_ref ISS-0930, which collides with an
+      existing (already-resolved) local filename; local filename kept as
+      ISS-0970 ... and GH-2116 retitled to match"), confirming ISS-0960 is
+      the stale original filename. Resolving work (Option B,
+      sequence-based ordering) lives entirely under ISS-0970.yaml: design
+      doc lib/letflow/design/iss0970-event-ordering-decision.md, PR #2145,
+      final commit 8f82d388. GH-2116 checked directly (`gh issue view
+      2116`): state CLOSED, closedAt 2026-10-02T04:19:09Z, title already
+      reading "ISS-0970: ..." -- confirming it was already closed by
+      ISS-0970's own resolution run and both issues share one GitHub
+      issue number by construction, so no second GitHub close was
+      performed. Doc-only change (docs/issues/ISS-0960.yaml), no code
+      touched; mix compile clean, mix letflow.check_issue_refs OK (581
+      files, all cross-references well-formed). No
+      docs/requirements.yaml edit applies (ISSUE closure, not a REQ).
+      Branch fix/ISS-0960-duplicate-of-ISS-0970. PR number and merge
+      commit recorded in docs/issues/ISS-0960.yaml once opened.

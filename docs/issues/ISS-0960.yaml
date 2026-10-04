@@ -9,4 +9,32 @@ description: >
   vortex/supplier-quality-deviation-critical EO-004 (and swiftroute): quarantine-batch SERVICE_TASK_COMPLETED stamped 17:49:35.635Z, next severity-classification task created 17:49:35.631Z; no task-created history event and no audit row for the service task. Event timestamp appears to be insert time after the following task insert in the same transaction. Decide: stamp with transaction logical time / emit task-created events, or define ordering by sequence number and amend the scenario. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml
 queue_ref: Q-930  # queue issue_ref ISS-0930 may collide with an existing local file; local filename ISS-0960
 github_ref: GH-2116
-status: open
+status: resolved
+resolution_type: duplicate
+resolved_in_run: fix/ISS-0960-duplicate-of-ISS-0970
+resolved_at: "2026-10-04T00:00:00Z"
+resolution: >
+  Confirmed duplicate of ISS-0970 (same queue_ref Q-930, same github_ref
+  GH-2116, same finding: vortex/supplier-quality-deviation-critical EO-004's
+  SERVICE_TASK_COMPLETED history event stamped after the next task row,
+  same source report
+  test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-NARRATIVE.yaml).
+  ISS-0970's own queue_ref comment already documents the collision: "queue
+  allocated issue_ref ISS-0930, which collides with an existing
+  (already-resolved) local filename; local filename kept as ISS-0970 (next
+  free on origin/main) and GH-2116 retitled to match" -- confirming
+  ISS-0960 is the stale original filename and ISS-0970 is its renumbered
+  resolution. The actual resolving work (Option B, sequence-based event
+  ordering) is recorded in full under ISS-0970.yaml: design doc
+  lib/letflow/design/iss0970-event-ordering-decision.md, PR #2145, final
+  commit 8f82d388.
+  GH-2116 handling: both issues share the same GitHub issue number by
+  construction (ISS-0970's queue_ref comment explicitly retitled GH-2116
+  to match ISS-0970, not a second issue). `gh issue view 2116` confirms
+  state CLOSED, closedAt 2026-10-02T04:19:09Z, title already reading
+  "ISS-0970: ..." -- i.e. already closed by ISS-0970's own resolution run.
+  No further GitHub action taken here; closing it again would be a
+  duplicate close of the same issue number.
+  Doc-only change (docs/issues/ISS-0960.yaml), no code touched;
+  mix compile clean. No docs/requirements.yaml edit applies (this is an
+  ISSUE closure, not a REQ).

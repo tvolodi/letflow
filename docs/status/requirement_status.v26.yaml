@@ -545,3 +545,31 @@ history:
       recorded in the run handoff as an infrastructure action. The feature
       flag is not authorised for enabling by this requirement (0042 OQ-3,
       lawful basis, remains open). Branch feature/WF02-REQ439-20261004.
+
+  - req: REQ-436
+    event: started
+    agent: ORCH
+    at: "2026-10-04T12:21:18Z"
+    note: >
+      WF-02 run WF02-REQ436-20261004 started on branch
+      feature/WF02-REQ436-20261004. The started event was not logged at
+      pickup; recorded retroactively by DOC-UPDATER at Step 6 using the
+      run's recorded start time.
+
+  - req: REQ-436
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-04T13:00:30Z"
+    note: >
+      Login-discovery rate limiter complete: new sibling
+      Letflow.Plugs.LoginDiscoveryRateLimit and its Bucket GenServer owning
+      its own ETS table (:letflow_login_discovery_rate_limit, every key
+      namespaced :login_discovery), wired into
+      lib/letflow/supervisor/infrastructure.ex; the existing
+      /api/public limiter is unchanged. Per-IP then global buckets, per-email
+      request and send buckets, IPv6 /64 aggregation, lossless eviction with
+      two key caps, non-identifying outcome counters. RELEASE-VALIDATOR PASS
+      (scoped): AC1..AC12 PASS, 240 scoped tests passed, compile
+      --warnings-as-errors and check_boundaries clean. The full suite was not
+      run by RELEASE-VALIDATOR under a RAM override; CI is the remaining
+      full-suite gate. Branch feature/WF02-REQ436-20261004.

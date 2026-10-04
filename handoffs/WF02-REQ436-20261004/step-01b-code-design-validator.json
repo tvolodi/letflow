@@ -1,0 +1,75 @@
+{
+  "handoff_id": "1076bf98-fb6d-4822-98a1-9c1d1eb6f49c",
+  "run_id": "WF02-REQ436-20261004",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ436-20261004/step-01b-code-design-validator.json",
+  "created_at": "2026-10-04T12:26:06Z",
+  "started_at": "2026-10-04T12:26:06Z",
+  "completed_at": "2026-10-04T12:31:55Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [
+      "REQ-436"
+    ],
+    "requirement_text": {
+      "REQ-436": "The mounting precondition for REQ-437's unauthenticated mount, per decision 0028 s6 and REQ-434 / 0042. Split out of the endpoint entry so each is one agent turn. SECURITY-REVIEWER is a hard gate (INV-5, INV-8: a limiter that shares state with another mount, or grows without bound, is a defect on a multi-tenant platform). Where this text and the merged design (lib/letflow/design/req434-email-first-login-directory.md, s12) differ, the design governs; the amendments below are the design's s0.3 corrections D5, D6, D10, D11, D13 and D14 and REQ-VALIDATOR must accept them.\nVERIFIED STARTING POINT: Letflow.Plugs.PublicReadRateLimit.Bucket (lib/letflow/plugs/public_read_rate_limit/bucket.ex) exposes consume(key, capacity, refill_per_sec) over ONE named ETS table (:letflow_public_read_rate_limit) with bucket_key typed :global | {:ip, ip_address}, a check-then-write over :ets.lookup/:ets.insert (not :ets.update_counter/4), and NO eviction. Reusing it as-is would (a) share the :global bucket with /api/public, so flooding one mount would 429 the other, and (b) let an attacker grow the table without bound by submitting many distinct emails.\nBUILDS: 1. A NEW sibling module, Letflow.Plugs.LoginDiscoveryRateLimit.Bucket (lib/letflow/plugs/login_discovery_rate_limit/bucket.ex), a GenServer owning its own named ETS table (:letflow_login_discovery_rate_limit); every key it writes begins with :login_discovery. The existing Bucket and PublicReadRateLimit are NOT modified (git diff empty, their tests pass unmodified). This is the 'mount-point-agnostic successor' reading of REQ-434 item 4, not a refactor of the existing Bucket (design req434-email-first-login-directory.md s0.3 D10). Shared with the existing limiter: the token-bucket algorithm (restated with a cross-reference comment), the Response.rate_limited + halt convention, 0028 s6 placement. 2. A plug Letflow.Plugs.LoginDiscoveryRateLimit (lib/letflow/plugs/), designed to run immediately after Letflow.Plugs.ClientIp (REQ-439) at the head of REQ-437's router chain, ahead of :match. The client address is conn.assigns.client_ip, falling back to conn.remote_ip when that assign is absent, and never a raw forwarded header (design req434-email-first-login-directory.md s0.3 D11: standing prohibition 8 is amended from 'keyed on conn.remote_ip' to the resolved client IP). The address is mapped to a bucket id with IPv6 aggregated to its /64 and an IPv4-mapped IPv6 address mapped to its IPv4 form (design req434-email-first-login-directory.md s0.3 D13). Order (design req434-email-first-login-directory.md s0.3 D13): the per-IP bucket is consumed FIRST; a refusal halts and does NOT touch the global bucket; only an IP-admitted request consumes the tighter global bucket. Both are checked before the body is read, so the 429 is input-independent for them. The per-email buckets are exposed as consume_email(email_key, kind :: :request | :send) for the endpoint to call after it computes the email key (the body is not parseable by a pre-:match plug without breaking the first-plug rule). Every refusal (IP, global, per-email) goes through ONE send_rate_limited/1 constructor, so the 429 status, headers (including a constant Retry-After) and body are identical by construction with no email-dependent content. 3. Bounded state (design req434-email-first-login-directory.md s0.3 D5, D13). Only LOSSLESS eviction: a periodic sweep deletes exactly the rows whose tokens have refilled to capacity (behaviourally identical to an absent row); a live (non-idle) key is never evicted, so a victim bucket cannot be refilled faster than its normal rate. Two key populations, two caps: email-kind keys (:email_hmac and :email_send) bounded by max_email_keys with a boot-time validate_config!/1 invariant (max_email_keys >= 2 * (global_capacity + ceil(global_refill_per_sec * (T_email_full_max + sweep_interval_s)))), and IP keys bounded by a hard max_ip_keys cap. At a cap, an inline sweep runs and, if still full, the NEW key is refused fail closed (an IP-key refusal does not consume a global token). consume is a compare-and-swap with bounded retries, failing closed on exhaustion, and inserts new keys with an insert-if-absent primitive. Capacities, refill rates, caps, sweep interval and retry-after come from application config (config :letflow, Letflow.Plugs.LoginDiscoveryRateLimit, ...) with the defaults of design s12.4, not hardcoded. 4. A fourth bucket kind, {:login_discovery, :email_send, h} (design req434-email-first-login-directory.md s0.3 D6): the per-address minimum send interval (default 1 token, refill 1/900 s, i.e. one notifier send per address per 15 minutes), consumed through consume_email(key, :send) by REQ-437's notifier task. Added to this entry rather than REQ-437 (design Q5). 5. Non-identifying outcome counters (design req434-email-first-login-directory.md s0.3 D14): one telemetry event [:letflow, :login_discovery, :outcome], measurement %{count: 1}, single metadata key outcome, emitted by this limiter with exactly :rate_limited_ip, :rate_limited_global or :rate_limited_email; metadata carries no email, key, IP, slug or tenant id. 6. It does NOT discharge the deferred authenticated Letflow.Plugs.RateLimit row in lib/letflow/plugs/api_pipeline.ex (decision 0040) and does not modify AuthPipeline.\n"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req436-login-discovery-rate-limiter.md",
+      "lib/letflow/design/req434-email-first-login-directory.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/login_discovery_rate_limit.ex",
+      "lib/letflow/plugs/login_discovery_rate_limit/bucket.ex",
+      "lib/letflow/supervisor/infrastructure.ex"
+    ],
+    "branch_name": "feature/WF02-REQ436-20261004"
+  },
+  "task": {
+    "description": "WF-02 step 01b hard gate: independently validate lib/letflow/design/req436-login-discovery-rate-limiter.md against every acceptance criterion (read the .md itself), no implementation code bodies, signatures/error shapes complete, consistency with merged req434 design s0.3/s12 (design governs), no planned edits to config/test.exs, config/runtime.exs, lib/letflow/identity*, login_directory*, routers/identity.ex (PR #2201), no new env var. Rule on design Q1 (headers), Q4 (extra config key inline_sweep_min_interval_ms) and the CAS/population-counting soundness (can the cap be exceeded or a live key evicted? any leak of reserved slots?). RE-VALIDATION after design rework 1 (commit 40a2e0cb): re-check each prior issue and the whole design again; flip status to COMPLETED/FAILED as normal.",
+    "acceptance_criteria": [
+      "keys are namespaced and separate: a grep/test shows every ETS key this limiter writes begins with :login_discovery, lives in its own table, and that the existing Bucket's :global and {:ip, ip} keys used by /api/public are unchanged",
+      "independence test: flooding the login-discovery global bucket to exhaustion leaves a /api/public request unaffected (not 429), and flooding the /api/public global bucket leaves login-discovery requests unaffected; the same for per-IP buckets with one IP; both directions quoted",
+      "the (ip_capacity+1)th request from one client address (conn.assigns.client_ip; conn.remote_ip when the assign is absent) within the window returns 429; a spoofed X-Forwarded-For header does not change the bucket key; the global bucket trips independently of any SINGLE IP (driven from many distinct addresses) (design s0.3 D13)",
+      "ordering (design s0.3 D13): one IP sending 10x global_capacity requests is refused after its own ip_capacity and leaves the global bucket with at least global_capacity - ip_capacity tokens (global token count asserted directly); a second address is still admitted afterwards and never sees a :rate_limited_global outcome; an IP-refused request consumes no global token",
+      "IPv6 (design s0.3 D13): addresses sharing a /64 share one bucket, addresses in different /64s do not, and an IPv4-mapped IPv6 address maps to the same bucket as its IPv4 form (ip_bucket_id/1 table test)",
+      "the 429 response status, headers and body are identical for IP-bucket, global-bucket and per-email-bucket refusals and do not depend on the submitted email (byte comparison of the three); the plug refuses before the body is read (an invalid or unreadable body still gets 429)",
+      "bounded state, lossless eviction (design s0.3 D5): submitting 10x max_email_keys distinct per-email keys never makes the email-kind entry count exceed the cap (queried via :ets.info/size or a size function); a hot key keeps being limited after unrelated keys became idle and were swept, using an injectable now_ms clock (no sleeping); a non-idle key is never evicted; a swept key behaves as a fresh bucket",
+      "two caps (design s0.3 D13): distinct-/64 requests beyond max_ip_keys are refused without consuming a global token and without evicting existing keys, while existing sources are unaffected; validate_config!/1 accepts the defaults and raises for a configuration violating the max_email_keys invariant",
+      "consume never admits more than capacity under N concurrent callers (compare-and-swap property)",
+      "per-email bucket: the Nth request for one address across different source IPs trips the per-email request bucket, and a different address is unaffected; the :send kind (design s0.3 D6) has an independent bucket (one send per address then refused, request bucket unaffected)",
+      "outcome counters (design s0.3 D14): each refusal emits exactly one [:letflow, :login_discovery, :outcome] event with outcome :rate_limited_ip, :rate_limited_global or :rate_limited_email respectively and no other metadata key (no email, key or IP)",
+      "git diff on lib/letflow/plugs/auth_pipeline.ex, lib/letflow/plugs/api_pipeline.ex, lib/letflow/plugs/public_read_rate_limit.ex and lib/letflow/plugs/public_read_rate_limit/bucket.ex is empty; the existing PublicReadRateLimit tests pass unmodified",
+      "no email address, email key or IP appears in Logger output captured during the test file (INV-4)",
+      "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Final re-validation after rework 2 (commit 2ad35919): only s7.4 and T7 changed since the last gate; I re-read the whole design and independently re-derived the arithmetic. rate_u_s = round(1e6/60) = 16667; cap_u = 5_000_000. Step 2: 30_000*16667/1000 = 500_010 < 1_000_000, refusal writes nothing. Step 3 (t0+120 s): unrelated 4_000_000 + 2_000_040 = 6_000_040 >= cap (idle, deleted; first idle at 60 s: 4_000_000 + 1_000_020); hot 0 + 2_000_040 < cap (kept). Step 4 (t0+301 s): 301*16667 = 5_016_767 >= cap (deleted), 300 s -> 5_000_100, 299 s -> 4_983_433 (kept); no intervening admit, so last_ms stays t0. All figures correct and the 6th consume at t0 is correctly refused. Every earlier issue is closed: Q1 headers set as cause-independent constants in send_rate_limited/1 (consistent with 434 s5.5 and byte-identity), typed config/sweep_scope/validate_config! inputs, inline_sweep_min_interval_ms and refill-rounds-to-zero validation, per-population inline-sweep marker, T8 non-idle IP rows, s4.1 config-consistency corollary, match-spec form note. All 14 acceptance criteria have a design element; no implementation bodies, no TBD, no planned edits to config/test.exs, config/runtime.exs, identity*, login_directory*, routers/identity.ex, no new env var. CAS and reserve-then-insert counting: cap cannot be exceeded, a non-idle key is never evicted, slots are released on every path except a kill inside the reserve/insert window (Q3, accepted). Q4 accepted. Design is buildable as written.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Residual accepted risks carried to implementation review: Q3 reserved-slot leak on a killed request process; Q5 :rate_limited_email also emitted on the :send kind (REQ-437 must not double-emit); 434 s15.2 still lists config/test.exs (stale, Q8). SECURITY-REVIEWER/REVIEWER should re-check these against the code.",
+        "affected_requirement": "REQ-436"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ436-20261004",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (2a)."
+  },
+  "rework_count": 2
+}

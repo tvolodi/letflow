@@ -67,7 +67,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
     refute Letflow.Scheduler.Poller in ids
   end
 
-  test "Letflow.Supervisor.Infrastructure owns the 20 expected children, in order" do
+  test "Letflow.Supervisor.Infrastructure owns the 21 expected children, in order" do
     children = Supervisor.which_children(Letflow.Supervisor.Infrastructure)
 
     ids =
@@ -91,6 +91,8 @@ defmodule Letflow.Supervisor.InfrastructureTest do
              # mirrors Letflow.Metrics.Registry's own "leaf,
              # independently-startable" placement immediately above it.
              Letflow.Plugs.PublicReadRateLimit.Bucket,
+             # REQ-436: sibling leaf bucket for Letflow.Plugs.LoginDiscoveryRateLimit.
+             Letflow.Plugs.LoginDiscoveryRateLimit.Bucket,
              Letflow.Admission,
              Letflow.InstanceSupervisor,
              Letflow.SandboxPool.TaskSupervisor,
@@ -114,7 +116,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
              Letflow.Obs.Alerts.TaskSupervisor
            ]
 
-    assert length(ids) == 20
+    assert length(ids) == 21
   end
 
   test "ISS-0224: SandboxPool.TaskSupervisor precedes SandboxPool" do

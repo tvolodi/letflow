@@ -270,3 +270,7 @@ config :letflow, :modules, [
   Letflow.Modules.FixtureDependent,
   Letflow.Modules.FixtureFailingInstall
 ]
+
+# REQ-439: explicit test default -- no proxy is trusted, so Letflow.Plugs.ClientIp
+# never honours X-Real-IP unless a test passes :trusted_proxies as plug opts.
+config :letflow, Letflow.Plugs.ClientIp, trusted_proxies: []

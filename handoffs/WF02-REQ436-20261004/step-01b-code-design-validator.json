@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ436-20261004/step-01b-code-design-validator.json",
   "created_at": "2026-10-04T12:26:06Z",
   "started_at": "2026-10-04T12:26:06Z",
-  "completed_at": "2026-10-04T12:30:43Z",
-  "status": "PENDING",
+  "completed_at": "2026-10-04T12:31:55Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -51,18 +51,13 @@
     ]
   },
   "result": {
-    "status": "FAIL",
-    "summary": "Re-validation of design after rework 1 (commit 40a2e0cb), full independent re-read of the diff and affected sections. Closed and verified: Q1 BLOCKER (s6.6 now sets retry-after, cache-control, referrer-policy, x-robots-tag as cause-independent constants; byte-identity preserved; T6 asserts them; s5.5 of 434 matched); config() typed from the s6.1 keys; sweep_scope = population | :all; validate_config!/1 is keyword-only with Bucket.init passing the env keyword; inline_sweep_min_interval_ms validated; refill rounds-to-zero check added; per-population inline-sweep marker {:login_discovery, :inline_sweep, population} is distinct from the count rows, a 3-tuple so never matched by the 4-tuple sweep head, and still begins :login_discovery; s4.1 corollary and match-spec form note ({:const, tuple}, literal keyed head) added; T8 uses ip_refill_per_sec 0.0001 and asserts the inline sweep removed 0 :ip rows. Q4 stays accepted. CAS and reserve/release soundness re-derived and unchanged (cap not exceeded, live key not evicted, no slot leak except Q3). One NEW MAJOR defect remains: the rewritten hot-key scenario in s7.4/T7 is arithmetically wrong, so a test built literally from it would fail.",
+    "status": "PASS",
+    "summary": "Final re-validation after rework 2 (commit 2ad35919): only s7.4 and T7 changed since the last gate; I re-read the whole design and independently re-derived the arithmetic. rate_u_s = round(1e6/60) = 16667; cap_u = 5_000_000. Step 2: 30_000*16667/1000 = 500_010 < 1_000_000, refusal writes nothing. Step 3 (t0+120 s): unrelated 4_000_000 + 2_000_040 = 6_000_040 >= cap (idle, deleted; first idle at 60 s: 4_000_000 + 1_000_020); hot 0 + 2_000_040 < cap (kept). Step 4 (t0+301 s): 301*16667 = 5_016_767 >= cap (deleted), 300 s -> 5_000_100, 299 s -> 4_983_433 (kept); no intervening admit, so last_ms stays t0. All figures correct and the 6th consume at t0 is correctly refused. Every earlier issue is closed: Q1 headers set as cause-independent constants in send_rate_limited/1 (consistent with 434 s5.5 and byte-identity), typed config/sweep_scope/validate_config! inputs, inline_sweep_min_interval_ms and refill-rounds-to-zero validation, per-population inline-sweep marker, T8 non-idle IP rows, s4.1 config-consistency corollary, match-spec form note. All 14 acceptance criteria have a design element; no implementation bodies, no TBD, no planned edits to config/test.exs, config/runtime.exs, identity*, login_directory*, routers/identity.ex, no new env var. CAS and reserve-then-insert counting: cap cannot be exceeded, a non-idle key is never evicted, slots are released on every path except a kill inside the reserve/insert window (Q3, accepted). Q4 accepted. Design is buildable as written.",
     "artifacts_out": [],
     "issues": [
       {
-        "severity": "MAJOR",
-        "description": "s7.4 hot-key scenario (T7) is wrong by the design's own s3 arithmetic. Hot key drained to 0 at t0, rate_u_s = 16667. At t0+120_000 it has refilled 120*16667 = 2_000_040 micro-tokens (about 2 tokens), so 'the next consume(hot, ..., t0 + 120_000) is still :rate_limited' is false: it is admitted. Worse, that admit rewrites the row to {~1_000_040, t0+120_000}; at t0+301_000 it holds 1_000_040 + 181*16667 = 4_017_... < cap_u 5_000_000, so 'sweep(t0 + 301_000) -> the hot key row is gone' is also false. Fix, with exact numbers: assert limiting at a time inside the first token's refill (for example consume(hot, t0 + 30_000) -> :rate_limited since 30*16667 = 500_010 < 1_000_000 and a refused consume writes nothing), then sweep(t0 + 120_000) -> N unrelated keys gone (60*16667 = 1_000_020 >= 1_000_000 so one consumed token is back; verify at 120 s: 2_000_040), hot row still present (token_count about 2.0 < 5); then, WITHOUT an intervening admit, sweep(t0 + 301_000) -> hot row gone (301*16667 = 5_016_767 >= 5_000_000) and consume is :ok against a full bucket. Or drop the 120 s consume assertion and replace it with token_count(hot, t0+120_000) about 2.0 and row present.",
-        "affected_requirement": "REQ-436"
-      },
-      {
         "severity": "MINOR",
-        "description": "s7.4 'sweep at exactly t0 leaves every row in place' is fine; but the sentence in the unrelated-keys step should state the arithmetic (60 s * 16667 = 1_000_020 >= 1_000_000) so TEST-DESIGNER cannot choose 60_000 minus a rounding edge. Optional, not blocking on its own.",
+        "description": "Residual accepted risks carried to implementation review: Q3 reserved-slot leak on a killed request process; Q5 :rate_limited_email also emitted on the :send kind (REQ-437 must not double-emit); 434 s15.2 still lists config/test.exs (stale, Q8). SECURITY-REVIEWER/REVIEWER should re-check these against the code.",
         "affected_requirement": "REQ-436"
       }
     ],
@@ -74,7 +69,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Rework CODE-DESIGNER (rework 2): correct the s7.4/T7 hot-key scenario numbers as specified, then re-submit to CODE-DESIGN-VALIDATOR; all other prior issues are closed."
+    "next_action": "Route to ELIXIR-DEV (2a)."
   },
   "rework_count": 2
 }

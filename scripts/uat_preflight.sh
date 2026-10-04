@@ -469,6 +469,19 @@ _JS_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
 def _strip_js_comments(txt):
     return _JS_LINE_COMMENT_RE.sub("", _JS_BLOCK_COMMENT_RE.sub("", txt))
 
+# ISS-0915: local_deps must also not over-match a string literal that merely mentions
+# "docker compose"/"psql" as PROSE (e.g. a log message, an assertion string, a test
+# title) -- that is not an executable invocation either. Strip the *contents* of JS/TS
+# string and template literals the same way comments are stripped above, before running
+# the literal keyword match. This only affects _LOCAL_DEPS_LITERAL_RE: the genuine
+# invocation path (_LOCAL_DEPS_HELPER_RE, matching actual call syntax
+# `runSqlAgainstDevPostgres(`) is call-expression syntax, never string content, so it is
+# unaffected and still catches a real invocation even when the matched text happens to
+# sit next to/inside otherwise-stripped string literals.
+_JS_STRING_RE = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`', re.S)
+def _strip_js_strings(txt):
+    return _JS_STRING_RE.sub('""', txt)
+
 _LOCAL_DEPS_LITERAL_RE = re.compile(r"docker[ -]compose|docker exec|\bpsql\b")
 # `runSqlAgainstDevPostgres` (web/tests/e2e/db-exec.ts) is the one exported helper
 # that actually shells into `docker compose exec ... psql` at runtime -- a spec that
@@ -481,7 +494,7 @@ def local_deps_check(sp):
     if not (sp and os.path.isfile(sp)):
         return ("OK", "n/a (no spec file)", "")
     code_txt = _strip_js_comments(open(sp, encoding="utf-8", errors="replace").read())
-    m = _LOCAL_DEPS_LITERAL_RE.search(code_txt)
+    m = _LOCAL_DEPS_LITERAL_RE.search(_strip_js_strings(code_txt))
     if m:
         return ("GAP", "spec invokes local-only tooling in executable code (`%s`)" % m.group(0),
                  "letflow (rewrite spec to API/seed; ENV_NOT_SUPPORTED)")

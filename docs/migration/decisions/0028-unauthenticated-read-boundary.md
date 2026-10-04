@@ -44,6 +44,10 @@ Three sub-questions hang off it, and none of the three existing mounts answers a
 **Letflow has exactly one unauthenticated read surface, `/api/public`, and a resource is
 reached on it by an opaque capability handle that is itself the credential.**
 
+> Cross-reference (0042, 2026-10-04): the credential-free, email-keyed `POST /api/login-discovery` mount decided in
+> `0042-email-first-login-tenant-directory.md` is a separate mount and is **not** a second read surface under this
+> decision: `/api/public` stays handle-addressed and `AuthPipeline` stays allowlist-free.
+
 1. **One mount.** A fourth sibling `forward("/api/public", to: Letflow.Routers.PublicRead)`
    on `Letflow.Router`, declared before the `/api/v1` forward. Not inside
    `Letflow.Plugs.ApiPipeline`; not by adding an allowlist to `AuthPipeline`; not a

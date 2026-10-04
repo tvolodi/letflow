@@ -32330,7 +32330,7 @@ requirements:
   - id: REQ-434
     title: "Decision record 0042 and design for email-first login: a platform tenant-login directory, a credential-free email-keyed lookup mount, and the amendments to 0006 s3.3 / 0038 / 0035 it requires"
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S4
     impl_order: 941  # letflow-queue task id, GH#2189. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
     description: >

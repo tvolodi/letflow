@@ -507,3 +507,16 @@ history:
       formatted). No full test suite run -- docs-only, no code impact.
       PR number and merge commit recorded in docs/issues/ISS-0882.yaml
       once opened.
+
+  - req: REQ-434
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-04T09:57:11Z"
+    note: >
+      Design-and-decision requirement (Q-941, GH#2189) complete: decision
+      0042 (docs/migration/decisions/0042-email-first-login-tenant-directory.md)
+      and its design are recorded, with 0006 s3.3 / 0038 / 0035 amendments
+      and a 0028 cross-reference. All gates recorded in 0042's Sign-off:
+      CODE-DESIGN-VALIDATOR PASS (round 4), SECURITY-REVIEWER RATIFIED,
+      REVIEWER RATIFIED. No application code. Branch
+      design/REQ-434-email-first-login-directory.

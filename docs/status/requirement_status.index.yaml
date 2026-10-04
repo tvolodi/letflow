@@ -6030,7 +6030,7 @@ volumes:
     path: docs/status/requirement_status.v26.yaml
     status: current
     opened: 2026-10-03
-    entries: 9
+    entries: 10
     note: >
       Opened by DOC-UPDATER's own ISS-0983 closing SCOPE-CHANGE append,
       successor to volume 25 (closed at 29 entries / 1211 frozen-prefix
@@ -6099,6 +6099,15 @@ volumes:
       docs/status/requirement_status.v26.yaml` = 9 on-disk entries;
       well under the 1200-line/120000-byte roll ceiling, no roll
       triggered.
+
+      Incremented to 10 by DOC-UPDATER's own ISS-0915 closing SCOPE-CHANGE
+      done-event append (2026-10-04T02:57:47Z -- local_deps false-GAP
+      fixed via call-prefix-aware string blanking, FAIL->rework->PASS
+      cycle, follow-up ISS-0986 filed for a separate non-blocking
+      nested-template-literal false positive) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v26.yaml` = 10 on-disk entries; 423
+      lines / 25255 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

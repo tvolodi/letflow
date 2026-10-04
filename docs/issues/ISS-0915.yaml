@@ -31,4 +31,60 @@ affected_files:
   - scripts/uat_preflight.sh
 queue_ref: null  # discovered directly by RELEASE-VALIDATOR mid-task, filed by ORCH; not a queue-originated task
 github_ref: null  # discovered directly in this repo; no GitHub mirror issue was opened
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0915-uat-preflight-false-gap
+resolved_at: "2026-10-04T00:00:00Z"
+resolution: >
+  Root cause: ISS-0909(b)'s comment-stripping fix only handled /* */ and //
+  comments, never addressed the separate case of a quoted string literal
+  merely mentioning "docker compose"/"psql" as prose (e.g. a log message),
+  so the local_deps check kept matching such prose as if it were a real
+  invocation.
+
+  FAIL -> rework -> PASS cycle:
+
+  1st attempt (eacd3932): blanked ALL string-literal content before keyword
+  matching, unconditionally. REVIEWER FAILed this as a genuine false
+  NEGATIVE: blanking every string also hid real
+  execSync(`psql ...`)-style invocations passed as a string argument to an
+  exec/spawn call, specifically web/tests/e2e/env04.e2e.spec.ts's lines
+  158-159/189-194, which are real invocations the check must still catch.
+  An unconditional "blank everything" approach is unsound in the unsafe
+  direction -- it can hide a real GAP, not just avoid a false one.
+
+  Rework (9aa254de): added `_EXEC_LIKE_CALL_RE`
+  (scripts/uat_preflight.sh:487), a call-prefix detector -- a string is
+  preserved (still matched against the docker/psql keywords) only when it
+  immediately follows execSync(/execFileSync(/spawn(/spawnSync(/exec(/
+  runSqlAgainstDevPostgres(; every other string (prose, log messages) is
+  blanked via `_JS_STRING_RE` (scripts/uat_preflight.sh:490) as before.
+  Added T6 (the exact false-negative repro from the 1st attempt) and T7
+  (runs the real local_deps check against env04.e2e.spec.ts's actual file
+  content, not a synthetic excerpt) to test/scripts/
+  uat_preflight_local_deps_test.exs.
+
+  REVIEWER's 2nd pass PASSed: independently re-ran T6/T7 after extracting
+  the real script code from scripts/uat_preflight.sh (not retyping it),
+  manually traced env04.e2e.spec.ts's actual GAP-relevant lines against the
+  call-prefix logic, and built 9 original adversarial test cases of its
+  own covering call-prefix edge cases (whitespace/newlines between the
+  call name and the open-paren, chained/nested calls, multi-line template
+  literals used as the call argument, etc.) -- all consistent with the fix
+  behaving correctly. REVIEWER found exactly one new issue, non-blocking:
+  `_JS_STRING_RE` mis-parses a NESTED template literal (a backtick string
+  containing another backtick-delimited `${...}` expression), letting the
+  inner literal's content leak past the blanking logic as un-blanked
+  source text -- a false POSITIVE (over-flags prose as a GAP), safe
+  direction, never hides a real invocation. Confirmed pre-existing in the
+  original eacd3932 commit, independent of this fix's call-prefix logic.
+  REVIEWER recommended filing this as a separate follow-up rather than
+  blocking this PR, since a sound fix needs real JS/TS tokenization
+  (brace-depth tracking across string and expression contexts), beyond
+  this lightweight regex-based check's intended scope. Filed as
+  docs/issues/ISS-0986.yaml.
+
+  DOC-UPDATER close-out sanity check: `mix test test/scripts/` and
+  `mix compile --warnings-as-errors` both run clean (see run-history for
+  exact output). Branch fix/ISS-0915-uat-preflight-false-gap, final commit
+  9aa254de. PR number and merge commit recorded in run-history
+  (docs/status/requirement_status.v26.yaml) once opened.

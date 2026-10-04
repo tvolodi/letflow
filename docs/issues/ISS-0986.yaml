@@ -1,0 +1,61 @@
+id: ISS-0986
+title: "uat_preflight.sh's local_deps check's _JS_STRING_RE mis-parses nested template literals, causing a safe-direction false positive"
+discovered_by: REVIEWER
+discovered_in_run: fix/ISS-0915-uat-preflight-false-gap (REVIEWER gate, 2nd/PASS pass)
+discovered_at: "2026-10-04T00:00:00Z"
+severity: MINOR
+owner: "ELIXIR-DEV (tooling) -- or REQ-ANALYST decision-first on whether to fix at all, see below"
+description: >
+  Found while REVIEWER independently re-verified ISS-0915's rework
+  (commit 9aa254de) by extracting scripts/uat_preflight.sh's actual Python
+  helper code (not retyping it) and constructing 9 original adversarial
+  test cases beyond T6/T7. scripts/uat_preflight.sh's local_deps check
+  blanks non-invocation string-literal content before matching
+  docker-compose/docker-exec/psql keywords, via a single regex,
+  `_JS_STRING_RE` (scripts/uat_preflight.sh:490):
+
+    _JS_STRING_RE = re.compile(
+      r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`', re.S
+    )
+
+  This regex cannot soundly parse a NESTED template literal -- a
+  backtick-delimited string containing another backtick-delimited
+  expression inside a `${...}` interpolation (valid JS/TS syntax, e.g.
+  `` `outer ${`inner`} text` ``). Because the regex's backtick
+  alternative matches up to the FIRST unescaped backtick, it closes the
+  "string" at the inner literal's opening backtick instead of the
+  outer literal's actual closing backtick. The inner template's own
+  content then "leaks" past the blanking logic as ordinary un-blanked
+  source text, where it can still be matched as if it were live script
+  content.
+
+  Confirmed direction: this is safe-direction, not unsafe-direction --
+  it is a false POSITIVE, not a false negative. The leaked text is
+  prose/content that gets over-flagged as a GAP (the check becomes
+  stricter than it should be), never a mechanism that could hide a real
+  docker/psql invocation (the exact class of bug ISS-0915 itself fixed).
+  No real corpus file today constructs a nested template literal in this
+  position, so this is a latent gap, not a live false GAP in the current
+  31-scenario corpus, same framing ISS-0915's own original report used.
+
+  This bug pre-existed in the original ISS-0915 eacd3932 commit (which
+  introduced `_JS_STRING_RE`) and is independent of ISS-0915's
+  rework/9aa254de call-prefix-detection logic (`_EXEC_LIKE_CALL_RE`,
+  scripts/uat_preflight.sh:487) -- that logic operates on the SAME
+  blanked-string output and is not itself affected by how the blanking
+  regex handles nesting.
+
+  Fix direction: a regex cannot soundly parse arbitrarily-nested
+  backtick/`${...}` template literals (this requires tracking brace
+  depth across both JS/TS string and expression contexts, i.e. a real
+  JS/TS tokenizer, not a single-pass regex) -- out of scope for this
+  lightweight heuristic check as currently designed. REQ-ANALYST should
+  decide first whether fixing this is worth the added complexity (a
+  minimal depth-aware scanner for the backtick case only) versus
+  documenting-and-accepting the limitation given the safe direction and
+  no live-corpus impact.
+affected_files:
+  - scripts/uat_preflight.sh
+queue_ref: null  # discovered directly by REVIEWER mid-task, filed by DOC-UPDATER; not a queue-originated task
+github_ref: null  # discovered directly in this repo; no GitHub mirror issue was opened
+status: open

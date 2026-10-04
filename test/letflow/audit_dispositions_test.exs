@@ -415,7 +415,8 @@ defmodule Letflow.AuditDispositionsTest do
                    "display_name" => "Disposition Test User",
                    "email" => "#{unique_name("req195-user")}@example.test"
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       assert [entry] = audit_rows_for(schema_name, "user.create")
@@ -438,12 +439,14 @@ defmodule Letflow.AuditDispositionsTest do
                    "display_name" => "Original Name",
                    "email" => "#{unique_name("req195-user-upd")}@example.test"
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       assert {:ok, updated} =
                Identity.update_user_profile(user.id, %{"display_name" => "New Name"},
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       assert [profile_entry] = audit_rows_for(schema_name, "user.update_profile")
@@ -453,7 +456,10 @@ defmodule Letflow.AuditDispositionsTest do
       assert updated.display_name == "New Name"
 
       assert {:ok, deactivated} =
-               Identity.update_user_status(user.id, :inactive, prefix: schema_name)
+               Identity.update_user_status(user.id, :inactive,
+                 prefix: schema_name,
+                 login_directory: :skip
+               )
 
       assert [status_entry] = audit_rows_for(schema_name, "user.update_status")
       assert status_entry.actor_id == nil
@@ -487,7 +493,8 @@ defmodule Letflow.AuditDispositionsTest do
                    "display_name" => "Token Owner",
                    "email" => "#{unique_name("req195-user-tok")}@example.test"
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       assert {:ok, %{token: token}} =
@@ -558,7 +565,8 @@ defmodule Letflow.AuditDispositionsTest do
                    "display_name" => "ISS-0983 Fault Injection",
                    "email" => "#{username}@example.test"
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       assert Repo.aggregate(from(u in User, where: u.username == ^username), :count,
@@ -576,14 +584,16 @@ defmodule Letflow.AuditDispositionsTest do
                    "display_name" => "Original Name",
                    "email" => "#{unique_name("iss0983-update-profile")}@example.test"
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       drop_audit_entries!(schema_name)
 
       assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
                Identity.update_user_profile(user.id, %{"display_name" => "New Name"},
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       reloaded = Repo.get!(User, user.id, prefix: schema_name)
@@ -600,7 +610,8 @@ defmodule Letflow.AuditDispositionsTest do
                    "display_name" => "ISS-0983 Status Fixture",
                    "email" => "#{unique_name("iss0983-update-status")}@example.test"
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       assert user.status == :active
@@ -608,7 +619,10 @@ defmodule Letflow.AuditDispositionsTest do
       drop_audit_entries!(schema_name)
 
       assert {:error, {:transaction_failed, %Postgrex.Error{}}} =
-               Identity.update_user_status(user.id, :inactive, prefix: schema_name)
+               Identity.update_user_status(user.id, :inactive,
+                 prefix: schema_name,
+                 login_directory: :skip
+               )
 
       reloaded = Repo.get!(User, user.id, prefix: schema_name)
       assert reloaded.status == :active
@@ -638,7 +652,8 @@ defmodule Letflow.AuditDispositionsTest do
                    "display_name" => "ISS-0983 Token Owner",
                    "email" => "#{unique_name("iss0983-create-token")}@example.test"
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       drop_audit_entries!(schema_name)
@@ -663,7 +678,8 @@ defmodule Letflow.AuditDispositionsTest do
                    "display_name" => "ISS-0983 Revoke Fixture",
                    "email" => "#{unique_name("iss0983-revoke-token")}@example.test"
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 login_directory: :skip
                )
 
       assert {:ok, %{token: token}} =

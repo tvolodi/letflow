@@ -206,7 +206,11 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
       # table) performs on the same field; called directly here at the
       # Identity level per the handoff's instruction to reuse "the same
       # Identity functions the GUI fix now calls".
-      assert {:ok, _user} = Identity.update_user_status(user_id, :inactive, prefix: schema_name)
+      assert {:ok, _user} =
+               Identity.update_user_status(user_id, :inactive,
+                 prefix: schema_name,
+                 login_directory: :skip
+               )
 
       deactivated_conn = oidc_request(:get, "/api/v1/identity/tokens") |> dispatch()
       assert deactivated_conn.status == 403

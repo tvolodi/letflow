@@ -71,6 +71,52 @@ end
 
 config :letflow, :secrets_master_key, secrets_master_key
 
+# REQ-435 (design lib/letflow/design/req434-email-first-login-directory.md §2.2,
+# decision 0042): the keyed-HMAC pepper for the platform tenant-login directory
+# (Letflow.LoginDirectory.email_key/1). Same startup discipline as the master
+# key above -- read ONCE here from the LETFLOW_LOGIN_DIRECTORY_PEPPER reference,
+# required in every environment (config/test.exs injects a test-only value),
+# never defaulted. It must be a distinct secret from the master key.
+# generate with: openssl rand -hex 32
+login_directory_pepper_hex = System.get_env("LETFLOW_LOGIN_DIRECTORY_PEPPER")
+
+login_directory_pepper_hex ||
+  raise """
+  environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER is missing.
+  Required in every environment (including test/CI) -- Letflow.LoginDirectory
+  (REQ-435) never falls back to a default pepper.
+  Generate one with: openssl rand -hex 32
+  """
+
+unless byte_size(login_directory_pepper_hex) == 64 and
+         String.match?(login_directory_pepper_hex, ~r/^[0-9a-f]{64}$/) do
+  raise """
+  environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER is malformed: it must be
+  exactly 64 lowercase hexadecimal characters (32 bytes, hex-encoded).
+  Generate one with: openssl rand -hex 32
+  """
+end
+
+login_directory_pepper = Base.decode16!(login_directory_pepper_hex, case: :lower)
+
+if login_directory_pepper == <<0::256>> or login_directory_pepper == <<0xFF::256>> do
+  raise """
+  environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER is a trivially-guessable
+  value (all-zeros or all-0xFF). Generate a real random value with:
+  openssl rand -hex 32
+  """
+end
+
+if login_directory_pepper == secrets_master_key do
+  raise """
+  environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER must be a distinct secret:
+  it equals LETFLOW_SECRETS_MASTER_KEY. Generate a separate value with:
+  openssl rand -hex 32
+  """
+end
+
+config :letflow, :login_directory_pepper, login_directory_pepper
+
 # REQ-193: structured log level. Defaults to :info when LOG_LEVEL is absent in dev/prod,
 # :debug in test (so capture_log([level: :debug]) can capture debug messages -- runtime.exs
 # runs after all compile-time config and would otherwise override the default :debug level

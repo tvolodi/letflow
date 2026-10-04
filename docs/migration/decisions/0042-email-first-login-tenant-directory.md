@@ -84,9 +84,8 @@ unchanged).
    (Mode A: every request gets the same neutral response; the tenant list reaches the user
    only by email) and `:redirect_single` (Mode B: exactly one active-tenant match returns
    `{slug, display_name}`; several matches or none return the same neutral response, and
-   the list for several is emailed). **Recommended default: Mode B**, switchable to Mode A
-   by config. This is a **recommendation requiring `REVIEWER` and `SECURITY-REVIEWER`
-   ratification**, because Mode B discloses "this email has an account in tenant Y" to an
+   the list for several is emailed). **Default: Mode B** (ratified by `REVIEWER` and `SECURITY-REVIEWER`, 2026-10-04, see Sign-off), switchable to Mode A
+   by config. Ratification was required because Mode B discloses "this email has an account in tenant Y" to an
    unauthenticated caller for single matches, bounded only by rate limiting. A third
    option, an unauthenticated tenant picker (`picker_unauth`), is **not built** (see
    "Alternatives rejected").
@@ -461,7 +460,7 @@ key cap and atomic check-and-write (design §0.3 D10, §12.1). The existing
 
 | # | Question | Answer in this record |
 |---|---|---|
-| RQ-1 | Multi-tenant disclosure mode | Default **Mode B `:redirect_single`**, switchable to Mode A by config; option C not built. **Recommendation pending `REVIEWER` and `SECURITY-REVIEWER` ratification.** |
+| RQ-1 | Multi-tenant disclosure mode | Default **Mode B `:redirect_single`**, switchable to Mode A by config; option C not built. **Ratified by `REVIEWER` and `SECURITY-REVIEWER` (2026-10-04), on the conditions in Sign-off.** |
 | RQ-2 | Backfill source | (1) each tenant schema's `users.email` via the derived prefix, now; (2) Keycloak Admin API as a separate future requirement. Consequence documented: an account that exists only in Keycloak and has never logged in is invisible to the directory (falls to `?realm=`/host/default fallbacks). The backfill iterates **all registered tenants**, not only active ones (design §4), so reactivation needs no re-run. |
 | RQ-3 | Inactive tenant / user | An `:inactive` or `:migrating` tenant, or one with a null/empty `idp_realm_id`, contributes **no match** (decided in the single query via the join). A deactivated user's entry is removed in the same transaction, subject to the other-active-user rule. |
 | RQ-4 | GDPR / PII retention | Keyed HMAC, not plaintext; same-transaction removal on deactivation and email change; FK `ON DELETE CASCADE` on tenant deletion; no row survives its source user except via the documented backfill race (design §4); no plaintext email in logs, audit or telemetry; erasure and pepper-rotation procedures in design §2. Proposed policy owner: `ORCH` (decision owner, as in 0028 and 0038). The human or legal controller is carried as OQ-3. |
@@ -485,10 +484,9 @@ key cap and atomic check-and-write (design §0.3 D10, §12.1). The existing
 
 ## Open questions this record does not answer
 
-- **OQ-1. Ratification of the disclosure default.** Whether Mode B is acceptable as the
-  default, or Mode A (or Mode B gated by a deployment flag) is required, is for `REVIEWER`
-  and `SECURITY-REVIEWER`. This record states the recommendation and the bounded inference;
-  it does not decide the risk appetite.
+- **OQ-1. Ratification of the disclosure default. RESOLVED (2026-10-04):** `REVIEWER` and
+  `SECURITY-REVIEWER` ratified Mode B as the default on the conditions recorded in Sign-off. The user may
+  still choose Mode A (a config switch) as a matter of risk appetite.
 - **OQ-2. Directory versus Keycloak Organizations.** A future ADR chooses; this record only
   guarantees the directory is retire-able.
 - **OQ-3. Legal basis and human owner of the directory's personal data. BLOCKING PRECONDITION

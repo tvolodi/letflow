@@ -674,7 +674,7 @@ Application config, not code:
 
 | Key | Values | Default | Source |
 |---|---|---|---|
-| `config :letflow, Letflow.Routers.LoginDiscovery, mode:` | `:uniform_plus_email`, `:redirect_single` | `:redirect_single` (**recommendation, pending ratification**) | `config/config.exs` default; deployment override from env `LETFLOW_LOGIN_DISCOVERY_MODE` in `config/runtime.exs`, unknown value -> raise at boot |
+| `config :letflow, Letflow.Routers.LoginDiscovery, mode:` | `:uniform_plus_email`, `:redirect_single` | `:redirect_single` (**ratified default**, 0042 Sign-off 2026-10-04) | `config/config.exs` default; deployment override from env `LETFLOW_LOGIN_DISCOVERY_MODE` in `config/runtime.exs`, unknown value -> raise at boot |
 | `... max_body_bytes:` | positive integer | 2048 | config |
 
 An unrecognised value read at request time is treated as `:uniform_plus_email` (the most

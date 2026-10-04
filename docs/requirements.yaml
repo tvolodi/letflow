@@ -32680,7 +32680,7 @@ requirements:
   - id: REQ-436
     title: "Login-discovery rate limiter: a sibling module with its own table and independent buckets (per-IP first, then global; per-email request; per-email send), IPv6 /64 aggregation, lossless eviction with two key caps, and non-identifying outcome counters"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 945  # letflow-queue task id, GH#2193. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
     description: >

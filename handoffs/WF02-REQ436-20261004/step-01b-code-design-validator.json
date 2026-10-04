@@ -9,7 +9,7 @@
   "created_at": "2026-10-04T12:26:06Z",
   "started_at": "2026-10-04T12:26:06Z",
   "completed_at": "2026-10-04T12:30:43Z",
-  "status": "COMPLETED",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -76,5 +76,5 @@
     },
     "next_action": "Rework CODE-DESIGNER (rework 2): correct the s7.4/T7 hot-key scenario numbers as specified, then re-submit to CODE-DESIGN-VALIDATOR; all other prior issues are closed."
   },
-  "rework_count": 1
+  "rework_count": 2
 }

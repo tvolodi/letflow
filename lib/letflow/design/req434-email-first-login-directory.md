@@ -1,7 +1,7 @@
 # REQ-434 — Design: email-first login, a platform tenant-login directory and a credential-free discovery route
 
 Stage S4 (backend) / S8 (SPA). Owner: `CODE-DESIGNER` -> `ELIXIR-DEV` (REQ-435, REQ-436,
-REQ-437) and `FRONTEND-DEV` (REQ-438). Status: design only. No implementation code appears
+REQ-437, and the new trusted-proxy requirement REQ-CIP, §15.0) and `FRONTEND-DEV` (REQ-438). Status: design only. No implementation code appears
 in this document: signatures, `@spec`/`@type`/`@callback` shapes, table shapes and prose
 only.
 
@@ -65,6 +65,11 @@ item-to-section map is in §16.
 | No app-wide `IntlProvider`; new pages wrap their own, catalogs en/ru/kk | `web/src/i18n/EntitiesIntlProvider.tsx`, `entitiesMessages.ts:34-35` | verified |
 | Mobile bootstrap (MOB-2), REQ-124's `/api/mobile/tenant-config` | `docs/mobile/requirements.md:50-`; `router.ex:118` | verified |
 | QA runs Keycloak 26.2 with realms `bpm-default`, `bilimbaga` | `docker-compose.yml:26`; `ai-dala-infra/landscape/services.md:177`; `.../hosts/ubuntu-16gb-nbg1-1.md:217` | verified |
+| (rework 2, D-2) Real deployment topology: Cloudflare edge -> host nginx -> published container port -> Bandit | `deploy/nginx/letflow-test.conf:6-8` (Cloudflare terminates, "always_use_https at Cloudflare edge"), `:20-25` (`proxy_pass http://127.0.0.1:3113`), `deploy/docker-compose.test.yml:8-9` (`127.0.0.1:3113:4000`), `lib/letflow/supervisor/http.ex:37` (Bandit serves `Letflow.Router` directly, no Plug in front) | verified |
+| (D-2) nginx sets `X-Real-IP $remote_addr` and `X-Forwarded-For $proxy_add_x_forwarded_for`, with **no** `set_real_ip_from`/`real_ip_header`, so `$remote_addr` is the **Cloudflare edge address**, not the visitor | `deploy/nginx/letflow-test.conf:23-24` (no realip directive anywhere in the file) | verified from the file; that Cloudflare supplies `CF-Connecting-IP` is external knowledge (U3) |
+| (D-2) The tree has **no** client-IP resolution: `conn.remote_ip` is the only IP read, by `PublicReadRateLimit` alone; no `RemoteIp` dependency, no `x-forwarded-for`/`x-real-ip` handling in `lib/` or `config/` | `grep -rn "remote_ip\|x-forwarded\|x-real-ip\|RemoteIp\|cidr" lib config mix.exs` -> only `lib/letflow/plugs/public_read_rate_limit.ex:4,44` (plus design prose) | verified. Behind the real topology `conn.remote_ip` is therefore the proxy hop (the docker bridge peer of the published port), shared by every visitor; the exact container-side address was not observable from the repo (U4) |
+| (rework 2, D-1) The existing `PublicReadRateLimit.call/2` consumes `global` **then** per-IP (`with :ok <- global, :ok <- ip`) and `Bucket` has one table, check-then-write, no eviction | `lib/letflow/plugs/public_read_rate_limit.ex:36-52`; `public_read_rate_limit/bucket.ex:31-33`, `:58-78` | verified; the same ordering defect exists on `/api/public` (carried as 0042 OQ-12, not fixed here) |
+| (rework 2, D-3) Ecto logs queries with bound parameters at `:debug` by default; the repo sets no `log:` default for `Letflow.Repo`; the logger level is `:debug` in test and `LOG_LEVEL`-controlled (`debug` accepted) elsewhere; a per-call `log: false` is already used in this tree | `config/runtime.exs:75-101`; `lib/letflow/sandbox_pool.ex:964`, `lib/letflow/tenant_provisioning.ex:386` (`log: false`) | verified: no `log:` config for the Repo found in `config/`; Ecto's default param logging is Ecto behaviour (not read from the repo's deps in this pass) |
 
 ### 0.2 Claims that could not be verified from the repository
 
@@ -73,6 +78,15 @@ item-to-section map is in §16.
 - **U2.** Keycloak's default for `loginWithEmailAllowed`. `priv/keycloak/realms/bpm-default.json`
   contains zero occurrences of the key, so the effective setting is the Keycloak default, which
   was not verified. Treated as a UAT precondition (§8.3), not an assumption.
+- **U3.** That Cloudflare forwards the visitor address in the `CF-Connecting-IP` header and
+  publishes the edge address ranges nginx must trust. External knowledge; the nginx file shows a
+  Cloudflare edge exists but not what it sends. REQ-CIP (§15.0) must verify against the live
+  edge or Cloudflare's published documentation and records the result in its handoff.
+- **U4.** The container-side peer address Bandit sees for traffic arriving through the published
+  port (`127.0.0.1:3113:4000`). Depends on the Docker network driver and host configuration and
+  cannot be read from the repository; REQ-CIP's UAT step must observe it on the real host and set
+  `LETFLOW_TRUSTED_PROXIES` accordingly. QA's own nginx vhost (`3201`) is not in this repository
+  and is likewise unverified.
 
 ### 0.3 Differences from REQ-434..438's own text (design governs; flagged, not silently resolved)
 
@@ -86,7 +100,12 @@ item-to-section map is in §16.
 | D6 | REQ-436 builds three bucket kinds | The per-address minimum send interval (RQ-6) needs a fourth, `:email_send` | Added to REQ-436's work package (§12); `REQ-VALIDATOR` must accept the amendment or move it to REQ-437. |
 | D7 | REQ-437 item 5 (OpenAPI coverage) | No OpenAPI artefact exists (decision 0010) | No-op, recorded in REQ-437's handoff (§15.3). |
 | D8 | REQ-434 (e) response "realm slug" | `slug` here means `tenants.slug`, the value `?realm=` and `/api/tenant-config` accept, not `idp_realm_id` | Stated explicitly in §5. |
+| D10 | REQ-434 description item 4: new mount reuses `PublicReadRateLimit.Bucket` "or a mount-point-agnostic successor" | The design builds a sibling module with its own table (§12.1); it neither reuses `Bucket` nor refactors it into a shared agnostic module | Treated as the successor option, justified: **shared** = token-bucket algorithm (restated, cross-referenced), `conn.remote_ip` keying, `Response.rate_limited` and halt convention, 0028 §6 placement; **new** = own ETS table, `:login_discovery`-prefixed keys, lossless eviction, key cap, atomic check-and-write. Not a refactor of `Bucket`, which would alter `/api/public` (§12.1). `REQ-VALIDATOR` must accept this reading of item 4. |
 | D9 | REQ-438 CURRENT BEHAVIOUR | Also true: a pre-existing eager `getOidcManager()` can bind the singleton to the default realm before an email is typed | Hand-off uses the per-slug registry, not the singleton (§8.4). |
+| D11 | REQ-436 / REQ-437 `depends_on` (`docs/requirements.yaml`: REQ-436 `[REQ-434]`, REQ-437 `[REQ-435, REQ-436]`) and REQ-434 OQ-5 ("trusted-proxy handling not part of this record") | In the real topology `conn.remote_ip` is a proxy hop (§0.1), so the per-IP bucket the Mode B inference rests on is one shared bucket for all users (`SECURITY-REVIEWER` D-2). | New requirement **REQ-CIP** (working name; id assigned by `REQ-ANALYST`; §15.0) becomes a `depends_on` of **REQ-436 and REQ-437** and a precondition for enabling the flag. `docs/requirements.yaml` is outside this change's file scope: `ORCH`/`REQ-ANALYST` must register REQ-CIP and amend both `depends_on` lists; `REQ-VALIDATOR` must accept. REQ-436/437 `Standing prohibition 8` wording ("keyed on `conn.remote_ip`") is amended to the resolved client IP (0042). |
+| D12 | REQ-437 (always-mounted route) | A boot-time precondition needs a server-side switch | New config `enabled` on the mount (default `false` in `:prod`, `true` in dev/test); disabled -> the route-level `404` (already in the closed status set). §12.6. |
+| D13 | REQ-436 limiter keys on "the client IP"; AC "global bucket trips independently" | Global-before-IP order drained the global bucket with refused requests (`SECURITY-REVIEWER` D-1) | Per-IP first, global only for IP-admitted requests; IPv6 aggregated to /64; two key caps (§12.2-12.4). The AC "global bucket trips independently of IP" is kept, reinterpreted as "independently of any *single* IP" (a test uses many IPs). |
+| D14 | REQ-437 telemetry/AC silent on outcome counters; REQ-438 429 state "retry affordance" | `SECURITY-REVIEWER` C-1 and C-2 | Outcome counters (§12.7) are added to REQ-436/437; the SPA 429 state additionally offers the `?realm=` route (§11.5, REQ-438). `REQ-VALIDATOR` must accept both additions. |
 
 ---
 
@@ -265,8 +284,12 @@ true. Anything else maps to the **sentinel key** (§5.3).
 ```
 
 - **Consistency guard (fail closed).** Before any write, the function checks
-  `schema_name_for_tenant(tenant_id) == prefix` (pure, no I/O, `tenant_provisioning.ex:214`).
-  Mismatch -> `{:error, :tenant_prefix_mismatch}` and nothing is written. This is the check a
+  `schema_name_for_tenant/1`, which returns `{:ok, name} | {:error, :invalid_tenant_id}`
+  (pure, no I/O, `tenant_provisioning.ex:212-219`), so the guard matches the result against the
+  pinned prefix, `{:ok, ^prefix}`, and never compares the tuple to a string. Any other result is
+  a failure with a distinct error: `{:error, :invalid_tenant_id}` (malformed `tenant_id`, passed
+  through unchanged) -> `{:error, :invalid_tenant_id}`; `{:ok, other_name}` (valid id, different
+  schema) -> `{:error, :tenant_prefix_mismatch}`. Both write nothing. This is the check a
   prefix-derived value could never perform (0006 R2), and the reason the explicit opt is kept.
 - **Missing opt:** `{:error, :tenant_id_required}` (typed, not a raise), unless
   `login_directory: :skip`.
@@ -278,8 +301,9 @@ true. Anything else maps to the **sentinel key** (§5.3).
   "Alternatives rejected" 8, with the corrected rationale in §0.3 D1).
 
 New error shapes added to the three specs: `{:error, :tenant_id_required}`,
-`{:error, :tenant_prefix_mismatch}`, `{:error, {:login_directory, term()}}`. The router handlers'
-`case` expressions gain arms mapping the first two to `Response.internal_error/1` (they are
+`{:error, :invalid_tenant_id}`, `{:error, :tenant_prefix_mismatch}`,
+`{:error, {:login_directory, term()}}`. The router handlers'
+`case` expressions gain arms mapping the first three to `Response.internal_error/1` (they are
 unreachable from the router, which always passes the opt, but a non-exhaustive `case` would
 raise) and `{:login_directory, _}` to `Response.internal_error/1`.
 
@@ -345,6 +369,23 @@ insert (`on_conflict: :nothing`); run the existing created-check; **only when it
 genuinely created row**, run the `:login_directory` plan; commit; then run
 `sync_role_claims_from_token/3` outside the transaction exactly as today. Rules:
 
+- **Username-conflict recovery inside the transaction (decided: savepoint-mode insert).** The
+  existing recovery (`identity.ex:1811-1846`: `username_unique_conflict?/1`, then
+  `get_by_username/2`, then `re_select_on_conflict/3`) runs after `Repo.insert` returns
+  `{:error, changeset}`. A unique violation on the separate `username` index aborts a Postgres
+  transaction ("current transaction is aborted"), so every recovery query would fail. The insert
+  therefore runs with the Ecto/Postgres option `mode: :savepoint`, which wraps that one statement
+  in a savepoint and rolls back to it on error, leaving the outer transaction usable;
+  `get_by_username/2` and `re_select_on_conflict/3` then run unchanged inside the same
+  transaction. Their outcomes: same identity -> `{:ok, %{user: _, created: false}}` (no directory
+  write; the winner wrote it); different identity or `nil` holder -> `{:error, changeset}`
+  unchanged, which rolls the transaction back (nothing was written, so nothing is lost). The
+  `on_conflict: :nothing` path raises no error and needs no savepoint. Chosen over "recover
+  outside the transaction and then write the entry" because that would need the transaction to
+  be abandoned and reopened (a second attempt at the insert, or a directory write detached from
+  the user write), re-creating the atomicity gap D2 closes; the savepoint keeps one transaction
+  and leaves the recovery code as is. Read-committed isolation means the in-transaction re-select
+  sees the winner's committed row.
 - `created: false` outcomes (existing row, race loser via `re_select_on_conflict/3`) write
   nothing: a returning user adds no entry, and the race winner already wrote it (idempotent,
   AC "a second login adds none").
@@ -397,6 +438,42 @@ return `{:error, :not_in_transaction}` if called outside a transaction.
 | Tenant -> `:inactive` / `:migrating` | no write; lookup returns no match for it; reactivation restores discoverability instantly |
 | Tenant row deleted | cascade |
 | Forced failure after the user write (audit) | neither the user change nor the entry change persists |
+
+### 3.9 Query logging: `log: false` on every directory query (rework 2, D-3)
+
+Ecto's default query logger writes the statement **and its bound parameters** at `:debug`
+(§0.1), and `LOG_LEVEL=debug` is accepted in any environment (`config/runtime.exs:75-101`). The
+removal check of §3.6 binds the **plaintext normalised email**; the lookup, the upserts, the
+removal delete and the advisory lock bind the **HMAC key** (and tenant id). Either in a log line
+contradicts Standing prohibition 9 (INV-4). Required, no exceptions:
+
+- **Every** `Repo` call that touches `tenant_login_directory`, or that carries a normalised email
+  or an `email_key` as a bound value, passes the per-call option `log: false` (the form already used
+  at `lib/letflow/tenant_provisioning.ex:386`, `lib/letflow/sandbox_pool.ex:964`). Enumerated:
+  `lookup_by_key/1` (the one discovery query); `upsert_entry/2` (insert, and the advisory-lock
+  statement); `remove_entry_if_unreferenced/3` (the other-active-user check on the tenant `users`
+  table, the advisory lock, the delete); the backfill's per-tenant `users` read and its chunked
+  `insert_all`; and any `Multi` step in `:login_directory` (the option is passed to each `Multi`
+  operation or `Repo` call inside the step).
+- **Telemetry is not affected.** `log: false` only suppresses the Logger line; the Repo query
+  telemetry events still fire, so the "exactly one `Repo` query per request" assertions (§10.3,
+  REQ-437) keep working. Query-count tests must therefore count telemetry events, never log lines.
+- **Structural guard.** A test greps `lib/letflow/login_directory.ex`,
+  `lib/letflow/login_directory/`, and `lib/letflow/identity/tenant_login_directory_entry.ex` and
+  fails when a `Repo.` call that is not marked `log: false` appears (the same style as the
+  `Repo.query` grep of INV-7). The behavioural proof is the captured-log test below.
+- **Behavioural proof.** `ExUnit.CaptureLog.capture_log(level: :debug, fn -> ... end)` (the test
+  environment's logger level is `:debug` precisely so this works, `config/runtime.exs:75-77`)
+  around: a create, an email-change, a deactivation (the removal query), a JIT first login, a
+  backfill run, a discovery lookup with a known, an unknown and a malformed address; asserts the
+  output contains **neither the plaintext email, nor its lowercase form, nor the hex or base64
+  rendering of its `email_key`**. This is in both REQ-435 and REQ-437's test lists (§15.1, §15.3).
+- **Not covered, stated.** (1) The **tenant `users` writes themselves** (insert/update of
+  `users.email` inside `create_user/2` etc.) bind the plaintext email and are logged at `:debug` by
+  Ecto today, independent of this feature; they are not directory queries, are unchanged, and are
+  carried as 0042 OQ-13 for `ORCH` to file. (2) PostgreSQL's own statement log
+  (`log_statement`, `log_min_duration_statement`) is database configuration outside this
+  repository; the same OQ-13 records it as a deployment check.
 
 ---
 
@@ -456,9 +533,25 @@ return `{:error, :not_in_transaction}` if called outside a transaction.
   modified; the route is public by mount position (0028).
 - `Letflow.Routers.LoginDiscovery` is a plain `Plug.Router` (not `AuthorizedRouter`; no
   authorization-matrix entry is needed because `Letflow.Api.Authorization` only enumerates
-  `/api/v1` routes). Its own chain, in order: `Letflow.Plugs.LoginDiscoveryRateLimit`,
-  `:match`, `:dispatch`. No `Plug.Parsers`, no `assign_trace_id` (so no `x-trace-id` header and a
-  constant `trace_id` in any problem body, as `tenant_config.ex:127-139` documents).
+  `/api/v1` routes). Its own chain, in order: (1) `plug :enabled_gate` (below), (2)
+  `Letflow.Plugs.ClientIp` (REQ-CIP, §12.6; resolves the client address, reads no body), (3)
+  `Letflow.Plugs.LoginDiscoveryRateLimit` (the limiter stays the first plug that does any *work*
+  after the gate; `ClientIp` is a pure header/peer read), (4) `:match`, (5) `:dispatch`. No
+  `Plug.Parsers`, no `assign_trace_id` (so no `x-trace-id` header and a constant `trace_id` in any
+  problem body, as `tenant_config.ex:127-139` documents).
+- **The disabled-mount gate (D12).** A module-level function plug `enabled_gate/2`, declared as the
+  **first** `plug` line of `Letflow.Routers.LoginDiscovery` itself: **no new module and no new
+  file**. Justification: `router.ex` mounts are unconditional static `forward/2` lines
+  (`router.ex:111-137`) with no per-mount guard, so the switch cannot live in the parent without
+  breaking that structure; a function plug in the mounted router runs before every other plug of
+  the chain, needs no separate test file (its test is the mount-switch case in
+  `login_discovery_test.exs`), and reads `Application.get_env(:letflow, Letflow.Routers.LoginDiscovery)[:enabled]`
+  **at request time** (so a test toggles it without recompiling). When `enabled` is not exactly
+  `true`: it emits the `:disabled` outcome (§12.7), responds with `Letflow.Api.Response.not_found/1`
+  (byte-identical to `Letflow.Router`'s catch-all and to the `match _` below), and halts. It runs
+  **before** `ClientIp`, the limiter, `:match` and body reading, for any method and any path, so a
+  disabled mount resolves no client address, touches no limiter state, issues zero `Repo` queries
+  and reveals nothing beyond what an unmounted path reveals. When enabled it is a no-op.
 - Routes: `post "/"` and `match _` -> `Letflow.Api.Response.not_found/1`, byte-identical to
   `Letflow.Router`'s catch-all, for any other method or sub-path. (Route-level, not
   input-dependent.)
@@ -666,7 +759,7 @@ involved.
 |---|---|---|
 | **INV-1** tenant data isolation | The directory is a global table outside every tenant schema (public migration, absent from `tenant_scoped_migrations/0`, `tenant_provisioning.ex:733`). The discovery path issues no query with a tenant `:prefix` and reads only `tenant_login_directory` and `tenants`. Writers run inside the Identity functions whose `:prefix` derives from `auth_context.tenant_id` (`context.ex:219-237`) and which assert `schema_name_for_tenant(tenant_id) == prefix`. The backfill reads each tenant schema only through the registration's derived `schema_name`. `tenant_id` on this global table is its only scoping (0006 D3), supplied explicitly (never from a request parameter) and cross-checked against the prefix. | REQ-435 tests: information_schema shows the table in `public` only; two-tenant isolation; request-body `tenant_id` ignored. REQ-437 test: no query on the path carries a `:prefix`. |
 | **INV-2** server-side field authorisation | Closed allowlist: hand-built maps, literal keys; `lookup_by_key/1` selects exactly `slug` and `display_name` into a plain map, so `idp_realm_id`, `id`, `settings`, status are unrepresentable beyond the query; the neutral body is a constant; the directory schema has no sensitive field. | REQ-437 tests assert the exact key set; REQ-435 test asserts the schema and returned structs carry no user/credential field. |
-| **INV-4** secrets by reference; no secret/PII in logs | Pepper by environment-variable reference, boot-validated, never logged or serialised (§2.2). No raw email, key, body or IP in logs, telemetry labels, audit rows or error messages: failures log fixed strings or atoms; the directory writes no audit rows; the limiter keys hold only the HMAC and an IP in memory; the notifier default adapter logs nothing identifying. | Captured-Logger tests in REQ-435/436/437 grep for the address and body; `grep -rn "System.get_env" config/ lib/` shows env-sourced only. |
+| **INV-4** secrets by reference; no secret/PII in logs | Pepper by environment-variable reference, boot-validated, never logged or serialised (§2.2). No raw email, key, body or IP in logs, telemetry labels, audit rows or error messages: failures log fixed strings or atoms; the directory writes no audit rows; the limiter keys hold only the HMAC and an IP in memory; the notifier default adapter logs nothing identifying; **every directory query passes `log: false` so Ecto's `:debug` bound-parameter logging never carries the email or key (§3.9)**; outcome counters carry fixed-atom labels only (§12.7); notifier tasks use the closure form so OTP crash reports print no recipient (§13). | Captured-Logger tests in REQ-435/436/437 grep for the address and body, **run with `capture_log(level: :debug)` (§3.9)**; notifier-raise test asserts no email in the crash log (§13); `grep -rn "System.get_env" config/ lib/` shows env-sourced only. |
 | **INV-5** not-found/forbidden indistinguishability | First email-keyed instance. Mechanism: one query for every class (sentinel for malformed); the same operations for every input; constant neutral bytes; the 429 is byte-identical for IP, global and per-email refusal; no 401/403; notifier submission unconditional. Honest bound: Mode B discloses the single-match case (0042). | The response-equivalence matrix (§10); REQ-437 byte-comparison and query-count tests. |
 | **INV-6** new data-access paths prove their scoping | This document and 0042 are the scoping proof; `SECURITY-REVIEWER` is a mandatory gate on 0042 and on REQ-435/436/437 and must record which of INV-1..INV-9 apply and why. | Gate verdicts (0042 Sign-off); REQ-435/437 handoffs. |
 | **INV-7** no SQL string interpolation | Every query is Ecto composition with bound parameters, including the "other active user" check and the advisory lock (bound parameters, no concatenation); the backfill passes the schema as the `prefix:` option, never into a SQL string; migrations use no `Repo.query`. | `grep -rn "Repo.query" lib/letflow/login_directory* lib/letflow/identity/tenant_login_directory_entry.ex priv/repo/migrations/<new>` shows no unbound use (REQ-435 AC). |
@@ -761,7 +854,26 @@ so ranks 1 and 2 agree in the normal round trip.
 
 `VITE_EMAIL_FIRST_LOGIN` (build-time, read through one helper, `isEmailFirstLoginEnabled()`);
 only the value `true` enables it; absent means off, i.e. today's behaviour exactly. Multi-tenant
-deployments set it in their build environment. E2E runs that pre-restore a session
+deployments set it in their build environment.
+
+**Enablement preconditions (rework 2; binding on any deployment outside dev).** Setting the flag
+to `true` in a QA or production build requires **all** of the following, each recorded in the
+enabling change's handoff:
+
+1. **Trusted-proxy client IP is configured and verified (D-2).** REQ-CIP is `done`;
+   `LETFLOW_TRUSTED_PROXIES` is set for that deployment; nginx forwards the real visitor address
+   (§12.6); and a UAT step shows two requests from two real source addresses land in different
+   per-IP buckets. The backend refuses to boot with the mount enabled in `:prod` and an empty trust
+   list (§12.6), so this precondition is mechanically enforced on the server side; the SPA flag is
+   not, which is why it is also listed here.
+2. **0042 OQ-3 is answered (C-5):** a named human or organisational controller, the lawful basis
+   and the retention period for the directory's personal data are recorded in 0042. Not decidable
+   inside this pipeline; owner and escalation in 0042 OQ-3. The flag stays off outside dev until it
+   is answered.
+3. **The multi-tenant dead end is resolved (0042 OQ-9):** either a real notifier adapter exists or
+   the organisation-code entry of §11.5 (shipped with REQ-438) is accepted as the interim path,
+   recorded by `ORCH`.
+4. **Realm "Login with email" is verified per realm (§8.3, OQ-8).** E2E runs that pre-restore a session
 (`tryRestoreE2eSession`, `AuthProvider.tsx:60-76`) have `isAuthenticated` true from the first
 render, so they never reach `ProtectedRoute`'s redirect branch and are unaffected whatever the
 flag says (REQ-438 must still assert this). RQ-5.
@@ -801,6 +913,17 @@ flag says (REQ-438 must still assert this). RQ-5.
   `bpm_realm_slug` exactly as `resolveRealmFromUrl()` does, then hand off per §8); **429**,
   **network failure** and **malformed response** each a distinct non-leaking error state with a
   retry affordance (a 429 does not reveal whether the address is known).
+- **The 429 state offers the `?realm=` route (C-2).** Because an attacker can keep one victim
+  address's per-email bucket exhausted (§12.8), the 429 state must not be a dead end: besides
+  "retry later" it shows an **organisation code** control (a text input for the tenant slug, not a
+  credential) whose submit navigates to `/?realm=<url-encoded slug>` (rank 1 of §11.1, which
+  bypasses discovery entirely and goes to the realm's Keycloak login). The control is a **static
+  part of the page present in every state** (idle, neutral, 429, network failure, malformed
+  response), so it adds no state-dependent DOM and the neutral DOM for an unknown and a
+  multi-tenant address stays identical (§15.4); it also serves as the interim route for the
+  multi-tenant dead end (0042 OQ-9). It validates only non-empty and length <= 255 (slugs have no
+  charset constraint, §0.1); an unknown slug is handled by the existing
+  `/api/tenant-config?realm=` fallback behaviour, unchanged.
 - No tenant picker is built: neither mode returns names for the multi-match case. (REQ-438's open
   question on picker presence is answered: none.)
 - All strings come from a new catalog covering `en`, `ru`, `kk` (decision 0021): a new
@@ -813,11 +936,16 @@ flag says (REQ-438 must still assert this). RQ-5.
 
 ### 12.1 Choice: a new sibling module with its own table, not namespaced keys on the existing Bucket
 
+This is the "mount-point-agnostic successor" option of REQ-434 item 4 (§0.3 D10), not reuse of
+`Bucket`. Shared: the token-bucket algorithm (restated), `conn.remote_ip` keying, the
+`Response.rate_limited` + halt convention, 0028 §6 placement. New: table, key namespace, lossless
+eviction, key cap, atomic check-and-write.
+
 Decided: `Letflow.Plugs.LoginDiscoveryRateLimit.Bucket` with its own named ETS table
 (`:letflow_login_discovery_rate_limit`). The existing `Bucket`
 (`public_read_rate_limit/bucket.ex`) and `PublicReadRateLimit` are **not modified** (git diff
 empty; their tests pass unmodified). Reasons: (a) adding eviction to the shared module would put
-`/api/public`'s IP keys under the same cap and sweep; (b) independence of the two mounts
+`/api/public`'s IP keys under the same caps and sweep; (b) independence of the two mounts
 (flooding one must not 429 the other) is then true by construction: different table, different
 keys; (c) 0028 permits reuse only "if that module lands mount-point-agnostic"
 (`0028...md:147-149`), which it has not. Every key this limiter writes begins with
@@ -827,11 +955,19 @@ cross-referencing the original; the alternative refactor would touch `/api/publi
 ### 12.2 API
 
 ```
+@type ip_bucket_id ::
+        {:v4, :inet.ip4_address()}
+        | {:v6_64, {0..65535, 0..65535, 0..65535, 0..65535}}
+
 @type bucket_key ::
         {:login_discovery, :global}
-        | {:login_discovery, :ip, :inet.ip_address()}
+        | {:login_discovery, :ip, ip_bucket_id()}
         | {:login_discovery, :email_hmac, binary()}
         | {:login_discovery, :email_send, binary()}
+
+# Pure. IPv4 -> {:v4, addr}. IPv6 -> {:v6_64, first four 16-bit groups} (the /64 network).
+# IPv4-mapped IPv6 (::ffff:a.b.c.d) is first converted to {:v4, a.b.c.d}.
+@spec Letflow.Plugs.LoginDiscoveryRateLimit.ip_bucket_id(:inet.ip_address()) :: ip_bucket_id()
 
 # Letflow.Plugs.LoginDiscoveryRateLimit  (@behaviour Plug)
 @spec init(keyword()) :: keyword()
@@ -845,15 +981,30 @@ cross-referencing the original; the alternative refactor would touch `/api/publi
 @spec consume(bucket_key(), capacity :: pos_integer(), refill_per_sec :: number(),
               now_ms :: integer()) :: :ok | :rate_limited
 @spec sweep(now_ms :: integer()) :: non_neg_integer()   # rows removed
-@spec size() :: non_neg_integer()
+@spec size(kind :: :ip | :email) :: non_neg_integer()   # :email counts :email_hmac + :email_send rows
 ```
 
 `now_ms` defaults to the monotonic clock; it is a parameter so tests can advance time without
 sleeping (the seam REQ-436's "evicted" test needs, D5).
 
-`call/2` consumes the global bucket then the per-IP bucket from `conn.remote_ip` (never a
-forwarded header), **before** the body is read; on refusal it calls `send_rate_limited/1` and
-halts. `consume_email/2` is called by the endpoint after it computes the key. **All three refusals
+`call/2` runs **before** the body is read, in this order (rework 2, D-1):
+
+1. Resolve the client address: `conn.assigns.client_ip` as set by `Letflow.Plugs.ClientIp`
+   (§12.6), or `conn.remote_ip` when that assign is absent. Never a raw forwarded header read here.
+2. Map it with `ip_bucket_id/1` (IPv6 aggregated to its /64, so rotating through a /64 is one
+   bucket) and consume the **per-IP** token. On refusal: emit the `:rate_limited_ip` counter
+   (§12.7), `send_rate_limited/1`, halt. **The global bucket is not touched.**
+3. Only an IP-admitted request consumes the **global** token. On refusal: counter
+   `:rate_limited_global`, `send_rate_limited/1`, halt. (The IP token already spent is the
+   caller's own; the refusal is still input-independent.)
+
+Consequence (the D-1 property): a single source flooding at any rate drains only its own IP
+bucket; the global bucket is spent only at the rate IP buckets admit (at most
+`ip_refill_per_sec` per distinct source after the initial burst), so one source cannot 429 the
+platform. A distributed flood (many /64s) can still drain the global bucket; that is the bounded
+residual 0042 states ("a botnet can still probe at the global rate"), now not worsened by refused
+requests. `consume_email/2` is called by the endpoint after it computes the key; its refusal emits
+`:rate_limited_email`. **All refusals (IP, global, email)
 use the single `send_rate_limited/1`**, which sets the common security headers, a constant
 `Retry-After` (config `retry_after_seconds`, default 60), and
 `Response.rate_limited("rate limit exceeded")`; one constructor makes the three byte-identical by
@@ -866,20 +1017,41 @@ construction, with no email-dependent body or header.
   `bucket.ex:66`), so deleting it changes nothing. A periodic `sweep/1` (timer in the owning
   GenServer, `sweep_interval_ms`) deletes exactly those rows. The sweep reads each kind's
   capacity and refill from config.
-- **Invariant making it sufficient.** Every request that creates an IP, email or send key first
-  consumed one *global* token. So the number of non-idle keys is bounded by the global admission
-  rate times the longest full-refill window: `max_keys >= 3 * (global_capacity +
-  ceil(global_refill_per_sec * (T_full_max + sweep_interval_s)))`, where `T_full_max` is the
-  largest of `ip_capacity/ip_refill`, `email_capacity/email_refill`, `send_capacity/send_refill`
-  in seconds and the factor 3 covers one IP key, one email key and one send key per admitted
-  request. `validate_config!/1` raises at boot (`Bucket.init/1`) when the configured values
-  violate it, so the table can never fill with non-evictable rows under admitted traffic.
-- **Backstop.** When creating a *new* key would exceed `max_keys`, an inline sweep runs; if still
-  full, the new key is **refused** (`:rate_limited`, fail closed). A live key is never evicted,
-  so a victim bucket can never be refilled faster than its normal refill. Under the invariant
-  this refusal is unreachable via admitted traffic; it is reachable only by a direct test call
-  that bypasses the global bucket, which is how REQ-436's "10x the cap never exceeds the cap"
-  test exercises it.
+- **Two key populations, two caps (re-derived for the per-IP-first order, D-1).** With the per-IP
+  token consumed *before* the global one (§12.2), IP keys are no longer gated by the global bucket,
+  so the earlier single invariant ("every key creation first consumed a global token") no longer
+  holds for them. The populations are therefore bounded separately:
+  - **Email-kind keys (`:email_hmac`, `:email_send`)** are created only by a request that already
+    passed the IP bucket **and** the global bucket (the endpoint consults them after `call/2`
+    returns, the send bucket inside the task the endpoint submitted). Each admitted request creates
+    at most one `:email_hmac` and one `:email_send` key. Non-idle email-kind keys are thus bounded by
+    the global admission rate times the longest full-refill window:
+    `max_email_keys >= 2 * (global_capacity + ceil(global_refill_per_sec * (T_email_full_max +
+    sweep_interval_s)))`, where `T_email_full_max` is the larger of
+    `email_capacity/email_refill` and `send_capacity/send_refill` in seconds (the IP bucket is
+    excluded; it is not part of this population). The factor 2 is one request-bucket key plus one
+    send key per admitted request. `validate_config!/1` raises at boot (`Bucket.init/1`) when the
+    configured values violate it, so this population can never fill with non-evictable rows under
+    admitted traffic. With the defaults: `2 * (60 + 10 * (900 + 30)) = 18 720 <= 50 000`.
+  - **IP keys** are created by *any* request, admitted or not, so no config relationship can bound
+    them: an attacker who controls many source addresses controls the count. A non-idle IP key
+    exists only while its bucket has not refilled, i.e. for at most `T_ip_full = ip_capacity /
+    ip_refill` seconds (20 s with the defaults) plus one sweep interval, so the count is bounded
+    by distinct /64s seen in the last ~50 s. The bound is therefore a hard cap, **`max_ip_keys`**
+    (default 100 000, about 10 MB of ETS), enforced by the backstop below. `validate_config!/1`
+    checks only that it is positive and not smaller than `ip_capacity`.
+- **Backstop (per population).** When creating a *new* key would exceed that population's cap
+  (`max_ip_keys` or `max_email_keys`), an inline sweep runs; if still full, the new key is
+  **refused** (`:rate_limited`, fail closed). A live key is never evicted, so a victim bucket can
+  never be refilled faster than its normal refill. For email-kind keys this refusal is unreachable
+  via admitted traffic (the invariant above); it is reachable by a direct test call that bypasses
+  the global bucket, which is how REQ-436's "10x the cap never exceeds the cap" test exercises it.
+  For IP keys it **is** reachable by a flood from more than `max_ip_keys` distinct /64 networks
+  within ~50 s: new, previously unseen sources are then refused (counter `:rate_limited_ip`, with
+  the global token **not** consumed, so the refusal cannot drain the global bucket), while sources
+  that already hold a bucket are unaffected. That is a deliberate fail-closed bound, stated as an
+  accepted residual in 0042 (a flood of that size can already drain the global bucket
+  at the global rate, so it adds no new capability to the attacker).
 - **Race.** `consume` is a compare-and-swap (a conditional replace of the exact tuple read, bounded
   retries, fail closed on exhaustion) rather than the existing check-then-write
   (`bucket.ex:63-75`), because under-counting lets a small burst through, and for the per-email and
@@ -898,9 +1070,12 @@ construction, with no email-dependent body or header.
 | `ip_capacity` / `ip_refill_per_sec` | 10 / 0.5 | |
 | `email_capacity` / `email_refill_per_sec` | 5 / 1/60 | per-address request bucket |
 | `send_capacity` / `send_refill_per_sec` | 1 / 1/900 | one notifier send per address per 15 minutes |
-| `max_keys` | 50 000 | satisfies the invariant with these defaults (3 x (60 + 10 x (900 + 30)) = 28 080) |
+| `max_email_keys` | 50 000 | must satisfy `2 x (global_capacity + ceil(global_refill x (T_email_full_max + sweep_s)))`; defaults give 2 x (60 + 10 x 930) = 18 720 |
+| `max_ip_keys` | 100 000 | hard cap on distinct per-/64 IP rows (§12.3) |
 | `sweep_interval_ms` | 30 000 | |
 | `retry_after_seconds` | 60 | constant on every 429 |
+| `enabled` (on `Letflow.Routers.LoginDiscovery`, §12.6) | `false` in `:prod`, `true` in dev/test | disabled mount returns the route-level 404 |
+| `trusted_proxies` (on `Letflow.Plugs.ClientIp`, §12.6) | `[]` | CIDR list of proxies whose `X-Real-IP` is honoured |
 
 `config/test.exs` raises the global and per-IP capacities so the suite's shared node-wide table
 does not make unrelated tests flaky; limiter tests override with `Application.put_env` and use
@@ -911,6 +1086,103 @@ unique documentation-range IPs (the technique `public_read_rate_limit_test.exs` 
 This limiter does not discharge the deferred `Letflow.Plugs.RateLimit` row
 (`api_pipeline.ex:59`) and does not modify `AuthPipeline` or `ApiPipeline` (git diff of
 `lib/letflow/plugs/auth_pipeline.ex` and `lib/letflow/plugs/api_pipeline.ex` is empty).
+
+### 12.6 Trusted-proxy client IP (D-2): mechanism, configuration, precondition
+
+**Problem (verified, §0.1).** The only IP the tree reads is `conn.remote_ip`. Behind the real
+topology (Cloudflare -> nginx -> published container port -> Bandit) that is the proxy hop, the same
+for every visitor, so every user would share one per-IP bucket (10 tokens, 0.5/s) and one visitor
+could 429 everyone, and the per-IP bound the Mode B inference rests on would not exist.
+
+**Mechanism.** New mount-agnostic plug `Letflow.Plugs.ClientIp` (REQ-CIP, §15.0):
+
+```
+@type cidr :: {:inet.ip_address(), prefix_len :: 0..128}
+
+# Plug
+@spec init(keyword()) :: [trusted_proxies: [cidr()]]        # from opts, else app config
+@spec call(Plug.Conn.t(), keyword()) :: Plug.Conn.t()       # assigns :client_ip
+# Pure
+@spec resolve(peer :: :inet.ip_address(), x_real_ip_values :: [String.t()], [cidr()]) ::
+        :inet.ip_address()
+@spec parse_cidrs(String.t()) :: {:ok, [cidr()]} | {:error, :invalid_cidr}
+@spec trusted?(:inet.ip_address(), [cidr()]) :: boolean()
+```
+
+Rules (all fail safe toward the *stricter, shared* bucket, never toward a spoofable one):
+
+1. `conn.assigns.client_ip` is always set. By default it is `conn.remote_ip` (an empty trust list,
+   or a peer not in the list: every forwarded header is ignored, today's behaviour exactly).
+2. Only when the TCP peer `conn.remote_ip` is inside a configured trusted CIDR is a forwarded
+   value honoured, and only the **`X-Real-IP`** header: exactly one header value that parses as a
+   single IPv4 or IPv6 address. Zero values, more than one value, a comma list or any parse failure
+   -> `client_ip = conn.remote_ip`.
+3. **`X-Forwarded-For` is never read.** It is a client-appendable chain; trusting its left side is a
+   spoof, and trusting its right side needs the full proxy-hop list. `X-Real-IP` is set (overwritten,
+   not appended) by the one proxy we control, so a visitor-supplied `X-Real-IP` is discarded by
+   nginx before it reaches the app (`deploy/nginx/letflow-test.conf:23` already sets it).
+4. `conn.remote_ip` itself is **not** rewritten: other code (`PublicReadRateLimit`, `/api/public`)
+   keeps its current, unchanged behaviour; REQ-CIP does not touch it (its own limitation remains
+   0042 OQ-12/OQ-5's tail, noted not fixed).
+
+**Where it is configured (three places, all owned by REQ-CIP).**
+
+| Layer | Setting | File |
+|---|---|---|
+| Application | env `LETFLOW_TRUSTED_PROXIES`: comma-separated CIDRs (for example the loopback and the Docker network gateway the proxy arrives from); read once at boot into `config :letflow, Letflow.Plugs.ClientIp, trusted_proxies: [cidr]`; an invalid entry raises at boot; unset = `[]` | `config/runtime.exs`, `config/test.exs` (test default `[]`), `deploy/.env.example` (documents the name, no real value) |
+| nginx | the visitor address must reach `$remote_addr` before `X-Real-IP` is set: `set_real_ip_from` the Cloudflare edge ranges and `real_ip_header CF-Connecting-IP` (ngx_http_realip_module), keeping the existing `proxy_set_header X-Real-IP $remote_addr` (without this `$remote_addr` is the Cloudflare edge, `letflow-test.conf` has no realip directive, §0.1). Whether Cloudflare sends `CF-Connecting-IP` and its ranges are external knowledge (U3) and must be verified by the REQ-CIP implementer | `deploy/nginx/letflow-test.conf` (QA's vhost is not in this repository, U4: recorded as an infrastructure action in the handoff) |
+| Mount switch | `config :letflow, Letflow.Routers.LoginDiscovery, enabled: boolean()`, env `LETFLOW_LOGIN_DISCOVERY_ENABLED` (`true`/`false`; other value raises); default `false` when `config_env() == :prod` | `config/runtime.exs`, `config/config.exs` |
+
+**Precondition for enabling the flag, enforced mechanically on the server.** `config/runtime.exs`
+raises at boot when `config_env() == :prod`, `LETFLOW_LOGIN_DISCOVERY_ENABLED` is true and
+`LETFLOW_TRUSTED_PROXIES` is empty or unset (message names both variables, no values). Outside
+`:prod`, the same combination logs one fixed warning at boot. The SPA flag `VITE_EMAIL_FIRST_LOGIN`
+cannot be checked by the server, so the broader precondition list is in §11.3. A disabled mount
+returns the route-level `404` for every request (§5.1), so the SPA built with the flag on against a
+backend that has not enabled the mount lands in its malformed-response state, not in a lockout.
+
+**Residuals.** (1) If the proxy is mis-trusted (a CIDR too broad, so an untrusted peer can send
+`X-Real-IP`), the limiter keys become spoofable; the list is deployment-owned, defaults to empty,
+and is reviewed in REQ-CIP's `SECURITY-REVIEWER` pass. (2) Visitors behind one NAT or one /64 share
+a bucket; inherent to per-IP limiting. (3) Multi-proxy chains (a second trusted hop) are not
+supported: one trusted hop, `X-Real-IP`.
+
+### 12.7 Non-identifying outcome counters (C-1)
+
+So that the Mode A kill switch (0042 Decision 3) can actually be triggered, the discovery path
+emits **one telemetry event per request**, `[:letflow, :login_discovery, :outcome]`, with
+measurement `%{count: 1}` and a single metadata key `outcome` whose value is exactly one of the
+fixed atoms: `:tenant` (the 200 single-match), `:accepted` (the 202 neutral, any cause),
+`:rate_limited_ip`, `:rate_limited_global`, `:rate_limited_email`, `:disabled` (the 404 of a
+disabled mount, emitted by `enabled_gate/2`, §5.1; **always** emitted, not optional, with the same
+single `outcome` metadata key and nothing else), `:not_found` (wrong method or path, enabled
+mount only).
+
+- **Non-identifying (INV-4):** the metadata carries no email, key, IP address, slug, tenant id or
+  count; the 202 is deliberately *not* split into multi/unknown/failed, because that split would
+  correlate a counter with an address class. The limiter emits the three `:rate_limited_*`
+  outcomes; the endpoint emits `:tenant`, `:accepted` and `:not_found`; the gate emits `:disabled`.
+- **Use:** the ratio `:tenant` / total and the `:rate_limited_*` rates are the abuse signals an
+  operator watches (a sudden rise in `:tenant` or in `:rate_limited_ip`) to decide to set
+  `LETFLOW_LOGIN_DISCOVERY_MODE=uniform_plus_email`. How those events reach `/metrics` follows the
+  existing `Letflow.Metrics.Registry` / `HttpMetrics` pattern (`router.ex:95-98`), chosen by the
+  implementer and reported in the handoff; if no registry hook fits, the telemetry events alone
+  satisfy this requirement and the gap is recorded rather than skipped.
+- The HTTP responses are unchanged: the 429 stays byte-identical across causes; only the *internal*
+  counter label differs.
+
+### 12.8 Accepted residual: a targeted per-email lockout (C-2)
+
+The per-email bucket (`email_capacity` 5, refill 1 per 60 s) is keyed on the HMAC of an address the
+caller supplies, so an attacker who knows a victim's address can send requests (from any IPs)
+that keep that address's bucket empty at a cost of about one request per minute, so the victim's
+own email-first attempt receives a `429`. **Accepted, recorded in 0042**, because the alternative
+(no per-address bucket) removes the email-bombing control of RQ-6. Mitigations that make it
+bounded rather than a denial of login: (a) it affects only that address, only on the email-first
+path; (b) the SPA's 429 state offers the organisation-code (`?realm=`) route, which bypasses
+discovery (§11.5); (c) `?realm=` and the stored slug (ranks 1-2, §11.1) never touch the route;
+(d) the `:rate_limited_email` counter makes sustained targeting visible (§12.7). It does not
+disclose whether the address exists (the 429 is identical for known and unknown addresses).
 
 ---
 
@@ -940,6 +1212,21 @@ This limiter does not discharge the deferred `Letflow.Plugs.RateLimit` row
 - **Isolation (INV-8):** the adapter runs under `try`/`rescue`/`catch` and a hard timeout
   (`timeout_ms`, default 5000, via an inner task that is killed on expiry); a raise, exit or
   timeout is dropped with a fixed log line containing no email, tenant, slug or exception text.
+- **Function-form `start_child`, never MFA with arguments (C-4).** OTP/Elixir crash reports for a
+  task print the started function **and its arguments** (`Function: {M, F, A}` / `Args: [...]`).
+  `submit/3` and the inner timeout task therefore always use `Task.Supervisor.start_child(sup,
+  fun)` with a zero-arity closure, **never** `start_child(sup, module, function, [email, ...])` or
+  any form that places the recipient, tenant list or key in an argument list. The closure body
+  calls the adapter and runs under the `try`/`rescue`/`catch` above, so a crash that is not caught
+  (for example a kill from the timeout) prints only the function reference. The same rule binds the
+  `Bucket` sweep timer and any other process started on this path: no process on the discovery path
+  is started with the email as an MFA argument. A structural test greps `lib/letflow/login_discovery/`
+  for `start_child`/`Task.start`/`spawn` calls with a non-closure form. **Raise test:** the
+  notifier double is set to raise (and, separately, to exit and to sleep past `timeout_ms`) with
+  the typed email in the exception message and in its own state; under `capture_log(level: :debug)`
+  the complete captured output (including any task crash report) is asserted to contain **neither**
+  the email nor its lowercase form; the request response is unchanged and the request process is
+  alive.
 - **Default adapter** `Letflow.LoginDiscovery.Notifier.Noop`: delivers nothing, returns `:ok`, and
   emits only a non-identifying counter or fixed log line. Config:
   `config :letflow, Letflow.LoginDiscovery.Notifier, adapter: ..., timeout_ms: ..., max_concurrent: ...`.
@@ -977,6 +1264,40 @@ This limiter does not discharge the deferred `Letflow.Plugs.RateLimit` row
 The shared rule for all four: where the requirement text and this design differ, this design
 governs and the difference is flagged to `REQ-VALIDATOR` (§0.3), not silently resolved.
 
+### 15.0 REQ-CIP -- trusted-proxy client IP (owner `ELIXIR-DEV`; NEW, working name; `depends_on` of REQ-436 and REQ-437)
+
+Id assigned by `REQ-ANALYST`; `docs/requirements.yaml` is amended by `ORCH`/`REQ-ANALYST`, not in
+this change (§0.3 D11). Proposed `depends_on: [REQ-434]`; REQ-436 gains `REQ-CIP`; REQ-437 gains
+`REQ-CIP` (and keeps `REQ-435`, `REQ-436`). Mandatory `SECURITY-REVIEWER` gate (INV-4/INV-5:
+spoofable limiter key). Spec: §12.6.
+
+**Create:** `lib/letflow/plugs/client_ip.ex` (plug, `resolve/3`, `parse_cidrs/1`, `trusted?/2`;
+no new dependency, CIDR matching is a small pure function over `:inet`);
+`test/letflow/plugs/client_ip_test.exs`;
+`test/letflow/client_ip_runtime_config_test.exs` (env parsing, modelled on
+`secrets_runtime_config_test.exs`).
+
+**Change:** `config/runtime.exs` (`LETFLOW_TRUSTED_PROXIES`, `LETFLOW_LOGIN_DISCOVERY_ENABLED`, the
+`:prod` boot refusal), `config/config.exs` (`enabled` default), `config/test.exs`,
+`deploy/.env.example` (names only), `deploy/nginx/letflow-test.conf` (realip directives, §12.6);
+the QA vhost, which is outside this repository, is recorded in the handoff as an infrastructure
+action with the exact directives. **Not changed (git diff empty):** `lib/letflow/plugs/
+public_read_rate_limit.ex` and its `bucket.ex`, `auth_pipeline.ex`, `api_pipeline.ex`.
+
+**Tests required:** empty trust list -> `client_ip == conn.remote_ip` whatever `X-Real-IP` and
+`X-Forwarded-For` say; peer outside the list sending `X-Real-IP` -> ignored; trusted peer with a
+valid single `X-Real-IP` (v4 and v6) -> that address; trusted peer with no, two, comma-list or
+unparsable `X-Real-IP` -> `remote_ip`; `X-Forwarded-For` never changes the result in any
+combination; CIDR matching table (v4/v6 boundaries, /0, /32, /128, v4-mapped); `parse_cidrs/1`
+rejects malformed entries; runtime config: unset, valid list, invalid entry raises, mount enabled in
+`:prod` with an empty list raises (message names the variables, contains no value), enabled with a
+list boots, `:dev`/`:test` with an empty list only warns; the plug reads no body; **an integration
+test through the real `Letflow.Routers.LoginDiscovery` chain (after REQ-437) showing two requests
+from two different `X-Real-IP` values behind one trusted peer fall into different per-IP buckets**
+(placed in REQ-437's list as well); the UAT step on the real host (U3, U4): two real source
+addresses, two buckets, and the observed container-side peer address recorded; `mix compile
+--warnings-as-errors`, `mix format --check-formatted`, `mix test`, `mix letflow.check_boundaries`.
+
 ### 15.1 REQ-435 -- directory data layer, writers, backfill (owner `ELIXIR-DEV`)
 
 **Create**
@@ -1007,7 +1328,13 @@ governs and the difference is flagged to `REQ-VALIDATOR` (§0.3), not silently r
 | `test/letflow/audit_dispositions_test.exs` (12 call sites), `test/letflow/entities/query_cursor_field_grants_test.exs`, `test/letflow/entities/query_joins_test.exs`, `test/letflow/plugs/iss0736_oidc_live_revocation_test.exs`, `test/letflow/routers/instances_test.exs`, `test/letflow/routers/me_test.exs` (2) | every caller passes `:tenant_id`, or `login_directory: :skip` where the fixture prefix has no `tenants` row; **a grep of `lib/` and `test/` for the three functions is quoted in the handoff** |
 | `config/runtime.exs`, `config/test.exs`, `.env.example` | pepper (§2.2) |
 
-**Tests required** (each maps to a REQ-435 acceptance criterion): migration up/down and
+**Tests required** (each maps to a REQ-435 acceptance criterion; additionally: a JIT
+username-race test, run with the directory hook enabled, in which a competing identity or the
+same identity already holds the `username`, asserting no "current transaction is aborted" error,
+`created: false` and no directory entry for the same-identity loser, the original changeset error
+and no entry for a different-identity collision, and the transaction still committing the
+winner-less path cleanly; plus guard tests for malformed `tenant_id` -> `:invalid_tenant_id` and
+valid-but-mismatched id -> `:tenant_prefix_mismatch`, §3.2): migration up/down and
 public-only (information_schema query); create via POST `/api/v1/users` writes one entry for
 `('Alice@Example.com ')` in the same transaction, and a forced audit failure leaves neither user
 nor entry (technique of `audit_dispositions_test.exs:526-610`); tenant-id source with two tenants
@@ -1026,19 +1353,28 @@ exercise real cross-connection locking; if the SQL sandbox cannot, `TEST-DESIGNE
 gap rather than skipping silently); backfill idempotency with three tenants and overlapping
 emails (second run inserts 0, row set identical, inactive users yield no row, `--dry-run` inserts
 nothing and prints counts, a tenant whose read raises is reported-and-skipped, an `:inactive`
-tenant's users are included); FK cascade; captured-Logger and task-output grep finds no email
-(INV-4); `grep` shows no string-built SQL (INV-7); `login_directory: :skip` appears only under
+tenant's users are included); FK cascade; **query logging (D-3, §3.9): every `Repo` call in the
+directory modules carries `log: false` (grep guard), and a `capture_log(level: :debug)` test over
+create, email-change, deactivation (the removal query), JIT first login and a backfill run finds
+neither the plaintext email, its lowercase form, nor the hex/base64 of its `email_key`; a
+test also asserts the query-count telemetry still fires with `log: false`;** captured-Logger and
+task-output grep finds no email (INV-4); `grep` shows no string-built SQL (INV-7); `login_directory: :skip` appears only under
 `test/`; `mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` and
 `mix letflow.check_boundaries` pass.
 
 ### 15.2 REQ-436 -- limiter (owner `ELIXIR-DEV`)
 
+**Dependencies (D-2):** `depends_on` gains `REQ-CIP` (§15.0); the plug reads the client address
+from `conn.assigns.client_ip` and falls back to `conn.remote_ip`, so the module is testable with the
+stub router alone, but it must not ship ahead of REQ-CIP.
+
 **Create:** `lib/letflow/plugs/login_discovery_rate_limit.ex`;
 `lib/letflow/plugs/login_discovery_rate_limit/bucket.ex`;
 `test/letflow/plugs/login_discovery_rate_limit_test.exs`;
 `test/letflow/plugs/login_discovery_rate_limit/bucket_test.exs`;
-`test/support/login_discovery_probe_router.ex` (a minimal stub `Plug.Router` with the plug first,
-because REQ-437's real router does not exist yet; REQ-437 re-asserts the real chain).
+`test/support/login_discovery_probe_router.ex` (a minimal stub `Plug.Router` with `ClientIp` and
+then the plug first, because REQ-437's real router does not exist yet; REQ-437 re-asserts the real
+chain).
 
 **Change:** `lib/letflow/supervisor/infrastructure.ex` (new `Bucket` child beside `:229`; moduledoc
 child list) and `test/letflow/supervisor/infrastructure_test.exs` (child count `20` -> `21` and
@@ -1051,8 +1387,22 @@ the order assertion, `:70`, `:117`); `config/test.exs` (suite-friendly capacitie
 `/api/public` keys and table are untouched; **independence both ways** (flood the login-discovery
 global bucket -> a `/api/public` request is not 429; flood `/api/public`'s global bucket -> the
 login-discovery stub still serves; the same for per-IP with one IP); the `(ip_capacity+1)`th
-request from one `remote_ip` returns 429, a spoofed `X-Forwarded-For` does not change the key, the
-global bucket trips independently of IP; **the 429 status, headers and body are byte-identical
+request from one client address returns 429, a spoofed `X-Forwarded-For` does not change the key
+(only `conn.assigns.client_ip` does), the global bucket trips independently of any *single* IP
+(driven from many distinct addresses); **ordering (D-1): a single IP sending 10 x
+`global_capacity` requests is refused after its own `ip_capacity` and leaves the global bucket
+with at least `global_capacity - ip_capacity` tokens (assert the global token count directly), a
+second address is still admitted afterwards, and `:ets.info`/`size/1` shows no global token was
+consumed by an IP-refused request; the flood never produces a `:rate_limited_global`
+outcome for the second address; IPv6: addresses sharing a /64 share one bucket, addresses in
+different /64s do not, an IPv4-mapped IPv6 address maps to the same bucket as its IPv4 form
+(`ip_bucket_id/1` table test); `max_ip_keys`: distinct-/64 requests beyond the cap are refused
+without consuming a global token and without evicting existing keys, existing sources are
+unaffected; `max_email_keys`: `validate_config!/1` accepts the defaults and rejects a
+configuration violating `2 x (global_capacity + ceil(global_refill x (T_email_full_max +
+sweep_s)))`; counters (C-1): each refusal emits exactly one `[:letflow, :login_discovery,
+:outcome]` event with `outcome` `:rate_limited_ip`/`:rate_limited_global`/`:rate_limited_email`
+and no other metadata (no email, key, IP);** **the 429 status, headers and body are byte-identical
 for IP, global and per-email refusals** and do not depend on the email; the plug refuses before
 the body is read (an invalid or unreadable body still gets 429); bounded state (10x `max_keys`
 distinct per-email keys never exceed `max_keys`, `:ets.info`-based count; a hot key keeps being
@@ -1076,6 +1426,10 @@ output; `mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix
 `test/letflow/login_discovery/dispatch_test.exs` (notifier failure isolation);
 `test/letflow/routers/login_discovery_timing_test.exs` (tagged sanity bound).
 
+**Dependencies (D-2):** `depends_on` gains `REQ-CIP` (§15.0); the router's chain starts with
+`Letflow.Plugs.ClientIp` (§5.1); the route is **disabled by default in `:prod`** and the boot-time
+refusal of §12.6 applies. Emits the C-1 counters for `:tenant`, `:accepted`, `:not_found` and (from `enabled_gate/2`, defined in `lib/letflow/routers/login_discovery.ex`, §5.1) `:disabled` (§12.7).
+
 **Change:** `lib/letflow/router.ex` (forward and route-table row); `lib/letflow/supervisor/infrastructure.ex`
 (`Letflow.LoginDiscovery.TaskSupervisor`, before the last child) and
 `test/letflow/supervisor/infrastructure_test.exs` (count `21` -> `22`);
@@ -1098,9 +1452,24 @@ response; sanity timing per §10.3 (tagged); cross-tenant isolation (no query on
 tenant `:prefix`; the route touches only `tenant_login_directory` and `tenants`); no input produces
 401 or 403 (enumeration over the §10 classes); router plug-order proof by behaviour (a
 rate-limited request returns 429 even with an invalid body; the 429 equals REQ-436's bytes);
-notifier raise, exit and timeout leave the HTTP response unchanged and the request process alive;
+notifier raise, exit and timeout leave the HTTP response unchanged and the request process alive,
+**and (C-4, §13) with the typed email in the raised message and the double's state, the full
+`capture_log(level: :debug)` output, including the task crash report, contains no email; a grep
+guard shows no `start_child`/`Task.start`/`spawn` with an MFA or argument-list form under
+`lib/letflow/login_discovery/`;**
 the default adapter delivers nothing and logs no email or tenant name; no email address and no raw
-body in captured Logger output; `mix compile --warnings-as-errors`, `mix format --check-formatted`,
+body in captured Logger output, **captured at `level: :debug` over known, unknown, multi and
+malformed requests, and no `email_key` hex/base64 either (D-3, §3.9); every `Repo` call in
+`lookup_by_key/1` carries `log: false`;** **outcome counters (C-1, §12.7): exactly one
+`[:letflow, :login_discovery, :outcome]` event per request with `:tenant` for the Mode B
+single-match, `:accepted` for every 202 (known, multi, unknown, malformed, failure alike, so the
+event does not split them), `:not_found` for a wrong method/path, and metadata containing only
+`outcome`; the mount switch (D12): with `enabled: false` every method/path returns the standard 404
+(byte-identical to the router catch-all), issues zero queries, never invokes `ClientIp` or the
+limiter (no limiter state created), and emits exactly one `:disabled` outcome event whose metadata
+is only `outcome`; toggling `enabled` at runtime in the test needs no recompile; the client-IP integration test of §15.0 (two `X-Real-IP` values behind a
+trusted peer land in two per-IP buckets; with an empty trust list a spoofed `X-Real-IP` changes
+nothing);** the `depends_on` of REQ-437 contains `REQ-CIP` (§0.3 D11); `mix compile --warnings-as-errors`, `mix format --check-formatted`,
 `mix test` and `mix letflow.check_boundaries` pass; the `SECURITY-REVIEWER` verdict is recorded
 against INV-1, INV-2, INV-4, INV-5, INV-6, INV-8, INV-9 (and INV-7 for the touched SQL).
 
@@ -1134,7 +1503,10 @@ stores `bpm_realm_slug`, then calls the **per-slug** manager's `signinRedirect` 
 has zero `input[type=password]`; an unknown-address response and a multi-tenant response render
 identical neutral DOM (snapshot equality); network failure, 429 and malformed response each render
 a distinct non-leaking error state with retry, and the 429 does not reveal whether the address is
-known; the pre-redirect path (for example `/instances/123?tab=x`) survives the email-first page
+known; **(C-2, §11.5) the 429, network-failure and malformed-response states each offer the
+organisation-code control, and submitting a code navigates to `/?realm=<url-encoded code>` with no
+discovery call; the control is present in the idle and neutral states too, and the neutral DOM for
+an unknown and a multi-tenant address remains identical (snapshot equality, control included);** the pre-redirect path (for example `/instances/123?tab=x`) survives the email-first page
 and is restored after login, an unsafe path is dropped (`isSafeRestorePath`); the i18n-grep test;
 a session pre-restored by `tryRestoreE2eSession` never reaches the redirect branch; `cd web &&
 npm run check` passes; the real-flow e2e against a Keycloak with two tenants' realms shows a
@@ -1155,7 +1527,8 @@ satisfies `mix letflow.check_uat_scenario_schema`, otherwise the gap is recorded
 | INV table for INV-1, 2, 4, 5, 6, 7, 8, 9; INV-3 does not apply | §9 |
 | Response-equivalence matrix (known single, known multi, unknown, malformed, inactive-only, active-plus-inactive) with status, body and timing envelope per mode | §10 |
 | Files and tests for REQ-435/436/437/438; mobile and future NOTEs recorded without specifying | §15; §14 |
-| Verdicts by CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER; each open question answered or carried | 0042 "Answers to REQ-434's open questions", "Open questions this record does not answer", "Sign-off" (all `PENDING`) |
+| Verdicts by CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER; each open question answered or carried | 0042 "Answers to REQ-434's open questions", "Open questions this record does not answer", "Sign-off" (re-run after rework 2) |
+| Rework 2 map: D-1 -> §12.2, §12.3, §12.4, §15.2; D-2 -> §0.1, §12.6, §15.0, §11.3, §0.3 D11; D-3 -> §3.9, §9 INV-4, §15.1, §15.3; C-1 -> §12.7; C-2 -> §12.8, §11.5, §15.4; C-3 -> 0042 prohibition 14; C-4 -> §13, §15.3; C-5 -> §11.3, 0042 OQ-3 | this file and 0042 |
 | Diff touches only `docs/migration/decisions/`, `lib/letflow/design/`, requirements bookkeeping | this change adds exactly `docs/migration/decisions/0042-...md` and this file |
 
 Description-item map: (a) §1, (b) §2, (c) §3, (d) §4, (e) §5, (f) §6, (g) §7, (h) §8, (i) §9,
@@ -1176,11 +1549,15 @@ Description-item map: (a) §1, (b) §2, (c) §3, (d) §4, (e) §5, (f) §6, (g) 
 | Q7 | A `--prune` mode for the backfill to remove ghost entries | not built | `REVIEWER` |
 | Q8 | Dual-pepper rotation window | not built; rebuild procedure (§2.4) | `ORCH` |
 | Q9 | Multi-tenant dead end while no mailer exists (0042 OQ-9): ship an adapter first, add manual organisation-code entry, or both | none in this requirement set | `ORCH`, `REVIEWER` |
-| Q10 | Trusted-proxy `remote_ip` handling behind nginx (0042 OQ-5) | none; per-IP bucket may collapse into global | `ORCH` (owning requirement) |
+| Q10 | Trusted-proxy client IP behind Cloudflare and nginx (0042 OQ-5) | **resolved by design:** new REQ-CIP (§15.0, §12.6), `depends_on` of REQ-436/437, boot refusal in `:prod` without a trust list. Open sub-items: Cloudflare `CF-Connecting-IP`/ranges (U3) and the container-side peer address (U4) are verified by the implementer and UAT; QA's vhost is outside the repo; `ORCH`/`REQ-ANALYST` must register REQ-CIP and amend both `depends_on` lists | `ORCH`, `REQ-VALIDATOR` |
 | Q11 | Whether the first-sign-in hand-off through the per-slug manager works end to end (§8.4) | to be proven by REQ-438's real-flow e2e | `FRONTEND-DEV`, `UAT-RUNNER` |
 | Q12 | `lower(btrim())` vs Elixir normalisation parity for non-ASCII addresses (§3.6) | accepted limitation | `REVIEWER` |
-| Q13 | Human or legal owner and lawful basis for the directory's personal data (0042 OQ-3) | proposed policy owner `ORCH`; the controller is not decidable here | `REVIEWER` |
+| Q13 | Human or legal owner and lawful basis for the directory's personal data (0042 OQ-3) | **blocking precondition (C-5):** the flag stays off outside dev until answered (§11.3 item 2); proposed policy owner `ORCH`; the controller is not decidable here and is escalated to the project owner (human); not answerable inside this pipeline | project owner (human), `ORCH` to escalate; `REVIEWER` to confirm it is recorded |
 | Q14 | Realm "Login with email" per realm (0042 OQ-8) | checked by `UAT-RUNNER` | `UAT-RUNNER` |
 | Q15 | Pre-existing unbounded `{:ip, ip}` growth in the `/api/public` `Bucket` (0042 OQ-12) | not fixed here; to be filed | `ORCH` |
+| Q16 | Existing tenant `users` writes and PostgreSQL's own statement log still expose plaintext emails at `:debug`/server level (0042 OQ-13, §3.9) | not changed here; ORCH to file | `ORCH` |
+| Q17 | The same global-before-IP ordering exists in `PublicReadRateLimit.call/2` on `/api/public` (§0.1) | not changed here (0042 OQ-12 extended) | `ORCH` |
+| Q18 | Accepted residual: targeted per-email lockout (§12.8) and the new-IP refusal at `max_ip_keys` (§12.3) | accepted, mitigated by the organisation-code route and counters | `SECURITY-REVIEWER` (re-run) |
 
-Gate verdicts are recorded in 0042's "Sign-off" section only; they are all `PENDING`.
+Gate verdicts are recorded in 0042's "Sign-off" section only; this is rework 2 following
+`SECURITY-REVIEWER`'s FAIL (D-1, D-2, D-3, C-1..C-5), and the gates re-run.

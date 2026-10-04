@@ -142,4 +142,35 @@ defmodule Letflow.Scripts.UatPreflightLocalDepsTest do
 
     refute out =~ "prose-comment/local_deps"
   end
+
+  test "T6: a direct execSync(`psql ...`) template-literal invocation still GAPs " <>
+         "(REVIEWER-found false negative in the first ISS-0915 attempt, which blanked " <>
+         "ALL string/template-literal contents including the command actually executed)",
+       %{tmp_dir: tmp} do
+    out =
+      run_local_deps(tmp, "genuine-execsync-psql-template", """
+      import { execSync } from 'child_process'
+      test('does a thing', () => {
+        const dbUrl = process.env.BPM_TEST_DB_URL
+        const id = '00000000-0000-0000-0000-000000000000'
+        const sql = `INSERT INTO foo (a) VALUES ('${id}')`
+        execSync(`psql "${dbUrl}" -c "${sql}"`, { stdio: 'pipe' })
+      });
+      """)
+
+    assert out =~ "[GAP] genuine-execsync-psql-template/local_deps:"
+  end
+
+  test "T7: web/tests/e2e/env04.e2e.spec.ts's real execSync(`psql ...`) fixture helpers " <>
+         "still GAP when run through local_deps directly against that file's actual content",
+       %{tmp_dir: tmp} do
+    real_spec =
+      Path.join([File.cwd!(), "web/tests/e2e/env04.e2e.spec.ts"])
+
+    body = File.read!(real_spec)
+
+    out = run_local_deps(tmp, "real-env04-spec", body)
+
+    assert out =~ "[GAP] real-env04-spec/local_deps:"
+  end
 end

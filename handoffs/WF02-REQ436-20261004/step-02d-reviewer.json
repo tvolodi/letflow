@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ436-20261004/step-02d-reviewer.json",
   "created_at": "2026-10-04T12:38:24Z",
   "started_at": "2026-10-04T12:38:24Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-04T12:38:55Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -52,5 +52,22 @@
       "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD (limiter, Bucket, infrastructure.ex, tests). Idiom: Bucket is a GenServer that only owns the table and sweep clock; consume/sweep run as plain :ets calls in the caller (select_replace CAS, insert_new, update_counter), a legitimate OTP use of ETS, not a GenServer-as-state-machine crutch (no gen_statem is warranted: token bucket has no states). Supervision: new child placed after the PublicReadRateLimit.Bucket sibling as a leaf under Infrastructure (one_for_one); no spawn, no singleton collapse; own table, own namespace, existing Bucket/PublicReadRateLimit/api_pipeline/auth_pipeline diff is empty. init validates config (fail-fast boot on misconfig, consistent with the project's fail-closed posture; defaults verified valid by SECURITY-REVIEWER) and arms Process.send_after sweep, rescheduled in handle_info; a crash of the owner recreates an empty table (same as sibling; limiter state is soft). Decision records: 0028 s6 placement, 0040 (authenticated RateLimit row untouched), 0042/434 D5/D6/D10/D11/D13/D14 consistent; code matches validated design req436 (inline_sweep_min_interval_ms is a documented design addition, Q4). Scope creep: none; no behaviours/macros/generic plumbing; token algorithm restated, not abstracted. Type safety: bucket_key/ip_bucket_id typed; kind is duplicated in key and row tag but cross-checked by pattern match; no new invalid-state class warranting a type-safety issue file. anti-patterns.md: no applicable entry violated. Child-count prose: infrastructure.ex moduledoc says 22 and lists 22 numbered children, which is CORRECT for a release boot; the test asserts 21 because {Ecto.Migrator, skip: skip_migrations?()} returns :ignore outside a release (RELEASE_NAME unset), so it is not a child under test. Not a defect; the pre-existing prose/test off-by-one (20 vs 21 before this change) is explained the same way. Optionally add a one-line note in the moduledoc that test env runs one fewer (Migrator skipped). Counter-leak note from 02c: reviewed; design Q3 deliberately rejected reconcile (would race in-flight reservations); fails closed, bounded, negligible; no change required, agree with non-blocking.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Optional doc tidy: infrastructure.ex moduledoc could note that under test (RELEASE_NAME unset) Ecto.Migrator is skipped so Supervisor.which_children shows 21, not 22. Not blocking.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "INFO",
+        "description": "Counter leak on killed request process between reserve and insert_new is accepted per design Q3; a reconcile would race with reservations. No fix required. If ever desired, reconcile only inside a quiescent window or use select_count under the sweep with a high-water guard.",
+        "affected_requirement": "REQ-436"
+      }
+    ],
+    "next_action": "PASS: route to TEST-DESIGNER (step 03)."
+  }
 }

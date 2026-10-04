@@ -31343,8 +31343,16 @@ requirements:
       (REQ-419's dependency guard forbids webview packages).
       4. Tokens persisted ONLY through one class in lib/auth/ backed by
       flutter_secure_storage, keyed by tenant (realm_url) so tenant A's
-      tokens are never presented to tenant B. REQ-422 hardens and guards
-      this; REQ-421 must not introduce any other storage path for tokens.
+      tokens are never presented to tenant B. REQ-422 hardens this one
+      storage path -- encrypted-at-rest options, redacted logging,
+      transport/cleartext checks, audience scoping, secret masking; see
+      REQ-422's own acceptance_criteria for the authoritative list. Key
+      rotation, biometric gating, and tamper detection are NOT in REQ-422's
+      scope and are out of scope for the current mobile security hardening
+      pass -- if still wanted, they need their own new requirement with
+      real acceptance criteria (ISS-0882), not an inferred extension of
+      REQ-422. REQ-421 must not introduce any other storage path for
+      tokens.
       5. Before any tenant content: GET /api/v1/me/memberships and
       GET /api/v1/me/modules (lib/letflow/routers/me.ex:74, :78) and build
       the route table from installed_modules (architecture.md §6 -- a

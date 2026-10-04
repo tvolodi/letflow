@@ -2702,3 +2702,4 @@
 2026-10-04T12:21:32Z | DONE | WF-02 | WF02-REQ439-20261004 | ORCH -> main | merged 0bd6c305 via PR #2200, squash, all CI checks green, no override needed
 2026-10-04T12:21:32Z | RELEASE_LOCK | WF-02 | WF02-REQ439-20261004 | ORCH -> letflow-queue | task 948 done
 2026-10-04T12:21:32Z | RUN_START | WF-02 | WF02-REQ436-20261004 | ORCH | REQ-436 / Q-945 / GH#2193 started on feature/WF02-REQ436-20261004
+2026-10-04T13:01:11Z | RUN_DONE | WF-02 | WF02-REQ436-20261004 | ORCH | gates green (design after 2 reworks, security, idiom, tests after 1 rework, release, doc; scoped test runs only, CI is the full-suite gate); PR #2202 left open for parent to merge; queue lock 945 NOT released by this run (parent's).

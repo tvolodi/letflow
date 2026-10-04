@@ -520,3 +520,28 @@ history:
       CODE-DESIGN-VALIDATOR PASS (round 4), SECURITY-REVIEWER RATIFIED,
       REVIEWER RATIFIED. No application code. Branch
       design/REQ-434-email-first-login-directory.
+
+  - req: REQ-439
+    event: started
+    agent: ORCH
+    at: "2026-10-04T11:05:18Z"
+    note: >
+      WF-02 run WF02-REQ439-20261004 (Q-948, GH#2198) started on branch
+      feature/WF02-REQ439-20261004. The started event was not logged at
+      pickup; recorded retroactively by DOC-UPDATER at Step 6 using the
+      run's recorded start time.
+
+  - req: REQ-439
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-04T11:43:29Z"
+    note: >
+      Trusted-proxy client IP resolution (REQ-CIP) complete (Q-948, GH#2198):
+      Letflow.Plugs.ClientIp, LETFLOW_TRUSTED_PROXIES and
+      LETFLOW_LOGIN_DISCOVERY_ENABLED runtime config, the :prod boot
+      refusal, deploy/.env.example names, and the deploy/nginx
+      letflow-test.conf realip directives. RELEASE-VALIDATOR PASS.
+      QA vhost is outside the repository (design U4); its directives are
+      recorded in the run handoff as an infrastructure action. The feature
+      flag is not authorised for enabling by this requirement (0042 OQ-3,
+      lawful basis, remains open). Branch feature/WF02-REQ439-20261004.

@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ436-20261004/step-01-code-designer.json",
   "created_at": "2026-10-04T12:21:19Z",
   "started_at": "2026-10-04T12:21:19Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-04T12:26:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -55,5 +55,18 @@
       "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Design for REQ-436 written: exact signatures/@specs for the plug and Bucket, ETS row layout (integer micro-token 4-tuples + 3 bookkeeping rows), select_replace CAS with insert_new and fail-closed bounded retries, reserve-then-insert update_counter population counting with two caps, select_delete guard sweep plus throttled inline sweep, config table, validate_config!/1 formula and call site (Bucket.init/1), telemetry, Infrastructure placement after PublicReadRateLimit.Bucket (test count 20->21), test seams, ip_bucket_id/1 table, AC traceability. No implementation code.",
+    "artifacts_out": [
+      "lib/letflow/design/req436-login-discovery-rate-limiter.md"
+    ],
+    "issues": [
+      "Q1: 434 s12.2 says the 429 sets common security headers but Response.rate_limited sets none; design sets Retry-After only",
+      "Q4: adds config key inline_sweep_min_interval_ms beyond 434 s12.4 (REQ-VALIDATOR to accept)",
+      "Q8: 434 s15.2 asks for config/test.exs change; barred by PR #2201, tests use Application.put_env",
+      "Q3/Q5/Q6/Q7 minor residuals recorded"
+    ],
+    "next_action": "CODE-DESIGN-VALIDATOR (WF-02 step 01 gate)"
+  }
 }

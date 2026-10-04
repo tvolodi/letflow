@@ -9,7 +9,7 @@
   "created_at": "2026-10-04T12:26:06Z",
   "started_at": "2026-10-04T12:26:06Z",
   "completed_at": "2026-10-04T12:29:30Z",
-  "status": "COMPLETED",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -32,7 +32,7 @@
     "branch_name": "feature/WF02-REQ436-20261004"
   },
   "task": {
-    "description": "WF-02 step 01b hard gate: independently validate lib/letflow/design/req436-login-discovery-rate-limiter.md against every acceptance criterion (read the .md itself), no implementation code bodies, signatures/error shapes complete, consistency with merged req434 design s0.3/s12 (design governs), no planned edits to config/test.exs, config/runtime.exs, lib/letflow/identity*, login_directory*, routers/identity.ex (PR #2201), no new env var. Rule on design Q1 (headers), Q4 (extra config key inline_sweep_min_interval_ms) and the CAS/population-counting soundness (can the cap be exceeded or a live key evicted? any leak of reserved slots?).",
+    "description": "WF-02 step 01b hard gate: independently validate lib/letflow/design/req436-login-discovery-rate-limiter.md against every acceptance criterion (read the .md itself), no implementation code bodies, signatures/error shapes complete, consistency with merged req434 design s0.3/s12 (design governs), no planned edits to config/test.exs, config/runtime.exs, lib/letflow/identity*, login_directory*, routers/identity.ex (PR #2201), no new env var. Rule on design Q1 (headers), Q4 (extra config key inline_sweep_min_interval_ms) and the CAS/population-counting soundness (can the cap be exceeded or a live key evicted? any leak of reserved slots?). RE-VALIDATION after design rework 1 (commit 40a2e0cb): re-check each prior issue and the whole design again; flip status to COMPLETED/FAILED as normal.",
     "acceptance_criteria": [
       "keys are namespaced and separate: a grep/test shows every ETS key this limiter writes begins with :login_discovery, lives in its own table, and that the existing Bucket's :global and {:ip, ip} keys used by /api/public are unchanged",
       "independence test: flooding the login-discovery global bucket to exhaustion leaves a /api/public request unaffected (not 429), and flooding the /api/public global bucket leaves login-discovery requests unaffected; the same for per-IP buckets with one IP; both directions quoted",
@@ -120,5 +120,6 @@
       "pr_create_error": null
     },
     "next_action": "Rework CODE-DESIGNER: close the BLOCKER (Q1 headers on send_rate_limited/1) and the MAJOR spec/test-outline items listed, then re-submit to CODE-DESIGN-VALIDATOR."
-  }
+  },
+  "rework_count": 1
 }

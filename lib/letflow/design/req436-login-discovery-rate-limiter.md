@@ -27,10 +27,12 @@ unresolved matter is in s14 (open questions); nothing is "TBD".
 | V8 | `test/support/` has no probe router for this; REQ-436 adds one (434 s15.2) | directory listing |
 | V9 | The existing test for the public limiter uses unique RFC 5737 documentation addresses and `async: false` to avoid the shared node-wide table | `test/letflow/plugs/public_read_rate_limit_test.exs:1-45` |
 
-Discrepancy recorded, not silently resolved (see Q1): 434 s12.2 says the 429 constructor "sets the
-common security headers"; V3 shows `Response.rate_limited/2` sets none and the repo has no shared
-"security headers" helper for this mount. This design sets exactly `Retry-After` plus what
-`Response.rate_limited/2` already sets, and records the gap.
+Header set (rework 1, validator BLOCKER). 434 s5.5 requires `Cache-Control: private, no-store`,
+`Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex, nofollow` on EVERY response of the
+route, and 434 s12.2 says `send_rate_limited/1` sets "the common security headers". The limiter
+runs before `:match`, so the route's own header setter never runs for its 429s; the headers are
+therefore set inside `send_rate_limited/1` (s6.6). V3 shows `Response.rate_limited/2` sets none of
+them, so no helper is reused; the constants are defined once in this module.
 
 ---
 
@@ -78,7 +80,15 @@ REQ-435/437).
 
 @type kind :: :global | :ip | :email_hmac | :email_send        # the row's kind tag
 @type population :: :ip | :email                               # :email = :email_hmac + :email_send
-@type config :: %{atom() => number()}                           # merged defaults + app env, s6
+@type sweep_scope :: population() | :all
+@type config :: %{
+        global_capacity: pos_integer(), global_refill_per_sec: pos_number(),
+        ip_capacity: pos_integer(), ip_refill_per_sec: pos_number(),
+        email_capacity: pos_integer(), email_refill_per_sec: pos_number(),
+        send_capacity: pos_integer(), send_refill_per_sec: pos_number(),
+        max_email_keys: pos_integer(), max_ip_keys: pos_integer(),
+        sweep_interval_ms: pos_integer(), retry_after_seconds: pos_integer(),
+        inline_sweep_min_interval_ms: pos_integer()}   # exactly the s6.1 keys
 ```
 
 `:email_hmac` keys carry the 434 s2 email key (a binary, the HMAC output); `:email_send` keys carry
@@ -115,7 +125,7 @@ keys below.
 |---|---|---|
 | `{:login_discovery, :count, :ip}` | `{key, :count, n :: non_neg_integer()}` | live-row count of the IP population |
 | `{:login_discovery, :count, :email}` | `{key, :count, n :: non_neg_integer()}` | live-row count of the email-kind population |
-| `{:login_discovery, :inline_sweep, :at}` | `{key, :inline_sweep, last_ms :: integer()}` | rate-limit marker for inline sweeps (s7.3) |
+| `{:login_discovery, :inline_sweep, population()}` (one row per population) | `{key, :inline_sweep, last_ms :: integer()}` | rate-limit marker for inline sweeps (s7.3) |
 
 **Refill arithmetic (integer, shared by `consume`, the sweep guard and the tests).** Let
 `rate_u_s = round(refill_per_sec * 1_000_000)` (micro-tokens per second, a positive integer; for the
@@ -155,8 +165,8 @@ retained); the GenServer is only the table owner and the sweep clock.
 @spec consume(bucket_key(), pos_integer(), number()) :: :ok | :rate_limited
   # arity 3 defaults now_ms to System.monotonic_time(:millisecond); arity 4 is the test seam
 
-@spec sweep(now_ms :: integer()) :: non_neg_integer()      # rows deleted, all kinds
-@spec sweep(now_ms :: integer(), population()) :: non_neg_integer()
+@spec sweep(now_ms :: integer()) :: non_neg_integer()      # sweep/2 with scope :all; rows deleted, all kinds
+@spec sweep(now_ms :: integer(), sweep_scope()) :: non_neg_integer()
 @spec size(population()) :: non_neg_integer()              # O(1): reads the count row
 @spec token_count(bucket_key(), now_ms :: integer()) :: {:ok, float()} | :absent
   # test/observability helper: effective tokens (refilled_u / 1_000_000) without consuming;
@@ -175,7 +185,7 @@ caps. It reads the two population caps lazily, only when it must create a *new* 
 needs per-kind capacity and refill and reads them from the same `config/0`. **Decision:** one
 config source of truth (the plug module's `config/0`), called at runtime by `Bucket`; the
 alternative of passing caps through every `consume` call was rejected because the sweep also needs
-them and a second plumbing path invites drift.
+them and a second plumbing path invites drift. Corollary: `consume` trusts its caller's capacity/refill while the sweep uses `config/0`; every caller (the plug, `consume_email`) passes the `config/0` values for that kind, and tests of sweep/eviction (T7, T9) must do the same, otherwise a row could be swept against a different capacity than it was consumed under.
 
 ---
 
@@ -195,6 +205,12 @@ true compare-and-swap: it returns `1` when the row was still exactly the one rea
 - A `GenServer.call` or an `:ets` lock: serialises the hot path; 434 s12.3 forbids it.
 - `:ets.update_element/3`: updates fields atomically but is unconditional, so it cannot detect an
   interleaved writer.
+
+Match-spec form: the head is the literal tuple including its literal key, so ETS resolves the
+key directly and the `select_replace` is an O(1) keyed operation, never a table scan (an
+implementer must not write the head with `:"$1"` for the key); the body must return the new
+tuple wrapped as a constant (`{:const, new_tuple}`, equivalently the double-brace form),
+since a bare tuple in a match-spec body is read as an expression.
 
 Literal-term caveat for the match head: every element of the stored tuple (atoms, integers,
 binaries, nested tuples of integers) is a legal literal in a match head. The key never contains an
@@ -272,8 +288,8 @@ see Q3.
 @spec send_rate_limited(Plug.Conn.t()) :: Plug.Conn.t()    # sends the 429 AND halts
 @spec ip_bucket_id(:inet.ip_address()) :: ip_bucket_id()
 @spec client_address(Plug.Conn.t()) :: :inet.ip_address()
-@spec config() :: %{...}                            # merged defaults + app env, s6.1
-@spec validate_config!(keyword()) :: :ok            # raises ArgumentError on violation
+@spec config() :: config()                          # s2 type; merged defaults + app env, keys exactly s6.1
+@spec validate_config!(overrides :: keyword()) :: :ok   # raises ArgumentError on violation
 @spec defaults() :: keyword()
 ```
 
@@ -297,7 +313,7 @@ Defaults are code constants returned by `defaults/0` (434 s12.4); no `config/*.e
 | `max_ip_keys` | 100_000 | pos_integer | cap gate |
 | `sweep_interval_ms` | 30_000 | pos_integer | `Bucket` timer; invariant |
 | `retry_after_seconds` | 60 | pos_integer | `send_rate_limited/1` (constant `Retry-After`) |
-| `inline_sweep_min_interval_ms` | 1_000 | pos_integer | inline-sweep throttle (s7.3). **New key beyond 434 s12.4**, added so the cap-full path cannot become an O(n)-per-request CPU amplifier; Q4 |
+| `inline_sweep_min_interval_ms` | 1_000 | pos_integer | inline-sweep throttle (s7.3); validated in s6.2 check 1. **New key beyond 434 s12.4**, added so the cap-full path cannot become an O(n)-per-request CPU amplifier; Q4 |
 
 Float defaults are written as exact rationals in code (`1/60`, `1/900` evaluated) so the derived
 `rate_u_s` equals `1000000/60 -> 16667` and `1111` deterministically (`round/1`).
@@ -306,13 +322,17 @@ Float defaults are written as exact rationals in code (`1/60`, `1/900` evaluated
 
 - **Called from:** `Bucket.init/1` (boot-time; a violation raises, the child fails to start, the
   supervisor start fails, the application does not boot) and directly from tests. It takes a
-  *keyword/map of overrides* and validates `defaults ++ overrides` so tests can pass partial config.
+  **keyword list** of overrides (`Bucket.init/1` passes `Application.get_env(:letflow,
+  Letflow.Plugs.LoginDiscoveryRateLimit, [])`, itself a keyword; `config/0` is the same merge
+  returned as a map) and validates `Keyword.merge(defaults(), overrides)` so tests can pass partial config.
   Returns `:ok` or raises `ArgumentError`. The message names the offending key(s) and the formula
   terms by name; values are numeric config, not secrets (INV-4 N/A), and no email/IP/key is in
   scope.
 - **Checks, in order:**
-  1. every capacity and key cap and `sweep_interval_ms` and `retry_after_seconds` is a positive
-     integer; every `*_refill_per_sec` is a positive number (`is_number and > 0`);
+  1. every capacity, both key caps, `sweep_interval_ms`, `retry_after_seconds` and
+     `inline_sweep_min_interval_ms` is a positive integer; every `*_refill_per_sec` is a positive number (`is_number and > 0`) **and** `round(refill_per_sec * 1_000_000) >= 1` for each of the four refill
+     keys (a refill below 5.0e-7 would round to 0 micro-tokens/s and the bucket would never refill);
+     the error message names the key and says "refill rounds to zero micro-tokens per second";
   2. `max_ip_keys >= ip_capacity` (434 s12.3: "positive and not smaller than `ip_capacity`");
   3. the email-population invariant:
      `max_email_keys >= 2 * (global_capacity + ceil(global_refill_per_sec * (t_email_full_max +
@@ -372,14 +392,18 @@ Tests that need the clock pass `now_ms` (arity 3).
 
 ### 6.6 `send_rate_limited/1` -- the single constructor (criterion 6)
 
-Sequence, no branching on any argument other than the conn: `Plug.Conn.put_resp_header(conn,
-"retry-after", Integer.to_string(retry_after_seconds))` -> `Letflow.Api.Response.rate_limited(conn,
-"rate limit exceeded")` -> `Plug.Conn.halt/1`. The detail string is a fixed literal; nothing about
-the cause (IP/global/email), the email, the IP or the key is passed in or reachable, so the status,
-headers and body are byte-identical across the three causes **by construction**. The body's only
-variable part is `trace_id` (V3), taken from `conn.assigns[:trace_id]`, independent of cause; the
-byte-comparison test sets the same `trace_id` assign on all three conns (or none). The constructor
-is the only code in the module that calls `Response.rate_limited`.
+Sequence, no branching on any argument other than the conn: `Plug.Conn.put_resp_header` four
+times with the constants `retry-after` = `Integer.to_string(retry_after_seconds)`, `cache-control` =
+`"private, no-store"`, `referrer-policy` = `"no-referrer"`, `x-robots-tag` = `"noindex, nofollow"`
+(434 s5.5; header names lowercase, as Plug requires) -> `Letflow.Api.Response.rate_limited(conn,
+"rate limit exceeded")` -> `Plug.Conn.halt/1`. The three non-`retry-after` values are module
+attribute constants, shared by every cause. CORS headers stay with the upstream Cors plug of the
+chain (not set here). The detail string is a fixed literal; nothing about the cause
+(IP/global/email), the email, the IP or the key is passed in or reachable, so status, headers and
+body are byte-identical across the three causes **by construction**. The body's only variable
+part is `trace_id` (V3), from `conn.assigns[:trace_id]`, independent of cause; the byte-comparison
+test sets the same `trace_id` on all three conns (or none). This is the only code in the module
+that calls `Response.rate_limited`.
 
 ### 6.7 `ip_bucket_id/1` table (criterion 5; pure, total over `:inet.ip_address()`)
 
@@ -406,7 +430,7 @@ Not mapped (stated, not a gap): NAT64 `64:ff9b::/96`, 6to4 `2002::/16`, Teredo. 
 else is ever deleted: a live key is never evicted, so no bucket can be refilled faster than its
 normal rate.
 
-### 7.1 `sweep(now_ms, population \\ :all)` -- one `:ets.select_delete/2` per kind
+### 7.1 `sweep(now_ms, scope \\ :all)` -- one `:ets.select_delete/2` per kind
 
 For each swept kind (`:ip`; `:email_hmac`; `:email_send`; **never `:global`**) with
 `cap_u` and `rate_u_s` from `config/0`, one `select_delete` is issued whose match specification is
@@ -441,7 +465,7 @@ semantics).
 
 Called by a request process from the cap gate (s5.1 step 3) for exactly the full population. To
 prevent every cap-full request from running an O(n) sweep, it is throttled by the
-`{:login_discovery, :inline_sweep, :at}` row: the caller reads `last_ms`; if `now_ms - last_ms <
+`{:login_discovery, :inline_sweep, population}` row of the full population (an `:ip` sweep never suppresses an `:email` one): the caller reads `last_ms`; if `now_ms - last_ms <
 inline_sweep_min_interval_ms` the inline sweep is skipped (the gate then simply re-checks the count
 once and refuses if still full); otherwise the caller claims the slot with `select_replace` (CAS) on
 that row (or `insert_new` when absent) and, only if it won, runs `sweep(now_ms, population)`. The
@@ -456,16 +480,18 @@ regardless of how many requests hit a full population.
   validate) can never push `size(:email)` above `max_email_keys`: each new key must reserve a slot
   first (s5.1). The test asserts `size(:email) <= max_email_keys` after each batch and
   `:ets.select_count` by kind agrees.
-- **Hot key after unrelated keys idle and swept (criterion 7).** With the injectable clock: fill
-  many keys at `t0`, drain one hot key, advance `now_ms` past the longest full-refill window,
-  `sweep(now_ms)`. Unrelated keys are gone (`size` drops), the hot key (still not refilled to
-  capacity if drained recently enough relative to the injected time) is *not* deleted and remains
-  limited; a swept key behaves as a fresh bucket (a `consume` afterwards is `:ok` with full
-  capacity). A key at capacity is never deleted *while non-idle*: asserted by consuming from a key,
-  sweeping at `last_ms` (no elapsed time), and asserting the row still exists.
+- **Hot key after unrelated keys idle and swept (criterion 7).** Concrete scenario with defaults
+  (`:email_hmac`: capacity 5, refill 1/60 per s, so one consumed token is back in 60 s and an empty
+  bucket is full in 300 s), every `consume` using the config values for that kind (s4.1 note):
+  at `t0` consume one token from each of N unrelated keys and drain the hot key to 0; `sweep(t0 +
+  120_000)` -> all N unrelated keys are gone (`size` drops by N), the hot key row is present and the
+  next `consume(hot, ..., t0 + 120_000)` is still `:rate_limited`; `sweep(t0 + 301_000)` -> the hot
+  key row is gone and `consume` is `:ok` against a full bucket (a swept key behaves as fresh). A
+  sweep at exactly `t0` (no elapsed time) leaves every row consumed at `t0` in place (non-idle
+  rows are never evicted).
 - **Two caps (criterion 8).** `max_ip_keys` set small via `put_env`; the (cap+1)th distinct /64 gets
   `:rate_limited` from the IP step, so `call/2` does not reach the global step (global
-  `token_count` unchanged, asserted), no existing IP row is deleted (all earlier ids still present),
+  `token_count` unchanged, asserted), no existing IP row is deleted (all earlier ids still present; the test sets `ip_refill_per_sec` to `0.0001` and a fixed or negligible elapsed time so those rows are non-idle for the whole test, and also asserts the inline sweep run by the cap-full path removed none of them, `sweep` return 0 for `:ip`),
   and requests from earlier sources are still admitted until their own bucket empties.
 
 ---
@@ -576,15 +602,17 @@ any path (criterion 13: nothing in this module can put an email, key or IP in lo
   /64 consuming one bucket.
 - **T6 (crit 6):** three conns refused by IP, global, email causes (global forced by lowering
   `global_capacity`, email forced via `/probe-email`); compare `resp.status`, the full sorted
-  response header list and `resp.resp_body` for equality after fixing `trace_id`; repeat with two
+  response header list and `resp.resp_body` for equality after fixing `trace_id`; assert on all three
+  that `retry-after` equals the configured constant and `cache-control` = `private, no-store`,
+  `referrer-policy` = `no-referrer`, `x-robots-tag` = `noindex, nofollow`; repeat with two
   different emails and assert identical bytes; send an invalid/unreadable body (for example a
   malformed `content-type` and truncated JSON) to a refused source and assert 429 (the body was not
   read).
-- **T7 (crit 7):** bucket-level with `max_email_keys` lowered; sweep with injected clock as in
-  s7.4; `size/1` vs `:ets.select_count`.
-- **T8 (crit 8):** `max_ip_keys` lowered; `validate_config!/1` accepts `[]` (defaults) and raises
+- **T7 (crit 7):** bucket-level with `max_email_keys` lowered; sweep with injected clock using the
+  exact times of s7.4 (t0, t0+120 s, t0+301 s); `size/1` vs `:ets.select_count`.
+- **T8 (crit 8):** `max_ip_keys` lowered and `ip_refill_per_sec: 0.0001` (earlier rows stay non-idle on the real clock, no flake); `validate_config!/1` accepts `[]` (defaults) and raises
   for `[max_email_keys: 1_000]`, for a non-positive capacity and for `max_ip_keys < ip_capacity`.
-- **T9 (crit 9):** `Task.async_stream` of `N = 200` `consume/4` calls at one fixed `now_ms` on one
+- **T9 (crit 9):** (all bucket calls pass the capacity/refill that `config/0` holds for that kind, s4.1) `Task.async_stream` of `N = 200` `consume/4` calls at one fixed `now_ms` on one
   key with capacity `C = 5` and `max_concurrency` large; the count of `:ok` is `<= 5` (and equals 5
   absent exhaustion; the assertion is `<=`). Repeated 20 times to give the race a chance.
 - **T10 (crit 10):** the Nth `consume_email(k, :request)` across different source addresses is
@@ -632,11 +660,7 @@ lib/letflow/plugs/public_read_rate_limit/bucket.ex` printing nothing.
 
 ## 14. Open questions (none silently resolved; each has a stated default the implementer follows)
 
-- **Q1 (security headers).** 434 s12.2 says the 429 constructor "sets the common security
-  headers"; no such helper exists for this mount (V3). **Default followed:** set only `Retry-After`
-  plus what `Response.rate_limited/2` sets. If REQ-437's router chain adds response headers
-  (for example a shared header plug), they apply equally to every cause. A shared headers helper is
-  REQ-437's to introduce; `REQ-VALIDATOR` / `SECURITY-REVIEWER` to confirm this reading.
+- **Q1.** Closed in rework 1: the 434 s5.5 header set is set inside `send_rate_limited/1` (s6.6); no open question remains.
 - **Q2 (`@max_cas_attempts` value).** 8 is chosen, not derived. Exhaustion fails closed, so a low
   value cannot over-admit. `ELIXIR-DEV` may raise it only with a recorded reason.
 - **Q3 (count-slot leak on a killed request process).** Between the reserve (`update_counter`) and

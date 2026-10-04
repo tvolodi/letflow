@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ436-20261004/step-01-code-designer.json",
   "created_at": "2026-10-04T12:21:19Z",
   "started_at": "2026-10-04T12:21:19Z",
-  "completed_at": "2026-10-04T12:26:00Z",
-  "status": "PENDING",
+  "completed_at": "2026-10-04T12:29:54Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -57,17 +57,12 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Design for REQ-436 written: exact signatures/@specs for the plug and Bucket, ETS row layout (integer micro-token 4-tuples + 3 bookkeeping rows), select_replace CAS with insert_new and fail-closed bounded retries, reserve-then-insert update_counter population counting with two caps, select_delete guard sweep plus throttled inline sweep, config table, validate_config!/1 formula and call site (Bucket.init/1), telemetry, Infrastructure placement after PublicReadRateLimit.Bucket (test count 20->21), test seams, ip_bucket_id/1 table, AC traceability. No implementation code.",
+    "summary": "Rework 1 closes all validator issues: send_rate_limited/1 now sets retry-after plus cache-control private,no-store, referrer-policy no-referrer, x-robots-tag noindex,nofollow (434 s5.5), T6 asserts them; config() typed with the s6.1 keys; sweep_scope type (population | :all); validate_config!/1 takes a keyword, validates inline_sweep_min_interval_ms and rejects refill rounding to zero micro-tokens/s; hot-key scenario given concrete times (t0, +120s, +301s); T8 uses ip_refill_per_sec 0.0001 and asserts inline sweep removed nothing; inline-sweep marker per population; sweep/consume config-consistency note; match-spec note (literal key O(1), const body). Q1 closed.",
     "artifacts_out": [
       "lib/letflow/design/req436-login-discovery-rate-limiter.md"
     ],
-    "issues": [
-      "Q1: 434 s12.2 says the 429 sets common security headers but Response.rate_limited sets none; design sets Retry-After only",
-      "Q4: adds config key inline_sweep_min_interval_ms beyond 434 s12.4 (REQ-VALIDATOR to accept)",
-      "Q8: 434 s15.2 asks for config/test.exs change; barred by PR #2201, tests use Application.put_env",
-      "Q3/Q5/Q6/Q7 minor residuals recorded"
-    ],
-    "next_action": "CODE-DESIGN-VALIDATOR (WF-02 step 01 gate)"
+    "issues": [],
+    "next_action": "CODE-DESIGN-VALIDATOR re-check"
   },
   "rework_count": 1
 }

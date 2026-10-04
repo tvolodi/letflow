@@ -9,7 +9,10 @@ Governing decision record: `docs/migration/decisions/0042-email-first-login-tena
 ("0042"). 0042 holds the amendments to 0006 §3.3/§7 item 3, 0038 and 0035, the standing
 prohibitions, the accepted bounded inference and the `PENDING` gates. Where REQ-435..438's own
 text and this design differ, this design governs and each difference is listed in §0.3 so
-`REQ-VALIDATOR` can reconcile it; none is resolved silently.
+`REQ-VALIDATOR` can reconcile it; none is resolved silently. **Amended by 0043 D-C** (key id, dual-read, pepper
+provisioning; rows D15-D20 of §0.3): §1.1, §1.2, §2.1, §2.2, §2.4, §3.6, §3.7, §4, §5.3, §5.4,
+§12.2, §15.1 and §17 carry the amendments; the 0043 D-A/D-B/D-D items (per-tenant disclosure,
+mail adapter, enablement gate) are **not** designed here.
 
 The requirement's description items (a)-(l) are specified in §§1-8, 9, 11 and 14; the
 item-to-section map is in §16.
@@ -70,6 +73,11 @@ item-to-section map is in §16.
 | (D-2) The tree has **no** client-IP resolution: `conn.remote_ip` is the only IP read, by `PublicReadRateLimit` alone; no `RemoteIp` dependency, no `x-forwarded-for`/`x-real-ip` handling in `lib/` or `config/` | `grep -rn "remote_ip\|x-forwarded\|x-real-ip\|RemoteIp\|cidr" lib config mix.exs` -> only `lib/letflow/plugs/public_read_rate_limit.ex:4,44` (plus design prose) | verified. Behind the real topology `conn.remote_ip` is therefore the proxy hop (the docker bridge peer of the published port), shared by every visitor; the exact container-side address was not observable from the repo (U4) |
 | (rework 2, D-1) The existing `PublicReadRateLimit.call/2` consumes `global` **then** per-IP (`with :ok <- global, :ok <- ip`) and `Bucket` has one table, check-then-write, no eviction | `lib/letflow/plugs/public_read_rate_limit.ex:36-52`; `public_read_rate_limit/bucket.ex:31-33`, `:58-78` | verified; the same ordering defect exists on `/api/public` (carried as 0042 OQ-12, not fixed here) |
 | (rework 2, D-3) Ecto logs queries with bound parameters at `:debug` by default; the repo sets no `log:` default for `Letflow.Repo`; the logger level is `:debug` in test and `LOG_LEVEL`-controlled (`debug` accepted) elsewhere; a per-call `log: false` is already used in this tree | `config/runtime.exs:75-101`; `lib/letflow/sandbox_pool.ex:964`, `lib/letflow/tenant_provisioning.ex:386` (`log: false`) | verified: no `log:` config for the Repo found in `config/`; Ecto's default param logging is Ecto behaviour (not read from the repo's deps in this pass) |
+| (0043 D-C delta) PR #2201 / branch `feat/REQ-435-login-directory` already implements the single-pepper form of the whole former REQ-435 | `git ls-tree origin/main priv/repo/migrations/` has no `20261004000001_*` (the migration is unmerged); `lib/letflow/login_directory.ex:50-357` (keys, lookup, plan, `apply_plan/3`, `upsert_entry/2`, `remove_entry_if_unreferenced/3`); `lib/letflow/login_directory/backfill.ex:57-145`; `config/runtime.exs:74-118` (one pepper, one config key `:login_directory_pepper`); `config/test.exs:24-30`; `.env.example:26` | verified. No `key_id` anywhere in the tree. |
+| (D-C delta) Single-key assumptions the amendment must change: `lookup_by_key/1` takes one key (`login_directory.ex:123-142`); `sentinel_key/0` yields one (`:87-93`); `remove_entry_if_unreferenced/3` deletes only `d.email_key == ^key` (`:318-324`); `upsert_entry/2` and the backfill build rows without `key_id` (`:264-268`; `backfill.ex:133`); the advisory lock and `plan_keys/1` derive from `email_key/1`, i.e. the current key (`:215-228`, `:348-356`) | same files | verified; the last item needs **no** change (it already locks the current key) |
+| (D-C delta) REQ-440's write path is already in the PR: `Identity` calls only `LoginDirectory.plan_user_change/2` and `apply_plan/3` (`identity.ex:496-512`, `:1976-1992`) and never reads a key or the pepper | `identity.ex` as cited | verified; `identity.ex` needs **no** change for D-C |
+| (D-C delta) Five test files swap the global `:login_directory_pepper` application env | `grep -rn login_directory_pepper test` -> `identity_login_directory_test.exs:27-38`, `login_directory_test.exs:23-34,140`, `login_directory/backfill_test.exs:198-200`, `routers/identity_login_directory_test.exs:77-79` | verified; they follow the config-shape change of §2.2 |
+| (D-C) A subprocess runtime-config test precedent that needs no database: `mix run --no-start -e <probe>` with `env:` nil-ing inherited vars | `test/letflow/client_ip_runtime_config_test.exs:10-12,39,56-72`; `test/letflow/secrets_runtime_config_test.exs` (empty string indistinguishable from absent, moduledoc) | verified |
 
 ### 0.2 Claims that could not be verified from the repository
 
@@ -106,6 +114,12 @@ item-to-section map is in §16.
 | D12 | REQ-437 (always-mounted route) | A boot-time precondition needs a server-side switch | New config `enabled` on the mount (default `false` in `:prod`, `true` in dev/test); disabled -> the route-level `404` (already in the closed status set). §12.6. |
 | D13 | REQ-436 limiter keys on "the client IP"; AC "global bucket trips independently" | Global-before-IP order drained the global bucket with refused requests (`SECURITY-REVIEWER` D-1) | Per-IP first, global only for IP-admitted requests; IPv6 aggregated to /64; two key caps (§12.2-12.4). The AC "global bucket trips independently of IP" is kept, reinterpreted as "independently of any *single* IP" (a test uses many IPs). |
 | D14 | REQ-437 telemetry/AC silent on outcome counters; REQ-438 429 state "retry affordance" | `SECURITY-REVIEWER` C-1 and C-2 | Outcome counters (§12.7) are added to REQ-436/437; the SPA 429 state additionally offers the `?realm=` route (§11.5, REQ-438). `REQ-VALIDATOR` must accept both additions. |
+| D15 | REQ-435 BUILDS item 4 (0043 D-C, "PROPOSED resolution"): (i) lookup takes a key LIST and runs ONE query `email_key = ANY(keys)` "selecting DISTINCT tenants"; (ii) one sentinel per candidate key; (iii) limiter on the CURRENT key only; (iv) writers lock the current key, removal deletes under every candidate key | Verified against the code (§0.1): all four are consistent with the existing structure, and (iii) and the lock part of (iv) need no code change. | **All four CONFIRMED**, with two refinements. (a) "DISTINCT tenants" is realised as a **semijoin** (`tenants` filtered by `EXISTS` over the directory with `email_key = ANY(keys)`), not `SELECT DISTINCT`/`GROUP BY`: the result then has one row per tenant by construction, so the match count the Mode B rule reads is a count of tenants even when a person holds a row under each key, and the existing `ORDER BY display_name, slug` and `LIMIT 50` are unchanged (§5.4). (b) The API is renamed, not overloaded: `lookup_by_key/1` becomes `lookup_by_keys/1` (key list, 1..2 entries); new `email_keys/1` and `sentinel_keys/0` return the candidate list, current key first; `email_key/1` and `sentinel_key/0` stay and mean "under the CURRENT key" (writers, backfill, limiter). Justification: alternatives (limiter on all candidate keys; one query per key) either double the per-address attack budget or break the one-query invariant (INV-5); a person's two rows are one tenant, so deduplicating by tenant is exactly what "exactly one match" means. |
+| D16 | REQ-435 item 3 names only the environment variables; design §2.2 said "`config :letflow, :login_directory_pepper, <32 bytes>`" | The id and an optional previous pair cannot live in a bare 32-byte value | New single config key `config :letflow, :login_directory_keys` holding `[current: key_slot, previous: key_slot \| nil]`, `key_slot = %{id: String.t(), pepper: <<_::256>>}` (§2.2). `:login_directory_pepper` is **removed** (no compatibility shim: nothing outside PR #2201 reads it); the five test files in §0.1 are updated. |
+| D17 | REQ-435 item 1 / design §15.1 Create row: "a migration ... `<timestamp later than 20261003000001>`" | PR #2201's migration `20261004000001_create_tenant_login_directory.exs` is not on `main` (§0.1) | **Edit that migration in place** to add `key_id`; do **not** add a second migration (§1.1). Justified: no environment other than a developer or CI database that ran the branch has ever applied it, so there is no deployed schema to migrate; an `ALTER TABLE ... ADD COLUMN ... NOT NULL` second migration would need a default or a backfill for rows that do not exist and would leave a transitional column history in the repository forever. Developer databases that already ran the branch: `mix ecto.rollback --step 1` then `mix ecto.migrate` (stated in the handoff). If REQ-435 is somehow merged without the delta first, this row flips to "new migration" and §1.1's "alter" shape applies. |
+| D18 | REQ-435 item 1 lists the columns | Two additions beyond the text | (a) A `CHECK` on `key_id` mirroring the boot validation (`key_id ~ '^[a-z0-9_-]{1,32}$'`, constraint name `key_id_format`), because a column that retire/key-status tooling will match on must not hold free text. (b) **No** index on `key_id`: deletion by key id belongs to REQ-443's `retire_key`, which owns its own migration if the table size warrants one (PK leading column is `email_key`, so a `key_id` filter is a scan; acceptable for a maintenance task). `REQ-VALIDATOR` accepts or strikes (a). |
+| D19 | REQ-435 item 3c: "absent -> raise" | Per `secrets_runtime_config_test.exs` an empty-string env value arrives indistinguishable from an absent one | In `config/runtime.exs` an **empty or all-whitespace** value of any of the four variables is treated as unset (so "empty pepper" = "absent pepper" = raise; "empty previous pair" = no previous). |
+| D20 | REQ-435 item 4 (iv) and REQ-440: removal "deletes under every candidate key" | The removal function is REQ-440's, already built in PR #2201 on a single key | The change to `remove_entry_if_unreferenced/3` (§3.6-3.7) is part of the D-C delta on the **same branch**. REQ-440 therefore closes by `RELEASE-VALIDATOR` verification **of the merge commit that includes the delta**, re-deriving its criteria including "removal deletes under every candidate key" (a test in §15.1, listed there because it needs the rotation configuration). REQ-440's write path itself (hooks, JIT transaction, `:tenant_id` opt, guard, `:skip`) is unchanged by D-C and verified, not rebuilt. |
 
 ---
 
@@ -117,11 +131,25 @@ item-to-section map is in §16.
 |---|---|---|
 | `email_key` | `bytea` | `NOT NULL`; `CHECK (octet_length(email_key) = 32)` |
 | `tenant_id` | `uuid` (`binary_id`) | `NOT NULL`; real FK `REFERENCES tenants(id) ON DELETE CASCADE` |
+| `key_id` | `varchar(32)` (`:string`) | `NOT NULL`, **no default**; `CHECK (key_id ~ '^[a-z0-9_-]{1,32}$')` (constraint `key_id_format`). **Amended by 0043 D-C.** Identifier of the pepper that produced `email_key`; always the CURRENT id at write time (§2.2). |
 | `inserted_at` | `timestamp` (naive UTC) | `NOT NULL` |
 
 - **Primary key:** composite `(email_key, tenant_id)`. This is the "unique (email key, tenant_id)"
   the requirement asks for, and its leading column serves the lookup, so no separate unique
-  index is created.
+  index is created. **`key_id` is not in the key** (0043 D-C): the 32 key bytes already differ
+  per pepper, so the pair stays the identity. One person under two peppers is therefore two rows
+  for one tenant (the rotation window, §2.4), and the lookup deduplicates by tenant (§5.4).
+  Catalog-asserted in §15.1.
+- **Migration shape (D17, §0.3).** The existing, unmerged
+  `priv/repo/migrations/20261004000001_create_tenant_login_directory.exs` is **edited in place**:
+  one added column `key_id` (`null: false`, no default, outside the primary key) and one added
+  `create constraint(... :key_id_format ...)`; its timestamp, table, key, FK, `email_key_is_32_bytes`
+  check and `(tenant_id)` index stay as they are. It stays a single reversible `change/0`
+  (`down` drops the table, so the new column and constraint need no extra rollback code). Editing
+  in place is correct because the file is not on `main` (verified, §0.1): the repository has no
+  released schema state to protect, and a follow-up `add :key_id` migration would need a
+  default/backfill for a table that has no production rows and would persist a meaningless
+  two-step history. **No index on `key_id`** (D18).
 - **Secondary index:** `(tenant_id)`, solely so the FK cascade on tenant deletion does not scan
   the whole table.
 - **No surrogate `id`, no `updated_at`:** rows are insert-or-delete only (as
@@ -148,14 +176,19 @@ not" paragraph (not an identity record; not read by `AuthPipeline`; not `tenant_
 @type t :: %Letflow.Identity.TenantLoginDirectoryEntry{
         email_key: <<_::256>>,
         tenant_id: Ecto.UUID.t(),
+        key_id: String.t(),
         inserted_at: NaiveDateTime.t()
       }
 ```
 
 Schema shape: `@primary_key false`; `field :email_key, :binary, primary_key: true`;
-`belongs_to :tenant ..., primary_key: true`. One changeset, `create_changeset/2` (casts
-`[:email_key, :tenant_id]`, requires both, `unique_constraint` on the pair). **No update
-changeset** (insert/delete only).
+`belongs_to :tenant ..., primary_key: true`; **added (D-C):** `field :key_id, :string`, a plain
+field, **not** `primary_key: true`. One changeset, `create_changeset/2` (casts
+`[:email_key, :tenant_id, :key_id]`, requires all three, validates `key_id` against the same
+format as the column check, `unique_constraint` on the pair, name `tenant_login_directory_pkey`
+unchanged). **No update changeset** (insert/delete only). The "what this table is not"
+paragraph of the moduledoc gains one sentence: `key_id` names a pepper, it is not a secret and
+not an identity.
 
 ### 1.3 Distinction from `tenant_memberships`, and the one-table-or-two decision
 
@@ -196,7 +229,9 @@ valid address is, with one implementation.
 `email_key = HMAC-SHA256(pepper, "letflow:login-directory:v1:" <> normalised_email)`, 32 raw
 bytes. `normalised_email` is `TenantMembership.normalize_subject_key/1`'s output (trim then
 Unicode `String.downcase`). The domain-separation prefix means the same pepper can never
-produce a value usable in another context.
+produce a value usable in another context. **Amended by 0043 D-C:** the formula is evaluated once
+per *candidate pepper* (§2.2): the CURRENT pepper always, the PREVIOUS one only while a rotation
+window is configured. The prefix and the normalisation do not change with the pepper.
 
 Validity (`Letflow.LoginDirectory.email_key/1` returns `:invalid` when any fails): the input is
 a binary; its trimmed byte size is 1..255 (255 equals the POST `/users` `max_length`,
@@ -205,21 +240,56 @@ true. Anything else maps to the **sentinel key** (§5.3).
 
 ### 2.2 Pepper by reference (INV-4, decision 0016)
 
-- Source: environment variable `LETFLOW_LOGIN_DIRECTORY_PEPPER`, 64 lowercase hex characters
-  decoding to 32 bytes. Read **once at boot** in `config/runtime.exs` into
-  `config :letflow, :login_directory_pepper, <32 bytes>`, with the same checks as the master key
-  (`config/runtime.exs:30-72`): absent -> raise; not 64 hex -> raise; all-zero or all-`0xFF`
-  -> raise; **equal to the secrets master key -> raise** (a distinct secret).
+- **Variables (0043 D-C, supersedes the single-variable form).** Four environment variables:
+
+  | Variable | Required | Value |
+  |---|---|---|
+  | `LETFLOW_LOGIN_DIRECTORY_PEPPER` | always | 64 lowercase hex characters = 32 bytes (the CURRENT pepper) |
+  | `LETFLOW_LOGIN_DIRECTORY_PEPPER_ID` | always | the current key id: `\A[a-z0-9_-]{1,32}\z` (anchored so a trailing newline fails), e.g. `p2026a` |
+  | `LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS` | only during a rotation, **with** its id | same format as the current pepper |
+  | `LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS_ID` | only during a rotation, **with** the pepper | same format as the current id |
+
+- **Config shape (D16).** Read **once at boot** in `config/runtime.exs` into one key,
+  `config :letflow, :login_directory_keys, [current: key_slot, previous: key_slot | nil]` with
+  `key_slot = %{id: String.t(), pepper: <<_::256>>}`; `previous` is `nil` in steady state. The old
+  `:login_directory_pepper` key is removed.
+- **Boot checks** (same discipline as the master key, `config/runtime.exs:30-72`; each is a
+  `raise` whose message names the variable(s) involved and **never echoes a value**, including
+  never a prefix, length of a secret or a decoded byte; an empty or all-whitespace value counts as
+  unset, D19). In this order, current pair first:
+  1. current pepper: absent -> raise; not exactly 64 lowercase hex -> raise; all-zero or all-`0xFF`
+     -> raise; **equal to the secrets master key -> raise** (a distinct secret);
+  2. current id: absent -> raise; fails the id format (charset, 1..32 characters) -> raise;
+  3. the previous pair is **both or neither**: exactly one of the two set -> raise;
+  4. when both are set: previous pepper fails the same format / trivial-value / master-key checks
+     as the current one -> raise; previous id fails the id format -> raise; **previous pepper equal
+     to the current pepper -> raise**; **previous id equal to the current id -> raise** (the two
+     comparisons are independent, both are checked).
+  A valid current-only configuration and a valid current-plus-previous configuration boot.
 - Required in every environment including CI: `config/test.exs` injects a fixed non-trivial
-  value when the variable is unset, exactly as it does for the master key
-  (`config/test.exs:18-22`). `.env.example` documents the name and format and carries no
-  working value (as `.env.example:11` does for the master key). This satisfies REQ-435 item 6
-  ("fails closed when absent in non-test environments").
+  pepper **and** a fixed valid id (for example `test-a`) when the variables are unset, exactly as
+  it does for the master key (`config/test.exs:18-22`, the existing `:24-30` block extended); it
+  never injects a previous pair. `.env.example` documents the four names and formats and carries
+  no working value (as `.env.example:11` does for the master key; `:26` already carries the
+  pepper name). This satisfies REQ-435 item 6 ("fails closed when absent in non-test
+  environments").
+- **No secret in the repository (REQ-435 AC).** The single 64-hex test value in `config/test.exs`
+  is the only 64-hex literal assigned to a `LETFLOW_LOGIN_DIRECTORY_PEPPER*` name anywhere in
+  `lib/`, `config/`, `test/`, `deploy/`, `.env.example`, `docs/runbooks/`. Test code that needs
+  other peppers (the boot-check matrix, dual-read tests) **generates them at run time**
+  (`:crypto.strong_rand_bytes/1` then hex-encode; the all-zero and all-`F` cases via
+  `String.duplicate/2`; "equal to the master key" via the environment's own value), so no second
+  64-hex literal exists for the guard of §15.1 to flag.
 - Resolved at the point of use via `Application.fetch_env/2`; never logged, never in a struct
-  field or return value. If it is somehow absent at call time, `email_key/1` and
-  `sentinel_key/0` return `{:error, :pepper_unavailable}` to their caller (not a raise); the
-  endpoint maps it to the neutral response with the all-zero constant key (§5.3 step 3) and a
-  fixed error log, and the writers return `{:error, :pepper_unavailable}` (INV-8).
+  field or return value. Only the key **id** may appear in a return value (reports, §4) because it
+  is a label, not a secret. If the configuration is somehow absent at call time, `email_key/1`,
+  `email_keys/1`, `sentinel_key/0`, `sentinel_keys/0` and `current_key_id/0` return
+  `{:error, :pepper_unavailable}` to their caller (not a raise); the endpoint maps it to the
+  neutral response with the all-zero constant key (§5.3 step 3) and a fixed error log, and the
+  writers return `{:error, :pepper_unavailable}` (INV-8).
+- **Candidate keys.** `email_keys/1` returns the key under the current pepper first, then (only
+  while `previous` is set) the key under the previous pepper: a list of length 1 or 2, a function
+  of the deployment state and never of the input. The same holds for `sentinel_keys/0`.
 - **Why not the `sec://tenant/...` store (0016 §C):** those references are tenant-scoped
   (`<tenant>` segment checked against the caller's tenant), the platform pepper has no tenant,
   and resolving it would need the database at a point where only configuration exists. The
@@ -235,7 +305,7 @@ true. Anything else maps to the **sentinel key** (§5.3).
 | Delivery to the address | Uses the address the caller just typed, never a stored one | Could use the stored one (not needed) |
 | Browse, export, debug by address | No | Yes |
 | Prefix/domain/partial match | Not possible (and not offered) | Possible (and a hazard) |
-| Pepper rotation | Rebuild required (§2.4) | n/a |
+| Pepper rotation | Dual-read planned rotation; rebuild only for emergency (§2.4) | n/a |
 | Dictionary attack with DB + pepper | Possible | Not needed |
 
 ### 2.4 Erasure and rotation procedures (documented, not built)
@@ -244,11 +314,26 @@ true. Anything else maps to the **sentinel key** (§5.3).
   There is no other path to a plaintext address in this table.
 - **Erasure of a tenant:** tenant row deletion cascades. Tenant deactivation hides entries at
   query time without deleting them.
-- **Pepper rotation:** set the new pepper; in one maintenance window delete all directory rows
-  and run the backfill (§4); while the window is open discovery returns the neutral response for
-  everyone and the SPA falls back to `?realm=`/stored slug. A dual-pepper window is not built
-  (0042 OQ-6). **Amended by 0043 D-C:** a key id and a dual-read window ARE now required
-  (REQ-435); this paragraph's rebuild procedure survives only as the emergency rotation.
+- **Pepper rotation. Amended by 0043 D-C** (planned rotation; replaces the rebuild-only text):
+  1. Provision the new pepper and a **new, never-used** id; set `LETFLOW_LOGIN_DIRECTORY_PEPPER`/`_ID`
+     to the new pair and `..._PREVIOUS`/`..._PREVIOUS_ID` to the old pair (the boot checks of §2.2
+     refuse equal peppers or ids, or a half-set pair).
+  2. From that boot, **writes use the new key and id only**; the lookup is **dual-read** (§5.4):
+     rows under the old key still find the person, rows under the new key find them too, and a
+     person with both is one tenant.
+  3. Run `mix letflow.backfill_login_directory` (§4): it is the **re-keying step**, writing every
+     active user under the current key and id (insert-only, so old-key rows remain).
+  4. Retire the old key (delete rows whose `key_id` is the previous id, then drop the previous
+     pair from the environment): `mix letflow.login_directory.retire_key`, `key_status` and the
+     runbook are REQ-443, not here. Until step 4 the table holds up to two rows per user per
+     tenant.
+  Discovery is never neutral-for-everyone during a planned rotation. The old single-window rebuild
+  (delete all rows, run the backfill, discovery neutral meanwhile) survives only as the
+  **emergency rotation** for a leaked pepper, where dual-read is deliberately not used. The
+  earlier statement "a dual-pepper window is not built (0042 OQ-6)" and Q8 are superseded by
+  0043 D-C and §0.3 D15.
+  **Residual:** a rotation resets the per-address limiter buckets once (§12.2), and the key id is a
+  label the operator must never reuse or attach to a different pepper (§17 Q19).
 
 ---
 
@@ -405,7 +490,13 @@ genuinely created row**, run the `:login_directory` plan; commit; then run
 has the same normalised email**. After the user write (same transaction) the changed user's row
 already carries its new email/status, so the check is simply: does any `users` row in that
 tenant `:prefix` have `status = active` and `lower(btrim(email))` equal to the normalised bound
-parameter? None -> delete `(key, tenant_id)`; some -> `:kept`. The query is parameterised
+parameter? None -> delete the entry; some -> `:kept`. **Amended by 0043 D-C:** "delete the entry"
+means delete the rows `(tenant_id, k)` for **every candidate key** `k` of that email
+(`email_keys/1`, §2.2, one `DELETE ... WHERE tenant_id = $1 AND email_key = ANY($2)`), so a person
+who holds a row under the previous key during a rotation window does not keep a ghost row under
+it. The result is `:removed` when at least one row was deleted, `:absent` when none, `:kept` as
+above. (A row under a key that is no longer a candidate, a retired key, is unreachable by lookup
+and is deleted by REQ-443's `retire_key`, not here.) The query is parameterised
 Ecto (INV-7), runs with the tenant's `:prefix` (INV-1; the only tenant-schema read in the whole
 feature besides the backfill), and uses no new index (`users.email` has none; the table is small
 and the path runs at admin-write rate). Known, documented limitation: `lower(btrim(...))` in
@@ -423,6 +514,20 @@ deadlock. Without it, two concurrent deactivations of two users sharing an email
 other as still active and both keep the entry, and a concurrent create can lose its entry to a
 concurrent removal. With it each decision observes the other's committed outcome. Both functions
 return `{:error, :not_in_transaction}` if called outside a transaction.
+
+**Amended by 0043 D-C: the lock is on the CURRENT key only.** `email_key` in the derivation above
+is always the key under the current pepper (`email_key/1`, §2.2), also when a previous pepper is
+configured and also for removal, which then *deletes* under every candidate key (§3.6). This is
+sufficient because every writer (upsert, removal, plan) derives the same current key for the same
+logical email, so all decisions about one person in one tenant still serialise on one lock; the
+previous-key row is only ever touched while holding the current-key lock. Acquisition order of a
+two-email plan is ascending current-key bytes, as before. **Code delta: none** (the PR's
+`plan_keys/1` and `acquire_key_lock/2` already derive from `email_key/1`); the requirement is a
+test (§15.1). **Residual:** the lock hash changes when the current pepper changes, so during a
+rolling multi-node rotation deploy an old node and a new node take different locks for the same
+person for the duration of the rollout; the ghost-entry race of this section is then possible for
+that window. Rotation is a maintenance-window operation (as the backfill already is, §4), which is
+the mitigation; recorded, not engineered away.
 
 ### 3.8 Behaviour table (events -> directory)
 
@@ -451,7 +556,7 @@ contradicts Standing prohibition 9 (INV-4). Required, no exceptions:
 - **Every** `Repo` call that touches `tenant_login_directory`, or that carries a normalised email
   or an `email_key` as a bound value, passes the per-call option `log: false` (the form already used
   at `lib/letflow/tenant_provisioning.ex:386`, `lib/letflow/sandbox_pool.ex:964`). Enumerated:
-  `lookup_by_key/1` (the one discovery query); `upsert_entry/2` (insert, and the advisory-lock
+  `lookup_by_keys/1` (the one discovery query); `upsert_entry/2` (insert, and the advisory-lock
   statement); `remove_entry_if_unreferenced/3` (the other-active-user check on the tenant `users`
   table, the advisory lock, the delete); the backfill's per-tenant `users` read and its chunked
   `insert_all`; and any `Multi` step in `:login_directory` (the option is passed to each `Multi`
@@ -491,11 +596,24 @@ contradicts Standing prohibition 9 (INV-4). Required, no exceptions:
         tenants: [%{tenant_id: Ecto.UUID.t(), users_read: non_neg_integer(),
                     inserted: non_neg_integer()}],
         failed: [%{tenant_id: Ecto.UUID.t(), reason: atom()}],
-        dry_run: boolean()
+        dry_run: boolean(),
+        key_id: String.t()          # added (D-C): the CURRENT id the rows were written under
       }
 @spec Letflow.LoginDirectory.Backfill.run(opts :: [dry_run: boolean()]) ::
         {:ok, backfill_report()} | {:error, :pepper_unavailable}
 ```
+
+**Amended by 0043 D-C: the backfill is the re-keying step of a rotation.** It computes keys with
+`email_key/1` and writes rows under the **current key and current key id only**, never under the
+previous key (`email_keys/1` is not used here). Consequences, all by design: (1) after a rotation
+the backfill creates the current-key row for every active user (the old-key rows are left
+alone: it is insert-only), so afterwards a person has rows under both ids and the dual-read lookup
+still returns the tenant once (§5.4); (2) re-running it in a steady state inserts 0 (the
+`ON CONFLICT (email_key, tenant_id) DO NOTHING` target is unchanged, `key_id` is not in it);
+(3) removing the old-key rows is REQ-443's `retire_key`, not this task. The "pepper available"
+precheck becomes `current_key_id/0` returning `{:ok, id}` (the existing sentinel-key call is no
+longer needed for it); the report carries `key_id` and the Mix task's summary line prints it (an
+id is a label, not a secret; no email, key or pepper is printed, INV-4).
 
 - **Enumeration (D3):** `TenantProvisioning.list_registrations/0` -> every registered tenant
   regardless of status, because status is filtered at query time and reactivation must not need
@@ -572,18 +690,24 @@ Non-JSON content type, an unreadable or oversize body, invalid JSON, a missing o
 
 1. Bounded body read; any failure -> malformed class (no early return).
 2. JSON decode with a non-raising decoder; failure -> malformed class.
-3. `email_key/1`; on `:invalid` or a failed decode, use `sentinel_key/0` (the keyed HMAC, with
-   the same pepper and the same cost class as a real key, of a fixed string that no valid
-   normalised address can equal because it contains no `@`; the writers never write a key for
-   an invalid address and refuse to write the sentinel, so it can never match a row). If the
-   pepper is unavailable at runtime (unreachable after boot validation, §2.2) the handler logs a
-   fixed error and uses the all-zero 32-byte constant key, which no writer ever writes, so the
-   single-query structure and the neutral response are preserved.
-4. Per-email limiter consult (`LoginDiscoveryRateLimit.consume_email(key, :request)`); a refusal
-   sends REQ-436's 429 (§12) and stops. The sentinel shares one bucket, which only throttles
-   garbage senders.
-5. **Exactly one** database round trip: `lookup_by_key(key)` (§5.4). A failure becomes
-   `{:error, :lookup_failed}` and is treated as "no matches" (INV-8).
+3. `email_keys/1`; on `:invalid` or a failed decode, use `sentinel_keys/0`. **Amended by 0043
+   D-C (key id):** both return a **list of candidate keys**, current first, one per configured
+   pepper (length 1 in steady state, 2 during a rotation window; §2.2). Per candidate pepper the
+   sentinel is the keyed HMAC, with the same pepper and the same cost class as a real key, of a
+   fixed string that no valid normalised address can equal because it contains no `@`; the writers
+   never write a key for an invalid address and refuse to write the sentinel, so it can never match
+   a row. **Constancy invariant:** for a given deployment state (current-only or current+previous)
+   every input class, valid, invalid, malformed or undecodable, performs exactly one HMAC per
+   candidate pepper and issues the same one query shape (`email_key = ANY(<list of that length>)`);
+   the number of HMACs and the list length depend on the deployment state, **never on the input**.
+   If the keys are unavailable at runtime (unreachable after boot validation, §2.2) the handler
+   logs a fixed error and uses a one-element list holding the all-zero 32-byte constant key, which
+   no writer ever writes, so the single-query structure and the neutral response are preserved.
+4. Per-email limiter consult (`LoginDiscoveryRateLimit.consume_email(key, :request)`) with the
+   **first (current) key** of the list (§12.2 amendment); a refusal sends REQ-436's 429 (§12) and
+   stops. The sentinel's current-key form shares one bucket, which only throttles garbage senders.
+5. **Exactly one** database round trip: `lookup_by_keys(keys)` (§5.4), passing the whole candidate
+   list. A failure becomes `{:error, :lookup_failed}` and is treated as "no matches" (INV-8).
 6. `decide(mode, result)` (pure, §7) -> `:neutral | {:match, tenant_ref}`.
 7. `Dispatch.submit/3` -- **always** exactly one notifier-task submission per request, matched or
    not, so request timing does not depend on a match (§13).
@@ -598,18 +722,37 @@ input-independent for IP and global buckets and byte-identical for the email buc
 @type email_key :: <<_::256>>
 @type tenant_ref :: %{slug: String.t(), display_name: String.t()}
 
+# Current-pepper forms: writers, backfill, limiter (unchanged signatures)
 @spec Letflow.LoginDirectory.email_key(term()) ::
         {:ok, email_key()} | :invalid | {:error, :pepper_unavailable}
 @spec Letflow.LoginDirectory.sentinel_key() :: email_key() | {:error, :pepper_unavailable}
-@spec Letflow.LoginDirectory.lookup_by_key(email_key()) ::
+
+# Candidate-key forms (new, 0043 D-C): current key first, previous (if configured) second
+@type candidate_keys :: [email_key(), ...]          # length 1 or 2
+@spec Letflow.LoginDirectory.email_keys(term()) ::
+        {:ok, candidate_keys()} | :invalid | {:error, :pepper_unavailable}
+@spec Letflow.LoginDirectory.sentinel_keys() :: candidate_keys() | {:error, :pepper_unavailable}
+@spec Letflow.LoginDirectory.current_key_id() :: {:ok, String.t()} | {:error, :pepper_unavailable}
+@spec Letflow.LoginDirectory.lookup_by_keys([email_key(), ...]) ::
         {:ok, [tenant_ref()]} | {:error, :lookup_failed}
 @spec Letflow.LoginDirectory.lookup_by_email(term()) ::
         {:ok, [tenant_ref()]} | {:error, :lookup_failed}
 ```
 
-`lookup_by_email/1` is the convenience composition (invalid input -> sentinel) that REQ-435's
-tests call; the endpoint uses `email_key/1` + limiter + `lookup_by_key/1` so the limiter can sit
-between them. The query: directory joined to `tenants`, `email_key == ^key`,
+`lookup_by_email/1` is the convenience composition (invalid input -> sentinel list) that REQ-435's
+tests call; the endpoint uses `email_keys/1` + limiter (current key = `hd(keys)`) +
+`lookup_by_keys/1` so the limiter can sit between them. `lookup_by_keys/1` takes the candidate
+list (1..2 keys, each 32 bytes; any other argument is `{:error, :lookup_failed}`); the single-key
+`lookup_by_key/1` of the PR is **removed** (renamed, §0.3 D15).
+**Amended by 0043 D-C (dual-read):** the query selects from `tenants` **semijoined** to the
+directory, one round trip: `tenants.status == :active`, `tenants.idp_realm_id` bound, and
+`EXISTS (a directory row with that tenant_id and email_key = ANY(^keys))`. Because the tenant is the
+row, a person who holds a row under each key (rotation window) yields that tenant **once**: the
+result length is a count of distinct tenants, so the Mode B "exactly one match" rule and
+0043 D-A's `disclose` flag are unaffected. With only the current pepper configured the list has one
+key, so a row under a previous key is not found (REQ-435 AC). Equivalent to the PR's directory-
+joined-to-tenants form for a single key (same rows, same order), which is why the existing
+lookup tests stay valid. The remaining query properties are unchanged and restated:
 `tenants.status == :active`, `tenants.idp_realm_id` not null and not empty (otherwise
 `/api/tenant-config?realm=<slug>` would silently resolve to the default realm,
 `tenant_config.ex:230-249`), `select` building the two-field map directly (the `Tenant` struct is
@@ -759,12 +902,12 @@ involved.
 | INV | Mechanism that discharges it | Where it is shown / tested |
 |---|---|---|
 | **INV-1** tenant data isolation | The directory is a global table outside every tenant schema (public migration, absent from `tenant_scoped_migrations/0`, `tenant_provisioning.ex:733`). The discovery path issues no query with a tenant `:prefix` and reads only `tenant_login_directory` and `tenants`. Writers run inside the Identity functions whose `:prefix` derives from `auth_context.tenant_id` (`context.ex:219-237`) and which assert `schema_name_for_tenant(tenant_id) == prefix`. The backfill reads each tenant schema only through the registration's derived `schema_name`. `tenant_id` on this global table is its only scoping (0006 D3), supplied explicitly (never from a request parameter) and cross-checked against the prefix. | REQ-435 tests: information_schema shows the table in `public` only; two-tenant isolation; request-body `tenant_id` ignored. REQ-437 test: no query on the path carries a `:prefix`. |
-| **INV-2** server-side field authorisation | Closed allowlist: hand-built maps, literal keys; `lookup_by_key/1` selects exactly `slug` and `display_name` into a plain map, so `idp_realm_id`, `id`, `settings`, status are unrepresentable beyond the query; the neutral body is a constant; the directory schema has no sensitive field. | REQ-437 tests assert the exact key set; REQ-435 test asserts the schema and returned structs carry no user/credential field. |
+| **INV-2** server-side field authorisation | Closed allowlist: hand-built maps, literal keys; `lookup_by_keys/1` selects exactly `slug` and `display_name` into a plain map, so `idp_realm_id`, `id`, `settings`, status are unrepresentable beyond the query; the neutral body is a constant; the directory schema has no sensitive field. | REQ-437 tests assert the exact key set; REQ-435 test asserts the schema and returned structs carry no user/credential field. |
 | **INV-4** secrets by reference; no secret/PII in logs | Pepper by environment-variable reference, boot-validated, never logged or serialised (§2.2). No raw email, key, body or IP in logs, telemetry labels, audit rows or error messages: failures log fixed strings or atoms; the directory writes no audit rows; the limiter keys hold only the HMAC and an IP in memory; the notifier default adapter logs nothing identifying; **every directory query passes `log: false` so Ecto's `:debug` bound-parameter logging never carries the email or key (§3.9)**; outcome counters carry fixed-atom labels only (§12.7); notifier tasks use the closure form so OTP crash reports print no recipient (§13). | Captured-Logger tests in REQ-435/436/437 grep for the address and body, **run with `capture_log(level: :debug)` (§3.9)**; notifier-raise test asserts no email in the crash log (§13); `grep -rn "System.get_env" config/ lib/` shows env-sourced only. |
 | **INV-5** not-found/forbidden indistinguishability | First email-keyed instance. Mechanism: one query for every class (sentinel for malformed); the same operations for every input; constant neutral bytes; the 429 is byte-identical for IP, global and per-email refusal; no 401/403; notifier submission unconditional. Honest bound: Mode B discloses the single-match case (0042). | The response-equivalence matrix (§10); REQ-437 byte-comparison and query-count tests. |
 | **INV-6** new data-access paths prove their scoping | This document and 0042 are the scoping proof; `SECURITY-REVIEWER` is a mandatory gate on 0042 and on REQ-435/436/437 and must record which of INV-1..INV-9 apply and why. | Gate verdicts (0042 Sign-off); REQ-435/437 handoffs. |
 | **INV-7** no SQL string interpolation | Every query is Ecto composition with bound parameters, including the "other active user" check and the advisory lock (bound parameters, no concatenation); the backfill passes the schema as the `prefix:` option, never into a SQL string; migrations use no `Repo.query`. | `grep -rn "Repo.query" lib/letflow/login_directory* lib/letflow/identity/tenant_login_directory_entry.ex priv/repo/migrations/<new>` shows no unbound use (REQ-435 AC). |
-| **INV-8** no unhandled crashes on realistic failure paths | Typed results throughout: non-raising JSON decode, bounded body read, `email_key/1` tagged returns, `lookup_by_key/1` wraps the query so any DB failure becomes `{:error, :lookup_failed}` and the neutral response (not a 500), the notifier runs in a supervised task isolated from the request process and bounded in time and concurrency, notifier crash/exit/timeout leaves the response unchanged, a missing pepper maps to neutral plus a fixed error log, the JIT and update paths return tagged errors, the backfill isolates per-tenant failures. | REQ-437 notifier-failure tests (raise, exit, timeout); REQ-435 forced-failure rollback tests; backfill failure-isolation test. |
+| **INV-8** no unhandled crashes on realistic failure paths | Typed results throughout: non-raising JSON decode, bounded body read, `email_key/1` tagged returns, `lookup_by_keys/1` wraps the query so any DB failure becomes `{:error, :lookup_failed}` and the neutral response (not a 500), the notifier runs in a supervised task isolated from the request process and bounded in time and concurrency, notifier crash/exit/timeout leaves the response unchanged, a missing pepper maps to neutral plus a fixed error log, the JIT and update paths return tagged errors, the backfill isolates per-tenant failures. | REQ-437 notifier-failure tests (raise, exit, timeout); REQ-435 forced-failure rollback tests; backfill failure-isolation test. |
 | **INV-9** tenant-controlled outbound URL validation | The server builds no redirect and makes no outbound HTTP request from tenant-supplied text on this path: the response carries `slug` and `display_name` as data and no `Location`; the SPA derives the authority from the server-built `/api/tenant-config` (authority from deployment config plus `idp_realm_id`, `tenant_config.ex:268-274`, `:327-331`), never from the discovery response. The notifier port is the only egress; the default adapter sends nothing, and a future adapter that adds links must build them from a deployment base URL, never from tenant text, and passes its own `SECURITY-REVIEWER` gate. | REQ-437 test: no `Location` header, no URL-shaped field; adapter requirement gate. |
 
 ---
@@ -1010,6 +1153,20 @@ use the single `send_rate_limited/1`**, which sets the common security headers, 
 `Retry-After` (config `retry_after_seconds`, default 60), and
 `Response.rate_limited("rate limit exceeded")`; one constructor makes the three byte-identical by
 construction, with no email-dependent body or header.
+
+**Amended by 0043 D-C: per-email buckets key on the CURRENT key only.** `consume_email(email_key,
+kind)` keeps its signature and its `{:login_discovery, :email_hmac | :email_send, binary()}` key
+shapes; the endpoint always passes the first (current) key of the candidate list (§5.3 step 4) and
+the notifier task the same, never the previous-pepper key. Reasons: keying on every candidate key
+would give an attacker two buckets per address (doubling the 5-request burst and the
+email-bombing send budget) for no benefit, and the limiter needs only a stable per-address
+identity within one deployment state. Consequence, accepted: **a rotation resets every
+per-address request and send bucket once** (the same address maps to a new key, hence a fresh
+full bucket; the old-key rows go idle and are swept losslessly, §12.3), so each address can
+receive one extra notifier send per rotation; the retired window is bounded by the sweep interval.
+The `max_email_keys` invariant of §12.3 is unaffected (key creation is still gated by admitted
+requests). **Code delta: none in REQ-436** (it is `done` and not reopened); the constraint binds
+REQ-437's endpoint, which is the only caller.
 
 ### 12.3 Bounded per-email state
 
@@ -1301,20 +1458,48 @@ addresses, two buckets, and the observed container-side peer address recorded; `
 
 ### 15.1 REQ-435 -- directory data layer, writers, backfill (owner `ELIXIR-DEV`)
 
+**Amended by 0043 D-C/D-F: the work is a DELTA on open PR #2201.** Per 0043 D-F, REQ-435 is now
+the data-layer half and REQ-440 the write-hook half, but PR #2201 (branch
+`feat/REQ-435-login-directory`) already contains both on a single pepper (§0.1). The "Create" and
+"Change" tables below describe the full set of files that exist after the PR; the **exact
+changes to make to what the PR already contains** are this table (nothing else changes; `identity.ex`,
+`routers/identity.ex`, `tenant_membership.ex`, `seed.ex` and the seed task are verified unaffected
+by D-C):
+
+| Existing file (PR #2201) | Change |
+|---|---|
+| `priv/repo/migrations/20261004000001_create_tenant_login_directory.exs` | **Edit in place** (§1.1, §0.3 D17): add `key_id` (`:string`, `size: 32`, `null: false`, no default, not `primary_key`) and `create constraint(..., :key_id_format, check: "key_id ~ '^[a-z0-9_-]{1,32}$'")`; header comment gains the 0043 D-C line. Nothing else. |
+| `lib/letflow/identity/tenant_login_directory_entry.ex` | `key_id` field, `@type t`, `create_changeset/2` casts/requires/validates it (§1.2). |
+| `lib/letflow/login_directory.ex` | (1) read keys from `:login_directory_keys` (§2.2) in place of `:login_directory_pepper`; (2) `email_key/1` and `sentinel_key/0` unchanged in signature, now explicitly the CURRENT key; (3) add `email_keys/1`, `sentinel_keys/0`, `current_key_id/0` (§5.4); (4) replace `lookup_by_key/1` with `lookup_by_keys/1` (semijoin, `email_key = ANY(keys)`, one query, `log: false`); `lookup_by_email/1` composes `email_keys/1` / `sentinel_keys/0`; (5) `upsert_entry/2` row gains `key_id: current id` (conflict target unchanged); (6) `remove_entry_if_unreferenced/3` deletes `tenant_id = ^t AND email_key = ANY(candidate keys)` (§3.6); (7) the advisory lock, `plan_keys/1`, `apply_plan/3`, `plan_user_change/2`: **no change** (§3.7); (8) moduledoc "Key form"/"Writers" paragraphs updated. |
+| `lib/letflow/login_directory/backfill.ex` | rows carry `key_id`; precheck via `current_key_id/0`; report gains `key_id`; moduledoc states it is the re-keying step (§4). |
+| `lib/mix/tasks/letflow.backfill_login_directory.ex` | summary prints the report's `key_id` if it formats the report (an id, not a secret). |
+| `config/runtime.exs` (`:74-118` pepper block) | replaced by the four-variable block and the checks of §2.2, publishing `:login_directory_keys`; messages echo no value; no other part of the file changes. |
+| `config/test.exs` (`:24-30`) | also injects a fixed valid `LETFLOW_LOGIN_DIRECTORY_PEPPER_ID`; never a previous pair. |
+| `.env.example` (`:26`) | adds `LETFLOW_LOGIN_DIRECTORY_PEPPER_ID=`, `..._PREVIOUS=`, `..._PREVIOUS_ID=` (names only, no value, documented as both-or-neither). |
+| `test/letflow/identity_login_directory_test.exs`, `login_directory_test.exs`, `login_directory/backfill_test.exs`, `routers/identity_login_directory_test.exs`, `test/support/login_directory_fixture.ex` | the pepper swap helpers move to the new config key (one shared helper in the fixture, not four copies); `test/specs/REQ-435.md` gains the new criteria (TEST-DESIGNER). |
+
+**REQ-440 closes by verification, not by rebuilding.** The PR's whole write path (hooks inside
+the Identity transactions, JIT transaction with savepoint, `:tenant_id` opt with its fail-closed
+guard, removal rule, `login_directory: :skip`) is unchanged by D-C except the removal delta above
+(§0.3 D20). `RELEASE-VALIDATOR` re-derives every REQ-440 criterion against the merge commit that
+**includes** this delta; nothing in REQ-440's file list is re-implemented.
+
 **Create**
 
 | File | Purpose |
 |---|---|
 | `priv/repo/migrations/<timestamp later than 20261003000001>_create_tenant_login_directory.exs` | §1.1; public schema only; reversible |
 | `lib/letflow/identity/tenant_login_directory_entry.ex` | §1.2 schema |
-| `lib/letflow/login_directory.ex` | `Letflow.LoginDirectory` context: `email_key/1`, `sentinel_key/0`, `lookup_by_key/1`, `lookup_by_email/1`, `upsert_entry/2`, `remove_entry_if_unreferenced/3`, `plan_user_change/2`, `apply_plan/3` |
+| `lib/letflow/login_directory.ex` | `Letflow.LoginDirectory` context: `email_key/1`, `sentinel_key/0`, `lookup_by_keys/1`, `lookup_by_email/1`, `upsert_entry/2`, `remove_entry_if_unreferenced/3`, `plan_user_change/2`, `apply_plan/3` |
 | `lib/letflow/login_directory/backfill.ex` | §4 |
 | `lib/mix/tasks/letflow.backfill_login_directory.ex` | §4 |
 | `test/letflow/login_directory_test.exs` | key form, lookup, isolation, FK cascade, query count |
 | `test/letflow/login_directory/plan_user_change_test.exs` | every row of §3.3 as a pure test |
 | `test/letflow/login_directory/backfill_test.exs` | idempotency, dry-run, failure isolation, no-email output |
 | `test/mix/tasks/letflow.backfill_login_directory_test.exs` | task output, non-zero exit on failure |
-| `test/letflow/login_directory_runtime_config_test.exs` | pepper boot checks, modelled on `secrets_runtime_config_test.exs` |
+| `test/letflow/login_directory_runtime_config_test.exs` | pepper and key-id boot-check matrix (§2.2), a controlled-environment `mix run --no-start` subprocess in the style of `secrets_runtime_config_test.exs` / `client_ip_runtime_config_test.exs` (**new in the D-C delta**) |
+| `test/letflow/login_directory/no_secret_in_repo_test.exs` | the no-secret grep guard (**new in the D-C delta**) |
+| `test/letflow/login_directory/rekey_test.exs` (or a `describe` in `backfill_test.exs`) | dual-read and re-keying scenarios under a two-pepper configuration (**new in the D-C delta**) |
 | additions to `test/letflow/routers/identity_test.exs` and a hooks test file | tenant_id source, same-transaction behaviour |
 
 **Change**
@@ -1362,6 +1547,63 @@ test also asserts the query-count telemetry still fires with `log: false`;** cap
 task-output grep finds no email (INV-4); `grep` shows no string-built SQL (INV-7); `login_directory: :skip` appears only under
 `test/`; `mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` and
 `mix letflow.check_boundaries` pass.
+
+**Additional tests required by 0043 D-C (each maps to a REQ-435 acceptance criterion; the
+"Tests required" paragraph above is the single-pepper baseline and stays valid):**
+
+1. **Catalog assertion (key_id / PK).** From `pg_catalog` / `information_schema` (as the
+   public-only assertion already does): `key_id` exists, `is_nullable = NO`, type
+   `character varying`, length 32; the primary-key constraint's column list is exactly
+   `{email_key, tenant_id}` and does not contain `key_id`; the `key_id_format` check exists and
+   rejects `'UPPER'`, `''` and a 33-character value; inserting the same `(email_key, tenant_id)`
+   twice violates the key (second insert with a different `key_id` also violates it); inserting the
+   same `tenant_id` with two different `email_key`/`key_id` pairs succeeds (two rows, one tenant).
+   `mix ecto.rollback --step 1` then `mix ecto.migrate` both succeed on the edited migration.
+2. **Dual-read, single distinct tenant, one query.** Configuration current = B, previous = A;
+   seed one row under key A/id A and one under key B/id B for the **same (email, tenant)** plus one
+   other tenant under A only: `lookup_by_email/1` returns the first tenant **exactly once**, in one
+   Repo query (telemetry counted, as `login_directory_test.exs:56-75` does), the other tenant also
+   returned once, deterministic order; with a Mode-B-style consumer the first-only case has
+   `length == 1`. With only the current pepper configured, a row under A alone is **not** found.
+3. **Sentinel constancy.** In the same deployment state (run once current-only, once
+   current+previous): a valid known email, a valid unknown email, an invalid shape, a non-binary and
+   an over-long input each issue **one** Repo query (telemetry) with the same parameter list length
+   (1 or 2), and each performs the **same number of HMAC calls** (1 or 2): counted by tracing
+   `:crypto.mac/4` calls in the test process (`:erlang.trace/3` plus `:erlang.trace_pattern/3`, no
+   production seam added), `async: false`. The sentinel keys never equal a real key and the writers
+   refuse to write them.
+4. **Removal under every candidate key, lock on the current key.** With current = B, previous = A
+   and rows for one person under both keys, deactivating the only active user (inside a transaction)
+   deletes **both** rows (`:removed`); with another active user sharing the email it keeps both
+   (`:kept`). The advisory-lock key is asserted to be derived from the current key (the same
+   `(tenant_id, current key)` lock is observed contended by a second connection, mirroring the
+   existing concurrency test, or the gap is recorded by `TEST-DESIGNER`, not skipped).
+5. **Boot-check matrix (subprocess).** `login_directory_runtime_config_test.exs`: `mix run
+   --no-start -e <probe>` in a child with `MIX_ENV=dev` (no `config/test.exs` fallback) and
+   `MIX_TEST_PARTITION`/`MIX_BUILD_PATH` nil-ed, passing every variable explicitly (inherited ones
+   nil-ed, an empty string never used as "malformed"). Each raising case asserts non-zero exit, a
+   message naming the variable(s), and that the **value is not in the output**; the probe prints
+   only ids and booleans, never a pepper. Cases: absent pepper; absent id; malformed id (uppercase,
+   too long, 0 chars, charset, trailing newline); non-64-hex; all-zero; all-`0xFF`; equal to the
+   master key; previous pepper only; previous id only; previous equal to current; previous id equal
+   to current id; previous failing hex/trivial/master-key checks; valid current-only boots
+   (`previous: nil`); valid current-plus-previous boots (both ids visible in the probe output).
+   All non-fixed peppers are generated at run time (§2.2).
+6. **No-secret guard.** `no_secret_in_repo_test.exs` takes `git ls-files` over `lib/ config/ test/
+   deploy/ .env.example docs/runbooks/` and fails on any line that mentions
+   `LETFLOW_LOGIN_DIRECTORY_PEPPER` (including `_PREVIOUS`) with a 64-hex run on the line, except the
+   one documented value in `config/test.exs`; asserts `.env.example` carries the four names with no
+   value; a seeded violation in a temp file proves the guard can fail. Output quotes the matches
+   (names and paths only, not values).
+7. **Re-keying.** Seed rows under key id A (current = A); reconfigure current = B, previous = A:
+   the lookup still returns the person; run the backfill: rows now exist under both ids for every
+   active user, the report's `key_id` is B, the lookup still returns each person **once**, a
+   second backfill inserts 0; inactive users and tenants behave as in the baseline; the rows under
+   A are untouched (the backfill never deletes). A write via `upsert_entry/2` under the new
+   configuration records `key_id` B.
+8. **Logging (extends §3.9's proof).** The `capture_log(level: :debug)` assertions also cover the
+   rotation configuration (two peppers): neither pepper (hex or base64), nor any `email_key`, nor
+   the email appears; the backfill output prints the key id only.
 
 ### 15.2 REQ-436 -- limiter (owner `ELIXIR-DEV`)
 
@@ -1439,6 +1681,12 @@ refusal of §12.6 applies. Emits the C-1 counters for `:tenant`, `:accepted`, `:
 adapter). **No** OpenAPI file exists to change (D7); the handoff records that fact.
 `lib/letflow/plugs/auth_pipeline.ex` is **not** modified (git diff empty).
 
+**Amended by 0043 D-C (key id).** The endpoint calls `email_keys/1` / `sentinel_keys/0`, passes the
+current key `hd(keys)` to `consume_email/2` (§12.2), and passes the whole list to
+`lookup_by_keys/1` (§5.3-5.4); it never calls the removed single-key `lookup_by_key/1`. A test with
+a two-pepper configuration (current + previous, one row under each for one tenant) shows a
+Mode B single match is still `200` (one tenant) and byte-identical to the one-pepper case.
+
 **Tests required:** Mode A byte-comparison across known-single, known-multi and unknown (same
 status, same Content-Type, byte-identical bodies); Mode B single-match returns exactly the keys
 `result`, `tenant.slug`, `tenant.display_name` and nothing else, multi and unknown are
@@ -1461,7 +1709,7 @@ guard shows no `start_child`/`Task.start`/`spawn` with an MFA or argument-list f
 the default adapter delivers nothing and logs no email or tenant name; no email address and no raw
 body in captured Logger output, **captured at `level: :debug` over known, unknown, multi and
 malformed requests, and no `email_key` hex/base64 either (D-3, §3.9); every `Repo` call in
-`lookup_by_key/1` carries `log: false`;** **outcome counters (C-1, §12.7): exactly one
+`lookup_by_keys/1` carries `log: false`;** **outcome counters (C-1, §12.7): exactly one
 `[:letflow, :login_discovery, :outcome]` event per request with `:tenant` for the Mode B
 single-match, `:accepted` for every 202 (known, multi, unknown, malformed, failure alike, so the
 event does not split them), `:not_found` for a wrong method/path, and metadata containing only
@@ -1559,6 +1807,11 @@ Description-item map: (a) §1, (b) §2, (c) §3, (d) §4, (e) §5, (f) §6, (g) 
 | Q16 | Existing tenant `users` writes and PostgreSQL's own statement log still expose plaintext emails at `:debug`/server level (0042 OQ-13, §3.9) | not changed here; ORCH to file | `ORCH` |
 | Q17 | The same global-before-IP ordering exists in `PublicReadRateLimit.call/2` on `/api/public` (§0.1) | not changed here (0042 OQ-12 extended) | `ORCH` |
 | Q18 | Accepted residual: targeted per-email lockout (§12.8) and the new-IP refusal at `max_ip_keys` (§12.3) | accepted, mitigated by the organisation-code route and counters | `SECURITY-REVIEWER` (re-run) |
+
+| Q19 | The key id is a label, not enforced as unique-per-pepper: re-using an id for a different pepper, or giving the same pepper a new id, makes `retire_key <id>` delete rows still reachable under a live pepper, and `ON CONFLICT DO NOTHING` (target `(email_key, tenant_id)`) leaves such a row under its old label. Boot checks only forbid `previous_id == current_id` and `previous == current` | Not enforceable at boot (no history); the rotation runbook states "a new, never-used id for every rotation, never relabel a pepper"; REQ-443's `key_status` should list ids present in the table and warn when a candidate id does not match what the table holds | `REVIEWER`; REQ-443 owner |
+| Q20 | Rolling multi-node rotation deploy: the advisory lock hash differs between old and new pepper, so the ghost-entry race of §3.7 is possible for the rollout window (§3.7 residual) | Rotation is a maintenance-window operation, as the backfill is (§4) | `SECURITY-REVIEWER`, `REVIEWER` |
+| Q21 | `key_id` has no index (D18): `retire_key` filters by it | Not built here; REQ-443 adds an index in its own migration if it measures a need | REQ-443 owner |
+| Q22 | The `CHECK` on `key_id` (D18a) and treating empty env values as unset (D19) are additions to the requirement text | adopted as stated | `REQ-VALIDATOR` |
 
 Gate verdicts are recorded in 0042's "Sign-off" section only; this is rework 2 following
 `SECURITY-REVIEWER`'s FAIL (D-1, D-2, D-3, C-1..C-5), and the gates re-run.

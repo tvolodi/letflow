@@ -72,50 +72,121 @@ end
 config :letflow, :secrets_master_key, secrets_master_key
 
 # REQ-435 (design lib/letflow/design/req434-email-first-login-directory.md §2.2,
-# decision 0042): the keyed-HMAC pepper for the platform tenant-login directory
-# (Letflow.LoginDirectory.email_key/1). Same startup discipline as the master
-# key above -- read ONCE here from the LETFLOW_LOGIN_DIRECTORY_PEPPER reference,
-# required in every environment (config/test.exs injects a test-only value),
-# never defaulted. It must be a distinct secret from the master key.
-# generate with: openssl rand -hex 32
-login_directory_pepper_hex = System.get_env("LETFLOW_LOGIN_DIRECTORY_PEPPER")
-
-login_directory_pepper_hex ||
-  raise """
-  environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER is missing.
-  Required in every environment (including test/CI) -- Letflow.LoginDirectory
-  (REQ-435) never falls back to a default pepper.
-  Generate one with: openssl rand -hex 32
-  """
-
-unless byte_size(login_directory_pepper_hex) == 64 and
-         String.match?(login_directory_pepper_hex, ~r/^[0-9a-f]{64}$/) do
-  raise """
-  environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER is malformed: it must be
-  exactly 64 lowercase hexadecimal characters (32 bytes, hex-encoded).
-  Generate one with: openssl rand -hex 32
-  """
+# decisions 0042 and 0043 D-C): the keyed-HMAC pepper(s) for the platform
+# tenant-login directory (Letflow.LoginDirectory). Same startup discipline as the
+# master key above -- read ONCE here, required in every environment
+# (config/test.exs injects test-only values), never defaulted. Four variables:
+#   LETFLOW_LOGIN_DIRECTORY_PEPPER / _ID                  (required: current pair)
+#   LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS / _PREVIOUS_ID (both or neither: rotation)
+# An empty or all-whitespace value counts as unset (D19). No message below ever
+# echoes a value (INV-4). generate a pepper with: openssl rand -hex 32
+ld_get = fn name ->
+  case System.get_env(name) do
+    nil -> nil
+    value -> if String.trim(value) == "", do: nil, else: value
+  end
 end
 
-login_directory_pepper = Base.decode16!(login_directory_pepper_hex, case: :lower)
+ld_pepper = fn name ->
+  hex =
+    ld_get.(name) ||
+      raise """
+      environment variable #{name} is missing.
+      Required for the login directory (REQ-435); there is no default.
+      Generate a pepper with: openssl rand -hex 32
+      """
 
-if login_directory_pepper == <<0::256>> or login_directory_pepper == <<0xFF::256>> do
-  raise """
-  environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER is a trivially-guessable
-  value (all-zeros or all-0xFF). Generate a real random value with:
-  openssl rand -hex 32
-  """
+  unless String.match?(hex, ~r/\A[0-9a-f]{64}\z/) do
+    raise """
+    environment variable #{name} is malformed: it must be exactly 64 lowercase
+    hexadecimal characters (32 bytes, hex-encoded).
+    Generate a pepper with: openssl rand -hex 32
+    """
+  end
+
+  pepper = Base.decode16!(hex, case: :lower)
+
+  if pepper == <<0::256>> or pepper == :binary.copy(<<0xFF>>, 32) do
+    raise """
+    environment variable #{name} is a trivially-guessable value (all-zeros or
+    all-0xFF). Generate a real random value with: openssl rand -hex 32
+    """
+  end
+
+  if pepper == secrets_master_key do
+    raise """
+    environment variable #{name} must be a distinct secret: it equals
+    LETFLOW_SECRETS_MASTER_KEY. Generate a separate value with: openssl rand -hex 32
+    """
+  end
+
+  pepper
 end
 
-if login_directory_pepper == secrets_master_key do
-  raise """
-  environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER must be a distinct secret:
-  it equals LETFLOW_SECRETS_MASTER_KEY. Generate a separate value with:
-  openssl rand -hex 32
-  """
+ld_id = fn name ->
+  id =
+    ld_get.(name) ||
+      raise """
+      environment variable #{name} is missing.
+      Required for the login directory (REQ-435); there is no default.
+      """
+
+  unless String.match?(id, ~r/\A[a-z0-9_-]{1,32}\z/) do
+    raise """
+    environment variable #{name} is malformed: it must be 1 to 32 characters
+    from [a-z0-9_-].
+    """
+  end
+
+  id
 end
 
-config :letflow, :login_directory_pepper, login_directory_pepper
+ld_current = %{
+  pepper: ld_pepper.("LETFLOW_LOGIN_DIRECTORY_PEPPER"),
+  id: ld_id.("LETFLOW_LOGIN_DIRECTORY_PEPPER_ID")
+}
+
+ld_previous_set? = {
+  ld_get.("LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS") != nil,
+  ld_get.("LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS_ID") != nil
+}
+
+ld_previous =
+  case ld_previous_set? do
+    {false, false} ->
+      nil
+
+    {true, true} ->
+      previous = %{
+        pepper: ld_pepper.("LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS"),
+        id: ld_id.("LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS_ID")
+      }
+
+      if previous.pepper == ld_current.pepper do
+        raise """
+        environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS must differ
+        from LETFLOW_LOGIN_DIRECTORY_PEPPER.
+        """
+      end
+
+      if previous.id == ld_current.id do
+        raise """
+        environment variable LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS_ID must differ
+        from LETFLOW_LOGIN_DIRECTORY_PEPPER_ID (a key id must never be reused).
+        """
+      end
+
+      previous
+
+    _one_of_two ->
+      raise """
+      LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS and
+      LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS_ID must be set together or not at
+      all (a rotation needs both the previous pepper and its id).
+      """
+  end
+
+config :letflow, :login_directory_keys, current: ld_current, previous: ld_previous
 
 # REQ-193: structured log level. Defaults to :info when LOG_LEVEL is absent in dev/prod,
 # :debug in test (so capture_log([level: :debug]) can capture debug messages -- runtime.exs

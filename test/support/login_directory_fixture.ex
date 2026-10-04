@@ -4,7 +4,7 @@ defmodule Letflow.Test.LoginDirectoryFixture do
   referenced from `lib/`).
 
   `tenant!/1` provisions a real tenant schema bound to a unique `idp_realm_id`
-  (so `Letflow.LoginDirectory.lookup_by_key/1` can find it), using the same
+  (so `Letflow.LoginDirectory.lookup_by_keys/1` can find it), using the same
   `SandboxAutoMode.provision!/2` + explicit cleanup shape as
   `test/letflow/audit_dispositions_test.exs`: provisioning commits real state in
   `:auto` mode, the test body then runs in a dedicated rolled-back sandbox
@@ -103,6 +103,70 @@ defmodule Letflow.Test.LoginDirectoryFixture do
   def key!(email) do
     {:ok, key} = Letflow.LoginDirectory.email_key(email)
     key
+  end
+
+  @doc """
+  Replaces the global `:login_directory_keys` application env for the calling
+  test (restored in `on_exit/1`). `:unset` deletes it; otherwise `current` and
+  `previous` are `{key_id, pepper_binary}` tuples (`previous` may be `nil`).
+  The calling test module must be `async: false`.
+  """
+  @spec swap_keys!(:unset | {String.t(), binary()}, {String.t(), binary()} | nil) :: :ok
+  def swap_keys!(:unset, _previous) do
+    remember_keys()
+    Application.delete_env(:letflow, :login_directory_keys)
+  end
+
+  def swap_keys!({_id, _pepper} = current, previous) do
+    remember_keys()
+
+    Application.put_env(:letflow, :login_directory_keys,
+      current: slot(current),
+      previous: slot(previous)
+    )
+  end
+
+  defp slot(nil), do: nil
+  defp slot({id, pepper}), do: %{id: id, pepper: pepper}
+
+  defp remember_keys do
+    original = Application.fetch_env(:letflow, :login_directory_keys)
+
+    on_exit(fn ->
+      case original do
+        {:ok, v} -> Application.put_env(:letflow, :login_directory_keys, v)
+        :error -> Application.delete_env(:letflow, :login_directory_keys)
+      end
+    end)
+  end
+
+  @doc "Deterministic 32-byte test pepper number `n` (never a real secret)."
+  @spec pepper(pos_integer()) :: binary()
+  def pepper(n), do: :crypto.hash(:sha256, "req435-test-pepper-#{n}")
+
+  @doc """
+  Inserts a directory row directly (bypassing the context under test) under an
+  explicit key and key id.
+  """
+  @spec insert_row!(Ecto.UUID.t(), binary(), String.t()) :: :ok
+  def insert_row!(tenant_id, key, key_id) do
+    {1, _} =
+      Repo.insert_all(TenantLoginDirectoryEntry, [
+        %{
+          email_key: key,
+          key_id: key_id,
+          tenant_id: tenant_id,
+          inserted_at: ~N[2026-01-01 00:00:00]
+        }
+      ])
+
+    :ok
+  end
+
+  @doc "Keyed-hash of `email` under an explicit pepper (independent of the context's config)."
+  @spec key_under(binary(), String.t()) :: binary()
+  def key_under(pepper, normalised_email) do
+    :crypto.mac(:hmac, :sha256, pepper, "letflow:login-directory:v1:" <> normalised_email)
   end
 
   @doc "Count of `users` rows in a tenant schema."

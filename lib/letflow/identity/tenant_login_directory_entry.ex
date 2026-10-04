@@ -31,6 +31,7 @@ defmodule Letflow.Identity.TenantLoginDirectoryEntry do
   @primary_key false
   schema "tenant_login_directory" do
     field(:email_key, :binary, primary_key: true)
+    field(:key_id, :string)
     belongs_to(:tenant, Letflow.Identity.Tenant, type: :binary_id, primary_key: true)
 
     field(:inserted_at, :naive_datetime)
@@ -38,19 +39,25 @@ defmodule Letflow.Identity.TenantLoginDirectoryEntry do
 
   @type t :: %__MODULE__{
           email_key: <<_::256>>,
+          key_id: String.t(),
           tenant_id: Ecto.UUID.t(),
           inserted_at: NaiveDateTime.t()
         }
 
   @doc """
-  Changeset for inserting an entry. Casts and requires `[:email_key,
-  :tenant_id]`; `unique_constraint` on the pair. No update changeset exists.
+  Changeset for inserting an entry. Casts and requires `[:email_key, :key_id,
+  :tenant_id]`; `key_id` (0043 D-C: the id of the pepper that produced
+  `email_key`, not part of the primary key) must match `[a-z0-9_-]{1,32}`
+  (mirrors the `key_id_format` CHECK); `unique_constraint` on the pair. No
+  update changeset exists.
   """
   @spec create_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def create_changeset(entry, attrs) do
     entry
-    |> cast(attrs, [:email_key, :tenant_id])
-    |> validate_required([:email_key, :tenant_id])
+    |> cast(attrs, [:email_key, :key_id, :tenant_id])
+    |> validate_required([:email_key, :key_id, :tenant_id])
+    |> validate_format(:key_id, ~r/\A[a-z0-9_-]{1,32}\z/)
+    |> check_constraint(:key_id, name: :key_id_format)
     |> unique_constraint([:email_key, :tenant_id], name: :tenant_login_directory_pkey)
   end
 end

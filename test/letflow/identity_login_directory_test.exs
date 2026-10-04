@@ -5,7 +5,7 @@ defmodule Letflow.IdentityLoginDirectoryTest do
   maintain `tenant_login_directory` in the same transaction as the user write.
   See `test/specs/REQ-435.md`.
 
-  `async: false`: real tenant schemas, global pepper swaps and a global Logger
+  `async: false`: real tenant schemas, global key-config swaps and a global Logger
   level change (all restored in `on_exit/1`).
   """
 
@@ -23,21 +23,7 @@ defmodule Letflow.IdentityLoginDirectoryTest do
 
   # ── helpers ─────────────────────────────────────────────────────────────
 
-  defp with_pepper(value) do
-    original = Application.fetch_env(:letflow, :login_directory_pepper)
-
-    on_exit(fn ->
-      case original do
-        {:ok, v} -> Application.put_env(:letflow, :login_directory_pepper, v)
-        :error -> Application.delete_env(:letflow, :login_directory_pepper)
-      end
-    end)
-
-    case value do
-      :unset -> Application.delete_env(:letflow, :login_directory_pepper)
-      v -> Application.put_env(:letflow, :login_directory_pepper, v)
-    end
-  end
+  defp with_pepper(:unset), do: Fx.swap_keys!(:unset, nil)
 
   defp unique_username(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
 

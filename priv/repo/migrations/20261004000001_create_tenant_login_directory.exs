@@ -10,6 +10,10 @@
 # The composite primary key's leading column serves the lookup, so no separate
 # unique index is created; the `tenant_id` index exists only so the FK cascade
 # on tenant deletion does not scan the table.
+#
+# 0043 D-C: `key_id` labels the pepper that produced `email_key` (NOT in the
+# primary key: the 32 key bytes already differ per pepper; no index -- deletion
+# by key id belongs to REQ-443). Edited in place: this migration is not on `main`.
 defmodule Letflow.Repo.Migrations.CreateTenantLoginDirectory do
   use Ecto.Migration
 
@@ -21,11 +25,17 @@ defmodule Letflow.Repo.Migrations.CreateTenantLoginDirectory do
         null: false,
         primary_key: true
 
+      add :key_id, :string, size: 32, null: false
+
       add :inserted_at, :naive_datetime, null: false
     end
 
     create constraint(:tenant_login_directory, :email_key_is_32_bytes,
              check: "octet_length(email_key) = 32"
+           )
+
+    create constraint(:tenant_login_directory, :key_id_format,
+             check: "key_id ~ '^[a-z0-9_-]{1,32}$'"
            )
 
     create index(:tenant_login_directory, [:tenant_id])

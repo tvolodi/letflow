@@ -8,7 +8,7 @@ defmodule Letflow.LoginDirectory.Backfill do
   Iterates **every registered tenant** via
   `Letflow.TenantProvisioning.list_registrations/0`, regardless of tenant
   status: tenant status is filtered at query time by
-  `Letflow.LoginDirectory.lookup_by_key/1`, so skipping an `:inactive` tenant
+  `Letflow.LoginDirectory.lookup_by_keys/1`, so skipping an `:inactive` tenant
   would leave its users undiscoverable after reactivation (design §0.3 D3).
 
   For each tenant it reads the active users' emails from that tenant's own
@@ -22,6 +22,12 @@ defmodule Letflow.LoginDirectory.Backfill do
   Each tenant runs in its own transaction under a rescue: a failure is recorded
   in `failed` with a reason atom only (never exception text or an email) and the
   next tenant still runs (INV-8).
+
+  **It is the re-keying step of a pepper rotation (0043 D-C):** keys are computed
+  with `email_key/1` and rows are written under the CURRENT key and
+  `current_key_id/0` only, never under the previous key, so after a rotation every
+  active user gains a current-key row (old-key rows are left alone; removing them
+  is `retire_key`, REQ-443). Steady state: a re-run inserts 0.
 
   Insert-only: it never removes. A backfill racing a concurrent deactivation can
   leave a ghost entry for the race window (0042 RQ-4); it does not take the
@@ -51,30 +57,31 @@ defmodule Letflow.LoginDirectory.Backfill do
   @type backfill_report :: %{
           tenants: [tenant_report()],
           failed: [%{tenant_id: Ecto.UUID.t(), reason: atom()}],
-          dry_run: boolean()
+          dry_run: boolean(),
+          key_id: String.t()
         }
 
   @doc """
   Runs the backfill. `dry_run: true` reads and computes but writes nothing
   (`inserted` is 0; `keys` is how many distinct keys a real run would attempt).
   Returns `{:error, :pepper_unavailable}` before touching any tenant when the
-  pepper is not configured; otherwise `{:ok, report}` even when `failed != []`.
+  keys are not configured (`current_key_id/0`); the report carries the `key_id`; otherwise `{:ok, report}` even when `failed != []`.
   """
   @spec run(opts :: [dry_run: boolean()]) ::
           {:ok, backfill_report()} | {:error, :pepper_unavailable}
   def run(opts \\ []) do
     dry_run? = Keyword.get(opts, :dry_run, false)
 
-    case LoginDirectory.sentinel_key() do
+    case LoginDirectory.current_key_id() do
       {:error, :pepper_unavailable} ->
         {:error, :pepper_unavailable}
 
-      _key ->
+      {:ok, key_id} ->
         report =
           Enum.reduce(
             TenantProvisioning.list_registrations(),
-            %{tenants: [], failed: [], dry_run: dry_run?},
-            fn registration, acc -> backfill_tenant(registration, dry_run?, acc) end
+            %{tenants: [], failed: [], dry_run: dry_run?, key_id: key_id},
+            fn registration, acc -> backfill_tenant(registration, dry_run?, key_id, acc) end
           )
 
         {:ok,
@@ -82,8 +89,8 @@ defmodule Letflow.LoginDirectory.Backfill do
     end
   end
 
-  defp backfill_tenant(registration, dry_run?, acc) do
-    case Repo.transaction(fn -> do_backfill_tenant(registration, dry_run?) end) do
+  defp backfill_tenant(registration, dry_run?, key_id, acc) do
+    case Repo.transaction(fn -> do_backfill_tenant(registration, dry_run?, key_id) end) do
       {:ok, tenant_report} -> %{acc | tenants: [tenant_report | acc.tenants]}
       {:error, reason} -> record_failure(acc, registration, reason)
     end
@@ -96,7 +103,7 @@ defmodule Letflow.LoginDirectory.Backfill do
     %{acc | failed: [%{tenant_id: registration.tenant_id, reason: reason} | acc.failed]}
   end
 
-  defp do_backfill_tenant(registration, dry_run?) do
+  defp do_backfill_tenant(registration, dry_run?, key_id) do
     emails =
       Repo.all(
         from(u in User, where: u.status == :active and not is_nil(u.email), select: u.email),
@@ -114,7 +121,7 @@ defmodule Letflow.LoginDirectory.Backfill do
       end)
       |> Enum.uniq()
 
-    inserted = if dry_run?, do: 0, else: insert_keys(keys, registration.tenant_id)
+    inserted = if dry_run?, do: 0, else: insert_keys(keys, registration.tenant_id, key_id)
 
     %{
       tenant_id: registration.tenant_id,
@@ -124,13 +131,14 @@ defmodule Letflow.LoginDirectory.Backfill do
     }
   end
 
-  defp insert_keys(keys, tenant_id) do
+  defp insert_keys(keys, tenant_id, key_id) do
     now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
 
     keys
     |> Enum.chunk_every(@insert_chunk_size)
     |> Enum.reduce(0, fn chunk, total ->
-      rows = Enum.map(chunk, &%{email_key: &1, tenant_id: tenant_id, inserted_at: now})
+      rows =
+        Enum.map(chunk, &%{email_key: &1, key_id: key_id, tenant_id: tenant_id, inserted_at: now})
 
       {count, _} =
         Repo.insert_all(TenantLoginDirectoryEntry, rows,

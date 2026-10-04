@@ -74,9 +74,7 @@ defmodule Letflow.Routers.IdentityLoginDirectoryTest do
 
     test "a directory failure is a 500 and leaves neither user nor entry" do
       a = Fx.tenant!()
-      original = Application.fetch_env!(:letflow, :login_directory_pepper)
-      on_exit(fn -> Application.put_env(:letflow, :login_directory_pepper, original) end)
-      Application.delete_env(:letflow, :login_directory_pepper)
+      Fx.swap_keys!(:unset, nil)
 
       conn = post_user(a, "dirfail@example.test")
 

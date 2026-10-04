@@ -15,18 +15,27 @@ defmodule Letflow.LoginDirectory do
   `email_key = HMAC-SHA256(pepper, "letflow:login-directory:v1:" <> normalised_email)`,
   32 raw bytes, where the normalised email is
   `Letflow.Identity.TenantMembership.normalize_subject_key/1` (one shared
-  implementation, never forked). The pepper is read at the point of use from
-  `config :letflow, :login_directory_pepper` (populated at boot from the
-  `LETFLOW_LOGIN_DIRECTORY_PEPPER` environment-variable reference by
-  `config/runtime.exs`, which fails closed when it is absent). It is never
-  logged, never stored in a struct and never returned.
+  implementation, never forked). Peppers are read at the point of use from
+  `config :letflow, :login_directory_keys` (`[current: slot, previous: slot | nil]`,
+  `slot = %{id, pepper}`; populated at boot from the `LETFLOW_LOGIN_DIRECTORY_PEPPER*`
+  environment-variable references by `config/runtime.exs`, which fails closed).
+  A pepper is never logged, stored in a struct or returned; only the key **id**
+  (a label) may be returned (0043 D-C).
+
+  `email_key/1` and `sentinel_key/0` are the CURRENT-pepper forms (writers,
+  backfill, limiter). `email_keys/1` and `sentinel_keys/0` return the candidate
+  list, current first, plus the previous key only during a planned rotation
+  (length 1 or 2, a function of deployment state, never of the input);
+  `lookup_by_keys/1` is dual-read over that list.
 
   ## Writers
 
   `upsert_entry/2` and `remove_entry_if_unreferenced/3` must run inside a
   transaction (they return `{:error, :not_in_transaction}` otherwise) and take a
   transaction-scoped advisory lock per `(tenant_id, email_key)` so concurrent
-  decisions observe each other's outcome. `plan_user_change/2` is the pure single
+  decisions observe each other's outcome (the lock is on the CURRENT key only;
+  writes use the current key and key id only, removal deletes under every
+  candidate key, 0043 D-C). `plan_user_change/2` is the pure single
   source of truth for add/remove decisions; `apply_plan/3` executes a plan,
   acquiring every lock in ascending key order first. The callers are the
   `Letflow.Identity` user functions, in the same transaction as the user write.
@@ -57,6 +66,7 @@ defmodule Letflow.LoginDirectory do
   @lock_namespace 435_001
 
   @type email_key :: <<_::256>>
+  @type candidate_keys :: [email_key(), ...]
   @type tenant_ref :: %{slug: String.t(), display_name: String.t()}
 
   @type plan_step ::
@@ -66,38 +76,98 @@ defmodule Letflow.LoginDirectory do
   # ── keys ────────────────────────────────────────────────────────────────
 
   @doc """
-  The keyed email key for `email`. Returns `:invalid` when `email` is not a
-  binary, its trimmed size is outside 1..255 bytes, or it fails
+  The email key for `email` under the CURRENT pepper. Returns `:invalid` when
+  `email` is not a binary, its trimmed size is outside 1..255 bytes, or it fails
   `TenantMembership.email_shape?/1`; `{:error, :pepper_unavailable}` when the
-  pepper is not configured.
+  keys are not configured.
   """
   @spec email_key(term()) :: {:ok, email_key()} | :invalid | {:error, :pepper_unavailable}
   def email_key(email) do
     if valid_email?(email) do
-      hmac(TenantMembership.normalize_subject_key(email))
+      with {:ok, [current | _previous]} <- hmacs(TenantMembership.normalize_subject_key(email)) do
+        {:ok, current}
+      end
     else
       :invalid
     end
   end
 
   @doc """
-  The sentinel key used for malformed input: a keyed HMAC of a fixed string no
+  Candidate keys for `email`, current first, then the previous pepper's key only
+  while a rotation is configured (length 1 or 2). Same error returns as
+  `email_key/1`.
+  """
+  @spec email_keys(term()) :: {:ok, candidate_keys()} | :invalid | {:error, :pepper_unavailable}
+  def email_keys(email) do
+    if valid_email?(email) do
+      hmacs(TenantMembership.normalize_subject_key(email))
+    else
+      :invalid
+    end
+  end
+
+  @doc """
+  The sentinel key under the CURRENT pepper: a keyed HMAC of a fixed string no
   valid address can equal. The writers never write it, so it never matches a row.
   """
   @spec sentinel_key() :: email_key() | {:error, :pepper_unavailable}
   def sentinel_key do
-    case hmac(@sentinel_input) do
-      {:ok, key} -> key
+    case hmacs(@sentinel_input) do
+      {:ok, [current | _previous]} -> current
       {:error, :pepper_unavailable} = error -> error
     end
   end
 
-  defp hmac(normalised) do
-    case Application.fetch_env(:letflow, :login_directory_pepper) do
-      {:ok, <<_::binary-size(32)>> = pepper} ->
-        {:ok, :crypto.mac(:hmac, :sha256, pepper, @key_domain <> normalised)}
+  @doc """
+  Sentinel keys, one per candidate pepper, current first (same length as
+  `email_keys/1` returns for a valid address).
+  """
+  @spec sentinel_keys() :: candidate_keys() | {:error, :pepper_unavailable}
+  def sentinel_keys do
+    case hmacs(@sentinel_input) do
+      {:ok, keys} -> keys
+      {:error, :pepper_unavailable} = error -> error
+    end
+  end
 
-      _other ->
+  @doc """
+  The id of the CURRENT pepper (a label, not a secret), recorded in every row
+  written.
+  """
+  @spec current_key_id() :: {:ok, String.t()} | {:error, :pepper_unavailable}
+  def current_key_id do
+    case key_slots() do
+      {:ok, [%{id: id} | _previous]} -> {:ok, id}
+      :error -> {:error, :pepper_unavailable}
+    end
+  end
+
+  # Configured slots, current first, previous (if any) second.
+  defp key_slots do
+    with {:ok, keys} when is_list(keys) <- Application.fetch_env(:letflow, :login_directory_keys),
+         %{id: id, pepper: <<_::binary-size(32)>>} = current when is_binary(id) <-
+           Keyword.get(keys, :current) do
+      case Keyword.get(keys, :previous) do
+        %{id: prev_id, pepper: <<_::binary-size(32)>>} = previous when is_binary(prev_id) ->
+          {:ok, [current, previous]}
+
+        _none ->
+          {:ok, [current]}
+      end
+    else
+      _other -> :error
+    end
+  end
+
+  defp hmacs(normalised) do
+    case key_slots() do
+      {:ok, slots} ->
+        {:ok,
+         Enum.map(slots, fn %{pepper: pepper} ->
+           :crypto.mac(:hmac, :sha256, pepper, @key_domain <> normalised)
+         end)}
+
+      :error ->
         {:error, :pepper_unavailable}
     end
   end
@@ -113,48 +183,59 @@ defmodule Letflow.LoginDirectory do
   # ── read ────────────────────────────────────────────────────────────────
 
   @doc """
-  The one discovery query: the directory joined to `tenants`, for `key`, active
-  tenants with a bound (non-empty) `idp_realm_id` only, ordered by `display_name`
-  then `slug`, limited to 50. Returns plain maps holding only `slug` and
-  `display_name` (the `Tenant` struct is never loaded, so no other field is
-  representable past the query). Touches public tables only (no `:prefix`). A
-  failure is `{:error, :lookup_failed}`.
+  The one discovery query (dual-read, 0043 D-C/D15): `tenants` semijoined
+  (`EXISTS`) to the directory rows whose `email_key` is any of `keys` (1..2
+  keys), so a tenant is returned once even when a person holds a row under each
+  key. Active tenants with a bound (non-empty) `idp_realm_id` only, ordered by
+  `display_name` then `slug`, limited to 50. Returns plain maps holding only
+  `slug` and `display_name` (the `Tenant` struct is never loaded). Touches public
+  tables only (no `:prefix`); one Repo round trip, `log: false`. Any other
+  argument, or a failure, is `{:error, :lookup_failed}`.
   """
-  @spec lookup_by_key(email_key()) :: {:ok, [tenant_ref()]} | {:error, :lookup_failed}
-  def lookup_by_key(<<_::binary-size(32)>> = key) do
-    query =
-      from(d in TenantLoginDirectoryEntry,
-        join: t in Tenant,
-        on: t.id == d.tenant_id,
-        where:
-          d.email_key == ^key and t.status == :active and not is_nil(t.idp_realm_id) and
-            t.idp_realm_id != "",
-        order_by: [asc: t.display_name, asc: t.slug],
-        limit: @lookup_limit,
-        select: %{slug: t.slug, display_name: t.display_name}
-      )
+  @spec lookup_by_keys(candidate_keys()) :: {:ok, [tenant_ref()]} | {:error, :lookup_failed}
+  def lookup_by_keys([_ | _] = keys) when length(keys) <= 2 do
+    if Enum.all?(keys, &match?(<<_::binary-size(32)>>, &1)) do
+      directory =
+        from(d in TenantLoginDirectoryEntry,
+          where: d.tenant_id == parent_as(:tenant).id and d.email_key in ^keys,
+          select: 1
+        )
 
-    {:ok, Repo.all(query, log: false)}
+      query =
+        from(t in Tenant,
+          as: :tenant,
+          where:
+            exists(directory) and t.status == :active and not is_nil(t.idp_realm_id) and
+              t.idp_realm_id != "",
+          order_by: [asc: t.display_name, asc: t.slug],
+          limit: @lookup_limit,
+          select: %{slug: t.slug, display_name: t.display_name}
+        )
+
+      {:ok, Repo.all(query, log: false)}
+    else
+      {:error, :lookup_failed}
+    end
   rescue
     _exception -> {:error, :lookup_failed}
   end
 
-  def lookup_by_key(_other), do: {:error, :lookup_failed}
+  def lookup_by_keys(_other), do: {:error, :lookup_failed}
 
   @doc """
-  Convenience composition of `email_key/1` and `lookup_by_key/1`: an invalid
-  input uses the sentinel key. An unavailable pepper is `{:error, :lookup_failed}`.
+  Convenience composition of `email_keys/1` and `lookup_by_keys/1`: an invalid
+  input uses the sentinel keys. An unavailable pepper is `{:error, :lookup_failed}`.
   """
   @spec lookup_by_email(term()) :: {:ok, [tenant_ref()]} | {:error, :lookup_failed}
   def lookup_by_email(email) do
-    case email_key(email) do
-      {:ok, key} ->
-        lookup_by_key(key)
+    case email_keys(email) do
+      {:ok, keys} ->
+        lookup_by_keys(keys)
 
       :invalid ->
-        case sentinel_key() do
+        case sentinel_keys() do
           {:error, :pepper_unavailable} -> {:error, :lookup_failed}
-          key -> lookup_by_key(key)
+          keys -> lookup_by_keys(keys)
         end
 
       {:error, :pepper_unavailable} ->
@@ -248,8 +329,8 @@ defmodule Letflow.LoginDirectory do
   # ── writers ─────────────────────────────────────────────────────────────
 
   @doc """
-  Inserts the entry for `(email_key(email), tenant_id)` if absent
-  (`ON CONFLICT DO NOTHING`). Must run inside a transaction. Returns
+  Inserts the entry for `(email_key(email), tenant_id)` under the current key and
+  `current_key_id/0` if absent (`ON CONFLICT DO NOTHING`). Must run inside a transaction. Returns
   `{:ok, :inserted | :exists}`, `{:error, :invalid_email}` (nothing written, the
   sentinel is never written), `{:error, :pepper_unavailable}`,
   `{:error, :not_in_transaction}` or `{:error, :write_failed}`.
@@ -260,9 +341,11 @@ defmodule Letflow.LoginDirectory do
   def upsert_entry(tenant_id, email) do
     with :ok <- ensure_in_transaction(),
          {:ok, key} <- key_or_error(email),
+         {:ok, key_id} <- current_key_id(),
          :ok <- acquire_key_lock(tenant_id, key) do
       row = %{
         email_key: key,
+        key_id: key_id,
         tenant_id: tenant_id,
         inserted_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
       }
@@ -282,7 +365,8 @@ defmodule Letflow.LoginDirectory do
   end
 
   @doc """
-  Deletes the entry for `(email_key(email), tenant_id)` only if no other active
+  Deletes the entries for `tenant_id` under every candidate key of `email`
+  (`email_keys/1`; the advisory lock is on the current key) only if no other active
   user in the tenant schema `prefix` has the same normalised email (design §3.6;
   `users.email` carries no unique index, so two active users can share it). The
   caller has already applied the user write in this transaction, so the check is
@@ -300,6 +384,7 @@ defmodule Letflow.LoginDirectory do
   def remove_entry_if_unreferenced(tenant_id, email, prefix) when is_binary(prefix) do
     with :ok <- ensure_in_transaction(),
          {:ok, key} <- key_or_error(email),
+         {:ok, candidate_keys} <- email_keys(email),
          :ok <- acquire_key_lock(tenant_id, key) do
       normalised = TenantMembership.normalize_subject_key(email)
 
@@ -318,7 +403,7 @@ defmodule Letflow.LoginDirectory do
         {count, _} =
           Repo.delete_all(
             from(d in TenantLoginDirectoryEntry,
-              where: d.email_key == ^key and d.tenant_id == ^tenant_id
+              where: d.email_key in ^candidate_keys and d.tenant_id == ^tenant_id
             ),
             log: false
           )

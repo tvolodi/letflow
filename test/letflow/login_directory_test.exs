@@ -4,13 +4,14 @@ defmodule Letflow.LoginDirectoryTest do
   the single-query lookup, cross-tenant isolation, FK cascade and the writers'
   own contracts. See `test/specs/REQ-435.md` for the criterion -> test mapping.
 
-  `async: false`: tests swap the global `:login_directory_pepper` application
-  env (restored in `on_exit/1`) and provision real tenant schemas.
+  `async: false`: tests swap the global `:login_directory_keys` application
+  env (restored in `on_exit/1`, 0043 D-C) and provision real tenant schemas.
   """
 
   use Letflow.DataCase, async: false
 
   import Ecto.Query, only: [from: 2]
+  import ExUnit.CaptureLog
 
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.TenantLoginDirectoryEntry
@@ -18,22 +19,6 @@ defmodule Letflow.LoginDirectoryTest do
   alias Letflow.LoginDirectory
   alias Letflow.TenantProvisioning.Registration
   alias Letflow.Test.LoginDirectoryFixture, as: Fx
-
-  defp with_pepper(value) do
-    original = Application.fetch_env(:letflow, :login_directory_pepper)
-
-    on_exit(fn ->
-      case original do
-        {:ok, v} -> Application.put_env(:letflow, :login_directory_pepper, v)
-        :error -> Application.delete_env(:letflow, :login_directory_pepper)
-      end
-    end)
-
-    case value do
-      :unset -> Application.delete_env(:letflow, :login_directory_pepper)
-      v -> Application.put_env(:letflow, :login_directory_pepper, v)
-    end
-  end
 
   defp in_tx(fun) do
     {:ok, result} = Repo.transaction(fn -> fun.() end)
@@ -106,18 +91,19 @@ defmodule Letflow.LoginDirectoryTest do
       assert rows == []
     end
 
-    test "the table holds only (email_key, tenant_id, inserted_at): no credential, role, user or profile column" do
+    test "the table holds only (email_key, key_id, tenant_id, inserted_at): no credential, role, user or profile column" do
       %{rows: rows} =
         Repo.query!(
           "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'tenant_login_directory'"
         )
 
-      assert rows |> List.flatten() |> Enum.sort() == ["email_key", "inserted_at", "tenant_id"]
+      assert rows |> List.flatten() |> Enum.sort() ==
+               ["email_key", "inserted_at", "key_id", "tenant_id"]
     end
 
     test "the Ecto schema exposes exactly the same fields (no password/role/user_id/external_id/display_name)" do
       assert Enum.sort(TenantLoginDirectoryEntry.__schema__(:fields)) ==
-               [:email_key, :inserted_at, :tenant_id]
+               [:email_key, :inserted_at, :key_id, :tenant_id]
     end
 
     test "the DB rejects a key that is not 32 bytes (CHECK octet_length = 32)" do
@@ -127,6 +113,7 @@ defmodule Letflow.LoginDirectoryTest do
         Repo.insert_all(TenantLoginDirectoryEntry, [
           %{
             email_key: :crypto.strong_rand_bytes(31),
+            key_id: "test-a",
             tenant_id: tenant_id,
             inserted_at: ~N[2026-01-01 00:00:00]
           }
@@ -137,7 +124,7 @@ defmodule Letflow.LoginDirectoryTest do
 
   describe "AC8: key form" do
     test "key is the 32-byte domain-separated HMAC-SHA256 of the normalised email (independent oracle)" do
-      {:ok, pepper} = Application.fetch_env(:letflow, :login_directory_pepper)
+      %{pepper: pepper} = Application.fetch_env!(:letflow, :login_directory_keys)[:current]
       expected = :crypto.mac(:hmac, :sha256, pepper, "letflow:login-directory:v1:" <> "a@x.com")
 
       assert {:ok, key} = LoginDirectory.email_key("A@X.com ")
@@ -157,14 +144,16 @@ defmodule Letflow.LoginDirectoryTest do
 
       assert {:ok, :inserted} = in_tx(fn -> LoginDirectory.upsert_entry(tenant_id, email) end)
 
-      assert [%{email_key: stored}] = Fx.entries(tenant_id)
+      assert [%{email_key: stored, key_id: stored_id}] = Fx.entries(tenant_id)
       assert stored == Fx.key!(email)
+      assert byte_size(stored) == 32
+      assert {:ok, ^stored_id} = LoginDirectory.current_key_id()
       refute String.contains?(stored, "stored-plain")
     end
 
     test "a different pepper yields a different key" do
       {:ok, key_a} = LoginDirectory.email_key("alice@example.test")
-      with_pepper(String.duplicate("b", 32))
+      Fx.swap_keys!({"test-b", Fx.pepper(2)}, nil)
       {:ok, key_b} = LoginDirectory.email_key("alice@example.test")
 
       assert key_a != key_b
@@ -188,11 +177,14 @@ defmodule Letflow.LoginDirectoryTest do
     end
 
     test "an absent pepper is {:error, :pepper_unavailable}; a wrong-size pepper too" do
-      with_pepper(:unset)
+      Fx.swap_keys!(:unset, nil)
       assert LoginDirectory.email_key("a@x.com") == {:error, :pepper_unavailable}
+      assert LoginDirectory.email_keys("a@x.com") == {:error, :pepper_unavailable}
       assert LoginDirectory.sentinel_key() == {:error, :pepper_unavailable}
+      assert LoginDirectory.sentinel_keys() == {:error, :pepper_unavailable}
+      assert LoginDirectory.current_key_id() == {:error, :pepper_unavailable}
 
-      with_pepper("short")
+      Fx.swap_keys!({"test-s", "short"}, nil)
       assert LoginDirectory.email_key("a@x.com") == {:error, :pepper_unavailable}
     end
 
@@ -313,17 +305,31 @@ defmodule Letflow.LoginDirectoryTest do
                in_tx(fn -> LoginDirectory.upsert_entry(tenant_id, "sentinel-no-at-sign") end)
 
       assert Fx.entries(tenant_id) == []
-      assert LoginDirectory.lookup_by_key(LoginDirectory.sentinel_key()) == {:ok, []}
+      assert LoginDirectory.lookup_by_keys(LoginDirectory.sentinel_keys()) == {:ok, []}
     end
 
     test "a missing pepper degrades to {:error, :lookup_failed}, never a raise" do
-      with_pepper(:unset)
+      Fx.swap_keys!(:unset, nil)
       assert LoginDirectory.lookup_by_email("a@x.com") == {:error, :lookup_failed}
       assert LoginDirectory.lookup_by_email("not-an-email") == {:error, :lookup_failed}
     end
 
-    test "lookup_by_key/1 rejects a non-32-byte key without querying" do
-      assert LoginDirectory.lookup_by_key("short") == {:error, :lookup_failed}
+    test "lookup_by_keys/1 rejects a non-list, an empty list, 3 keys and a non-32-byte key without querying" do
+      key = Fx.key!("a@x.com")
+
+      {result, count} =
+        count_queries(fn ->
+          [
+            LoginDirectory.lookup_by_keys("short"),
+            LoginDirectory.lookup_by_keys(["short"]),
+            LoginDirectory.lookup_by_keys([]),
+            LoginDirectory.lookup_by_keys([key, key, key]),
+            LoginDirectory.lookup_by_keys([key, "short"])
+          ]
+        end)
+
+      assert Enum.all?(result, &(&1 == {:error, :lookup_failed}))
+      assert count == 0
     end
   end
 
@@ -404,7 +410,7 @@ defmodule Letflow.LoginDirectoryTest do
 
     test "upsert_entry/2 with a missing pepper returns :pepper_unavailable and writes nothing" do
       %{tenant_id: tenant_id} = Fx.tenant!()
-      with_pepper(:unset)
+      Fx.swap_keys!(:unset, nil)
 
       assert {:error, :pepper_unavailable} =
                in_tx(fn -> LoginDirectory.upsert_entry(tenant_id, "a@x.com") end)
@@ -469,6 +475,428 @@ defmodule Letflow.LoginDirectoryTest do
 
       assert Fx.entries(a.tenant_id) == []
       assert [_] = Fx.entries(b.tenant_id)
+    end
+  end
+
+  # ── 0043 D-C additions (design §15.1 "Additional tests", items 1-4) ────────
+
+  # Reports whether Postgres rejected `fun`. The SQL sandbox already confines a
+  # failed statement to its own savepoint, so the transaction stays usable.
+  defp rejected?(fun) do
+    fun.()
+    false
+  rescue
+    Postgrex.Error -> true
+  end
+
+  defp raw_row(tenant_id, key, key_id) do
+    %{email_key: key, key_id: key_id, tenant_id: tenant_id, inserted_at: ~N[2026-01-01 00:00:00]}
+  end
+
+  # Mirrors the private hash in LoginDirectory.acquire_key_lock/2 (namespace 435_001).
+  defp advisory_lock_held?(tenant_id, key) do
+    hash = :erlang.phash2({tenant_id, key}, 2_147_483_647)
+
+    %{rows: [[n]]} =
+      Repo.query!(
+        "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND classid = 435001 AND objid = $1 AND pid = pg_backend_pid()",
+        [hash]
+      )
+
+    n > 0
+  end
+
+  # Counts the :crypto.mac/4 calls the calling process makes while `fun` runs.
+  # A separate tracer process is required: a process does not receive its own
+  # call-trace messages.
+  defp count_hmac_calls(fun) do
+    me = self()
+    tracer = spawn(fn -> collect_mac(0) end)
+    :erlang.trace_pattern({:crypto, :mac, 4}, true, [:global])
+    :erlang.trace(me, true, [:call, {:tracer, tracer}])
+
+    try do
+      result = fun.()
+      ref = :erlang.trace_delivered(me)
+
+      receive do
+        {:trace_delivered, ^me, ^ref} -> :ok
+      end
+
+      send(tracer, {:count, me})
+
+      receive do
+        {:mac_count, n} -> {result, n}
+      end
+    after
+      :erlang.trace(me, false, [:call])
+      :erlang.trace_pattern({:crypto, :mac, 4}, false, [:global])
+      Process.exit(tracer, :kill)
+    end
+  end
+
+  defp collect_mac(n) do
+    receive do
+      {:trace, _pid, :call, {:crypto, :mac, [:hmac, :sha256, _, _]}} -> collect_mac(n + 1)
+      {:count, from} -> send(from, {:mac_count, n})
+    end
+  end
+
+  # Returns the bound parameter list of each Repo query the calling process issues.
+  defp query_params(fun) do
+    ref = make_ref()
+    me = self()
+    handler_id = {__MODULE__, :params, ref}
+
+    :telemetry.attach(
+      handler_id,
+      [:letflow, :repo, :query],
+      fn _event, _measurements, meta, _config ->
+        if self() == me, do: send(me, {:params, ref, meta.params})
+      end,
+      nil
+    )
+
+    try do
+      result = fun.()
+      {result, drain_params(ref, [])}
+    after
+      :telemetry.detach(handler_id)
+    end
+  end
+
+  defp drain_params(ref, acc) do
+    receive do
+      {:params, ^ref, params} -> drain_params(ref, [params | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  describe "D-C catalog: key_id column and primary key" do
+    test "key_id is NOT NULL varchar(32); the primary key is exactly (email_key, tenant_id)" do
+      %{rows: [[nullable, type, length]]} =
+        Repo.query!(
+          "SELECT is_nullable, data_type, character_maximum_length FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'tenant_login_directory' AND column_name = 'key_id'"
+        )
+
+      assert {nullable, type, length} == {"NO", "character varying", 32}
+
+      %{rows: pk} =
+        Repo.query!("""
+        SELECT a.attname FROM pg_index i
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey)
+        WHERE i.indrelid = 'public.tenant_login_directory'::regclass AND i.indisprimary
+        """)
+
+      assert pk |> List.flatten() |> Enum.sort() == ["email_key", "tenant_id"]
+    end
+
+    test "the key_id_format CHECK exists and rejects uppercase, empty and 33-character ids" do
+      %{rows: [[1]]} =
+        Repo.query!(
+          "SELECT 1 FROM pg_constraint WHERE conname = 'key_id_format' AND conrelid = 'public.tenant_login_directory'::regclass AND contype = 'c'"
+        )
+
+      %{tenant_id: tenant_id} = Fx.tenant!()
+
+      for bad <- ["UPPER", "", String.duplicate("a", 33), "has space", "new\nline"] do
+        assert rejected?(fn ->
+                 Repo.insert_all(TenantLoginDirectoryEntry, [
+                   raw_row(tenant_id, :crypto.strong_rand_bytes(32), bad)
+                 ])
+               end),
+               "expected key_id #{inspect(bad)} to be rejected"
+      end
+
+      assert :ok = Fx.insert_row!(tenant_id, :crypto.strong_rand_bytes(32), "ok_id-1")
+
+      assert :ok =
+               Fx.insert_row!(tenant_id, :crypto.strong_rand_bytes(32), String.duplicate("a", 32))
+    end
+
+    test "NULL key_id is rejected (NOT NULL)" do
+      %{tenant_id: tenant_id} = Fx.tenant!()
+
+      assert rejected?(fn ->
+               Repo.query!(
+                 "INSERT INTO tenant_login_directory (email_key, key_id, tenant_id, inserted_at) VALUES ($1, NULL, $2, now())",
+                 [:crypto.strong_rand_bytes(32), Ecto.UUID.dump!(tenant_id)]
+               )
+             end)
+    end
+
+    test "a duplicate (email_key, tenant_id) violates the key, even with a different key_id" do
+      %{tenant_id: tenant_id} = Fx.tenant!()
+      key = :crypto.strong_rand_bytes(32)
+      :ok = Fx.insert_row!(tenant_id, key, "id-a")
+
+      assert rejected?(fn -> Fx.insert_row!(tenant_id, key, "id-a") end)
+      assert rejected?(fn -> Fx.insert_row!(tenant_id, key, "id-b") end)
+      assert [%{key_id: "id-a"}] = Fx.entries(tenant_id)
+    end
+
+    test "the same person under two pepper/key-id pairs is two rows for one tenant" do
+      %{tenant_id: tenant_id} = Fx.tenant!()
+      key_a = Fx.key_under(Fx.pepper(1), "person@example.test")
+      key_b = Fx.key_under(Fx.pepper(2), "person@example.test")
+      refute key_a == key_b
+
+      :ok = Fx.insert_row!(tenant_id, key_a, "id-a")
+      :ok = Fx.insert_row!(tenant_id, key_b, "id-b")
+
+      assert Fx.entries(tenant_id) |> Enum.map(& &1.key_id) |> Enum.sort() == ["id-a", "id-b"]
+    end
+
+    test "the changeset requires key_id and validates its format" do
+      attrs = %{email_key: :crypto.strong_rand_bytes(32), tenant_id: Ecto.UUID.generate()}
+      blank = %TenantLoginDirectoryEntry{}
+
+      refute TenantLoginDirectoryEntry.create_changeset(blank, attrs).valid?
+
+      refute TenantLoginDirectoryEntry.create_changeset(blank, Map.put(attrs, :key_id, "BAD")).valid?
+
+      assert TenantLoginDirectoryEntry.create_changeset(blank, Map.put(attrs, :key_id, "good-1")).valid?
+    end
+  end
+
+  describe "D-C dual-read (previous pepper configured)" do
+    setup do
+      a = Fx.tenant!(display_name: "Aaa Dual")
+      b = Fx.tenant!(display_name: "Bbb Dual")
+      Fx.swap_keys!({"id-b", Fx.pepper(2)}, {"id-a", Fx.pepper(1)})
+      %{a: a, b: b, email: Fx.unique_email("dual-read")}
+    end
+
+    test "one row per key id for the SAME (email, tenant) returns that tenant exactly once, in ONE query",
+         %{a: a, b: b, email: email} do
+      :ok = Fx.insert_row!(a.tenant_id, Fx.key_under(Fx.pepper(1), email), "id-a")
+      :ok = Fx.insert_row!(a.tenant_id, Fx.key_under(Fx.pepper(2), email), "id-b")
+      # tenant B holds the person under the previous key only (not yet re-keyed)
+      :ok = Fx.insert_row!(b.tenant_id, Fx.key_under(Fx.pepper(1), email), "id-a")
+
+      {result, count} = count_queries(fn -> LoginDirectory.lookup_by_email(email) end)
+
+      assert {:ok, [%{display_name: "Aaa Dual"}, %{display_name: "Bbb Dual"}]} = result
+      assert count == 1
+
+      assert {:ok, keys} = LoginDirectory.email_keys(email)
+      assert length(keys) == 2
+      assert LoginDirectory.lookup_by_keys(keys) == result
+      assert {:ok, [%{display_name: "Aaa Dual"}]} = LoginDirectory.lookup_by_keys([hd(keys)])
+    end
+
+    test "a person with rows under both keys in only one tenant yields length 1", %{
+      a: a,
+      email: email
+    } do
+      :ok = Fx.insert_row!(a.tenant_id, Fx.key_under(Fx.pepper(1), email), "id-a")
+      :ok = Fx.insert_row!(a.tenant_id, Fx.key_under(Fx.pepper(2), email), "id-b")
+
+      assert {:ok, [%{display_name: "Aaa Dual"}]} = LoginDirectory.lookup_by_email(email)
+    end
+
+    test "with only the current pepper configured, a row under the previous key id alone is not found",
+         %{a: a, email: email} do
+      :ok = Fx.insert_row!(a.tenant_id, Fx.key_under(Fx.pepper(1), email), "id-a")
+      assert {:ok, [%{}]} = LoginDirectory.lookup_by_email(email)
+
+      Fx.swap_keys!({"id-b", Fx.pepper(2)}, nil)
+      assert LoginDirectory.lookup_by_email(email) == {:ok, []}
+      assert {:ok, [_current_only]} = LoginDirectory.email_keys(email)
+    end
+
+    test "email_keys/1 is current first, then previous; email_key/1 is the current key", %{
+      email: email
+    } do
+      assert {:ok, [current, previous]} = LoginDirectory.email_keys(email)
+      assert current == Fx.key_under(Fx.pepper(2), email)
+      assert previous == Fx.key_under(Fx.pepper(1), email)
+      assert LoginDirectory.email_key(email) == {:ok, current}
+      assert LoginDirectory.current_key_id() == {:ok, "id-b"}
+      assert [sentinel_current, _sentinel_previous] = LoginDirectory.sentinel_keys()
+      assert sentinel_current == LoginDirectory.sentinel_key()
+    end
+  end
+
+  describe "D-C sentinel constancy: one query and the same HMAC count for every input" do
+    setup do
+      a = Fx.tenant!()
+      known = Fx.unique_email("known")
+      in_tx(fn -> LoginDirectory.upsert_entry(a.tenant_id, known) end)
+      %{known: known}
+    end
+
+    defp sentinel_inputs(known) do
+      [
+        known,
+        Fx.unique_email("unknown"),
+        "not-an-email",
+        nil,
+        123,
+        "a@" <> String.duplicate("x", 260) <> ".com"
+      ]
+    end
+
+    for {label, rotation?} <- [{"current only", false}, {"current + previous", true}] do
+      test "#{label}: each input issues one query with equal parameter shape and the same HMAC count",
+           %{known: known} do
+        expected =
+          if unquote(rotation?) do
+            Fx.swap_keys!({"id-b", Fx.pepper(2)}, {"id-a", Fx.pepper(1)})
+            2
+          else
+            1
+          end
+
+        observed =
+          for input <- sentinel_inputs(known) do
+            {{result, params}, hmacs} =
+              count_hmac_calls(fn ->
+                query_params(fn -> LoginDirectory.lookup_by_email(input) end)
+              end)
+
+            assert {:ok, _} = result
+            assert [one_query] = params
+            {hmacs, Enum.map(one_query, &if(is_list(&1), do: length(&1), else: :scalar))}
+          end
+
+        assert observed |> Enum.map(&elem(&1, 0)) |> Enum.uniq() == [expected]
+        assert observed |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 1
+        assert observed |> hd() |> elem(1) |> Enum.any?(&(&1 == expected))
+      end
+    end
+
+    test "sentinel keys never equal a real key and the writers refuse to write them", %{
+      known: known
+    } do
+      Fx.swap_keys!({"id-b", Fx.pepper(2)}, {"id-a", Fx.pepper(1)})
+      %{tenant_id: tenant_id} = Fx.tenant!()
+
+      assert {:ok, real_keys} = LoginDirectory.email_keys(known)
+      assert LoginDirectory.sentinel_keys() |> Enum.all?(&(&1 not in real_keys))
+
+      assert {:error, :invalid_email} =
+               in_tx(fn -> LoginDirectory.upsert_entry(tenant_id, "sentinel-no-at-sign") end)
+
+      assert Fx.entries(tenant_id) == []
+    end
+  end
+
+  describe "D-C removal under every candidate key; lock on the current key" do
+    setup do
+      %{tenant_id: tenant_id, schema_name: schema_name} = Fx.tenant!()
+      other = Fx.tenant!()
+      Fx.swap_keys!({"id-b", Fx.pepper(2)}, {"id-a", Fx.pepper(1)})
+      email = Fx.unique_email("rm-rot")
+      :ok = Fx.insert_row!(tenant_id, Fx.key_under(Fx.pepper(1), email), "id-a")
+      :ok = Fx.insert_row!(tenant_id, Fx.key_under(Fx.pepper(2), email), "id-b")
+      :ok = Fx.insert_row!(other.tenant_id, Fx.key_under(Fx.pepper(1), email), "id-a")
+      %{tenant_id: tenant_id, schema_name: schema_name, other: other, email: email}
+    end
+
+    test "with no other active holder, both rows of the tenant are deleted (:removed); other tenants keep theirs",
+         %{tenant_id: tenant_id, schema_name: schema_name, other: other, email: email} do
+      assert {:ok, :removed} =
+               in_tx(fn ->
+                 LoginDirectory.remove_entry_if_unreferenced(tenant_id, email, schema_name)
+               end)
+
+      assert Fx.entries(tenant_id) == []
+      assert [%{key_id: "id-a"}] = Fx.entries(other.tenant_id)
+    end
+
+    test "with another active user sharing the email, both rows are kept (:kept)", %{
+      tenant_id: tenant_id,
+      schema_name: schema_name,
+      email: email
+    } do
+      insert_user!(schema_name, String.upcase(email))
+
+      assert {:ok, :kept} =
+               in_tx(fn ->
+                 LoginDirectory.remove_entry_if_unreferenced(tenant_id, email, schema_name)
+               end)
+
+      assert length(Fx.entries(tenant_id)) == 2
+    end
+
+    test "a row under the previous key only is still removed", %{other: other, email: email} do
+      assert {:ok, :removed} =
+               in_tx(fn ->
+                 LoginDirectory.remove_entry_if_unreferenced(
+                   other.tenant_id,
+                   email,
+                   other.schema_name
+                 )
+               end)
+
+      assert Fx.entries(other.tenant_id) == []
+    end
+
+    test "the advisory lock is taken on the CURRENT key only", %{
+      tenant_id: tenant_id,
+      schema_name: schema_name,
+      email: email
+    } do
+      refute advisory_lock_held?(tenant_id, Fx.key_under(Fx.pepper(2), email))
+
+      in_tx(fn ->
+        LoginDirectory.remove_entry_if_unreferenced(tenant_id, email, schema_name)
+      end)
+
+      assert advisory_lock_held?(tenant_id, Fx.key_under(Fx.pepper(2), email))
+      refute advisory_lock_held?(tenant_id, Fx.key_under(Fx.pepper(1), email))
+    end
+  end
+
+  describe "D-C writers record the current key id" do
+    test "upsert_entry/2 stores key_id of the current pepper, under the current key" do
+      %{tenant_id: tenant_id} = Fx.tenant!()
+      Fx.swap_keys!({"id-b", Fx.pepper(2)}, {"id-a", Fx.pepper(1)})
+      email = Fx.unique_email("write-id")
+
+      assert {:ok, :inserted} = in_tx(fn -> LoginDirectory.upsert_entry(tenant_id, email) end)
+      assert [%{key_id: "id-b", email_key: key}] = Fx.entries(tenant_id)
+      assert key == Fx.key_under(Fx.pepper(2), email)
+    end
+  end
+
+  describe "D-C logging: rotation configuration leaks nothing at :debug" do
+    test "write, lookup (known, unknown, invalid) and removal log no email, key (hex/base64/inspect) or pepper" do
+      %{tenant_id: tenant_id, schema_name: schema_name} = Fx.tenant!()
+      Fx.swap_keys!({"id-b", Fx.pepper(2)}, {"id-a", Fx.pepper(1)})
+      level = Logger.level()
+      Logger.configure(level: :debug)
+      on_exit(fn -> Logger.configure(level: level) end)
+
+      email = Fx.unique_email("logleak")
+      :ok = Fx.insert_row!(tenant_id, Fx.key_under(Fx.pepper(1), email), "id-a")
+
+      log =
+        capture_log([level: :debug], fn ->
+          in_tx(fn -> LoginDirectory.upsert_entry(tenant_id, email) end)
+          LoginDirectory.lookup_by_email(email)
+          LoginDirectory.lookup_by_email(Fx.unique_email("nobody"))
+          LoginDirectory.lookup_by_email("not-an-email")
+
+          in_tx(fn ->
+            LoginDirectory.remove_entry_if_unreferenced(tenant_id, email, schema_name)
+          end)
+        end)
+
+      secrets =
+        for n <- [1, 2], bin <- [Fx.pepper(n), Fx.key_under(Fx.pepper(n), email)], do: bin
+
+      for secret <- secrets do
+        refute log =~ Base.encode16(secret, case: :lower)
+        refute log =~ Base.encode16(secret, case: :upper)
+        refute log =~ Base.encode64(secret)
+        refute log =~ inspect(secret, limit: :infinity)
+      end
+
+      refute log =~ email
+      refute log =~ "tenant_login_directory"
     end
   end
 end

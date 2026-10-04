@@ -95,6 +95,7 @@ defmodule Mix.Tasks.Letflow.BackfillLoginDirectoryTest do
     assert Enum.any?(infos, &(&1 =~ "tenant #{a.tenant_id}: users_read=2 keys=2 inserted=2"))
     assert Enum.any?(infos, &(&1 =~ "tenant #{b.tenant_id}: users_read=1 keys=1 inserted=1"))
     assert Enum.any?(infos, &(&1 =~ "login directory backfill complete:"))
+    assert Enum.any?(infos, &(&1 =~ "row(s) inserted under key id test-a"))
     refute Enum.any?(infos, &(&1 =~ "(dry run)"))
     assert [_, _] = Fx.entries(a.tenant_id)
     assert [_] = Fx.entries(b.tenant_id)
@@ -134,7 +135,7 @@ defmodule Mix.Tasks.Letflow.BackfillLoginDirectoryTest do
     source = File.read!("lib/mix/tasks/letflow.backfill_login_directory.ex")
 
     assert source =~ "if failed != [], do: System.halt(1)"
-    assert source =~ "LETFLOW_LOGIN_DIRECTORY_PEPPER is not configured"
+    assert source =~ "login directory pepper configuration is missing"
     refute source =~ ~r/query!?\(/
     refute source =~ ~r/schema_name\s*<>|"[^"]*#\{[^}]*schema/i
   end

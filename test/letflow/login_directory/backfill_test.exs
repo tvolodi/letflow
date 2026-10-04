@@ -88,6 +88,13 @@ defmodule Letflow.LoginDirectory.BackfillTest do
       after_first = snapshot(mine)
       assert length(after_first) == 6
 
+      # D-C: the report names the current key id and every row carries it.
+      assert first.key_id == "test-a"
+
+      assert mine
+             |> Enum.flat_map(&Fx.entries(&1.tenant_id))
+             |> Enum.all?(&(&1.key_id == "test-a"))
+
       assert {:ok, second} = Backfill.run()
       for t <- mine, do: assert(report_for(second, t).inserted == 0)
       assert snapshot(mine) == after_first
@@ -192,12 +199,98 @@ defmodule Letflow.LoginDirectory.BackfillTest do
     end
   end
 
+  describe "D-C re-keying (rotation)" do
+    defp rows(tenants), do: Enum.flat_map(tenants, &Fx.entries(&1.tenant_id))
+
+    test "backfill under a new current key adds rows under it, never touches the old rows; lookup returns each person once; rerun inserts 0" do
+      %{a: a, b: b, c: c} = seeded_tenants()
+      mine = [a, b, c]
+
+      # Phase 1: current = A, previous unset -> rows under key id "id-a".
+      Fx.swap_keys!({"id-a", Fx.pepper(1)}, nil)
+      assert {:ok, %{key_id: "id-a"}} = Backfill.run()
+      under_a = rows(mine)
+      assert length(under_a) == 6
+      assert Enum.all?(under_a, &(&1.key_id == "id-a"))
+
+      # Phase 2: current = B, previous = A -> the previous-key rows still resolve.
+      Fx.swap_keys!({"id-b", Fx.pepper(2)}, {"id-a", Fx.pepper(1)})
+      assert {:ok, [_]} = LoginDirectory.lookup_by_email("a-only@example.test")
+
+      assert {:ok, report} = Backfill.run()
+      assert report.key_id == "id-b"
+      assert counts(report, a) == %{users_read: 4, keys: 2, inserted: 2}
+      assert counts(report, b) == %{users_read: 2, keys: 2, inserted: 2}
+      assert counts(report, c) == %{users_read: 2, keys: 2, inserted: 2}
+
+      after_rekey = rows(mine)
+      assert length(after_rekey) == 12
+
+      assert after_rekey |> Enum.filter(&(&1.key_id == "id-a")) |> Enum.sort() ==
+               Enum.sort(under_a)
+
+      assert after_rekey |> Enum.count(&(&1.key_id == "id-b")) == 6
+
+      b_keys = for r <- after_rekey, r.key_id == "id-b", do: r.email_key
+      assert Fx.key_under(Fx.pepper(2), "a-only@example.test") in b_keys
+      refute Fx.key_under(Fx.pepper(2), "gone-inactive@example.test") in b_keys
+
+      # Both keys now hold the person: still exactly one result per tenant.
+      assert {:ok, found} = LoginDirectory.lookup_by_email(@shared)
+      slug_of = fn t -> Repo.get!(Tenant, t.tenant_id).slug end
+      assert found |> Enum.map(& &1.slug) |> Enum.sort() == Enum.sort([slug_of.(a), slug_of.(b)])
+
+      assert {:ok, again} = Backfill.run()
+      for t <- mine, do: assert(report_for(again, t).inserted == 0)
+      assert length(rows(mine)) == 12
+    end
+
+    test "a dry run under a rotation configuration reports the current key id and writes nothing" do
+      %{a: a} = seeded_tenants()
+      Fx.swap_keys!({"id-b", Fx.pepper(2)}, {"id-a", Fx.pepper(1)})
+
+      assert {:ok, %{dry_run: true, key_id: "id-b"}} = Backfill.run(dry_run: true)
+      assert Fx.entries(a.tenant_id) == []
+    end
+
+    test "rotation configuration: no pepper (hex/base64/inspect), key or email in the report or the debug log" do
+      seeded_tenants()
+      Fx.swap_keys!({"id-b", Fx.pepper(2)}, {"id-a", Fx.pepper(1)})
+      previous = Logger.level()
+      Logger.configure(level: :debug)
+      on_exit(fn -> Logger.configure(level: previous) end)
+
+      {reports, log} =
+        with_log([level: :debug], fn ->
+          {:ok, dry} = Backfill.run(dry_run: true)
+          {:ok, real} = Backfill.run()
+          _ = LoginDirectory.lookup_by_email(@shared)
+          {dry, real}
+        end)
+
+      secrets =
+        for n <- [1, 2],
+            bin <- [Fx.pepper(n), Fx.key_under(Fx.pepper(n), @shared)],
+            do: bin
+
+      dumped = inspect(reports, limit: :infinity)
+
+      for secret <- secrets, haystack <- [log, dumped] do
+        refute haystack =~ Base.encode16(secret, case: :lower)
+        refute haystack =~ Base.encode16(secret, case: :upper)
+        refute haystack =~ Base.encode64(secret)
+        refute haystack =~ inspect(secret, limit: :infinity)
+      end
+
+      refute log =~ "example.test"
+      refute log =~ "tenant_login_directory"
+    end
+  end
+
   describe "pepper" do
     test "an unavailable pepper returns {:error, :pepper_unavailable} before touching any tenant" do
       %{a: a} = seeded_tenants()
-      original = Application.fetch_env!(:letflow, :login_directory_pepper)
-      on_exit(fn -> Application.put_env(:letflow, :login_directory_pepper, original) end)
-      Application.delete_env(:letflow, :login_directory_pepper)
+      Fx.swap_keys!(:unset, nil)
 
       assert Backfill.run() == {:error, :pepper_unavailable}
       assert Backfill.run(dry_run: true) == {:error, :pepper_unavailable}

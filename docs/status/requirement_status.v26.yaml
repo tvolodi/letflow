@@ -379,3 +379,45 @@ history:
       docs/requirements.yaml edit applies (ISSUE closure, not a REQ).
       Branch fix/ISS-0960-duplicate-of-ISS-0970. PR number and merge
       commit recorded in docs/issues/ISS-0960.yaml once opened.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-04T02:57:47Z"
+    note: >
+      Closed ISS-0915 (uat_preflight.sh local_deps check false-GAPped on a
+      string literal merely mentioning "docker compose"/"psql" as prose,
+      not an actual invocation). FAIL -> rework -> PASS cycle: 1st attempt
+      (eacd3932) blanked ALL string content unconditionally before keyword
+      matching -- REVIEWER FAILed this as a genuine false NEGATIVE, since
+      it also hid real execSync(`psql ...`)-style invocations, e.g.
+      web/tests/e2e/env04.e2e.spec.ts's lines 158-159/189-194. Rework
+      (9aa254de) added `_EXEC_LIKE_CALL_RE` (scripts/uat_preflight.sh:487):
+      a string is preserved (still matched) only when it immediately
+      follows execSync(/execFileSync(/spawn(/spawnSync(/exec(/
+      runSqlAgainstDevPostgres(; every other string is blanked via
+      `_JS_STRING_RE` as before. Added T6 (the exact false-negative repro)
+      and T7 (runs against env04.e2e.spec.ts's real file content) to
+      test/scripts/uat_preflight_local_deps_test.exs. REVIEWER's 2nd pass
+      PASSed -- independently re-extracted the real script code (not
+      retyping it), manually traced env04.e2e.spec.ts's actual GAP lines,
+      and built 9 original adversarial test cases of its own. REVIEWER
+      found one new non-blocking issue: `_JS_STRING_RE` mis-parses NESTED
+      template literals (a backtick string containing another
+      backtick-delimited `${...}` expression), letting the inner literal's
+      content leak past the blanking logic -- a false POSITIVE (over-flags
+      prose), safe direction, never hides a real invocation; pre-existing
+      since eacd3932, independent of this fix's call-prefix logic. Filed
+      as docs/issues/ISS-0986.yaml (owner ELIXIR-DEV / REQ-ANALYST
+      decision-first on fix-vs-accept, since a sound fix needs real JS/TS
+      tokenization, arguably out of scope for this lightweight regex
+      check). Given REVIEWER's two independent verification passes
+      (including re-running the real code, not just trusting reports),
+      DOC-UPDATER judged a separate TEST-RUNNER/RELEASE-VALIDATOR cycle
+      unnecessary; re-confirmed at close-out: mix test test/scripts/ (35
+      passed, 0 failures), mix compile --warnings-as-errors (clean), mix
+      letflow.check_issue_refs (582 files, all cross-references
+      well-formed). No docs/requirements.yaml edit applies (ISSUE closure,
+      not a REQ). Branch fix/ISS-0915-uat-preflight-false-gap, final
+      commit 9aa254de. PR number and merge commit recorded in
+      docs/issues/ISS-0915.yaml once opened.

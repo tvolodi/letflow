@@ -469,6 +469,37 @@ _JS_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
 def _strip_js_comments(txt):
     return _JS_LINE_COMMENT_RE.sub("", _JS_BLOCK_COMMENT_RE.sub("", txt))
 
+# ISS-0915: local_deps must also not over-match a string literal that merely mentions
+# "docker compose"/"psql" as PROSE (e.g. a log message, an assertion string, a test
+# title) -- that is not an executable invocation either. BUT (REVIEWER finding on the
+# first attempt at this fix, same issue) blanking the contents of EVERY string/template
+# literal is unsound: it also blinds the check to a string that IS the command actually
+# being executed, e.g. `execSync(\`psql "${dbUrl}" -c "${sql}"\`, ...)` -- a pattern that
+# exists for real in web/tests/e2e/env04.e2e.spec.ts (lines ~158-159/190/194), not just a
+# hypothetical. The distinction that matters is not "is this text inside a string" but
+# "is this string a direct argument to an exec/spawn-style call" -- so only strings that
+# are NOT the direct (first, post-"(") argument of a known exec-like call get blanked;
+# a string sitting right after one of those call names' opening "(" is left untouched so
+# _LOCAL_DEPS_LITERAL_RE can still see (and GAP on) a real command embedded in it. The
+# genuine call-expression invocation path (_LOCAL_DEPS_HELPER_RE, matching
+# `runSqlAgainstDevPostgres(` syntax itself) is separately unaffected either way, since it
+# never looks at string content.
+_EXEC_LIKE_CALL_RE = re.compile(
+    r"\b(?:execSync|execFileSync|spawnSync|spawn|exec|runSqlAgainstDevPostgres)\s*\(\s*$"
+)
+_JS_STRING_RE = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`', re.S)
+def _strip_js_strings(txt):
+    def repl(m):
+        # Look at what immediately precedes this string literal (whitespace-insensitive,
+        # newlines included): if it's a known exec-like call's opening "(", this string
+        # IS (or may be) the command being executed -- keep it verbatim so the literal
+        # keyword match below can still see it. Anything else (console.log(, throw new
+        # Error(, test(, a bare string, ...) is prose or non-exec data -- blank it.
+        if _EXEC_LIKE_CALL_RE.search(txt[: m.start()]):
+            return m.group(0)
+        return '""'
+    return _JS_STRING_RE.sub(repl, txt)
+
 _LOCAL_DEPS_LITERAL_RE = re.compile(r"docker[ -]compose|docker exec|\bpsql\b")
 # `runSqlAgainstDevPostgres` (web/tests/e2e/db-exec.ts) is the one exported helper
 # that actually shells into `docker compose exec ... psql` at runtime -- a spec that
@@ -481,7 +512,7 @@ def local_deps_check(sp):
     if not (sp and os.path.isfile(sp)):
         return ("OK", "n/a (no spec file)", "")
     code_txt = _strip_js_comments(open(sp, encoding="utf-8", errors="replace").read())
-    m = _LOCAL_DEPS_LITERAL_RE.search(code_txt)
+    m = _LOCAL_DEPS_LITERAL_RE.search(_strip_js_strings(code_txt))
     if m:
         return ("GAP", "spec invokes local-only tooling in executable code (`%s`)" % m.group(0),
                  "letflow (rewrite spec to API/seed; ENV_NOT_SUPPORTED)")

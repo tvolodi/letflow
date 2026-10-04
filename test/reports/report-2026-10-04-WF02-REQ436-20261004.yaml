@@ -1,0 +1,59 @@
+run_id: WF02-REQ436-20261004
+step: "WF-02 Step 4"
+agent: TEST-RUNNER
+generated_at: "2026-10-04T12:56:53Z"
+branch: feature/WF02-REQ436-20261004
+commit: 04c3f4189438bfec8b8da36486f9e2bdd476e2f3
+scope: SCOPED run per parent override (touched areas only)
+full_suite_run: false
+full_suite_not_run_reason: "Parent instructed that RAM is tight; scripts/test_parallel.sh and the full suite were deliberately NOT run. RELEASE-VALIDATOR must independently run broader verification; this report makes no claim about untouched areas."
+postgres: "docker compose up -d, LETFLOW_DB_PORT=5472 (from .env)"
+test_files:
+  - test/letflow/plugs/login_discovery_rate_limit_test.exs
+  - test/letflow/plugs/login_discovery_rate_limit/bucket_test.exs
+  - test/letflow/plugs/public_read_rate_limit_test.exs
+  - test/letflow/plugs/client_ip_config_test.exs
+  - test/letflow/plugs/client_ip_test.exs
+  - test/letflow/supervisor/infrastructure_test.exs
+  - test/letflow/application_test.exs
+  - test/letflow/supervisor/http_test.exs
+  - test/letflow/admission_test.exs
+  - test/letflow/router_test.exs
+  note_extra_files: "last five found by grep for Infrastructure references / children"
+runs:
+  - run: 1
+    command: "MIX_TEST_PARTITION=r436a mix test <files>"
+    exit_code: 1
+    outcome: "No tests executed. mix ecto.create (test alias) failed: 'connection not available and request was dropped from queue after 4000ms'. Environmental, Postgres container had just been (re)started by docker compose up -d. Not a test failure."
+  - run: 2
+    command: same
+    exit_code: 0
+    output: "Finished in 25.9 seconds; Result: 240 passed"
+  - run: 3
+    command: same
+    exit_code: 0
+    output: "Finished in 8.5 seconds; Result: 240 passed"
+  - run: 4
+    command: same
+    exit_code: 0
+    output: "Finished in 6.8 seconds; Result: 240 passed"
+  - run: 5
+    command: "MIX_TEST_PARTITION=r436a mix test login_discovery_rate_limit_test.exs login_discovery_rate_limit/bucket_test.exs"
+    exit_code: 0
+    output: "Finished in 0.4 seconds; Result: 38 passed"
+  - run: 6
+    command: same as run 5
+    exit_code: 0
+    output: "Finished in 0.4 seconds; Result: 38 passed"
+flake_check: "Runs 2,3,4 identical (240 passed, 0 failed); runs 5,6 identical (38 passed). No flake observed. Run 1 was a DB-readiness failure before any test ran."
+static_checks:
+  "mix compile --warnings-as-errors --force": "exit 0; Compiling 285 files (.ex); Generated letflow app"
+  "mix format --check-formatted": "exit 0; no output"
+  "mix letflow.check_boundaries": "exit 0; OK -- 871 edges checked, 0 violations"
+  "mix letflow.lint_handoffs": "exit 0; OK -- 0 new violations across 3321 handoff files under handoffs (25 pre-existing grandfathered, traced to ISS-0190)"
+  note: "Static mix tasks run with MIX_TEST_PARTITION unset (the dev-env guard in config rejects it otherwise)."
+untouched_files_check:
+  command: "git diff main...HEAD -- lib/letflow/plugs/auth_pipeline.ex lib/letflow/plugs/api_pipeline.ex lib/letflow/plugs/public_read_rate_limit.ex lib/letflow/plugs/public_read_rate_limit/bucket.ex"
+  result: "empty (0 bytes)"
+failures: []
+unrelated_warning_in_logs: "[warning] LETFLOW_LOGIN_DISCOVERY_ENABLED is true with LETFLOW_TRUSTED_PROXIES empty ... (boot-time warning emitted under test config; logged, not a failure)"

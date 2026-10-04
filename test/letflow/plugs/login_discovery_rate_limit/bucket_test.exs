@@ -226,37 +226,52 @@ defmodule Letflow.Plugs.LoginDiscoveryRateLimit.BucketTest do
   end
 
   describe "AC9: consume is a compare-and-swap" do
-    test "N concurrent callers never admit more than capacity (new-key and existing-key paths)" do
-      for round <- 1..20 do
-        key = {:login_discovery, :email_hmac, "cas-#{round}-#{rand_key()}"}
+    # Spawns `callers` processes that all block on a barrier, releases them at
+    # once, and returns how many of their `fun.()` calls answered :ok. A
+    # Task.async_stream start is too staggered to expose a check-then-write race.
+    defp barrier_oks(callers, fun) do
+      parent = self()
 
-        oks =
-          1..200
-          |> Task.async_stream(fn _ -> Bucket.consume(key, 5, 0.0001, 1_000) end,
-            max_concurrency: 50,
-            ordered: false
-          )
-          |> Enum.count(fn {:ok, r} -> r == :ok end)
+      pids =
+        for _ <- 1..callers do
+          spawn_link(fn ->
+            receive do
+              :go -> send(parent, {:result, fun.()})
+            end
+          end)
+        end
 
-        assert oks <= 5, "round #{round}: #{oks} admitted with capacity 5"
-        assert oks >= 1
+      Enum.each(pids, &send(&1, :go))
+
+      Enum.count(1..callers, fn _ ->
+        receive do
+          {:result, r} -> r == :ok
+        end
+      end)
+    end
+
+    test "barrier-started callers never admit more than capacity on an existing row" do
+      capacity = 20
+
+      for round <- 1..300 do
+        key = {:login_discovery, :email_hmac, "cas-#{round}"}
+        # create the row first so every racing caller takes the replace path.
+        assert Bucket.consume(key, capacity, 0.0001, 1_000) == :ok
+        oks = barrier_oks(64, fn -> Bucket.consume(key, capacity, 0.0001, 1_000) end)
+        assert oks + 1 <= capacity, "round #{round}: #{oks + 1} admitted, capacity #{capacity}"
       end
     end
 
-    test "the global (insert_new) path also never over-admits" do
-      for round <- 1..20 do
-        :ets.delete(@table, {:login_discovery, :global})
+    test "barrier-started callers never admit more than capacity on the new global key" do
+      capacity = 7
+
+      for round <- 1..300 do
+        :ets.delete(@table, @global_key)
 
         oks =
-          1..200
-          |> Task.async_stream(
-            fn _ -> Bucket.consume({:login_discovery, :global}, 7, 0.0001, 1_000 + round) end,
-            max_concurrency: 50,
-            ordered: false
-          )
-          |> Enum.count(fn {:ok, r} -> r == :ok end)
+          barrier_oks(64, fn -> Bucket.consume(@global_key, capacity, 0.0001, 1_000) end)
 
-        assert oks <= 7, "round #{round}: #{oks} admitted with capacity 7"
+        assert oks <= capacity, "round #{round}: #{oks} admitted, capacity #{capacity}"
         assert oks >= 1
       end
     end

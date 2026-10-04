@@ -4601,7 +4601,7 @@ in place (`q929-vortex-8d-corrective-action-subprocess.md`'s own "SECOND CORRECT
 `sub_process_service_task_after_test.exs`'s moduledoc) with the verified `Ecto.Multi` pre-
 validation mechanism, citing `deps/ecto/lib/ecto/multi.ex`'s own `__apply__/4`.
 
-## A conservative skip-and-warn branch can look like complete coverage of a failure shape while only ever warning about it (2026-10-04, ELIXIR-DEV, ISS-0941)
+## A conservative skip-and-warn branch can look like complete coverage of a failure shape while only ever warning about it (2026-10-04, ORCH/ELIXIR-DEV, ISS-0941)
 
 `test/support/tenant_schema_reaper.ex`'s original `sweep_orphans/2` logs a `:warning`
 ("malformed schema_name") for any `tenant_schemas` row whose `schema_name` doesn't match its

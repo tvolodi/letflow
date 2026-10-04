@@ -480,14 +480,26 @@ regardless of how many requests hit a full population.
   validate) can never push `size(:email)` above `max_email_keys`: each new key must reserve a slot
   first (s5.1). The test asserts `size(:email) <= max_email_keys` after each batch and
   `:ets.select_count` by kind agrees.
-- **Hot key after unrelated keys idle and swept (criterion 7).** Concrete scenario with defaults
-  (`:email_hmac`: capacity 5, refill 1/60 per s, so one consumed token is back in 60 s and an empty
-  bucket is full in 300 s), every `consume` using the config values for that kind (s4.1 note):
-  at `t0` consume one token from each of N unrelated keys and drain the hot key to 0; `sweep(t0 +
-  120_000)` -> all N unrelated keys are gone (`size` drops by N), the hot key row is present and the
-  next `consume(hot, ..., t0 + 120_000)` is still `:rate_limited`; `sweep(t0 + 301_000)` -> the hot
-  key row is gone and `consume` is `:ok` against a full bucket (a swept key behaves as fresh). A
-  sweep at exactly `t0` (no elapsed time) leaves every row consumed at `t0` in place (non-idle
+- **Hot key after unrelated keys idle and swept (criterion 7).** Concrete scenario with defaults,
+  every `consume` using the config values for that kind (s4.1 note). `:email_hmac`: capacity 5 ->
+  `cap_u = 5_000_000`; `rate_u_s = round(1_000_000 / 60) = 16_667` micro-tokens per second. All
+  times below are `now_ms`; **no consume is issued between the checks except where stated**
+  (an admit would rewrite `last_ms` and change the arithmetic):
+  1. at `t0`: consume once from each of N unrelated keys (row tokens `4_000_000`, `last_ms = t0`)
+     and consume 5 times from the hot key (tokens `0`, `last_ms = t0`; a 6th consume at `t0` is
+     `:rate_limited`).
+  2. at `t0 + 30_000`: `consume(hot)` is `:rate_limited`: refilled = `div(30_000 * 16_667, 1000)` =
+     `500_010` < `1_000_000`. A refusal writes nothing, so the row is unchanged.
+  3. `sweep(t0 + 120_000)`: unrelated rows: `4_000_000 + div(120_000 * 16_667, 1000)` = `6_000_040
+     >= 5_000_000` -> idle, all N deleted (`size` drops by N; the unrelated rows become idle from
+     `t0 + 60 s`: `4_000_000 + 1_000_020`). Hot row: `0 + 2_000_040 < 5_000_000` -> not idle, kept.
+     (Do NOT consume the hot key at `t0 + 120_000` and then expect a 429: refilled would be
+     `2_000_040 >= 1_000_000`, i.e. an admit.)
+  4. `sweep(t0 + 301_000)` (hot row still the one from step 1): `0 + div(301_000 * 16_667, 1000)` =
+     `5_016_767 >= 5_000_000` -> idle, deleted; a subsequent `consume(hot)`
+     is `:ok` against a full bucket (a swept key behaves as fresh). The hot row first becomes idle at
+     `t0 + 300 s` (`300 * 16_667 = 5_000_100`); at `t0 + 299 s` it is `4_983_433`, still kept.
+  A sweep at exactly `t0` (no elapsed time) leaves every row consumed at `t0` in place (non-idle
   rows are never evicted).
 - **Two caps (criterion 8).** `max_ip_keys` set small via `put_env`; the (cap+1)th distinct /64 gets
   `:rate_limited` from the IP step, so `call/2` does not reach the global step (global
@@ -609,7 +621,7 @@ any path (criterion 13: nothing in this module can put an email, key or IP in lo
   malformed `content-type` and truncated JSON) to a refused source and assert 429 (the body was not
   read).
 - **T7 (crit 7):** bucket-level with `max_email_keys` lowered; sweep with injected clock using the
-  exact times of s7.4 (t0, t0+120 s, t0+301 s); `size/1` vs `:ets.select_count`.
+  exact steps and numbers of s7.4 (t0, t0+30 s refusal, sweep t0+120 s, sweep t0+301 s, no intervening admit); `size/1` vs `:ets.select_count`.
 - **T8 (crit 8):** `max_ip_keys` lowered and `ip_refill_per_sec: 0.0001` (earlier rows stay non-idle on the real clock, no flake); `validate_config!/1` accepts `[]` (defaults) and raises
   for `[max_email_keys: 1_000]`, for a non-positive capacity and for `max_ip_keys < ip_capacity`.
 - **T9 (crit 9):** (all bucket calls pass the capacity/refill that `config/0` holds for that kind, s4.1) `Task.async_stream` of `N = 200` `consume/4` calls at one fixed `now_ms` on one

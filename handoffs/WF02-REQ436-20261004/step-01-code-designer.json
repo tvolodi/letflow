@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ436-20261004/step-01-code-designer.json",
   "created_at": "2026-10-04T12:21:19Z",
   "started_at": "2026-10-04T12:21:19Z",
-  "completed_at": "2026-10-04T12:29:54Z",
-  "status": "PENDING",
+  "completed_at": "2026-10-04T12:31:28Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -57,7 +57,7 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Rework 1 closes all validator issues: send_rate_limited/1 now sets retry-after plus cache-control private,no-store, referrer-policy no-referrer, x-robots-tag noindex,nofollow (434 s5.5), T6 asserts them; config() typed with the s6.1 keys; sweep_scope type (population | :all); validate_config!/1 takes a keyword, validates inline_sweep_min_interval_ms and rejects refill rounding to zero micro-tokens/s; hot-key scenario given concrete times (t0, +120s, +301s); T8 uses ip_refill_per_sec 0.0001 and asserts inline sweep removed nothing; inline-sweep marker per population; sweep/consume config-consistency note; match-spec note (literal key O(1), const body). Q1 closed.",
+    "summary": "Rework 2: s7.4/T7 hot-key arithmetic corrected and verified with integer arithmetic (rate_u_s=16667: t0+30s refused at 500010 < 1e6; sweep t0+120s deletes unrelated rows (6000040>=5e6) and keeps hot (2000040<5e6); sweep t0+301s deletes hot (5016767>=5e6); idle from t0+300s=5000100, t0+299s=4983433), no intervening admit; T8 and other scenarios rechecked (ip rate_u_s=100, idle threshold 10000 s, no error). Prior rework-1 fixes retained.",
     "artifacts_out": [
       "lib/letflow/design/req436-login-discovery-rate-limiter.md"
     ],

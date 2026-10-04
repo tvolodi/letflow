@@ -1,0 +1,25 @@
+id: ISS-0987
+title: "config/runtime.exs secrets master key boot check does not reject an all-0xFF key: <<0xFF::256>> is the 256-bit integer 255, not 32 bytes of 0xFF"
+discovered_by: letflow-4 session (verified read-only by the supervisor on main d3a62a06)
+discovered_in_run: PR #2201 / Q-944 (pepper check) -- filed by ORCH
+discovered_at: "2026-10-05T00:00:00Z"
+severity: MINOR
+owner: "ELIXIR-DEV (via CODE-DESIGNER); SECURITY-REVIEWER applies"
+description: >
+  config/runtime.exs ~line 63 (REQ-190, secrets master-key boot check) reads
+  `secrets_master_key == <<0::256>> or secrets_master_key == <<0xFF::256>>`. The first half is correct.
+  The second is meant to reject an all-0xFF key, but `<<0xFF::256>>` is the 256-bit INTEGER 255 (31 zero
+  bytes then 0xFF): byte_size 32, decode_unsigned 255, and `<<0xFF::256>> == :binary.copy(<<0xFF>>, 32)` is
+  false (verified with elixir). So LETFLOW_SECRETS_MASTER_KEY set to 64 'f' is NOT refused at boot, defeating
+  the "trivially-guessable key" guard that docs/migration/decisions/0016-secrets-storage-backend.md exists to
+  close off. Fix: compare against `:binary.copy(<<0xFF>>, 32)` and add a regression test (all-zeros and
+  all-0xFF both refused, a valid key accepted) alongside the existing secrets runtime-config test. The same
+  wrong literal appears in lib/letflow/design/req190-secrets-core.md and was already fixed in the new pepper
+  check in PR #2201 (Q-944), which also edits config/runtime.exs. SEQUENCING: do not open a PR editing
+  config/runtime.exs until PR #2201 has merged.
+affected_files:
+  - config/runtime.exs
+  - lib/letflow/design/req190-secrets-core.md
+queue_ref: Q-954  # queue issue_ref ISS-0954 collides with an existing local file; local filename ISS-0987
+github_ref: GH-2209
+status: open

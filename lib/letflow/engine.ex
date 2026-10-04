@@ -3225,9 +3225,25 @@ defmodule Letflow.Engine do
   # right after a SUB_PROCESS never got its timers/dispatch rows. Resolves the
   # events eagerly (so a failure can be routed as a typed error by the caller)
   # and appends the resulting Scheduler / ServiceTaskDispatch Multi steps to
-  # `multi`. Every token_id in `pending_events` must already be a persisted
-  # TokenRecord id (identity id_map), same as complete_task/3. Tenant id is
-  # derived from the schema prefix (INV-PD-7), never from caller input.
+  # `multi`. Tenant id is derived from the schema prefix (INV-PD-7), never
+  # from caller input.
+  #
+  # ISS-0975 fix (design doc §2): a PARALLEL_GATEWAY join firing within this
+  # same hop chain, reached via Letflow.Engine.SubProcess's own completion
+  # re-entry, can mint a token_id that is not yet a real, persisted
+  # TokenRecord id at the point this function is called -- the identity
+  # id_map this function used to build unconditionally was the 5th instance
+  # of the same bug ISS-0974 fixed at 4 sibling call sites. `multi` carries
+  # no `changes` map of its own at build time (unlike those 4 sites, this
+  # function does not itself run inside an already-open transaction when
+  # called), so the real id_map must instead be read back out of the
+  # transaction's own accumulated `changes`, at `hop_chain_token_records_key`
+  # -- a key some earlier step in the same Multi (the caller's own insert
+  # step) is guaranteed to have already populated with a
+  # {id_map, [TokenRecord.t()]} pair by the time either Multi.merge/2 callback
+  # below actually runs (design doc §2.5). Falls back to identity for every
+  # token_id `hop_chain_id_map` doesn't cover -- the common, non-join case
+  # (design doc §2.4).
   @doc false
   @spec append_pending_event_arms_multi(
           Multi.t(),
@@ -3236,7 +3252,8 @@ defmodule Letflow.Engine do
           instance_id :: Ecto.UUID.t(),
           variables :: map(),
           now :: DateTime.t(),
-          prefix :: String.t()
+          prefix :: String.t(),
+          hop_chain_token_records_key :: term()
         ) :: {:ok, Multi.t()} | {:error, term()}
   def append_pending_event_arms_multi(
         multi,
@@ -3245,7 +3262,8 @@ defmodule Letflow.Engine do
         instance_id,
         variables,
         now,
-        prefix
+        prefix,
+        hop_chain_token_records_key
       ) do
     catalog_ctx = %{
       pin_source: {:reconstruct, instance_id, prefix},
@@ -3263,23 +3281,36 @@ defmodule Letflow.Engine do
              catalog_ctx
            ),
          {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
-      timer_id_map = Map.new(prepared_timers, fn {token_id, _attrs} -> {token_id, token_id} end)
-
-      dispatch_id_map =
-        Map.new(prepared_dispatches, fn %{token_id: token_id} -> {token_id, token_id} end)
-
       arms_multi =
         Multi.new()
-        |> then(&build_timer_arms_multi(&1, prepared_timers, timer_id_map, prefix))
-        |> then(
-          &build_service_task_dispatch_multi(
-            &1,
+        |> Multi.merge(fn changes ->
+          {hop_chain_id_map, _hop_chain_new_records} =
+            Map.fetch!(changes, hop_chain_token_records_key)
+
+          timer_id_map =
+            Map.new(prepared_timers, fn {token_id, _attrs} ->
+              {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+            end)
+
+          build_timer_arms_multi(Multi.new(), prepared_timers, timer_id_map, prefix)
+        end)
+        |> Multi.merge(fn changes ->
+          {hop_chain_id_map, _hop_chain_new_records} =
+            Map.fetch!(changes, hop_chain_token_records_key)
+
+          dispatch_id_map =
+            Map.new(prepared_dispatches, fn %{token_id: token_id} ->
+              {token_id, Map.get(hop_chain_id_map, token_id, token_id)}
+            end)
+
+          build_service_task_dispatch_multi(
+            Multi.new(),
             prepared_dispatches,
             dispatch_id_map,
             tenant_id,
             prefix
           )
-        )
+        end)
 
       {:ok, Multi.append(multi, arms_multi)}
     end
@@ -4704,6 +4735,14 @@ defmodule Letflow.Engine do
   # fired) returns {:ok, {%{}, []}} with no Repo call at all, matching
   # insert_token_records/4's and TaskActivation.append_multi/6's own
   # newly_pending == []/[]-clause fast paths.
+  #
+  # ISS-0975: `defp` -> `def`/@doc false -- Letflow.Engine.SubProcess's own
+  # completion path (build_completion_write_steps/13) needs this exact same
+  # insert-before-reconcile treatment and has no local reason to duplicate
+  # it (design doc §1.1): this function's own Multi step key is always the
+  # caller's responsibility, so there is nothing collision-prone inside it
+  # to justify a sub_process.ex-local copy, unlike reconcile_parent_tokens/5.
+  @doc false
   @spec insert_hop_chain_new_token_records(
           repo :: Ecto.Repo.t(),
           instance_id :: Ecto.UUID.t(),
@@ -4713,13 +4752,13 @@ defmodule Letflow.Engine do
         ) ::
           {:ok, {%{optional(String.t()) => Ecto.UUID.t()}, [TokenRecord.t()]}}
           | {:error, term()}
-  defp insert_hop_chain_new_token_records(
-         repo,
-         instance_id,
-         original_active_tokens,
-         final_tokens,
-         prefix
-       ) do
+  def insert_hop_chain_new_token_records(
+        repo,
+        instance_id,
+        original_active_tokens,
+        final_tokens,
+        prefix
+      ) do
     original_ids = MapSet.new(original_active_tokens, &to_string(&1.id))
 
     hop_chain_new_tokens =
@@ -4750,13 +4789,17 @@ defmodule Letflow.Engine do
   # to_string(record.id) convention. id_map == %{} (no join fired this hop
   # chain) is a no-op: instance_state is returned unchanged rather than
   # rebuilding an identical tokens list.
+  #
+  # ISS-0975: `defp` -> `def`/@doc false, same cross-module-reuse reason as
+  # insert_hop_chain_new_token_records/5 immediately above (design doc §1.1).
+  @doc false
   @spec rewrite_token_ids(InstanceState.t(), %{optional(String.t()) => Ecto.UUID.t()}) ::
           InstanceState.t()
-  defp rewrite_token_ids(%InstanceState{} = instance_state, id_map) when id_map == %{} do
+  def rewrite_token_ids(%InstanceState{} = instance_state, id_map) when id_map == %{} do
     instance_state
   end
 
-  defp rewrite_token_ids(%InstanceState{} = instance_state, id_map) do
+  def rewrite_token_ids(%InstanceState{} = instance_state, id_map) do
     # Rewrites BOTH .tokens and .pending_task_nodes: dispatch_human_task/3
     # (transition.ex:385-389) appends the just-dispatched Token struct (at
     # whatever token_id it carried at dispatch time -- the synthetic

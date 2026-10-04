@@ -4565,3 +4565,38 @@ PASS or resolution note cites a `lib/letflow/design/*.md` path, `git log --all -
 once before citing it elsewhere, and if the only version of the file is a workspace-local draft
 that never got `git add`ed, either commit it or cite the issue number instead of a path that
 looks committed but isn't.
+
+## A design's predicted pre-fix error surfaced right (symptom), twice in a row explained wrong (mechanism), and the second "correction" was itself unverified prose (2026-10-03, REVIEWER, ISS-0975)
+
+ISS-0975's own design doc §0 predicted the pre-fix crash for a hop-chain-local join feeding a
+SERVICE_TASK/TIMER would be `{:error, {:new_token_during_resume_not_supported, token_id}}` from
+`reconcile_parent_tokens/5`'s guard. ELIXIR-DEV empirically ran the pre-fix tree and found the
+real error is a raw `Ecto.Changeset` cast error instead -- correctly caught by this project's
+"verify, don't assume" discipline, and documented in the new test's own moduledoc. But the
+*explanation* offered for why the guard doesn't fire (the moduledoc's own prose, and
+`q929-vortex-8d-corrective-action-subprocess.md`'s own first correction note, both independently
+claimed: "a join into SERVICE_TASK/TIMER produces a `pending_event` that's never a member of
+`final_instance_state.tokens`, unlike HUMAN_TASK") was itself never verified and turned out to
+be false -- `Transition.fire_join/5` places the join-merged token into `.tokens` identically
+regardless of the outgoing edge's node type; REVIEWER confirmed this by instrumenting the actual
+pre-fix call path (temporary, uncommitted `IO.inspect`s) rather than trusting the plausible-
+sounding prose. The *real* mechanism: the pre-fix identity id_map feeds the still-synthetic
+token_id into an eagerly-built, already-cast-invalid `Ecto.Changeset`, passed to `Multi.insert/4`
+at Multi-*build* time; `Ecto.Multi.__apply__/4`'s own pre-flight validity scan
+(`check_operations_valid/1`) rejects any invalid changeset anywhere within the same
+`Multi.merge/2`-produced sub-list *before* running a single `Multi.run/3` callback in that
+sub-list -- `__apply__/4` recurses per merge, re-running `check_operations_valid/1` freshly on
+each nested Multi's own operations as that merge is reached in sequence, so this is not a single
+upfront scan across the whole top-level composed Multi -- so the reconciliation guard -- an
+earlier-declared `Multi.run` step in the same sub-list -- never gets a turn to run at all,
+regardless of which `InstanceState` field the token lives in. Two independent authors
+(ELIXIR-DEV's test moduledoc and
+CODE-DESIGNER's own correction note) reached for the same wrong-but-plausible explanation
+without tracing the actual mechanism, because the *symptom* (a different error than predicted)
+had already been verified and it is easy to stop there. The lesson: confirming a predicted
+failure mode was wrong (good) is not the same as explaining *why* it was wrong, and that second
+claim needs its own trace -- grep the actual dispatch functions, don't reason from a plausible
+HUMAN_TASK/SERVICE_TASK asymmetry that sounds right. Both doc's prose has since been corrected
+in place (`q929-vortex-8d-corrective-action-subprocess.md`'s own "SECOND CORRECTION",
+`sub_process_service_task_after_test.exs`'s moduledoc) with the verified `Ecto.Multi` pre-
+validation mechanism, citing `deps/ecto/lib/ecto/multi.ex`'s own `__apply__/4`.

@@ -258,3 +258,61 @@ history:
       mix compile clean. Branch
       fix/ISS-0966-duplicate-of-ISS-0973. PR number and merge commit
       recorded in docs/issues/ISS-0966.yaml once opened.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-03T22:30:00Z"
+    note: >
+      Closed ISS-0975 (append_pending_event_arms_multi/7's timer_id_map/
+      dispatch_id_map carried the same identity-id_map bug ISS-0974 fixed in
+      4 Multi.merge sibling sites, as a 5th site reached via
+      sub_process.ex's ISS-0929 pending-event re-entry path, which lacked
+      ISS-0408's insert-before-reconcile treatment and has no `changes` map
+      to read a real id_map from). Two-part fix: Part A ports ISS-0408's
+      insert-before-reconcile treatment into lib/letflow/engine/
+      sub_process.ex; Part B fixes append_pending_event_arms_multi/7's
+      identity id_maps to read real ids from changes, mirroring ISS-0974's
+      pattern. Design doc
+      lib/letflow/design/iss0975-subprocess-join-reentry-id-map.md
+      (CODE-DESIGN-VALIDATOR PASS after 2 cycles, 1st FAILed on literal/
+      mechanical doc issues only). SECURITY-REVIEWER PASS (full INV sweep,
+      tenant isolation confirmed, no new crash path, 3-tuple key
+      disambiguation confirmed correct). REVIEWER PASS -- notable arc: the
+      pre-fix crash's predicted shape was wrong twice before its actual
+      mechanism was pinned down. ELIXIR-DEV first found empirically that
+      the real pre-fix failure is a raw Ecto.Changeset cast error, not the
+      design doc's predicted reconcile_parent_tokens/5 guard error; the
+      *explanation* then offered for why the guard didn't fire (a
+      SERVICE_TASK/TIMER token never joining final_instance_state.tokens)
+      was ALSO unverified and wrong (Transition.fire_join/5 puts it there
+      regardless of node type) -- REVIEWER traced the real mechanism by
+      instrumenting the actual pre-fix call path and reading
+      deps/ecto/lib/ecto/multi.ex's own source: Ecto.Multi.__apply__/4's
+      check_operations_valid/1 pre-flight rejects an invalid changeset
+      within the same Multi.merge-produced sub-list before any Multi.run
+      callback in that sub-list executes, so the reconciliation guard
+      never gets a turn. REVIEWER also confirmed Part A's insert step
+      remains structurally necessary regardless, confirmed the widened
+      reconcile_parent_tokens/5 input still correct for other graph
+      shapes, confirmed via fresh grep sweep no 6th site exists, and added
+      a docs/anti-patterns.md entry on verifying a mechanism not just a
+      symptom. TEST-RUNNER PASS, independently confirmed 5403/5403 full
+      suite clean plus all targeted test files passing.
+      RELEASE-VALIDATOR PASS -- independently re-traced the same
+      Ecto.Multi mechanism from deps/ecto/lib/ecto/multi.ex's own source
+      (confirming REVIEWER's claim but flagging that the anti-patterns.md
+      entry's wording overclaimed the mechanism's scope as Multi-wide
+      when it is only true within the same Multi.merge-produced sub-list;
+      non-blocking at the time, corrected by DOC-UPDATER at this
+      close-out), independently reproduced the fail-then-pass proof
+      (reverted to origin/main, re-ran the new tests: 6/8 passed pre-fix,
+      E7/E8 failing with the exact documented cast error), constructed an
+      original adversarial check confirming AC4 (non-join path
+      byte-identical pre/post fix), ran mix letflow.check.test twice
+      independently (2 unrelated pre-existing parallel-suite flakes, both
+      confirmed passing in isolation, not regressions), confirmed
+      requirements.yaml untouched and queue_ref/github_ref accurate.
+      Branch fix/ISS-0975-subprocess-join-reentry-id-map, final commit
+      01d06acf. PR number and merge commit recorded in
+      docs/issues/ISS-0975.yaml once opened.

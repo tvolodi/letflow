@@ -6030,7 +6030,7 @@ volumes:
     path: docs/status/requirement_status.v26.yaml
     status: current
     opened: 2026-10-03
-    entries: 13
+    entries: 15
     note: >
       Opened by DOC-UPDATER's own ISS-0983 closing SCOPE-CHANGE append,
       successor to volume 25 (closed at 29 entries / 1211 frozen-prefix
@@ -6115,6 +6115,11 @@ volumes:
       reaper, new sweep_template_build_orphans/2 5-condition AND gate) --
       `grep -c "^  - req:" docs/status/requirement_status.v26.yaml` = 11
       on-disk entries; 472 lines / 28343 bytes, well under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
+
+      Incremented to 15 by DOC-UPDATER's REQ-439 Step 6 append (a
+      retroactive started event plus the done event, WF02-REQ439-20261004)
+      -- recounted from the file: 15 on-disk `- req:` entries, under the
       1200-line/120000-byte roll ceiling, no roll triggered.
 
 known_anomalies:

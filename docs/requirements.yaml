@@ -33005,7 +33005,7 @@ requirements:
   - id: REQ-439
     title: "Trusted-proxy client IP resolution (REQ-CIP) for the login-discovery rate limiter: Letflow.Plugs.ClientIp, trust-list and mount-switch configuration, and the :prod boot refusal"
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S4
     impl_order: 948  # letflow-queue task id, GH#2198. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (second pass).
     description: >

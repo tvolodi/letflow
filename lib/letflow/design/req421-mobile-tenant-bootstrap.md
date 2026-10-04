@@ -422,7 +422,7 @@ class TokenSet {
   `delete`) are the seam REQ-422 "hardens and guards this" (REQ-421's own
   requirements.yaml text) wraps or extends; this design does not guess at
   REQ-422's own shape beyond stating that seam exists.
-  **Correction (ISS-0881, post-REQ-422):** REQ-422 (now built, PR #1973)
+  **Correction (ISS-0882, post-REQ-422):** REQ-422 (now built, PR #1973)
   hardened token storage/logging/transport/cleartext/audience-scoping/
   masking only — its actual requirement text and acceptance criteria never
   included key rotation, biometric gating, or tamper detection. Those three

@@ -12,4 +12,36 @@ related:
   - ISS-0932
 queue_ref: Q-925
 github_ref: GH-2105
-status: open
+status: resolved
+resolved_in_run: superseded-by-ISS-0952
+resolved_at: "2026-10-04T00:00:00Z"
+resolution: >
+  Duplicate, not fixed by this issue's own route. Confirmed by reading both
+  files side by side: identical title/root-cause description (stale
+  HUMAN_TASK escalation timer not cancelled on normal task completion,
+  firing later against whatever node the token is then on), identical
+  owner (ELIXIR-DEV), and the same queue_ref (Q-925) and github_ref
+  (GH-2105). ISS-0952's own queue_ref comment confirms it was filed as a
+  corrected/renumbered follow-up after the queue issue_ref ISS-0925
+  collided with an existing local filename -- i.e. ISS-0952 IS this same
+  finding under its next-free local number, not an independent issue.
+
+  ISS-0952 was independently resolved: Engine.complete_task now runs a
+  :cancel_escalation_timers Multi step
+  (TaskActivation.cancel_pending_escalation_timers/6, scoped to the task's
+  token+node, cancel_reason "task_completed"), and
+  advance_after_escalation_timer_fired/3 treats a timer whose node_id
+  differs from its token's current node as a no-op
+  (escalation_timer_stale?/2) -- both active-timer cancellation and a
+  fire-time staleness guard, landed via commit f446363b
+  ("fix(ISS-0952): cancel escalation timer on normal task completion;
+  ignore stale escalation fires [Q-925] (#2109)"), merged 2026-10-01 as
+  PR #2109. Confirmed via test/letflow/engine/human_task_escalation_test.exs
+  (3 tests, real Postgres-backed, passing). That fix fully satisfies this
+  issue's own description and acceptance need.
+
+  GitHub issue GH-2105 (shared by both issues) was already closed --
+  confirmed directly via `gh issue view 2105`: state CLOSED, closed
+  2026-10-01T18:45:55Z, the same timestamp as PR #2109's merge. No
+  separate GitHub issue number is involved (ISS-0952 did not reference a
+  different github_ref), so no further GitHub action was needed here.

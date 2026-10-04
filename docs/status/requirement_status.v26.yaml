@@ -318,6 +318,38 @@ history:
       docs/issues/ISS-0975.yaml once opened.
 
   - req: SCOPE-CHANGE
+    event: cancelled
+    agent: DOC-UPDATER
+    at: "2026-10-04T00:05:00Z"
+    note: >
+      Closed docs/issues/ISS-0925.yaml as a duplicate of ISS-0952 (status:
+      resolved, resolved_in_run: superseded-by-ISS-0952). Confirmed by
+      reading both files side by side: identical title/root-cause
+      description (stale HUMAN_TASK escalation timer not cancelled on
+      normal task completion), identical owner (ELIXIR-DEV), and the same
+      queue_ref (Q-925) and github_ref (GH-2105). ISS-0952's own
+      queue_ref comment confirms it was filed as a corrected/renumbered
+      follow-up after the queue issue_ref ISS-0925 collided with an
+      existing local filename -- ISS-0952 IS this same finding under its
+      next-free local number. ISS-0952's own REQ-ANALYST/ELIXIR-DEV route
+      produced the actual fix: Engine.complete_task's new
+      :cancel_escalation_timers Multi step
+      (TaskActivation.cancel_pending_escalation_timers/6) plus a fire-time
+      staleness guard (escalation_timer_stale?/2), landed via commit
+      f446363b, merged as PR #2109 (2026-10-01), confirmed via
+      test/letflow/engine/human_task_escalation_test.exs (3 tests, real
+      Postgres-backed, passing) -- fully satisfying ISS-0925's own
+      description too. No separate requirement filed from ISS-0925 itself,
+      so no docs/requirements.yaml edit applies here.
+      GH-2105 was checked directly (`gh issue view 2105`): state CLOSED,
+      closed 2026-10-01T18:45:55Z (same timestamp as PR #2109's merge) --
+      same GitHub issue number both issues share, not a second issue
+      needing its own close, so no further GitHub action was taken here.
+      Doc-only change (docs/issues/ISS-0925.yaml), no code touched;
+      mix compile clean. Branch fix/ISS-0925-duplicate-of-ISS-0952. PR
+      #2184, merge commit af9ed157.
+
+  - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER
     at: "2026-10-04T00:00:00Z"

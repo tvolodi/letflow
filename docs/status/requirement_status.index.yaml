@@ -6030,7 +6030,7 @@ volumes:
     path: docs/status/requirement_status.v26.yaml
     status: current
     opened: 2026-10-03
-    entries: 7
+    entries: 9
     note: >
       Opened by DOC-UPDATER's own ISS-0983 closing SCOPE-CHANGE append,
       successor to volume 25 (closed at 29 entries / 1211 frozen-prefix
@@ -6082,6 +6082,23 @@ volumes:
       `grep -c "^  - req:" docs/status/requirement_status.v26.yaml` = 7
       on-disk entries; 318 lines / 19000 bytes, well under the
       1200-line/120000-byte roll ceiling, no roll triggered.
+
+      Incremented to 8 by DOC-UPDATER's own ISS-0925 closing SCOPE-CHANGE
+      cancelled-event append (2026-10-04T00:05:00Z -- ISS-0925 closed as a
+      duplicate of ISS-0952, superseded by commit f446363b/PR #2109) --
+      `grep -c "^  - req:" docs/status/requirement_status.v26.yaml` = 8
+      on-disk entries; 351 lines / 20909 bytes, well under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
+
+      Incremented to 9 by ORCH's own merge-conflict resolution between
+      PR #2184 (ISS-0925 closure, merged first as af9ed157) and PR #2183
+      (ISS-0960 closure, both independently appended to this volume file
+      concurrently): resolved the conflict by keeping both SCOPE-CHANGE
+      entries (ISS-0925's cancelled-event, ISS-0960's done-event) rather
+      than dropping either -- `grep -c "^  - req:"
+      docs/status/requirement_status.v26.yaml` = 9 on-disk entries;
+      well under the 1200-line/120000-byte roll ceiling, no roll
+      triggered.
 
 known_anomalies:
   # Entries that do not conform to the documented vocabulary and are LEFT AS

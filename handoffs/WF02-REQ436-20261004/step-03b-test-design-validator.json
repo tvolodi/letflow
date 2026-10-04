@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ436-20261004/step-03b-test-design-validator.json",
   "created_at": "2026-10-04T12:45:56Z",
   "started_at": "2026-10-04T12:45:56Z",
-  "completed_at": "2026-10-04T12:49:09Z",
-  "status": "PENDING",
+  "completed_at": "2026-10-04T12:53:05Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -54,33 +54,18 @@
     ]
   },
   "result": {
-    "verdict": "FAIL",
-    "summary": "37 of 38 checks pass; AC9 (compare-and-swap) is not discriminating. Route to TEST-DESIGNER.",
-    "issues": [
-      "AC9 FAIL: mutant 'cas' (defp cas replaced by unconditional :ets.insert returning 1, i.e. check-then-write) SURVIVES: 38/38 passed. The AC9 tests (200 tasks, concurrency 50, capacity 5) cannot fail without CAS. Mutant 'insertnew' (insert_new replaced by :ets.insert on the global path) also SURVIVES: 38/38 passed.",
-      "Evidence a better test is feasible (ad hoc probe in the throwaway worktree, not committed): Task.async_stream cap=5/200 and cap=50/5000 never over-admitted under the cas mutant (max 5, 50); only cap=500/20000 saw 501. A barrier start (spawn N processes that block on receive :go, then send :go to all) over 300 rounds, 64 callers: cas mutant admitted max 29 for capacity 20 (existing-key path) and max 11 for capacity 7 (new global key path); insertnew mutant admitted 8 for capacity 7. So barrier-synchronised, many-round tests with capacity well below caller count kill both mutants. Required fix: rewrite both AC9 concurrency tests that way and assert <= capacity every round; keep the unchanged baseline passing.",
-      "Minor, non-blocking: AC12 and AC14 are process criteria with no test (spec says so explicitly, acceptable); verified here that git diff main is empty for auth_pipeline.ex, api_pipeline.ex, public_read_rate_limit.ex, public_read_rate_limit/ and test/letflow/plugs shows only the two new test files added (existing tests unmodified)."
-    ],
-    "static_checks": "No @tag :skip, TODO, sleep, hardcoded secrets in the 3 test files or spec. Clock injected via now_ms; telemetry handler detached, Application env (Limiter, PublicReadRateLimit, ClientIp) and the /api/public :global row restored in on_exit; table emptied before and after each test; no test depends on another. Every AC1-AC13 has a runnable test.",
-    "baseline": "Throwaway worktree ../letflow-3-mut-r436 at HEAD 255cf1ae, LETFLOW_DB_PORT=5472 MIX_TEST_PARTITION=r436a, scoped to the two test files: 'Result: 38 passed'.",
+    "verdict": "PASS",
+    "revalidated_at": "b78792ef",
+    "summary": "AC9 rework (barrier-started, 300-round, 64-caller tests) discriminates. All earlier checks and the 13 earlier mutants stand (prior run: 13 killed, only cas/insertnew survived).",
+    "baseline": "Throwaway worktree at b78792ef, both files: 'Result: 38 passed'. Flakiness: bucket_test.exs alone run 3 times: 'Result: 14 passed' x3.",
     "mutation_results": {
-      "order (global consumed before ip)": "KILLED, 29/38 passed (9 failures incl. AC4, AC6, AC2, AC3, AC8, AC11)",
-      "nov6 (IPv6 /64 aggregation removed)": "KILLED, 36/38 passed (AC5 table + end-to-end)",
-      "nomap (IPv4-mapped fold disabled)": "KILLED, 36/38 passed (AC5)",
-      "cas (select_replace -> unconditional insert)": "SURVIVED, 38 passed",
-      "insertnew (insert_new -> insert on global)": "SURVIVED, 38 passed",
-      "sweeplive (sweep guard accepts non-idle rows)": "KILLED, 33/38 passed (AC7, AC8)",
-      "hdr (extra header only on global refusal)": "KILLED, 37/38 passed (AC6)",
-      "body (body varies with request)": "KILLED, 35/38 passed (AC6, AC10)",
-      "telemail (email in telemetry metadata)": "KILLED, 37/38 passed (AC11)",
-      "logemail (email in Logger output)": "KILLED, 37/38 passed (AC13)",
-      "xff (X-Forwarded-For used as key)": "KILLED, 37/38 passed (AC3)",
-      "ipglobal (IP refusal also consumes global)": "KILLED, 35/38 passed (AC4, AC8)",
-      "nocap (no email key cap)": "KILLED, 36/38 passed (AC7)",
-      "reqsend (:send shares request bucket)": "KILLED, 35/38 passed (AC1, AC10)",
-      "noretry (retry-after constant hardcoded)": "KILLED, 37/38 passed (AC6)"
+      "cas (check-then-write)": "KILLED 2/2 AC9 tests, 36/38 passed (previously survived)",
+      "insertnew (insert_new->insert on global)": "KILLED in 4 of 5 runs (37/38 passed, new-global-key AC9 test); survived 1 run (38 passed). Probabilistic race, residual weakness, non-blocking since the CAS path is killed deterministically enough.",
+      "retry1open (1 attempt + fail-open on exhaustion)": "KILLED, 36/38 passed",
+      "retry1 (1 attempt, still fail-closed)": "SURVIVED 38 passed, acceptable: fewer admits is safe, AC9 only bounds over-admission",
+      "failopen (exhaustion returns :ok, 8 attempts)": "SURVIVED 38 passed: exhaustion after 8 CAS failures is not reachable in tests; no AC demands a test for it (non-blocking note: fail-closed on exhaustion is in REQ text item 3 but untested)"
     },
-    "cleanup": "Worktree removed and pruned (git worktree list shows only the main tree). Mutations were never applied in the main tree; git status --porcelain lib/ test/ is empty."
+    "cleanup": "Worktree removed and pruned; main tree never mutated; git status --porcelain lib/ test/ empty; worktree list shows only the main tree."
   },
   "rework_count": 1
 }

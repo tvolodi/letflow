@@ -26,6 +26,26 @@ defmodule Letflow.ClientIpRuntimeConfigTest do
 
   @moduletag :slow
 
+  # Same fix as test/letflow/admission_runtime_config_test.exs (ISS-0908 follow-up): the first
+  # MIX_ENV=prod child boot otherwise absorbs a full _build/prod compile, which on a loaded
+  # runner can exceed ExUnit's 60s per-test timeout -- whichever prod case happens to run first
+  # (or alongside the admission module's own compile) times out, so a different test failed on
+  # each CI run (REQ-439 tests, seen on #2201: :227, then "blank trust list"). setup_all has no
+  # per-test timeout; afterwards each child only loads the compiled .beam files.
+  setup_all do
+    env = [{"MIX_ENV", "prod"}, {"MIX_TEST_PARTITION", nil}, {"MIX_BUILD_PATH", nil}]
+
+    {output, exit_status} =
+      System.cmd("mix", ["compile"], env: env, stderr_to_stdout: true, cd: File.cwd!())
+
+    if exit_status != 0 do
+      raise "precompiling _build/prod under MIX_ENV=prod failed (exit #{exit_status}):
+#{output}"
+    end
+
+    :ok
+  end
+
   @master_key "3f1c9a2e7b4d6081f5a3c8e2b7d4f6091a3c5e7b9d2f4a6c8e1b3d5f7a9c2e4b"
   @probe ~S|IO.puts("RESULT " <> inspect({Application.get_env(:letflow, Letflow.Plugs.ClientIp), Application.get_env(:letflow, Letflow.Routers.LoginDiscovery)}))|
 

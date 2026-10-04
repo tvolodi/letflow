@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ436-20261004/step-05-release-validator.json",
   "created_at": "2026-10-04T12:57:08Z",
   "started_at": "2026-10-04T12:57:08Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-04T12:59:01Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -51,5 +51,42 @@
       "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted"
     ]
   },
-  "result": null
+  "result": {
+    "verdict": "PASS",
+    "full_suite_run": false,
+    "full_suite_note": "Per scoped override (tight RAM) the full suite, scripts/test_parallel.sh and `mix letflow.check.test` were NOT run. check.test wraps test_parallel.sh (full suite); one attempt incidentally failed in the ecto create step (partition-log dir empty) and was not retried. No claim is made about untouched areas; CI is the remaining full-suite gate. Dead-default warning class checked instead on the scoped run output: 0 occurrences of 'default values for the optional arguments', 0 'warning:' lines.",
+    "commands": {
+      "mix compile --warnings-as-errors --force": "exit 0; Compiling 285 files; Generated letflow app",
+      "mix format --check-formatted": "exit 0",
+      "mix letflow.check_boundaries": "OK -- 871 edges checked, 0 violations",
+      "mix letflow.lint_handoffs": "OK -- 0 new violations across 3322 handoff files (25 grandfathered, ISS-0190)",
+      "MIX_TEST_PARTITION=rv436x mix test <10 scoped files incl. both new files, public_read_rate_limit_test, client_ip*, infrastructure, application, http, admission, router>": "exit 0; Finished in 6.9 seconds; Result: 240 passed"
+    },
+    "criteria": {
+      "AC1": "PASS - bucket_test 'AC1: keys are namespaced and separate' asserts live table rows all begin :login_discovery, own table :letflow_login_discovery_rate_limit, public table shapes unchanged; passed",
+      "AC2": "PASS - plug test 'AC2' four directions (global and per-IP, both ways); passed",
+      "AC3": "PASS - 'AC3' (N+1th 429, XFF/Forwarded/X-Real-IP no effect, remote_ip fallback, 9 distinct addrs trip global); passed",
+      "AC4": "PASS - 'AC4' ordering, 200 requests from one IP, global tokens asserted, no global event, second address admitted; passed",
+      "AC5": "PASS - 'AC5' ip_bucket_id/1 table, /64 sharing, IPv4-mapped fold; passed",
+      "AC6": "PASS - 'AC6' byte-identical 429 for ip/global/email, body unread (Unfetched); passed",
+      "AC7": "PASS - bucket_test 'AC7' injected now_ms, 10x max_email_keys, hot key kept, swept key fresh; passed",
+      "AC8": "PASS - plug 'AC8' max_ip_keys fail-closed w/o global token or eviction + bucket_test 'AC8 (config half)' validate_config!/1; passed",
+      "AC9": "PASS - bucket_test 'AC9' 200 concurrent tasks x 20 rounds, <= capacity; code uses :ets.insert_new for new keys; passed",
+      "AC10": "PASS - 'AC10' per-email across 4 IPs, independent :send bucket; passed",
+      "AC11": "PASS - 'AC11' exactly one [:letflow,:login_discovery,:outcome] event, metadata only outcome; passed",
+      "AC12": "PASS - git diff main...HEAD empty for auth_pipeline.ex, api_pipeline.ex, public_read_rate_limit.ex, public_read_rate_limit/bucket.ex and public_read_rate_limit_test.exs (unmodified, passing)",
+      "AC13": "PASS - 'AC13' capture_log at :debug shows no email/key/IP; modules contain no Logger calls; passed",
+      "AC14": "PASS for the scoped set - compile/format/boundaries/scoped tests quoted above; full-suite portion not run (see full_suite_note)"
+    },
+    "other_checks": {
+      "config_env_secrets": "no change to config/*.exs, .env.example, mix.exs; new modules read only Application.get_env(:letflow, LoginDiscoveryRateLimit); no System.get_env",
+      "pr_2201_overlap": "none - git diff main...HEAD file list (lib/letflow/plugs/login_discovery_*, supervisor/infrastructure.ex, design doc, new tests, support probe router, handoffs) has no intersection with PR #2201's file list (gh pr view 2201, OPEN)",
+      "requirements_staleness": "git diff HEAD...origin/main --stat -- docs/requirements.yaml is empty; not stale",
+      "infrastructure_child_count": "Infrastructure.ex change adds the Bucket child; test updated to 21. Cosmetic nit (non-blocking): its moduledoc prose says total 22 and numbers the list to 22, while the child list/test count 21 (pre-existing doc list already ran one ahead of the test's 20).",
+      "decision_records": "no contradiction found in scoped inspection"
+    },
+    "files_modified_by_validator": [
+      "handoffs/WF02-REQ436-20261004/step-05-release-validator.json"
+    ]
+  }
 }

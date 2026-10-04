@@ -247,7 +247,8 @@ true. Anything else maps to the **sentinel key** (§5.3).
 - **Pepper rotation:** set the new pepper; in one maintenance window delete all directory rows
   and run the backfill (§4); while the window is open discovery returns the neutral response for
   everyone and the SPA falls back to `?realm=`/stored slug. A dual-pepper window is not built
-  (0042 OQ-6).
+  (0042 OQ-6). **Amended by 0043 D-C:** a key id and a dual-read window ARE now required
+  (REQ-435); this paragraph's rebuild procedure survives only as the emergency rotation.
 
 ---
 
@@ -685,9 +686,9 @@ The original user requirement, recorded as written: "respond uniformly and deliv
 list by email unless the email matches exactly one tenant". That is **Mode B**, the user's stated
 shape. Reconciliation with the anti-enumeration goal: Mode B discloses only the exactly-one case
 (bounded in §6 and 0042) and is uniform for everything else; Mode A removes the disclosure at the
-cost of UX and a mailer. **The default is a recommendation requiring `REVIEWER` and
-`SECURITY-REVIEWER` ratification; it is not a settled decision.** If ratification chooses Mode A,
-only the `config.exs` default changes.
+cost of UX and a mailer. **The default (Mode B) was ratified by `REVIEWER` and
+`SECURITY-REVIEWER` on 2026-10-04 (Q1).** If it is later changed to Mode A, only the `config.exs`
+default changes.
 
 Pure decision and delivery rules (`Letflow.LoginDiscovery`):
 
@@ -793,7 +794,7 @@ whole request including the limiter and notifier submission.
 
 **Equivalence class in Mode A: every row with status 202 is byte-identical.**
 
-### 10.2 Mode B: `:redirect_single` (recommended default)
+### 10.2 Mode B: `:redirect_single` (ratified default)
 
 | Input class | Status | Body | Content-Type | Queries | Deliveries | Must be byte-identical to |
 |---|---|---|---|---|---|---|
@@ -1540,14 +1541,14 @@ Description-item map: (a) §1, (b) §2, (c) §3, (d) §4, (e) §5, (f) §6, (g) 
 
 | # | Question | Default adopted for the build | Who ratifies |
 |---|---|---|---|
-| Q1 | Mode B as the default disclosure mode | `:redirect_single`, switchable to A by config | `REVIEWER`, `SECURITY-REVIEWER` |
+| Q1 | Mode B as the default disclosure mode | `:redirect_single`, switchable to A by config (ratified 2026-10-04; per-tenant selection added by 0043 D-A) | `REVIEWER`, `SECURITY-REVIEWER` |
 | Q2 | Pepper by environment variable rather than the `sec://` store | env var, boot-validated (§2.2) | `REVIEWER` |
 | Q3 | JIT directory failure aborts the first login (fail closed) versus best-effort after commit | transactional, fail closed (§3.5) | `REVIEWER` |
 | Q4 | Backfill iterates all registered tenants, not only active (D3) | all registered | `REQ-VALIDATOR` |
 | Q5 | The `:email_send` bucket kind belongs to REQ-436, not REQ-437 (D6) | REQ-436 | `REQ-VALIDATOR` |
 | Q6 | Session-expired path (D4) | unchanged with a stored realm; `/login` when none and flag on | `REQ-VALIDATOR`, `FRONTEND-DEV` |
 | Q7 | A `--prune` mode for the backfill to remove ghost entries | not built | `REVIEWER` |
-| Q8 | Dual-pepper rotation window | not built; rebuild procedure (§2.4) | `ORCH` |
+| Q8 | Dual-pepper rotation window | not built; rebuild procedure (§2.4). **Amended by 0043 D-C: key id + dual-read now required (REQ-435)** | `ORCH` |
 | Q9 | Multi-tenant dead end while no mailer exists (0042 OQ-9): ship an adapter first, add manual organisation-code entry, or both | none in this requirement set | `ORCH`, `REVIEWER` |
 | Q10 | Trusted-proxy client IP behind Cloudflare and nginx (0042 OQ-5) | **resolved by design:** new REQ-CIP (§15.0, §12.6), `depends_on` of REQ-436/437, boot refusal in `:prod` without a trust list. Open sub-items: Cloudflare `CF-Connecting-IP`/ranges (U3) and the container-side peer address (U4) are verified by the implementer and UAT; QA's vhost is outside the repo; `ORCH`/`REQ-ANALYST` must register REQ-CIP and amend both `depends_on` lists | `ORCH`, `REQ-VALIDATOR` |
 | Q11 | Whether the first-sign-in hand-off through the per-slug manager works end to end (§8.4) | to be proven by REQ-438's real-flow e2e | `FRONTEND-DEV`, `UAT-RUNNER` |

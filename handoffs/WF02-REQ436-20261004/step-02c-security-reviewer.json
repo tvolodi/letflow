@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ436-20261004/step-02c-security-reviewer.json",
   "created_at": "2026-10-04T12:35:38Z",
   "started_at": "2026-10-04T12:35:38Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-04T12:38:07Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -52,5 +52,40 @@
       "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Scope: in scope (secrets/INV-4 plus unauthenticated-mount precondition; response shaping of a 429). Read both new modules in full plus the infrastructure.ex diff. INV-1 N/A: no Ecto schema, migration or tenant table; state is a process-local ETS table keyed by HMAC/IP, no tenant data. INV-2 N/A: no tenant-scoped entity serialised; the 429 is a constant problem document. INV-3 N/A: no Lua/WASM. INV-4 APPLIES, PASS: no Logger call in either module (grep), no System.get_env, no new env var or config/*.exs entry (defaults only; grep of config/ shows only the unrelated Routers.LoginDiscovery enabled flag), telemetry metadata is exactly %{outcome: atom} with measurement %{count: 1}; keys (IP id, email HMAC) are never emitted. INV-5 APPLIES (same-bytes refusal), PASS: IP, global and email refusals all go through the single send_rate_limited/1 (constant Retry-After from config, constant detail string, no cause/email/IP input); only per-request trace_id from conn.assigns can differ, which is not input- or cause-dependent. INV-6 satisfied by this handoff. INV-7 N/A: no Repo.query. INV-8 APPLIES, PASS: no bare {:ok,_}= matches reachable from network input; consume is total (CAS bounded to 8 attempts, fails closed to :rate_limited); client_address validates the client_ip assign shape and falls back to conn.remote_ip; no atoms are created from input; X-Forwarded-For and Forwarded are never read (only the ClientIp assign, which itself reads X-Real-IP only from a trusted CIDR peer). Exercised by scoped run (MIX_TEST_PARTITION=sec436r, no full suite): dev smoke test 2 passed; my own throwaway probe (deleted, tree clean): 200 concurrent consumes on one cap-10 key admitted exactly 10 (CAS holds); 40000 distinct email keys with max_email_keys=20000 left size(:email)=20000 and actual row count 20000 (counter == rows, cap holds, fail closed); a hot key stayed limited across a sweep of unrelated keys; full sweep returned counts to {0,0} (no drift). Verified by reading: per-IP bucket consumed first and an IP refusal returns before the global consume; a new IP key refused at max_ip_keys returns :rate_limited before touching global; sweep deletes only rows with elapsed>=0 and tokens refilled to capacity (guard mirrors refill/5), never the :global row nor the count/marker 3-tuples; every row exists only after its slot was reserved, so the count never underestimates and never goes negative; own table :letflow_login_discovery_rate_limit, every key begins :login_discovery; git diff on PublicReadRateLimit(+Bucket), api_pipeline.ex, auth_pipeline.ex is empty; default config satisfies validate_config! (required 18720 <= 50000). Plug is not yet mounted anywhere (REQ-437).",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Counter leak is not self-healing: a request process killed in the microsecond window between bump/reserve_slot and insert_new leaves the population count permanently one too high (design Q3, accepted). Sweep only decrements by rows it deleted and never reconciles against :ets.select_count. Bounded effect (fails closed, cap is over-estimated) and negligible rate, but a cheap reconcile in the periodic sweep (set count to actual row count) would remove it. Non-blocking; candidate follow-up.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Availability, not confidentiality: the IP bucket is consumed BEFORE the global one, so an attacker spread across many /64s creates IP keys at a rate not limited by the global bucket; with enough distinct sources they can fill max_ip_keys (100000) and cause new legitimate sources to be refused (fail closed) until the throttled inline sweep (1/s) frees idle rows (idle after ~2 s). Requires roughly 50k distinct /64s per second; accepted tradeoff of the design (existing sources unaffected, no eviction of live keys). Also, if REQ-437 mounts this plug without ClientIp behind a proxy, all visitors share one IP bucket; REQ-437 must mount ClientIp first.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MINOR",
+        "description": "consume_email/2,3 guards is_binary but not size; key length is caller-controlled. REQ-437 must pass the fixed-length HMAC, never the raw email (raw email would also put PII in ETS). Also design Q5: :rate_limited_email is emitted on the :send kind too; REQ-437 must not double-emit. Truncating integer refill (div) and a stale-now_ms write can mis-credit a few micro-tokens; negligible and in the limiter-favouring direction except for a theoretical stale-clock double refill of at most one preemption interval.",
+        "affected_requirement": "REQ-437"
+      },
+      {
+        "severity": "INFO",
+        "description": "infrastructure.ex moduledoc says 22 children while the updated test asserts 21 (the pre-existing off-by-one in the prose, not a code defect); REVIEWER may want it tidied.",
+        "affected_requirement": "REQ-436"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ436-20261004",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "No BLOCKER or MAJOR. Route to REVIEWER (2d)."
+  }
 }

@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ436-20261004/step-01b-code-design-validator.json",
   "created_at": "2026-10-04T12:26:06Z",
   "started_at": "2026-10-04T12:26:06Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-04T12:29:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -50,5 +50,75 @@
       "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted"
     ]
   },
-  "result": null
+  "result": {
+    "status": "FAIL",
+    "summary": "Independently read lib/letflow/design/req436-login-discovery-rate-limiter.md (664 lines) against all 14 acceptance criteria, the merged req434 design (s0.3, s5.5, s12, s15.2), response.ex, public_read.ex, infrastructure.ex and infrastructure_test.exs. Structure is strong: every criterion is traced, no implementation bodies, no TBD, no edits planned to config/test.exs, config/runtime.exs, identity*, login_directory*, routers/identity.ex, no new env var, infrastructure_test count 20->21 verified correct (20 ids listed today). CAS/population soundness verified: select_replace on the exact read tuple plus insert_new cannot admit more than capacity; reserve-then-insert (update_counter before insert_new, delete before decrement) keeps the count an upper bound on rows so the cap cannot be exceeded; the sweep guard is the same integer formula as consume and conditional per object so a live key is never evicted; every reservation is released on all paths except a process kill inside the two-call window (Q3, accepted, conservative). FAIL on one real contradiction with the governing 434 design (Q1 ruling) plus several spec/test-outline ambiguities that must be closed before build.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "Q1 RULING: REJECTED. 434 s5.5 requires Cache-Control: private, no-store, Referrer-Policy: no-referrer and X-Robots-Tag: noindex, nofollow on EVERY response from the route, success and refusal, and 434 s12.2 says send_rate_limited/1 sets 'the common security headers'. The limiter 429 is sent before the router (pre-:match) so the route's own header setter (as routers/public_read.ex set_response_headers/1, private there) never runs for it; with the design's default the limiter 429s would be cacheable by Cloudflare/nginx and miss Referrer-Policy/X-Robots-Tag. The design's reading (Retry-After only) overrides the governing design on the basis that no shared helper exists, but the header set is specified, not the helper. Fix: s6.6 sequence must put the three constant headers (cache-control 'private, no-store', referrer-policy 'no-referrer', x-robots-tag 'noindex, nofollow') plus constant retry-after in send_rate_limited/1, all cause-independent (byte-identity preserved); drop or rewrite s0 discrepancy note, s14 Q1; add the header set to T6 expectations (assert them on all three 429s); CORS stays with the upstream Cors plug.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "s6 public surface: @spec config() :: %{...} is a placeholder, not a shape. Use the s2 type config() with the s6.1 key list (or a keyword/map with named keys and types).",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "s4 vs s7.1 spec mismatch: s7.1 declares sweep(now_ms, population \\ :all) but the s4 @spec uses population() which has no :all (s2 type is :ip | :email). Define the type (population | :all) or drop the default and state sweep/1 as the all-populations arity.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "validate_config!/1 inconsistency: @spec takes keyword() but s6.2 says 'keyword/map of overrides'; Bucket.init passes 'Application env'. State one input type (keyword) and how config/0 (a map) relates. Also s6.2 check 1 omits inline_sweep_min_interval_ms from the positive-integer list (the Q4 key must be validated), and does not require rate_u_s = round(refill*1_000_000) >= 1 (a refill below 5e-7 rounds to 0 micro-tokens/s and the bucket would never refill); add that check with its error message.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "Q4 RULING: ACCEPTED as additive (434 observable behaviour unchanged; fail-closed cost bound is justified), conditional on it being added to validate_config!/1 (above) and listed in the s6.1 table as already done.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "s7.4 / T7 hot-key scenario is self-contradictory: it says advance now_ms 'past the longest full-refill window' then sweep and expect the hot key to survive. With defaults a key drained to 0 refills fully in 300 s (request) / 900 s (send), so advancing past the longest window sweeps the hot key too. State concrete times: e.g. fill N keys with 1 token consumed at t0 (full after 60 s), drain hot key to 0 at t0 (full after 300 s), sweep at t0+120 s -> unrelated keys gone, hot key present and still 429; then sweep at t0+301 s -> hot key gone and a consume is :ok with full capacity.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MAJOR",
+        "description": "s7.4 criterion 8 test (T8) asserts 'no existing IP row is deleted' while the cap-full path runs an inline sweep that deletes any idle row. The plan must require the earlier IP rows to be non-idle for the duration (tiny ip_refill_per_sec such as 0.0001 as s11.1 suggests for plug-level tests, stated explicitly for T8) so the test cannot flake on the real clock, and must also assert the inline sweep did not remove them.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MINOR",
+        "description": "s7.3: one shared {:login_discovery, :inline_sweep, :at} throttle row serves both populations, so an :ip inline sweep within 1 s suppresses an :email one. Either key the marker per population or state the shared throttle as intended (conservative: refuses rather than evicts).",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MINOR",
+        "description": "s4.1/s7.1: sweep derives capacity/refill from config/0 per kind while consume takes caller-supplied capacity/refill. State that tests of sweep/eviction (T7, T9) must call Bucket.consume with the config values for that kind, otherwise a row can be swept against a different capacity than it was consumed under.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MINOR",
+        "description": "s5: add one sentence that the match-spec body must wrap tuple constants (double-brace) and that the literal key in the head makes the select_replace an O(1) keyed operation; otherwise an implementer can write a head that scans the table per consume.",
+        "affected_requirement": "REQ-436"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Conflict recorded per core-directives: 434 s15.2 lists config/test.exs under Change; the design omits it per the PR #2201 restriction. Accepted (Q8) and consistent with the task, but 434 s15.2 stays stale until REQ-437/follow-up owns it.",
+        "affected_requirement": "REQ-436"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ436-20261004",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER: close the BLOCKER (Q1 headers on send_rate_limited/1) and the MAJOR spec/test-outline items listed, then re-submit to CODE-DESIGN-VALIDATOR."
+  }
 }

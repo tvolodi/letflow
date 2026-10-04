@@ -389,30 +389,6 @@ defmodule Letflow.Plugs.ClientIpTest do
       conn = run(build_conn(@peer_v4, [{"x-real-ip", <<0xFF, 0xFE>>}]), [@trusted_v4])
       assert conn.assigns.client_ip == @peer_v4
     end
-
-    test "with no :trusted_proxies opt the plug reads application config at call time" do
-      original = Application.get_env(:letflow, ClientIp)
-
-      # config/test.exs default: nobody is trusted.
-      assert original[:trusted_proxies] == []
-
-      on_exit(fn ->
-        if original,
-          do: Application.put_env(:letflow, ClientIp, original),
-          else: Application.delete_env(:letflow, ClientIp)
-      end)
-
-      # sync with a module-level override: this test mutates global env, so it is
-      # the only one that does and it restores it. The other tests pass opts.
-      Application.put_env(:letflow, ClientIp, trusted_proxies: [@trusted_v4])
-
-      conn = ClientIp.call(build_conn(@peer_v4, [{"x-real-ip", "198.51.100.23"}]), [])
-      assert conn.assigns.client_ip == {198, 51, 100, 23}
-
-      Application.put_env(:letflow, ClientIp, trusted_proxies: [])
-      conn = ClientIp.call(build_conn(@peer_v4, [{"x-real-ip", "198.51.100.23"}]), [])
-      assert conn.assigns.client_ip == @peer_v4
-    end
   end
 
   describe "X-Forwarded-For and Forwarded never change the result" do

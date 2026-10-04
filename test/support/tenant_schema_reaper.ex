@@ -87,6 +87,37 @@ defmodule Letflow.TenantSchemaReaper do
   `test_parallel.sh` run (ISS-0107's scenario) carries no group tag of its own, so it
   never matches the parent run's group and still correctly triggers deferral.
 
+  ## ISS-0941 -- a third, independent sweep for orphaned "Tenant Template Build
+  ## (throwaway)" rows that `sweep_orphans/2` detects but can never reclaim
+
+  `sweep_template_build_orphans/2` is this module's third responsibility. See
+  `lib/letflow/design/iss0941-orphan-tenant-row-reaper.md` for the full design and
+  rationale.
+
+  `test/support/tenant_template.ex`'s `build_template!/0` inserts a throwaway
+  `tenants`/`tenant_schemas` row pair (`display_name: "Tenant Template Build
+  (throwaway)"`) pointing at a freshly-created staging schema
+  (`"tenant_template_build_" <> 32 hex chars`), and deletes both rows itself on the
+  success path, before its own schema rename. On a failure path after that insert
+  (any exception, or a hard process kill), the row survives with its backing schema
+  already dropped (or never cleaned up) -- but the staging name's shape never matches
+  `sweep_orphans/2`'s own `@schema_name_format` regex, so that sweep's
+  `skipped_invalid_format` branch unconditionally skips it, by shape, independent of
+  whether the row's schema still exists. This function asks the question
+  `sweep_orphans/2` never does for this row shape: a direct, live
+  `information_schema.schemata` lookup for the row's own `schema_name`, confirming
+  absence before ever deleting anything. It only ever deletes the two bookkeeping
+  rows -- it never issues a `DROP SCHEMA` of its own, even when it could (the schema
+  is already confirmed absent by the time it would run); a row whose schema is
+  confirmed *present* is left untouched and logged, not reclaimed (see the design
+  doc §1 for why that case is deliberately out of scope here).
+
+  Reuses `current_application_name/1` and `concurrent_invocation_present?/2` verbatim
+  (same private helpers the other two sweeps use, same ISS-0414 §2.2 same-module-call
+  rationale) and the identical `try/rescue/after` failure-mode contract: never raises
+  to its caller, restores `Sandbox.mode(repo, :manual)` in an `after` block regardless
+  of outcome.
+
   ## ISS-0414 -- a second, independent sweep for orphaned `service_catalog` rows
 
   `sweep_service_catalog_orphans/1` is this module's second responsibility, added for
@@ -127,6 +158,12 @@ defmodule Letflow.TenantSchemaReaper do
   @schema_name_format ~r/^tenant_[0-9a-f]{32}$/
 
   @default_min_age_seconds 300
+
+  # The exact literal test/support/tenant_template.ex's build_template!/0 inserts as
+  # its throwaway tenants row's display_name (ISS-0941 design doc §0/§1). Not a regex
+  # -- an exact match, deliberately narrower scoping than sweep_orphans/2's own
+  # format-based check.
+  @template_build_display_name "Tenant Template Build (throwaway)"
 
   @doc """
   Reclaims `tenant_schemas` rows old enough (`provisioned_at` older than
@@ -272,6 +309,138 @@ defmodule Letflow.TenantSchemaReaper do
     after
       Sandbox.mode(repo, :manual)
     end
+  end
+
+  @doc """
+  Reclaims `tenant_schemas`/`tenants` row pairs belonging to a
+  `"Tenant Template Build (throwaway)"` row (ISS-0941) old enough (`provisioned_at`
+  older than `min_age_seconds`) not to still be a plausible in-progress
+  `test/support/tenant_template.ex` build, but only once a direct,
+  live `information_schema.schemata` lookup confirms the row's own `schema_name` no
+  longer exists -- and only once it has confirmed (reusing the same ISS-0110/ISS-0217
+  check the other two sweeps use) that no OTHER `mix test` invocation is currently
+  connected to this database at all. If one is, the sweep defers entirely, touching
+  nothing, exactly like the other two sweeps' own deferral.
+
+  A row matching the `display_name` filter and old enough, but whose `schema_name` is
+  confirmed to still exist, is left untouched -- this function never issues a
+  `DROP SCHEMA` of its own (see the design doc §1/§2.2 for why that case is out of
+  scope here) -- and counted in `:skipped_schema_present` instead, logged at
+  `:warning` per row.
+
+  Never raises to its caller -- an outer failure (the candidate-row `SELECT`, a
+  per-row `information_schema.schemata` lookup, either `Sandbox.mode/2` call, or
+  `current_application_name/1`'s own query) not already caught by the per-row
+  try/rescue below is caught here, logged at `:error`, and reported back as
+  `{:ok, %{deleted: 0, skipped_schema_present: 0}}`; only the log output distinguishes
+  that case from a genuinely empty sweep. See the design doc §2.4/§2.5 for the full
+  algorithm and failure-mode contract.
+  """
+  @spec sweep_template_build_orphans(repo :: module(), min_age_seconds :: non_neg_integer()) ::
+          {:ok, %{deleted: non_neg_integer(), skipped_schema_present: non_neg_integer()}}
+          | {:deferred, :concurrent_invocation}
+  def sweep_template_build_orphans(
+        repo \\ Letflow.Repo,
+        min_age_seconds \\ @default_min_age_seconds
+      ) do
+    try do
+      Sandbox.mode(repo, :auto)
+
+      own_tag = current_application_name(repo)
+
+      if concurrent_invocation_present?(repo, own_tag) do
+        Logger.info(
+          "TenantSchemaReaper.sweep_template_build_orphans/2: deferring this sweep " <>
+            "entirely -- another mix test invocation (application_name != " <>
+            "#{inspect(own_tag)}) is currently connected to this database, and this " <>
+            "sweep has no per-row ownership tracking, so it cannot safely tell that " <>
+            "invocation's still-live tenant_template_build row apart from a genuinely " <>
+            "orphaned one (ISS-0941). Retrying on the next boundary sweep."
+        )
+
+        {:deferred, :concurrent_invocation}
+      else
+        cutoff = NaiveDateTime.utc_now() |> NaiveDateTime.add(-min_age_seconds, :second)
+
+        %{rows: rows} =
+          repo.query!(
+            "SELECT ts.id, ts.tenant_id, ts.schema_name " <>
+              "FROM tenant_schemas ts JOIN tenants t ON t.id = ts.tenant_id " <>
+              "WHERE t.display_name = $1 AND ts.schema_name LIKE 'tenant_template_build_%' " <>
+              "AND ts.provisioned_at < $2",
+            [@template_build_display_name, cutoff]
+          )
+
+        {deleted, skipped_schema_present} =
+          Enum.reduce(rows, {0, 0}, fn [id, tenant_id, schema_name], {deleted_acc, skipped_acc} ->
+            row = %{id: id, tenant_id: tenant_id, schema_name: schema_name}
+
+            if schema_exists?(repo, schema_name) do
+              Logger.warning(
+                "TenantSchemaReaper.sweep_template_build_orphans/2: tenant_schemas row " <>
+                  "id=#{Ecto.UUID.cast!(id)} tenant_id=#{Ecto.UUID.cast!(tenant_id)} " <>
+                  "schema_name=#{inspect(schema_name)} matches the throwaway " <>
+                  "template-build display_name and is old enough, but its schema still " <>
+                  "exists -- leaving it untouched (ISS-0941 design doc §1)."
+              )
+
+              {deleted_acc, skipped_acc + 1}
+            else
+              if reclaim_template_build_row(repo, row) do
+                {deleted_acc + 1, skipped_acc}
+              else
+                {deleted_acc, skipped_acc}
+              end
+            end
+          end)
+
+        {:ok, %{deleted: deleted, skipped_schema_present: skipped_schema_present}}
+      end
+    rescue
+      exception ->
+        Logger.error(
+          "TenantSchemaReaper.sweep_template_build_orphans/2 aborted: " <>
+            Exception.format(:error, exception, __STACKTRACE__)
+        )
+
+        {:ok, %{deleted: 0, skipped_schema_present: 0}}
+    after
+      Sandbox.mode(repo, :manual)
+    end
+  end
+
+  # Direct, live existence check against information_schema.schemata -- deliberately
+  # not the regex-based format check sweep_orphans/2 uses (ISS-0941 design doc §0: the
+  # staging name's shape never matches that regex, which is the actual mechanism
+  # behind the issue this function exists to fix).
+  defp schema_exists?(repo, schema_name) do
+    %{rows: rows} =
+      repo.query!(
+        "SELECT 1 FROM information_schema.schemata WHERE schema_name = $1",
+        [schema_name]
+      )
+
+    rows != []
+  end
+
+  # Deletes the tenant_schemas row, then its parent tenants row -- no DROP SCHEMA,
+  # unlike reclaim_row/2, since this branch's own caller has already confirmed the
+  # schema does not exist (ISS-0941 design doc §2.4 step 4). Returns true on success,
+  # false if this row's own cleanup raised (left for the next sweep to retry) -- a
+  # per-row failure never aborts the sweep for the remaining rows.
+  defp reclaim_template_build_row(repo, %{id: id, tenant_id: tenant_id, schema_name: schema_name}) do
+    repo.query!("DELETE FROM tenant_schemas WHERE id = $1", [id])
+    repo.query!("DELETE FROM tenants WHERE id = $1", [tenant_id])
+    true
+  rescue
+    exception ->
+      Logger.warning(
+        "TenantSchemaReaper.sweep_template_build_orphans/2: failed to reclaim " <>
+          "tenant_schemas row id=#{Ecto.UUID.cast!(id)} tenant_id=#{Ecto.UUID.cast!(tenant_id)} " <>
+          "schema_name=#{schema_name}: " <> Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      false
   end
 
   # The application_name this connection was opened with -- config/test.exs sets it

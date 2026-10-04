@@ -1,0 +1,63 @@
+run_id: WF04-ISS0941-20261004
+step: "WF-02 Step 4 / WF-04 Step 1"
+agent: TEST-RUNNER
+generated_at: "2026-10-04T06:30:00Z"
+branch: fix/ISS-0941-orphan-tenant-row-reaper
+commit: d76bd52c4008324dc0b86380f8ea5b9aff8eaab7
+scope: full suite, isolated worktree + isolated Postgres container (own DB port, not shared with any other concurrent checkout)
+worktree: /tmp/claude-1001/.../scratchpad/wt-testrunner-iss0941 (git worktree add --detach at d76bd52c, fetched fresh from origin)
+postgres: wt-testrunner-iss0941-postgres-1, LETFLOW_DB_PORT=5472 (own compose project, isolated from other concurrently-running checkouts on this host)
+pre_run_check: "ps aux | grep mix showed an unrelated, already-running `mix test` (pid 1595723) in the main checkout on this host (port 5463) -- left untouched; this run used its own isolated worktree/DB instead of that checkout."
+command: "TEST_PARALLEL_N=2 TEST_NONPOOL_CONNECTION_RESERVE=30 ./scripts/test_parallel.sh"
+result:
+  combined_passed: 5409
+  combined_total: 5410
+  combined_failed: 1
+  properties: 8
+  partitions_reported: "2/2"
+  exit_code: 1
+  output: >
+    partition 1: 2530 tests, 1 property, 1 failures, exit 2
+    partition 2: 2872 tests, 7 properties, 0 failures, exit 0
+    combined: 5402 tests, 8 properties, 1 failures (5409/5410 passed) -- 2/2 partitions reported
+failures:
+  - file: test/letflow/secrets_runtime_config_test.exs
+    test: "LETFLOW_SECRETS_MASTER_KEY unset fails application boot with a clear 'is missing' error"
+    error: "ExUnit.TimeoutError: test timed out after 60000ms, inside System.cmd(\"mix\", [\"run\", \"-e\", ...]) at test/letflow/secrets_runtime_config_test.exs:77"
+    classification: "environmental flake, not a regression from ISS-0941"
+    proof: >
+      Re-ran test/letflow/secrets_runtime_config_test.exs alone, same worktree/DB, immediately
+      after the full-suite run: Result: 2 passed, Finished in 1.5 seconds -- no timeout.
+      This test spawns a nested `mix run` subprocess with a 60s ExUnit timeout; at the time
+      partition 1 hit it, this host was also running an unrelated, pre-existing `mix test`
+      invocation in the main checkout (pid 1595723, observed via ps aux both before and ~20
+      minutes after this run started) plus this run's own two partitions -- CPU contention
+      from that unrelated process is the most likely cause of the nested-boot subprocess
+      missing its 60s budget. Not one of the six known flake classes listed in this task
+      (ISS-0453, ISS-0937/38/39/40, Obs.AlertsTest AC-8, SandboxPoolTest RT-6, PluginHandlerTest
+      AC7) -- a seventh, newly-observed flake class, logged here rather than silently retried.
+      No code in lib/letflow/ or test/ was touched to make this pass; it was not re-run as part
+      of the combined full-suite result above.
+target_files_confirmed:
+  - file: test/support/template_build_reaper_test.exs
+    result: "Result: 7 passed -- 0 failures (matches expected 7 tests)"
+  - file: test/support/tenant_schema_reaper_test.exs
+    result: "Result: 6 passed -- 0 failures, unaffected by ISS-0941 changes"
+  - file: test/support/service_catalog_reaper_test.exs
+    result: "Result: 5 passed -- 0 failures, unaffected by ISS-0941 changes"
+  note: >
+    Each run individually via `MIX_ENV=test mix test <file> --seed 0` in the same isolated
+    worktree/DB immediately after the full-suite run; also ran combined in one `mix test`
+    invocation (18 passed total, consistent with 7+6+5).
+mix_letflow_check_test: "not used -- ran scripts/test_parallel.sh directly per task instructions, so ISS-0939's known hang was not encountered."
+known_flake_classes_encountered: "none of the six listed classes (ISS-0453, ISS-0937/38/39/40, Obs.AlertsTest AC-8, SandboxPoolTest RT-6/ISS-0881/0977, Wasm.PluginHandlerTest AC7) appeared in this run."
+conclusion: >
+  5409/5410 passed on the full suite against d76bd52c. The single failure
+  (secrets_runtime_config_test.exs) reproduces as a pass in isolation and is attributed to
+  host CPU contention from an unrelated concurrent mix test process, not to the ISS-0941
+  changes. All three reaper test files -- the new template_build_reaper_test.exs (7/7) and
+  the two pre-existing tenant_schema_reaper_test.exs (6/6) and service_catalog_reaper_test.exs
+  (5/5) -- pass in full and unaffected. Recommend RELEASE-VALIDATOR re-run independently per
+  standard policy; if the secrets_runtime_config_test.exs timeout recurs under less host
+  contention, it should be filed as a new issue rather than assumed resolved by this report.
+lib_test_modified_by_step: false

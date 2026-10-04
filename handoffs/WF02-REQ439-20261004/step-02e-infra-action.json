@@ -1,0 +1,49 @@
+{
+  "handoff_id": "02dbaf2a-2dd0-4e67-9964-8f2ea3bbcf88",
+  "run_id": "WF02-REQ439-20261004",
+  "workflow_id": "WF-02",
+  "step": "02e",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ439-20261004/step-02e-infra-action.json",
+  "created_at": "2026-10-04T11:05:18Z",
+  "started_at": "2026-10-04T11:05:18Z",
+  "completed_at": "2026-10-04T11:40:27Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [
+      "REQ-439"
+    ],
+    "requirement_text": {
+      "REQ-439": "See docs/requirements.yaml REQ-439 (queue Q-948, GH#2198); description copied verbatim into dispatch prompts."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/plugs/client_ip.ex",
+      "config/runtime.exs",
+      "config/config.exs",
+      "config/test.exs",
+      "deploy/nginx/letflow-test.conf",
+      "deploy/.env.example"
+    ],
+    "branch_name": "feature/WF02-REQ439-20261004"
+  },
+  "task": {
+    "description": "WF-02 step 02e (ORCH)",
+    "acceptance_criteria": [
+      "see REQ-439"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "INFRASTRUCTURE ACTION for QA's nginx vhost (outside this repo), apply in the server block before 'proxy_set_header X-Real-IP $remote_addr;' (verified 2026-10-04 against cloudflare.com/ips-v4, /ips-v6 and developers.cloudflare.com/fundamentals/reference/http-headers/; SECURITY-REVIEWER re-verified): set_real_ip_from 173.245.48.0/20; 103.21.244.0/22; 103.22.200.0/22; 103.31.4.0/22; 141.101.64.0/18; 108.162.192.0/18; 190.93.240.0/20; 188.114.96.0/20; 197.234.240.0/22; 198.41.128.0/17; 162.158.0.0/15; 104.16.0.0/13; 104.24.0.0/14; 172.64.0.0/13; 131.0.72.0/22; 2400:cb00::/32; 2606:4700::/32; 2803:f800::/32; 2405:b500::/32; 2405:8100::/32; 2a06:98c0::/29; 2c0f:f248::/32 (one 'set_real_ip_from <range>;' line each); real_ip_header CF-Connecting-IP; real_ip_recursive off;. Then set LETFLOW_TRUSTED_PROXIES on the QA container to the address nginx connects from (Docker bridge gateway, not 127.0.0.1; to be found on the host by UAT-RUNNER). Do not enable LETFLOW_LOGIN_DISCOVERY_ENABLED outside dev: 0042 OQ-3 (lawful basis) is unresolved. Canonical copy of the directives: deploy/nginx/letflow-test.conf.",
+    "artifacts_out": [
+      "deploy/nginx/letflow-test.conf"
+    ],
+    "issues": [],
+    "next_action": "Parent/infra owner applies to QA vhost"
+  }
+}

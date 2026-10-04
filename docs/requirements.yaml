@@ -32291,3 +32291,586 @@ requirements:
       # T-LIVE-GREEN). Closed out: DOC-UPDATER locked and released task 940 as
       # status=done at this requirement's own closure (verified live via GET /tasks
       # before locking: status open, eligible true, locked_by null).
+
+  # ---------------------------------------------------------------
+  # Email-first login with a platform tenant directory (user-approved
+  # feature, 2026-10-04). Problem: each tenant has its own Keycloak realm
+  # and its own users (admin/invitation-created, no open sign-up). Before
+  # login the SPA does not know which realm to show: it resolves from
+  # sessionStorage/?realm= (web/src/auth/tenantConfig.ts,
+  # resolveRealmFromUrl), else GET /api/tenant-config?host=, which has no
+  # host binding by design (REQ-076), so it falls back to bpm-default.
+  # Bilimbaga users must therefore type ?realm=bilimbaga (ISS-0727) and
+  # otherwise see 'invalid password'. Five entries, chained:
+  #   REQ-434 CODE-DESIGNER   decision record 0042 + design (HARD GATE:
+  #                            amends 0006 s3.3 / 0038 / 0035, bounds 0028)
+  #   REQ-435 ELIXIR-DEV      directory table + population hooks + backfill
+  #   REQ-436 ELIXIR-DEV      namespaced, bounded login-discovery limiter
+  #   REQ-437 ELIXIR-DEV      public lookup endpoint + notifier port
+  #   REQ-438 FRONTEND-DEV    SPA email-first screen + ProtectedRoute wiring
+  # Every entry carries `# impl_order: UNREGISTERED -- ...` for ORCH to
+  # replace with the register_task response at WF-01 Step 3.
+  #
+  # Out of scope for all five (future, not built here): SSO / a single
+  # identity across realms (accounts stay separate per realm, decision
+  # 0006 D1 unchanged); a Keycloak identity-provider-brokering topology
+  # (kc_idp_hint is therefore NOT used -- see REQ-434's design); mobile
+  # adoption (NOTE only, in REQ-434); an SMTP/mail adapter (REQ-437 ships a
+  # port with a non-delivering default adapter, see its open_questions).
+  # ---------------------------------------------------------------
+
+  - id: REQ-434
+    title: "Decision record 0042 and design for email-first login: a platform tenant-login directory, a credential-free email-keyed lookup mount, and the amendments to 0006 s3.3 / 0038 / 0035 it requires"
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S4
+    impl_order: 941  # letflow-queue task id, GH#2189. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
+    description: >
+      The feature below cannot be built without first deciding whether it is
+      allowed. This entry is a DESIGN-AND-DECISION requirement: it writes a
+      decision record and a design document, no application code (CODE-DESIGNER
+      is design-only). It is the first entry on purpose, as REQ-384 did with
+      decision 0038 before any code existed.
+
+      THE FEATURE (user-approved). A platform-level directory maps a normalised
+      email to the tenants where it has an account. The SPA shows an email-first
+      screen before any redirect: exactly one tenant -> go straight to that
+      tenant's Keycloak realm login with login_hint; several -> tenant choice
+      or emailed list (per the disclosure mode below); none -> neutral outcome.
+      After login, tenant resolution is unchanged: the token's realm ->
+      Letflow.Identity.resolve_tenant_by_realm/1 (lib/letflow/identity.ex:150,
+      decision 0006 R5). ?realm= and host-based resolution
+      (web/src/auth/tenantConfig.ts resolveRealmFromUrl,
+      GET /api/tenant-config) remain as fallbacks/overrides. The in-app tenant
+      switcher (REQ-384, GET /api/v1/me/memberships) is untouched.
+
+      DECISIONS THIS ENTRY MUST FLAG AS REQUIRING REVIEWER SIGN-OFF (do not
+      diverge silently; each is a real conflict found by reading the records):
+
+      1. Decision 0006 s3.3 / s7 item 3, as already amended by 0038.
+      0038's 'What remains foreclosed' list names 'a self-service find-my-
+      account(s)-by-email flow reachable by an unauthenticated ... caller' and
+      'a cross-tenant lookup keyed on anything the caller supplies at request
+      time'. This feature IS that flow. It needs a SECOND, wider, explicitly
+      bounded amendment (0042), not an inference from 0038. The design must
+      state the bounded inference precisely (what an unauthenticated caller can
+      and cannot learn) and why it is accepted, in the manner 0028 states its
+      'Accepted bounded inference'.
+
+      2. Decision 0035 states the SPA has no in-app login surface and no /login
+      route; credentials are entered only on Keycloak's hosted UI. The new
+      email-first page collects an email address, never a credential, and hands
+      off to Keycloak unchanged. 0042 must say that 0035's core decision
+      (credentials are never entered in the SPA) stands and that its 'no /login
+      route' observation is amended to allow a credential-free discovery route.
+
+      3. Decision 0028 says Letflow has 'exactly one unauthenticated read
+      surface' (/api/public, handle-addressed) with standing prohibitions: no
+      caller-supplied tenant hint, no collection/search route, no 401/403, and
+      AuthPipeline keeps its no-allowlist property. The lookup here is keyed by
+      a caller-supplied email, so it MUST NOT be mounted under /api/public. The
+      design must decide the mount (recommended: a new sibling
+      forward('/api/login-discovery', ...) on Letflow.Router, declared before
+      the /api/v1 forward, in the manner of /api/tenant-config), and 0042 must
+      state that this does not reopen 0028 (AuthPipeline stays allowlist-free;
+      /api/public stays handle-only) while REVIEWER decides whether 0028's
+      'exactly one' sentence needs a one-line cross-reference.
+
+      4. Decision 0040 concerns AUTHENTICATED routes and defers a general
+      per-actor limiter to S4 (Letflow.Plugs.RateLimit, a deferred row in
+      lib/letflow/plugs/api_pipeline.ex). It does not cover this route, and
+      0028 s6 is the closer precedent: rate limiting is a PRECONDITION of
+      mounting an unauthenticated route, enforced as the first plug, keyed on
+      conn.remote_ip. 0042 must say the new mount follows 0028 s6, reuses
+      Letflow.Plugs.PublicReadRateLimit.Bucket (lib/letflow/plugs/
+      public_read_rate_limit/bucket.ex) or a mount-point-agnostic successor,
+      and does not discharge 0040's deferred authenticated limiter.
+
+      Also to be read and respected, confirmed not in conflict unless the design
+      finds otherwise: 0002 (OIDC library/verification -- the token path is
+      unchanged), 0022 (BilimBaga vertical: its users are the motivating
+      case; no per-vertical code), 0038 point 4 (realm-resolution chain
+      unchanged), 0012 (mobile stack), 0016 (secrets by reference).
+
+      THE DESIGN DOCUMENT (lib/letflow/design/req434-email-first-login-
+      directory.md) MUST SPECIFY, with source citations, not assertions:
+
+      (a) Directory schema. A public-schema (global) table, e.g.
+      tenant_login_directory, alongside tenants and tenant_memberships, outside
+      every tenant schema (INV-1 storage unchanged). Columns limited to an
+      email key, tenant_id (real FK to tenants, ON DELETE CASCADE) and
+      timestamps; unique (email key, tenant_id). It is a pointer table: no
+      password, role, session or profile fields. Distinguish it from
+      tenant_memberships (REQ-384): memberships are admin-linked cross-tenant
+      switch targets; the directory is a login-routing index of where an
+      account exists. Decide whether one table or a unification is right and
+      say why; recommended: separate tables, one shared normalisation function
+      (Letflow.Identity.TenantMembership.normalize_subject_key/1 -- one
+      implementation on both sides, per its own moduledoc).
+
+      (b) Email key form. Recommended default: a keyed HMAC-SHA256 of the
+      normalised email (lower-case, trim) with the pepper supplied by secret
+      REFERENCE (INV-4, decision 0016), not plaintext, because the lookup only
+      ever needs equality on an email the caller just typed, and delivery
+      (REQ-437) uses that typed address, never a stored one. State the
+      trade-off against tenant_memberships' plaintext subject_key. Flagged as
+      an open question below.
+
+      (c) Population signals. Letflow has no Keycloak Admin client in lib/
+      (REQ-135/137 are survey/design only; realm and user creation happen in
+      Keycloak outside Letflow). The in-Letflow signals are therefore
+      Letflow.Identity.create_user/2 (lib/letflow/identity.ex:227, reached from
+      POST /api/v1/users, authz_post '/users', :UsersManage in
+      lib/letflow/routers/identity.ex) and Letflow.Identity.provision_oidc_user/4
+      (identity.ex:127, JIT on first login). Specify whether the directory
+      write is in the same Ecto.Multi/transaction as the user insert (recommended,
+      matching create_user's existing Audit.append_multi shape), the removal
+      semantics on user deletion or deactivation (POST /users/:id/status), email
+      change, and tenant deactivation (tenants.status :inactive).
+      Keycloak-side-only accounts (created in the realm admin console but
+      never seen by Letflow) are NOT in the directory until their first login
+      or a backfill; say so as a documented limitation.
+      VERIFIED GAPS the design must resolve, not assume: (1) tenant_id source --
+      create_user/2 (identity.ex:227), update_user_profile/3 (:337) and
+      update_user_status/3 (:389) receive only opts[:prefix], never a
+      tenant_id. Recommended: a new required :tenant_id key in their opts,
+      supplied by their callers in lib/letflow/routers/identity.ex from
+      conn.assigns.auth_context.tenant_id (never a request parameter);
+      rejected alternative: a reverse prefix->tenant lookup (extra query, a
+      second source of tenant identity). provision_oidc_user/4 already has
+      tenant_id. (2) users.email has no unique index (only username and
+      (external_realm, external_id) are unique), so two active users in one
+      tenant may share an email; the removal rule is: delete a directory entry
+      only if no OTHER ACTIVE user in that tenant has the same normalised
+      email. (3) Identity has no delete_user function, so 'user deletion' has
+      no code path; erasure is tenant deletion (FK cascade), tenant
+      deactivation (status filtered at query time) and the status/email-change
+      paths. (4) The status hook lives INSIDE Identity.update_user_status/3
+      (same transaction), not in the router handler; likewise the profile
+      hook inside update_user_profile/3.
+
+      (d) Backfill. An idempotent mix task (naming per lib/mix/tasks/
+      letflow.backfill_*.ex precedent) iterating tenants and reading each
+      tenant schema's users.email through the existing per-tenant :prefix
+      derivation (TenantProvisioning.schema_name_for_tenant/1). Open question
+      on the source (below).
+
+      (e) The lookup endpoint contract: method (recommended POST with the
+      email in the JSON body, never a query string, so it is not written to
+      access logs), request/response shape, the closed response allowlist
+      (hand-built map, literal keys, per 0028), and the single-round-trip rule
+      (one directory query joined to tenants for status and display name; no
+      second lookup on the miss path; a malformed email must not short-circuit
+      ahead of that query). Return a realm SLUG and display name only -- never
+      idp_realm_id, tenant UUID, or an authority URL (INV-2, INV-9: the SPA
+      derives the authority via the existing GET /api/tenant-config?realm=).
+
+      (f) Anti-enumeration, honestly bounded. Unknown email and known email must
+      be indistinguishable in status, body shape and bounded timing. A
+      single-match redirect inherently tells the caller 'this email has an
+      account in tenant X'; the design must state this as the accepted bounded
+      inference (or choose the strict mode as the default), and list the
+      mitigations (limiter, per-email throttle, no bulk route, uniform
+      response in the strict mode below). State plainly that the
+      considered-and-rejected trick 'always redirect unknown emails to
+      bpm-default' leaks any non-default tenant's membership by contrast, and
+      why it is or is not used.
+
+      (g) Disclosure modes (application config, not code). Mode A,
+      'uniform_plus_email': the endpoint always returns the same neutral
+      response (HTTP 202, identical body, delivery work done off the request
+      path so timing does not depend on a match); the tenant list, whether one
+      tenant or many, reaches the user only by email. Mode B,
+      'redirect_single': exactly one match returns the realm slug directly
+      (UX-optimal; carries the bounded inference of (f)); several matches or
+      none return the same neutral response and the list is emailed. The
+      ORIGINAL user requirement, recorded as written: 'respond uniformly and
+      deliver the tenant list by email unless the email matches exactly one
+      tenant' -- that is Mode B, the user's stated shape. The design must
+      reconcile Mode B with the anti-enumeration goal and record the chosen
+      default (see open_questions); it must NOT silently pick.
+
+      (h) Keycloak interplay. login_hint: the SPA passes the typed email to
+      signinRedirect so the realm login page pre-fills the username
+      (oidc-client-ts signin args; interacts with buildRedirectArgs in
+      web/src/auth/oidcRedirectArgs.ts and the redirect_uri ?realm= embedding
+      from ISS-0726). kc_idp_hint selects a brokered identity provider inside a
+      realm and is NOT applicable (no realm brokers an IdP today); state that
+      it is deliberately unused. login_hint populates the username field only;
+      realms whose users log in by username need 'Login with email' enabled for
+      a typed email to work -- list that as a realm-configuration precondition
+      and state who checks it (UAT).
+
+      (i) Security invariants touched, by number: INV-1 (directory outside
+      tenant schemas; backfill reads each tenant schema only via the derived
+      prefix), INV-2 (closed response allowlist), INV-4 (pepper by reference;
+      no raw email in logs or telemetry), INV-5 (known/unknown email
+      indistinguishability -- INV-5's text is about resource ids; this is its
+      first email-keyed instance), INV-6 (new data-access path must prove
+      scoping), INV-7 (no SQL interpolation in backfill), INV-8 (notifier,
+      mail or DB failure on the public path must return the same neutral
+      response, not a 500, not a crash), INV-9 (no tenant-controlled outbound
+      URL: the server never builds a redirect from tenant-supplied text). INV-3
+      does not apply. SECURITY-REVIEWER is a mandatory gate on 0042 AND on
+      REQ-435/436/437 implementation.
+
+      (j) Mobile tier NOTE (not a spec). The mobile bootstrap resolves the
+      tenant from a deep-link subdomain or manual slug entry (docs/mobile/
+      requirements.md MOB-2, REQ-421, REQ-124's /api/mobile/tenant-config) and
+      is unaffected. The new endpoint is additive and unauthenticated, so a
+      later mobile requirement may adopt it in place of manual slug entry; the
+      design records that as a future option and that neither the endpoint nor
+      the response may assume a browser. docs/mobile/ is not edited here.
+
+      (k) Future, explicitly out of scope: SSO across realms or a single
+      identity spanning tenants (0006 D1/0038 keep one account per realm); a
+      platform-level Keycloak broker realm.
+
+      (l) Fallback precedence in the SPA, as a table: (1) sessionStorage
+      bpm_realm_slug, (2) ?realm= query parameter, (3) the email-first screen,
+      (4) host lookup (GET /api/tenant-config?host=) and its bpm-default
+      fallback retained for single-tenant/dev deployments. DECIDED HERE as the
+      recommended precedence (to be ratified): host binding does not exist
+      today (tenant_config by host has no host->tenant binding by design,
+      REQ-076), so host lookup never identifies a tenant and is NOT ranked
+      above the email-first screen. Order: explicit ?realm= > stored slug >
+      email-first screen when the flag is on > default-realm fallback
+      (host lookup, then bpm-default). Note today's resolveRealmFromUrl()
+      reads the stored slug BEFORE ?realm=; the design must say how an
+      explicit ?realm= overrides a stale stored value. A deployment with only
+      the default tenant uses the flag (see open_questions). REQ-438 implements
+      exactly this order.
+    open_questions:
+      - "Multi-tenant disclosure mode. Options: (A) uniform_plus_email -- always the same 202 neutral response, the tenant list (one or many) delivered only by email; most enumeration-resistant, worst UX, REQUIRES a mail capability Letflow does not have (grep of mix.exs/lib/config finds no mailer: no swoosh/bamboo/smtp). (B) redirect_single -- exactly one match returns the realm slug directly, several/none return the neutral response plus an emailed list (the user's stated shape). (C) picker_unauth -- return tenant names to the caller; REJECTED as a production default (leaks tenant membership for any typed email; violates the spirit of INV-5). RECOMMENDED DEFAULT: (B) redirect_single with the multi-tenant list delivered by email, switchable per deployment to (A) by config; (C) only behind an explicit dev-only flag. Needs REVIEWER and SECURITY-REVIEWER ratification because (B) discloses 'email X has an account in tenant Y' to an unauthenticated caller for single matches, bounded only by rate limiting."
+      - "Directory backfill source. Options: (1) each tenant schema's users.email via the per-tenant prefix (recommended: the only data Letflow owns and can read; covers JIT/admin-created users Letflow has seen); (2) the Keycloak realm's user list via the Admin REST API (covers realm-only accounts, but Letflow has no Admin client -- REQ-135/137 are design only -- and it needs admin credentials per realm, a new INV-4 secret surface); (3) both, deduplicated. Recommended: (1) now, (2) as a separate future requirement. Consequence to document: an account that exists only in Keycloak and has never logged in is invisible to the directory (falls to the ?realm=/host fallbacks)."
+      - "Inactive/deactivated tenant (tenants.status :inactive or :migrating, REQ-075) and deactivated user (users.status). Recommended default: an inactive tenant contributes NO match (treated as unknown, decided in the same single query via the join to tenants, per 0028's 'no second query' rule), because Letflow.Plugs.TenantStatus would 403 the user after login anyway and 0028 forbids a 403-style 'exists but unavailable' disclosure on an unauthenticated route; a :migrating tenant is also excluded; a deactivated USER row is removed from the directory on status change. Alternative: still route to the realm so the user sees the tenant-inactive message after login (better UX, leaks that the tenant exists and is inactive)."
+      - "GDPR/PII retention of the directory. The directory is a cross-tenant index of personal data held outside any tenant schema, so a tenant's data-erasure obligation does not automatically reach it. Recommended: store a keyed HMAC, not plaintext; delete the row in the same transaction as user deletion/deactivation and by FK cascade on tenant deletion; no row survives its source user; no plaintext email in logs, audit before/after state, or telemetry; document the erasure procedure and the pepper-rotation procedure (rotating it requires a rebuild). To be ratified by REVIEWER with a stated owner for the retention policy."
+      - "Single-tenant and development deployments: should the email-first screen be skipped when only one tenant exists, or sit behind a build/config flag? Recommended: a SPA build flag (default ON in multi-tenant deployments, OFF where the platform has exactly the default tenant), so local dev and E2E logins (iss0896 master-admin credentials, tryRestoreE2eSession) are not forced through a new screen."
+      - "Per-email throttle and email-bombing: in modes that send mail, an attacker can make Letflow email arbitrary victims. Recommended: a per-email-key bucket in addition to per-IP and global buckets, a fixed minimum interval between sends to the same address, and a fixed message carrying no attacker-controlled text. Mail adapter selection is deferred (see REQ-437)."
+      - "Keycloak Organizations as an alternative to the custom directory. Facts: docker-compose.yml:26 runs quay.io/keycloak/keycloak:26.2, and the ai-dala-infra landscape docs (landscape/services.md:177, hosts/ubuntu-16gb-nbg1-1.md:217) show QA on 26.2; Organizations is a Keycloak feature from 26.0, so it is plausibly available, but it must be enabled and verified on each deployment, not assumed. Realm-per-tenant is recorded in decision 0002 (one-to-one tenant<->realm binding; 'One shared Keycloak host, N realms', line 190) and decision 0006 R5 (realm->tenant->schema 1:1 bijection). Pros of Organizations: many tenants as organizations in ONE realm, email-domain and invitation matching and org-aware login could replace this custom directory and its anti-enumeration surface; avoids realm-per-tenant cost (per-realm memory, startup and operational overhead, which scales poorly beyond a few hundred realms). Cons: it means migrating off realm-per-tenant, a major change that touches 0002 and 0006 R5 (token realm -> tenant resolution, JIT provisioning, per-realm audience and issuer verification, ProviderRegistry) and would end the separate-accounts-per-realm model. A future ADR is needed to choose; THIS requirement set's scope stays the directory plus email-first login, with NO migration. The design must record that the directory is built so a later move to Organizations can retire it (the SPA depends only on the discovery response contract)."
+    acceptance_criteria:
+      - "docs/migration/decisions/0042-email-first-login-tenant-directory.md exists, its Status line reads decided, and its 'Amends' section names 0006 s3.3/s7 item 3, 0038's 'What remains foreclosed' list, and 0035's 'no in-app login surface / no /login route' observation, each by section and quoted, and states in each case what remains unchanged"
+      - "0042 contains a 'Standing prohibitions' section that at least states: AuthPipeline keeps its no-allowlist property; /api/public stays handle-addressed with no email or tenant hint (0028); the lookup is a separate mount; the response never contains idp_realm_id, tenant_id, an authority URL or any tenant field beyond slug and display name; no bulk, list, search or paginated variant; no 401 or 403 on the route"
+      - "0042 contains an 'Accepted bounded inference' section that states exactly what an unauthenticated caller can learn in the default disclosure mode and what is explicitly NOT learnable, and explains how 0040 (authenticated routes only) relates to this route and that 0028 s6 is the governing limiter precedent"
+      - "lib/letflow/design/req434-email-first-login-directory.md exists and specifies items (a) through (l) of this description, each with a source citation (file:line or decision section) for every claim about existing code, and contains zero implementation code (interface signatures, @spec and schema shapes only)"
+      - "the design includes a table mapping INV-1, INV-2, INV-4, INV-5, INV-6, INV-7, INV-8 and INV-9 to the concrete mechanism that discharges each, and states INV-3 does not apply"
+      - "the design includes a response-equivalence matrix (known single-tenant, known multi-tenant, unknown, malformed, inactive-tenant-only, active-plus-inactive) giving the exact status code, body and permitted timing envelope per disclosure mode, so a TEST-DESIGNER can write the enumeration tests without re-deciding anything"
+      - "the design lists, for each of REQ-435, REQ-436, REQ-437 and REQ-438, the exact files it will create or change and the tests it must contain, and records the mobile NOTE of (j) and the future-work NOTE of (k) without specifying them"
+      - "CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER and REVIEWER each record a RATIFIED/PASS verdict in the decision record or design before this requirement is marked done; each open question above is either answered in 0042 with the chosen default stated, or carried forward in 0042's own 'Open questions this record does not answer' section"
+      - "git diff for this requirement touches only docs/migration/decisions/, lib/letflow/design/ and docs/requirements.yaml status bookkeeping -- no file under lib/letflow/ outside design/, priv/, web/ or apps/"
+    depends_on: [REQ-384, REQ-323, REQ-352, REQ-076, REQ-078]
+
+  - id: REQ-435
+    title: "Platform tenant-login directory: public-schema table, writes inside the user create/JIT/status/profile transactions (with an explicit tenant_id source), and an idempotent backfill task"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 944  # letflow-queue task id, GH#2192. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
+    description: >
+      Implements the directory exactly as specified by REQ-434's design and
+      decision 0042 (lib/letflow/design/req434-email-first-login-directory.md);
+      where this text and that design differ, the design governs and the
+      difference is flagged to REQ-VALIDATOR, not silently resolved. This
+      entry builds ONLY the data layer and its population; the limiter is
+      REQ-436, the public lookup endpoint is REQ-437 and the SPA is REQ-438.
+      Per decision 0028's 'must land with its first writer' rule, the table
+      lands here together with all of its writers and the backfill, so it is
+      never an orphan (the REQ-056 failure mode).
+
+      BUILDS:
+      1. A migration under priv/repo/migrations/ creating the public-schema
+      directory table (global, alongside tenants/tenant_memberships; never
+      created per tenant schema), with the key, tenant_id FK ON DELETE
+      CASCADE and a unique (key, tenant_id) index, per REQ-434 (a).
+      2. A schema module under lib/letflow/identity/ (moduledoc in the style
+      of lib/letflow/identity/tenant_membership.ex, including an explicit
+      'what this table is not' paragraph) and context functions on
+      Letflow.Identity or a new Letflow.LoginDirectory context: upsert_entry/2,
+      remove_entry_if_unreferenced/3, lookup_by_email/1 (read-only; the
+      single-join query REQ-437 will call, returning only slug, display name
+      and status eligibility), plus the shared email normalisation (reuse
+      TenantMembership.normalize_subject_key/1; do not fork it).
+      3. Population hooks INSIDE the Identity context functions, in the SAME
+      Ecto.Multi/transaction as the source write -- not in router handlers:
+      Letflow.Identity.create_user/2 (lib/letflow/identity.ex:227, its existing
+      Multi with Audit.append_multi), Letflow.Identity.provision_oidc_user/4
+      (identity.ex:127, created: true path; it already receives tenant_id),
+      Letflow.Identity.update_user_status/3 (identity.ex:389), and
+      Letflow.Identity.update_user_profile/3 (identity.ex:337) when the email
+      changes. A user with a nil email writes no row. No route is added and no
+      existing response shape changes.
+      4. TENANT_ID SOURCE (verified gap): create_user/2, update_user_profile/3
+      and update_user_status/3 receive only opts[:prefix], never a tenant_id.
+      Follow REQ-434 (c)'s ratified choice; the recommended one is a new
+      required :tenant_id key in their opts, supplied by their callers in
+      lib/letflow/routers/identity.ex from conn.assigns.auth_context.tenant_id
+      (never from a request parameter), with the existing :prefix semantics
+      unchanged and every other caller of these three functions updated or
+      proven to need no directory write. A reverse prefix->tenant lookup is the
+      rejected alternative (an extra query and a second source of tenant
+      identity).
+      5. REMOVAL RULE (verified: users.email carries no unique index -- only
+      username and (external_realm, external_id) are unique): deactivating or
+      changing the email of ONE user must not remove the entry while ANOTHER
+      ACTIVE user in the same tenant has the same normalised email. The
+      removal deletes the entry only if no other active user in that tenant
+      schema has that normalised email. Identity has no delete_user function,
+      so 'user deletion' has no code path to hook; erasure is covered by
+      tenant deletion (FK cascade) and tenant deactivation (status filtered at
+      query time in lookup_by_email/1), plus the user status/email paths above.
+      6. The pepper (if REQ-434 chose keyed HMAC) is read from application
+      config via a secret REFERENCE (INV-4, decision 0016) with a startup-time
+      check that fails closed when it is absent in non-test environments.
+      7. An idempotent mix task (e.g. lib/mix/tasks/letflow.backfill_login_
+      directory.ex, following letflow.backfill_platform_roles.ex /
+      letflow.backfill_task_assignee_type.ex) that iterates all active tenants,
+      reads each tenant schema's users.email (active users only) via the
+      TenantProvisioning.schema_name_for_tenant/1 prefix (no string-interpolated
+      schema in SQL, INV-7), writes entries with ON CONFLICT DO NOTHING, supports
+      --dry-run, prints per-tenant counts, never logs an email, and treats a
+      failure in one tenant as reported-and-skipped (INV-8), not a halt.
+    open_questions:
+      - "See REQ-434 open question 'Keycloak Organizations as an alternative': a future ADR may replace this directory; scope here stays the directory only, no realm migration."
+      - "Backfill source is whatever REQ-434/0042 ratified (default: users.email per tenant schema). If REVIEWER chose the Keycloak Admin API as a source, this entry must be split and re-validated -- do not extend it silently."
+      - "Whether a deactivated user (users.status) is removed or kept-but-flagged follows REQ-434's ratified answer; the default recorded there is 'removed', subject to the other-active-user rule above."
+      - "tenant_id source (new :tenant_id opt vs reverse prefix lookup) follows REQ-434 (c)'s ratified answer; if REVIEWER prefers the reverse lookup, the opt-threading work in item 4 changes shape and this entry is re-validated for size."
+    acceptance_criteria:
+      - "`mix ecto.migrate` and `mix ecto.rollback` both succeed; the table exists in the public schema only and a query of information_schema shows it in no tenant schema; real output quoted"
+      - "creating a user via POST /api/v1/users in tenant A with email 'Alice@Example.com ' produces exactly one directory entry for (normalised key, tenant A) in the same transaction as the user row: a test that forces the audit append to fail shows neither the user nor the entry persisted"
+      - "tenant_id source: the directory entry's tenant_id equals the caller's auth_context tenant_id on create/status/profile paths, asserted with two tenants whose schemas are both reachable; a request body or query parameter carrying a different tenant_id changes nothing; every caller of create_user/2, update_user_profile/3 and update_user_status/3 in lib/ and test/ is shown by grep to pass the opt or to be intentionally exempt, quoted"
+      - "provision_oidc_user/4 on first JIT login adds the entry; a second login for the same user adds none (idempotent); update_user_status/3 to a non-active status removes the entry INSIDE its own transaction (a forced failure after the status write leaves entry and status both unchanged); a user without email creates no entry"
+      - "other-active-user rule: in one tenant, users U1 and U2 both active with email 'dup@x.com'; deactivating U1 leaves the entry in place; deactivating U2 afterwards removes it; changing U2's email via update_user_profile/3 when U1 is inactive removes the old entry and adds the new one; tested"
+      - "the same email in tenant A and tenant B yields two entries; lookup_by_email/1 returns both in a deterministic order, and returns no row for a tenant whose status is :inactive or :migrating (decided in one query, asserted by counting queries via telemetry or Ecto query logging: exactly one)"
+      - "cross-tenant isolation test: with tenants A and B each holding distinct users, the directory contains only (key, tenant_id) pairs; lookup_by_email/1 on an address that exists only in A never returns anything tied to B; the schema and returned structs contain no password, role, user id, external_id or user display-name field"
+      - "when the HMAC key form is ratified, a test asserts the stored key is never the plaintext email and differs under a different pepper; when plaintext is ratified, a test asserts normalisation equivalence ('A@X.com ' and 'a@x.com' collide to one key)"
+      - "backfill idempotency test: seed 3 tenants with overlapping emails (including one inactive user), run the task twice; the second run inserts zero rows and the row set is identical; inactive users yield no row; --dry-run inserts nothing and prints counts; a tenant whose schema read raises is skipped and reported while the other tenants still complete"
+      - "grep of the task output and of captured Logger output during the test run finds no email address (INV-4); the task builds no SQL by string interpolation of schema names (INV-7)"
+      - "deleting a tenant row cascades its directory entries (FK ON DELETE CASCADE) -- tested"
+      - "`mix compile --warnings-as-errors`, `mix format --check-formatted` and `mix test` pass for the touched areas, and `mix letflow.check_boundaries` passes, real output quoted"
+    depends_on: [REQ-434]
+
+  - id: REQ-436
+    title: "Login-discovery rate limiter: namespaced, independent buckets (global, per-IP, per-email-key) with bounded per-email state, built on or extracted from the public-read bucket"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 945  # letflow-queue task id, GH#2193. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
+    description: >
+      The mounting precondition for REQ-437's unauthenticated mount, per
+      decision 0028 s6 and REQ-434 / 0042. Split out of the endpoint entry so
+      each is one agent turn. SECURITY-REVIEWER is a hard gate (INV-5, INV-8:
+      a limiter that shares state with another mount, or grows without bound,
+      is a defect on a multi-tenant platform).
+
+      VERIFIED STARTING POINT: Letflow.Plugs.PublicReadRateLimit.Bucket
+      (lib/letflow/plugs/public_read_rate_limit/bucket.ex) exposes
+      consume(key, capacity, refill_per_sec) over ONE named ETS table
+      (:letflow_public_read_rate_limit) with bucket_key typed
+      :global | {:ip, ip_address}, a check-then-write over :ets.lookup/:ets.insert
+      (not :ets.update_counter/4), and NO eviction. Reusing it as-is would (a)
+      share the :global bucket with /api/public, so flooding one mount would
+      429 the other, and (b) let an attacker grow the table without bound by
+      submitting many distinct emails.
+
+      BUILDS:
+      1. Either namespaced keys on the existing Bucket (extending bucket_key to
+      {:login_discovery, :global}, {:login_discovery, :ip, ip} and
+      {:login_discovery, :email_hmac, h}, leaving the existing /api/public keys
+      and behaviour untouched) or a mount-agnostic extraction with a per-mount
+      table. REQ-434's design chooses; either way /api/public's own tests pass
+      unmodified.
+      2. A plug Letflow.Plugs.LoginDiscoveryRateLimit (lib/letflow/plugs/),
+      designed to be the FIRST plug in REQ-437's router chain, ahead of :match:
+      per-IP bucket from conn.remote_ip (never a forwarded header absent
+      trusted-proxy config) and a tighter global bucket, both checked before
+      the body is read so the 429 is input-independent for them. The per-email
+      bucket is exposed as a function the endpoint calls after it has computed
+      the email key (the body is not parseable by a pre-:match plug without
+      breaking the first-plug rule); its refusal must return the SAME 429 as the
+      IP and global buckets, with no email-dependent body or header.
+      3. Bounded per-email state: a fixed maximum number of per-email keys with
+      eviction (oldest/least-recently-used or TTL sweep -- the design chooses),
+      so an attacker submitting N distinct emails cannot grow memory past the
+      cap, and evicting a key never lets a victim bucket be refilled by the
+      attacker faster than its normal refill. Capacities, refill rates and the
+      cap come from application config (config :letflow,
+      Letflow.Plugs.LoginDiscoveryRateLimit, ...), not hardcoded.
+      4. It does NOT discharge the deferred authenticated Letflow.Plugs.RateLimit
+      row in lib/letflow/plugs/api_pipeline.ex (decision 0040) and does not
+      modify AuthPipeline.
+    open_questions:
+      - "See REQ-434 open question 'Keycloak Organizations as an alternative': a future ADR may retire this whole surface; scope here stays the limiter only."
+      - "Extend the existing Bucket with namespaced keys, or extract a mount-agnostic limiter with its own table? Recommended: namespaced keys on the existing module if the existing /api/public tests stay green unmodified; extraction only if eviction cannot be added without touching /api/public semantics."
+      - "Eviction strategy for the per-email keys (LRU vs TTL sweep vs fixed-size ring) and the cap value; the check-then-write race in Bucket.consume/3 is tolerated for the existing mount -- decide whether it is acceptable for the per-email bucket, where under-counting lets a small burst through."
+    acceptance_criteria:
+      - "keys are namespaced: a grep/test shows every ETS key this limiter writes begins with :login_discovery, and that Bucket's existing :global and {:ip, ip} keys used by /api/public are unchanged"
+      - "independence test: flooding the login-discovery global bucket to exhaustion leaves a /api/public request unaffected (not 429), and flooding the /api/public global bucket leaves login-discovery requests unaffected; the same for per-IP buckets with one IP; both directions quoted"
+      - "the (ip_capacity+1)th request from one conn.remote_ip within the window returns 429; a spoofed X-Forwarded-For header does not change the bucket key; the global bucket trips independently of any IP"
+      - "the 429 response status, headers and body are identical for IP-bucket, global-bucket and per-email-bucket refusals and do not depend on the submitted email (byte comparison of the three)"
+      - "bounded state test: submit 10x the configured cap of distinct per-email keys and assert the table's per-email entry count never exceeds the cap (queried via :ets.info/size or a count function), and that a single hot key keeps being limited after unrelated keys are evicted"
+      - "per-email bucket: the Nth request for one address across different source IPs trips the per-email bucket, and a different address is unaffected"
+      - "git diff on lib/letflow/plugs/auth_pipeline.ex and lib/letflow/plugs/api_pipeline.ex is empty; the existing PublicReadRateLimit tests pass unmodified"
+      - "no email address, email key or IP appears in Logger output captured during the test file (INV-4)"
+      - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted"
+    depends_on: [REQ-434]
+
+  - id: REQ-437
+    title: "Public email-first lookup endpoint: credential-free POST mount, mode-parametrised response, single-round-trip resolution and a notifier port"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 946  # letflow-queue task id, GH#2194. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
+    description: >
+      Implements the lookup mount specified by REQ-434's design and decision
+      0042, on top of REQ-435's directory and REQ-436's limiter.
+      SECURITY-REVIEWER is a named hard gate on this entry (new
+      unauthenticated, caller-keyed data path: INV-1, INV-2, INV-4, INV-5,
+      INV-6, INV-8, INV-9). Where this text and the ratified design differ,
+      the design governs.
+
+      The response contract is PARAMETRISED BY AN EXPLICIT CONFIG MODE
+      (config :letflow, Letflow.Routers.LoginDiscovery, mode: :uniform_plus_email
+      | :redirect_single). The two modes have different equivalence classes and
+      every test below names its mode. The default is REQ-434/0042's ratified
+      default (recommended: :redirect_single, the user's stated shape).
+      - mode :uniform_plus_email: every request, whatever it matches, gets the
+      same neutral response; known and unknown addresses are byte-identical.
+      - mode :redirect_single: exactly one active-tenant match returns the
+      realm slug and display name; several matches and no matches both get the
+      same neutral response, byte-identical to each other (the tenant list for
+      several matches goes by email through the notifier). A single match is
+      DISCLOSED by design (the bounded inference of REQ-434 (f)); it is not
+      claimed indistinguishable from unknown.
+
+      BUILDS:
+      1. Letflow.Routers.LoginDiscovery (lib/letflow/routers/), mounted in
+      lib/letflow/router.ex as a sibling forward (path per the design,
+      recommended '/api/login-discovery') declared BEFORE forward('/api/v1',
+      Letflow.Plugs.ApiPipeline), like /api/tenant-config at router.ex:111. It
+      is NOT mounted under /api/public (decision 0028) and AuthPipeline is not
+      modified. One route: POST with the email in the JSON body. A catch-all
+      and wrong methods return the platform's standard 404
+      (Letflow.Api.Response.not_found/1). REQ-436's plug is the first plug in
+      the chain; the endpoint additionally calls REQ-436's per-email check.
+      2. Resolution via the directory's lookup_by_email/1 from REQ-435: ONE
+      database round trip before any response decision, for matched, unmatched
+      and malformed input alike (a malformed email is normalised to a fixed
+      sentinel so the query count does not differ; there is no early-return
+      branch ahead of the query), and no second query to improve an error
+      message.
+      3. A hand-built success body with literal keys; the only tenant fields
+      ever present are slug and display name; never idp_realm_id, tenant UUID,
+      authority URL, user id or counts of other accounts.
+      4. A notifier PORT: a behaviour (e.g. Letflow.LoginDiscovery.Notifier,
+      @callback deliver_tenant_list/2) invoked off the request path
+      (Task.Supervisor child, so request timing does not depend on a match or
+      on mail latency), a default adapter that DELIVERS NOTHING and logs only a
+      non-identifying counter (no email, no tenant), and a test double. The
+      real SMTP/mail adapter is explicitly NOT built here (Letflow has no
+      mailer); until one exists, paths that depend on email delivery degrade
+      safely to the neutral response. Notifier failure or crash must not alter
+      the HTTP response (INV-8).
+      5. OpenAPI/spec coverage per decision 0010 for the new route, if the
+      project's openapi guard enumerates public mounts.
+    open_questions:
+      - "See REQ-434 open question 'Keycloak Organizations as an alternative': a future ADR may replace the directory and with it this endpoint; scope here stays the endpoint only, no realm migration."
+      - "No mail capability exists in the repo. Which adapter (SMTP via Swoosh/Bamboo, an external transactional provider) and who owns its credentials (INV-4) is a separate decision and requirement; until then the email-delivering paths are inert. Confirm with REVIEWER that shipping the port with a non-delivering default is acceptable, or sequence an adapter requirement before REQ-438 can be demonstrated end to end in the multi-tenant case."
+      - "Wall-clock timing bounds are inherently flaky in CI. The binding timing guarantee is STRUCTURAL (same query count, no early-return branch, notifier off the request path); the wall-clock check is a generous sanity bound only. REQ-VALIDATOR to confirm the chosen bound (recommended: a median difference under 25 ms and no systematic skew across N>=200 alternating samples) is not tight enough to flake."
+    acceptance_criteria:
+      - "mode :uniform_plus_email: POSTs for a known single-tenant address, a known multi-tenant address and an unknown address return the SAME status code, the SAME Content-Type and byte-identical bodies (no per-request ids), asserted by direct byte comparison"
+      - "mode :redirect_single: a single-active-tenant address returns a body whose keys are exactly the design's list (slug, display name) and nothing else; a multi-tenant address and an unknown address return byte-identical neutral bodies with the same status and Content-Type; the notifier double records exactly one delivery for the multi-tenant address and zero for the unknown one; the single-match disclosure is asserted and documented as accepted, not hidden"
+      - "malformed inputs (missing email, non-string, empty, 10 000-character string, no '@', wrong content type, invalid JSON) return the response the design's matrix assigns (the neutral response, or the standard 400/415 if the design splits them), identical in status and shape across the inputs the matrix groups together, and never a 500; asserted in both modes"
+      - "an address present only in an inactive tenant returns a response byte-identical to an unknown address in both modes; an address in an active tenant plus an inactive one is treated as exactly the active-only case"
+      - "structural timing: exactly one Repo query is issued per request (counted via telemetry) for matched, unmatched, inactive and malformed email alike, and no code path returns before that query; the notifier runs under a supervised task and the handler returns without awaiting it (a notifier double that sleeps 2 s does not delay the response)"
+      - "sanity timing: over at least 200 alternating requests, multi-tenant address vs unknown address (the equivalence class that must be indistinguishable in mode :redirect_single; and known vs unknown in mode :uniform_plus_email), the median latency difference is below the design's generous stated bound, with method and bound quoted; this test is tagged so it can be quarantined without weakening the structural test"
+      - "cross-tenant isolation: with tenants A and B holding the same and different emails, responses contain no field from, and no side effect in, any tenant schema (asserted: no query on this path carries a tenant :prefix; the route touches only the public directory and tenants tables)"
+      - "no 401 and no 403 is producible on this route by any input (property/enumeration test over the matrix), git diff on lib/letflow/plugs/auth_pipeline.ex is empty, and the REQ-436 limiter is the first plug (asserted by router plug-order test); a rate-limited request returns REQ-436's identical 429"
+      - "notifier failure tests: an adapter that raises, exits and times out leaves the HTTP response unchanged and the request process alive (INV-8); the default adapter delivers nothing and its log output contains no email address or tenant name"
+      - "grep of Logger output captured during the whole test file finds no email address and no raw request body (INV-4)"
+      - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-1, INV-2, INV-4, INV-5, INV-6, INV-8, INV-9"
+    depends_on: [REQ-435, REQ-436]
+
+  - id: REQ-438
+    title: "SPA email-first login screen: credential-free discovery page, ProtectedRoute wiring, login_hint hand-off to Keycloak, and ?realm=/stored-slug overrides preserved"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 947  # letflow-queue task id, GH#2195. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
+    description: >
+      The web/ half of the feature, per REQ-434's design and decision 0042.
+      Credentials are NEVER entered in the SPA (decision 0035's core decision
+      stands): the new page collects an email address only, then hands off to
+      Keycloak's hosted login unchanged.
+
+      CURRENT BEHAVIOUR TO CHANGE (verified in the tree): web/src/auth/
+      ProtectedRoute.tsx on !isAuthenticated immediately calls
+      getOidcManager().then(m => m.signinRedirect(buildRedirectArgs(...))); the
+      realm comes from resolveRealmFromUrl() in web/src/auth/tenantConfig.ts
+      (sessionStorage 'bpm_realm_slug', then ?realm=, else null ->
+      GET /api/tenant-config?host= -> bpm-default fallback). A user in another
+      tenant with no ?realm= is sent to the wrong realm (ISS-0727).
+
+      PRECEDENCE (decided in REQ-434 (l); host binding does not exist today --
+      tenant_config by host has no host->tenant binding by design, REQ-076 --
+      so a host lookup never identifies a tenant and is not ranked above the
+      email-first screen): (1) an explicit ?realm= query parameter, (2) a
+      stored 'bpm_realm_slug' from a previous load, (3) the email-first screen
+      when the email-first flag is on, (4) otherwise the default-realm fallback
+      exactly as today (host lookup then bpm-default). Note: today's
+      resolveRealmFromUrl() reads the stored slug BEFORE ?realm=; the
+      implementation must make an explicit ?realm= win and update the stored
+      value, and must not change behaviour when only one of the two is present.
+
+      BUILDS:
+      1. A public route (e.g. '/login', registered in web/src/router.tsx
+      OUTSIDE ProtectedRoute) and page component under web/src/pages/ with an
+      email field, client-side shape validation only, submit, and the states
+      the platform already demands of data screens (loading, error, neutral).
+      User-facing strings go through the existing i18n mechanism (decision
+      0021, web/src/i18n/).
+      2. A typed API client function (web/src/api/loginDiscovery.ts, beside
+      memberships.ts) for the REQ-437 route, using the existing
+      web/src/api/client.ts, with the response type as a closed union matching
+      the design's matrix.
+      3. Outcomes: slug returned -> store it exactly as resolveRealmFromUrl()
+      does (sessionStorage 'bpm_realm_slug') so buildRedirectArgs embeds
+      ?realm= in redirect_uri (ISS-0726 behaviour preserved), then call
+      signinRedirect with login_hint = the typed email, via the existing
+      OidcManager / tenantOidcRegistry path (fetching that realm's config with
+      the existing GET /api/tenant-config?realm=); neutral response -> a single
+      fixed message that never says whether the address exists (and, where the
+      mode emails a list, says only that instructions were sent if the address
+      is registered); if the ratified design includes a tenant choice, render a
+      picker ONLY for data the response actually carries.
+      4. ProtectedRoute wiring per the PRECEDENCE above, preserving the
+      pre-redirect path via the existing isSafeRestorePath/state mechanism
+      (web/src/auth/safeRestorePath.ts). The email-first flag (build/config,
+      per REQ-434's answer) disables the screen for single-tenant and dev/E2E
+      deployments, restoring today's behaviour exactly.
+      5. AuthProvider's session-expired/logout paths (and
+      __tests__/AuthProvider.logout-clears-realm.test.tsx behaviour) still
+      clear the stored realm and now land on the email-first page (flag on)
+      rather than the default realm's login.
+      6. Tests: Vitest unit/component tests, a new i18n-grep test in the style
+      of web/src/__tests__/entities-i18n-grep.test.ts covering the new page
+      (no general hardcoded-string guard exists in web/tests/guards today --
+      decision 0021 is enforced per area by such grep tests), and a Playwright
+      (or the existing e2e harness) path for the real flow; add a UAT scenario
+      fixture only if it satisfies mix letflow.check_uat_scenario_schema,
+      otherwise record the gap.
+    open_questions:
+      - "See REQ-434 open question 'Keycloak Organizations as an alternative': a future ADR may replace the directory and this screen's lookup; the SPA depends only on the discovery response contract so it can be retargeted. Scope here stays the screen only."
+      - "Single-tenant/dev flag default and name (see REQ-434): confirm the flag keeps tryRestoreE2eSession and iss0896 master-admin E2E logins off the new screen."
+      - "Realm login-by-email precondition: login_hint pre-fills the username field only. Realms whose users log in by username need 'Login with email' enabled for a typed email to work; who verifies this per realm (UAT-RUNNER against bilimbaga and bpm-default) is to be settled with REQ-434 (h)."
+      - "Picker presence: whether the SPA ever renders a tenant list depends on the ratified disclosure mode; if the ratified default never returns names to the caller, no picker is built and this entry drops that sub-bullet by the design's say-so."
+    acceptance_criteria:
+      - "flag on, no ?realm= and no stored slug: an unauthenticated visit renders the email-first page and does NOT call signinRedirect; asserted in a component test with signinRedirect mocked (zero calls)"
+      - "precedence test table, each row a test: ?realm=a with stored slug b -> signinRedirect for realm a, stored value updated to a, no email-first page; stored slug only -> signinRedirect for it, no email-first page; ?realm= only -> as before; neither -> email-first page; flag off and neither -> today's default-realm redirect. The existing ProtectedRoute, buildRedirectArgs, tenantConfig and AuthProvider.logout-clears-realm tests pass unmodified"
+      - "submitting an email whose mocked response is a single-tenant slug stores bpm_realm_slug, then calls signinRedirect once with redirect_uri containing '?realm=<slug>' and a login_hint equal to the typed email; no password input exists anywhere on the page (DOM assertion: zero input[type=password])"
+      - "an unknown-address response and a known-multiple-tenant response (mocked per the design's matrix) render the identical neutral message: same text, same DOM structure (snapshot equality)"
+      - "API/network failure, 429 and malformed-response states each render a distinct, non-leaking error state with a retry affordance; a 429 does not reveal whether the address is known"
+      - "the pre-redirect path (e.g. /instances/123?tab=x) is preserved through the email-first page and restored after login via the existing state mechanism, and an unsafe path is dropped (isSafeRestorePath), tested"
+      - "all user-facing strings on the new page come from the i18n catalogue in every shipped locale; the new i18n-grep test (modelled on web/src/__tests__/entities-i18n-grep.test.ts) fails on a seeded hardcoded string fixture and passes on the real page"
+      - "`cd web && npm run check` (which runs type-check, lint, test and guards) passes, real output quoted; the real-flow e2e run against a Keycloak with two tenants' realms shows a bilimbaga user arriving at the bilimbaga realm login with the username pre-filled, output quoted (or the infra gap recorded as a blocker, as ISS-0727 was)"
+      - "git diff shows no change under lib/, priv/ or apps/ -- this entry is web/ only"
+    depends_on: [REQ-437, REQ-133, REQ-384]

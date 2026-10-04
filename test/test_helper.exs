@@ -9,6 +9,16 @@ Letflow.TenantSchemaReaper.sweep_orphans()
 # letflow.check.test`) already loads.
 Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)
 
+# ISS-0941: suite-boundary safety net against orphaned "Tenant Template Build
+# (throwaway)" tenant_schemas/tenants row pairs that sweep_orphans/2 detects
+# (logs "malformed schema_name") but can never reclaim -- see
+# lib/letflow/design/iss0941-orphan-tenant-row-reaper.md and
+# Letflow.TenantSchemaReaper's own moduledoc ("ISS-0941" section) for the full
+# rationale. Placed at the same two boundary points, strictly before
+# ensure_template!/0 below, so this sweep can never observe this invocation's own
+# in-progress template build -- only a prior invocation's leftover state.
+Letflow.TenantSchemaReaper.sweep_template_build_orphans(Letflow.Repo)
+
 # REQ-134: excludes test/letflow/integration/keycloak_auth_pipeline_test.exs
 # (@moduletag :keycloak) from every default invocation -- plain `mix test`, `mix test
 # <path>`, and each scripts/test_parallel.sh partition alike, since all three load this
@@ -115,4 +125,6 @@ end
 ExUnit.after_suite(fn _stats ->
   Letflow.TenantSchemaReaper.sweep_orphans()
   Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)
+  # ISS-0941: see the comment above the pre-ExUnit.start() call site above.
+  Letflow.TenantSchemaReaper.sweep_template_build_orphans(Letflow.Repo)
 end)

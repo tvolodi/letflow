@@ -4600,3 +4600,22 @@ HUMAN_TASK/SERVICE_TASK asymmetry that sounds right. Both doc's prose has since 
 in place (`q929-vortex-8d-corrective-action-subprocess.md`'s own "SECOND CORRECTION",
 `sub_process_service_task_after_test.exs`'s moduledoc) with the verified `Ecto.Multi` pre-
 validation mechanism, citing `deps/ecto/lib/ecto/multi.ex`'s own `__apply__/4`.
+
+## A conservative skip-and-warn branch can look like complete coverage of a failure shape while only ever warning about it (2026-10-04, ELIXIR-DEV, ISS-0941)
+
+`test/support/tenant_schema_reaper.ex`'s original `sweep_orphans/2` logs a `:warning`
+("malformed schema_name") for any `tenant_schemas` row whose `schema_name` doesn't match its
+real-tenant regex, and leaves it untouched. That branch detected exactly ISS-0941's row shape
+(the `test/support/tenant_template.ex` "Tenant Template Build (throwaway)" staging name, which
+never matches the regex by construction) from day one, every single sweep, across every `mix
+test` invocation since that code existed -- and never once deleted it, because the branch's
+purpose was format validation (is this safe to `DROP SCHEMA` against?), not existence
+confirmation (does this schema still exist at all?). A warning that keeps firing, identically,
+across many repeated invocations without ever resolving on its own is itself a signal: the branch
+needs a second, more decisive check (here: a direct `information_schema.schemata` lookup plus a
+narrower `display_name` identity filter, added as a separately-scoped third sweep function,
+`sweep_template_build_orphans/2`), not just a louder log message. This generalizes past this one
+module: any "detected, logged, but deliberately left alone" branch in a long-lived boundary hook
+is worth periodically asking "has this logged condition ever actually cleared on its own,
+anywhere, or does it only ever get logged" -- if the latter, the skip is masking a gap, not
+guarding one.

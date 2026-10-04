@@ -51,6 +51,46 @@ fix_direction: >
   REQ-ANALYST/WF-01). Low-risk documentation-only change; no code impact.
 affected_files:
   - docs/requirements.yaml
-status: open
 queue_ref: Q-881
 github_ref: GH-1975
+status: resolved
+resolved_in_run: fix/ISS-0882-req421-text-correction
+resolved_at: "2026-10-04T08:24:24Z"
+resolution: >
+  REQ-ANALYST corrected docs/requirements.yaml's REQ-421 entry (lines
+  31343-31358): the old text read "...tokens are never presented to
+  tenant B. REQ-422 hardens and guards this; REQ-421 must not introduce
+  any other storage path for tokens." -- an unscoped forward-reference
+  that CODE-DESIGN-VALIDATOR and REVIEWER both read as implying REQ-422
+  covers key rotation, biometric gating, and tamper detection. The new
+  text names what REQ-422 actually hardens -- "encrypted-at-rest
+  options, redacted logging, transport/cleartext checks, audience
+  scoping, secret masking; see REQ-422's own acceptance_criteria for the
+  authoritative list" -- and states explicitly that "key rotation,
+  biometric gating, and tamper detection are NOT in REQ-422's scope and
+  are out of scope for the current mobile security hardening pass -- if
+  still wanted, they need their own new requirement with real acceptance
+  criteria (ISS-0882), not an inferred extension of REQ-422." REQ-VALIDATOR
+  PASSed: independently confirmed the new text matches REQ-422's 10 real
+  acceptance_criteria item-for-item, confirmed no silent-abandonment
+  framing (the three items are disclaimed, not dropped), confirmed the
+  diff is scoped to exactly REQ-421's own block (lines 31343-31358), and
+  confirmed no further validation gate is needed for a pure requirement-
+  text correction on two already-done requirements. Both REQ-421 and
+  REQ-422 remain status: done; no code or design impact.
+
+  Included in the same change, as a small additional commit: fixed
+  lib/letflow/design/req421-mobile-tenant-bootstrap.md's own self-
+  correction note (line 425), which mislabeled itself "ISS-0881" instead
+  of "ISS-0882" -- the exact filename_numbering_anomaly this issue itself
+  documents (registered as queue task 881 / Q-881, but filed as ISS-0882
+  because ISS-0881.yaml already existed on main for an unrelated issue).
+  One-string fix: "Correction (ISS-0881, post-REQ-422)" -> "Correction
+  (ISS-0882, post-REQ-422)".
+
+  Verification at close-out: mix compile clean, docs/requirements.yaml
+  confirmed valid YAML (python3 yaml.safe_load), mix letflow.check_issue_refs
+  OK (582 files, all cross-references well-formed, GH-1975 correctly
+  formatted). Branch fix/ISS-0882-req421-text-correction, commit d0373e7e
+  (text correction) plus a follow-up commit for the design-doc mislabel
+  fix. Docs-only; no test suite run required.

@@ -470,3 +470,40 @@ history:
       not a REQ). Branch fix/ISS-0915-uat-preflight-false-gap, final
       commit 9aa254de. PR number and merge commit recorded in
       docs/issues/ISS-0915.yaml once opened.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-04T08:30:00Z"
+    note: >
+      Closed ISS-0882 (REQ-421's requirement text forward-referenced key
+      rotation/biometric gating/tamper detection as REQ-422 scope, but
+      REQ-422 -- done, PR #1973 -- has none of it). REQ-ANALYST reworded
+      REQ-421's text (docs/requirements.yaml lines 31343-31358) to name
+      what REQ-422 actually hardens (encrypted-at-rest options, redacted
+      logging, transport/cleartext checks, audience scoping, secret
+      masking) and to explicitly disclaim key rotation/biometric gating/
+      tamper detection as out of scope for the current mobile security
+      hardening pass, needing their own new requirement if still wanted --
+      not silently dropped, not an inferred extension. REQ-VALIDATOR
+      PASSed: independently confirmed the new text matches REQ-422's 10
+      real acceptance_criteria item-for-item, confirmed no
+      silent-abandonment framing, confirmed the diff scoped to exactly
+      REQ-421's own block, confirmed no further gate needed for a pure
+      requirement-text correction on two already-done requirements
+      (REQ-421 and REQ-422 both remain status: done; no code/design
+      impact). Pure docs/requirements.yaml text change, branch
+      fix/ISS-0882-req421-text-correction, commit d0373e7e. Also included,
+      as a small follow-up commit in the same PR: fixed
+      lib/letflow/design/req421-mobile-tenant-bootstrap.md's own
+      self-correction note (line 425), which mislabeled itself
+      "ISS-0881" instead of "ISS-0882" -- the exact
+      filename_numbering_anomaly ISS-0882.yaml itself documents (queue
+      task 881 / Q-881, filed as ISS-0882 because ISS-0881.yaml already
+      existed on main for an unrelated issue). DOC-UPDATER re-confirmed
+      at close-out: mix compile clean, docs/requirements.yaml confirmed
+      valid YAML (python3 yaml.safe_load), mix letflow.check_issue_refs OK
+      (582 files, all cross-references well-formed, GH-1975 correctly
+      formatted). No full test suite run -- docs-only, no code impact.
+      PR number and merge commit recorded in docs/issues/ISS-0882.yaml
+      once opened.

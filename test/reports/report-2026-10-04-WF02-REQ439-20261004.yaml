@@ -1,0 +1,37 @@
+run_id: WF02-REQ439-20261004
+agent: TEST-RUNNER
+requirement: REQ-439
+branch: feature/WF02-REQ439-20261004
+tested_commit: c9a77e3d
+date: 2026-10-04
+verdict: PASS
+full_suite:
+  run: false
+  reason: >
+    ORCH override: RAM (~3.5GB) shared with another worker's tests; scripts/test_parallel.sh
+    intentionally NOT run. CI runs the full suite on the PR. This report covers a scoped run only.
+scoped_test_run:
+  command: >
+    MIX_TEST_PARTITION=r439r2 mix test test/letflow/plugs/client_ip_test.exs
+    test/letflow/plugs/client_ip_config_test.exs test/letflow/client_ip_runtime_config_test.exs
+    test/letflow/secrets_runtime_config_test.exs test/letflow/admission_runtime_config_test.exs
+    test/letflow/plugs/public_read_rate_limit_test.exs
+  attempts:
+    - attempt: 1
+      outcome: "** (Mix) The database for Letflow.Repo couldn't be created: command timed out"
+      attribution: known harness flake (fresh-partition tenant-template/db create timeout); not a test failure
+    - attempt: 2
+      outcome: "exit=0"
+      result_line: "Result: 180 passed"
+      finished: "Finished in 32.6 seconds (17.8s async, 14.7s sync)"
+  failures: 0
+  db_free_skip_flags_used: false
+static_checks:
+  - command: mix compile --warnings-as-errors --force
+    output: "Compiling 283 files (.ex) / Generated letflow app"
+    exit: 0
+  - command: mix format --check-formatted
+    exit: 0
+  - command: mix letflow.check_boundaries
+    output: "mix letflow.check_boundaries: OK -- 867 edges checked, 0 violations"
+    exit: 0

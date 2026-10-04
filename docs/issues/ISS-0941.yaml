@@ -149,7 +149,6 @@ resolution: >
   docs/anti-patterns.md's ORCH/ELIXIR-DEV joint attribution (commit
   4a784478).
 
-  Branch: fix/ISS-0941-orphan-tenant-row-reaper. Final commit a6d34efe
-  (rebased onto origin/main's 14c2e1cb prior to PR open; includes this
-  close-out commit itself). PR #2186. Merge commit recorded here once
-  merged.
+  Branch: fix/ISS-0941-orphan-tenant-row-reaper (deleted post-merge). PR
+  #2186, squash-merged into main as 777f6560 (2026-10-04T08:19:42Z); CI
+  green (Backend/Frontend/Mobile gates all pass).

@@ -32309,22 +32309,49 @@ requirements:
   # resolveRealmFromUrl), else GET /api/tenant-config?host=, which has no
   # host binding by design (REQ-076), so it falls back to bpm-default.
   # Bilimbaga users must therefore type ?realm=bilimbaga (ISS-0727) and
-  # otherwise see 'invalid password'. Five entries, chained:
+  # otherwise see 'invalid password'. Original five entries (434-438), chained:
   #   REQ-434 CODE-DESIGNER   decision record 0042 + design (HARD GATE:
   #                            amends 0006 s3.3 / 0038 / 0035, bounds 0028)
-  #   REQ-435 ELIXIR-DEV      directory table + population hooks + backfill
+  #   REQ-435 ELIXIR-DEV      directory data layer: table + key id, pepper with
+  #                            dual-read rotation, lookup/upsert, backfill
+  #                            (the 'a' half; trimmed 2026-10-04, decision 0043 D-F)
   #   REQ-436 ELIXIR-DEV      namespaced, bounded login-discovery limiter
-  #   REQ-437 ELIXIR-DEV      public lookup endpoint + notifier port
+  #   REQ-437 ELIXIR-DEV      public lookup endpoint + notifier port +
+  #                            per-tenant effective mode + notifier adapter key
   #   REQ-438 FRONTEND-DEV    SPA email-first screen + ProtectedRoute wiring
-  # Every entry carries `# impl_order: UNREGISTERED -- ...` for ORCH to
+  # Added by the 2026-10-04 BA decisions D-A..D-H (decision 0043):
+  #   REQ-439 ELIXIR-DEV      trusted-proxy client IP (earlier addition, done)
+  #   REQ-440 ELIXIR-DEV      directory write hooks + JIT transaction +
+  #                            tenant_id opt + removal rule (the 'b' half of
+  #                            the REQ-435 split; depends_on REQ-435)
+  #   REQ-441 ELIXIR-DEV      provider-agnostic mail notifier adapter, SMTP
+  #                            first (depends_on REQ-437; required before the
+  #                            flag is enabled outside dev)
+  #   REQ-442 ELIXIR-DEV      per-tenant login disclosure mode (depends_on
+  #                            REQ-435; REQ-437 depends_on it)
+  #   REQ-443 ELIXIR-DEV      pepper rotation tooling: retire_key, key_status,
+  #                            runbook (split from REQ-435; depends_on REQ-435)
+  #   REQ-444 ELIXIR-DEV      enablement gate: defaults off outside dev, boot
+  #                            refusal without legal-confirmation marker, real
+  #                            adapter and rotation tooling (split from REQ-437;
+  #                            depends_on REQ-437, 441, 443)
+  # Chain: 434 -> 435 -> 440 and 442 -> 437 (also needs 436, 439) -> 438, 441;
+  # 435 -> 443; 444 needs 437, 441, 443. REQ-437 does not depend on 443 or 444.
+  # Only remaining user/legal decision of the series: 0042 OQ-3 (lawful basis
+  # and controller), a hard gate on enabling the feature outside dev; the BA
+  # position in decision 0043 D-D is PROPOSED and needs legal confirmation.
+  # Every new entry carries `# impl_order: UNREGISTERED -- ...` for ORCH to
   # replace with the register_task response at WF-01 Step 3.
   #
-  # Out of scope for all five (future, not built here): SSO / a single
+  # Out of scope for the series (future, not built here): SSO / a single
   # identity across realms (accounts stay separate per realm, decision
   # 0006 D1 unchanged); a Keycloak identity-provider-brokering topology
   # (kc_idp_hint is therefore NOT used -- see REQ-434's design); mobile
-  # adoption (NOTE only, in REQ-434); an SMTP/mail adapter (REQ-437 ships a
-  # port with a non-delivering default adapter, see its open_questions).
+  # adoption (NOTE only, in REQ-434); a Keycloak-sync backfill for accounts
+  # that never logged in (NOTE only, decision 0043 D-E); Keycloak Organizations
+  # (deferred, ADR when the tenant count grows, D-G). The mail adapter is no
+  # longer out of scope: REQ-437 ships the port with a non-delivering default
+  # and REQ-441 the SMTP adapter.
   # ---------------------------------------------------------------
 
   - id: REQ-434
@@ -32569,110 +32596,139 @@ requirements:
     depends_on: [REQ-384, REQ-323, REQ-352, REQ-076, REQ-078]
 
   - id: REQ-435
-    title: "Platform tenant-login directory: public-schema table, writes inside the user create/JIT/status/profile transactions (with an explicit tenant_id source), and an idempotent backfill task"
+    title: "Platform tenant-login directory, data-layer half (the 'a' half of the REQ-435/REQ-440 split, BA decision D-F): public-schema table with a key-id column, keyed-HMAC email key from a per-environment pepper with dual-read rotation, lookup, upsert and an idempotent backfill task"
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    impl_order: 944  # letflow-queue task id, GH#2192. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
+    impl_order: 944  # letflow-queue task id, GH#2192. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS. Trimmed 2026-10-04 (WF-01 re-entry, BA decisions D-C/D-F, decision 0043): the write hooks, JIT transaction, tenant_id opt and removal rule moved to REQ-440; the queue text of task 944 predates this trim and is superseded by this file.
     description: >
-      Implements the directory exactly as specified by REQ-434's design and
-      decision 0042 (lib/letflow/design/req434-email-first-login-directory.md);
-      where this text and that design differ, the design governs and the
-      difference is flagged to REQ-VALIDATOR, not silently resolved. This
-      entry builds ONLY the data layer and its population; the limiter is
-      REQ-436, the public lookup endpoint is REQ-437 and the SPA is REQ-438.
-      Per decision 0028's 'must land with its first writer' rule, the table
-      lands here together with all of its writers and the backfill, so it is
-      never an orphan (the REQ-056 failure mode).
+      Implements the data layer of the directory as specified by REQ-434's
+      design and decision 0042 (lib/letflow/design/req434-email-first-login-
+      directory.md); where this text and that design differ, the design
+      governs and the difference is flagged to REQ-VALIDATOR, not silently
+      resolved. SPLIT (BA decision D-F, decision 0043): this entry builds the
+      migration, the schema module, the pepper and key-id handling, the
+      read/upsert functions and the backfill. The population hooks inside the
+      Identity transactions, the JIT transaction, the explicit :tenant_id opt
+      with its guard and the removal rule are REQ-440. The limiter is
+      REQ-436, the lookup endpoint REQ-437, the SPA REQ-438.
+
+      WRINKLE (state, do not paper over): decision 0028's 'a table lands with
+      its first writer' rule, restated as 0042 Standing prohibition 13, is
+      satisfied only by REQ-435 and REQ-440 landing back to back. Until
+      REQ-440 is done the backfill is the only writer, so the table is
+      populated once and goes stale. REQ-437 must not be claimed for done
+      before REQ-440 is done (REQ-437 depends_on lists it). The letter of
+      0042 prohibition 13 ('REQ-435 ships the table together with every
+      writer') is amended by decision 0043 D-F; flagged for REVIEWER.
 
       BUILDS:
       1. A migration under priv/repo/migrations/ creating the public-schema
-      directory table (global, alongside tenants/tenant_memberships; never
-      created per tenant schema), with the key, tenant_id FK ON DELETE
-      CASCADE and a unique (key, tenant_id) index, per REQ-434 (a).
-      2. A schema module under lib/letflow/identity/ (moduledoc in the style
-      of lib/letflow/identity/tenant_membership.ex, including an explicit
-      'what this table is not' paragraph) and context functions on
-      Letflow.Identity or a new Letflow.LoginDirectory context: upsert_entry/2,
-      remove_entry_if_unreferenced/3, lookup_by_email/1 (read-only; the
-      single-join query REQ-437 will call, returning only slug, display name
-      and status eligibility), plus the shared email normalisation (reuse
-      TenantMembership.normalize_subject_key/1; do not fork it).
-      3. Population hooks INSIDE the Identity context functions, in the SAME
-      Ecto.Multi/transaction as the source write -- not in router handlers:
-      Letflow.Identity.create_user/2 (lib/letflow/identity.ex:227, its existing
-      Multi with Audit.append_multi), Letflow.Identity.provision_oidc_user/4
-      (identity.ex:127, created: true path; it already receives tenant_id),
-      Letflow.Identity.update_user_status/3 (identity.ex:389), and
-      Letflow.Identity.update_user_profile/3 (identity.ex:337) when the email
-      changes. JIT TRANSACTION (design req434-email-first-login-directory.md s0.3 D2): the JIT insert in
-      provision_oidc_user/4 (insert_or_fetch/4, identity.ex ~1766-1809) is NOT
-      inside any transaction today, so there is no existing one to join; this
-      entry wraps the JIT insert, its created-check and the directory upsert in
-      a NEW Repo.transaction (only a genuinely created row writes an entry; a
-      directory failure aborts the transaction and returns {:error,
-      {:login_directory, reason}}); sync_role_claims_from_token/3 stays outside
-      it as today. A user with a nil email writes no row. No route is added and
-      no existing response shape changes.
-      4. TENANT_ID SOURCE (verified gap): create_user/2, update_user_profile/3
-      and update_user_status/3 receive only opts[:prefix], never a tenant_id.
-      Follow REQ-434 (c)'s ratified choice; decided by design s0.3 D1: a new
-      required :tenant_id key in their opts, supplied by their callers in
-      lib/letflow/routers/identity.ex from conn.assigns.auth_context.tenant_id
-      (never from a request parameter), with the existing :prefix semantics
-      unchanged and every other caller of these three functions updated or
-      proven to need no directory write. The explicit :tenant_id opt is kept
-      (design req434-email-first-login-directory.md s0.3 D1) with a corrected rationale: a reverse
-      prefix->tenant derivation (tenant_id_for_schema_name/1) is pure and costs
-      no query, so it is rejected NOT as 'an extra query' but because a
-      prefix-derived value can never detect a prefix/tenant mismatch. Instead
-      each of the three functions runs a fail-closed consistency guard before
-      any write: schema_name_for_tenant(tenant_id) must equal opts[:prefix]
-      ({:error, :invalid_tenant_id} for a malformed id, {:error,
-      :tenant_prefix_mismatch} for a valid id naming a different schema,
-      {:error, :tenant_id_required} when the opt is missing), writing nothing on
-      any of them.
-      5. REMOVAL RULE (verified: users.email carries no unique index -- only
-      username and (external_realm, external_id) are unique): deactivating or
-      changing the email of ONE user must not remove the entry while ANOTHER
-      ACTIVE user in the same tenant has the same normalised email. The
-      removal deletes the entry only if no other active user in that tenant
-      schema has that normalised email. Identity has no delete_user function,
-      so 'user deletion' has no code path to hook; erasure is covered by
-      tenant deletion (FK cascade) and tenant deactivation (status filtered at
-      query time in lookup_by_email/1), plus the user status/email paths above.
-      6. The pepper (if REQ-434 chose keyed HMAC) is read from application
-      config via a secret REFERENCE (INV-4, decision 0016) with a startup-time
-      check that fails closed when it is absent in non-test environments.
-      7. An idempotent mix task (e.g. lib/mix/tasks/letflow.backfill_login_
+      directory table tenant_login_directory (global, alongside tenants/
+      tenant_memberships; never created per tenant schema), per design s1.1:
+      email_key bytea (32 bytes, CHECK), tenant_id FK ON DELETE CASCADE,
+      composite primary key (email_key, tenant_id) which is the unique
+      (key, tenant_id) index, a (tenant_id) index, inserted_at, PLUS a new
+      NOT NULL key_id column (short identifier of the pepper that produced
+      email_key, BA decision D-C; amends design s1.1). key_id is NOT part of
+      the primary key: the key bytes already differ per pepper, so the pair
+      (email_key, tenant_id) stays the identity. Reversible.
+      2. A schema module Letflow.Identity.TenantLoginDirectoryEntry
+      (lib/letflow/identity/, moduledoc in the style of tenant_membership.ex
+      with an explicit 'what this table is not' paragraph) and a new context
+      Letflow.LoginDirectory with: email_key/1, sentinel_key/0, the lookup
+      (lookup_by_key/1 and lookup_by_email/1 of design s5.4, amended by item
+      4 below), upsert_entry/2 (writes under the CURRENT key id only) and the
+      shared normalisation (reuse TenantMembership.normalize_subject_key/1
+      and the extracted public email_shape?/1 of design s1.5; do not fork
+      either). The removal function remove_entry_if_unreferenced/3 and the
+      plan functions belong to REQ-440.
+      3. PEPPER PROVISIONING AND KEY ID (BA decision D-C; supersedes design
+      s2.4 'dual-pepper window not built', design Q8 and 0042 OQ-6):
+      a. Per-environment HMAC pepper of at least 32 random bytes, supplied by
+      the environment's secrets store through the environment variable
+      LETFLOW_LOGIN_DIRECTORY_PEPPER (64 hex characters = 32 random bytes,
+      design s2.2) and NEVER committed to the repository, a fixture, a
+      Dockerfile, a compose file or a handoff. Dev supplies it through an
+      ordinary environment variable (documented in .env.example with no
+      working value, as .env.example:11 does for the master key); config/
+      test.exs injects a fixed non-trivial test value and key id.
+      b. A key id: LETFLOW_LOGIN_DIRECTORY_PEPPER_ID (required alongside the
+      pepper; lowercase letters, digits, '-' and '_', 1..32 characters, for
+      example 'p2026a'). Every directory row records the key id of the pepper
+      that produced its email_key.
+      c. DUAL-READ DURING ROTATION: an optional previous pepper,
+      LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS with
+      LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS_ID (both or neither; absent in
+      steady state). While present, the lookup computes the candidate key set
+      {current key, previous key} and finds rows under either; writes and the
+      backfill use the current key and key id only. config/runtime.exs
+      validates at boot, with the same checks as the master key
+      (config/runtime.exs:30-72): absent -> raise; not 64 hex -> raise;
+      all-zero or all-0xFF -> raise; equal to the secrets master key ->
+      raise; previous equal to current, previous id equal to current id, or
+      only one of the previous pair set -> raise. No message echoes a value.
+      d. ROTATION TOOLING IS NOT HERE: the retire_key and key_status mix
+      tasks and the rotation runbook docs/runbooks/login-directory-pepper-
+      rotation.md are REQ-443 (split out so this entry stays one agent turn;
+      depends_on this entry). Serving lookups needs only a, b, c above; a
+      deployed pepper needs a rotation procedure, which is why REQ-444's
+      enablement gate requires REQ-443 done before the feature is enabled
+      outside dev.
+      4. DESIGN INTERPLAY FLAGGED, NOT SILENTLY RESOLVED (see
+      open_questions and decision 0043 'Conflicts flagged for REVIEWER'): the
+      key id touches design s5.3 (sentinel_key/0), s5.4 (lookup_by_key/1 takes
+      one key), s12.2 (consume_email(email_key, kind)) and s3.7 (advisory lock
+      derived from (tenant_id, email_key)). PROPOSED resolution, to be
+      confirmed by CODE-DESIGNER/REVIEWER before the build starts, and the
+      acceptance criteria below are written to it: (i) the lookup takes a
+      key LIST and issues ONE query (email_key = ANY(keys)) selecting
+      DISTINCT tenants, so the match count is a count of distinct tenants and
+      the Mode B 'exactly one match' rule is unaffected by a person holding a
+      row under each key; (ii) sentinel_key/0 likewise yields one sentinel per
+      candidate key, so the query shape and the number of HMACs are the same
+      for every input (constant per deployment state, never per input);
+      (iii) the per-email limiter buckets (REQ-436) key on the CURRENT key
+      only, so a rotation resets per-address buckets once and nothing else;
+      (iv) writers take the advisory lock on the current key and the removal
+      (REQ-440) deletes under every candidate key.
+      5. An idempotent mix task (lib/mix/tasks/letflow.backfill_login_
       directory.ex, following letflow.backfill_platform_roles.ex /
-      letflow.backfill_task_assignee_type.ex) that iterates ALL REGISTERED tenants via
-      TenantProvisioning.list_registrations/0 regardless of tenant status
-      (design req434-email-first-login-directory.md s0.3 D3: skipping an :inactive tenant would leave
-      its users without entries, so reactivation would leave them undiscoverable;
-      tenant status is filtered at query time in lookup_by_email/1), reads each
-      tenant schema's users.email (active users only) via the
-      TenantProvisioning.schema_name_for_tenant/1 prefix (no string-interpolated
-      schema in SQL, INV-7), writes entries with ON CONFLICT DO NOTHING, supports
-      --dry-run, prints per-tenant counts, never logs an email, and treats a
-      failure in one tenant as reported-and-skipped (INV-8), not a halt.
+      letflow.backfill_task_assignee_type.ex) that iterates ALL REGISTERED
+      tenants via TenantProvisioning.list_registrations/0 regardless of tenant
+      status (design s0.3 D3: tenant status is filtered at query time), reads
+      each tenant schema's users.email (active users only) via the
+      TenantProvisioning.schema_name_for_tenant/1 prefix (no string-
+      interpolated schema in SQL, INV-7), writes entries under the current key
+      and key id with ON CONFLICT DO NOTHING, supports --dry-run, prints
+      per-tenant counts, never logs an email, treats a failure in one tenant
+      as reported-and-skipped (INV-8), and is the re-keying step of a rotation
+      (rerun after the pepper changes).
+      KNOWN LIMITATION (BA decision D-E; NOTE only, no requirement): the
+      backfill source is the tenant users table. A Keycloak-only account that
+      has never logged in to Letflow and is not in a tenant users table is
+      invisible to the directory until its first login (it falls back to
+      ?realm=/stored slug/default). An optional future Keycloak-sync
+      requirement could close it; it is not scoped here.
     open_questions:
-      - "See REQ-434 open question 'Keycloak Organizations as an alternative': a future ADR may replace this directory; scope here stays the directory only, no realm migration."
-      - "Backfill source is whatever REQ-434/0042 ratified (default: users.email per tenant schema). If REVIEWER chose the Keycloak Admin API as a source, this entry must be split and re-validated -- do not extend it silently."
-      - "Whether a deactivated user (users.status) is removed or kept-but-flagged follows REQ-434's ratified answer; the default recorded there is 'removed', subject to the other-active-user rule above."
-      - "tenant_id source is settled by the design (design req434-email-first-login-directory.md s0.3 D1): explicit :tenant_id opt plus a fail-closed consistency guard; the reverse prefix lookup is not pursued."
-      - "OPEN: pepper provisioning for the email key (environment variable versus the sec:// store, design Q2; who provisions it in each environment). The item 6 startup check fails closed in non-test environments until it is provisioned; the feature stays unusable there until then."
+      - "See REQ-434 open question 'Keycloak Organizations as an alternative': DEFERRED (BA decision D-G, decision 0043): decide via an ADR when the tenant count grows. The directory is the abstraction that survives a later move; scope here stays the directory only, no realm migration."
+      - "Backfill source is whatever REQ-434/0042 ratified (default: users.email per tenant schema). If REVIEWER chose the Keycloak Admin API as a source, this entry must be split and re-validated -- do not extend it silently. Known limitation (D-E): Keycloak-only accounts that never logged in are invisible until first login."
+      - "CONFLICT FLAGGED FOR REVIEWER (D-C): the key id and dual-read supersede design s2.4 / Q8 ('dual-pepper window not built; rebuild procedure', decider ORCH) and 0042 OQ-6. The interplay with the unique (key, tenant_id) identity, sentinel_key/0, the limiter's per-email key and the advisory lock is listed in BUILDS item 4 with a PROPOSED resolution. CODE-DESIGNER should amend design s2.4, s3.7, s5.3, s5.4 and s12.2 (or REVIEWER chooses another resolution) before the build starts. Open PR #2201 (queue Q-944, branch feat/REQ-435-login-directory, merge held) was built against the single-pepper design; items 3a-3d and the lookup/limiter amendments of item 4 may then land as a delta on top of it."
+      - "EXTERNAL dependency, not in this repository: the ai-dala-infra secrets inventory needs an entry for LETFLOW_LOGIN_DIRECTORY_PEPPER (and _ID) per environment (QA, production) before the feature can be enabled there. Recorded, not edited from here; the item 3 startup check fails closed until it is provisioned."
+      - "OPEN, only remaining user/legal decision of the series (0042 OQ-3, decision 0043 D-D): lawful basis and controller for the directory's personal data. Keyed HMACs of emails remain personal data while the pepper exists. The BA position is PROPOSED only (operator is controller; legitimate interest / contract necessity for login routing; minimisation by keyed hash) and needs legal confirmation. Gates enabling the feature outside dev (REQ-437, REQ-441)."
+      - "Sizing: REQ-VALIDATOR found the first version of this entry too large for one agent turn; the rotation tooling (retire_key, key_status, the runbook and their criteria) was split off as REQ-443, which depends_on this entry. This entry keeps the migration, schema, context, pepper and key-id configuration with boot checks, dual-read, and the backfill."
     acceptance_criteria:
-      - "`mix ecto.migrate` and `mix ecto.rollback` both succeed; the table exists in the public schema only and a query of information_schema shows it in no tenant schema; real output quoted"
-      - "creating a user via POST /api/v1/users in tenant A with email 'Alice@Example.com ' produces exactly one directory entry for (normalised key, tenant A) in the same transaction as the user row: a test that forces the audit append to fail shows neither the user nor the entry persisted"
-      - "tenant_id source: the directory entry's tenant_id equals the caller's auth_context tenant_id on create/status/profile paths, asserted with two tenants whose schemas are both reachable; a request body or query parameter carrying a different tenant_id changes nothing; every caller of create_user/2, update_user_profile/3 and update_user_status/3 in lib/ and test/ is shown by grep to pass the opt or to be intentionally exempt, quoted; the fail-closed guard (design req434-email-first-login-directory.md s0.3 D1) is tested: a malformed tenant_id returns {:error, :invalid_tenant_id}, a valid tenant_id naming a different schema than opts[:prefix] returns {:error, :tenant_prefix_mismatch}, a missing opt returns {:error, :tenant_id_required}, and each writes neither user nor entry; the test-only `login_directory: :skip` escape opt (design s3.2, s15.1) is honoured only for tests, and a grep guard shows the string `login_directory: :skip` appears only under test/ and never in lib/, quoted"
-      - "provision_oidc_user/4 on first JIT login adds the entry inside a NEW Repo.transaction wrapping the JIT insert, created-check and directory upsert (design req434-email-first-login-directory.md s0.3 D2): a test that forces the directory write to fail leaves no user row and returns {:error, {:login_directory, _}}, and sync_role_claims_from_token/3 runs outside the transaction; a second login for the same user adds none (idempotent); update_user_status/3 to a non-active status removes the entry INSIDE its own transaction (a forced failure after the status write leaves entry and status both unchanged); a user without email creates no entry"
-      - "other-active-user rule: in one tenant, users U1 and U2 both active with email 'dup@x.com'; deactivating U1 leaves the entry in place; deactivating U2 afterwards removes it; changing U2's email via update_user_profile/3 when U1 is inactive removes the old entry and adds the new one; tested"
-      - "the same email in tenant A and tenant B yields two entries; lookup_by_email/1 returns both in a deterministic order, and returns no row for a tenant whose status is :inactive or :migrating (decided in one query, asserted by counting queries via telemetry or Ecto query logging: exactly one)"
-      - "cross-tenant isolation test: with tenants A and B each holding distinct users, the directory contains only (key, tenant_id) pairs; lookup_by_email/1 on an address that exists only in A never returns anything tied to B; the schema and returned structs contain no password, role, user id, external_id or user display-name field"
-      - "when the HMAC key form is ratified, a test asserts the stored key is never the plaintext email and differs under a different pepper; when plaintext is ratified, a test asserts normalisation equivalence ('A@X.com ' and 'a@x.com' collide to one key)"
-      - "backfill idempotency test: seed 3 tenants with overlapping emails (including one inactive user, and one tenant registered with status :inactive whose active users are still backfilled per design req434-email-first-login-directory.md s0.3 D3 while lookup_by_email/1 still excludes it), run the task twice; the second run inserts zero rows and the row set is identical; inactive users yield no row; --dry-run inserts nothing and prints counts; a tenant whose schema read raises is skipped and reported while the other tenants still complete"
-      - "grep of the task output and of captured Logger output during the test run finds no email address (INV-4); the task builds no SQL by string interpolation of schema names (INV-7)"
+      - "`mix ecto.migrate` and `mix ecto.rollback` both succeed; the table (with the key_id column) exists in the public schema only and a query of information_schema shows it in no tenant schema; real output quoted"
+      - "the primary key is (email_key, tenant_id) and key_id is NOT NULL and not part of it, asserted from the catalog; an insert of the same (email_key, tenant_id) twice violates the key; the same logical person written under two different pepper/key-id pairs yields two rows for one tenant"
+      - "the same email in tenant A and tenant B (seeded through upsert_entry/2) yields two entries; the lookup returns both in a deterministic order, returns no row for a tenant whose status is :inactive or :migrating or whose idp_realm_id is null or empty, and issues exactly one query (counted via telemetry or Ecto query logging)"
+      - "dual-read (item 3c / 4): with a previous pepper configured and one row under each key id for the SAME (email, tenant), the lookup returns that tenant exactly once (distinct tenants, so a 'single match' stays single) in one query; with only the current pepper, a row under the previous key id is not found; the sentinel path issues the same single query and the same number of HMAC calls as a real email in the same deployment state"
+      - "pepper boot checks, tested in the style of test/letflow/secrets_runtime_config_test.exs (config/runtime.exs evaluated with a controlled environment): absent pepper, absent or malformed key id, non-64-hex, all-zero, all-0xFF, equal to the master key, previous equal to current, previous id equal to current id, and only one of the previous pair set each raise at boot with a message that does not contain the value; a valid current-only and a valid current-plus-previous configuration boot"
+      - "a test asserts the stored email_key is never the plaintext email, is 32 bytes, and differs under a different pepper; normalisation equivalence ('A@X.com ' and 'a@x.com' collide to one key)"
+      - "no secret in the repository: a grep guard over the tracked tree (lib/, config/, test/, deploy/, .env.example, docs/runbooks/) finds no 64-hex value assigned to LETFLOW_LOGIN_DIRECTORY_PEPPER* other than the single documented non-trivial test value in config/test.exs, and .env.example carries the variable names with no working value; quoted"
+      - "cross-tenant isolation: with tenants A and B each holding distinct users, the directory contains only (key, tenant_id, key_id, inserted_at); the lookup on an address that exists only in A never returns anything tied to B; the schema and returned structs contain no password, role, user id, external_id or user display-name field"
+      - "backfill idempotency: seed 3 tenants with overlapping emails (including one inactive user, and one tenant registered with status :inactive whose active users are still backfilled while the lookup still excludes it), run the task twice; the second run inserts zero rows and the row set is identical; inactive users yield no row; --dry-run inserts nothing and prints counts; a tenant whose schema read raises is skipped and reported while the other tenants still complete; rows are written under the current key id"
+      - "re-keying by the backfill (the step REQ-443's runbook relies on): seed rows under key id A; reconfigure current = B and previous = A; the lookup still finds the person; run the backfill; rows now exist under both ids and the lookup still returns the person once"
+      - "grep of the backfill output and of captured Logger output (captured at level :debug) during the test run finds no email address, no email key hex/base64 and no pepper (INV-4); every Repo call on a directory table carries log: false (design s3.9); the backfill builds no SQL by string interpolation of schema names (INV-7)"
       - "deleting a tenant row cascades its directory entries (FK ON DELETE CASCADE) -- tested"
       - "`mix compile --warnings-as-errors`, `mix format --check-formatted` and `mix test` pass for the touched areas, and `mix letflow.check_boundaries` passes, real output quoted"
     depends_on: [REQ-434]
@@ -32819,6 +32875,26 @@ requirements:
       DISCLOSED by design (the bounded inference of REQ-434 (f)); it is not
       claimed indistinguishable from unknown.
 
+      PER-TENANT DISCLOSURE (BA decision D-A, decision 0043; the per-tenant
+      setting, its migration and its write path are REQ-442, a depends_on of
+      this entry): the deployment-wide mode above stays the default and is the
+      fallback and ceiling; each tenant may be set to uniform. The lookup
+      happens by email before the tenant is known, so the effective mode is a
+      rule over the MATCH SET: return the single-match 200 ONLY if there is
+      exactly one active match AND that match's disclose flag (from REQ-442's
+      lookup) is true; in every other case return the neutral response, and
+      still email the list as before (a single match in a uniform tenant is
+      delivered [t], like Mode A). A uniform-tenant address is therefore
+      byte-identical to an unknown one. Rate limiting stays on in all modes.
+      Uniform is RECOMMENDED for candidate-facing tenants (for example
+      Bilimbaga exam candidates).
+
+      ENABLEMENT GATE (BA decision D-D, decision 0043): the feature stays OFF
+      outside dev until a named person confirms the lawful basis and
+      controller (0042 OQ-3). That gate is made testable by REQ-444 (split
+      out of this entry), not left to procedure; this entry only fixes the
+      notifier adapter key the gate reads (BUILDS item 9).
+
       BUILDS:
       1. Letflow.Routers.LoginDiscovery (lib/letflow/routers/), mounted in
       lib/letflow/router.ex as a sibling forward (path per the design,
@@ -32872,12 +32948,31 @@ requirements:
       7. OpenAPI/spec coverage: no-op. No OpenAPI artefact exists in the
       repository (decision 0010), so there is nothing to change; the handoff
       records that fact (design req434-email-first-login-directory.md s0.3 D7).
+      8. EFFECTIVE-MODE DECISION (D-A): Letflow.LoginDiscovery.decide/2 and
+      delivery/2 (design s7) take the lookup's per-match disclose flag
+      (REQ-442) instead of re-deriving a mode per tenant: decision is {:match,
+      t} iff exactly one active match and its disclose is true, else :neutral;
+      delivery is {:deliver, list} for two or more matches, {:deliver, [t]}
+      for one non-disclosed match, :none for none or failure and for a
+      disclosed single match. disclose is stripped before any body is built;
+      the response allowlist, status codes, one-query and one-submission
+      rules are unchanged. The deployment mode remains
+      LETFLOW_LOGIN_DISCOVERY_MODE (default :redirect_single).
+      9. NOTIFIER ADAPTER KEY (named explicitly so REQ-441 and REQ-444 use
+      the same one): the adapter is selected by the application-env key
+      `config :letflow, Letflow.LoginDiscovery.Notifier, adapter: <module>`
+      (design s13), default Letflow.LoginDiscovery.Notifier.Noop in
+      config/config.exs, the test double in config/test.exs. The enablement
+      gate (defaults, boot refusal, confirmation marker) is NOT built here: it
+      is REQ-444 (split out so this entry stays one agent turn).
     open_questions:
-      - "See REQ-434 open question 'Keycloak Organizations as an alternative': a future ADR may replace the directory and with it this endpoint; scope here stays the endpoint only, no realm migration."
-      - "OPEN, blocks enabling the feature flag outside dev (0042 OQ-3, design Q13): the human or legal owner (data controller) and lawful basis for the directory's personal data are not decided and are not answerable inside this pipeline; the server mount stays disabled outside dev (enabled default false in :prod) until the project owner answers. ORCH to escalate; REVIEWER to confirm it is recorded."
-      - "OPEN, the user's call: disclosure-mode risk appetite. Mode B is the ratified default (REVIEWER and SECURITY-REVIEWER), but the choice to run Mode B versus Mode A (LETFLOW_LOGIN_DISCOVERY_MODE=uniform_plus_email) in a given deployment, and the abuse-counter thresholds at which to flip (design s12.7), remain the project owner's decision."
-      - "OPEN: no mail capability exists in the repo. Which adapter (SMTP via Swoosh/Bamboo, an external transactional provider) and who owns its credentials (INV-4) is a separate decision and requirement; until then the email-delivering paths are inert. Confirm with REVIEWER that shipping the port with a non-delivering default is acceptable, or sequence an adapter requirement before REQ-438 can be demonstrated end to end in the multi-tenant case."
-      - "OPEN: pepper provisioning for the email key (env var versus the sec:// store, design Q2) is a REQ-435 concern but gates every lookup this endpoint performs; the endpoint cannot be enabled in an environment until it is provisioned."
+      - "See REQ-434 open question 'Keycloak Organizations as an alternative': DEFERRED (BA decision D-G, decision 0043); decide via an ADR when the tenant count grows. The directory is the abstraction that survives a later move; scope here stays the endpoint only, no realm migration."
+      - "OPEN, the one remaining user/legal decision of the series (0042 OQ-3, design Q13, decision 0043 D-D): the human or legal owner (data controller) and lawful basis for the directory's personal data. BA position PROPOSED only, needing legal confirmation: the platform operator is the controller for the directory; legitimate interest / contract necessity for login routing; data minimisation by keyed hash; to be written into the privacy notice and DPA. HARD GATE KEPT: the feature stays off outside dev until a named person confirms; made testable by REQ-444 (defaults false, boot refusal without the confirmation marker and without a real mail adapter). ORCH to escalate; REVIEWER to confirm it is recorded."
+      - "RESOLVED by BA delegation (decision 0043 D-A): the disclosure-mode risk appetite. Mode B stays the deployment-wide default; it is configurable per tenant (REQ-442) with the deployment mode as fallback and ceiling; uniform is recommended for candidate-facing tenants. The abuse-counter thresholds at which an operator flips a deployment to uniform (design s12.7) remain an operational choice."
+      - "CONFLICTS FLAGGED FOR REVIEWER (decision 0043), not silently resolved: (a) the effective-mode rule of BUILDS item 8 changes design s7's 'decide(mode, result)' (one deployment mode) to a per-match flag, and adds a row to the s10.2 matrix: single match in a uniform tenant is 202 N, one delivery of a list of 1, byte-identical to the Mode B neutral group; (b) 0042 Standing prohibition 11 (a change to the disclosure shape is a security change needing SECURITY-REVIEWER and an amendment to 0042), see REQ-442; (c) the design's Mode A single-match delivery is reused for the uniform-tenant single match. None of the ratified invariants (one query, no early return, closed allowlist, no 401/403, constant work) is broken by the rule; REQ-VALIDATOR and SECURITY-REVIEWER confirm."
+      - "RESOLVED into a requirement (BA decision D-B): the mail adapter is REQ-441 (SMTP first, provider-agnostic port, credentials by environment reference). It is REQUIRED before the feature flag can be enabled outside dev; the boot refusal of REQ-444 enforces it. Until REQ-441 lands, shipping the port with the non-delivering Noop default is acceptable here and the email-delivering paths are inert."
+      - "RESOLVED into REQ-435 acceptance criteria (BA decision D-C): per-environment pepper from the secrets store with a key id and dual-read rotation; the endpoint cannot be enabled in an environment until it is provisioned (REQ-435 boot checks). EXTERNAL dependency, not in this repository: an ai-dala-infra secrets-inventory entry for the pepper (and for the SMTP credentials, REQ-441); recorded, not edited from here."
+      - "Known limitation (BA decision D-E, NOTE only): Keycloak-only accounts that have never logged in and are not in a tenant users table are invisible to the directory until first login, so such a user gets the neutral response and must use ?realm=. An optional future Keycloak-sync requirement could close it; it is not scoped."
       - "Wall-clock timing bounds are inherently flaky in CI. The binding timing guarantee is STRUCTURAL (same query count, no early-return branch, notifier off the request path); the wall-clock check is a generous sanity bound only. REQ-VALIDATOR to confirm the chosen bound (recommended: a median difference under 25 ms and no systematic skew across N>=200 alternating samples) is not tight enough to flake."
     acceptance_criteria:
       - "mode :uniform_plus_email: POSTs for a known single-tenant address, a known multi-tenant address and an unknown address return the SAME status code, the SAME Content-Type and byte-identical bodies (no per-request ids), asserted by direct byte comparison"
@@ -32894,11 +32989,20 @@ requirements:
       - "notifier failure tests: an adapter that raises, exits and times out leaves the HTTP response unchanged and the request process alive (INV-8); the :send bucket (REQ-436) limits a second delivery to the same address inside the interval; the default adapter delivers nothing and its log output contains no email address or tenant name; the Letflow.LoginDiscovery.TaskSupervisor child is added in lib/letflow/supervisor/infrastructure.ex and the existing infrastructure child-count test is updated from 21 to 22 (design s15.3), real output quoted"
       - "grep of Logger output captured at level :debug during the whole test file finds no email address, no email key and no raw request body (INV-4)"
       - "the OpenAPI item is a recorded no-op (design s0.3 D7): the handoff states that no OpenAPI artefact exists (decision 0010) and no such file is changed"
+      - "per-tenant effective mode (D-A, BUILDS item 8), pure decide/2 and delivery/2 table tests plus router tests, each naming deployment mode and tenant setting: (1) deployment redirect_single, one active match, disclose true -> 200 with exactly result, tenant.slug, tenant.display_name, zero deliveries; (2) deployment redirect_single, one active match in a UNIFORM tenant (disclose false) -> 202 neutral, byte-identical to an unknown address, one delivery of a list of 1; (3) two active matches, one redirect_single tenant and one uniform tenant -> 202 neutral, byte-identical to unknown, one delivery of both; (4) one active plus one inactive tenant: the active tenant's own setting governs; (5) deployment uniform_plus_email -> every case 202 neutral whatever the tenant settings (ceiling); (6) unknown, malformed, inactive-only and lookup-failure unchanged from the design s10.2 matrix. Byte comparison on status, Content-Type and body"
+      - "per-tenant mode keeps the ratified invariants: for the uniform-tenant single match the request issues exactly one Repo query (telemetry), makes exactly one notifier submission, returns no earlier than the other classes (no early-return branch), emits the :accepted outcome (not :tenant), and the 429 behaviour is unchanged; a response never contains the disclose flag, the tenant's mode, a tenant id or idp_realm_id (key-set assertion); the sanity timing test of design s10.3 is run for uniform-tenant single versus unknown as an additional pair"
+      - "the notifier adapter is selected by the application-env key `config :letflow, Letflow.LoginDiscovery.Notifier, adapter: <module>` (default Letflow.LoginDiscovery.Notifier.Noop, set in config/config.exs; the test config sets the test double), asserted from the evaluated config; this key is what REQ-441 sets (via LETFLOW_MAIL_ADAPTER) and REQ-444's gate reads"
       - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-1, INV-2, INV-4, INV-5, INV-6, INV-8, INV-9"
     # NOTE (ORCH 2026-10-04): the REQ-439 edge is in this file only; Q-946 still carries depends_on
     # [944, 945] in the queue (no edit operation). REQ-439 is transitively required via REQ-436, but
     # the queue does not enforce Q-948 for Q-945; see REQ-436's note.
-    depends_on: [REQ-435, REQ-436, REQ-439]
+    # NOTE (WF-01 re-entry 2026-10-04, decision 0043): REQ-440 (write hooks; the 'b' half of the
+    # REQ-435 split, D-F) and REQ-442 (per-tenant disclosure setting, D-A) are added to depends_on.
+    # REQ-437 must not be claimed for done before REQ-440. REQ-441 (mail adapter) depends_on THIS
+    # entry and, with REQ-443 and the gate REQ-444, is required before the feature flag is enabled
+    # outside dev, not before this builds.
+    # The queue copy of this task (Q-946) cannot be edited; claimers honour this file's depends_on.
+    depends_on: [REQ-435, REQ-436, REQ-439, REQ-440, REQ-442]
 
   - id: REQ-438
     title: "SPA email-first login screen: credential-free discovery page, ProtectedRoute wiring, login_hint hand-off to Keycloak, and ?realm=/stored-slug overrides preserved"
@@ -32987,8 +33091,9 @@ requirements:
       - "Single-tenant/dev flag default and name (see REQ-434): confirm the flag keeps tryRestoreE2eSession and iss0896 master-admin E2E logins off the new screen."
       - "Realm login-by-email precondition: login_hint pre-fills the username field only. Realms whose users log in by username need 'Login with email' enabled for a typed email to work; who verifies this per realm (UAT-RUNNER against bilimbaga and bpm-default) is to be settled with REQ-434 (h)."
       - "OPEN, blocks enabling the email-first flag (VITE_EMAIL_FIRST_LOGIN) outside dev (0042 OQ-3): lawful basis and data controller for the directory's personal data are undecided and escalated to the project owner. The flag also requires the backend mount switch and trusted-proxy configuration (REQ-437, REQ-439); the SPA cannot check the server side."
-      - "OPEN, the user's call: disclosure-mode risk appetite. Mode B is the ratified default; running Mode A instead is a backend config change that needs no SPA change."
-      - "OPEN: mail adapter. Until a mailer exists the multi-tenant address gets only the neutral message (no email is delivered), so the multi-tenant dead end is covered only by the organisation-code control (design s11.5, 0042 OQ-9)."
+      - "RESOLVED by BA delegation (decision 0043 D-A): disclosure-mode risk appetite. Mode B is the deployment default and the mode is configurable per tenant (REQ-442, effective rule in REQ-437); neither a deployment nor a per-tenant change needs any SPA change, because the SPA reacts only to the closed response union."
+      - "Mail adapter: REQ-441 (BA decision D-B) is required before the flag is enabled outside dev. Until it lands the multi-tenant address gets only the neutral message (no email is delivered), so the multi-tenant dead end is covered only by the organisation-code control (design s11.5, 0042 OQ-9). A uniform-tenant user (who gets the neutral message and an email) likewise relies on the email or the organisation code."
+      - "Known limitation (BA decision D-E, NOTE only): a Keycloak-only account that has never logged in is invisible to the directory and gets the neutral message; the organisation-code control is its route until first login."
     acceptance_criteria:
       - "flag on, no ?realm= and no stored slug: an unauthenticated visit renders the email-first page and does NOT call signinRedirect; asserted in a component test with signinRedirect mocked (zero calls)"
       - "precedence test table, each row a test: ?realm=a with stored slug b -> signinRedirect for realm a, stored value updated to a, no email-first page; stored slug only -> signinRedirect for it, no email-first page; ?realm= only -> as before; neither -> email-first page; flag off and neither -> today's default-realm redirect. The existing ProtectedRoute, buildRedirectArgs, tenantConfig and AuthProvider.logout-clears-realm tests pass unmodified"
@@ -32999,6 +33104,8 @@ requirements:
       - "the pre-redirect path (e.g. /instances/123?tab=x) is preserved through the email-first page and restored after login via the existing state mechanism, and an unsafe path is dropped (isSafeRestorePath), tested"
       - "all user-facing strings on the new page come from the i18n catalogue in every shipped locale; the new i18n-grep test (modelled on web/src/__tests__/entities-i18n-grep.test.ts) fails on a seeded hardcoded string fixture and passes on the real page"
       - "`cd web && npm run check` (which runs type-check, lint, test and guards) passes, real output quoted; the real-flow e2e run against a Keycloak with two tenants' realms shows a bilimbaga user arriving at the bilimbaga realm login with the username pre-filled, output quoted (or the infra gap recorded as a blocker, as ISS-0727 was)"
+      - "per-tenant disclosure mode causes no UI difference beyond what the response carries (BA decision D-A): the page, its states and its strings are driven only by the closed response union (200 tenant, 202 accepted, 429, network failure, malformed); a grep guard shows no web/ source references a disclosure mode, 'uniform', 'redirect_single' or a tenant-mode field; a test feeds the page a 202 (as a uniform-tenant address would produce) and asserts the DOM equals the unknown-address neutral snapshot, organisation-code control included"
+      - "the feature stays off outside dev (BA decision D-D): web/ build configuration defaults VITE_EMAIL_FIRST_LOGIN to off for every non-dev build (a test or build-config assertion over the committed env files and vite config shows no committed non-dev file sets it true), and enabling it is documented in the PR as dependent on the backend enablement gate of REQ-444"
       - "git diff shows no change under lib/, priv/ or apps/ -- this entry is web/ only"
     depends_on: [REQ-437, REQ-133, REQ-384]
 
@@ -33088,3 +33195,390 @@ requirements:
       - "git diff on lib/letflow/plugs/public_read_rate_limit.ex, lib/letflow/plugs/public_read_rate_limit/bucket.ex, lib/letflow/plugs/auth_pipeline.ex and lib/letflow/plugs/api_pipeline.ex is empty; the SECURITY-REVIEWER verdict is recorded against INV-4 and INV-5"
       - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted"
     depends_on: [REQ-434]
+
+  # ---------------------------------------------------------------
+  # Email-first login series, BA decisions D-A..D-H (2026-10-04,
+  # decision 0043). The user delegated the series' open questions to the
+  # BA. Added: REQ-440 (the 'b' half of the REQ-435 split), REQ-441
+  # (mail notifier adapter), REQ-442 (per-tenant disclosure mode).
+  # REQ-435 and REQ-437 were amended in place; REQ-438 got two criteria.
+  # REQ-436 and REQ-439 are done and untouched. The only remaining
+  # user/legal decision is 0042 OQ-3 (lawful basis / controller).
+  # ---------------------------------------------------------------
+
+  - id: REQ-440
+    title: "Directory write path (the 'b' half of the REQ-435/REQ-440 split, BA decision D-F): population hooks inside the Identity transactions, the JIT transaction, the explicit tenant_id opt with its fail-closed guard, and the removal rule"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 949  # letflow-queue task id, GH#2203. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
+    description: >
+      The writers of the directory REQ-435 builds, exactly as specified by
+      REQ-434's design (lib/letflow/design/req434-email-first-login-
+      directory.md s3) and decision 0042. Where this text and the design
+      differ, the design governs and the difference is flagged to
+      REQ-VALIDATOR. This text is the 'b' half of the former REQ-435 and its
+      BUILDS items are carried over unchanged in substance; they are not new
+      scope.
+
+      WRINKLE (state, do not paper over): decision 0028's 'a table lands
+      with its first writer' rule (0042 Standing prohibition 13) is satisfied
+      only by REQ-435 and this entry landing back to back. Between them the
+      backfill alone populates the table. REQ-437 depends_on this entry and
+      MUST NOT be claimed for done before it.
+
+      PR #2201 (queue Q-944, worker letflow-4-worker-q944, branch
+      feat/REQ-435-login-directory, merge held) currently implements ALL of
+      the former REQ-435, including these hooks, in one branch. If the whole
+      of it lands as one change, this entry's BUILDS are satisfied by that
+      change and are closed by RELEASE-VALIDATOR verification (re-deriving
+      every acceptance criterion below against the merged code) instead of
+      being re-implemented. The PR is not touched by this entry.
+
+      BUILDS:
+      1. Population hooks INSIDE the Identity context functions, in the SAME
+      Ecto.Multi/transaction as the source write -- not in router handlers:
+      Letflow.Identity.create_user/2 (lib/letflow/identity.ex:227, its
+      existing Multi with Audit.append_multi), update_user_status/3
+      (identity.ex:389) and update_user_profile/3 (identity.ex:337, when the
+      email changes). A user with a nil email writes no row. The pure plan
+      function plan_user_change/2 and apply_plan/3 of design s3.3 are the
+      single source of truth for add/remove. No route is added and no
+      existing response shape changes.
+      2. JIT TRANSACTION (design s0.3 D2): the JIT insert in
+      provision_oidc_user/4 (insert_or_fetch/4, identity.ex ~1766-1809,
+      created: true path) is NOT inside any transaction today; wrap the JIT
+      insert, its created-check and the directory upsert in a NEW
+      Repo.transaction (only a genuinely created row writes an entry; a
+      directory failure aborts the transaction and returns {:error,
+      {:login_directory, reason}}); sync_role_claims_from_token/3 stays
+      outside it. Savepoint-mode insert per design s3.5 so the username-race
+      recovery still runs in a live transaction.
+      3. TENANT_ID SOURCE: create_user/2, update_user_profile/3 and
+      update_user_status/3 receive only opts[:prefix] today. Add a new
+      required :tenant_id opt supplied by their callers in lib/letflow/
+      routers/identity.ex from conn.assigns.auth_context.tenant_id (never a
+      request parameter), :prefix semantics unchanged, every other caller
+      updated or proven to need no directory write. Fail-closed guard before
+      any write: schema_name_for_tenant(tenant_id) must equal opts[:prefix]
+      ({:error, :invalid_tenant_id} for a malformed id, {:error,
+      :tenant_prefix_mismatch} for a valid id naming a different schema,
+      {:error, :tenant_id_required} when missing), writing nothing on any of
+      them. Rationale as in design s0.3 D1 (a reverse prefix derivation is
+      pure and costs no query; it is rejected because it can never detect a
+      mismatch).
+      4. REMOVAL RULE (verified: users.email carries no unique index):
+      remove_entry_if_unreferenced/3 deletes the entry only if no OTHER
+      active user in that tenant schema has the same normalised email, under
+      EVERY candidate key (current and, during a rotation, previous; BA
+      decision D-C, REQ-435 item 4(iv)), serialised by the advisory lock of
+      design s3.7. Identity has no delete_user function, so deletion has no
+      path to hook; 0042 Standing prohibition 14 binds any future deletion
+      path.
+      5. Test-only escape opt `login_directory: :skip` per design s3.2/s15.1,
+      honoured only for tests.
+    open_questions:
+      - "See REQ-434 open question 'Keycloak Organizations as an alternative': DEFERRED (BA decision D-G, decision 0043); decide via an ADR when the tenant count grows. Scope here stays the write path only."
+      - "Whether a deactivated user is removed or kept-but-flagged follows 0042 RQ-3: removed, subject to the other-active-user rule."
+      - "JIT directory-write failure policy (0042 OQ-10): RATIFIED by REVIEWER as in-transaction, fail closed on index integrity."
+      - "Depends on the REQ-435 interplay flagged there (key id and dual-read touch the advisory-lock key and the removal under every candidate key); if CODE-DESIGNER resolves it differently, item 4 follows the amended design."
+      - "If PR #2201 lands whole, BUILDS are satisfied by it and this entry is closed by RELEASE-VALIDATOR verification (see description); if it lands in pieces, this entry is the second piece and REQ-435 the first."
+    acceptance_criteria:
+      - "creating a user via POST /api/v1/users in tenant A with email 'Alice@Example.com ' produces exactly one directory entry for (normalised key under the current key id, tenant A) in the same transaction as the user row: a test that forces the audit append to fail shows neither the user nor the entry persisted"
+      - "tenant_id source: the directory entry's tenant_id equals the caller's auth_context tenant_id on create/status/profile paths, asserted with two tenants whose schemas are both reachable; a request body or query parameter carrying a different tenant_id changes nothing; every caller of create_user/2, update_user_profile/3 and update_user_status/3 in lib/ and test/ is shown by grep to pass the opt or to be intentionally exempt, quoted; the guard is tested: a malformed tenant_id returns {:error, :invalid_tenant_id}, a valid tenant_id naming a different schema than opts[:prefix] returns {:error, :tenant_prefix_mismatch}, a missing opt returns {:error, :tenant_id_required}, and each writes neither user nor entry; a grep guard shows the string `login_directory: :skip` appears only under test/ and never in lib/, quoted"
+      - "provision_oidc_user/4 on first JIT login adds the entry inside a NEW Repo.transaction wrapping the JIT insert, created-check and directory upsert: a test that forces the directory write to fail leaves no user row and returns {:error, {:login_directory, _}}, and sync_role_claims_from_token/3 runs outside the transaction; a second login for the same user adds none (idempotent); the username-race recovery path still works inside the transaction (design s15.1 test); a user without email creates no entry"
+      - "update_user_status/3 to a non-active status removes the entry INSIDE its own transaction (a forced failure after the status write leaves entry and status both unchanged)"
+      - "other-active-user rule: in one tenant, users U1 and U2 both active with email 'dup@x.com'; deactivating U1 leaves the entry in place; deactivating U2 afterwards removes it; changing U2's email via update_user_profile/3 when U1 is inactive removes the old entry and adds the new one; tested"
+      - "removal under dual-read: with a previous pepper configured and rows under both key ids for one (email, tenant), deactivating the last active user removes BOTH rows; with the other-active-user rule holding, both stay; tested"
+      - "the same email in tenant A and tenant B yields two entries via the write path; a status change in A leaves B's entry untouched"
+      - "grep of captured Logger output (level :debug) during the test run finds no email address and no email key (INV-4); every Repo call on a directory table carries log: false; no SQL is built by string interpolation (INV-7)"
+      - "`mix compile --warnings-as-errors`, `mix format --check-formatted` and `mix test` pass for the touched areas, and `mix letflow.check_boundaries` passes, real output quoted; if the closure is by verification of PR #2201's merged code (description), RELEASE-VALIDATOR records each criterion re-derived against the merge commit"
+    depends_on: [REQ-435]
+
+  - id: REQ-441
+    title: "Provider-agnostic mail notifier adapter for the login-discovery tenant-list email: SMTP adapter first, capturing test adapter, secrets by environment reference, uniform response whatever the delivery result (BA decision D-B)"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 952  # letflow-queue task id, GH#2206. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
+    description: >
+      Implements the real mail adapter behind the notifier PORT that REQ-437
+      specifies (Letflow.LoginDiscovery.Notifier, @callback
+      deliver_tenant_list/2, design s13) and replaces its non-delivering
+      default for deployments that enable the feature. REQUIRED before the
+      email-first feature flag can be enabled outside dev (REQ-444's boot
+      refusal treats the non-delivering Noop adapter as not real, and REQ-444
+      depends_on this entry). Provider-agnostic: the port is the abstraction;
+      SMTP is the first adapter. SECURITY-REVIEWER is a named hard gate (new
+      external egress, INV-4 credentials, INV-8, INV-9, INV-5 uniformity).
+
+      FIRST STEP, before any implementation (WF-02): a CODE-DESIGNER pass
+      that chooses the mail library, records the choice as a decision record
+      under docs/migration/decisions/ and designs the adapter, its
+      configuration and its failure handling. This entry adds a runtime
+      dependency, so the library choice is a decision, not an implementation
+      detail; ELIXIR-DEV does not start until that design has passed
+      CODE-DESIGN-VALIDATOR.
+
+      NOTE ONLY, out of scope: the same adapter is expected to serve
+      invitations and password recovery later. Nothing here builds those, and
+      the port is not widened for them; a later requirement may add
+      callbacks.
+
+      BUILDS:
+      1. An SMTP adapter module implementing the REQ-437 notifier behaviour
+      (for example Letflow.LoginDiscovery.Notifier.Smtp), plus whatever
+      mailer module the chosen library needs. Library choice (proposal:
+      Swoosh with its SMTP adapter over gen_smtp; alternatives Bamboo or a
+      bare gen_smtp) is made by CODE-DESIGNER and recorded as a decision
+      record; mix.exs gains only that dependency. The hex dependency needs
+      network for mix deps.get; if this environment cannot fetch it, say so
+      explicitly rather than guessing.
+      2. Configuration by environment reference only (INV-4, no secret in the
+      repository): LETFLOW_MAIL_ADAPTER (the adapter selector; unset or
+      unknown keeps the Noop default, unknown value raises at boot),
+      LETFLOW_SMTP_HOST, LETFLOW_SMTP_PORT, LETFLOW_SMTP_USERNAME,
+      LETFLOW_SMTP_PASSWORD, LETFLOW_SMTP_TLS (verified TLS by default;
+      plaintext only when explicitly set and never in :prod), LETFLOW_MAIL_FROM
+      and the deployment base URL for any link (INV-9). Read once at boot in
+      config/runtime.exs; with the adapter selected, a missing host,
+      credentials or sender raises at boot with a message that echoes no
+      value; .env.example (and deploy/.env.example) document the names with no
+      working value. The password is never logged, never in a struct field
+      that is inspected or serialised, and never in a crash report.
+      3. UNIFORM RESPONSE WHATEVER THE DELIVERY RESULT: delivery runs in the
+      notifier task off the request path (REQ-437 item 5). A successful send,
+      an SMTP rejection, a timeout, a connection or TLS failure and a raise
+      all leave the HTTP status, headers and body byte-identical and add no
+      per-request signal. Failure handling: no automatic retry in this
+      requirement (a retry loop is an email-bombing amplifier; the per-address
+      :send bucket of REQ-436 is consumed once per attempt, success or
+      failure); the failure is recorded only as a non-identifying counter
+      event [:letflow, :login_discovery, :notifier] with a single metadata
+      key outcome in {:delivered, :failed, :skipped}, and a fixed log line
+      carrying no address, tenant, slug, SMTP reply text or exception text.
+      4. A fixed message template (design s13 'message contract'): the only
+      request-derived text is the recipient address; tenant slugs and display
+      names appear as plain text; any link is built from the deployment base
+      URL and the slug URL-encoded, never from tenant-controlled URL text; no
+      HTML from tenant text (plain-text body, or HTML with all interpolated
+      values escaped); subject and body fixed strings.
+      5. A capturing test adapter under test/support/ that records
+      (recipient, tenants) calls and can be set to return {:error, _}, raise,
+      exit or sleep. If REQ-437's test double already provides this, reuse it
+      and add nothing; do not duplicate it.
+      6. ADAPTER SELECTION KEY: config/runtime.exs maps LETFLOW_MAIL_ADAPTER
+      onto the application-env key `config :letflow,
+      Letflow.LoginDiscovery.Notifier, adapter: <module>` (design s13; REQ-437
+      defines the key with the Noop default). A selected Smtp adapter with
+      incomplete configuration refuses to boot (item 2). The enablement gate
+      that treats Smtp as a real adapter is REQ-444, not built here.
+    open_questions:
+      - "OPEN, decision needed (CODE-DESIGNER, recorded in docs/migration/decisions/): the mail library and, if an external transactional provider is preferred later, the second adapter. SMTP is first by BA decision D-B."
+      - "EXTERNAL dependency, not in this repository: the ai-dala-infra secrets inventory needs entries for the SMTP credentials (LETFLOW_SMTP_USERNAME / LETFLOW_SMTP_PASSWORD) and the chosen SMTP relay per environment (0042 OQ-4 asked who owns the credentials: the platform operator). Recorded, not edited from here."
+      - "OPEN, only remaining user/legal decision of the series (0042 OQ-3, decision 0043 D-D): the feature stays off outside dev until a named person confirms the lawful basis and controller; this entry makes the mail adapter real but does not lift that gate. Sender domain SPF/DKIM/DMARC alignment is an infrastructure action outside this repository."
+      - "SMTP replies can reveal whether a mailbox exists (a synchronous rejection). This is safe only because the delivery result never reaches the HTTP response; the counters carry no address. Confirm with SECURITY-REVIEWER that the :failed counter's rate is not itself an oracle an operator-visible dashboard could expose per address (it carries no per-address dimension)."
+      - "Keycloak Organizations: DEFERRED (BA decision D-G); not relevant to this entry."
+    acceptance_criteria:
+      - "the Smtp adapter implements Letflow.LoginDiscovery.Notifier (a Mox-style or behaviour-conformance test shows the callbacks and return shapes match REQ-437's port exactly); the port itself is not changed"
+      - "delivery against a local SMTP sink started by the test (an in-process listener, no network egress): a multi-tenant address's notifier task sends exactly one message whose recipient is the typed address and whose body lists the active tenants' slugs and display names as plain text with a link built from the configured base URL; the sink receives no other recipient"
+      - "uniform response: through the real Letflow.Routers.LoginDiscovery chain, the response bytes for the same multi-tenant POST are byte-identical when the adapter succeeds, returns {:error, _}, raises, exits, times out, and when the SMTP sink refuses the recipient, refuses the connection, or fails TLS; the request process stays alive; status, headers and body compared directly"
+      - "failure handling: after a failed attempt the per-address :send bucket is consumed (a second attempt inside the interval is skipped, not retried); no retry process is started (a grep guard shows no retry loop or Process.send_after on the delivery path); the [:letflow, :login_discovery, :notifier] event is emitted once per attempt with metadata exactly %{outcome: _}"
+      - "no leak: the full capture_log(level: :debug) output across the success and every failure case above contains no email address, no tenant slug or display name, no SMTP reply text, no password and no exception message text; the typed email is placed in the exception message of the raising double to prove it (design s13 C-4 form); a grep guard shows no start_child/Task.start/spawn with an MFA or argument-list form under lib/letflow/login_discovery/"
+      - "no secret in the repository: a grep guard over the tracked tree finds no value assigned to LETFLOW_SMTP_PASSWORD or LETFLOW_SMTP_USERNAME outside the variable names in .env.example/docs, and .env.example names the variables with no working value; quoted"
+      - "boot configuration tested (config/runtime.exs evaluated with a controlled environment): LETFLOW_MAIL_ADAPTER unset keeps Noop; unknown value raises; smtp selected with a missing host, port, sender or credentials raises with a message containing none of the values; a complete configuration boots; plaintext TLS mode raises in :prod"
+      - "adapter selection: LETFLOW_MAIL_ADAPTER=smtp sets the application-env key `config :letflow, Letflow.LoginDiscovery.Notifier, adapter:` to the Smtp module (and unset leaves Noop), asserted from the evaluated runtime config; this is the same key the enablement gate of REQ-444 reads (the gate itself, and its test with the Smtp module, belong to REQ-444, which depends_on this entry)"
+      - "message template: subject and body are fixed strings; a tenant display name containing markup, a newline or a URL is rendered as inert text and produces no extra header and no link other than the configured-base-URL link (header-injection and link-injection test)"
+      - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-4, INV-5, INV-8 and INV-9"
+    depends_on: [REQ-437]
+
+  - id: REQ-442
+    title: "Per-tenant login disclosure mode (BA decision D-A): a platform-admin-only tenant setting that selects uniform or single-match disclosure for the email-first lookup, with the deployment-wide mode as fallback and ceiling, resolved inside the single lookup query"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 950  # letflow-queue task id, GH#2204. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
+    description: >
+      Decision D-A: Mode B (:redirect_single) stays the deployment-wide
+      default; the disclosure mode becomes configurable per tenant with the
+      deployment-wide mode as the fallback; 'uniform' (Mode A) is RECOMMENDED
+      for candidate-facing tenants (for example Bilimbaga exam candidates).
+      Rate limiting stays on in all modes. SIZING ANSWER: this does NOT fit
+      REQ-437's sizing. It needs a schema change on tenants (public schema),
+      a platform-admin write path with authorisation and response-shaping
+      checks, and a change to the lookup query owned by REQ-435, none of
+      which REQ-437 touches; REQ-437 is already one full turn. So it is its
+      own requirement, and REQ-437 consumes its result.
+
+      The lookup happens by email BEFORE the tenant is known, so the
+      effective-mode rule is defined over the MATCH SET (ORCH proposal,
+      checked against design s10 and recorded in decision 0043): disclose
+      slug and display name only if there is exactly ONE active match AND
+      that tenant's effective mode is redirect_single; otherwise return the
+      neutral response (and, as before, email the list). A uniform-tenant
+      address is thereby indistinguishable from an unknown one. Checked
+      against the ratified invariants: it does not break the Mode B
+      equivalence class {multi, unknown, malformed, inactive-only,
+      lookup-failure} (it only enlarges it with 'single match in a uniform
+      tenant'), the single-query and no-early-return rules, the constant-work
+      rule (the effective mode is computed in the same query; delivery stays
+      one unconditional off-path submission) or the closed response
+      allowlist; it DOES touch three ratified wordings, flagged below.
+
+      BUILDS:
+      1. A migration adding tenants.login_disclosure_mode (public schema,
+      nullable string, CHECK in ('uniform_plus_email','redirect_single');
+      NULL = use the deployment-wide default). NOT stored in the tenant
+      :settings blob: that blob has a closed key vocabulary whose values reach
+      the pre-authentication /api/tenant-config and a tenant-admin write path
+      (REQ-382), and the mode is a platform-security attribute that a tenant
+      admin must not set or read. Reversible.
+      2. The Tenant schema field and a changeset path writable ONLY by
+      PLATFORM_ADMIN through the existing platform-admin tenant update route
+      (locate by grep which route calls Tenant.admin_patch_changeset/2 and
+      extend that path; no new route unless none exists, in which case say
+      so and stop for REQ-VALIDATOR). The change is audited as other
+      platform-admin tenant updates are. A tenant admin's settings route
+      rejects the key (closed vocabulary already does); GET /api/tenant-config
+      and every tenant-admin-readable tenant shape do NOT contain it (INV-2);
+      the platform-admin tenant response may.
+      3. LOOKUP EXTENSION in Letflow.LoginDirectory (REQ-435): the single
+      query additionally yields, per matched tenant, a boolean disclose
+      computed in SQL: the deployment mode is bound as a parameter;
+      disclose = (deployment mode is redirect_single) AND
+      COALESCE(tenants.login_disclosure_mode, 'redirect_single') =
+      'redirect_single'. The deployment-wide mode is thereby the fallback
+      (tenant NULL) AND the ceiling (deployment :uniform_plus_email forces
+      every tenant uniform, preserving 0042's configuration-only kill
+      switch). The internal match type becomes %{slug, display_name,
+      disclose}; disclose is consumed by REQ-437's decide/2 and is stripped
+      before any response is built, so the response allowlist is unchanged.
+      Still exactly one query, no tenant :prefix.
+      4. An unrecognised stored value cannot occur (CHECK); an unrecognised
+      value read in code is treated as uniform.
+    open_questions:
+      - "CONFLICTS FLAGGED FOR REVIEWER (decision 0043), not silently resolved: (1) 0042 Standing prohibition 4 and design s5.4 say the lookup returns plain maps with ONLY slug and display_name; this entry adds an internal disclose boolean that never leaves the decision function. (2) 0042 Standing prohibition 11 makes any change to the disclosure shape a security change needing SECURITY-REVIEWER sign-off and an amendment to 0042; per-tenant selection is not a third mode but is a new selector, so SECURITY-REVIEWER must sign this entry and decision 0043 D-A is the amending record. (3) Design s7 and 0042 Decision 3 define the mode as a single deployment-wide config; this entry makes it per-tenant with the deployment value as fallback and CEILING. The ceiling is the conservative reading of 'deployment-wide default as fallback' (a tenant can opt into uniform, but cannot opt into disclosure the deployment has switched off); if the BA meant a tenant may also override a uniform deployment default upward, the SQL rule and the kill-switch property change and REVIEWER must decide."
+      - "Who may set it: PLATFORM_ADMIN only is proposed. Whether Bilimbaga (candidate-facing) should be set to uniform_plus_email by a data migration or by an operator action after deploy is an operational choice for ORCH/the operator; this entry ships no tenant-specific data change (decision 0022 bucket rule: nothing here names exams)."
+      - "Keycloak Organizations: DEFERRED (BA decision D-G, decision 0043); decide via an ADR when the tenant count grows."
+    acceptance_criteria:
+      - "`mix ecto.migrate` and `mix ecto.rollback` both succeed; tenants.login_disclosure_mode exists in the public schema only, is nullable, and the CHECK rejects any value other than the two modes (an insert of 'picker_unauth' fails), real output quoted; existing tenants read NULL"
+      - "write authorisation: PLATFORM_ADMIN sets the value through the existing platform-admin tenant update route and the change is audited; a TENANT_ADMIN and an ordinary user get the platform's existing refusal; a request body carrying the key to the tenant settings route is rejected by the closed vocabulary; tested through the authorization matrix"
+      - "no exposure: byte-level assertions that GET /api/tenant-config?realm=<slug> (and the mobile variant) and every tenant-admin-readable tenant/settings response contain no login_disclosure_mode key, for tenants with the value set and unset (INV-2); the platform-admin tenant response is allowed to contain it"
+      - "lookup matrix, one test per cell, each asserting disclose and exactly one query (telemetry): deployment redirect_single with tenant NULL -> true; deployment redirect_single with tenant redirect_single -> true; deployment redirect_single with tenant uniform_plus_email -> false; deployment uniform_plus_email with tenant NULL or redirect_single or uniform_plus_email -> false (ceiling); an inactive or unbound-realm tenant yields no row whatever its mode"
+      - "the internal match type carries disclose and no other new field; a test over the lookup function's return and a grep show no login_disclosure_mode, tenant id or idp_realm_id is returned past the lookup; the response allowlist test of REQ-437 passes unmodified"
+      - "no prefix: the lookup still issues no query carrying a tenant :prefix; log: false on every directory Repo call is preserved"
+      - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-1, INV-2, INV-5 and INV-6"
+    depends_on: [REQ-435]
+
+  - id: REQ-443
+    title: "Login-directory pepper rotation tooling (split from REQ-435, BA decision D-C): retire_key and key_status mix tasks and the rotation runbook"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 951  # letflow-queue task id, GH#2205. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
+    description: >
+      The operational half of BA decision D-C (per-environment pepper with a
+      key id and dual-read rotation). REQ-435 builds the key id column, the
+      pepper and key-id configuration with boot checks, the dual-read lookup
+      and the re-keying backfill; this entry builds the tooling and the
+      procedure an operator needs to rotate a deployed pepper. It is NOT a
+      dependency of REQ-437 (serving lookups does not need rotation tooling);
+      it IS a dependency of REQ-444 (a pepper that is deployed outside dev
+      needs a rotation procedure before the feature is enabled there).
+
+      BUILDS:
+      1. A mix task letflow.login_directory.retire_key --key-id ID that
+      deletes the directory rows carrying a retired key id. It refuses the
+      current key id and a key id that is not present, supports --dry-run, and
+      prints counts only. Every Repo call on the directory table carries
+      log: false (design s3.9); no SQL is built by string interpolation (INV-7).
+      2. A mix task letflow.login_directory.key_status printing per-key-id
+      row counts only. Neither task logs or prints an email, an email key or a
+      pepper.
+      3. A rotation runbook at docs/runbooks/login-directory-pepper-rotation.md
+      (a new directory: docs/ has no runbooks convention yet, flagged to
+      REQ-VALIDATOR) covering: first provisioning per environment (generate
+      32 random bytes as 64 hex with a local tool, store in the environment's
+      secrets store, never in the repository, chat or a handoff); the planned
+      rotation (set the new pepper and id as current and the old as previous,
+      deploy; run the backfill; verify with key_status that every previous-id
+      row has a current-id counterpart; retire the previous id; remove the
+      previous variables, deploy); the emergency rotation (suspected pepper
+      exposure: immediate retire, accepting that discovery returns the neutral
+      response and the SPA falls back to ?realm= until the backfill completes);
+      rollback; and the EXTERNAL dependency on an ai-dala-infra secrets-
+      inventory entry. The runbook contains no real value and no command that
+      prints a secret.
+    open_questions:
+      - "EXTERNAL dependency, not in this repository: the ai-dala-infra secrets inventory needs an entry for LETFLOW_LOGIN_DIRECTORY_PEPPER (and its _ID) per environment. Recorded in the runbook, not edited from here."
+      - "docs/runbooks/ is a new directory (no existing runbook convention in docs/); REQ-VALIDATOR may relocate it. Keycloak Organizations: DEFERRED (BA decision D-G), not relevant here."
+    acceptance_criteria:
+      - "rotation exercise (the runbook, executed in a test): seed rows under key id A; reconfigure current = B and previous = A; the lookup still finds the person; run the backfill (REQ-435); key_status shows rows under both ids; retire_key --key-id A removes exactly the A rows; the lookup still finds the person under B; retire_key refuses the current key id and an absent key id; --dry-run deletes nothing"
+      - "the rotation runbook docs/runbooks/login-directory-pepper-rotation.md exists and contains the first-provisioning, planned-rotation, emergency-rotation and rollback sections and the EXTERNAL secrets-inventory dependency, with no secret value (a grep guard finds no 64-hex string in it)"
+      - "grep of retire_key and key_status output and of captured Logger output (level :debug) during the test run finds no email address, no email key hex/base64 and no pepper (INV-4); every Repo call on a directory table carries log: false; no task builds SQL by string interpolation (INV-7)"
+      - "`mix compile --warnings-as-errors`, `mix format --check-formatted` and `mix test` pass for the touched areas, and `mix letflow.check_boundaries` passes, real output quoted"
+    depends_on: [REQ-435]
+
+  - id: REQ-444
+    title: "Email-first enablement gate (split from REQ-437, BA decision D-D): shipped defaults off outside dev, and a boot-time refusal without a legal-confirmation marker, a real mail adapter and the rotation tooling"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 953  # letflow-queue task id, GH#2207. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
+    description: >
+      Makes the hard gate on enabling the feature outside dev (0042 OQ-3: a
+      named person must confirm the lawful basis and controller) a TESTABLE
+      configuration property instead of a procedure. The BA position on OQ-3
+      is PROPOSED only (decision 0043 D-D) and needs legal confirmation; this
+      entry does not decide it, it enforces that nothing is enabled before
+      someone has.
+
+      Dependency choice (keeps depends_on acyclic): the gate treats the
+      notifier adapter as REAL only if it is on an explicit list of
+      delivering adapters (initially Letflow.LoginDiscovery.Notifier.Smtp from
+      REQ-441), and the test of that list uses the Smtp module, so this entry
+      depends_on REQ-441. REQ-441 does not depend on this entry. The gate also
+      requires the rotation procedure to exist (REQ-443), because a pepper
+      deployed outside dev needs one.
+
+      BUILDS:
+      1. Shipped defaults: Letflow.Routers.LoginDiscovery enabled is false
+      for :prod. config/config.exs sets enabled: config_env() != :prod
+      (already in the tree, REQ-439); no config file (config/config.exs,
+      config/prod.exs, runtime.exs defaults) sets it true for :prod; the
+      server flag is never defaulted on by code. The SPA build flag
+      VITE_EMAIL_FIRST_LOGIN (REQ-438) stays off by default in every non-dev
+      build (REQ-438 carries that criterion).
+      2. A pure boot check (for example Letflow.LoginDiscovery.BootCheck.check/4
+      taking env, enabled?, confirmation marker and the value of the
+      application-env key `config :letflow, Letflow.LoginDiscovery.Notifier,
+      adapter:` that REQ-437 defines and REQ-441 sets via LETFLOW_MAIL_ADAPTER)
+      called from config/runtime.exs after REQ-439's
+      Letflow.Plugs.ClientIp.boot_check/3 (left unchanged). In any environment
+      other than :dev and :test, when the mount is enabled, boot REFUSES
+      (raises, echoing no value) unless ALL of: (i) the confirmation marker
+      LETFLOW_LOGIN_DIRECTORY_LEGAL_CONFIRMATION is set to a non-blank value
+      of at least 8 characters, which the operator sets only after a named
+      person has confirmed OQ-3 (the value is that person's reference and a
+      date; never logged); (ii) the configured notifier adapter is on the list
+      of delivering adapters (not Noop, not the test double); (iii) the
+      pepper and key id of REQ-435 are configured (its own boot checks
+      already require them, asserted here as a precondition, not
+      re-implemented). The marker cannot prove a confirmation happened; it
+      makes enabling without one a deliberate, auditable act.
+      3. Rotation-procedure precondition: the rotation runbook of REQ-443
+      exists at docs/runbooks/login-directory-pepper-rotation.md (enforced as
+      a repository test, since a runtime check of a document is not
+      meaningful); the requirement ordering (depends_on REQ-443) is the real
+      enforcement.
+    open_questions:
+      - "OPEN, the one remaining user/legal decision of the series (0042 OQ-3, decision 0043 D-D). Until a named person confirms, the marker stays unset in every non-dev environment and the feature stays off. BA position (PROPOSED, needs legal confirmation): platform operator is controller for the directory; legitimate interest / contract necessity for login routing; minimisation by keyed hash; to be written into the privacy notice and DPA."
+      - "Whether environments other than :dev and :test should be exempt (for example an isolated demo) is not decided; the default here is that only :dev and :test are exempt. QA runs MIX_ENV=prod, so QA is gated too."
+      - "Keycloak Organizations: DEFERRED (BA decision D-G), not relevant here."
+    acceptance_criteria:
+      - "defaults: a test loads config/config.exs, config/prod.exs and the runtime.exs defaults for env :prod (Config.Reader) and asserts Letflow.Routers.LoginDiscovery enabled is false; asserts dev and test may be true; and a grep shows no file sets it true for :prod"
+      - "boot refusal, tested through the pure check and through config/runtime.exs evaluated with a controlled environment: in :prod with LETFLOW_LOGIN_DISCOVERY_ENABLED=true (and a valid LETFLOW_TRUSTED_PROXIES) boot raises when the marker is unset, blank or shorter than 8 characters; raises when the marker is valid but the adapter is Noop or the test double; passes with a valid marker and the Smtp adapter module (REQ-441) configured; never refuses in :dev or :test; never refuses when enabled is false; no raised message echoes the marker value"
+      - "REQ-439's existing boot_check tests pass unmodified and git diff on lib/letflow/plugs/client_ip.ex is empty"
+      - "the rotation runbook docs/runbooks/login-directory-pepper-rotation.md exists (repository test), and REQ-443 is in this entry's depends_on"
+      - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-4 and INV-6"
+    depends_on: [REQ-437, REQ-441, REQ-443]

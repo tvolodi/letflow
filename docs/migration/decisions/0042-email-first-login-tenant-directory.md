@@ -295,7 +295,7 @@ promise.
 ## Accepted bounded inference
 
 Stated rather than claimed away, in the manner of `0028...md:124-138` and
-`lib/letflow/routers/tenant_config.ex:53-56`. The statement is for the **recommended
+`lib/letflow/routers/tenant_config.ex:53-56`. The statement is for the **ratified
 default, Mode B**; Mode A's differences are noted at the end.
 
 **What an unauthenticated caller CAN learn in Mode B** (each is bounded by the limiter):

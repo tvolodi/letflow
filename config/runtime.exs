@@ -146,6 +146,65 @@ log_level_atom =
 
 config :logger, level: log_level_atom
 
+# REQ-439 (REQ-CIP; design lib/letflow/design/req439-trusted-proxy-client-ip.md s4):
+# trusted-proxy client-IP list and the login-discovery mount switch. Placed
+# outside the prod-only block below (the :prod boot refusal needs config_env()
+# and must fire before the prod-only DATABASE_URL raise) and evaluated in EVERY
+# environment. Every message here is fixed text: no env value, header value or
+# CIDR entry is ever echoed (INV-4). Logger is not guaranteed started while
+# config evaluates (e.g. on a release), so warnings go to standard error.
+trusted_proxies =
+  case Letflow.Plugs.ClientIp.parse_cidrs(System.get_env("LETFLOW_TRUSTED_PROXIES") || "") do
+    {:ok, cidrs} ->
+      cidrs
+
+    {:error, :invalid_cidr} ->
+      raise "environment variable LETFLOW_TRUSTED_PROXIES contains an invalid CIDR entry. " <>
+              "Expected a comma-separated list of IPv4/IPv6 addresses or CIDRs (for example a/N). " <>
+              "The value is not echoed."
+  end
+
+login_discovery_enabled =
+  case Letflow.Plugs.ClientIp.parse_enabled(
+         System.get_env("LETFLOW_LOGIN_DISCOVERY_ENABLED"),
+         config_env() != :prod
+       ) do
+    {:ok, enabled} ->
+      enabled
+
+    {:error, :invalid_boolean} ->
+      raise "environment variable LETFLOW_LOGIN_DISCOVERY_ENABLED must be exactly true or false. " <>
+              "The value is not echoed."
+  end
+
+case Letflow.Plugs.ClientIp.boot_check(config_env(), login_discovery_enabled, trusted_proxies) do
+  {:error, :prod_requires_trusted_proxies} ->
+    raise "LETFLOW_LOGIN_DISCOVERY_ENABLED is true but LETFLOW_TRUSTED_PROXIES is empty or " <>
+            "unset: refusing to boot. Without a trusted proxy list the per-IP rate-limit key " <>
+            "is the proxy hop shared by every visitor. Set LETFLOW_TRUSTED_PROXIES to the " <>
+            "reverse proxy's CIDR(s), or set LETFLOW_LOGIN_DISCOVERY_ENABLED=false."
+
+  :warn_zero_prefix ->
+    IO.puts(
+      :stderr,
+      "[warning] LETFLOW_TRUSTED_PROXIES contains a /0 CIDR: every peer of that address " <>
+        "family is trusted, so X-Real-IP is spoofable. Review the list."
+    )
+
+  :warn ->
+    IO.puts(
+      :stderr,
+      "[warning] LETFLOW_LOGIN_DISCOVERY_ENABLED is true with LETFLOW_TRUSTED_PROXIES empty: " <>
+        "per-IP rate limiting keys on the proxy hop (single shared bucket). Not allowed in prod."
+    )
+
+  :ok ->
+    :ok
+end
+
+config :letflow, Letflow.Plugs.ClientIp, trusted_proxies: trusted_proxies
+config :letflow, Letflow.Routers.LoginDiscovery, enabled: login_discovery_enabled
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

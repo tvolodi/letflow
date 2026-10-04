@@ -59,4 +59,12 @@ config :letflow, :lua_platform_time_source, Letflow.Engine.Lua.Platform.SystemCl
 # test-only fixture module on top of that list.
 config :letflow, :modules, [Letflow.Modules.Exam]
 
+# REQ-439 (design lib/letflow/design/req439-trusted-proxy-client-ip.md s4): keys
+# exist in every environment before config/runtime.exs overrides them from
+# LETFLOW_TRUSTED_PROXIES / LETFLOW_LOGIN_DISCOVERY_ENABLED. The mount switch
+# defaults to off in prod and on in dev/test; the trust list defaults to empty
+# (no forwarded header is ever honoured).
+config :letflow, Letflow.Plugs.ClientIp, trusted_proxies: []
+config :letflow, Letflow.Routers.LoginDiscovery, enabled: config_env() != :prod
+
 import_config "#{config_env()}.exs"

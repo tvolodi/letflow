@@ -84,4 +84,71 @@ related:
   - ISS-0940
   - ISS-0921
   - ISS-0414
-status: open
+queue_ref: null  # discovered incidentally by ORCH during a full-suite run, not queue-originated (same framing as ISS-0940)
+github_ref: null  # not mirrored to GitHub -- discovered-and-fixed in the same local run, no separate GitHub issue filed
+status: resolved
+resolved_in_run: WF03-ISS0941-20261004
+resolved_at: "2026-10-04T00:00:00Z"
+resolution: >
+  Root cause: test/support/tenant_schema_reaper.ex's sweep_orphans/2 already
+  detects this exact row shape (the "skipping tenant_schemas row ... with
+  malformed schema_name" warning) but only as a side effect of its regex
+  format validation, not via an explicit guard for the throwaway-build case --
+  so a genuinely orphaned "Tenant Template Build (throwaway)" row (dropped or
+  never-committed schema, bookkeeping row surviving) is warned about and
+  skipped forever rather than ever being cleaned up, by design (the existing
+  sweep deliberately cannot distinguish a genuinely in-progress concurrent
+  build from a truly abandoned one from the row alone).
+
+  Fix: new sweep_template_build_orphans/2 in the same module, adding a
+  5-condition AND gate before any delete: (1) display_name matches the
+  throwaway-fixture naming convention ("Tenant Template Build (throwaway)"),
+  (2) schema_name matches the expected generated-name pattern, (3) row age
+  exceeds a safety threshold, (4) the existing concurrent-build guard
+  precondition (ISS-0414's own conservative design) is satisfied, and (5) a
+  live schema-existence check against information_schema.schemata per
+  candidate confirms the schema is actually absent -- only then is the
+  tenant_schemas row (and its parent tenants row) deleted. This directly
+  implements the suggested_fix above, preserving the original conservative
+  intent while finally acting on the one shape it can confirm beyond doubt
+  (schema confirmed absent, not merely malformed-looking).
+
+  Design doc: lib/letflow/design/iss0941-orphan-tenant-row-reaper.md.
+
+  Gate verdicts:
+  - CODE-DESIGN-VALIDATOR: PASS (1 cycle).
+  - SECURITY-REVIEWER: PASS -- test-only confinement via elixirc_paths
+    confirmed (unreachable outside MIX_ENV=test), deletion scope confirmed
+    tight (only rows satisfying all 5 conditions), no SQL injection (no
+    string-interpolated SQL; pattern/age checks done in Elixir, deletes via
+    parameterized Ecto queries).
+  - REVIEWER: PASS -- independently verified the mechanism itself (not just
+    the symptom), all 7 test cases, the wiring order at both existing sweep
+    boundary points, and confirmed no scope creep; also fixed a
+    docs/anti-patterns.md attribution nit (the entry had mis-attributed the
+    original stall to ELIXIR-DEV alone instead of ORCH/ELIXIR-DEV jointly,
+    corrected in commit 4a784478).
+  - TEST-RUNNER: PASS -- independently confirmed the full suite clean,
+    5409/5410 (1 transient unrelated host-contention timeout, confirmed
+    isolated via rerun), all 3 reaper test files passing.
+  - RELEASE-VALIDATOR: PASS -- independently traced the 4-part gate as
+    actually wired (display_name + schema_name pattern + age, ANDed in one
+    query, plus the concurrency-guard precondition, plus the live
+    schema-existence check per candidate), verified 3 test cases directly,
+    and constructed an original TOCTOU adversarial analysis: concluded this
+    is NOT a gap, because schema names are never reused (generated via
+    128-bit random crypto bytes before row insert), so there is no "about to
+    create the same name" race for the deletion to collide with. Also ran
+    both the full suite and the stricter `mix letflow.check.test`
+    independently clean, and confirmed docs/requirements.yaml was untouched
+    (no REQ tied to this issue).
+
+  Process note: ORCH took over implementation mid-stream after the original
+  ELIXIR-DEV agent stalled in a Monitor-wait loop (per the "No Background
+  Wait For A Cross-Turn Notification" core directive); this is reflected in
+  docs/anti-patterns.md's ORCH/ELIXIR-DEV joint attribution (commit
+  4a784478).
+
+  Branch: fix/ISS-0941-orphan-tenant-row-reaper. Final commit 4a784478
+  (rebased onto origin/main's 14c2e1cb prior to PR open). PR number and
+  merge commit recorded here once opened/merged.

@@ -383,6 +383,55 @@ history:
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER
+    at: "2026-10-04T00:00:00Z"
+    note: >
+      Closed ISS-0941 (orphaned "Tenant Template Build (throwaway)"
+      tenants/tenant_schemas rows outlive their dropped Postgres schema on
+      the shared letflow-postgres-1 dev container, causing a wide
+      unrelated-looking failure spread in any full-suite run that iterates
+      "every tenant"). Root cause: test/support/tenant_schema_reaper.ex's
+      sweep_orphans/2 already detected this row shape (the "malformed
+      schema_name" warning) only as a side effect of regex format
+      validation, not via an explicit guard, so a genuinely orphaned
+      throwaway-build row was warned about and skipped forever rather than
+      ever cleaned up. Fix: new sweep_template_build_orphans/2, a
+      5-condition AND gate (display_name match + schema_name pattern + row
+      age + the existing ISS-0414 concurrency-guard precondition + a live
+      schema-existence check against information_schema.schemata per
+      candidate) before deleting the tenant_schemas row and its parent
+      tenants row. Design doc
+      lib/letflow/design/iss0941-orphan-tenant-row-reaper.md
+      (CODE-DESIGN-VALIDATOR PASS, 1 cycle). SECURITY-REVIEWER PASS
+      (test-only confinement via elixirc_paths confirmed, tight deletion
+      scope, no SQL injection). REVIEWER PASS (independently verified the
+      mechanism, all 7 test cases, wiring order at both sweep boundary
+      points, no scope creep; also fixed a docs/anti-patterns.md
+      attribution nit, commit 4a784478). TEST-RUNNER PASS, independently
+      confirmed 5409/5410 full suite clean (1 transient unrelated
+      host-contention timeout, confirmed isolated via rerun), all 3 reaper
+      test files passing. RELEASE-VALIDATOR PASS -- independently traced
+      the 4-part gate as actually wired, verified 3 test cases directly,
+      and constructed an original TOCTOU adversarial analysis concluding
+      NOT a gap (schema names never reused -- generated via 128-bit random
+      crypto bytes before row insert, so no "about to create same name"
+      race exists); confirmed the secrets_runtime_config_test.exs timeout
+      genuinely unrelated, confirmed requirements.yaml untouched, ran both
+      the full suite and the stricter mix letflow.check.test independently
+      clean. RELEASE-VALIDATOR also found one administrative gap:
+      docs/issues/ISS-0941.yaml had no queue_ref/github_ref fields at all
+      -- added here as null with explanatory comments per the ISS-0414/
+      ISS-0940 convention. Process note: ORCH took over implementation
+      mid-stream after the original ELIXIR-DEV agent stalled in a
+      Monitor-wait loop; reflected in docs/anti-patterns.md's ORCH/
+      ELIXIR-DEV joint attribution. No docs/requirements.yaml edit applies
+      (ISSUE closure, not a REQ). Branch
+      fix/ISS-0941-orphan-tenant-row-reaper, final commit 4a784478
+      (rebased onto origin/main's 14c2e1cb before PR open). PR number and
+      merge commit recorded in docs/issues/ISS-0941.yaml once opened.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
     at: "2026-10-04T02:57:47Z"
     note: >
       Closed ISS-0915 (uat_preflight.sh local_deps check false-GAPped on a

@@ -4753,12 +4753,12 @@ defmodule Letflow.Engine do
           {:ok, {%{optional(String.t()) => Ecto.UUID.t()}, [TokenRecord.t()]}}
           | {:error, term()}
   def insert_hop_chain_new_token_records(
-         repo,
-         instance_id,
-         original_active_tokens,
-         final_tokens,
-         prefix
-       ) do
+        repo,
+        instance_id,
+        original_active_tokens,
+        final_tokens,
+        prefix
+      ) do
     original_ids = MapSet.new(original_active_tokens, &to_string(&1.id))
 
     hop_chain_new_tokens =

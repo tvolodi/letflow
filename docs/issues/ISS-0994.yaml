@@ -91,4 +91,5 @@ affected_files:
   - docs/agents/instructions/security-invariants.md
 queue_ref: Q-961  # queue issue_ref ISS-0961 collides with an unrelated local issue; local number ISS-0994 (next free on origin/main and all open PRs)
 github_ref: GH-2231
+duplicate_of: ISS-0993
 status: open

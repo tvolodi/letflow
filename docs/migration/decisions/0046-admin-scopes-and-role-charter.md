@@ -182,7 +182,7 @@ SUPERSEDED as to the count by D5 and D6 via the addendum below; the principle (t
 The addendum's "sixth role" count is SUPERSEDED by D5 and D6 (eight roles). This record is now
 the place to read for the current count.
 
-> "`POST /users` -- `UsersGroupsRolesManage`, `PLATFORM_ADMIN`-only via the catch-all clause -- and `POST /tokens` -- `TokensManage`, `PLATFORM_ADMIN`-only"
+> "`POST /users` — `UsersGroupsRolesManage`, `PLATFORM_ADMIN`-only via the catch-all clause — and `POST /tokens` — `TokensManage`, `PLATFORM_ADMIN`-only"
 
 Historical statement of fact at 2026-09-14. SUPERSEDED for the grant by D5 (TENANT_ADMIN holds
 both in its own tenant) and D4.

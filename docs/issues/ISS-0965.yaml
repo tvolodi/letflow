@@ -10,3 +10,34 @@ description: >
 queue_ref: Q-938  # queue issue_ref ISS-0938 collides with an existing local file; local filename ISS-0965
 github_ref: GH-2126
 status: open
+diagnosis: >
+  Diagnosed 2026-10-05 (ORCH re-run of the single scenario against QA at origin/main
+  509e72c4, QA == origin/main; independently confirmed by ISSUE-FIXER code trace).
+  Root cause is the SPEC PRECONDITION, not the backend and not QA data:
+  web/tests/e2e/pipelines/renderer-states.pipeline.e2e.spec.ts isCurrentMember()
+  (lines ~199-205) uses dialog.locator('div').filter({hasText: email}).filter({hasText: 'Remove'}),
+  which also matches ANCESTOR divs of the whole dialog. Non-members are listed in the
+  "Add member" <select> as <option> text "Name <email>", and worker-user's row supplies a
+  "Remove" button, so whenever TASK_WORKER already has any other member the check
+  returns true and ensureGroupMembership() silently skips the add. operator-user is
+  therefore never put in TASK_WORKER, and after PROCESS_OPERATOR is revoked it holds no
+  role that allows /tasks/inbox. Candidates (a) missing platform_role binding, (b) duplicate
+  users row, (c) add not persisting are all refuted by the evidence below.
+  Evidence (QA, read via API, admin-user + operator-user tokens): GET /identity/roles shows
+  TASK_WORKER kind=platform_role group_id=101d1596-3975-40ca-a9f6-a9a74425c7ea (bound);
+  GET /identity/groups/<that id>/members lists only worker-user (operator-user id
+  7578ad55-d84e-4762-8283-7d68358ccba0, the single users row for operator@letflow.local, is
+  absent) after the failed spec run; operator PROCESS_OPERATOR-only after revoke:
+  GET /tasks/inbox 403 insufficient permissions, GET /dlq 403. Control: POST the membership
+  into TASK_WORKER by hand (201), revoke PROCESS_OPERATOR (204): GET /tasks/inbox 200
+  (count 0), GET /dlq 403 -- backend authz behaves exactly as REQ-378 intends. All test
+  memberships were removed afterwards (TASK_WORKER = [worker-user], PROCESS_OPERATOR =
+  [operator-user], as found).
+  Proposed fix (not applied; route to FRONTEND-DEV/TEST-DESIGNER, no design doc needed):
+  replace isCurrentMember's body with
+  `(await dialog.getByText(memberEmail, { exact: true }).count()) > 0` (member rows render
+  the email alone in its own div, GroupsPage.tsx ~291; option text is "Name <email>" so an
+  exact match never hits it), correct the stale comment above it, and assert after the add
+  that the email appears as an exact-text row so a skipped add fails loudly at the
+  precondition. ISS-0907's "missing QA memberships" attribution was directionally right
+  (operator-user lacks TASK_WORKER) but the reason it stays missing is this spec defect.

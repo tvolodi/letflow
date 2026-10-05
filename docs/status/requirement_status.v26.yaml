@@ -573,3 +573,24 @@ history:
       --warnings-as-errors and check_boundaries clean. The full suite was not
       run by RELEASE-VALIDATOR under a RAM override; CI is the remaining
       full-suite gate. Branch feature/WF02-REQ436-20261004.
+
+  - req: REQ-435
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T11:55:06Z"
+    note: >
+      Platform tenant-login directory data layer (key_id, dual-read,
+      backfill) delivered via PR #2201, merge commit b01b785e (Q-944).
+      SECURITY-REVIEWER PASS, REVIEWER PASS. Merge was held pending pepper
+      provisioning per the PR title.
+
+  - req: REQ-440
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T11:55:07Z"
+    note: >
+      Closed by verification: the REQ-440 write path was delivered inside PR
+      #2201 (merge commit b01b785e, Q-944). RELEASE-VALIDATOR re-derived all
+      acceptance criteria and passed it for closure; report
+      test/reports/report-2026-10-05-WF02-REQ440-VERIFY.yaml. Minor test
+      gaps filed as docs/issues/ISS-0990.yaml.

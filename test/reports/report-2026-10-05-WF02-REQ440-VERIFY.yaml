@@ -1,0 +1,110 @@
+run_id: WF02-REQ440-VERIFY-20261005
+agent: RELEASE-VALIDATOR
+requirement: REQ-440
+queue_task: Q-949 (GH#2203)
+branch: docs/REQ-440-verification
+verified_commit: b01b785e (contains PR #2201 merge b01b785e46f0f399d0956ce6c4f5ce905bcc5e0a)
+date: 2026-10-05
+verdict: PASS_WITH_NOTES
+closure: verification-only (BUILDS delivered inside PR #2201 together with REQ-435)
+evidence:
+  scoped_tests:
+    command: >
+      mix test test/letflow/identity_login_directory_test.exs
+      test/letflow/identity_login_directory_concurrency_test.exs
+      test/letflow/login_directory/plan_user_change_test.exs
+      test/letflow/routers/identity_login_directory_test.exs
+      test/letflow/login_directory_test.exs
+      test/letflow/login_directory/no_secret_in_repo_test.exs
+    result: "Result: 119 passed (exit 0)"
+  static_checks:
+    format: "mix format --check-formatted exit 0"
+    compile: "mix compile --warnings-as-errors --force exit 0"
+    boundaries: "mix letflow.check_boundaries: OK -- 885 edges checked, 0 violations"
+  full_suite:
+    run: false
+    reason: >
+      Not run by instruction (shared RAM). mix letflow.check.test and scripts/test_parallel.sh were
+      NOT independently run by this validator; cited only: PR #2201 backend gate ran the full suite
+      green on head 8becf5a8. CI on the PR/merge is the remaining full-suite checkpoint.
+criteria:
+  - n: 1
+    summary: create via POST /users -> one entry, same txn; forced audit failure leaves neither
+    verdict: VERIFIED
+    code: lib/letflow/identity.ex:237-290 (Multi: user, :login_directory, audit)
+    tests: "routers/identity_login_directory_test.exs:51,64; identity_login_directory_test.exs:110,188 (DROP audit_entries -> {:transaction_failed,_}, user_count 0 and no entries)"
+  - n: 2
+    summary: tenant_id source, guard errors, caller grep, :skip grep
+    verdict: VERIFIED
+    code: "identity.ex:467-493 directory_target (nil->:tenant_id_required, schema mismatch->:tenant_prefix_mismatch, malformed->:invalid_tenant_id); routers/identity.ex:270-272 user_write_opts uses auth_context.tenant_id"
+    tests: "identity_login_directory_test.exs:217,239,262 (guard x3 on each fn), routers test:87 (body+query tenant_id ignored), :126,:154; grep guards :325-:384"
+    greps: |
+      lib callers: routers/identity.ex:280 create_user(attrs, opts), :396 update_user_profile, :434 update_user_status (all opts from user_write_opts/1);
+      lib/mix/tasks/letflow.seed.exam_fixtures.ex:237 passes tenant_id: tenant_id.
+      grep -rn "login_directory: :skip" lib -> only lib/letflow/design/req434-*.md (docs), zero .ex/.exs.
+      test callers: me_test(2) and test/support/simulation/seed.ex:192 pass tenant_id; 18 sites use :skip (see notes).
+  - n: 3
+    summary: JIT in new Repo.transaction; failure -> no user + {:error,{:login_directory,_}}; sync outside; idempotent; username race; no-email
+    verdict: VERIFIED
+    code: identity.ex:1856-1883 (transaction), 1887-1973 (savepoint insert, race recovery), 1979-1998 (write_jit_directory_entry -> Repo.rollback({:login_directory,r})); sync_role_claims_from_token after commit at :1863
+    tests: identity_login_directory_test.exs:390,417,433,447,460,483,498,534 (source-order check),556; concurrency_test.exs:121
+  - n: 4
+    summary: status->non-active removes entry inside own txn; forced failure leaves both unchanged
+    verdict: VERIFIED
+    code: identity.ex:398-442 (FOR UPDATE lock, update, directory_step, audit in one Multi)
+    tests: identity_login_directory_test.exs:583,599,611; routers test:168
+  - n: 5
+    summary: other-active-user rule (U1/U2, profile email change)
+    verdict: VERIFIED
+    code: login_directory.ex:380-415 remove_entry_if_unreferenced (exists? active user with lower(btrim(email)) in prefix schema); plan_user_change :254-271
+    tests: identity_login_directory_test.exs:643,656,669; concurrency_test.exs:69,92
+  - n: 6
+    summary: removal under dual-read removes/keeps BOTH rows
+    verdict: VERIFIED_AT_REMOVAL_FUNCTION_ONLY (minor test-seam gap)
+    code: login_directory.ex:395-415 deletes where email_key in ^candidate_keys and tenant_id
+    tests: "login_directory_test.exs:798 (both removed, other tenant keeps), :809 (both kept), :824 (previous-key-only removed). No test drives it through Identity.update_user_status/3 with a previous pepper configured."
+  - n: 7
+    summary: same email in A and B -> two entries; status change in A leaves B's
+    verdict: VERIFIED_WITH_MINOR_TEST_GAP
+    tests: "routers test:105 (two entries via write path); login_directory_test.exs:798 (other tenant's row kept, function level). No write-path test deactivates in A while B holds the same email. Mechanism is the tenant_id filter in delete_all (login_directory.ex:404-408)."
+  - n: 8
+    summary: INV-4 logging, log: false on every directory Repo call, INV-7 no interpolated SQL
+    verdict: VERIFIED
+    code: "login_directory.ex:215,353,392,404,436 all log: false; backfill.ex:144 insert_all (and others) via balanced-arg grep test; Repo.query! uses bound params"
+    tests: "identity_login_directory_test.exs:354,367 (static), :779-:845 (debug log capture with harness control, key encodings refuted)"
+  - n: 9
+    summary: compile/format/test/boundaries pass
+    verdict: VERIFIED (scoped; full suite cited from PR #2201 gate only)
+gaps_and_notes:
+  - id: N1
+    severity: MINOR
+    text: >
+      login_directory: :skip is used at 18 test sites (audit_dispositions_test 12, query_cursor_field_grants,
+      query_joins, iss0736_oidc_live_revocation, instances_test) although EVERY one runs on a real
+      TenantFixture/provisioned tenant that has a tenants row and a tenant_id available. Design s15.1 allowed
+      :skip only where the prefix has no tenants row. TEST-DESIGNER's suspicion is correct (they could pass
+      tenant_id). None hides a lib gap (hook behaviour is covered in the identity/router tests), but the
+      iss0736 test (deactivation of a real JIT user) skips the removal hook it would otherwise exercise.
+  - id: N2
+    severity: MINOR
+    text: >
+      Test-seam gaps for criteria 6 and 7 (no Identity-level dual-read removal test; no write-path test of
+      deactivation in A with the same email live in B). Behaviour is code-evident and unit-tested one layer down.
+  - id: N3
+    severity: INFO
+    text: >
+      The :skip opt is honoured by lib code for any caller (identity.ex:471); the "tests only" rule is enforced
+      solely by the grep test. Static log: false guard regex covers only all/exists?/insert_all/delete_all/query!
+      (not insert/update/one), acceptable today as the modules use none of those.
+  - id: N4
+    severity: INFO
+    text: >
+      Out-of-band user writers that bypass the hook: Letflow.IdentityMigration.insert_all_preserving_id
+      (one-time legacy copy via mix letflow.copy_identity_tables; covered by Backfill) and
+      RoleBackfill update_all (role_claims_synced_at only, no email/status). No other Repo write to users in lib/.
+      Status enum is only :active/:inactive (user.ex:41), plan treats non-:active as ineligible.
+  - id: N5
+    severity: INFO
+    text: >
+      INV-4 test tolerates the pre-existing users/audit_entries query logging of the raw email at :debug;
+      only directory queries/keys are proven unlogged.

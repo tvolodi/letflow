@@ -1,0 +1,30 @@
+id: ISS-0990
+title: "REQ-440 verification notes: three minor test-coverage gaps in the directory write-path tests"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ440-VERIFY-20261005 (Q-949)
+severity: MINOR
+owner: "TEST-DESIGNER / ELIXIR-DEV"
+description: >
+  RELEASE-VALIDATOR re-derived REQ-440 (PR #2201, merge b01b785e) and passed it for closure by
+  verification, with these test-only gaps (no lib/ gap found):
+  (1) `login_directory: :skip` is used at 18 test call sites on real provisioned tenants
+  (audit_dispositions_test x12, entities/query_cursor_field_grants_test, entities/query_joins_test,
+  plugs/iss0736_oidc_live_revocation_test, routers/instances_test); design s15.1 allows it only where
+  the prefix has no `tenants` row, so they could pass `tenant_id`. The iss0736 test deactivates a real
+  user and therefore skips the removal hook it would otherwise exercise.
+  (2) Removal under dual-read (both rows removed / both kept) is tested only at
+  `remove_entry_if_unreferenced` (login_directory_test.exs ~798/809/824); no test drives it through
+  `update_user_status/3` with a previous pepper configured.
+  (3) No write-path test deactivates a user in tenant A while tenant B holds the same email (the
+  function-level test shows B's entry kept; routers/identity_login_directory_test.exs:105 covers only
+  two entries via the write path).
+  Info: lib honours `:skip` for any caller (only the grep test prevents non-test use);
+  IdentityMigration inserts users directly (the backfill covers them).
+affected_files:
+  - test/letflow/audit_dispositions_test.exs
+  - test/letflow/plugs/iss0736_oidc_live_revocation_test.exs
+  - test/letflow/login_directory_test.exs
+  - test/letflow/identity_login_directory_test.exs
+queue_ref: Q-949
+github_ref: GH-2203
+status: open

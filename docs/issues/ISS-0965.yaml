@@ -9,7 +9,15 @@ description: >
   ISS-0907 (closed_not_applicable) attributed the FULL2 failure to missing QA memberships (ISS-0886/ISS-0910) and asked for a re-run. Re-run still fails at step 5: after revoking PROCESS_OPERATOR membership My Tasks shows PermissionDenied and task-inbox-list never attaches. Either operator-user still lacks a TASK_WORKER-granting membership on QA or the ISS-0907 diagnosis is wrong. Needs live trace of GET /tasks/inbox for operator-user post-revoke. Evidence: test/uat-reports/uat-2026-10-01-WF05-FULL3-20261001-PLATFORM-B.yaml
 queue_ref: Q-938  # queue issue_ref ISS-0938 collides with an existing local file; local filename ISS-0965
 github_ref: GH-2126
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0965-renderer-states-ismember
+resolved_at: "2026-10-05T18:00:00Z"
+resolution: >
+  isCurrentMember() now uses an EXACT text match (dialog.getByText(email, {exact: true})), which hits
+  member rows only and never an <option> "Name <email>" or an ancestor div; ensureGroupMembership()
+  asserts after the add that the email is a visible exact-text member row, so a skipped or lost add
+  fails at the precondition instead of passing silently. Spec-only change (no lib/ change). The e2e
+  spec was NOT run here (needs the stack); letflow-2 re-runs the scenario on QA after merge to confirm.
 diagnosis: >
   Diagnosed 2026-10-05 (ORCH re-run of the single scenario against QA at origin/main
   509e72c4, QA == origin/main; independently confirmed by ISSUE-FIXER code trace).

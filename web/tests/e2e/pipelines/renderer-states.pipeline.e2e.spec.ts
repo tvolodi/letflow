@@ -188,21 +188,15 @@ async function openManageMembers(adminPage: Page, groupName: string): Promise<Lo
  * reactivity timing).
  */
 async function isCurrentMember(dialog: Locator, memberEmail: string): Promise<boolean> {
-  // Scoped to rows that also carry a "Remove" button -- the dropdown above
-  // ("Add member") lists exactly the NON-members as <option> text, which
-  // would otherwise false-positive a bare getByText(memberEmail) match
-  // against a person who is NOT (yet) a member. Both filters use plain
-  // hasText strings (not a nested has: locator) -- a `has:` locator built
-  // from the same root as the outer one does not compose the way it looks
-  // like it should; confirmed directly while writing this spec (it silently
-  // matched zero rows against a dialog visibly showing the member).
-  return (
-    (await dialog
-      .locator('div')
-      .filter({ hasText: memberEmail })
-      .filter({ hasText: 'Remove' })
-      .count()) > 0
-  )
+  // ISS-0965 (Q-938): a member row renders the email ALONE in its own div
+  // (GroupsPage.tsx member list), while the "Add member" dropdown lists the
+  // NON-members as <option> text "Name <email>" -- so an EXACT text match hits
+  // member rows only and never an <option>. The earlier ancestor-div filter
+  // (hasText email + hasText "Remove") matched ANY ancestor div containing the
+  // email inside an <option> AND another member's Remove button, so when the
+  // group already had a different member the add was silently skipped and the
+  // operator never landed in TASK_WORKER (step 5 then failed on QA).
+  return (await dialog.getByText(memberEmail, { exact: true }).count()) > 0
 }
 
 async function ensureGroupMembership(adminPage: Page, groupName: string, memberEmail: string, memberSelectLabel: string): Promise<void> {
@@ -217,6 +211,13 @@ async function ensureGroupMembership(adminPage: Page, groupName: string, memberE
     const res = await addResponse
     expect(res.ok(), `adding ${memberEmail} to ${groupName} must succeed`).toBeTruthy()
   }
+  // ISS-0965: assert the precondition loudly -- after this function the email
+  // must appear as an exact-text member row, so a skipped or lost add fails
+  // HERE (at the precondition) and can never pass silently into step 5.
+  await expect(
+    dialog.getByText(memberEmail, { exact: true }),
+    `${memberEmail} must be a member of ${groupName} after the precondition step`,
+  ).toBeVisible({ timeout: 10_000 })
 }
 
 test.describe('Pipeline: renderer-permission-denied-surface (platform-renderer-permission-denied-surface)', () => {

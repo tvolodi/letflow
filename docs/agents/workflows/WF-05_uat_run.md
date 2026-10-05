@@ -138,6 +138,8 @@ realms/actors, deployed definitions, and specs needing local Postgres). Prepare 
    `when:` branch" procedure. Record which branch was run in the report.
 3. Observe actual resulting state (not just "no error thrown") — query the instance
    back to confirm the expected state was reached.
+3a. For a step with `expect_refusal: true`, follow `.claude/agents/uat-runner.md`'s "Refusal
+   steps and actor access"; record `actors_observed` per scenario.
 4. Record PASS/FAIL per scenario with the observed evidence, not an inferred one.
 5. Write test/uat-reports/uat-<date>-<run-id>.yaml.
 6. Complete the handoff: PASS if all scenarios passed, FAIL otherwise with each
@@ -164,6 +166,10 @@ section for why these are separate, non-substitutable gates.
 2. Cross-check MUST-severity acceptance criteria for the requirement/stage batch
    under test against passing-scenario coverage.
 3. Apply the single-BLOCKER-blocks-release rule.
+3a. Apply the access gate: read `access_verdict` and `access_note` from every BA sign-off. The
+    recommendation is NOT `APPROVED` if any sign-off has `access_verdict: FAIL`, or
+    `access_verdict: NOT_COVERED` for a vertical that is not listed in `refusal_coverage_exempt`
+    in `test/fixtures/uat/actors.yaml`. A missing `access_verdict` counts as `NOT_COVERED`.
 4. Arbitrate any cross-vertical disagreement found; route to REQ-ANALYST if the
    underlying requirement is ambiguous.
 5. Write test/uat-reports/po-signoff-<run_id>.yaml.
@@ -175,5 +181,7 @@ PASS → this stage's UAT parity is confirmed **and** business-approved for
 release; ORCH proceeds toward RELEASE-VALIDATOR / the stage-gate check in
 `ORCHESTRATOR.md` §8.
 FAIL (BLOCKED) → route per each issue's `suggested_action` (`route_to_wf03` /
-`route_to_req_analyst` / `route_to_uat_runner`), then re-run this step once
+`route_to_req_analyst` / `route_to_uat_runner` / `route_to_security_review`); an issue
+with `route_to_security_review` is dispatched by ORCH to SECURITY-REVIEWER, never to WF-03
+directly; then re-run this step once
 resolved, per `.claude/agents/product-owner.md`'s rework policy (`max_rework: 1`).

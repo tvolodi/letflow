@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ442-20261005/step-03-test-designer.json",
   "created_at": "2026-10-05T12:18:47Z",
   "started_at": "2026-10-05T12:18:47Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T12:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -39,11 +39,23 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
-    "next_action": null
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-442.md and 4 new ExUnit files (all uncommitted). SCOPED RUN (MIX_TEST_PARTITION=r442t MIX_ENV=test; new 4 files + tenants_test, login_directory_test, tenant_config_test, mobile_tenant_config_test, tenant_settings_test, identity/tenant_test): 'Finished in 209.6 seconds ... Result: 218 passed'. New files alone: schema 12 passed, login_directory_disclose 21 passed, tenants_mode 24 passed, mode_exposure 13 passed. 'mix format --check-formatted' on the 4 new files: FMT_OK. grep of run logs for 'default values for the optional arguments' and for warnings naming req442 files: none. NOT RUN: the full-suite 'mix letflow.check.test' (parallel full suite; RAM tight and ORCH said scoped runs only) -- no test helper in the new files has a default argument, and the scoped compile of the new files emitted no such warning, but the fresh-recompile-all gate was not executed; TEST-RUNNER should run it. MIGRATION (AC1, real output, partition DB): 'mix ecto.rollback --step 1' -> 'drop constraint tenants_login_disclosure_mode_check from table tenants / alter table tenants'; 'mix ecto.migrate' -> 'create check constraint tenants_login_disclosure_mode_check on table tenants / == Migrated 20261005000001'. Column/CHECK/NULL asserted in ExUnit (information_schema returns [[public, character varying, YES, 255, nil]]; picker_unauth rejected naming tenants_login_disclosure_mode_check). FAIL-FIRST (throwaway worktree at merge-base 5b56822a, fresh DB partition r442pre, removed afterwards): 54 of 58 tests fail (SCH file fails to compile: no such struct key); 4 pass as unchanged-behaviour guards. Because the code under test did not exist, relied on MUTATION, each reverted via git checkout of the committed lib file and verified with empty 'git status --short lib priv': M1 login_directory.ex ceiling AND->OR: 7/21 fail (ceiling cells, junk deployment, multi-tenant). M2 identity.ex audit after_state leaks the mode: 3/24 fail. M3 identity.ex nil-actor guard removed: 2/24 fail. M4 tenant.ex status_changeset casts the mode: 1/12 fail. M5 tenant_config.ex leaks stored mode: 3/13 fail. COVERAGE: AC2 (PLATFORM_ADMIN set per mode, PATCH null via HTTP, null no-op, absent key, invalid values 422, authz matrix over TENANT_ADMIN/unknown/empty/all 5 non-admin roles on own+other tenant with unchanged row and zero audit rows, tenant settings route top-level+wrapped never persists, audit row value-free in target chain, nil actor, no registration, dropped audit table rollback with fixed log line); AC3 (byte-level refute of attr name and both values on tenant-config, mobile config, tenant-settings PATCH + stored blob, /me/memberships, GET /audit, for mode unset/uniform/redirect; 7-key set on create/list/get/patch/deactivate/reactivate; grep gate over lib/); AC4 (6 matrix cells one test each, exactly one telemetry query, junk deployment, config-read variants, inactive/migrating/unbound/empty realm x all modes, per-row flags); AC5 (exact key set, no struct, select-body grep); AC6 (no prefix, bound boolean param, no log output, one Repo call in lookup region). RECORDED GAPS: REQ-437 response allowlist test does not exist yet (LoginDiscovery not in tree); log: false is not visible in telemetry meta so it is asserted from source + captured log; AC7 gates other than format are ELIXIR-DEV/SECURITY-REVIEWER/TEST-RUNNER scope. ENVIRONMENT INCIDENT: mid-task a sibling session ran 'git checkout main' and 'pull --ff-only' in C:/Users/tvolo/dev/ai-dala/letflow-3 (reflog HEAD@{1} checkout feature->main), so lib/ lost the REQ-442 code and my first RT run failed. I did NOT switch that checkout back. Decision: created git worktree C:/Users/tvolo/dev/ai-dala/letflow-3-r442t-wt on branch feature/WF02-REQ442-20261005 (copied _build/deps), moved my untracked test files there, and did all work and this handoff edit there. The main checkout (on main, clean except letflow-3.code-workspace) was left as found; ORCH must decide whether to remove the worktree or check the branch out again.",
+    "artifacts_out": [
+      "test/specs/REQ-442.md",
+      "test/letflow/req442_tenant_mode_schema_test.exs",
+      "test/letflow/req442_login_directory_disclose_test.exs",
+      "test/letflow/routers/req442_tenants_mode_test.exs",
+      "test/letflow/routers/req442_mode_exposure_test.exs"
+    ],
+    "issues": [
+      "Full-suite 'mix letflow.check.test' not run by TEST-DESIGNER (scoped-runs-only instruction); TEST-RUNNER to run it.",
+      "Files live in worktree C:/Users/tvolo/dev/ai-dala/letflow-3-r442t-wt (branch feature/WF02-REQ442-20261005, uncommitted) because letflow-3 was switched to main by a sibling session.",
+      "Throwaway DB letflow_testr442pre (partition r442pre) and letflow_testr442t remain in local Postgres.",
+      "REQ-437 response-allowlist test does not exist yet; AC5 clause cannot be exercised.",
+      "Spec: 'TENANT_ADMIN' is not a role in Authorization.roles/0; tested as an unknown role string plus all real non-admin roles."
+    ],
+    "next_action": "TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 0
 }

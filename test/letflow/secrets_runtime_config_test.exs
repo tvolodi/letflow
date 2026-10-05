@@ -26,6 +26,11 @@ defmodule Letflow.SecretsRuntimeConfigTest do
     LETFLOW_SECRETS_MASTER_KEY="not-64-hex-characters-at-all" MIX_ENV=test mix run -e "IO.puts(1)"
       -> exit 1, "... is malformed: it must be exactly 64 lowercase hexadecimal ..."
 
+    LETFLOW_SECRETS_MASTER_KEY=<64 x "f"> (valid distinct pepper pair) MIX_ENV=dev mix run --no-start -e "IO.puts(:booted_past_config)"
+      -> BEFORE ISS-0987 fix (config/runtime.exs compared against <<0xFF::256>>, the
+         integer 255, not 32 bytes of 0xFF): exit 0, marker printed (the all-0xFF
+         refusal was dead code). AFTER the fix: exit 1, "trivially-guessable".
+
   `MIX_ENV=test` cannot exercise the truly-*absent* case: `config/test.exs` itself
   injects a fallback test-only value when the variable is absent from the real
   environment (so the rest of this suite can boot at all), so an absent-var subprocess
@@ -107,5 +112,62 @@ defmodule Letflow.SecretsRuntimeConfigTest do
     assert output =~ "LETFLOW_SECRETS_MASTER_KEY"
     assert output =~ "is malformed"
     refute output =~ "should_not_reach_here"
+  end
+
+  # ISS-0987: shared env for the weak-key regression tests. A valid, distinct pepper
+  # pair is supplied so the REQ-435 pepper check cannot mask the master-key check
+  # (without it an all-0xFF key exits 1 on "pepper is missing" and the test would pass
+  # before the fix for the wrong reason). MIX_TEST_PARTITION/MIX_BUILD_PATH are nil'd
+  # for the same reason as the first test above.
+  @marker "booted_past_config"
+  @pepper String.duplicate("ab", 32)
+
+  defp run_with_key(key_hex) do
+    env = [
+      {"LETFLOW_SECRETS_MASTER_KEY", key_hex},
+      {"LETFLOW_LOGIN_DIRECTORY_PEPPER", @pepper},
+      {"LETFLOW_LOGIN_DIRECTORY_PEPPER_ID", "p1"},
+      {"MIX_ENV", "dev"},
+      {"MIX_TEST_PARTITION", nil},
+      {"MIX_BUILD_PATH", nil}
+    ]
+
+    System.cmd("mix", ["run", "--no-start", "-e", "IO.puts(:#{@marker})"],
+      env: env,
+      stderr_to_stdout: true,
+      cd: File.cwd!()
+    )
+  end
+
+  defp assert_refused_as_trivial(key_hex) do
+    {output, exit_status} = run_with_key(key_hex)
+
+    refute exit_status == 0, "expected non-zero exit, got 0 with output:
+#{output}"
+    assert output =~ "trivially-guessable"
+    assert output =~ "LETFLOW_SECRETS_MASTER_KEY"
+    refute output =~ @marker
+    # INV-4: the message names the variable, never echoes the key value (full run).
+    refute output =~ key_hex
+  end
+
+  test "ISS-0987: all-zeros LETFLOW_SECRETS_MASTER_KEY is refused as trivially-guessable" do
+    assert_refused_as_trivial(String.duplicate("0", 64))
+  end
+
+  test "ISS-0987: all-0xFF LETFLOW_SECRETS_MASTER_KEY is refused as trivially-guessable" do
+    assert_refused_as_trivial(String.duplicate("f", 64))
+  end
+
+  test "ISS-0987: a valid non-trivial LETFLOW_SECRETS_MASTER_KEY boots past config" do
+    key = "0123456789abcdef" |> String.duplicate(4) |> String.reverse()
+    refute key == @pepper
+
+    {output, exit_status} = run_with_key(key)
+
+    assert exit_status == 0, "expected exit 0, got #{exit_status} with output:
+#{output}"
+    assert output =~ @marker
+    refute output =~ "trivially-guessable"
   end
 end

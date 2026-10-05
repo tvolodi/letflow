@@ -54,20 +54,28 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "revalidation_of": "rework 3, commit 4afc2ca6. Verdict history: rework 0 FAIL (1 MAJOR + 3 MINOR), rework 1 PASS, rework 2 FAIL (4 MINOR), rework 3 PASS.",
-    "summary": "All four MINOR defects (V1-V4) from the rework-2 check are resolved. 2.3.9 e-mail-edit/linking bullet is now 'ASSUMED RISK, UNVERIFIED (S-18)' and says 'may allow'; SSO-session and mobile-refresh-token bullets are 'ASSUMED, UNVERIFIED (S-14, S-6)' and '(S-14, S-17)'; 2.3.5 item 6 is 'ASSUMED, UNVERIFIED (S-17, S-14)' with the token-lifetime value also UNVERIFIED; 2.3.8 item 2 now cites S-18 and states S-15 covers only 'Login with email'. New S-17 (access-token lifetime and revocation) and S-18 (self-registration, e-mail verification, e-mail edit, broker linking) are defined in 5.2 (lines 844-851), each marked UNVERIFIED. Phase 0 row (line 729) says S-1..S-18; line 201 'S-1..S-7' is O2's own subset and remains correct; every S-n cite (S-6, S-14, S-17, S-18) resolves to a matching definition. Status PROPOSED (line 3); sign-off entries all pending (lines 1056-1072); 0 code fences; 0 TBD. New config citations match.",
+    "status": "FAIL",
+    "revalidation_of": "rework 4, commit 63df2c62. Verdict history: rework 0 FAIL, rework 1 PASS, rework 2 FAIL, rework 3 PASS, rework 4 FAIL (one MINOR dangling cross-reference).",
+    "summary": "Structural integrity is intact except for ONE dangling cross-reference caused by renaming section 6. Verified from the rework-4 diff: Status PROPOSED (line 3); sign-off entries all pending; 0 code fences; 0 TBD; step counts unchanged (29-30 at lines 577 and 672; 8 + 3-4 + 18); S-range unchanged (S-1..S-18 at line 736; S-1..S-7 at line 201 is O2's own subset); new 6.8 exists and is referenced by 'see 6.8' in 6.4; '(see 6.4)', '(see 6.2)', '(see 4.3)', 'R-11', 'question 10' all resolve; original step-01 criteria still hold (nothing removed). No new Keycloak assertion in the diff (the only Keycloak-related additions are the 0012/MOB-5 note and mail-template points, which are repo facts). Fails strictly on the one dangling reference below.",
     "new_citations_verified": [
-      "config/prod.exs:32-38: config :letflow, :oidc_jit_provisioning with only \"bpm-default\" (enabled: true, default_status: :active, default_roles: [])",
-      "config/dev.exs:137-143: identical single \"bpm-default\" entry",
-      "config/test.exs:171-176: \"bpm-default\" entry; the map continues with \"jit-disabled-test-realm\" (enabled: false) at 177-181, so '(test.exs adds test realms)' is accurate (one extra realm)",
-      "ADR 5.2 S-17 (lines 844-847) and S-18 (lines 848-851) text read and matches the references at lines 508, 611, 631, 644",
-      "ADR line 729 Phase 0 'S-1..S-18'; line 201 'S-1..S-7' (O2 organisation subset)",
-      "Sign-off lines 1056, 1057, 1067, 1071 all pending",
-      "jit_provisioning_config.ex:43-59,72-80 fail-open default (rechecked, matches the 'ordering matters' claim)",
-      "hosts/ubuntu-16gb-nbg1-1.md:203 QA realms bilimbaga, swiftroute, meridian, vortex (rechecked earlier, matches)"
+      "0038:95-97 'What remains foreclosed' bullet 2 quote matches (ADR 6.4)",
+      "0042:193-196 reaffirmation that 0038's second bullet remains foreclosed 'verbatim' matches (ADR 6.5)",
+      "0043:3-5 'decided by delegation (BA) ... D-D PROPOSED ... does not claim REVIEWER or SECURITY-REVIEWER sign-off' matches (ADR 1.1, 6.6)",
+      "0043:112-114 'Nothing here builds those and the port is not widened for them' matches (ADR 6.6 D-B amendment)",
+      "0043 'Conflicts flagged for REVIEWER' heading at ~286 ('Each is stated, not resolved') matches the 'ten conflicts remain OPEN' claim",
+      "0042 Standing prohibition 12 (notifier egress: fixed template, no request-derived text) and 14 (user-deletion paths call remove_entry_if_unreferenced/3; 0042:290) match 6.5 and 2.3.5 item 6",
+      "0012-mobile-tier-stack.md:23 (flutter_appauth Auth-Code + PKCE) and :63 (Custom Tabs / SFSafariViewController) match 6.8",
+      "docs/requirements.yaml REQ-440 (lines ~33242-33262): hooks in create_user/2, update_user_status/3, update_user_profile/3 plus the JIT transaction in provision_oidc_user/4 = four, matching 'REQ-440's four function hooks'"
     ],
-    "issues": [],
-    "route": "PASS. Proceed to remaining gates / user ratification."
+    "issues": [
+      {
+        "id": 1,
+        "severity": "MINOR",
+        "location": "ADR line 10 ('If ratified, the \"Consistency with ratified records\" section lists exactly which quoted passages ...')",
+        "defect": "Section 6 was renamed in rework 4 to '6. Consistency with existing decision records (0042 ratified; 0043 BA-decided, gates owed)'; the header paragraph still cites the old title, so the reference no longer resolves by name.",
+        "fix": "Change line 10 to 'the \"Consistency with existing decision records\" section (section 6)' (and 'ratified' to 'existing' in the surrounding sentence about amended records if desired)."
+      }
+    ],
+    "route": "Back to CODE-DESIGNER for the one-phrase fix; a grep-level re-check suffices. Everything else is clean."
   }
 }

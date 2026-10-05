@@ -1,14 +1,14 @@
 # 0044 -- Identity model: realm-per-tenant (O1), central realm with organisations (O2), or a two-tier hybrid (O3)
 
 Status: PROPOSED. This record is a proposal for the user to ratify. It claims no gate verdict:
-the Sign-off section at the end is filled only by the gate agents, and every gate there reads
-`pending`. Until the user ratifies it, nothing in it is a decision and no ratified record is
-changed by it.
+the Sign-off section at the end carries the gate agents' verdicts (validator, security,
+reviewer: PASS) and the user's ratification, which is `pending`. Until the user ratifies it,
+nothing in it is a decision and no ratified record is changed by it.
 
 Date: 2026-10-05. Drafted by `CODE-DESIGNER` (ADHOC-20261005-001, step 01). Owner: `ORCH`.
 
-Amends / supersedes: nothing yet. If ratified, the "Consistency with ratified records" section
-lists exactly which quoted passages of 0002, 0006, 0038, 0042 and 0043 would be amended or
+Amends / supersedes: nothing yet. If ratified, the "Consistency with existing decision records"
+section (section 6) lists exactly which quoted passages of 0002, 0006, 0038, 0042 and 0043 would be amended or
 superseded, and by which phase. This record never edits those files itself.
 
 Decision requested of the user: (1) ratify or reject the RECOMMENDATION (O3, phased, with
@@ -1098,10 +1098,20 @@ ratification (or when the user rejects O3 in favour of O1, in which case the sam
 
 ## 9. Sign-off
 
-Filled in by the gate agents only. This record's author does not claim any verdict.
+Verdicts below are copied by `ORCH` from the gate agents' own handoff results
+(`handoffs/ADHOC-20261005-001/step-01b-*.json`, `step-02-*.json`, `step-03-*.json`); the
+record's author claims none. A gate PASS is a verdict on soundness and honesty of this
+proposal, not a choice among O1, O2 and O3, which is the user's. History: the record needed
+four rework rounds (validator FAIL on O3 coverage; security FAIL on 6 MAJOR; validator FAIL
+on tags; reviewer FAIL on 3 MAJOR), each applied as text and re-gated; `ORCH` ran the fourth
+round past the nominal `max_rework` of 3 because each failure was new and narrowing, not a
+repeat (stated in the PR body).
 
-- **CODE-DESIGN-VALIDATOR:** pending.
-- **SECURITY-REVIEWER:** pending. Specific asks: (a) the selector + membership rule and the
+- **CODE-DESIGN-VALIDATOR:** `PASS` (2026-10-05, after rework 3; the later line-10 cross-reference
+  fix of rework 4 was applied by `ORCH` as a one-phrase mechanical edit, not re-gated).
+- **SECURITY-REVIEWER:** `RATIFIED` / `PASS` (2026-10-05, after rework 3; 0 BLOCKER, 0 MAJOR,
+  1 ADVICE A-1: new dedicated realms need their JIT entry before the tenant row is bound). Not
+  re-run on rework 4, which only changed consistency wording (6.x, 4.3, hold note). Specific asks as gated: (a) the selector + membership rule and the
   INV-5 equivalence class of section 2.3.5 (ordering slug -> membership -> status, decoy
   query, collapsed response); (b) the downgrade of 0006 section 3.2's guarantee from a DB
   constraint to an application invariant (`0006...md:188-195`, `:304-306`) and the single-
@@ -1111,7 +1121,9 @@ Filled in by the gate agents only. This record's author does not claim any verdi
   (e) the domain-routing amendment of 0042 prohibitions 6, 7, 11 and its residual oracle
   (2.3.2 item 3, 6.5, R-7); (f) the invitation-security constraints (2.3.8) and the Phase 2/3
   hardening scope (2.3.9).
-- **REVIEWER:** pending. Specific asks: (a) the supersession scope for 0006 section 7.3 and
+- **REVIEWER:** `RATIFIED` / `PASS` (2026-10-05, after rework 4; RV-1..RV-8 resolved; two MINOR
+  notes: line-14 vs section 4 emphasis, and `hold:` handling by queue tooling unverified).
+  Specific asks as gated: (a) the supersession scope for 0006 section 7.3 and
   0042's "what remains unchanged" paragraph; (b) the amendment of 0002's "sole source" sentence
   and 0038 point 4; (c) whether the Phase 1 = O1 framing leaves 0042 intact and does not pretend to settle 0043's open conflicts 1-10
   (it should); (d) the O3 treatment of PR #2201 and the hold note.

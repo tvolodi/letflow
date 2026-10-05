@@ -1,0 +1,59 @@
+{
+  "handoff_id": "db7aba2a-c25b-4c5e-9b97-33189ffb90fe",
+  "run_id": "WF03-Q954-20261005",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-Q954-20261005/step-02-code-designer.json",
+  "created_at": "2026-10-05T11:41:40Z",
+  "started_at": "2026-10-05T11:41:50Z",
+  "completed_at": "2026-10-05T11:42:36Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0987": "queue Q-954 / GH #2209: config/runtime.exs ~line 63 compares secrets_master_key to <<0xFF::256>> (integer 255) instead of 32 bytes of 0xFF. Design the literal fix, the design-doc correction, and the regression test plan."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-Q954-20261005/step-01-issue-fixer-diagnose.json",
+      "config/runtime.exs",
+      "lib/letflow/design/req190-secrets-core.md",
+      "test/letflow/secrets_runtime_config_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q954-20261005"
+  },
+  "task": {
+    "description": "WF-03 Step 2 fix design for ISS-0987/Q-954. Design doc only at lib/letflow/design/iss0987-secrets-master-key-0xff-literal.md.",
+    "acceptance_criteria": [
+      "runtime.exs literal fix specified; pepper block untouched; no key echo",
+      "req190 design doc literal correction described",
+      "Regression test plan supplies valid pepper, asserts message and no key echo, fail-first for 0xFF case, mutants only in throwaway worktrees",
+      "No implementation code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss0987-secrets-master-key-0xff-literal.md. Change A: runtime.exs:63 second operand becomes :binary.copy(<<0xFF>>, 32); message unchanged and non-echoing; pepper block untouched. Change B: ELIXIR-DEV corrects the false literal/prose at req190-secrets-core.md:200. Change C: three subprocess tests (all-zeros refused, 64 x f refused, valid key accepted) with MIX_ENV=dev, nil MIX_TEST_PARTITION/MIX_BUILD_PATH, valid distinct pepper pair, --no-start with a boot marker; refusal cases assert 'trivially-guessable' message plus no key echo; 0xFF case is the fail-first test (must fail on unfixed tree); mutants only in throwaway worktrees. No open questions. Not self-reviewed.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0987-secrets-master-key-0xff-literal.md"
+    ],
+    "owned_modules": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q954-20261005",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR; on PASS route to TEST-DESIGNER/ELIXIR-DEV (fail-first test, then runtime.exs literal and req190 doc fix). SECURITY-REVIEWER applies."
+  }
+}

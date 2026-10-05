@@ -1,0 +1,99 @@
+{
+  "handoff_id": "a41d8e57-2c06-4b39-9f7a-6d3e0b1c58f4",
+  "run_id": "ADHOC-20261005-001",
+  "workflow_id": "ADHOC",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/ADHOC-20261005-001/step-03-reviewer.json",
+  "created_at": "2026-10-05T03:40:00Z",
+  "started_at": null,
+  "completed_at": "2026-10-05T03:42:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [
+      "REQ-434",
+      "REQ-435",
+      "REQ-436",
+      "REQ-437",
+      "REQ-438",
+      "REQ-439",
+      "REQ-440",
+      "REQ-441",
+      "REQ-442",
+      "REQ-443",
+      "REQ-444"
+    ],
+    "requirement_text": {
+      "note": "Verbatim descriptions: handoffs/ADHOC-20261005-001/step-01-code-designer.json context.requirement_text. This step reviews a PROPOSED decision record plus a 7-line hold marker in docs/requirements.yaml."
+    },
+    "source_text": {
+      "coordinator_request": "REVIEWER and SECURITY-REVIEWER must check the ADR's consistency with docs/migration/decisions/ especially 0002, 0006, 0035, 0038, 0042, 0043 and security-invariants INV-1..INV-8. Hold note requested by the coordinator: a visible hold marker on REQ-437..REQ-444 (REQ-436 already merged; REQ-439 is done so unmarked) in docs/requirements.yaml without changing status/depends_on semantics; to be removed on ratification. Do not touch Q-944/#2201 entries beyond what is needed (REQ-435 deliberately unmarked)."
+    },
+    "related_handoff_ids": [
+      "step-01-code-designer.json",
+      "step-01b-code-design-validator.json",
+      "step-02-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/migration/decisions/0044-hybrid-identity-model.md",
+      "docs/requirements.yaml (7 added `hold:` lines only; see git diff origin/main -- docs/requirements.yaml)",
+      "docs/migration/decisions/0002-oidc-integration.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "docs/migration/decisions/0012-mobile-tier-stack.md",
+      "docs/migration/decisions/0035-frontend-login-delegated-to-keycloak.md",
+      "docs/migration/decisions/0038-tenant-membership-lookup-amendment.md",
+      "docs/migration/decisions/0042-email-first-login-tenant-directory.md",
+      "docs/migration/decisions/0043-email-first-login-ba-decisions.md",
+      "docs/agents/instructions/security-invariants.md",
+      "handoffs/ADHOC-20261005-001/step-02-security-reviewer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-ada3a2b6d6b41b710",
+    "branch_name": "docs/ADR-hybrid-identity"
+  },
+  "task": {
+    "description": "REVIEWER hard gate (decision-record consistency, scope creep, honesty) on docs/migration/decisions/0044-hybrid-identity-model.md at HEAD of branch docs/ADR-hybrid-identity. CODE-DESIGN-VALIDATOR PASS (after 3 reworks) and SECURITY-REVIEWER RATIFIED. Check: (1) the branch diff vs origin/main touches only the ADR, handoffs/ADHOC-20261005-001/*, handoffs/registry.json, handoffs/orchestrator.log and 7 `hold:` lines in docs/requirements.yaml (verify with git diff --stat origin/main and that the yaml still parses and no status/depends_on changed); (2) consistency with 0002, 0006, 0012, 0035, 0038, 0042, 0043: read each record's relevant passages in full and confirm every 'consistent / amends / supersedes' claim in the ADR sections 2.3.4 and 6 is true, that amend-by-reference vs supersession is chosen the way 0038/0042 chose it, and that nothing the ratified records forbid is silently done (esp. 0006 D1/R5/s7.3, 0038 four conditions, 0042 standing prohibitions 1-14, 0043 D-A..D-H and its flagged conflicts); (3) Phase 1 = O1 really leaves every ratified record intact and the PR #2201 disposition (hold, then merge with 0043 D-C delta) is consistent with 0043 D-F/D-C and with the PR's actual state (gh pr view 2201 -R tvolodi/letflow: check state/merge hold/CI); (4) scope creep: the record decides a direction and gates, it must not smuggle implementation, new requirements ids or requirement edits; the recommendation must be proportionate and the risk of over-engineering stated; (5) the claim that REQ-434..444 are 'stay' under the recommendation and the per-REQ table is accurate vs docs/requirements.yaml status/depends_on; (6) the ADR number 0044 is free (main + open PRs; note numbers get reused: identify by content); (7) the record is honest about what is unknown (Keycloak) and does not pre-empt the user's ratification. Do NOT edit anything. Output RATIFIED/PASS or FAIL with findings classified BLOCKER/MAJOR/MINOR and exact locations. Write the result into this handoff's 'result' (status PASS/FAIL, summary, issues[]), set status COMPLETED, take times from `date -u`; do not spawn agents; do not commit.",
+    "acceptance_criteria": [
+      "Diff scope verified",
+      "Every consistency claim in the ADR checked against the source record text",
+      "PR #2201 treatment checked against the PR's real state",
+      "Verdict with classified findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "RATIFIED (REVIEWER) on re-review of rework 4 (commit 63df2c62). RV-1..RV-8 resolved in text; 0 BLOCKER, 0 MAJOR, 2 MINOR notes.",
+    "summary": "Round 1 was FAIL (3 MAJOR, 5 MINOR). Re-verified against source: 0038 lines 91-103 and 0042 lines 193-196 quotes in new 6.4/6.5 are accurate (bullet 2 quoted, second half marked AMENDS Phase 2, first half stays true); 0043 lines 3-5, 112-114, 286-343 cites accurate; 0012 lines 23 and 63 and docs/mobile/requirements.md:208-211 match new 6.8 (CONSISTENT; MOB-5 is a mobile-spec change, not a 0012 change). No 'already ratified' claim about 0043 remains (grep of 'ratif': lines 72, 677, 863, 969, 1049 now say BA-decided, gates owed). Diff scope unchanged: ADR + handoffs + 7 hold lines; YAML parses, 411 reqs, all records identical to main ignoring hold; holds on REQ-437,438,440-444, REQ-435 unmarked; statuses/depends_on match the section 8 and 2.3.6 tables. No new inconsistency found between new text and 2.3.x / 4.x / matrix / section 8: 2.3.2, 2.3.4, 2.3.6 and 8 now agree on the invitation writer; 4.3 and 8 agree on 'no new hold from 0044'; prohibition 12 and D-B moved to AMENDS (Phase 3) with SECURITY-REVIEWER gate; prohibition 14 bound to the offboarding purge.",
+    "resolved": {
+      "RV-1": "fixed (2.1 line 72, matrix row 677, 4.3 O1 row, section 6 title, 6.6 status bullet, Q11, sign-off ask c)",
+      "RV-2": "fixed (6.4 bullet 2 AMENDS Phase 2, 6.5 reaffirmation AMENDS)",
+      "RV-3": "fixed (6.5 prohibition 12 AMENDS Phase 3, 6.6 D-B AMENDS Phase 3, prohibition 14 in 2.3.5 item 6)",
+      "RV-4": "fixed (2.3.2, 2.3.6, section 8 REQ-440 rows)",
+      "RV-5": "fixed (4.3 O3 row, section 8 REQ-435 row, Hold note; D-C delta now names REQ-443)",
+      "RV-6": "fixed (section 4 headline: Phase 0 starts only on a Q1 answer wanting the shared tier)",
+      "RV-7": "fixed (6.8 on 0012; 2.3.4 0038 sentence softened)",
+      "RV-8": "addressed in Hold note (see MINOR-B)"
+    },
+    "issues": [
+      {
+        "id": "RV-9",
+        "severity": "MINOR",
+        "location": "0044 section 4 headline vs top-of-file Decision requested (line 14) and 4.1 rationale",
+        "finding": "Headline now reads 'Proceed with Phase 1 ... O3 is the recommended direction for anything further'; line 14 still asks the user to ratify 'O3, phased, with Phase 1 = O1'. Compatible, slightly different emphasis; harmless."
+      },
+      {
+        "id": "RV-10",
+        "severity": "MINOR",
+        "location": "0044 Hold note",
+        "finding": "States `hold:` is a key 'that tooling ignores' and that letflow-queue state is unchanged; I did not verify letflow-queue/REQ-VALIDATOR behaviour (external). Statement is honest about the consequence (a worker must read the marker and release); ORCH should confirm."
+      }
+    ],
+    "files_modified": [
+      "handoffs/ADHOC-20261005-001/step-03-reviewer.json"
+    ],
+    "decision_record_disagreement": "None."
+  }
+}

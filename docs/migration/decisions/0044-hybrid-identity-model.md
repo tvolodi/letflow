@@ -156,8 +156,10 @@ schemas through the derived prefix only. INV-2: closed response allowlist. INV-3
 applicable. INV-4: pepper and SMTP credentials by environment reference; no raw email in logs
 (`log: false`). INV-5: first email-keyed instance; equivalence classes defined in design
 section 10. INV-6: each new path proves scoping (0042 design). INV-7: no interpolated SQL in
-backfill. INV-8: notifier/mail/DB failure returns the neutral response. INV-9: no server-built
-redirect from tenant text (INV-9 text: `security-invariants.md:332-382`).
+backfill. INV-8: notifier/mail/DB failure returns the neutral response. INV-9: no
+tenant-controlled outbound URL is requested by Letflow in Phase 1, and the notifier carries
+no tenant-derived URL (0042 Standing prohibition 12) (INV-9 text:
+`security-invariants.md:332-382`).
 
 **Migration from today.** None for users. Tables and code are additive; the feature is off
 outside dev until OQ-3 is answered (0043 D-D, REQ-444).
@@ -248,8 +250,8 @@ are never taken from a request value. The server accepts a selector (a header or
 segment carrying a tenant slug) only as a hint that can narrow, never widen: it resolves
 the slug to a tenant, then requires an ACTIVE `users` row in that tenant's schema for the
 token's `(shared realm, sub)` pair. Roles come from that tenant's local groups, never from
-token claims. If the token carries an organisation claim (spike S-3) and disagrees with the
-selector the request is refused. JIT creation of a `users` row on selector alone MUST NOT
+token claims. An organisation claim (spike S-3) is only a cross-check, never the authority;
+the mismatch rule is stated once in 2.3.5 item 5. JIT creation of a `users` row on selector alone MUST NOT
 exist: with it, any holder of a shared-realm account could name any shared tenant's slug and
 be provisioned into it. Rows are created only by tenant-admin invitation or equivalent
 (see O3 section 2.3.4).
@@ -311,9 +313,10 @@ directory is the router.
 
 1. Entry: `/login` (the credential-free discovery page, already authorised by 0042 for the
    email-first screen). An invitation link or a `?realm=`/subdomain skips straight to step 4.
-2. E-mail typed -> `POST /api/login-discovery` (unchanged contract: 200 `{slug,
+2. E-mail typed -> `POST /api/login-discovery` (contract unchanged in Phases 1-3: 200 `{slug,
    display_name}` or neutral 202; per-tenant disclosure per 0043 D-A).
-3. Directory lookup is unchanged: it returns tenants, with no knowledge of tier.
+3. Directory lookup is unchanged in Phases 1-3: it returns tenants, with no knowledge of
+   tier. (Phase 4 domain routing changes the query, see 2.3.2 item 3.)
 4. SPA calls `GET /api/tenant-config?realm=<slug>` (already pre-authentication and already a
    bounded inference). For a `dedicated` tenant it returns that tenant's realm authority (as
    today). For a `shared` tenant it would return the central realm's authority and the tenant
@@ -341,16 +344,27 @@ What changes:
    authority + selector). `resolve_realm` (`tenant_config.ex:230-239`) currently requires a
    non-null `idp_realm_id` to win; shared tenants have `idp_realm_id` NULL, so this function
    needs a second branch.
-3. A new routing source for people who are NOT in the directory yet (invited but never logged
-   in; enterprise SSO users who have never been JIT-provisioned): a `tenant_login_domains`
-   table (verified e-mail domain -> tenant), consulted only when the directory returns
-   nothing. This is the only genuinely new router input, and it also closes the
-   Keycloak-only-account gap recorded as a known limitation in 0043 D-E. It discloses
-   "this domain is routed to tenant X", a domain-level (not person-level) inference, to be
-   analysed by SECURITY-REVIEWER when it is designed (Phase 4).
+3. A new routing source (Phase 4 only) for people who are NOT in the directory yet (invited
+   but never logged in; enterprise SSO users who have never been JIT-provisioned): a
+   `tenant_login_domains` table (verified e-mail domain -> tenant). It also closes the
+   Keycloak-only-account gap of 0043 D-E. It is NOT a "second lookup on the miss path": that
+   would break 0042 Standing prohibition 7 (one database round trip, no second query) and
+   create a timing signal between "known" and "unknown at a routed domain". Phase 4 MUST
+   take one of two forms: (a) ONE joined query (directory plus domain table) with constant
+   work on every path, whose domain-routed results are answered ONLY through the existing
+   mode and per-tenant uniform rules, i.e. never a 200 in Mode A or for a uniform tenant, so
+   a routed domain behaves like a directory match for that tenant and nothing new is
+   disclosed to uniform tenants; or (b) give nothing tenant-specific at the discovery step
+   and route by domain elsewhere (Keycloak-side, S-4). Either way this AMENDS 0042 Standing
+   prohibitions 6, 7 and 11 (6.5) and needs SECURITY-REVIEWER sign-off in its own
+   requirement. Residual oracle, named: in form (a) with a disclosing tenant, any local part
+   at a routed domain yields the 200 `{slug, display_name}` whether or not that mailbox
+   exists, so the endpoint reveals "this domain is routed to tenant X" (domain-level, not
+   person-level), and a routed vs unrouted domain differ in 200 vs 202.
 4. An invitation entry (`/invite/<opaque token>`) as a second credential-free route resolved
-   by an opaque capability handle in the manner of 0028; it carries tenant and tier, so no
-   e-mail lookup is needed.
+   by an opaque token; it carries tenant and tier, so no e-mail lookup is needed. 0028's
+   handle model is only a LOOSE analogy (0028 governs unauthenticated reads; an invitation
+   token is a bearer capability that MUTATES membership). Its constraints are in 2.3.8.
 5. The in-app switcher (0038) keeps working for dedicated-to-dedicated hops; shared-to-shared
    hops become a selector change with the same token (no re-login).
 
@@ -383,14 +397,32 @@ scope, 0042 Decision 7 and 0042 design item (k)).
   tenant from the realm (`0006...md:152-157`): for the shared realm the tenant is resolved by
   selector + membership. A new platform-level binding is required for the shared realm
   itself (a table such as `shared_identity_realms`, so the trust source stays a database
-  row that can be revoked immediately, in the spirit of `0002...md:168-175`).
+  row that can be revoked immediately, in the spirit of `0002...md:168-175`). Two rules bind
+  it: (i) **disjointness** -- no realm may be both a `shared_identity_realms` row and some
+  tenant's `tenants.idp_realm_id` (the unique index on `tenants` alone cannot prevent it);
+  enforced in `Tenant.create_changeset`, in shared-realm creation, and by a DB trigger or at
+  minimum a boot assertion; otherwise every shared-realm token would authenticate into that
+  dedicated tenant through the unchanged chain (`auth_pipeline.ex:126-133`); (ii) **realm
+  kind decided once**: the dedicated-vs-shared decision is made a single time, BEFORE
+  `resolve_tenant`, from the revocable database row, and the two branches never share state
+  (a shared-realm token can never satisfy a dedicated tenant's chain; see S-11).
 - **0006 section 3.2 argument weakens.** Its safety claim, that two tenant schemas can never
   hold the same `(external_realm, external_id)` because R5 forbids a realm bound to two
   tenants (`0006...md:188-195`), is false BY DESIGN for the shared realm: one `sub` legitimately
-  appears in several tenant schemas. The global guarantee is then not "one realm, one tenant"
-  but "a row exists in schema T only if an invitation or admin action created it", i.e. JIT
-  MUST be off for the shared realm. 0006 section 8 itself names this claim as the one SECURITY-
-  REVIEWER must re-derive (`0006...md:304-306`); it must be re-derived again in Phase 2.
+  appears in several tenant schemas. The replacement guarantee is "a row exists in schema T
+  only if an invitation or admin action created it". This is a DOWNGRADE: the guarantee
+  replaced was a database constraint (`tenants_idp_realm_id_partial_index`,
+  `0006...md:138-141`); the replacement is an application invariant. It therefore must be made
+  structural: (a) exactly ONE dedicated writer creates shared-realm `users` rows (invitation
+  acceptance), a function distinct from `provision_oidc_user/4` (`identity.ex:127`, the JIT
+  insert), which must not be reused for it; (b) every other `users` writer
+  (`provision_oidc_user/4`, `create_user/2`, `update_user_profile/3`) refuses an
+  `external_realm` that is a shared realm, with a typed error; (c) a DB backstop where
+  feasible (a trigger or CHECK against `shared_identity_realms`, or an invitation reference
+  NOT NULL on shared rows); if none is feasible, Phase 2 must say so explicitly. JIT is thus
+  off for the shared realm by construction (2.3.5 item 4a), not by configuration. 0006
+  section 8 itself names this claim as the one SECURITY-REVIEWER must re-derive
+  (`0006...md:304-306`); it must be re-derived again in Phase 2.
 - **0006 section 3.3 / 7.3 (multi-tenant human identity): this is the real supersession.**
   0038 and 0042 each amended only the lookup half and left "no single human identity spanning
   multiple tenants" untouched (`0042...md:160-165`). A shared-tier account IS one
@@ -412,17 +444,53 @@ Summary of the rule O3 would adopt (also the O2 rule):
    The caller can only choose among slugs; the prefix is derived by
    `TenantProvisioning.schema_name_for_tenant/1` from the resolved id, never supplied.
 3. Authorisation to be in that tenant: an ACTIVE `users` row with that `(external_realm,
-   external_id)` in that tenant's schema. No row -> the same response as a non-existent
-   tenant (INV-5), with the same number of database round trips.
+   external_id)` in that tenant's schema. **Ordering is fixed: slug -> membership ->
+   status.** Membership is decided first; tenant status (`:inactive`/`:migrating`, today's
+   `TenantStatus` 403) is evaluated only for a caller who IS a member. If status were checked
+   first, a non-member would see 403 for an inactive tenant and 404 for a non-existent one,
+   an existence oracle. A member seeing their own inactive tenant is acceptable; it must not
+   reveal other tenants.
+   - **Collapsed response.** Unknown slug, non-member and not-invited produce ONE status and
+     ONE body, byte-identical (INV-5, `security-invariants.md:199-204`). Today's pipeline
+     emits distinguishable bodies (401 "token realm does not match tenant", 403 "JIT
+     provisioning disabled for this realm", 403 account inactive,
+     `auth_pipeline.ex:152-191`); the selector path must not reuse those for these cases.
+   - **Uniform cost.** A non-existent slug costs zero tenant-schema queries while a real
+     tenant costs a `users` lookup, so parity needs a deliberate DECOY query: for an unknown
+     slug the server runs the same-shaped lookup against a fixed decoy target, so the
+     number of database round trips is the same on every path. Phase 2 tests assert equal
+     round trips and equal bytes.
 4. Roles: `list_effective_role_names` from that tenant's local groups
-   (`auth_pipeline.ex:353-361`). Token role claims are ignored for shared realms; claim mapping
-   and JIT configuration, today keyed by realm, must become keyed by tenant or disabled for
-   the shared realm (`claim_mapping_config.ex:53-75`).
+   (`auth_pipeline.ex:353-361`). Token role claims are ignored for shared realms.
+   - **4a. The shared-realm branch is STRUCTURAL.** It is selected by the
+     `shared_identity_realms` row, and that branch never calls `provision_oidc_user/4` or
+     `sync_role_claims_from_token/3` (`identity.ex:763-768`; also run at `identity.ex:1752-1756,
+     1805, 1865-1867`, including for existing rows with a nil marker, where realm-wide shared
+     roles in the token could otherwise be copied into every tenant where the user has a row).
+   - **4b. Unconfigured realm becomes DENY.** Today the fallback FAILS OPEN:
+     `JitProvisioningConfig.for_realm/1` returns `default/1` for any realm absent from
+     `config :letflow, :oidc_jit_provisioning`, and `default/1` is `enabled: true,
+     default_status: :active, default_roles: []`
+     (`lib/letflow/oidc/jit_provisioning_config.ex:43-59,72-80`); `ClaimMappingConfig.for_realm/1`
+     has the same absent-realm fallback (`claim_mapping_config.ex:53-75`). A shared realm
+     missing from those maps, or mistyped, would be JIT-on. The fallback for an unconfigured
+     realm must become a typed deny. **Phase 2 acceptance property, with a test:** a shared
+     realm absent from every config map still cannot create a `users` row.
 5. Cannot be chosen by the caller: tenant id, schema prefix, roles, status, `users` row id,
-   and anything about a tenant they have no row in. A token claim naming an organisation, if
-   Keycloak provides one (S-3), is a cross-check, never the authority.
-6. Tenant status (`:inactive`/`:migrating`) is enforced as today by `TenantStatus` after
-   resolution.
+   and anything about a tenant they have no row in.
+   - **Organisation claim rule (stated once, used by 2.2 and here).** A token claim naming
+     organisations, if Keycloak provides one (S-3), is a cross-check, never the authority.
+     A claim listing all of a user's memberships can legitimately differ from the selector,
+     so a mismatch is not by itself a refusal: the request is refused only when the claim
+     is present as a per-organisation token (S-3 "scoped to ONE organisation") and names a
+     different organisation than the selector. Authority remains the local `users` row.
+6. Revocation bound. Letflow-side deactivation is immediate per request (`users.status` read
+   live, `auth_pipeline.ex:353-363`). A Keycloak-side disable, or a changed `sub`, does NOT
+   revoke already-issued access tokens: the bound is the access-token lifetime (value
+   UNVERIFIED, to be recorded in the Phase 0 spike, S-14). Central account deletion leaves
+   local rows keyed to a dead `sub`; Phase 3 therefore requires an **offboarding
+   procedure** that fans central disable/deletion out to the local `users` rows (set
+   inactive, then purge per policy) and records it in the per-tenant audit trail.
 
 #### 2.3.6 REQ-434..REQ-444 under O3 (stay / modify / obsolete)
 
@@ -454,7 +522,8 @@ Where dedicated is identical to O1 this says so and refers to 2.1. Multi-tenant 
 a person who arrives by invitation or URL; if they arrive by e-mail the same directory
 lookup applies, with the same disclosure rules and per-tenant uniform flag (REQ-442), which
 is recommended on for candidate-facing shared tenants. New inference only in Phase 4: the
-domain table discloses "this domain routes to tenant X" (domain-level, R-7). The hosted
+domain table, even under the single-query constraint of 2.3.2 item 3, reveals "this domain
+routes to tenant X" for disclosing tenants (domain-level residual oracle, R-7). The hosted
 login page's own e-mail behaviour in the shared realm is UNVERIFIED (S-6).
 
 **INV-1..INV-8 impact (O3).**
@@ -507,6 +576,53 @@ so INV-1 holds. Isolation between the two tiers is complete (different realms).
 every call, tenant-config needs a shared variant, and MOB-5's "token audience MUST be scoped to
 the tenant realm" (`docs/mobile/requirements.md:208-211`) must be revised for shared tenants
 first (R-11). No mobile change in Phases 0-2.
+
+#### 2.3.8 Invitation security (constraints Phase 2/3 must carry)
+
+An invitation is the ONLY way a shared-tier `users` row is created, so it is a bearer
+capability that mutates membership. Constraints:
+1. **Bound to the authenticated identity at acceptance, not to an e-mail string.** Acceptance
+   requires an authenticated session of the shared realm; the row is keyed to that token's
+   `(shared realm, sub)`. Binding by e-mail would be account linking by e-mail.
+2. **Verified e-mail.** The token's `email_verified` must be true and the address must equal
+   the invited address. Without this, with self-registration enabled in the shared realm an
+   attacker could register `victim@x` unverified and accept the invitation addressed to it.
+   (Whether self-registration is enabled, and how verification behaves: UNVERIFIED, S-15.)
+3. **Token lifecycle.** High-entropy random token (at least 128 bits), short fixed expiry,
+   single use, stored only as a hash (comparison of hashes), revocable by the inviting tenant
+   admin; acceptance is idempotent for the same `sub` only.
+4. **Leak handling.** `/invite/<token>` must not reach access logs or `Referer`: the SPA
+   exchanges the token from the URL fragment or immediately replaces the URL, sends
+   `Referrer-Policy: no-referrer`, and logs only a fixed string (INV-4 spirit; 0042 prohibition 9
+   style, no token in logs or telemetry).
+5. **Rate limiting.** First-plug limiter as for the discovery mount (0028 s6 style, reusing
+   the mount-agnostic machinery), plus a per-token attempt cap.
+6. **INV-5 / INV-6.** An unknown, expired, used or revoked token returns one collapsed
+   response; the route carries its own scoping proof and SECURITY-REVIEWER gate. It touches
+   exactly one tenant schema, derived from the token's server-side record, never from a
+   request parameter.
+7. **Single writer.** Acceptance is the dedicated shared-realm writer of 2.3.4 (a); it writes
+   the directory row in the same transaction through the REQ-440 hook.
+
+#### 2.3.9 Additional Phase 2/3 scope (security hardening, one line each)
+
+- **Mutable e-mail in the central realm.** Profile e-mail edits and first-broker-login
+  linking by e-mail can transfer an account to an attacker; invitations, domain routing and
+  the directory all key on e-mail. Phase 2 requires locked/verified e-mail change and no
+  automatic linking by e-mail; membership authority is `(realm, sub)` only.
+- **Break-glass admin of the shared realm (question 5).** Needs an audit trail and
+  credential custody by reference only (INV-4); no shared password in a repository, chat or
+  handoff.
+- **Per-tenant audit trail.** Membership grants/removals and shared-realm logins are
+  recorded in the tenant's own audit log, so auditors need not read the central realm.
+- **Cross-tenant SSO session and logout scope.** One shared-realm SSO session spans all the
+  user's shared tenants; logout semantics (S-14) become a requirement of the pilot.
+- **Mobile refresh token.** One shared-realm refresh token is valid for every shared tenant
+  of the user (unlike per-realm tokens); the MOB-5 revision must address secure storage and
+  per-tenant binding before any mobile shared-tier work.
+- **The directory is never the shared-tier membership source** (0042 Standing prohibition
+  10): membership is the per-tenant `users` row plus its invitation record; the directory
+  only routes.
 
 ---
 
@@ -575,7 +691,7 @@ Rationale.
 | R-4 | Single shared realm outage or misconfiguration hits every shared tenant. | Shared tier limited to low-criticality tenants first; realm export/restore runbook before the pilot; separate realm for the shared tier, never `master` or a dedicated tenant's realm. |
 | R-5 | User migration (if a tenant is ever moved to shared) orphans history because `sub` changes. | Never migrate in Phases 1-4; migration only on explicit user decision with a re-link tool and rehearsal on a QA copy; question 3 default is "Bilimbaga stays dedicated". |
 | R-6 | A future Letflow Keycloak Admin client forwards tenant-supplied IdP URLs (SSRF through Keycloak). | Treat as INV-9-style validation at the admin client; SECURITY-REVIEWER gate; platform operator, not tenant admin, configures IdPs in Phase 4. |
-| R-7 | Domain-based routing is abused (claiming someone else's domain) or leaks which domains are SSO tenants. | Platform-operator-verified domains only (DNS proof), uniform response, same limiter; first release has no self-service domain claim (question 6). |
+| R-7 | Domain-based routing is abused (claiming someone else's domain) or leaks which domains are SSO tenants. | Platform-operator-verified domains only (DNS proof), one joined constant-work query answered only through the mode/uniform rules (never a 200 in Mode A or a uniform tenant), same limiter; first release has no self-service domain claim (question 6). The domain-level oracle for disclosing tenants is a named, accepted residual (2.3.2 item 3). |
 | R-8 | The e-mail path is inert until a mail adapter exists, so multi-tenant people dead-end (0042 OQ-9). | REQ-441 stays a prerequisite of enabling outside dev (REQ-444); organisation-code control remains. |
 | R-9 | Per-tenant claim/JIT configuration (currently keyed by realm in config) does not scale to shared tenants. | Move to per-tenant records in Phase 2; static config remains for dedicated realms. |
 | R-10 | Holding REQ-437..444 stalls the email-first work for no benefit if the user ratifies. | Hold is temporary; under the recommendation all of them are `stay`, so the cost is elapsed time only. |
@@ -588,9 +704,9 @@ Rationale.
 |---|---|---|---|
 | 0 | **Spike (no product code).** Throwaway Keycloak 26.2 container, answer spike questions S-1..S-16 below, record results in a spike report and an addendum to this record. Decision gate: ratify Phase 2 or stop at O1. | 3-4 (REQ-ANALYST requirement + executing agent per question group) | Fully (docs and a throwaway container). |
 | 1 | **O1 as planned = dedicated tier + router.** REQ-435 (with 0043 D-C delta on PR #2201), REQ-440 (closed by verification of the merged PR), REQ-442, REQ-437, REQ-438, REQ-441, REQ-443, REQ-444. Off outside dev until OQ-3 answered. | about 8 | Yes: flag off, reversible migrations, no user data moved. |
-| 2 | **Shared-tier foundations, dark.** New ADR 0045 (supersedes 0006 7.3 for shared; amends 0002 addendum, R5, 0038 point 4). `tenants.auth_mode` (default `dedicated`), `shared_identity_realms` trust source in `ProviderRegistry`/`AuthPipeline`, selector plug + membership authorisation, per-tenant claim/JIT config, tenant-config shared branch. No tenant uses it. | about 7 | Yes until a tenant is set to shared (column default keeps all behaviour). |
+| 2 | **Shared-tier foundations, dark.** New ADR 0045 (supersedes 0006 7.3 for shared; amends 0002 addendum, R5, 0038 point 4). `tenants.auth_mode` (default `dedicated`), `shared_identity_realms` trust source in `ProviderRegistry`/`AuthPipeline`, selector plug + membership authorisation, per-tenant claim/JIT config, tenant-config shared branch. No tenant uses it. Acceptance properties: structural shared-realm branch and deny-by-default config fallback with the absent-realm test (2.3.5 4a-4b); single writer, refusal elsewhere, DB backstop or explicit statement (2.3.4); realm disjointness and realm-kind-decided-once; slug -> membership -> status with decoy query and collapsed response (2.3.5 item 3); full-issuer check (S-11); invitation constraints (2.3.8); hardening lines of 2.3.9. | about 7 | Yes until a tenant is set to shared (column default keeps all behaviour). |
 | 3 | **Pilot.** One greenfield shared tenant (not Bilimbaga by default). Keycloak Admin client or manual provisioning runbook (INV-4), invitations (uses REQ-441), SPA handling (shared answer in tenant-config), mobile MOB-5 revision. | about 6 | Pilot tenant can be deleted/deactivated (new tenant only). |
-| 4 | **Domain routing and enterprise SSO for dedicated realms.** `tenant_login_domains`, brokered corporate IdP in a dedicated realm, domain-fallback branch in discovery, extended enablement gate. | about 5 | Yes (new tables; per-realm IdP config). |
+| 4 | **Domain routing and enterprise SSO for dedicated realms.** `tenant_login_domains`, brokered corporate IdP in a dedicated realm, domain routing as one joined constant-work query under the mode/uniform rules, or not at discovery (2.3.2 item 3), extended enablement gate. | about 5 | Yes (new tables; per-realm IdP config). |
 | 5 | **Optional: migrate existing simple tenants** to shared (user decision per tenant, re-link tool, rehearsal). | per tenant, 3-4 | NOT cleanly reversible (user `sub` changes). Only on explicit user instruction. |
 
 Mobile adoption of discovery is a separate, later requirement in any phase (design section 14).
@@ -681,6 +797,10 @@ Each is UNVERIFIED. They are phrased to be answerable on a throwaway 26.2 contai
     `<base>/realms/<shared>`)? Confirm `extract_realm` (`auth_pipeline.ex:269-281`) and
     `Oidcc.Token.validate_jwt` with one `client_id` (`oidcc.ex:147-156`) validate it; confirm
     the audience mapper emits the audience Letflow expects for the shared client.
+    Narrowness (Phase 2 acceptance): the FULL issuer (base URL plus realm) is checked, not
+    only the realm slug that `extract_realm` keeps from `iss`; and a token from the shared
+    realm's client cannot satisfy a dedicated tenant's chain (one `client_id` is used for
+    all realms today, so the realm-kind decision of 2.3.4 must come first).
 12. **S-12 (memory and realm count).** UNVERIFIED. Measure resident memory of the Keycloak
     container at 1, 6 and 50 realms, and with 10 and 1000 organisations in one realm, on the
     QA host class (CX43); record the current QA Keycloak memory and JVM settings.
@@ -728,7 +848,9 @@ passage changes in a stated phase; SUPERSEDES = a decision is replaced. "Today" 
   section 2.3.4. The quoted claim "realm<->tenant is a strict partial bijection (nullable only
   when OIDC is off)" (`0006...md:150-152`) gains a second legitimate NULL case (shared tier).
 - Section 3.2 (`0006...md:181-210`): its argument "R5 makes the collision unreachable"
-  (`0006...md:188-195`) is false for the shared realm. NOT silently reused; needs the
+  (`0006...md:188-195`) is false for the shared realm, and its replacement is a DOWNGRADE from a
+  database constraint to an application invariant (2.3.4: single writer, refusal elsewhere,
+  DB backstop or an explicit statement none is feasible). NOT silently reused; needs the
   independent SECURITY-REVIEWER re-derivation 0006 section 8 already asks for
   (`0006...md:304-306`).
 - Section 3.3 (`0006...md:212-221`) and section 7 item 3 (`0006...md:296-297`, quoted:
@@ -759,10 +881,16 @@ passage changes in a stated phase; SUPERSEDES = a decision is replaced. "Today" 
 
 ### 6.5 Decision 0042 (email-first directory)
 
-- Decisions 1-6 and Standing prohibitions 1-14: CONSISTENT. The tier reaches the browser
-  through tenant-config, not through the discovery response, so Standing prohibitions 4 and 11
-  (closed allowlist; no new field without SECURITY-REVIEWER) are not touched by the router
-  reuse.
+- Decisions 1-6 and Standing prohibitions 1-5, 8-10, 12-14: CONSISTENT in Phases 1-3. The
+  tier reaches the browser through tenant-config, not through the discovery response, so
+  prohibitions 4 and 11 (closed allowlist; no new field without SECURITY-REVIEWER) are not
+  touched by the router reuse in those phases.
+- **AMENDS (Phase 4, domain routing).** Standing prohibition 6 (no input-differentiated
+  status), 7 (one database round trip, no second query, quoted in 2.3.2 item 3) and 11 (a
+  new disclosure source needs SECURITY-REVIEWER and an amendment). Domain routing may only be
+  built as one joined constant-work query answered through the existing mode and per-tenant
+  uniform rules (never a 200 in Mode A or a uniform tenant), or not at the discovery step at
+  all. The residual domain-level oracle is named in 2.3.2 item 3 and R-7.
 - **AMENDS (Phase 2+).** Decision 7, quoted `0042...md:111-114`: "No SSO across realms, no
   Keycloak identity-provider brokering (`kc_idp_hint` is deliberately unused), no Keycloak Admin
   client, no migration to Keycloak Organizations". Phase 2-4 introduce organisations, an
@@ -894,9 +1022,15 @@ Filled in by the gate agents only. This record's author does not claim any verdi
 
 - **CODE-DESIGN-VALIDATOR:** pending.
 - **SECURITY-REVIEWER:** pending. Specific asks: (a) the selector + membership rule and the
-  INV-5 equivalence class of section 2.3.5; (b) the weakening of 0006 section 3.2's claim for
-  the shared realm (`0006...md:188-195`, `:304-306`); (c) the "JIT must be off for the shared
-  realm" rule; (d) the domain-routing inference (R-7).
+  INV-5 equivalence class of section 2.3.5 (ordering slug -> membership -> status, decoy
+  query, collapsed response); (b) the downgrade of 0006 section 3.2's guarantee from a DB
+  constraint to an application invariant (`0006...md:188-195`, `:304-306`) and the single-
+  writer / refuse-shared-realm / backstop requirements of 2.3.4; (c) the structural shared-
+  realm branch and deny-by-default config fallback (2.3.5 items 4a-4b); (d) disjointness of
+  `shared_identity_realms` and `tenants.idp_realm_id` and realm-kind-decided-once (2.3.4);
+  (e) the domain-routing amendment of 0042 prohibitions 6, 7, 11 and its residual oracle
+  (2.3.2 item 3, 6.5, R-7); (f) the invitation-security constraints (2.3.8) and the Phase 2/3
+  hardening scope (2.3.9).
 - **REVIEWER:** pending. Specific asks: (a) the supersession scope for 0006 section 7.3 and
   0042's "what remains unchanged" paragraph; (b) the amendment of 0002's "sole source" sentence
   and 0038 point 4; (c) whether the Phase 1 = O1 framing leaves every ratified record intact

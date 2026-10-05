@@ -156,7 +156,7 @@ defmodule Letflow.Routers.Identity do
   @users_cursor_prefix "U:"
 
   authz_post "/users", :UsersManage do
-    handle_create(conn, conn.assigns.scoped_opts)
+    handle_create(conn, user_write_opts(conn))
   end
 
   authz_get "/users", :UsersManage do
@@ -168,11 +168,11 @@ defmodule Letflow.Routers.Identity do
   end
 
   authz_patch "/users/:id", :UsersManage do
-    handle_patch(conn, conn.params["id"], conn.assigns.scoped_opts)
+    handle_patch(conn, conn.params["id"], user_write_opts(conn))
   end
 
   authz_post "/users/:id/status", :UsersManage do
-    handle_status_update(conn, conn.params["id"], conn.assigns.scoped_opts)
+    handle_status_update(conn, conn.params["id"], user_write_opts(conn))
   end
 
   authz_post "/groups", :GroupsManage do
@@ -263,6 +263,14 @@ defmodule Letflow.Routers.Identity do
     }
   ]
 
+  # REQ-435 (design §3.2): the user-write functions maintain the platform login
+  # directory and need the caller's tenant id. It comes from the authenticated
+  # `auth_context` (the same field `scoped_repo_opts/1` derives `:prefix` from),
+  # never from a request parameter; `Identity` re-checks it against `:prefix`.
+  defp user_write_opts(conn) do
+    Keyword.put(conn.assigns.scoped_opts, :tenant_id, conn.assigns.auth_context.tenant_id)
+  end
+
   defp handle_create(conn, opts) do
     case Validation.validate(@create_schema, conn.body_params) do
       {:errors, field_errors} ->
@@ -274,6 +282,10 @@ defmodule Letflow.Routers.Identity do
           {:error, :duplicate_username} -> Response.conflict(conn, "username already exists")
           {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
           {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
+          {:error, {:login_directory, _reason}} -> Response.internal_error(conn)
+          {:error, :tenant_id_required} -> Response.internal_error(conn)
+          {:error, :invalid_tenant_id} -> Response.internal_error(conn)
+          {:error, :tenant_prefix_mismatch} -> Response.internal_error(conn)
         end
     end
   end
@@ -386,6 +398,10 @@ defmodule Letflow.Routers.Identity do
               {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
               {:error, :not_found} -> Response.not_found(conn)
               {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
+              {:error, {:login_directory, _reason}} -> Response.internal_error(conn)
+              {:error, :tenant_id_required} -> Response.internal_error(conn)
+              {:error, :invalid_tenant_id} -> Response.internal_error(conn)
+              {:error, :tenant_prefix_mismatch} -> Response.internal_error(conn)
             end
         end
     end
@@ -420,6 +436,10 @@ defmodule Letflow.Routers.Identity do
               {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
               {:error, :not_found} -> Response.not_found(conn)
               {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
+              {:error, {:login_directory, _reason}} -> Response.internal_error(conn)
+              {:error, :tenant_id_required} -> Response.internal_error(conn)
+              {:error, :invalid_tenant_id} -> Response.internal_error(conn)
+              {:error, :tenant_prefix_mismatch} -> Response.internal_error(conn)
             end
         end
     end

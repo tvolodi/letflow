@@ -33300,7 +33300,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    impl_order: 952  # letflow-queue task id, GH#2206. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
+    impl_order: 955  # letflow-queue task id, GH#2213. Re-registered 2026-10-05 by ORCH (supersedes Q-952/GH#2206, blocked: stale queue depends_on). Originally registered 2026-10-05 (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
     description: >
       Implements the real mail adapter behind the notifier PORT that REQ-437
       specifies (Letflow.LoginDiscovery.Notifier, @callback
@@ -33524,7 +33524,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    impl_order: 953  # letflow-queue task id, GH#2207. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
+    impl_order: 956  # letflow-queue task id, GH#2214. Re-registered 2026-10-05 by ORCH (supersedes Q-953/GH#2207, blocked: depended on blocked Q-952). Originally registered 2026-10-05 (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
     description: >
       Makes the hard gate on enabling the feature outside dev (0042 OQ-3: a
       named person must confirm the lawful basis and controller) a TESTABLE

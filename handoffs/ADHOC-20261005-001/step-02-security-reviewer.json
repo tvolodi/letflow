@@ -1,0 +1,96 @@
+{
+  "handoff_id": "3b9f6d20-84c1-4a7e-9d05-c2e8f1a67b03",
+  "run_id": "ADHOC-20261005-001",
+  "workflow_id": "ADHOC",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/ADHOC-20261005-001/step-02-security-reviewer.json",
+  "created_at": "2026-10-05T03:50:00Z",
+  "started_at": null,
+  "completed_at": "2026-10-05T03:34:50Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [
+      "REQ-434",
+      "REQ-435",
+      "REQ-436",
+      "REQ-437",
+      "REQ-438",
+      "REQ-439",
+      "REQ-440",
+      "REQ-441",
+      "REQ-442",
+      "REQ-443",
+      "REQ-444"
+    ],
+    "requirement_text": {
+      "note": "Verbatim descriptions: handoffs/ADHOC-20261005-001/step-01-code-designer.json context.requirement_text. This step reviews a decision record, not an implementation; scope the read to the ADR plus the security-relevant sources it cites."
+    },
+    "source_text": {
+      "coordinator_request": "REVIEWER and SECURITY-REVIEWER must check the ADR's consistency with docs/migration/decisions/ especially 0002, 0006, 0035, 0038, 0042, 0043 and security-invariants INV-1..INV-8."
+    },
+    "related_handoff_ids": [
+      "step-01-code-designer.json",
+      "step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/migration/decisions/0044-hybrid-identity-model.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/migration/decisions/0002-oidc-integration.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "docs/migration/decisions/0028-unauthenticated-read-boundary.md",
+      "docs/migration/decisions/0038-tenant-membership-lookup-amendment.md",
+      "docs/migration/decisions/0042-email-first-login-tenant-directory.md",
+      "docs/migration/decisions/0043-email-first-login-ba-decisions.md",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-ada3a2b6d6b41b710",
+    "branch_name": "docs/ADR-hybrid-identity"
+  },
+  "task": {
+    "description": "SECURITY gate on the PROPOSED decision record docs/migration/decisions/0044-hybrid-identity-model.md (CODE-DESIGN-VALIDATOR PASS after 1 rework). It proposes a possible future shared-tier identity model (central realm, tenant selector, membership authorisation, domain-based routing) and a rollout whose Phase 1 is the already-ratified email-first directory. Review as a security design review: (a) the tenant-selector + membership rule and the INV-5 equivalence class (ADR 2.3.5): can a caller with a shared-realm account reach, read or be provisioned into a tenant they are not a member of; is 'JIT off for the shared realm' sufficient; what else could confer cross-tenant access (token claims, group/role mapping, subject collisions, email-verified/unverified emails, account linking, org membership vs local users row, deactivation propagation, token refresh)? (b) the weakening of 0006 s3.2 / R5 claims and 0002 'sole source' sentence: are the amendments honestly stated and bounded? (c) domain-based routing inference (R-7) and enumeration posture vs INV-5 and 0042 standing prohibitions (do the O3 additions keep the discovery response closed and byte-uniform?); (d) INV-1..INV-9 mapping in 2.3.7 and 6.7: is each correct against security-invariants.md (read the invariants file; quote the text you rely on); (e) anything the ADR should say but does not (e.g. account takeover via email change in the central realm, org-admin delegation, break-glass, audit trail per tenant, token audience/issuer pinning, logout/session scope, mobile token storage). Verify claims about this repo by reading the cited files (auth_pipeline.ex, identity.ex etc.). Do NOT edit the ADR. Output verdict RATIFIED/PASS or FAIL with findings classified BLOCKER/MAJOR/MINOR/ADVICE and exact locations; a FAIL means ORCH routes rework to CODE-DESIGNER. Note the ADR is PROPOSED and the user ratifies; your verdict is about security soundness and honesty of the record, not about choosing the option. Write the result into this handoff's 'result' (status PASS/FAIL, summary, issues[]) and set status COMPLETED; do not spawn agents; do not commit.",
+    "acceptance_criteria": [
+      "Each of (a)-(e) addressed with evidence",
+      "INV-1..INV-9 mapping verified against security-invariants.md text",
+      "Verdict with classified findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "RATIFIED (security soundness and record honesty; the user ratifies the option)",
+    "round": 3,
+    "summary": "SECURITY-REVIEWER re-review of 0044 after rework 3 (commit 4afc2ca6): PASS / RATIFIED. 0 BLOCKER, 0 MAJOR, 0 MINOR, 1 ADVICE. N-1..N-5 are resolved in the text. N-1: 2.3.2 item 3 and R-7 now name the person-level inference (200 vs 202 reveals a single-tenant mailbox), the possible mail to nonexistent mailboxes for uniform tenants, and require dedupe by tenant in the joined query. N-2: 2.3.5 item 4b adds the ordering (explicit entry for every existing dedicated realm plus a boot check, then flip the fallback) or the alternative of scoping deny to shared realms. N-3: invitation transport is a URL fragment (`/invite#<token>`) in 2.3.1/2.3.2/2.3.8 item 4/6.3, token then sent only in a POST body. N-4: 2.2, 2.3.4 guarantee and (a)-(c) now say only an accepted invitation creates rows; the Phase 5 re-link tool is a separate, user-authorised writer bound to (realm, sub) pairs and never matches by e-mail. N-5: decoy defined as a real users lookup against a fixed existing tenant schema. Factual check of 4b: config/prod.exs:32-38 and config/dev.exs:137-143 list only bpm-default; config/test.exs:171-176 list bpm-default plus jit-disabled-test-realm (and further test realms); config/runtime.exs has no JIT or claim-mapping key; deploy/Dockerfile:6 sets MIX_ENV=prod so a deployed image (QA included) uses prod.exs; no env-based override of :oidc_jit_provisioning exists in the repository. So any QA realm other than bpm-default falls through JitProvisioningConfig.default/1 (enabled: true) provided it is bound as a tenant's idp_realm_id. The realm list itself (bilimbaga, swiftroute, meridian, vortex) is cited from the ai-dala-infra landscape doc outside this repository and the QA compose/env was not inspectable here; the ADR's wording is acceptable because it is conditioned by the boot check (every tenants.idp_realm_id must have an entry). Invitation transport coherence: a fragment is never sent to the SPA host or logs; the SPA POSTs the token in a body, so the INV-5 collapsed response for unknown/expired/used/revoked tokens (2.3.8 item 6), the first-plug limiter plus per-token attempt cap (item 5), the single tenant schema derived from the server-side token record (item 6) and the single writer (item 7) are unaffected and coherent; the Referrer-Policy and URL-replacement controls remain. New spike items S-17 (token lifetime/revocation) and S-18 (self-registration, email_verified, email edit, broker linking) honestly mark the previous assertions as ASSUMED/UNVERIFIED; no new contradictions found. Phase 0 text updated to S-1..S-18 consistently. Not a verdict on choosing O1/O2/O3.",
+    "previous_findings_status": {
+      "N-1": "RESOLVED",
+      "N-2": "RESOLVED",
+      "N-3": "RESOLVED",
+      "N-4": "RESOLVED",
+      "N-5": "RESOLVED",
+      "SR-1..SR-10": "RESOLVED (round 2)"
+    },
+    "issues": [
+      {
+        "id": "A-1",
+        "severity": "ADVICE",
+        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.5 item 4b",
+        "finding": "The boot check 'every tenants.idp_realm_id has a JIT entry' covers realms bound at boot only; a tenant provisioned later at runtime would be denied until config is updated and the app restarted (JIT maps are compile/boot config). That is fail-closed and safe, but the Phase 2 runbook should say new dedicated realms need their entry before the tenant row is bound, or the map should move to per-tenant records (R-9).",
+        "required": "None blocking."
+      }
+    ],
+    "files_read": [
+      "docs/migration/decisions/0044-hybrid-identity-model.md",
+      "config/prod.exs",
+      "config/dev.exs",
+      "config/test.exs",
+      "config/runtime.exs (grep)",
+      "deploy/Dockerfile (grep)",
+      "lib/letflow/oidc/jit_provisioning_config.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ]
+  }
+}

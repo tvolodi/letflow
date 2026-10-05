@@ -72,9 +72,11 @@ defmodule Letflow.Identity do
   alias Letflow.Identity.TenantMembership
   alias Letflow.Identity.TenantRole
   alias Letflow.Identity.User
+  alias Letflow.LoginDirectory
   alias Letflow.Oidc.IdentityContext
   alias Letflow.Oidc.JitProvisioningConfig
   alias Letflow.Repo
+  alias Letflow.TenantProvisioning
 
   @type provisioning_error ::
           :jit_disabled
@@ -90,7 +92,7 @@ defmodule Letflow.Identity do
   `provision_oidc_user/4`'s own @doc for why a missing prefix must never silently
   fall back to the (post-REQ-063) no-longer-authoritative `public` schema.
   """
-  @type opts :: [prefix: String.t()]
+  @type opts :: [prefix: String.t(), login_directory: :enabled | :skip]
 
   @doc """
   Idempotent upsert keyed on `(tenant_id, external_realm, external_id)`:
@@ -219,12 +221,20 @@ defmodule Letflow.Identity do
   violation (mirrors `username_unique_conflict?/1`'s existing check), or
   `{:error, Ecto.Changeset.t()}` for any other changeset failure.
   """
-  @spec create_user(attrs :: map(), opts :: opts()) ::
+  @spec create_user(attrs :: map(), opts :: user_write_opts()) ::
           {:ok, User.t()}
           | {:error, :duplicate_username}
           | {:error, Ecto.Changeset.t()}
+          | {:error, directory_guard_error()}
+          | {:error, {:login_directory, term()}}
           | {:error, {:transaction_failed, Exception.t()}}
   def create_user(attrs, opts) do
+    with {:ok, directory} <- directory_target(opts) do
+      do_create_user(attrs, opts, directory)
+    end
+  end
+
+  defp do_create_user(attrs, opts, directory) do
     try do
       prefix = Keyword.fetch!(opts, :prefix)
       changeset = User.create_changeset(%User{}, attrs)
@@ -239,6 +249,7 @@ defmodule Letflow.Identity do
       # function had no transaction of its own before this requirement.
       Multi.new()
       |> Multi.insert(:user, changeset, prefix: prefix)
+      |> directory_step(directory, prefix, fn %{user: user} -> {nil, user} end)
       |> Multi.merge(fn %{user: user} ->
         Audit.append_multi(
           Multi.new(),
@@ -266,6 +277,9 @@ defmodule Letflow.Identity do
           else
             {:error, changeset}
           end
+
+        {:error, :login_directory, reason, _changes} ->
+          {:error, {:login_directory, reason}}
 
         {:error, :audit, reason, _changes} ->
           {:error, reason}
@@ -328,51 +342,22 @@ defmodule Letflow.Identity do
   — all optional). Design §7 gap 4. `attrs` carries only the keys present in
   the request body; an omitted field's existing value is preserved by
   `Ecto.Changeset.cast/3`'s own behavior over an already-loaded struct.
+
+  REQ-435: also maintains the platform login directory in the same
+  transaction (design §3.3-§3.4) -- see `t:user_write_opts/0`.
   """
-  @spec update_user_profile(id :: Ecto.UUID.t(), attrs :: map(), opts :: opts()) ::
+  @spec update_user_profile(id :: Ecto.UUID.t(), attrs :: map(), opts :: user_write_opts()) ::
           {:ok, User.t()}
           | {:error, :not_found}
           | {:error, Ecto.Changeset.t()}
+          | {:error, directory_guard_error()}
+          | {:error, {:login_directory, term()}}
           | {:error, {:transaction_failed, Exception.t()}}
   def update_user_profile(id, attrs, opts) do
-    prefix = Keyword.fetch!(opts, :prefix)
-
-    case Repo.get(User, id, prefix: prefix) do
-      nil ->
-        {:error, :not_found}
-
-      %User{} = user ->
-        try do
-          # REQ-195 -- actor_id: nil, §3.1b (same disposition/reasoning as
-          # create_user/2 above). Wrapped in Ecto.Multi for the
-          # same-transaction guarantee (AC3).
-          Multi.new()
-          |> Multi.update(:user, User.profile_changeset(user, attrs), prefix: prefix)
-          |> Multi.merge(fn %{user: updated} ->
-            Audit.append_multi(
-              Multi.new(),
-              :audit,
-              %{
-                actor_id: nil,
-                action: "user.update_profile",
-                resource_type: "user",
-                resource_id: updated.id,
-                before_state: Audit.struct_state(user, [:password_hash]),
-                after_state: Audit.struct_state(updated, [:password_hash]),
-                trace_id: nil
-              },
-              prefix
-            )
-          end)
-          |> Repo.transaction()
-          |> case do
-            {:ok, %{user: updated}} -> {:ok, updated}
-            {:error, :user, reason, _changes} -> {:error, reason}
-            {:error, :audit, reason, _changes} -> {:error, reason}
-          end
-        rescue
-          exception -> {:error, {:transaction_failed, exception}}
-        end
+    with {:ok, directory} <- directory_target(opts) do
+      update_locked_user(id, opts, directory, "user.update_profile", fn locked ->
+        User.profile_changeset(locked, attrs)
+      end)
     end
   end
 
@@ -380,52 +365,150 @@ defmodule Letflow.Identity do
   Updates a user's `status` only. Design §7 gap 5 (OQ-5 — a dedicated
   `User.status_changeset/2` rather than reusing `profile_changeset/2`, see
   that function's own @doc).
+
+  REQ-435: also maintains the platform login directory in the same
+  transaction (a non-active status removes the entry unless another active
+  user in the tenant has the same email) -- see `t:user_write_opts/0`.
   """
-  @spec update_user_status(id :: Ecto.UUID.t(), status :: :active | :inactive, opts :: opts()) ::
+  @spec update_user_status(
+          id :: Ecto.UUID.t(),
+          status :: :active | :inactive,
+          opts :: user_write_opts()
+        ) ::
           {:ok, User.t()}
           | {:error, :not_found}
           | {:error, Ecto.Changeset.t()}
+          | {:error, directory_guard_error()}
+          | {:error, {:login_directory, term()}}
           | {:error, {:transaction_failed, Exception.t()}}
   def update_user_status(id, status, opts) do
+    with {:ok, directory} <- directory_target(opts) do
+      update_locked_user(id, opts, directory, "user.update_status", fn locked ->
+        User.status_changeset(locked, %{status: status})
+      end)
+    end
+  end
+
+  # REQ-435 (design §3.4): the `before` state the directory plan is computed
+  # from is read INSIDE the transaction with a row lock (FOR UPDATE), not
+  # before it, so two concurrent edits cannot compute plans from the same stale
+  # row and leave a ghost entry. REQ-195 -- actor_id: nil, §3.1b (same
+  # disposition/reasoning as create_user/2). The outer rescue (ISS-0983
+  # hardening) is preserved.
+  defp update_locked_user(id, opts, directory, audit_action, changeset_fun) do
     prefix = Keyword.fetch!(opts, :prefix)
 
-    case Repo.get(User, id, prefix: prefix) do
-      nil ->
-        {:error, :not_found}
+    try do
+      Multi.new()
+      |> Multi.run(:locked_user, fn repo, _changes ->
+        case repo.one(from(u in User, where: u.id == ^id, lock: "FOR UPDATE"), prefix: prefix) do
+          %User{} = locked -> {:ok, locked}
+          nil -> {:error, :not_found}
+        end
+      end)
+      |> Multi.update(:user, fn %{locked_user: locked} -> changeset_fun.(locked) end,
+        prefix: prefix
+      )
+      |> directory_step(directory, prefix, fn %{locked_user: locked, user: updated} ->
+        {locked, updated}
+      end)
+      |> Multi.merge(fn %{locked_user: locked, user: updated} ->
+        Audit.append_multi(
+          Multi.new(),
+          :audit,
+          %{
+            actor_id: nil,
+            action: audit_action,
+            resource_type: "user",
+            resource_id: updated.id,
+            before_state: Audit.struct_state(locked, [:password_hash]),
+            after_state: Audit.struct_state(updated, [:password_hash]),
+            trace_id: nil
+          },
+          prefix
+        )
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{user: updated}} -> {:ok, updated}
+        {:error, :locked_user, :not_found, _changes} -> {:error, :not_found}
+        {:error, :user, reason, _changes} -> {:error, reason}
+        {:error, :login_directory, reason, _changes} -> {:error, {:login_directory, reason}}
+        {:error, :audit, reason, _changes} -> {:error, reason}
+      end
+    rescue
+      exception -> {:error, {:transaction_failed, exception}}
+    end
+  end
 
-      %User{} = user ->
-        try do
-          # REQ-195 -- actor_id: nil, §3.1b (same disposition/reasoning as
-          # create_user/2 above). Wrapped in Ecto.Multi for the
-          # same-transaction guarantee (AC3).
-          Multi.new()
-          |> Multi.update(:user, User.status_changeset(user, %{status: status}), prefix: prefix)
-          |> Multi.merge(fn %{user: updated} ->
-            Audit.append_multi(
-              Multi.new(),
-              :audit,
-              %{
-                actor_id: nil,
-                action: "user.update_status",
-                resource_type: "user",
-                resource_id: updated.id,
-                before_state: Audit.struct_state(user, [:password_hash]),
-                after_state: Audit.struct_state(updated, [:password_hash]),
-                trace_id: nil
-              },
-              prefix
-            )
-          end)
-          |> Repo.transaction()
-          |> case do
-            {:ok, %{user: updated}} -> {:ok, updated}
-            {:error, :user, reason, _changes} -> {:error, reason}
-            {:error, :audit, reason, _changes} -> {:error, reason}
-          end
-        rescue
-          exception -> {:error, {:transaction_failed, exception}}
+  @typedoc """
+  Opts for the user-write functions that maintain the platform login directory
+  (REQ-435, design §3.2): `:prefix` as before, plus a required `:tenant_id`
+  supplied by the caller from the authenticated context (never from request
+  data). A fail-closed guard checks that `schema_name_for_tenant(tenant_id)`
+  equals `:prefix` before any write. `:login_directory` set to `:skip` disables
+  the directory write; it exists only for test fixtures whose synthetic schema
+  prefix has no `tenants` row, and no `lib/` caller may use it.
+  """
+  @type user_write_opts :: [
+          prefix: String.t(),
+          tenant_id: Ecto.UUID.t(),
+          login_directory: :enabled | :skip
+        ]
+
+  @type directory_guard_error ::
+          :tenant_id_required | :invalid_tenant_id | :tenant_prefix_mismatch
+
+  # Fail-closed consistency guard (design §3.2). Returns `{:ok, :skip}` for the
+  # test-only opt-out, else `{:ok, {:enabled, canonical_tenant_id}}`, else one
+  # of the three typed guard errors. Writes nothing.
+  @spec directory_target(opts :: keyword()) ::
+          {:ok, :skip | {:enabled, Ecto.UUID.t()}} | {:error, directory_guard_error()}
+  defp directory_target(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    case Keyword.get(opts, :login_directory, :enabled) do
+      :skip ->
+        {:ok, :skip}
+
+      _enabled ->
+        case Keyword.get(opts, :tenant_id) do
+          nil ->
+            {:error, :tenant_id_required}
+
+          tenant_id ->
+            case TenantProvisioning.schema_name_for_tenant(tenant_id) do
+              {:ok, ^prefix} ->
+                {:ok, canonical} = Ecto.UUID.cast(tenant_id)
+                {:ok, {:enabled, canonical}}
+
+              {:ok, _other_schema} ->
+                {:error, :tenant_prefix_mismatch}
+
+              {:error, :invalid_tenant_id} ->
+                {:error, :invalid_tenant_id}
+            end
         end
     end
+  end
+
+  # Adds the `:login_directory` Multi step. `states_fun` maps the changes so far
+  # to `{before_user_or_nil, after_user}` for `LoginDirectory.plan_user_change/2`.
+  defp directory_step(multi, :skip, _prefix, _states_fun), do: multi
+
+  defp directory_step(multi, {:enabled, tenant_id}, prefix, states_fun) do
+    Multi.run(multi, :login_directory, fn _repo, changes ->
+      {before, after_user} = states_fun.(changes)
+
+      case LoginDirectory.apply_plan(
+             LoginDirectory.plan_user_change(before, after_user),
+             tenant_id,
+             prefix
+           ) do
+        :ok -> {:ok, :done}
+        {:error, _reason} = error -> error
+      end
+    end)
   end
 
   @typedoc "Params accepted by `list_group_members/3` — see its own @doc."
@@ -1763,7 +1846,45 @@ defmodule Letflow.Identity do
     end
   end
 
+  # REQ-435 (design §3.5, D2): the JIT insert, its created-check and the login
+  # directory upsert now run in ONE new Repo.transaction (the insert was not in
+  # any transaction before, so there was none to join). Only a genuinely
+  # created row writes a directory entry; a directory failure aborts the
+  # transaction and surfaces as {:error, {:login_directory, reason}}.
+  # sync_role_claims_from_token/3 deliberately runs AFTER the transaction
+  # commits, exactly as it ran after the insert before this change.
   defp insert_or_fetch(identity_context, tenant_id, jit_config, opts) do
+    case Repo.transaction(fn ->
+           insert_or_fetch_in_tx(identity_context, tenant_id, jit_config, opts)
+         end) do
+      {:ok, {:created, inserted}} ->
+        # REQ-378 §2.2.3 -- a brand-new row's marker is always nil, so no
+        # gate check is needed here (the row cannot pre-exist).
+        synced_user = sync_role_claims_from_token(inserted, identity_context, opts)
+        {:ok, %{user: synced_user, created: true}}
+
+      {:ok, {:existing, existing}} ->
+        # REQ-378 §2.2.3 -- identical gate to upsert_by_external_identity/4's
+        # own %User{} = existing branch: this is the on-conflict race-loser
+        # path's "found an existing row" outcome, and both must apply the same
+        # marker-gated sync. No directory write: the race winner wrote it.
+        user =
+          if is_nil(existing.role_claims_synced_at) do
+            sync_role_claims_from_token(existing, identity_context, opts)
+          else
+            existing
+          end
+
+        {:ok, %{user: user, created: false}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  # Runs inside the transaction opened by insert_or_fetch/4. Returns
+  # {:created, user} | {:existing, user}, or aborts via Repo.rollback/1.
+  defp insert_or_fetch_in_tx(identity_context, tenant_id, jit_config, opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
     attrs = %{
@@ -1777,11 +1898,17 @@ defmodule Letflow.Identity do
 
     changeset = User.jit_changeset(%User{}, attrs)
 
+    # mode: :savepoint -- a unique violation on the separate `username` index
+    # would otherwise abort the surrounding Postgres transaction ("current
+    # transaction is aborted") and every recovery query below would fail. The
+    # savepoint rolls back only this statement, leaving the transaction usable
+    # (design §3.5). The on_conflict: :nothing arbiter raises no error.
     case Repo.insert(changeset,
            on_conflict: :nothing,
            conflict_target:
              {:unsafe_fragment, "(external_realm, external_id) WHERE external_id IS NOT NULL"},
            returning: true,
+           mode: :savepoint,
            prefix: prefix
          ) do
       {:ok, %User{id: id} = inserted} ->
@@ -1800,10 +1927,8 @@ defmodule Letflow.Identity do
         # with our own freshly-generated id actually exists in the database —
         # Repo.get/2 on the primary key is the cheapest form of that check.
         if Repo.get(User, id, prefix: prefix) do
-          # REQ-378 §2.2.3 -- a brand-new row's marker is always nil, so no
-          # gate check is needed here (the row cannot pre-exist).
-          synced_user = sync_role_claims_from_token(inserted, identity_context, opts)
-          {:ok, %{user: synced_user, created: true}}
+          write_jit_directory_entry(inserted, tenant_id, opts)
+          {:created, inserted}
         else
           re_select_on_conflict(tenant_id, identity_context, opts)
         end
@@ -1827,7 +1952,7 @@ defmodule Letflow.Identity do
                 # A DIFFERENT identity already holds this username ->
                 # genuine, unrelated collision. Propagate the original
                 # changeset error unchanged.
-                {:error, changeset}
+                Repo.rollback(changeset)
               end
 
             nil ->
@@ -1837,15 +1962,40 @@ defmodule Letflow.Identity do
               # defensive-fallback discipline. Propagate the original
               # error -- do not fabricate a {:ok, _} result for a row this
               # call cannot actually locate.
-              {:error, changeset}
+              Repo.rollback(changeset)
           end
         else
           # Not a username-constraint error at all -> unchanged existing
           # behavior.
-          {:error, changeset}
+          Repo.rollback(changeset)
         end
     end
   end
+
+  # REQ-435: only reached for a genuinely created row. A user with an
+  # ineligible email or a non-active default status writes nothing and is not
+  # an error (design §3.5). The guard runs only when there is an entry to
+  # write, so JIT of an ineligible user never depends on the tenant opts.
+  defp write_jit_directory_entry(%User{} = inserted, tenant_id, opts) do
+    case LoginDirectory.plan_user_change(nil, inserted) do
+      [] ->
+        :ok
+
+      plan ->
+        with {:ok, {:enabled, canonical}} <- jit_directory_target(tenant_id, opts),
+             :ok <- LoginDirectory.apply_plan(plan, canonical, Keyword.fetch!(opts, :prefix)) do
+          :ok
+        else
+          {:ok, :skip} -> :ok
+          {:error, reason} -> Repo.rollback({:login_directory, reason})
+        end
+    end
+  end
+
+  # provision_oidc_user/4 already receives the authoritative tenant_id as a
+  # positional argument, so the same fail-closed guard runs over it.
+  defp jit_directory_target(tenant_id, opts),
+    do: directory_target(Keyword.put(opts, :tenant_id, tenant_id))
 
   @spec username_unique_conflict?(changeset :: Ecto.Changeset.t()) :: boolean()
   defp username_unique_conflict?(%Ecto.Changeset{errors: errors}) do
@@ -1855,24 +2005,12 @@ defmodule Letflow.Identity do
     end)
   end
 
+  # Runs inside insert_or_fetch/4's transaction; the marker-gated role-claims
+  # sync is applied by the caller after commit.
   defp re_select_on_conflict(tenant_id, identity_context, opts) do
     case get_by_external_identity(tenant_id, identity_context, opts) do
-      %User{} = existing ->
-        # REQ-378 §2.2.3 -- identical gate to upsert_by_external_identity/4's
-        # own %User{} = existing branch above: this is the on-conflict
-        # race-loser path's "found an existing row" outcome, and both must
-        # apply the same marker-gated sync.
-        user =
-          if is_nil(existing.role_claims_synced_at) do
-            sync_role_claims_from_token(existing, identity_context, opts)
-          else
-            existing
-          end
-
-        {:ok, %{user: user, created: false}}
-
-      nil ->
-        {:error, :external_identity_collision}
+      %User{} = existing -> {:existing, existing}
+      nil -> Repo.rollback(:external_identity_collision)
     end
   end
 

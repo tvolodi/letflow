@@ -21,6 +21,17 @@ System.get_env("LETFLOW_SECRETS_MASTER_KEY") ||
     "3f1c9a2e7b4d6081f5a3c8e2b7d4f6091a3c5e7b9d2f4a6c8e1b3d5f7a9c2e4b"
   )
 
+# REQ-435: test-only login-directory pepper + key id (never a previous pair; distinct from the master key; not
+# all-zero/all-F). Same inject-if-unset pattern as the master key above.
+System.get_env("LETFLOW_LOGIN_DIRECTORY_PEPPER") ||
+  System.put_env(
+    "LETFLOW_LOGIN_DIRECTORY_PEPPER",
+    "9d4b1e6a2c8f3705b1d7e9a4c6f20813e5a7b9c1d3f5a70924c6e8b0d2f4a6c8"
+  )
+
+System.get_env("LETFLOW_LOGIN_DIRECTORY_PEPPER_ID") ||
+  System.put_env("LETFLOW_LOGIN_DIRECTORY_PEPPER_ID", "test-a")
+
 # ISS-0015 (GH#71): don't start the HTTP listener under test at all -- no
 # test drives Letflow.Router over a real socket (it's exercised via
 # Plug.Test conn structs throughout this suite), so there is nothing to

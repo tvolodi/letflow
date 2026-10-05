@@ -1192,7 +1192,8 @@ defmodule Letflow.Routers.InstancesTest do
                  "display_name" => display_name,
                  "email" => "#{unique_name("req200")}@example.test"
                },
-               prefix: schema_name
+               prefix: schema_name,
+               login_directory: :skip
              )
 
     user

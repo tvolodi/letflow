@@ -168,14 +168,14 @@ defmodule Letflow.Simulation.Seed do
     people = Map.get(org_structure_fixture, "people", [])
 
     Enum.reduce_while(people, {:ok, []}, fn person, {:ok, acc} ->
-      case seed_one_user(person, prefix) do
+      case seed_one_user(person, prefix, tenant.id) do
         {:ok, user} -> {:cont, {:ok, acc ++ [user]}}
         {:error, _reason} = error -> {:halt, error}
       end
     end)
   end
 
-  defp seed_one_user(person, prefix) do
+  defp seed_one_user(person, prefix, tenant_id) do
     username = Map.fetch!(person, "username")
 
     case find_user_by_username(username, prefix) do
@@ -189,7 +189,7 @@ defmodule Letflow.Simulation.Seed do
           "email" => Map.fetch!(person, "email")
         }
 
-        case Identity.create_user(attrs, prefix: prefix) do
+        case Identity.create_user(attrs, prefix: prefix, tenant_id: tenant_id) do
           {:ok, user} -> {:ok, user}
           {:error, :duplicate_username} -> refetch_user_or_error(username, prefix)
           {:error, _reason} = error -> error

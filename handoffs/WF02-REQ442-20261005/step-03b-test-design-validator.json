@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ442-20261005/step-03b-test-design-validator.json",
   "created_at": "2026-10-05T12:39:37Z",
   "started_at": "2026-10-05T12:39:37Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T12:41:29Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -39,11 +39,12 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
+    "status": "PASS",
+    "summary": "Every AC (1,2a-f,3a-b,4,4b,5,6) maps to runnable tests in test/specs/REQ-442.md; AC7 is a tooling gate (TEST-RUNNER). Grep of the four req442 test files: no @tag :skip, no TODO/FIXME, no secrets or connection strings; env changes restored in on_exit per spec; tests use per-test data. Recorded gap (REQ-437 allowlist test does not exist yet) is legitimate. Pre-fix failure is 'code did not exist', so I applied TEST-DESIGNER mutant M1 myself (login_directory.ex: '? AND COALESCE' -> '? OR COALESCE'): 'Result: 14/21 passed' = 7 of 21 fail (ceiling cells, tenant uniform cell, junk deployment, per-row flags, inactive neighbour, config read). Reverted with git checkout; 'git status --porcelain lib test' empty; test file re-run green: 'Result: 21 passed'.",
     "artifacts_out": [],
     "issues": [],
-    "next_action": null
+    "next_action": "TEST-RUNNER",
+    "notes_for_test_runner": "Run the full-suite mix letflow.check.test (fresh recompile-all, default-argument warnings) which TEST-DESIGNER did not execute; also compile --warnings-as-errors, format check, check_boundaries."
   },
   "rework_count": 0
 }

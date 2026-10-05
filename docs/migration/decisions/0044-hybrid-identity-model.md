@@ -1,9 +1,14 @@
 # 0044 -- Identity model: realm-per-tenant (O1), central realm with organisations (O2), or a two-tier hybrid (O3)
 
-Status: PROPOSED. This record is a proposal for the user to ratify. It claims no gate verdict:
-the Sign-off section at the end carries the gate agents' verdicts (validator, security,
-reviewer: PASS) and the user's ratification, which is `pending`. Until the user ratifies it,
-nothing in it is a decision and no ratified record is changed by it.
+Status: PHASE 1 RATIFIED by the user (repo owner) on 2026-10-05; all later phases DEFERRED.
+Phase 1 means REQ-435..444 as planned, directory + email-first login, realm-per-tenant (O1).
+The shared tier / O3 beyond Phase 1, e-mail-domain routing, brokered company IdP and any O2
+move are NOT decided: they are deferred until a real tenant needs them (trigger: an actual
+customer requirement), at which point the Keycloak spikes S-1..S-18 are run and the remaining
+questions are answered. See "Ratification record (2026-10-05)" below. Until a later phase is
+ratified, nothing in sections 2.2/2.3 (beyond Phase 1) is a decision and no ratified record is
+changed by it. The legal controller question (0042 OQ-3 / 0043 D-D) remains OPEN and still gates
+enabling the feature flag outside dev.
 
 Date: 2026-10-05. Drafted by `CODE-DESIGNER` (ADHOC-20261005-001, step 01). Owner: `ORCH`.
 
@@ -1080,6 +1085,9 @@ For comparison (not recommended): O1 = all `stay`, no hold needed. O2 = REQ-435,
 
 ### Hold note
 
+UPDATE 2026-10-05: Phase 1 was ratified and the `hold:` markers described below have been
+removed (see "Ratification record" in section 9). The text below is retained as history.
+
 REQ-437, REQ-438, REQ-440, REQ-441, REQ-442, REQ-443 and REQ-444 (the pending requirements
 numbered 437 and above) carry a temporary hold marker in `docs/requirements.yaml`, added by
 `ORCH` and not by this record, pending the user's ratification of this record. The marker's
@@ -1127,5 +1135,29 @@ repeat (stated in the PR body).
   0042's "what remains unchanged" paragraph; (b) the amendment of 0002's "sole source" sentence
   and 0038 point 4; (c) whether the Phase 1 = O1 framing leaves 0042 intact and does not pretend to settle 0043's open conflicts 1-10
   (it should); (d) the O3 treatment of PR #2201 and the hold note.
-- **User ratification:** pending. Not a gate agent; the user alone converts Status from
-  PROPOSED to decided.
+- **User ratification:** Phase 1 RATIFIED on 2026-10-05 (see below); later phases deferred. Not
+  a gate agent; the user alone converts Status from PROPOSED to decided.
+
+### Ratification record (2026-10-05)
+
+The user (repo owner) decided in the session on 2026-10-05, quote: "My concern is that we can
+resolve complex authorization path in future. But I prefer to make simple cases now and complex
+later when they will come actually. So, I am for the first phase to execute now and other - as
+soon as they will be really needed".
+
+- **Ratified now (Phase 1):** REQ-435..444 as planned: platform directory, email-first login,
+  realm-per-tenant (O1). Under the recommendation every one of these is `stay` (section 8), so
+  the temporary hold on REQ-437, 438, 440-444 is lifted and the `hold:` markers are removed
+  from `docs/requirements.yaml`. Work is still subject to each requirement's `depends_on`
+  (REQ-440 before 437; 441 and 442 before 437; 443/444 as in the yaml). PR #2201 proceeds as in
+  4.3, still gated by the pepper-provisioning hold.
+- **Deferred, not decided:** the shared tier / O3 beyond Phase 1, domain routing, brokered
+  company IdP and any O2 move. Trigger to revisit: an actual customer requirement. At that time
+  run spikes S-1..S-18 (section 5.2) and answer the remaining questions.
+- **Section 7 questions:** the defaults for the Phase-1-relevant questions are ACCEPTED as
+  written: Q1 (tens of hand-provisioned tenants, no self-service, build Phase 1 only), Q3
+  (Bilimbaga stays in its dedicated realm, uniform disclosure per 0043 D-A), Q5 (central realm
+  owner: not applicable until a shared tier exists), Q11 (release Phase 1 now). Q4 (legal
+  controller, 0042 OQ-3) stays OPEN and still gates enabling the feature flag outside dev. All
+  other questions (Q2, Q6-Q10, Q12-Q14) are DEFERRED, not answered; their stated defaults are
+  not adopted by this ratification.

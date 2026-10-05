@@ -155,9 +155,7 @@ defmodule Letflow.Routers.Tasks do
     handle_reassign(conn, conn.params["id"], conn.assigns.scoped_opts)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── GET /tasks (design §5.2) ────────────────────────────────────────────
 

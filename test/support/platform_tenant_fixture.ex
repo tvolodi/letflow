@@ -1,0 +1,173 @@
+defmodule Letflow.Support.PlatformTenantFixture do
+  @moduledoc """
+  Test-only fixture for ISS-0993 / ISS-0994 platform-scope tests
+  (`lib/letflow/design/iss0993-platform-scope-separation.md` section 12, "Fixtures").
+
+  Provides:
+
+    * `pin!/1` / `unpin!/0` / `with_platform_tenant!/2` -- set or clear the
+      configuration-pinned platform tenant
+      (`config :letflow, Letflow.PlatformTenant, tenant_id: ...`) around a test. The original
+      value is restored by an `on_exit/1` registered at the first `pin!/1` or `unpin!/0` call,
+      so a failing test cannot leak a pin into another module. Application config is
+      VM-global: every module using this helper must be `async: false`.
+    * `three_tenants!/0` / `two_tenants!/0` -- provisioned tenants P (platform), A (ordinary),
+      B (other ordinary) through `Letflow.TenantFixture`.
+    * `auth_context/2`, `router_conn/5` -- the hand-assigned `auth_context` style every router
+      test in this suite uses (no scope-fact keys on purpose: the plug recomputes them).
+    * `mint_token!/2`, `api_conn/5` -- a real API token for a fresh user of a fixture tenant,
+      and a request carrying it for the full `Letflow.Router` pipeline.
+    * `shadow_lines/1` -- the `platform_scope_shadow_deny` lines of a captured log.
+  """
+
+  import Plug.Conn
+  import Plug.Test
+
+  alias Letflow.Identity
+  alias Letflow.Identity.User
+  alias Letflow.Repo
+  alias Letflow.TenantFixture
+
+  @config_key Letflow.PlatformTenant
+
+  @type fixture :: TenantFixture.tenant_fixture()
+
+  # --- Pin management -------------------------------------------------------
+
+  @doc """
+  Pins `tenant_id` as the platform tenant (or clears the pin with `nil`) for the rest of the
+  calling test. Registers the restore on the first call within a test process.
+  """
+  @spec pin!(String.t() | nil) :: :ok
+  def pin!(tenant_id) do
+    ensure_restore!()
+    Application.put_env(:letflow, @config_key, tenant_id: tenant_id)
+    :ok
+  end
+
+  @doc "Clears the platform tenant pin for the rest of the calling test (nobody has platform scope)."
+  @spec unpin!() :: :ok
+  def unpin!, do: pin!(nil)
+
+  @doc "Runs `fun` with `tenant_id` pinned; the previous config is restored afterwards, even on a raise."
+  @spec with_platform_tenant!(String.t() | nil, (-> result)) :: result when result: term()
+  def with_platform_tenant!(tenant_id, fun) when is_function(fun, 0) do
+    original = Application.fetch_env(:letflow, @config_key)
+
+    try do
+      Application.put_env(:letflow, @config_key, tenant_id: tenant_id)
+      fun.()
+    after
+      restore(original)
+    end
+  end
+
+  defp ensure_restore! do
+    key = {__MODULE__, :restore_registered}
+
+    if Process.get(key) != true do
+      Process.put(key, true)
+      original = Application.fetch_env(:letflow, @config_key)
+      ExUnit.Callbacks.on_exit(fn -> restore(original) end)
+    end
+  end
+
+  defp restore({:ok, value}), do: Application.put_env(:letflow, @config_key, value)
+  defp restore(:error), do: Application.delete_env(:letflow, @config_key)
+
+  # --- Tenants --------------------------------------------------------------
+
+  @doc "Two provisioned ordinary tenants, `%{a: fixture, b: fixture}`."
+  @spec two_tenants!() :: %{a: fixture(), b: fixture()}
+  def two_tenants! do
+    %{
+      a: TenantFixture.provisioned_tenant!(slug_prefix: "scope-a"),
+      b: TenantFixture.provisioned_tenant!(slug_prefix: "scope-b")
+    }
+  end
+
+  @doc "Three provisioned tenants, `%{p: platform candidate, a: ordinary, b: other ordinary}`."
+  @spec three_tenants!() :: %{p: fixture(), a: fixture(), b: fixture()}
+  def three_tenants! do
+    Map.put(two_tenants!(), :p, TenantFixture.provisioned_tenant!(slug_prefix: "scope-p"))
+  end
+
+  # --- Requests -------------------------------------------------------------
+
+  @doc "A hand-assigned `auth_context` (no scope-fact keys) for `fixture` holding `roles`."
+  @spec auth_context(fixture() | nil, [String.t()]) :: map()
+  def auth_context(fixture, roles) do
+    tenant_id = if fixture, do: fixture.tenant_id, else: Ecto.UUID.generate()
+    %{user_id: Ecto.UUID.generate(), tenant_id: tenant_id, roles: roles}
+  end
+
+  @doc """
+  A `Plug.Test` connection for direct dispatch into one router's `call/2`
+  (path relative to that router's mount), carrying a hand-assigned `auth_context`.
+  """
+  @spec router_conn(atom(), String.t(), fixture() | nil, [String.t()], map() | nil) ::
+          Plug.Conn.t()
+  def router_conn(method, path, fixture, roles, body) do
+    conn = conn(method, path)
+
+    conn =
+      if body do
+        %{conn | body_params: body} |> put_req_header("content-type", "application/json")
+      else
+        conn
+      end
+
+    conn
+    |> assign(:auth_context, auth_context(fixture, roles))
+    |> assign(:trace_id, "platform-scope-test-trace-id")
+  end
+
+  @doc "Mints a real API token for a fresh active user of `fixture`, holding exactly `roles`."
+  @spec mint_token!(fixture(), [String.t()]) :: String.t()
+  def mint_token!(fixture, roles) do
+    user =
+      %User{}
+      |> Ecto.Changeset.change(%{
+        username: "scope-caller-#{Ecto.UUID.generate()}",
+        display_name: "Scope Test Caller",
+        email: "scope-caller-#{Ecto.UUID.generate()}@example.com",
+        password_hash: "__NO_PASSWORD_SET__",
+        status: :active,
+        auth_source: :internal
+      })
+      |> Repo.insert!(prefix: fixture.schema_name)
+
+    {:ok, %{plaintext: plaintext}} =
+      Identity.create_token(user.id, %{roles: roles, expires_at: nil},
+        prefix: fixture.schema_name
+      )
+
+    plaintext
+  end
+
+  @doc """
+  A request for the FULL `Letflow.Router` pipeline (`/api/v1` prefix is part of `path`),
+  authenticated by `token` and addressed to `slug`.
+  """
+  @spec api_conn(atom(), String.t(), String.t(), String.t(), map() | nil) :: Plug.Conn.t()
+  def api_conn(method, path, token, slug, body) do
+    conn(method, path, if(body, do: Jason.encode!(body), else: nil))
+    |> put_req_header("content-type", "application/json")
+    |> put_req_header("authorization", "Bearer " <> token)
+    |> put_req_header("x-tenant-slug", slug)
+  end
+
+  @doc "The full `Letflow.Router` dispatch of a connection."
+  @spec dispatch_api(Plug.Conn.t()) :: Plug.Conn.t()
+  def dispatch_api(conn), do: Letflow.Router.call(conn, Letflow.Router.init([]))
+
+  # --- Log inspection -------------------------------------------------------
+
+  @doc "The `platform_scope_shadow_deny` lines of a captured log, one string per line."
+  @spec shadow_lines(String.t()) :: [String.t()]
+  def shadow_lines(log) do
+    log
+    |> String.split("\n")
+    |> Enum.filter(&String.contains?(&1, "platform_scope_shadow_deny"))
+  end
+end

@@ -415,9 +415,7 @@ defmodule Letflow.Routers.Entities do
     handle_export_records(conn, conn.params["entity_type"])
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ══ POST /entities/definitions ════════════════════════════════════════
   #

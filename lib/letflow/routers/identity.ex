@@ -224,9 +224,7 @@ defmodule Letflow.Routers.Identity do
     handle_upsert_role(conn, conn.assigns.scoped_opts)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── POST /users (design §2.1) ───────────────────────────────────────────
 

@@ -177,6 +177,35 @@ and Decision C (event-store insert-only, composite PK, idempotency sidecar table
 own `users`/`tenant`/tenant-binding tables (`docs/migration/stage-1-identity.md`) follow
 Decision B like every other business table.
 
+### 5.1 Route declaration and permission scope (ISS-0993 / ISS-0994)
+
+Design: `lib/letflow/design/iss0993-platform-scope-separation.md`.
+
+- Declare every HTTP route with `authz_get`/`authz_post`/`authz_put`/`authz_patch`/
+  `authz_delete` and a literal policy key. `use Letflow.Api.AuthorizedRouter` no longer
+  imports the plain `get`/`post`/... macros, so a keyless route does not compile, and a
+  route must never resolve to `:Unknown`. Declare the router's catch-all with
+  `authz_unmatched(:ordinary)` (or `:platform_prefix` for the five platform routers).
+- Every permission has exactly ONE scope, `Letflow.Api.Authorization.permission_scope/1`:
+  `:platform` (`:TenantsManage`, `:PlatformServicesManage`) or `:tenant` (everything else;
+  every module permission is tenant scope; an unclassified atom is treated as `:platform`,
+  fail closed). Adding a core permission means adding it to the scope table in the same
+  change; a test fails when it is missing.
+- A platform-scope permission is honoured only when the caller's DATABASE-RESOLVED tenant
+  (`conn.assigns.auth_context.tenant_id`) is the configured platform tenant
+  (`LETFLOW_PLATFORM_TENANT_ID`, `Letflow.PlatformTenant`) AND the caller holds
+  `PLATFORM_ADMIN` there. Never take the tenant from a header, path, query, body or token
+  claim, and never read the stored `platform_scope?` key by dot access: recompute via
+  `PlatformTenant.platform_tenant?/1`, `scope_facts/2` or `scope_facts_for/1`.
+- A handler that receives a tenant identifier from the request must call
+  `Letflow.Api.TenantTarget.authorize_target_tenant/2` before any lookup and map
+  `{:error, :not_found}` to the zero-argument `Response.not_found/1` (404, INV-5).
+  (Wired in A2; in A1 the helper exists but no handler calls it yet.)
+- Promotion access goes through `Letflow.Definitions.PromotionAccess.checker_for/1`, not an
+  allow-all checker. (Wired in A2; in A1 it exists but no call site uses it yet.)
+- Never log tenant ids, role names or tokens (the platform shadow log carries only the
+  policy key and one boolean).
+
 ---
 
 ## 6. OIDC / identity — ueberauth_oidcc (partial adoption, decided)

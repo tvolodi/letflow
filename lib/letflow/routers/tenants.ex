@@ -67,11 +67,26 @@ defmodule Letflow.Routers.Tenants do
   target tenant is the caller's own, from
   `conn.assigns.auth_context.tenant_id`).
 
-  `POST /:test_tenant_id/promote/:process_key` is declared with a plain
-  `post` macro, not `authz_post` — it is `:Unknown`-gated
-  (PLATFORM_ADMIN-only), the same deliberate decision every other REQ-077
-  route makes; see `Letflow.Routers.Promotions`' moduledoc for the full
-  reasoning.
+  `POST /:test_tenant_id/promote/:process_key` is declared with `authz_post`
+  and the explicit key `:PromotionsManage` (TENANT scope; ISS-0993 row 34): the
+  ONLY non-platform route under the `/tenants` mount. Its source,
+  `:test_tenant_id`, is the one caller-supplied tenant: a non-operator may only
+  name its OWN tenant there, a platform-tenant operator may name another
+  (decision point OQ-2, `Letflow.PlatformTenant.cross_tenant_promotion_operator_only?/0`).
+  `Letflow.Api.TenantTarget.authorize_target_tenant/2` (404 byte-identical to a
+  nonexistent source, called BEFORE any read of the source tenant) implements
+  it; it ships in A1 but is not yet called by `handle_promote` (A2).
+
+  ## Scope rule (ISS-0993 / ISS-0994): PLATFORM scope
+
+  The six registry routes (`POST/GET /tenants`, `GET/PATCH /tenants/:slug`,
+  `POST /tenants/:slug/deactivate|reactivate`) require `:TenantsManage`, a
+  PLATFORM-scope permission: honoured only for a `PLATFORM_ADMIN` whose
+  database-resolved tenant is the configured platform tenant
+  (`Letflow.PlatformTenant`, `LETFLOW_PLATFORM_TENANT_ID`). A `PLATFORM_ADMIN` of
+  any other tenant, including for its own slug, gets 403. A1 runs this in
+  shadow mode: enforcement is still the legacy outcome and a
+  `platform_scope_shadow_deny` line is logged where A2 will deny.
 
   ## Relationship to REQ-076 (AC7)
 
@@ -192,22 +207,18 @@ defmodule Letflow.Routers.Tenants do
   end
 
   # REQ-077 R10 (ENV-03) -- the ONE route this requirement contributes to
-  # this router (design §2.4): PLATFORM_ADMIN-only via the `:Unknown`
-  # catch-all, same deliberate decision every other REQ-077 route makes
-  # (see Letflow.Routers.Promotions' moduledoc). Deliberately NOT
-  # `authz_post` -- no policy key. `:test_tenant_id` is caller-supplied and
+  # this router (design §2.4): own-tenant TENANT scope, key :PromotionsManage
+  # (ISS-0993 row 34), no longer :Unknown. `:test_tenant_id` is caller-supplied and
   # IS a cross-tenant read (design §7.9); the destination
   # (`conn.assigns.auth_context.tenant_id`, never a path/query/body value)
   # is not. R-Co's path segment is `:definition_name`; Letflow's is
   # `:process_key` -- same value, renamed to match this codebase's own
   # promotion-stack vocabulary (design §2.4).
-  post "/:test_tenant_id/promote/:process_key" do
+  authz_post "/:test_tenant_id/promote/:process_key", :PromotionsManage do
     handle_promote(conn, conn.params["test_tenant_id"], conn.params["process_key"])
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:platform_prefix)
 
   # ── POST /tenants (design §7.1, AC4, AC7) ───────────────────────────────
 

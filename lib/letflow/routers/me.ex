@@ -79,9 +79,7 @@ defmodule Letflow.Routers.Me do
     handle_list_modules(conn)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── GET /me/memberships (design §2.2) ───────────────────────────────────
 

@@ -75,6 +75,12 @@ config :letflow, Letflow.Routers.LoginDiscovery, enabled: config_env() != :prod
 # adapter key is the one REQ-441 (mail adapter) and REQ-444 (enablement gate) read.
 config :letflow, Letflow.LoginDiscovery, mode: :redirect_single, max_body_bytes: 2048
 
+# ISS-0993 / ISS-0994 (design lib/letflow/design/iss0993-platform-scope-separation.md
+# section 3): the single configuration-pinned platform tenant id. nil in every
+# environment (test included) = nobody holds platform scope (fail closed).
+# config/runtime.exs fills it from the optional LETFLOW_PLATFORM_TENANT_ID.
+config :letflow, Letflow.PlatformTenant, tenant_id: nil
+
 config :letflow, Letflow.LoginDiscovery.Notifier,
   adapter: Letflow.LoginDiscovery.Notifier.Noop,
   timeout_ms: 5_000,

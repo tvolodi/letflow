@@ -1149,24 +1149,26 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
   # design §12.8 -- the :Unknown/PLATFORM_ADMIN-only authorization decision
   # ────────────────────────────────────────────────────────────────────────────
 
-  describe "design §12.8: the :Unknown authorization decision is pinned" do
+  describe "design §12.8: the ten promotion routes carry explicit policy keys" do
+    # ISS-0993: the ten templates no longer resolve to :Unknown; each carries an
+    # explicit TENANT-scope key (design iss0993-platform-scope-separation.md section 7.2).
     @path_templates [
-      {"POST", "/promotions"},
-      {"POST", "/promotions/plan"},
-      {"GET", "/promotions/:id"},
-      {"GET", "/promotions/:id/context"},
-      {"POST", "/promotions/:id/approve"},
-      {"POST", "/promotions/:id/reject"},
-      {"POST", "/promotions/:id/apply"},
-      {"POST", "/promotions/:review_id/run-assertions"},
-      {"POST", "/definitions/:process_key/rollback"},
-      {"POST", "/tenants/:test_tenant_id/promote/:process_key"}
+      {"POST", "/promotions", :PromotionsManage},
+      {"POST", "/promotions/plan", :PromotionsManage},
+      {"GET", "/promotions/:id", :PromotionsRead},
+      {"GET", "/promotions/:id/context", :PromotionsRead},
+      {"POST", "/promotions/:id/approve", :PromotionsManage},
+      {"POST", "/promotions/:id/reject", :PromotionsManage},
+      {"POST", "/promotions/:id/apply", :PromotionsManage},
+      {"POST", "/promotions/:review_id/run-assertions", :PromotionsManage},
+      {"POST", "/definitions/:process_key/rollback", :DefinitionsRollback},
+      {"POST", "/tenants/:test_tenant_id/promote/:process_key", :PromotionsManage}
     ]
 
-    test "every one of the ten route templates resolves to :Unknown" do
-      for {method, path} <- @path_templates do
-        assert Authorization.endpoint_policy_key(method, path) == :Unknown,
-               "expected #{method} #{path} to resolve to :Unknown"
+    test "every one of the ten route templates resolves to its explicit key, never :Unknown" do
+      for {method, path, key} <- @path_templates do
+        assert Authorization.endpoint_policy_key(method, path) == key,
+               "expected #{method} #{path} to resolve to #{inspect(key)}"
       end
     end
 

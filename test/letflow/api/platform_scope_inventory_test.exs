@@ -1,0 +1,560 @@
+defmodule Letflow.Api.PlatformScopeInventoryTest do
+  @moduledoc """
+  ISS-0993 / ISS-0994 design section 11 (guards G0..G3) and section 12 items 13 and 18
+  (spec `test/specs/ISS-0993-A1.md`): the route-inventory guard for platform scope separation.
+
+  INV-10 check ("platform authority bound to the platform tenant"), enforced from the merge of
+  Q-960 PR A. Named checks carried here: the scope-table completeness guard (G2), the platform
+  pinning snapshot (G3), the permission-classification guard.
+
+    * **G0** -- compile time. `use Letflow.Api.AuthorizedRouter` no longer imports the plain
+      `get/post/put/patch/delete/head/options` macros, so a plain-macro route does not compile;
+      `match/2` (router catch-all) and `forward/2` still do, and `authz_unmatched/1` accepts only
+      its two kinds.
+    * **G1** -- source scan of the router files for route declarations that are neither `authz_*`
+      nor a catch-all, with an explicit allowlist of the six public routes (design 7.4). The
+      scanner takes source text, so one test feeds it a literal bad snippet and asserts it is
+      flagged (demonstrated once, without compiling a bad route).
+    * **G2** -- route table. Every router mounted by `Letflow.Plugs.ApiPipeline` is discovered
+      through `__authz_routes__/0`; no declared key is `:Unknown`; every route's permission is a
+      core or a Catalog permission; every permission atom reachable is classified in exactly one
+      of the two sets (core scope table or Catalog rule), otherwise the runtime fail-closed
+      fallback (`:platform`) would apply and the test fails.
+    * **G3** -- platform pinning. The set of routes whose permission is platform scope equals a
+      literal snapshot of the 21 rows of design 7.1, and the pure `evaluate_access/2` grid for the
+      platform keys is as designed.
+    * **G4** (tenant-identifier scan) is intentionally NOT included in A1: it is a scan for
+      request-supplied tenant ids that must reach `TenantTarget.authorize_target_tenant/2`, and
+      A1 wires no handler to the helper. It belongs to A2, together with the wiring (design 11
+      allows dropping it without weakening G0-G3 and the handler-level tests).
+
+  No database. `async: true` is safe: nothing here mutates global state.
+  """
+
+  use ExUnit.Case, async: true
+
+  import ExUnit.CaptureIO
+
+  alias Letflow.Api.Authorization
+  alias Letflow.Api.Authorization.AccessContext
+  alias Letflow.Modules.Catalog
+
+  # --------------------------------------------------------------------------
+  # shared helpers
+  # --------------------------------------------------------------------------
+
+  @pipeline_source File.read!("lib/letflow/plugs/api_pipeline.ex")
+
+  # {router module, mount prefix} from the `forward("<prefix>", to: <Module>)` lines.
+  defp pipeline_mounts do
+    ~r/forward\(\s*"([^"]+)"\s*,\s*to:\s*([A-Za-z0-9_.]+)\s*\)/
+    |> Regex.scan(@pipeline_source)
+    |> Enum.map(fn [_all, prefix, module] -> {Module.concat([module]), prefix} end)
+  end
+
+  # Routers reached only through `Letflow.Routers.Modules` (mounted at /modules/<manifest id>).
+  defp module_mounts do
+    for entry <- Catalog.entry_modules(),
+        Code.ensure_loaded?(entry),
+        function_exported?(entry, :router, 0) do
+      {entry.router(), "/modules/" <> entry.manifest().id}
+    end
+  end
+
+  defp all_mounts, do: pipeline_mounts() ++ module_mounts()
+
+  defp discovered_routers do
+    for module <- Application.spec(:letflow, :modules),
+        Code.ensure_loaded?(module),
+        function_exported?(module, :__authz_routes__, 0),
+        do: module
+  end
+
+  defp full_path(prefix, "/"), do: prefix
+  defp full_path(prefix, local), do: prefix <> local
+
+  # [{router, method, full_path, declared_key}]
+  defp all_routes do
+    mounts = Map.new(all_mounts())
+
+    for router <- discovered_routers(),
+        {method, local, key} <- router.__authz_routes__() do
+      prefix = Map.fetch!(mounts, router)
+      {router, method, full_path(prefix, local), key}
+    end
+  end
+
+  defp classified_core, do: Authorization.core_permissions()
+  defp classified_catalog, do: Catalog.permissions()
+
+  # --------------------------------------------------------------------------
+  # G0 -- compile time
+  # --------------------------------------------------------------------------
+
+  describe "G0: no plain verb macros in an AuthorizedRouter" do
+    defp compile_router(body) do
+      name = "Elixir.PlatformScopeG0Probe#{System.unique_integer([:positive])}"
+
+      source = """
+      defmodule #{name} do
+        use Letflow.Api.AuthorizedRouter
+      #{body}
+      end
+      """
+
+      capture_io(:stderr, fn ->
+        send(self(), {:result, safe_compile(source)})
+      end)
+
+      receive do
+        {:result, result} -> result
+      end
+    end
+
+    defp safe_compile(source) do
+      Code.compile_string(source)
+      :compiled
+    rescue
+      error -> {:error, error}
+    end
+
+    for verb <- ~w(get post put patch delete head options) do
+      test "a plain `#{verb}` route does not compile" do
+        assert {:error, %CompileError{}} =
+                 compile_router(~s|  #{unquote(verb)} "/x" do\n    conn\n  end|)
+      end
+    end
+
+    test "authz_* routes, `match _` and `forward` still compile" do
+      assert :compiled ==
+               compile_router("""
+                 authz_get "/x", :HelpRead do
+                   conn
+                 end
+
+                 authz_post "/y", :HelpRead do
+                   conn
+                 end
+               """)
+
+      assert :compiled == compile_router("  match _ do\n    conn\n  end")
+    end
+
+    test "authz_unmatched/1 accepts exactly :platform_prefix and :ordinary" do
+      assert :compiled == compile_router("  authz_unmatched(:platform_prefix)")
+      assert :compiled == compile_router("  authz_unmatched(:ordinary)")
+      assert {:error, _} = compile_router("  authz_unmatched(:other)")
+      assert {:error, _} = compile_router("  authz_unmatched(\"ordinary\")")
+    end
+
+    test "authz_unmatched/1 records the marker policy key and answers 404; it is not a route" do
+      name = Module.concat(__MODULE__, "UnmatchedProbe#{System.unique_integer([:positive])}")
+
+      capture_io(:stderr, fn ->
+        Code.compile_string("""
+        defmodule #{inspect(name)} do
+          use Letflow.Api.AuthorizedRouter
+          authz_get "/x", :HelpRead do
+            conn
+          end
+          authz_unmatched(:platform_prefix)
+        end
+        """)
+      end)
+
+      assert name.__authz_routes__() == [{"GET", "/x", :HelpRead}]
+    end
+  end
+
+  # --------------------------------------------------------------------------
+  # G1 -- source scan (takes source text)
+  # --------------------------------------------------------------------------
+
+  describe "G1: every route declaration is authz_*, a catch-all or on the public allowlist" do
+    # [{line_number, verb, path_or_pattern}] for route declarations that are not authz_*,
+    # `match _` or `forward`. Heredoc (doc) blocks and comment lines are skipped.
+    def plain_route_declarations(source) do
+      source
+      |> String.split("\n")
+      |> Enum.with_index(1)
+      |> Enum.reduce({false, []}, fn {line, number}, {in_doc?, found} ->
+        quotes = length(String.split(line, ~s(""")) |> tl())
+        toggled? = rem(quotes, 2) == 1
+
+        cond do
+          in_doc? -> {if(toggled?, do: false, else: true), found}
+          toggled? -> {true, found}
+          true -> {false, found ++ declaration(line, number)}
+        end
+      end)
+      |> elem(1)
+    end
+
+    defp declaration(line, number) do
+      trimmed = String.trim_leading(line)
+
+      cond do
+        String.starts_with?(trimmed, "#") ->
+          []
+
+        match =
+            Regex.run(~r/^(get|post|put|patch|delete|head|options)\s*\(?\s*"([^"]*)"/, trimmed) ->
+          [_all, verb, path] = match
+          [{number, String.upcase(verb), path}]
+
+        match = Regex.run(~r/^match\s*\(?\s*"([^"]*)"/, trimmed) ->
+          [_all, path] = match
+          [{number, "MATCH", path}]
+
+        true ->
+          []
+      end
+    end
+
+    # The six GLOBAL-PUBLIC routes of design 7.4 (never under ApiPipeline).
+    @public_allowlist [
+      {"lib/letflow/router.ex", "GET", "/health"},
+      {"lib/letflow/routers/login_discovery.ex", "POST", "/"},
+      {"lib/letflow/routers/metrics_exposition.ex", "GET", "/"},
+      {"lib/letflow/routers/mobile_tenant_config.ex", "GET", "/"},
+      {"lib/letflow/routers/public_read.ex", "GET", "/:kind/:handle"},
+      {"lib/letflow/routers/tenant_config.ex", "GET", "/"}
+    ]
+
+    defp scanned_files do
+      Enum.sort(
+        ["lib/letflow/router.ex"] ++
+          Path.wildcard("lib/letflow/routers/**/*.ex") ++
+          Path.wildcard("lib/letflow/modules/**/router.ex")
+      )
+    end
+
+    test "the scanner flags a literal bad snippet (demonstrated without compiling a bad route)" do
+      bad = """
+      defmodule Bad do
+        use Letflow.Api.AuthorizedRouter
+
+        authz_get "/ok", :HelpRead do
+          conn
+        end
+
+        post "/plain" do
+          conn
+        end
+
+        match "/sneaky" do
+          conn
+        end
+
+        match _ do
+          conn
+        end
+      end
+      """
+
+      assert plain_route_declarations(bad) == [
+               {8, "POST", "/plain"},
+               {12, "MATCH", "/sneaky"}
+             ]
+    end
+
+    test "the scanner ignores doc blocks, comments, authz_* and the `match _` catch-all" do
+      source = ~s'''
+      defmodule Fine do
+        @moduledoc """
+        get "/in-a-doc" do
+        """
+        # get "/in-a-comment" do
+        authz_get "/x", :HelpRead do
+          conn
+        end
+        match _ do
+          conn
+        end
+      end
+      '''
+
+      assert plain_route_declarations(source) == []
+    end
+
+    test "the router files are discovered (the scan is not vacuous)" do
+      files = scanned_files()
+      assert length(files) >= 30
+      assert "lib/letflow/routers/tenants.ex" in files
+      assert "lib/letflow/modules/exam/router.ex" in files
+    end
+
+    test "every plain route declaration under the router files is on the public allowlist, and the allowlist has no stale entry" do
+      found =
+        for file <- scanned_files(),
+            {line, verb, path} <- plain_route_declarations(File.read!(file)),
+            do: {file, line, verb, path}
+
+      offenders =
+        for {file, line, verb, path} <- found,
+            {file, verb, path} not in @public_allowlist,
+            do: "#{file}:#{line}  #{verb} #{inspect(path)}"
+
+      assert offenders == [],
+             "route(s) declared without an authz_* macro (explicit policy key required):\n" <>
+               Enum.join(offenders, "\n")
+
+      seen = for {file, _line, verb, path} <- found, do: {file, verb, path}
+
+      for entry <- @public_allowlist do
+        assert entry in seen, "stale public allowlist entry #{inspect(entry)}"
+      end
+
+      assert length(@public_allowlist) == 6
+    end
+  end
+
+  # --------------------------------------------------------------------------
+  # G2 -- route table
+  # --------------------------------------------------------------------------
+
+  describe "G2: route table" do
+    test "every router mounted by the pipeline declares its routes through AuthorizedRouter or is the module gateway" do
+      mounted = Enum.map(pipeline_mounts(), &elem(&1, 0))
+      discovered = discovered_routers()
+
+      assert length(mounted) >= 20
+
+      for router <- mounted do
+        Code.ensure_loaded!(router)
+
+        assert router in discovered or router == Letflow.Routers.Modules,
+               "#{inspect(router)} is mounted by ApiPipeline but exports no __authz_routes__/0"
+      end
+    end
+
+    test "every discovered router has a mount (no router declares routes that are never walked)" do
+      mounted = all_mounts() |> Enum.map(&elem(&1, 0))
+
+      for router <- discovered_routers() do
+        assert router in mounted, "#{inspect(router)} declares authz routes but has no mount"
+      end
+    end
+
+    test "no mount prefix is shared by two routers" do
+      prefixes = pipeline_mounts() |> Enum.map(&elem(&1, 1))
+      assert prefixes == Enum.uniq(prefixes)
+    end
+
+    test "(a) no route declares :Unknown, and no catch-all marker is declared as a route key" do
+      routes = all_routes()
+      assert length(routes) >= 130
+
+      for {router, method, path, key} <- routes do
+        refute key == :Unknown, "#{inspect(router)} #{method} #{path} declares :Unknown"
+
+        refute key in [:UnmatchedPlatformPath, :UnmatchedRoute],
+               "#{inspect(router)} #{method} #{path} declares a catch-all marker"
+      end
+    end
+
+    test "(b)/(d) every route's permission is a core or a Catalog permission (never the identity fallback)" do
+      known = classified_core() ++ classified_catalog()
+
+      for {router, method, path, key} <- all_routes() do
+        permission = Authorization.required_permission(key)
+
+        assert permission in known,
+               "#{inspect(router)} #{method} #{path}: key #{inspect(key)} resolves to " <>
+                 "#{inspect(permission)}, which is in neither core_permissions/0 nor Catalog.permissions/0"
+      end
+    end
+
+    test "(c) every reachable permission atom is classified in exactly one of core and Catalog" do
+      assert classified_core() -- Enum.uniq(classified_core()) == []
+      assert classified_catalog() -- Enum.uniq(classified_catalog()) == []
+
+      assert Enum.filter(classified_core(), &(&1 in classified_catalog())) == [],
+             "a permission is both core and Catalog"
+
+      reachable =
+        all_routes()
+        |> Enum.map(fn {_r, _m, _p, key} -> Authorization.required_permission(key) end)
+        |> Kernel.++(classified_core())
+        |> Kernel.++(classified_catalog())
+        |> Enum.uniq()
+
+      for permission <- reachable do
+        in_core? = permission in classified_core()
+        in_catalog? = permission in classified_catalog()
+
+        assert in_core? != in_catalog?,
+               "#{inspect(permission)} must be in exactly one of core_permissions/0 and Catalog.permissions/0"
+
+        assert Authorization.permission_scope(permission) in [:platform, :tenant]
+      end
+    end
+
+    test "an unclassified atom falls to the fail-closed :platform scope, so (c) would catch it" do
+      assert Authorization.permission_scope(:NotARealPermissionAtom) == :platform
+      assert :NotARealPermissionAtom not in classified_core()
+      assert :NotARealPermissionAtom not in classified_catalog()
+    end
+
+    test "the formerly plain-macro routes and PATCH /tenant/settings resolve to explicit keys" do
+      expected = [
+        {"POST", "/promotions", :PromotionsManage},
+        {"POST", "/promotions/plan", :PromotionsManage},
+        {"GET", "/promotions/platform-events", :PromotionsRead},
+        {"GET", "/promotions/:id", :PromotionsRead},
+        {"GET", "/promotions/:id/context", :PromotionsRead},
+        {"POST", "/promotions/:id/approve", :PromotionsManage},
+        {"POST", "/promotions/:id/reject", :PromotionsManage},
+        {"POST", "/promotions/:id/apply", :PromotionsManage},
+        {"POST", "/promotions/:review_id/run-assertions", :PromotionsManage},
+        {"GET", "/promotions", :PromotionsRead},
+        {"POST", "/definitions/:process_key/rollback", :DefinitionsRollback},
+        {"POST", "/tenants/:test_tenant_id/promote/:process_key", :PromotionsManage},
+        {"PATCH", "/tenant/settings", :TenantSettingsManage}
+      ]
+
+      routes = all_routes()
+
+      for {method, path, key} <- expected do
+        assert {method, path, key} in Enum.map(routes, fn {_r, m, p, k} -> {m, p, k} end),
+               "#{method} #{path} does not declare #{inspect(key)}"
+      end
+    end
+  end
+
+  # --------------------------------------------------------------------------
+  # G3 -- platform pinning
+  # --------------------------------------------------------------------------
+
+  @platform_routes [
+    {"POST", "/tenants"},
+    {"GET", "/tenants"},
+    {"GET", "/tenants/:slug"},
+    {"PATCH", "/tenants/:slug"},
+    {"POST", "/tenants/:slug/deactivate"},
+    {"POST", "/tenants/:slug/reactivate"},
+    {"POST", "/onboarding"},
+    {"GET", "/onboarding/:id"},
+    {"GET", "/onboarding"},
+    {"POST", "/platform-migrations/rollouts"},
+    {"GET", "/platform-migrations/rollouts/:id"},
+    {"POST", "/platform-migrations/rollouts/:id/resume"},
+    {"GET", "/event-retention/summary"},
+    {"POST", "/event-retention/retirements"},
+    {"GET", "/event-retention/retirements/:id"},
+    {"GET", "/admin/services"},
+    {"POST", "/admin/services"},
+    {"PATCH", "/admin/services/:service_id"},
+    {"DELETE", "/admin/services/:service_id"},
+    {"POST", "/admin/services/:service_id/versions"},
+    {"POST", "/admin/services/:service_id/retire"}
+  ]
+
+  describe "G3: platform pinning" do
+    test "the routes whose permission is platform scope are exactly the 21 snapshot rows" do
+      actual =
+        for {_router, method, path, key} <- all_routes(),
+            Authorization.permission_scope(Authorization.required_permission(key)) == :platform,
+            do: {method, path}
+
+      assert length(@platform_routes) == 21
+      assert Enum.sort(actual) == Enum.sort(@platform_routes)
+    end
+
+    test "the only non-platform route under the /tenants mount is the promote route" do
+      tenants_routes =
+        for {Letflow.Routers.Tenants, method, path, key} <- all_routes(), do: {method, path, key}
+
+      assert length(tenants_routes) == 7
+
+      non_platform =
+        for {method, path, key} <- tenants_routes,
+            Authorization.permission_scope(Authorization.required_permission(key)) == :tenant,
+            do: {method, path}
+
+      assert non_platform == [{"POST", "/tenants/:test_tenant_id/promote/:process_key"}]
+    end
+
+    test "platform_permissions/0 is exactly :TenantsManage and :PlatformServicesManage" do
+      assert Enum.sort(Authorization.platform_permissions()) ==
+               Enum.sort([:TenantsManage, :PlatformServicesManage])
+
+      for permission <- Authorization.platform_permissions() do
+        assert Authorization.permission_scope(permission) == :platform
+      end
+
+      derived =
+        Enum.filter(
+          Authorization.core_permissions(),
+          &(Authorization.permission_scope(&1) == :platform)
+        )
+
+      assert Enum.sort(derived) == Enum.sort(Authorization.platform_permissions())
+    end
+
+    test "evaluate_access/2 on every platform key: the platform tenant's PLATFORM_ADMIN is allowed, nobody else" do
+      platform_keys =
+        for {_r, _m, _p, key} <- all_routes(),
+            Authorization.permission_scope(Authorization.required_permission(key)) == :platform,
+            uniq: true,
+            do: key
+
+      assert Enum.sort(platform_keys) == [
+               :AdminServicesManage,
+               :AdminServicesRead,
+               :TenantsManage
+             ]
+
+      for key <- platform_keys do
+        admin = fn platform? ->
+          Authorization.evaluate_access(
+            %AccessContext{user_id: "u", roles: [:PLATFORM_ADMIN], platform_tenant?: platform?},
+            key
+          )
+        end
+
+        assert admin.(false).kind == :Deny403, "#{key}: PLATFORM_ADMIN of another tenant"
+        assert admin.(true).kind == :Allow, "#{key}: PLATFORM_ADMIN of the platform tenant"
+
+        for role <- Authorization.roles() -- [:PLATFORM_ADMIN], platform? <- [true, false] do
+          decision =
+            Authorization.evaluate_access(
+              %AccessContext{user_id: "u", roles: [role], platform_tenant?: platform?},
+              key
+            )
+
+          assert decision.kind == :Deny403,
+                 "#{key}: #{role} with platform_tenant? #{platform?} must be denied"
+        end
+
+        # the default (field omitted) fails closed
+        assert Authorization.evaluate_access(
+                 %AccessContext{user_id: "u", roles: [:PLATFORM_ADMIN]},
+                 key
+               ).kind == :Deny403
+      end
+    end
+
+    test "platform permissions are granted only through the platform-scope check" do
+      for permission <- Authorization.platform_permissions(),
+          role <- Authorization.roles() do
+        refute Authorization.has_permission_in_scope?([role], permission, false),
+               "#{role} must not hold #{permission} outside the platform tenant"
+      end
+
+      assert Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], :TenantsManage, true)
+
+      assert Authorization.has_permission_in_scope?(
+               [:PLATFORM_ADMIN],
+               :PlatformServicesManage,
+               true
+             )
+
+      refute Authorization.has_permission_in_scope?([:PROCESS_DESIGNER], :TenantsManage, true)
+
+      # fail closed on a non-boolean platform flag
+      refute Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], :TenantsManage, nil)
+      refute Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], :TenantsManage, "true")
+    end
+  end
+end

@@ -212,9 +212,7 @@ defmodule Letflow.Modules.Exam.Router do
     handle_download_certificate(conn, conn.params["id"])
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ══ POST /exam-sessions ═══════════════════════════════════════════════
   #

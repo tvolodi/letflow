@@ -35,7 +35,7 @@ defmodule Letflow.Routers.Promotions do
   shaped wildcard in this module regardless of declaration order.
 
   R11 is ISS-0733 GAP B (`lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md`
-  §2) -- a dedicated, `:Unknown`/PLATFORM_ADMIN-only read of the platform
+  §2) -- a dedicated `:PromotionsRead` read (own tenant schema only) of the platform
   sentinel's own event stream (`EventStore.platform_instance_id/0`), added
   alongside this module's other ten routes rather than as a scoped exception
   in `Letflow.Instances.timeline/3` (design §2.3). Declared before `/:id` so
@@ -58,30 +58,26 @@ defmodule Letflow.Routers.Promotions do
   R-Co consumed either contract before this requirement (`web/` has no
   promotion client), so there is no compatibility cost either way.
 
-  ## The `:Unknown` authorization decision (design §4) — deliberate, not an omission
+  ## Authorization: explicit keys, TENANT scope (ISS-0993 / ISS-0994)
 
-  PROVENANCE (historical, not current decision authority):
-  Every route in this module is declared with `Letflow.Api.AuthorizedRouter`'s
-  plain `get`/`post` macros (NOT `authz_get`/`authz_post`), so none carries a
-  `:policy_key` — `Letflow.Plugs.Authorize` (mounted for every request by
-  `use Letflow.Api.AuthorizedRouter`) evaluates every one of them as
-  `endpoint == :Unknown`, `Letflow.Api.Authorization.evaluate_access/2`'s own
-  catch-all: `Allow` for `PLATFORM_ADMIN` only, `Deny403` for every other
-  role, including a caller with no roles at all — the strictest gate this
-  codebase has. `required_permission(:Unknown) -> :MetricsRead` exists in
-  that module but is dead code on this path (`evaluate_access/2`'s `cond`
-  short-circuits on `:Unknown` in its first branch) and is NOT what gates
-  these routes. PLATFORM_ADMIN-only access to the promotions resource is a
-  considered decision (design §4.2, and R-Co's `main.zig:1571` hardcodes
-  the same restriction), not an unhandled fallthrough: no new
-  policy key or permission is added to `Letflow.Api.Authorization` by this
-  requirement.
+  Every route is declared with `authz_get`/`authz_post` and an explicit policy
+  key: `:PromotionsRead` (R3 `GET /:id`, R4 `GET /:id/context`, R11
+  `GET /platform-events`, R12 `GET /`) and `:PromotionsManage` (R1 `POST /`, R2
+  `POST /plan`, R5-R8 approve/reject/apply/run-assertions). Both permissions
+  are TENANT scope (`Letflow.Api.Authorization.permission_scope/1`): own-tenant
+  review lifecycle works for the tenant's administrators, and nothing here
+  resolves to `:Unknown` any more. R11 reads only the sentinel event stream
+  inside the caller's own tenant schema.
 
-  This module intentionally does NOT use `authz_get`/`authz_post` for these
-  routes: those macros exist for a route that needs a *specific*,
-  independently-registered `endpoint_policy_key/2` clause, which none of
-  these routes has (see `lib/letflow/api/authorized_router.ex`'s own
-  moduledoc, "A route that must intentionally NOT declare a policy key").
+  The rule for naming ANOTHER tenant (decision point OQ-2,
+  `Letflow.PlatformTenant.cross_tenant_promotion_operator_only?/0`): only a
+  request that reads or writes a tenant OTHER than the caller's is
+  operator-only (platform-tenant `PLATFORM_ADMIN`). Product limitation: a
+  customer cannot promote from its test tenant to its production tenant by
+  itself until a tenant-pairing model is specified. That check is
+  `Letflow.Api.TenantTarget.authorize_target_tenant/2` (source and target ids
+  of R1/R2, stored ids of R7/R8), shipped but NOT yet called by these
+  handlers (wired in A2).
 
   ## INV-5 — a cross-tenant review id is the SAME response as a nonexistent one (design §5)
 
@@ -144,26 +140,17 @@ defmodule Letflow.Routers.Promotions do
   422 `UNKNOWN_FIELD` response (`promotion_review.zig:398-406`) is therefore
   not ported: stronger by construction, weaker in diagnostics only.
 
-  ## The `permission_checker` gap (design §7.9) — the biggest security caveat here
+  ## The `permission_checker` (design §7.9; ISS-0993 section 9)
 
   `PromotionPlan.compute_promotion_plan/5` and `Promotion.promote_definition/3`
-  both require a `permission_checker`, and the only implementation that
-  exists, `PromotionPlan.default_permission_checker/2`, performs **no real
-  enforcement** — it always returns `true`. R1, R2 and R10 all read another
-  tenant's process-definition graph by design (a promotion is inherently
-  cross-tenant), so under the always-true default any caller reaching them
-  can read any tenant's definitions by naming that tenant as
-  `source_tenant_id`. This is bounded, not eliminated, by the `:Unknown`
-  decision above: only `PLATFORM_ADMIN` can reach R1/R2/R10 today, and that
-  role already has legitimate cross-tenant reach via REQ-075's
-  `:TenantsManage` routes — so this is a missing enforcement layer, not a
-  live escalation, UNLESS a later requirement widens access to these routes
-  before this gap is closed. **Escalated to SECURITY-REVIEWER (design §11
-  OQ-2), not resolved here.** Every call site below passes
-  `permission_checker: &PromotionPlan.default_permission_checker/2`
-  explicitly and by name (never an inline `fn _, _ -> true end`), so
-  `grep -rn "default_permission_checker" lib/` finds every place this gap is
-  live.
+  require a `permission_checker`. Today every call site below still passes
+  `&PromotionPlan.default_permission_checker/2`, which always returns `true`
+  (so `grep -rn "default_permission_checker" lib/` finds every place). The
+  replacement, `Letflow.Definitions.PromotionAccess.checker_for/1` (true iff the
+  source tenant equals the caller's own tenant or the caller holds platform
+  scope), ships in this change but is NOT wired yet; A2 swaps every call site
+  and deletes the allow-all default. Until then the exposure is bounded only by
+  the legacy enforcement (`PLATFORM_ADMIN`-only through the permission matrix).
 
   ## The allowlist statement (design §7, AC6)
 
@@ -198,48 +185,48 @@ defmodule Letflow.Routers.Promotions do
   alias Letflow.EventStore
   alias Letflow.EventStore.PlatformEvents
 
-  # `:Unknown`-gated (see moduledoc) -- plain macros, no policy key.
+  # Explicit policy keys (see moduledoc): :PromotionsRead / :PromotionsManage.
   # "/plan" is declared before the "/:id/..." two-segment patterns even
   # though it cannot actually collide with any of them (no `post "/:id"`
   # exists in this file) -- the cheap, order-independent-looking form
   # (design §2.2).
 
-  post "/" do
+  authz_post "/", :PromotionsManage do
     handle_submit(conn)
   end
 
-  post "/plan" do
+  authz_post "/plan", :PromotionsManage do
     handle_plan(conn)
   end
 
   # ISS-0733 GAP B (R11, design §2.4) -- declared before "/:id" (same
   # ordering discipline as "/plan" above) so the literal "platform-events"
   # segment is never captured by the :id wildcard.
-  get "/platform-events" do
+  authz_get "/platform-events", :PromotionsRead do
     handle_platform_events(conn)
   end
 
-  get "/:id" do
+  authz_get "/:id", :PromotionsRead do
     handle_get_assertion_run(conn, conn.params["id"])
   end
 
-  get "/:id/context" do
+  authz_get "/:id/context", :PromotionsRead do
     handle_context(conn, conn.params["id"])
   end
 
-  post "/:id/approve" do
+  authz_post "/:id/approve", :PromotionsManage do
     handle_approve(conn, conn.params["id"])
   end
 
-  post "/:id/reject" do
+  authz_post "/:id/reject", :PromotionsManage do
     handle_reject(conn, conn.params["id"])
   end
 
-  post "/:id/apply" do
+  authz_post "/:id/apply", :PromotionsManage do
     handle_apply(conn, conn.params["id"])
   end
 
-  post "/:review_id/run-assertions" do
+  authz_post "/:review_id/run-assertions", :PromotionsManage do
     handle_run_assertions(conn, conn.params["review_id"])
   end
 
@@ -248,13 +235,11 @@ defmodule Letflow.Routers.Promotions do
   # stylistic/consistency-driven: `GET /` cannot be captured by `GET /:id`,
   # `GET /:id/context`, or `GET /platform-events` regardless of declaration
   # order, since none of those patterns matches an empty path segment.
-  get "/" do
+  authz_get "/", :PromotionsRead do
     handle_list_reviews(conn)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── POST /promotions -- R1, submit (design §7.1) ────────────────────────
 

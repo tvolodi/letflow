@@ -60,6 +60,17 @@ defmodule Letflow.Plugs.Authorize do
   that this plug is built around, not permitted to "fix" (see that
   module's moduledoc and REQ-130's design §3).
 
+  ## Platform scope (ISS-0993 / ISS-0994) -- A1 shadow mode
+
+  The plug recomputes `platform_tenant?` from the database-resolved
+  `auth_context.tenant_id` (`Letflow.PlatformTenant.platform_tenant?/1`; the flag
+  stored by the pipeline is never read). In A1 enforcement is LEGACY: the
+  decision is evaluated with `platform_tenant?` forced to `true`, so the outcome
+  is exactly the pre-fix one. The decision under the REAL value is evaluated too;
+  when it differs, one `platform_scope_shadow_deny key=<PolicyKey>
+  platform_tenant=<boolean>` warning is logged (no ids, roles or tokens). A2
+  deletes the forcing and the log line and denies `:Unknown` for every role.
+
   ## What reaches the handler on `:Allow`/`:AllowWithRowFilter` (design §6)
 
     * `conn.assigns[:scoped_opts]` — the `[prefix: schema]` keyword list
@@ -86,9 +97,12 @@ defmodule Letflow.Plugs.Authorize do
 
   import Plug.Conn
 
+  require Logger
+
   alias Letflow.Api.Authorization
   alias Letflow.Api.Context
   alias Letflow.Api.Response
+  alias Letflow.PlatformTenant
 
   @impl Plug
   def init(opts), do: opts
@@ -100,16 +114,26 @@ defmodule Letflow.Plugs.Authorize do
         conn |> Response.internal_error() |> halt()
 
       {:ok, prefix: _schema} = ok ->
-        ctx = %Authorization.AccessContext{
+        # ISS-0993 (design section 4): `platform_tenant?` is RECOMPUTED from the
+        # database-resolved tenant id; the flag stored in auth_context (if any)
+        # is never read, so a hand-assigned context stays fail-closed.
+        real_ctx = %Authorization.AccessContext{
           user_id: conn.assigns.auth_context.user_id,
-          roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
+          roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles),
+          platform_tenant?:
+            PlatformTenant.platform_tenant?(Map.get(conn.assigns.auth_context, :tenant_id))
         }
 
         # No :policy_key private key present (plain get/post/patch/delete, or
         # a router's own `match _` catch-all) -> :Unknown, evaluate_access/2's
         # own fail-closed-EXCEPT-PLATFORM_ADMIN branch. Never widened.
         policy_key = Map.get(conn.private, :policy_key, :Unknown)
-        decision = Authorization.evaluate_access(ctx, policy_key)
+
+        # A1 LEGACY FORCING (deleted in A2): enforce with platform_tenant?
+        # forced to true, i.e. exactly today's outcome for platform-scope
+        # permissions; the real value is evaluated only for the shadow log.
+        decision = Authorization.evaluate_access(%{real_ctx | platform_tenant?: true}, policy_key)
+        shadow_log(real_ctx, policy_key, decision)
 
         case decision.kind do
           :Deny403 ->
@@ -123,5 +147,22 @@ defmodule Letflow.Plugs.Authorize do
             |> assign(:access_decision, decision)
         end
     end
+  end
+
+  # A1 shadow evaluation (deleted in A2). When the decision under the REAL
+  # platform_tenant? differs from the enforced legacy decision, emit exactly one
+  # fixed-form line carrying ONLY the policy key and one boolean. No tenant id,
+  # user id, role, slug or token data; the response is unaffected. A1 accepts one
+  # such line per request while the pin is unset (log volume only); removed in A2.
+  defp shadow_log(real_ctx, policy_key, enforced_decision) do
+    real_decision = Authorization.evaluate_access(real_ctx, policy_key)
+
+    if real_decision.kind != enforced_decision.kind do
+      Logger.warning(
+        "platform_scope_shadow_deny key=#{policy_key} platform_tenant=#{real_ctx.platform_tenant?}"
+      )
+    end
+
+    :ok
   end
 end

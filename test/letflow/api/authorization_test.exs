@@ -67,7 +67,12 @@ defmodule Letflow.Api.AuthorizationTest do
       :MembershipsRead,
       :ModulesManage,
       :MyModulesRead,
-      :EntitiesRestrictionsManage
+      :EntitiesRestrictionsManage,
+      :PlatformServicesManage,
+      :TenantSettingsManage,
+      :PromotionsRead,
+      :PromotionsManage,
+      :DefinitionsRollback
     ]
 
     test "core_permissions/0 returns the closed core list through ISS-0935's :EntitiesRestrictionsManage, no Catalog atoms" do
@@ -113,7 +118,8 @@ defmodule Letflow.Api.AuthorizationTest do
     end
 
     test "evaluate_access/2 grants PLATFORM_ADMIN and denies everyone else" do
-      admin_ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN]}
+      # ISS-0993: :TenantsManage is PLATFORM scope; the grant needs platform_tenant?: true.
+      admin_ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN], platform_tenant?: true}
 
       assert %Authorization.AccessDecision{kind: :Allow} =
                Authorization.evaluate_access(admin_ctx, :TenantsManage)
@@ -797,8 +803,8 @@ defmodule Letflow.Api.AuthorizationTest do
         {:MetricsRead, :MetricsRead},
         {:WebhookSubscriptionsManage, :WebhooksManage},
         {:ServicesRead, :DefinitionsRead},
-        {:AdminServicesManage, :UsersGroupsRolesManage},
-        {:AdminServicesRead, :UsersGroupsRolesManage},
+        {:AdminServicesManage, :PlatformServicesManage},
+        {:AdminServicesRead, :PlatformServicesManage},
         {:TenantsManage, :TenantsManage},
         {:RolesManage, :RolesManage},
         {:AttachmentsManage, :AttachmentsManage},
@@ -1949,7 +1955,7 @@ defmodule Letflow.Api.AuthorizationTest do
         {"PATCH", "/tenants/:slug", :TenantsManage},
         {"POST", "/tenants/:slug/deactivate", :TenantsManage},
         {"POST", "/tenants/:slug/reactivate", :TenantsManage},
-        {"PATCH", "/tenant/settings", :TenantsManage},
+        {"PATCH", "/tenant/settings", :TenantSettingsManage},
         {"POST", "/onboarding", :TenantsManage},
         {"GET", "/onboarding/:id", :TenantsManage},
         {"GET", "/onboarding", :TenantsManage},
@@ -2130,7 +2136,17 @@ defmodule Letflow.Api.AuthorizationTest do
 
       assert Authorization.core_permissions() ==
                @pre_req401_permissions ++
-                 [:ModulesManage, :MyModulesRead, :EntitiesRestrictionsManage]
+                 [
+                   :ModulesManage,
+                   :MyModulesRead,
+                   :EntitiesRestrictionsManage,
+                   # ISS-0993: appended core permissions
+                   :PlatformServicesManage,
+                   :TenantSettingsManage,
+                   :PromotionsRead,
+                   :PromotionsManage,
+                   :DefinitionsRollback
+                 ]
 
       pair_count = length(Authorization.roles()) * length(@pre_req401_permissions)
       assert pair_count == 192

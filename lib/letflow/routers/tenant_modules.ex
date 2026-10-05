@@ -45,9 +45,7 @@ defmodule Letflow.Routers.TenantModules do
     handle_put_settings(conn, conn.params["module_id"])
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── POST /tenant/modules (design §2.3/§2.4) ─────────────────────────────
 

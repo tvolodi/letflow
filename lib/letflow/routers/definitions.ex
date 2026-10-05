@@ -17,10 +17,10 @@ defmodule Letflow.Routers.Definitions do
   in that design doc's §7.6. None of the four requirements touches the
   `match _` catch-all or modifies a route another of them added.
 
-  `POST /:process_key/rollback` is declared with a plain `post` macro, not
-  `authz_post` — it is `:Unknown`-gated (PLATFORM_ADMIN-only), the same
-  deliberate decision every other REQ-077 route makes; see
-  `Letflow.Routers.Promotions`' moduledoc for the full reasoning.
+  `POST /:process_key/rollback` is declared with `authz_post` and the explicit
+  key `:DefinitionsRollback` (ISS-0993, TENANT scope): it acts on the caller's
+  OWN tenant schema only (`scoped_opts`), no tenant identifier is read from the
+  request, and it no longer resolves to `:Unknown`.
 
   | Handler               | Method/path                       | Delegate                                              | Permission        | Response |
   |------------------------|-----------------------------------|--------------------------------------------------------|-------------------|----------|
@@ -321,22 +321,17 @@ defmodule Letflow.Routers.Definitions do
   end
 
   # REQ-077 R9 -- the ONE route this requirement contributes to this router
-  # (design §2.3): PLATFORM_ADMIN-only via the `:Unknown` catch-all
-  # (Letflow.Plugs.Authorize evaluates any route declared with a plain
-  # get/post/put/patch/delete macro, rather than authz_get/authz_post/etc,
-  # as :Unknown -- see lib/letflow/api/authorized_router.ex's own
-  # moduledoc). Deliberately NOT declared with authz_post/2 -- see
+  # (design §2.3): own-tenant TENANT scope, key :DefinitionsRollback (ISS-0993,
+  # no longer :Unknown). See
   # Letflow.Routers.Promotions' moduledoc for the full reasoning this route
   # shares with all ten REQ-077 routes. `:process_key` is a free-form
   # string (process_definitions.name has no numeric/UUID shape), so there
   # is nothing to pre-cast here, unlike `/:id`'s UUID segments above.
-  post "/:process_key/rollback" do
+  authz_post "/:process_key/rollback", :DefinitionsRollback do
     handle_rollback(conn, conn.params["process_key"])
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # PROVENANCE (historical, not current decision authority):
   # ── POST /definitions/:id/validate (design §7) ────────────────────────────

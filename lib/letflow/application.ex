@@ -61,6 +61,15 @@ defmodule Letflow.Application do
     # design doc §3.4a).
     children = [
       Letflow.Supervisor.Infrastructure,
+      # ISS-0993 (design iss0993-platform-scope-separation.md section 3): one-shot,
+      # non-fatal check that the configured platform tenant is registered. Listed
+      # right after Infrastructure (which owns Letflow.Repo); a temporary Task, so
+      # it never blocks boot and never counts against this supervisor's restart
+      # budget. Letflow.PlatformTenant.check_registration/0 never raises.
+      Supervisor.child_spec({Task, &Letflow.PlatformTenant.check_registration/0},
+        id: :platform_tenant_registration_check,
+        restart: :temporary
+      ),
       Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary),
       Letflow.Supervisor.PollersBreaker,
       Letflow.Supervisor.Http

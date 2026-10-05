@@ -112,9 +112,7 @@ defmodule Letflow.Routers.Help do
     handle_resolve(conn)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ══ GET /help/resolved ═══════════════════════════════════════════════
 

@@ -187,9 +187,7 @@ defmodule Letflow.Routers.SolutionPacks do
     handle_update_apply(conn, conn.params["pack_id"])
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── POST /solution-packs/export (design §8.5) ─────────────────────────────
 

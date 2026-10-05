@@ -134,9 +134,7 @@ defmodule Letflow.Routers.Webhooks do
     handle_deliveries(conn, conn.params["id"])
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── GET /webhooks/subscriptions (design §3.1) ─────────────────────────────
 

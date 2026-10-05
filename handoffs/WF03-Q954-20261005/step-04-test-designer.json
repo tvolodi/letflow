@@ -1,0 +1,48 @@
+{
+  "handoff_id": "b7e1c4a9-5d3f-4e28-9a60-1c2d8f4e7b53",
+  "run_id": "WF03-Q954-20261005",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-Q954-20261005/step-04-test-designer.json",
+  "created_at": "2026-10-05T11:47:00Z",
+  "started_at": "2026-10-05T11:47:00Z",
+  "completed_at": "2026-10-05T11:47:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0987": "queue Q-954 / GH#2209: secrets master key all-0xFF refusal compared against <<0xFF::256>> (integer 255), dead code."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0987-secrets-master-key-0xff-literal.md",
+      "handoffs/WF03-Q954-20261005/step-03-elixir-dev.json",
+      "handoffs/WF03-Q954-20261005/step-03d-reviewer.json",
+      "config/runtime.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q954-20261005"
+  },
+  "task": {
+    "description": "WF-03 Step 4: add the three subprocess regression tests (all-zeros refused, all-0xFF refused, valid key accepted) per design section 4; prove fail-first and mutate.",
+    "acceptance_criteria": [
+      "Three tests written per design with a valid distinct pepper pair",
+      "Fail-first evidence on the pre-fix literal",
+      "At least one further mutant with measured counts",
+      "Tests pass on the fixed tree; tree restored"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added 3 tests to test/letflow/secrets_runtime_config_test.exs (shared env: pepper = 'ab' x 32, id p1, MIX_ENV=dev, MIX_TEST_PARTITION and MIX_BUILD_PATH nil; marker booted_past_config). Fixed tree: 5/5 pass in the file. Fail-first done in the main tree (no worktree: a worktree would need a full deps/_build copy and RAM is tight) after committing the tests (31dac335): config/runtime.exs line 63 temporarily reverted to '<<0xFF::256>>' gives 4/5 passed, failing the all-0xFF test with 'expected non-zero exit, got 0 ... booted_past_config'. Mutant 2, dropping the '<<0::256>> or' operand (fixed 0xFF operand kept): 4/5 passed, failing the all-zeros test with the same exit-0 output. Both mutants reverted with git checkout -- config/runtime.exs; git status --porcelain lib/ config/ test/ empty afterwards; fixed-tree re-run 5 passed. mix format --check-formatted clean. Run with LETFLOW_SKIP_ECTO_SETUP unset after a manual ecto.create/migrate for partition q954a (ecto.create inside the test alias timed out once). Full mix letflow.check.test not run (full suite, RAM constraint); the new tests have no helper default args.",
+    "artifacts_out": [
+      "test/letflow/secrets_runtime_config_test.exs"
+    ]
+  }
+}

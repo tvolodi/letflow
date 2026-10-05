@@ -60,7 +60,7 @@ secrets_master_key =
       """
   end
 
-if secrets_master_key == <<0::256>> or secrets_master_key == <<0xFF::256>> do
+if secrets_master_key == <<0::256>> or secrets_master_key == :binary.copy(<<0xFF>>, 32) do
   raise """
   environment variable LETFLOW_SECRETS_MASTER_KEY is a trivially-guessable
   value (all-zeros or all-0xFF). This is exactly the hardcoded-key failure

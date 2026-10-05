@@ -32598,7 +32598,7 @@ requirements:
   - id: REQ-435
     title: "Platform tenant-login directory, data-layer half (the 'a' half of the REQ-435/REQ-440 split, BA decision D-F): public-schema table with a key-id column, keyed-HMAC email key from a per-environment pepper with dual-read rotation, lookup, upsert and an idempotent backfill task"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 944  # letflow-queue task id, GH#2192. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS. Trimmed 2026-10-04 (WF-01 re-entry, BA decisions D-C/D-F, decision 0043): the write hooks, JIT transaction, tenant_id opt and removal rule moved to REQ-440; the queue text of task 944 predates this trim and is superseded by this file.
     description: >
@@ -33209,7 +33209,7 @@ requirements:
   - id: REQ-440
     title: "Directory write path (the 'b' half of the REQ-435/REQ-440 split, BA decision D-F): population hooks inside the Identity transactions, the JIT transaction, the explicit tenant_id opt with its fail-closed guard, and the removal rule"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 949  # letflow-queue task id, GH#2203. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
     description: >

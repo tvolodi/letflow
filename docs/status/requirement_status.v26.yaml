@@ -655,6 +655,19 @@ history:
       The real-host client-IP UAT leg is covered by the named blocker issue
       ISS-0991 (docs/issues/ISS-0991.yaml). Gate record in test/specs/REQ-437.md.
 
+  - req: REQ-438
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T16:30:06Z"
+    note: >
+      SPA email-first login screen (Q-959, GH#2219) implemented in the Q-959
+      PR (web/ only). SECURITY-REVIEWER PASS, REVIEWER PASS. RELEASE-VALIDATOR
+      PASS, report test/reports/report-2026-10-05-WF02-REQ438.yaml. The
+      real-flow e2e criterion is covered by the named blocker issue ISS-0992
+      (docs/issues/ISS-0992.yaml). Feature flag VITE_EMAIL_FIRST_LOGIN is off
+      by default; enabling it outside dev depends on the REQ-444 backend
+      enablement gate.
+
   - req: REQ-441
     event: started
     agent: ORCH

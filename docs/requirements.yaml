@@ -33008,7 +33008,7 @@ requirements:
   - id: REQ-438
     title: "SPA email-first login screen: credential-free discovery page, ProtectedRoute wiring, login_hint hand-off to Keycloak, and ?realm=/stored-slug overrides preserved"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 959  # letflow-queue task id, GH#2219. Re-registered 2026-10-05 by ORCH (supersedes Q-947/GH#2195, blocked: queue dep on blocked Q-254 made it ineligible; REQ-133 is done here). Originally registered 2026-10-04 (WF-01 Step 3).
     description: >
@@ -33104,7 +33104,7 @@ requirements:
       - "AuthProvider (design req434-email-first-login-directory.md s0.3 D4): logout clears the stored realm (existing test unmodified) and, flag on, the next load reaches the email-first page; session-expired with a stored realm still re-logs into that realm; session-expired with no stored realm and the flag on navigates to /login without calling signinRedirect; flag off is unchanged; tested"
       - "the pre-redirect path (e.g. /instances/123?tab=x) is preserved through the email-first page and restored after login via the existing state mechanism, and an unsafe path is dropped (isSafeRestorePath), tested"
       - "all user-facing strings on the new page come from the i18n catalogue in every shipped locale; the new i18n-grep test (modelled on web/src/__tests__/entities-i18n-grep.test.ts) fails on a seeded hardcoded string fixture and passes on the real page"
-      - "`cd web && npm run check` (which runs type-check, lint, test and guards) passes, real output quoted; the real-flow e2e run against a Keycloak with two tenants' realms shows a bilimbaga user arriving at the bilimbaga realm login with the username pre-filled, output quoted (or the infra gap recorded as a blocker, as ISS-0727 was)"
+      - "`cd web && npm run check` (which runs type-check, lint, test and guards) passes, real output quoted; the real-flow e2e run against a Keycloak with two tenants' realms shows a bilimbaga user arriving at the bilimbaga realm login with the username pre-filled, output quoted (or the infra gap recorded as a blocker, as ISS-0727 was; recorded as blocker ISS-0992)"
       - "per-tenant disclosure mode causes no UI difference beyond what the response carries (BA decision D-A): the page, its states and its strings are driven only by the closed response union (200 tenant, 202 accepted, 429, network failure, malformed); a grep guard shows no web/ source references a disclosure mode, 'uniform', 'redirect_single' or a tenant-mode field; a test feeds the page a 202 (as a uniform-tenant address would produce) and asserts the DOM equals the unknown-address neutral snapshot, organisation-code control included"
       - "the feature stays off outside dev (BA decision D-D): web/ build configuration defaults VITE_EMAIL_FIRST_LOGIN to off for every non-dev build (a test or build-config assertion over the committed env files and vite config shows no committed non-dev file sets it true), and enabling it is documented in the PR as dependent on the backend enablement gate of REQ-444"
       - "git diff shows no change under lib/, priv/ or apps/ -- this entry is web/ only"

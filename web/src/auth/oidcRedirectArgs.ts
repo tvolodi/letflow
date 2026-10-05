@@ -16,20 +16,30 @@ import { isSafeRestorePath } from './safeRestorePath'
  * to `undefined` explicitly) — see
  * lib/letflow/design/iss-0726-oidc-redirect-path-restore.md §2.3.
  *
- * Returns `{ redirect_uri, state? }` when a realm slug is resolvable, or
+ * `options.loginHint` (REQ-438, design req434 section 8.1), when a non-empty string,
+ * is returned as `login_hint` so Keycloak pre-fills the username field with the
+ * address typed on the email-first page. It is omitted entirely otherwise, so
+ * existing callers' results are unchanged.
+ *
+ * Returns `{ redirect_uri, state?, login_hint? }` when a realm slug is resolvable, or
  * `undefined` to let the UserManager use its configured default redirect_uri.
  */
 export function buildRedirectArgs(
   capturePath?: string,
-): { redirect_uri: string; state?: string } | undefined {
+  options?: { loginHint?: string },
+): { redirect_uri: string; state?: string; login_hint?: string } | undefined {
   const slug = resolveRealmFromUrl()
   if (!slug) return undefined
 
   const redirect_uri =
     window.location.origin + '/auth/callback?realm=' + encodeURIComponent(slug)
 
+  const args: { redirect_uri: string; state?: string; login_hint?: string } = { redirect_uri }
   if (capturePath !== undefined && isSafeRestorePath(capturePath)) {
-    return { redirect_uri, state: capturePath }
+    args.state = capturePath
   }
-  return { redirect_uri }
+  if (options?.loginHint) {
+    args.login_hint = options.loginHint
+  }
+  return args
 }

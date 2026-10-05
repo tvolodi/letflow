@@ -1,0 +1,94 @@
+id: ISS-0994
+title: "Any tenant's PLATFORM_ADMIN can list, deactivate and reactivate every other tenant and run platform-wide operations (platform-scope permissions are not bound to the platform tenant)"
+discovered_by: ORCH
+discovered_in_run: AUDIT-ROLES-20261005
+discovered_at: "2026-10-05T18:35:02Z"
+severity: BLOCKER
+owner: "CODE-DESIGNER -> ELIXIR-DEV (SECURITY-REVIEWER gate)"
+description: >
+  SECURITY, cross-tenant. PLATFORM_ADMIN is seeded as a group in EVERY tenant
+  schema (Letflow.TenantOnboarding.provision_and_migrate/1 ->
+  RoleRegistry.seed_default_platform_role_groups/1) and is obtainable inside any
+  tenant: a realm role claimed by that tenant's own IdP realm is synced into
+  group_members by Identity.sync_role_claims_from_token/3, and that tenant's own
+  admin can add anyone via POST /identity/groups/:id/members. The platform-wide
+  routers (/tenants, /onboarding, /platform-migrations, /event-retention) are
+  gated ONLY by the role check (:TenantsManage, granted through
+  core_role_allows?(:PLATFORM_ADMIN, _) -> true, lib/letflow/api/authorization.ex:1130).
+  Nothing checks WHICH tenant the caller belongs to;
+  test/letflow/routers/tenants_test.exs:39-41 says so in its own words ("the
+  caller's own tenant identity is irrelevant to this router's authorization --
+  only `roles` matters"). Letflow.Plugs.TenantStatus
+  (lib/letflow/plugs/tenant_status.ex:102) additionally exempts ANY
+  PLATFORM_ADMIN from the deactivated-tenant gate, including the deactivated
+  tenant's own admin.
+
+  Consequence: any customer's admin can enumerate all other customers, switch
+  them off, create tenants, start platform-wide migration rollouts and
+  event-history retirement; and deactivating a tenant does not stop that
+  tenant's own admin, who can simply reactivate it.
+evidence: >
+  Proven 2026-10-05 with a throwaway ExUnit test (real Postgres, not committed)
+  using two TenantFixture.provisioned_tenant! tenants A and B, dispatching
+  Letflow.Routers.Tenants / Letflow.Plugs.TenantStatus directly, with
+  auth_context.tenant_id = A (resp. B) and roles ["PLATFORM_ADMIN"]. Output:
+  (1) A-admin GET /tenants -> 200, body mentions B: true.
+  (2) A-admin POST /tenants/B/deactivate -> 200, B status now inactive.
+  (3) B-admin (B inactive) through TenantStatus plug -> halted? false.
+  (4) control: B TASK_WORKER (B inactive) through TenantStatus -> halted? true, status 403.
+  (5) B-admin POST /tenants/B/reactivate -> 200, B status now active.
+  The existing cross-tenant tests only use PROCESS_DESIGNER as the attacker
+  (test/letflow/routers/tenants_test.exs:100-161), which is why the suite is green.
+fix_direction: >
+  Independent of any later role renaming -- do NOT add or rename roles here.
+  (1) Introduce the single PLATFORM TENANT (the operator's own tenant), identified
+  by server-side configuration or a column no tenant-reachable API can write
+  (CODE-DESIGNER decides; the pinned default tenant, @default_tenant_slug in
+  lib/letflow/identity/tenant.ex:85, is the natural default).
+  (2) Give permissions a scope. Platform scope = any action on the tenant registry
+  or across tenants: the six /tenants routes, the three /onboarding routes, the
+  three /platform-migrations routes, and /event-retention. All currently reuse
+  :TenantsManage (authorization.ex:654-700).
+  (3) PATCH /tenant/settings (authorization.ex:673) also reuses :TenantsManage but
+  acts on the caller's OWN tenant: move it to its own tenant-scope permission
+  (e.g. :TenantSettingsManage) so tenant admins keep branding after step 4.
+  (4) A platform-scope permission is allowed only when the caller holds a role
+  granting it AND auth_context.tenant_id is the platform tenant. Carry that fact
+  into Authorization.AccessContext (e.g. platform_tenant?: boolean, set by
+  Letflow.Plugs.Authorize from the DB-resolved tenant, never from a request
+  value) so evaluate_access/2 stays pure. Elsewhere the same role yields Deny403
+  on those routes; tenant-scoped behaviour is unchanged.
+  (5) Letflow.Plugs.TenantStatus: the deactivated-tenant exemption applies only to
+  a platform-tenant PLATFORM_ADMIN.
+  (6) Reject deactivating the platform tenant itself (409), or step 5 can lock the
+  operator out.
+  (7) Update the moduledocs stating the old rule (routers/tenants.ex,
+  platform_migrations.ex, event_retention.ex, onboarding.ex,
+  plugs/tenant_status.ex) and add the rule to
+  docs/agents/instructions/security-invariants.md as a new invariant.
+  Out of scope (separate follow-up requirements): hiding the platform console in
+  web/ for non-platform tenants, a separate TENANT_ADMIN role, the
+  :Unknown-gated promotion routes.
+acceptance_criteria:
+  - "A PLATFORM_ADMIN whose auth_context.tenant_id is NOT the platform tenant receives 403 (problem+json, no tenant data in the body, target row unchanged) on every route of /tenants, /onboarding, /platform-migrations and /event-retention, including when the target slug is the caller's own tenant. One test per route group, real Postgres, two provisioned tenants."
+  - "A PLATFORM_ADMIN of the platform tenant gets the same responses as today on all those routes; no existing assertion is weakened or deleted."
+  - "With tenant B inactive, a request from B's own PLATFORM_ADMIN is halted by Letflow.Plugs.TenantStatus with 403 tenant_inactive; a platform-tenant PLATFORM_ADMIN is still exempt."
+  - "POST /tenants/<platform tenant slug>/deactivate is rejected with 409 and the row is unchanged."
+  - "PATCH /tenant/settings still succeeds for a non-platform tenant's PLATFORM_ADMIN and is gated by a tenant-scope permission that is not :TenantsManage."
+  - "The platform-tenant marker cannot be set or changed through any /api/v1 route."
+  - "security-invariants.md carries a new invariant stating that platform-scope permissions require the platform tenant, and SECURITY-REVIEWER signs off against it."
+  - "mix test passes in full; the result line is quoted in the run report."
+affected_files:
+  - lib/letflow/api/authorization.ex
+  - lib/letflow/plugs/authorize.ex
+  - lib/letflow/plugs/tenant_status.ex
+  - lib/letflow/routers/tenants.ex
+  - lib/letflow/routers/onboarding.ex
+  - lib/letflow/routers/platform_migrations.ex
+  - lib/letflow/routers/event_retention.ex
+  - lib/letflow/routers/tenant_settings.ex
+  - lib/letflow/identity/tenant.ex
+  - docs/agents/instructions/security-invariants.md
+queue_ref: Q-961  # queue issue_ref ISS-0961 collides with an unrelated local issue; local number ISS-0994 (next free on origin/main and all open PRs)
+github_ref: GH-2231
+status: open

@@ -436,4 +436,524 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchemaTest do
       end
     end
   end
+
+  # ==================================================================
+  # REQ-452 -- actor roster, expect_refusal, rules SCHEMA-7..12
+  #
+  # Hermetic: every corpus is written to a throwaway tmp dir (scenario files
+  # plus a roster file, JSON-encoded -- JSON is valid YAML) and checked via
+  # check_paths/3. No DB; the only live-corpus use is T-LIVE-ROSTER. Each
+  # rule fixture violates ONLY the rule under test.
+  # ==================================================================
+
+  @known_roles ["PLATFORM_ADMIN", "TASK_WORKER"]
+  @live_roster Path.join(@project_root, "test/fixtures/uat/actors.yaml")
+  @live_glob Path.join(@project_root, "test/fixtures/uat/scenarios/**/*.yaml")
+
+  # Frozen in the test itself: the roster's refusal_coverage_exempt may only
+  # shrink, never grow beyond this list (REQ-452 AC).
+  @initial_refusal_exempt ~w(bilimbaga meridian platform swiftroute vortex)
+
+  defp tmp_dir do
+    dir = Path.join(System.tmp_dir!(), "letflow-r452-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    on_exit(fn -> File.rm_rf!(dir) end)
+    dir
+  end
+
+  # A valid scenario in `scope` with one step by `actor`; carries a refusal
+  # step unless refusal: false.
+  defp r452_scenario(id, scope, actor, opts \\ []) do
+    step = %{"step" => 1, "actor" => actor, "action" => "tries a thing", "via" => "gui"}
+
+    step =
+      if Keyword.get(opts, :refusal, true), do: Map.put(step, "expect_refusal", true), else: step
+
+    %{
+      "id" => id,
+      "title" => "Fixture #{id}",
+      "version" => "1.0",
+      "scope" => scope,
+      "steps" => [step],
+      "expected_outcomes" => [%{"id" => "EO-1", "description" => "refused"}]
+    }
+  end
+
+  defp r452_roster(overrides) do
+    Map.merge(
+      %{
+        "actors" => %{
+          "actor-acme-bob" => %{"tenant" => "acme", "builtin_roles" => ["TASK_WORKER"]},
+          "actor-platform-pat" => %{
+            "tenant" => "platform",
+            "builtin_roles" => ["PLATFORM_ADMIN"]
+          }
+        }
+      },
+      overrides
+    )
+  end
+
+  defp r452_tenant_admin_roster(extra) do
+    r452_roster(
+      Map.merge(
+        %{
+          "actors" => %{
+            "actor-acme-bob" => %{"tenant" => "acme", "builtin_roles" => ["PLATFORM_ADMIN"]}
+          }
+        },
+        extra
+      )
+    )
+  end
+
+  # Writes the corpus; returns {scenario_paths, roster_path, report}.
+  defp r452_run(scenarios, roster, known_roles \\ @known_roles) do
+    dir = tmp_dir()
+    roster_path = Path.join(dir, "actors.json")
+    File.write!(roster_path, Jason.encode!(roster))
+
+    paths =
+      for scenario <- scenarios do
+        path = Path.join(dir, "#{scenario["id"]}.yaml")
+        File.write!(path, Jason.encode!(scenario))
+        path
+      end
+
+    {paths, roster_path, Check.check_paths(paths, roster_path, known_roles)}
+  end
+
+  defp tags(report), do: rules(report.violations)
+
+  defp only(report, tag), do: Enum.filter(report.violations, &(&1.rule == tag))
+
+  defp exempt_overflow(exempt),
+    do: MapSet.difference(MapSet.new(exempt), MapSet.new(@initial_refusal_exempt))
+
+  describe "REQ-452 baseline" do
+    test "T-R452-BASE -- the shared fixture corpus is clean, so every rule test isolates its rule" do
+      {_paths, _rp, report} =
+        r452_run([r452_scenario("base", "acme", "actor-acme-bob")], r452_roster(%{}))
+
+      assert report.violations == []
+      assert report.actor_stats == %{login_actors: 1, in_roster: 1, unresolved: 0, missing: 0}
+    end
+  end
+
+  describe "SCHEMA-7 (rule a) -- login actor must be in the roster" do
+    test "T-SCHEMA-7 -- an actor in neither actors: nor unresolved: names rule, file and actor" do
+      {[path], _rp, report} =
+        r452_run([r452_scenario("s7", "acme", "actor-acme-ghost")], r452_roster(%{}))
+
+      assert tags(report) == ["SCHEMA-7"]
+      assert [v] = report.violations
+      assert v.file == path
+      assert v.message =~ "actor-acme-ghost"
+      assert report.actor_stats.missing == 1
+    end
+
+    test "T-SCHEMA-7-NEG -- an actor listed only under unresolved: passes (a recorded gap)" do
+      roster = r452_roster(%{"unresolved" => %{"actor-acme-ghost" => %{"searched" => ["grep"]}}})
+      {_p, _rp, report} = r452_run([r452_scenario("s7n", "acme", "actor-acme-ghost")], roster)
+
+      assert report.violations == []
+      assert report.actor_stats.unresolved == 1
+    end
+
+    test "T-SCHEMA-7-NONLOGIN -- actor-system-* and actor-any are not login actors" do
+      scenario = r452_scenario("s7x", "acme", "actor-system-engine")
+
+      scenario =
+        put_in(scenario, ["steps"], [
+          hd(scenario["steps"]),
+          %{"step" => 2, "actor" => "actor-any", "action" => "x", "via" => "gui"}
+        ])
+
+      {_p, _rp, report} = r452_run([scenario], r452_roster(%{}))
+
+      assert report.violations == []
+      assert report.actor_stats.login_actors == 0
+    end
+  end
+
+  describe "SCHEMA-8 (rule b) -- builtin_roles must be in Authorization.roles/0" do
+    defp unknown_role_roster do
+      r452_roster(%{
+        "actors" => %{
+          "actor-acme-bob" => %{"tenant" => "acme", "builtin_roles" => ["TENANT_BOSS"]}
+        }
+      })
+    end
+
+    test "T-SCHEMA-8 -- an unknown role names rule, roster file and actor" do
+      {_p, rp, report} =
+        r452_run([r452_scenario("s8", "acme", "actor-acme-bob")], unknown_role_roster())
+
+      assert tags(report) == ["SCHEMA-8"]
+      assert [v] = report.violations
+      assert v.file == rp
+      assert v.message =~ "actor-acme-bob"
+      assert v.message =~ "TENANT_BOSS"
+    end
+
+    test "T-SCHEMA-8-FOLLOWS-ROLES -- the same role passes once it is in the passed role list" do
+      {_p, _rp, report} =
+        r452_run(
+          [r452_scenario("s8f", "acme", "actor-acme-bob")],
+          unknown_role_roster(),
+          @known_roles ++ ["TENANT_BOSS"]
+        )
+
+      assert report.violations == []
+    end
+
+    test "T-KNOWN-ROLE-NAMES -- known_role_names/0 is exactly Authorization.roles/0 as strings" do
+      assert Check.known_role_names() ==
+               Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+
+      assert "PLATFORM_ADMIN" in Check.known_role_names()
+    end
+  end
+
+  describe "SCHEMA-9 (rule c) -- tenant actor must not hold PLATFORM_ADMIN" do
+    test "T-SCHEMA-9 -- tenant acme + PLATFORM_ADMIN, no exemption, names rule, roster file, actor" do
+      {_p, rp, report} =
+        r452_run([r452_scenario("s9", "acme", "actor-acme-bob")], r452_tenant_admin_roster(%{}))
+
+      assert tags(report) == ["SCHEMA-9"]
+      assert [v] = report.violations
+      assert v.file == rp
+      assert v.message =~ "actor-acme-bob"
+    end
+
+    test "T-SCHEMA-9-LEGACY -- the legacy_platform_admin exemption silences rule (c)" do
+      roster =
+        r452_tenant_admin_roster(%{
+          "legacy_platform_admin" => %{
+            "actor-acme-bob" => %{
+              "since" => "2026-10-06",
+              "reason" => "no TENANT_ADMIN yet",
+              "removed_by" => "REQ-454"
+            }
+          }
+        })
+
+      {_p, _rp, report} = r452_run([r452_scenario("s9l", "acme", "actor-acme-bob")], roster)
+
+      assert report.violations == []
+    end
+
+    test "T-SCHEMA-9-PLATFORM -- a platform-tenant PLATFORM_ADMIN is fine" do
+      {_p, _rp, report} =
+        r452_run([r452_scenario("s9p", "platform", "actor-platform-pat")], r452_roster(%{}))
+
+      assert report.violations == []
+    end
+
+    test "T-SCHEMA-12-LEGACY-STALE -- a legacy entry for a non-PLATFORM_ADMIN actor is SCHEMA-12" do
+      roster =
+        r452_roster(%{
+          "legacy_platform_admin" => %{
+            "actor-acme-bob" => %{
+              "since" => "2026-10-06",
+              "reason" => "stale",
+              "removed_by" => "REQ-454"
+            }
+          }
+        })
+
+      {_p, rp, report} = r452_run([r452_scenario("s9s", "acme", "actor-acme-bob")], roster)
+
+      assert tags(report) == ["SCHEMA-12"]
+      assert hd(report.violations).file == rp
+    end
+  end
+
+  describe "SCHEMA-10 (rule d) -- platform actor only in scope platform" do
+    test "T-SCHEMA-10 -- platform actor in a scope-acme scenario names rule, file, actor" do
+      {[path], _rp, report} =
+        r452_run([r452_scenario("s10", "acme", "actor-platform-pat")], r452_roster(%{}))
+
+      assert tags(report) == ["SCHEMA-10"]
+      assert [v] = report.violations
+      assert v.file == path
+      assert v.message =~ "actor-platform-pat"
+      assert v.message =~ "s10"
+    end
+
+    test "T-SCHEMA-10-ALLOWED -- the scenario id in platform_actor_allowed with a reason passes" do
+      roster = r452_roster(%{"platform_actor_allowed" => %{"s10a" => "tenant onboarding"}})
+      {_p, _rp, report} = r452_run([r452_scenario("s10a", "acme", "actor-platform-pat")], roster)
+
+      assert report.violations == []
+    end
+
+    test "T-SCHEMA-10-EMPTY-REASON -- an allowed entry with an empty reason is rejected as SCHEMA-12 (roster fails to load, so cross rules do not run)" do
+      roster = r452_roster(%{"platform_actor_allowed" => %{"s10e" => "  "}})
+      {_p, _rp, report} = r452_run([r452_scenario("s10e", "acme", "actor-platform-pat")], roster)
+
+      assert tags(report) == ["SCHEMA-12"]
+      assert hd(report.violations).message =~ "s10e"
+    end
+  end
+
+  describe "SCHEMA-11 (rule e) -- every scope needs a refusal step or an exemption" do
+    test "T-SCHEMA-11 -- scope with no refusal step names rule, first file, scope" do
+      {[path], _rp, report} =
+        r452_run(
+          [r452_scenario("s11", "acme", "actor-acme-bob", refusal: false)],
+          r452_roster(%{})
+        )
+
+      assert tags(report) == ["SCHEMA-11"]
+      assert [v] = report.violations
+      assert v.file == path
+      assert v.message =~ "\"acme\""
+    end
+
+    test "T-SCHEMA-11-NEG-FLAT -- a flat step with expect_refusal: true covers the scope" do
+      {_p, _rp, report} =
+        r452_run([r452_scenario("s11f", "acme", "actor-acme-bob")], r452_roster(%{}))
+
+      assert report.violations == []
+    end
+
+    test "T-SCHEMA-11-NEG-BRANCH -- a refusal step inside a branch covers the scope" do
+      step = %{
+        "step" => 1,
+        "actor" => "actor-acme-bob",
+        "action" => "tries a thing",
+        "via" => "gui",
+        "expect_refusal" => true
+      }
+
+      scenario = %{
+        "id" => "s11b",
+        "title" => "Branching",
+        "version" => "1.0",
+        "scope" => "acme",
+        "branches" => [
+          %{
+            "name" => "all",
+            "when" => "else",
+            "steps" => [step],
+            "expected_outcomes" => [%{"id" => "EO-1", "description" => "refused"}]
+          }
+        ]
+      }
+
+      {_p, _rp, report} = r452_run([scenario], r452_roster(%{}))
+
+      assert report.violations == []
+    end
+
+    test "T-SCHEMA-11-NEG-EXEMPT -- a scope in refusal_coverage_exempt passes without a refusal step" do
+      roster = r452_roster(%{"refusal_coverage_exempt" => ["acme"]})
+
+      {_p, _rp, report} =
+        r452_run([r452_scenario("s11e", "acme", "actor-acme-bob", refusal: false)], roster)
+
+      assert report.violations == []
+    end
+
+    test "T-SCHEMA-11-ONE-OF-MANY -- one refusal step among several scenarios covers the whole scope" do
+      {_p, _rp, report} =
+        r452_run(
+          [
+            r452_scenario("s11m1", "acme", "actor-acme-bob", refusal: false),
+            r452_scenario("s11m2", "acme", "actor-acme-bob")
+          ],
+          r452_roster(%{})
+        )
+
+      assert report.violations == []
+    end
+
+    test "T-SCHEMA-11-COMPANY-ID -- scope resolved from company_id: is grouped too" do
+      scenario =
+        r452_scenario("s11c", "x", "actor-acme-bob", refusal: false)
+        |> Map.delete("scope")
+        |> Map.put("company_id", "acme")
+
+      {_p, _rp, report} = r452_run([scenario], r452_roster(%{}))
+
+      assert tags(report) == ["SCHEMA-11"]
+      assert hd(report.violations).message =~ "\"acme\""
+    end
+  end
+
+  describe "SCHEMA-12 -- structural integrity of roster and expect_refusal" do
+    test "T-SCHEMA-12-NON-BOOLEAN -- expect_refusal: \"yes\" is SCHEMA-12 naming the step" do
+      data =
+        valid_flat(%{"steps" => [Map.put(flat_step(), "expect_refusal", "yes")]})
+
+      violations = check(data)
+
+      assert rules(violations) == ["SCHEMA-12"]
+      assert [v] = violations
+      assert v.file == @fixture_path
+      assert v.message =~ "step 1: expect_refusal must be a boolean"
+    end
+
+    test "T-SCHEMA-12-NON-BOOLEAN-BRANCH -- same check inside branches[].steps" do
+      step = Map.put(flat_step(), "expect_refusal", 1)
+
+      data =
+        valid_branching([
+          %{
+            "name" => "b",
+            "when" => "else",
+            "steps" => [step],
+            "expected_outcomes" => [flat_outcome()]
+          }
+        ])
+
+      assert rules(check(data)) == ["SCHEMA-12"]
+    end
+
+    test "T-SCHEMA-12-BOOLEAN-OK -- true and false are both accepted" do
+      for v <- [true, false] do
+        data = valid_flat(%{"steps" => [Map.put(flat_step(), "expect_refusal", v)]})
+        assert check(data) == []
+      end
+    end
+
+    test "T-SCHEMA-12-MISSING-ROSTER -- a missing roster file is one SCHEMA-12 on the roster path, not a crash" do
+      dir = tmp_dir()
+      missing = Path.join(dir, "nope.yaml")
+      path = Path.join(dir, "s.yaml")
+      File.write!(path, Jason.encode!(r452_scenario("sm", "acme", "actor-acme-bob")))
+
+      report = Check.check_paths([path], missing, @known_roles)
+
+      assert tags(report) == ["SCHEMA-12"]
+      assert [v] = report.violations
+      assert v.file == missing
+      assert report.actor_stats == :not_loaded
+    end
+
+    test "T-SCHEMA-12-EMPTY-ACTORS -- an empty actors: map is SCHEMA-12" do
+      {_p, rp, report} =
+        r452_run([r452_scenario("se", "acme", "actor-acme-bob")], %{"actors" => %{}})
+
+      assert tags(report) == ["SCHEMA-12"]
+      assert Enum.all?(report.violations, &(&1.file == rp))
+    end
+
+    test "T-SCHEMA-12-BAD-SINCE -- a legacy_platform_admin since that is not an ISO date is SCHEMA-12" do
+      roster =
+        r452_tenant_admin_roster(%{
+          "legacy_platform_admin" => %{
+            "actor-acme-bob" => %{
+              "since" => "last tuesday",
+              "reason" => "r",
+              "removed_by" => "REQ-454"
+            }
+          }
+        })
+
+      {_p, rp, report} = r452_run([r452_scenario("sd", "acme", "actor-acme-bob")], roster)
+
+      assert "SCHEMA-12" in tags(report)
+      assert Enum.any?(only(report, "SCHEMA-12"), &(&1.file == rp and &1.message =~ "since"))
+    end
+
+    test "T-SCHEMA-12-ENTRY-SHAPE -- an actor with empty builtin_roles or no tenant is SCHEMA-12" do
+      roster =
+        r452_roster(%{
+          "actors" => %{
+            "actor-acme-bob" => %{"tenant" => "acme", "builtin_roles" => []},
+            "actor-acme-eve" => %{"builtin_roles" => ["TASK_WORKER"]}
+          }
+        })
+
+      {_p, _rp, report} = r452_run([r452_scenario("sh", "acme", "actor-acme-bob")], roster)
+
+      messages = report |> only("SCHEMA-12") |> Enum.map(& &1.message)
+      assert Enum.any?(messages, &(&1 =~ "actor-acme-bob"))
+      assert Enum.any?(messages, &(&1 =~ "actor-acme-eve"))
+    end
+
+    test "T-SCHEMA-12-UNRESOLVED -- unresolved entry without searches, or also in actors:, is SCHEMA-12" do
+      roster =
+        r452_roster(%{
+          "unresolved" => %{
+            "actor-acme-ghost" => %{"searched" => []},
+            "actor-acme-bob" => %{"searched" => ["x"]}
+          }
+        })
+
+      {_p, _rp, report} = r452_run([r452_scenario("su", "acme", "actor-acme-bob")], roster)
+
+      messages = report |> only("SCHEMA-12") |> Enum.map(& &1.message)
+      assert Enum.any?(messages, &(&1 =~ "actor-acme-ghost"))
+      assert Enum.any?(messages, &(&1 =~ "actor-acme-bob"))
+    end
+
+    test "T-SCHEMA-12-ALLOWED-NOT-STRING -- platform_actor_allowed value that is not a string is SCHEMA-12" do
+      roster = r452_roster(%{"platform_actor_allowed" => %{"x" => nil}})
+      {_p, _rp, report} = r452_run([r452_scenario("sa", "acme", "actor-acme-bob")], roster)
+
+      assert tags(report) == ["SCHEMA-12"]
+    end
+
+    test "T-SCHEMA-12-EXEMPT-SHAPE -- refusal_coverage_exempt that is not a list of strings is SCHEMA-12" do
+      roster = r452_roster(%{"refusal_coverage_exempt" => "acme"})
+      {_p, _rp, report} = r452_run([r452_scenario("sx", "acme", "actor-acme-bob")], roster)
+
+      assert tags(report) == ["SCHEMA-12"]
+    end
+  end
+
+  describe "render/1 -- actor roster counts" do
+    test "T-RENDER-COUNTS -- the Actor roster line carries the three counts" do
+      {_p, _rp, report} =
+        r452_run([r452_scenario("rc", "acme", "actor-acme-ghost")], r452_roster(%{}))
+
+      out = report |> Check.render() |> IO.iodata_to_binary()
+
+      assert out =~ "Actor roster:"
+      assert out =~ "1 login actor(s) in corpus: 0 in roster, 0 unresolved, 1 missing"
+    end
+
+    test "T-RENDER-NO-STATS -- a report without actor_stats still renders" do
+      report = %{files: [], file_count: 0, violations: []}
+
+      refute IO.iodata_to_binary(Check.render(report)) =~ "Actor roster:"
+    end
+  end
+
+  describe "refusal_coverage_exempt is frozen to a shrinking subset" do
+    test "T-EXEMPT-FROZEN -- the real roster's exempt list is a subset of the frozen initial list" do
+      assert {:ok, roster} = Check.read_roster(@live_roster)
+
+      assert MapSet.size(exempt_overflow(roster.refusal_coverage_exempt)) == 0,
+             "refusal_coverage_exempt may only shrink; extra scopes: " <>
+               inspect(exempt_overflow(roster.refusal_coverage_exempt))
+    end
+
+    test "T-EXEMPT-FROZEN-BITES -- a fabricated extra scope is caught by the same helper" do
+      assert MapSet.to_list(exempt_overflow(@initial_refusal_exempt ++ ["newscope"])) ==
+               ["newscope"]
+    end
+
+    test "T-EXEMPT-SHRINK-OK -- a strictly smaller list passes the helper" do
+      assert MapSet.size(exempt_overflow(["meridian"])) == 0
+    end
+  end
+
+  describe "live corpus" do
+    test "T-LIVE-ROSTER -- real actors.yaml plus every real scenario passes with no missing actor" do
+      paths = @live_glob |> Path.wildcard() |> Enum.sort()
+      assert paths != []
+
+      report = Check.check_paths(paths, @live_roster, Check.known_role_names())
+
+      assert report.violations == [], inspect(report.violations)
+      stats = report.actor_stats
+      assert stats.missing == 0
+      assert stats.login_actors == stats.in_roster + stats.unresolved
+      assert stats.login_actors > 0
+    end
+  end
 end

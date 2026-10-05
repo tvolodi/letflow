@@ -654,3 +654,13 @@ history:
       RELEASE-VALIDATOR report test/reports/report-2026-10-05-WF02-REQ437.yaml.
       The real-host client-IP UAT leg is covered by the named blocker issue
       ISS-0991 (docs/issues/ISS-0991.yaml). Gate record in test/specs/REQ-437.md.
+
+  - req: REQ-441
+    event: started
+    agent: ORCH
+    at: "2026-10-05T16:41:00Z"
+    note: >
+      WF-02 run WF02-REQ441-20261005 (queue task 957, GH#2217) started; design phase
+      passed CODE-DESIGN-VALIDATOR and design-phase SECURITY-REVIEWER; supervisor
+      approved gen_smtp 1.3.0 alone as the mail library. Branch
+      feature/WF02-REQ441-20261005.

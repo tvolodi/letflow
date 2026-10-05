@@ -33299,7 +33299,7 @@ requirements:
   - id: REQ-441
     title: "Provider-agnostic mail notifier adapter for the login-discovery tenant-list email: SMTP adapter first, capturing test adapter, secrets by environment reference, uniform response whatever the delivery result (BA decision D-B)"
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S4
     impl_order: 957  # letflow-queue task id, GH#2217. Re-registered 2026-10-05 by ORCH, depends_on Q-946 (REQ-437); supersedes Q-955/GH#2213, Q-952/GH#2206 (both blocked, wrong deps). NOTE: needs a NEW mix dependency (no Swoosh/gen_smtp in mix.exs/mix.lock today), so the flag-and-stop rule applies when it is built.
     description: >

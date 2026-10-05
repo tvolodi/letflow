@@ -109,6 +109,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Merge queue: GitHub runs the required checks on a temporary
+  # `gh-readonly-queue/main/...` branch holding the PR merged onto the latest
+  # main (+ queued PRs ahead of it), so a PR no longer has to be re-run by hand when
+  # main moves. The job names below are the required-status-check contexts and report
+  # unchanged on this event. cd.yml is unaffected: it only fires for CI runs on branch
+  # `main`, never for a gh-readonly-queue/* branch.
+  merge_group:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -160,6 +167,17 @@ jobs:
           # range genuinely represents everything that changed relative to main.
           if [ "${{ github.event_name }}" = "push" ]; then
             echo "Push to main -- always running all gates (ISS-0840: path filter on push-to-main caused false-green)."
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "mobile=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Merge queue: the commit under test is the merged result, so there is no
+          # single PR base to diff against -- run every gate in full (the fail-safe
+          # direction; a queue run is the last check before main moves).
+          if [ "${{ github.event_name }}" = "merge_group" ]; then
+            echo "Merge queue run -- always running all gates."
             echo "backend=true" >> "$GITHUB_OUTPUT"
             echo "frontend=true" >> "$GITHUB_OUTPUT"
             echo "mobile=true" >> "$GITHUB_OUTPUT"

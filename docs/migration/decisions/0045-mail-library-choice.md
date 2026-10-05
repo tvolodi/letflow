@@ -1,9 +1,9 @@
 # 0045 -- Mail library for the login-discovery notifier adapter (REQ-441)
 
-Status: PROPOSED. Not ratified (REVIEWER and SECURITY-REVIEWER sign it off in the implementation review).
-The dependency was approved by the supervisor; the chosen library is gen_smtp ALONE (see sections 8 and 9). The new hex dependency this record recommends is a HARD STOP:
-it needs explicit approval from the supervisor / repo owner before ELIXIR-DEV may touch `mix.exs`
-or `mix.lock`. Until then no dependency is added and `mix deps.get` is not run.
+Status: ACCEPTED (2026-10-05). Signed off by REVIEWER at WF02-REQ441-20261005 step 02d and by SECURITY-REVIEWER at step 02c (INV-4 call-time credential read ratified).
+The dependency was approved by the supervisor; the chosen library is gen_smtp ALONE (see sections 8 and 9). The new hex dependency this record recommends was a HARD STOP:
+it needed explicit approval from the supervisor / repo owner before ELIXIR-DEV could touch `mix.exs`
+or `mix.lock`. That condition is satisfied: approved by the supervisor 2026-10-05.
 
 Date: 2026-10-05. Drafted by `CODE-DESIGNER` (run WF02-REQ441-20261005, step 01). Owner: `ORCH`.
 
@@ -151,7 +151,7 @@ a candidate unless something not found in the research changes this.
 | Security-sensitive code we own | smallest | smallest | small (one adapter module) | large | small |
 | Needs vendor/legal/commercial decision | no | no | no | no | YES |
 
-## 4. Decision (PROPOSED)
+## 4. Decision (ACCEPTED)
 
 Adopt **O3: gen_smtp alone**, with the library call confined to one module so the choice stays
 reversible.
@@ -233,8 +233,7 @@ Approval of the dependency is conditional on, and ELIXIR-DEV must evidence in it
 
 ## 8. Chosen library (implementation record, REQ-441 step 02a)
 
-Status of this record stays PROPOSED: REVIEWER and SECURITY-REVIEWER sign it off in the implementation
-review. The dependency itself was approved by the supervisor on the condition set recorded in the
+Status: ACCEPTED, see the header. The dependency itself was approved by the supervisor on the condition set recorded in the
 step-02a handoff.
 
 **The chosen library is `gen_smtp` ALONE** (O3): `{:gen_smtp, "~> 1.3"}` in `mix.exs`, resolved to
@@ -435,3 +434,18 @@ the `listen` state unchanged and `:ranch.info/0` reports no listeners.
   sender's domain so the node's FQDN is not advertised.
 - `retries_exceeded`, `no_more_hosts` and `send` error tuples carry the remote reply text; the adapter
   collapses every non-binary return to `{:error, :failed}` and never inspects or logs them.
+
+## 10. Sign-off conditions and leftovers (DOC-UPDATER, REQ-441 step 06)
+
+Conditions SECURITY-REVIEWER set at step 02c, binding on any later change to the Smtp adapter:
+
+1. Never call `mimemail` (the adapter keeps its own fixed MIME encoder, see 9.5).
+2. Never set `trace_fun` in the gen_smtp client options.
+3. Never put credentials into any option list the TLS path might log.
+4. Re-verify section 9 against the new source if gen_smtp moves past `~> 1.3`.
+
+Non-blocking leftovers recorded by the gates (not defects of this requirement):
+
+- `Transport.send_message/4` carries an unused 4th argument.
+- The self-built MIME encoder is a residual risk; it is covered by the header-injection and
+  link-injection tests but is not a library-maintained encoder.

@@ -33299,7 +33299,7 @@ requirements:
   - id: REQ-441
     title: "Provider-agnostic mail notifier adapter for the login-discovery tenant-list email: SMTP adapter first, capturing test adapter, secrets by environment reference, uniform response whatever the delivery result (BA decision D-B)"
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S4
     impl_order: 957  # letflow-queue task id, GH#2217. Re-registered 2026-10-05 by ORCH, depends_on Q-946 (REQ-437); supersedes Q-955/GH#2213, Q-952/GH#2206 (both blocked, wrong deps). NOTE: needs a NEW mix dependency (no Swoosh/gen_smtp in mix.exs/mix.lock today), so the flag-and-stop rule applies when it is built.
     description: >
@@ -33343,7 +33343,7 @@ requirements:
       blank keeps the Noop default, an unknown value raises at boot),
       LETFLOW_SMTP_HOST, LETFLOW_SMTP_PORT, LETFLOW_SMTP_USERNAME,
       LETFLOW_SMTP_PASSWORD, LETFLOW_SMTP_TLS (verified TLS by default;
-      plaintext only when explicitly set and never in :prod), LETFLOW_MAIL_FROM
+      plaintext only when explicitly set and never in :prod), LETFLOW_MAIL_FROM and
       LETFLOW_PUBLIC_BASE_URL (the deployment base URL for any link, INV-9)
       and LETFLOW_MAIL_TIMEOUT_MS. Validated at boot in config/runtime.exs:
       the non-secret values are written to application env, while the SMTP
@@ -33385,7 +33385,7 @@ requirements:
       incomplete configuration refuses to boot (item 2). The enablement gate
       that treats Smtp as a real adapter is REQ-444, not built here.
     open_questions:
-      - "RESOLVED for the mail library (decision 0045: gen_smtp alone, status PROPOSED pending REVIEWER and SECURITY-REVIEWER sign-off in the implementation review); still OPEN: if an external transactional provider is preferred later, the second adapter. SMTP is first by BA decision D-B."
+      - "RESOLVED for the mail library (decision 0045: gen_smtp alone, status ACCEPTED, signed off by REVIEWER and SECURITY-REVIEWER); still OPEN: if an external transactional provider is preferred later, the second adapter. SMTP is first by BA decision D-B."
       - "EXTERNAL dependency, not in this repository: the ai-dala-infra secrets inventory needs entries for the SMTP credentials (LETFLOW_SMTP_USERNAME / LETFLOW_SMTP_PASSWORD) and the chosen SMTP relay per environment (0042 OQ-4 asked who owns the credentials: the platform operator). Recorded, not edited from here."
       - "OPEN, only remaining user/legal decision of the series (0042 OQ-3, decision 0043 D-D): the feature stays off outside dev until a named person confirms the lawful basis and controller; this entry makes the mail adapter real but does not lift that gate. Sender domain SPF/DKIM/DMARC alignment is an infrastructure action outside this repository."
       - "SMTP replies can reveal whether a mailbox exists (a synchronous rejection). This is safe only because the delivery result never reaches the HTTP response; the counters carry no address. Confirm with SECURITY-REVIEWER that the :failed counter's rate is not itself an oracle an operator-visible dashboard could expose per address (it carries no per-address dimension)."

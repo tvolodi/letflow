@@ -677,3 +677,21 @@ history:
       passed CODE-DESIGN-VALIDATOR and design-phase SECURITY-REVIEWER; supervisor
       approved gen_smtp 1.3.0 alone as the mail library. Branch
       feature/WF02-REQ441-20261005.
+
+  - req: REQ-441
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T17:58:44Z"
+    note: >
+      Real mail adapter behind the REQ-437 notifier port complete (queue task
+      957, GH#2217, PR #2226): Letflow.LoginDiscovery.Notifier.Smtp via gen_smtp
+      1.3.0 alone (decision 0045; a deviation from the requirement's
+      Swoosh + gen_smtp proposal, within the scope CODE-DESIGNER was given).
+      All gates PASS: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (including the
+      INV-4 call-time credential read ratification), REVIEWER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR (report
+      test/reports/report-2026-10-05-WF02-REQ441.yaml). Still OPEN and gating
+      enablement of the feature outside dev (REQ-444): H2 relay host and
+      credentials, H3 infra secrets inventory plus SPF/DKIM/DMARC alignment,
+      H4 lawful basis and controller (0042 OQ-3, 0043 D-D). This requirement
+      does not lift that gate. Branch feature/WF02-REQ441-20261005.

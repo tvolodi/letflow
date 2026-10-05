@@ -120,6 +120,16 @@ item-to-section map is in §16.
 | D18 | REQ-435 item 1 lists the columns | Two additions beyond the text | (a) A `CHECK` on `key_id` mirroring the boot validation (`key_id ~ '^[a-z0-9_-]{1,32}$'`, constraint name `key_id_format`), because a column that retire/key-status tooling will match on must not hold free text. (b) **No** index on `key_id`: deletion by key id belongs to REQ-443's `retire_key`, which owns its own migration if the table size warrants one (PK leading column is `email_key`, so a `key_id` filter is a scan; acceptable for a maintenance task). `REQ-VALIDATOR` accepts or strikes (a). |
 | D19 | REQ-435 item 3c: "absent -> raise" | Per `secrets_runtime_config_test.exs` an empty-string env value arrives indistinguishable from an absent one | In `config/runtime.exs` an **empty or all-whitespace** value of any of the four variables is treated as unset (so "empty pepper" = "absent pepper" = raise; "empty previous pair" = no previous). |
 | D20 | REQ-435 item 4 (iv) and REQ-440: removal "deletes under every candidate key" | The removal function is REQ-440's, already built in PR #2201 on a single key | The change to `remove_entry_if_unreferenced/3` (§3.6-3.7) is part of the D-C delta on the **same branch**. REQ-440 therefore closes by `RELEASE-VALIDATOR` verification **of the merge commit that includes the delta**, re-deriving its criteria including "removal deletes under every candidate key" (a test in §15.1, listed there because it needs the rotation configuration). REQ-440's write path itself (hooks, JIT transaction, `:tenant_id` opt, guard, `:skip`) is unchanged by D-C and verified, not rebuilt. |
+| D21 | REQ-437 description / BUILDS 1-2 / mount-switch AC and §7: `mode` (and `max_body_bytes`) "in `config :letflow, Letflow.Routers.LoginDiscovery`" | REQ-439's `test/letflow/client_ip_runtime_config_test.exs:55-91` (probe `@probe`, `:56-72`) asserts the **whole** `Application` env of `Letflow.Routers.LoginDiscovery` is exactly `[enabled: true]` (`"RESULT {[trusted_proxies: []], [enabled: true]}"` at `:91`, `:176`, `:208`, `:229`: the dev/prod cases assert the same whole-keyword shape). `config/config.exs:68` and `config/runtime.exs:277` set only `enabled`. Any extra key under that module's env breaks that test. | `mode` and `max_body_bytes` live under a **distinct key**: `config :letflow, Letflow.LoginDiscovery, mode: ..., max_body_bytes: ...` (§7). `Letflow.Routers.LoginDiscovery` env stays `[enabled: boolean]` and REQ-439's test needs **no change**. The private reader that PR #2223 added to `lib/letflow/login_directory.ex` (it read `Letflow.Routers.LoginDiscovery[:mode]`) is re-pointed to the new key and made public (§7, D28). |
+| D22 | REQ-437 AC "mode switch ... unknown `LETFLOW_LOGIN_DISCOVERY_MODE` raises at boot, tested, unset gives `:redirect_single`"; implied "required" env | The feature is already gated off outside dev by REQ-439's `enabled` flag, so requiring the mode variable at boot would add a second mandatory variable with no safety gain and would break every deploy that does not use the feature. | `LETFLOW_LOGIN_DISCOVERY_MODE` is **OPTIONAL**: unset, empty or all-whitespace = not set (D19 precedent) = `:redirect_single` from `config/config.exs`. A set value must be exactly `uniform_plus_email` or `redirect_single` (after trim); anything else raises at boot with a message that does not echo the value. Listed in `deploy/.env.example` as an optional blank placeholder (§7, §15.3). |
+| D23 | REQ-437 AC / BUILDS 2: with `enabled: false` "every method and path returns the standard 404 ... emits exactly one `:disabled` event" | `Letflow.Router` plugs `Letflow.Plugs.Cors` (`router.ex:95`) **before** every `forward`, and `Cors` answers an allowed-origin `OPTIONS` carrying `Access-Control-Request-Method` with `204` and `halt` (`lib/letflow/plugs/cors.ex:104-116`, `preflight_request?/1` at `:139-141`: method `OPTIONS` plus an `Access-Control-Request-Method` header plus an allowed `Origin`), so such a preflight never reaches the mounted router, whatever the mount state. | The disabled-mount AC is stated for **non-preflight requests** (every method, every path, including an `OPTIONS` that is not an allowed-origin preflight). An allowed-origin CORS preflight to the disabled mount is answered `204` by `Cors` exactly as for any other path, with zero events, zero queries and no limiter state; it is asserted as a separate documented carve-out (§5.1, §15.3.1). |
+| D24 | REQ-437 AC "exactly one Repo query per request ... and no code path returns before that query" | The per-IP and global 429 are returned by the limiter plug before `:match` (§12.2), the per-email 429 at §5.3 step 4, before the query; a wrong method or sub-path (404), a disabled mount and a CORS preflight also issue no query. Separately, because the limiter plug runs **before** `:match`, a wrong-method or wrong-path request **consumes per-IP and global tokens** (and a refused one is a 429, not a 404). | The one-query rule is stated for **every request that reaches §5.3 step 5** (every 200/202). Zero queries for: 429 (all three buckets), 404, the disabled 404, the CORS preflight. The three 429 refusals are the only returns ahead of the query on an enabled `POST /`. Wrong-method/sub-path requests drain limiter tokens by design (an unauthenticated flood of `GET /x` shares the caller's own per-IP bucket and the global bucket; accepted, §12.8 style residual); the matrix's "404" rows read "404 when the limiter admits it, else 429" (§10 notes). |
+| D25 | REQ-436 text "chain order ... starts with `ClientIp`" and REQ-437 BUILDS 1 / AC "the chain order is ClientIp then the REQ-436 limiter" | The design (§5.1) and `enabled_gate/2` put the gate first. | Chain, in order: `enabled_gate` -> `Letflow.Plugs.ClientIp` -> `Letflow.Plugs.LoginDiscoveryRateLimit` -> `:match` -> `:dispatch`. "Starts with ClientIp" is corrected to "the gate, then ClientIp, then the limiter, all ahead of `:match`". The AC test of order (429 even with an invalid body) is unchanged. |
+| D26 | REQ-437 AC "malformed inputs ... return the response the design's matrix assigns (the neutral response, **or the standard 400/415 if the design splits them**)" | Design §5.2/§5.3/§10 do **not** split: every malformed input is the neutral class. A 400/415 would be distinguishable from a lookup of an unknown address and would add an early-return class (INV-5). | **Malformed input = `202` neutral** (`{"result":"accepted"}`), never 400/415/422/500, in both modes. The "or 400/415" alternative is struck from the AC. |
+| D27 | REQ-437 BUILDS 3 "resolution via the directory's `lookup_by_email/1`"; AC "ONE database round trip ... a malformed email is normalised to a fixed sentinel" | `lookup_by_email/1` (`login_directory.ex:275-292`) returns `{:error, :lookup_failed}` **without any query** when the pepper is unavailable, and it never exposes the current key the limiter needs between key derivation and the query (§5.3 step 4). The 0043 D-C design (§5.4) already says the endpoint uses `email_keys/1` + limiter + `lookup_by_keys/1`. | The endpoint **never calls `lookup_by_email/1`**. It computes `email_keys/1` (or `sentinel_keys/0` on `:invalid`), consumes the per-email bucket on `hd(keys)`, and calls `lookup_by_keys/1` **exactly once**. When the pepper is unavailable it substitutes the one-element list `[<<0::256>>]` so the single query still runs (§5.3 step 3, precise behaviour there). `lookup_by_email/1` stays a convenience for REQ-435's tests. |
+| D28 | REQ-437 BUILDS 8 / §7 `decide(mode, result)` with `result` unspecified; `LoginDiscovery.mode/0` unspecified | PR #2223's lookup returns `tenant_match` (`slug`, `display_name`, `disclose`), and it already holds a deployment-mode reader (`defp deployment_mode/0`, `login_directory.ex:257-267`) and the mode vocabulary (`@type disclosure_mode`, `:79`). A second reader or a re-spelled vocabulary could disagree with the SQL `disclose` bit. | One source of truth: `Letflow.LoginDirectory.deployment_mode/0` (made public, key re-pointed per D21) is the only function that reads the mode config; `Letflow.LoginDiscovery.mode/0` **delegates** to it, and the env parser is `Letflow.LoginDirectory.parse_deployment_mode/1`, called by `config/runtime.exs`. `decide/2` and `delivery/2` take `result :: {:ok, [tenant_match()]} \| {:error, :lookup_failed}` and strip `disclose` with `Map.take([:slug, :display_name])` (§7). `lookup_by_keys/1` is the only lookup the endpoint uses. |
+| D29 | REQ-437 BUILDS 9 / §7 "unrecognised value at request time ... logs a fixed message once" | The reader lives in `Letflow.LoginDirectory`, whose moduledoc forbids logging there and which has no once-only state. After D22's boot validation an unrecognised value is unreachable in a deployment. | No log on an unrecognised request-time value: it is treated as `:uniform_plus_email` silently (the conservative rule is kept; only the "logs once" clause is struck). |
+
 
 ---
 
@@ -671,9 +681,27 @@ id is a label, not a secret; no email, key or pepper is printed, INV-4).
   **before** `ClientIp`, the limiter, `:match` and body reading, for any method and any path, so a
   disabled mount resolves no client address, touches no limiter state, issues zero `Repo` queries
   and reveals nothing beyond what an unmounted path reveals. When enabled it is a no-op.
+- **CORS carve-out (D23).** `Letflow.Router` plugs `Letflow.Plugs.Cors` before every `forward`
+  (`router.ex:95`). An `OPTIONS` request that carries an allowed `Origin` **and** an
+  `Access-Control-Request-Method` header (a CORS preflight, `cors.ex:139-141`) is answered `204`
+  and halted by `Cors` **before** the mounted router runs, for every path including this one,
+  enabled or disabled. It therefore emits no outcome event, issues no query, runs no `ClientIp`
+  or limiter, and creates no limiter state. This is unchanged, intended behaviour (it is how the
+  SPA's cross-origin `POST` is permitted; it reveals nothing path-specific). Every other request,
+  including an `OPTIONS` without those headers or from a non-allowed origin, reaches the mounted
+  router and is a "non-preflight" request in the sense of every statement in this design about the
+  disabled gate. The disabled-mount test asserts **non-preflight** methods (at least `GET`, `POST`,
+  `PUT`, `PATCH`, `DELETE`, and a bare `OPTIONS`); a separate test asserts the preflight carve-out.
 - Routes: `post "/"` and `match _` -> `Letflow.Api.Response.not_found/1`, byte-identical to
   `Letflow.Router`'s catch-all, for any other method or sub-path. (Route-level, not
-  input-dependent.)
+  input-dependent.) `match _` emits the `:not_found` outcome (§12.7) before responding.
+- **Limiter-before-match consequence (D24).** The limiter plug runs ahead of `:match`, so a
+  wrong-method or wrong-sub-path request **consumes per-IP and global tokens** and is itself
+  refused with the `429` when the bucket is empty: the `404` is returned only when the limiter
+  admits the request. Likewise a request with an invalid or oversize body is rate-limited before
+  its body is ever read. This is by design (the limiter must not depend on routing or input) and
+  is not a defect; tests of the `404` rows therefore use a fresh per-IP bucket (a unique
+  documentation-range IP, §12.4 technique).
 - `Letflow.Router`'s moduledoc route table gains the row for this mount (Auth **none**, DB global
   `tenant_login_directory` + `tenants`).
 
@@ -684,7 +712,25 @@ id is a label, not a secret; no email, key or pepper is printed, INV-4).
 with a bounded read (`max_body_bytes`, default 2048); the router calls no raising parser.
 Non-JSON content type, an unreadable or oversize body, invalid JSON, a missing or non-string
 `email`, an empty string, a string over 255 bytes after trim, or a string failing
-`email_shape?/1` are all the **malformed class** (§5.3).
+`email_shape?/1` are all the **malformed class** (§5.3). **The malformed class is answered `202`
+neutral, never `400`, `415`, `422` or `500` (D26)**: the design does not split malformed from
+unknown, because a distinct status would be an input-dependent early-return class (INV-5).
+
+Reading rules the implementer must follow (no code here, only the observable contract):
+
+- The body is read with the Plug bounded read using `max_body_bytes` as its limit; a result that
+  says "more data remains" (oversize) or an error is the malformed class. The body is read
+  **whatever the `Content-Type`** (the content type is checked afterwards and a non-JSON type makes
+  the input malformed), so that the work done does not depend on the header.
+- `max_body_bytes` is read at request time by `Letflow.LoginDiscovery.max_body_bytes/0` from
+  `config :letflow, Letflow.LoginDiscovery, max_body_bytes:` (default 2048, §7); a value that is not
+  a positive integer falls back to 2048 (no log).
+- The decoded value is passed to `LoginDirectory.email_keys/1` as it is (`email_keys/1` accepts any
+  term and returns `:invalid` for a non-string, empty, over-long or badly shaped value, so the
+  endpoint holds no second copy of the shape rules). The endpoint never trims or lowercases for the
+  key: `email_keys/1` normalises through `TenantMembership.normalize_subject_key/1`.
+- The recipient handed to the notifier (§13) is `TenantMembership.normalize_subject_key(email)` when
+  `email_keys/1` returned `{:ok, _}`, and `nil` in every other case (malformed, or keys unavailable).
 
 ### 5.3 Handler sequence (identical for every input class)
 
@@ -700,21 +746,48 @@ Non-JSON content type, an unreadable or oversize body, invalid JSON, a missing o
    every input class, valid, invalid, malformed or undecodable, performs exactly one HMAC per
    candidate pepper and issues the same one query shape (`email_key = ANY(<list of that length>)`);
    the number of HMACs and the list length depend on the deployment state, **never on the input**.
-   If the keys are unavailable at runtime (unreachable after boot validation, §2.2) the handler
-   logs a fixed error and uses a one-element list holding the all-zero 32-byte constant key, which
-   no writer ever writes, so the single-query structure and the neutral response are preserved.
+   **Pepper unavailable (D27), precisely.** `email_keys/1` returns `{:error, :pepper_unavailable}`,
+   or `sentinel_keys/0` returns `{:error, :pepper_unavailable}` (the config key
+   `:login_directory_keys` is absent or malformed). After boot validation (`config/runtime.exs`
+   refuses to boot without a valid pepper in every environment, §2.2) this is unreachable in a
+   deployment; it is reachable only in a test that deletes the key. The endpoint then (a) emits one
+   fixed `Logger.error` line containing no input, (b) substitutes the one-element list
+   `[<<0::256>>]` (the all-zero 32-byte constant, which no writer can write because writers need a
+   pepper), (c) uses `nil` as the notifier recipient, and continues with steps 4-8 unchanged. The
+   consequences: the single query **is still issued** (`lookup_by_keys([<<0::256>>])` is a valid
+   32-byte list and returns `{:ok, []}`), so the **one-query rule holds even with no pepper**;
+   the response is the neutral `202`; no delivery; the outcome event is `:accepted`. The limiter
+   key for the whole degraded state is the zero key, so every request shares one per-email bucket
+   (capacity 5, refill 1/60 s) and the endpoint is heavily throttled while degraded; accepted,
+   fail-closed. This is exactly why the endpoint must **not** use `lookup_by_email/1`, which in
+   the same state returns `{:error, :lookup_failed}` after **zero** queries (`login_directory.ex`,
+   `lookup_by_email/1`), breaking the one-query rule.
 4. Per-email limiter consult (`LoginDiscoveryRateLimit.consume_email(key, :request)`) with the
    **first (current) key** of the list (§12.2 amendment); a refusal sends REQ-436's 429 (§12) and
    stops. The sentinel's current-key form shares one bucket, which only throttles garbage senders.
-5. **Exactly one** database round trip: `lookup_by_keys(keys)` (§5.4), passing the whole candidate
-   list. A failure becomes `{:error, :lookup_failed}` and is treated as "no matches" (INV-8).
-6. `decide(mode, result)` (pure, §7) -> `:neutral | {:match, tenant_ref}`.
-7. `Dispatch.submit/3` -- **always** exactly one notifier-task submission per request, matched or
-   not, so request timing does not depend on a match (§13).
-8. Send the response.
+5. **Exactly one** database round trip: `lookup_by_keys/1` (the arity-1 form only, which reads the
+   deployment mode through `LoginDirectory.deployment_mode/0`, §7), passing the whole candidate
+   list (§5.4). A failure is `{:error, :lookup_failed}` and is treated as "no matches" (INV-8). No
+   other query is issued on the request path by the endpoint, by `decide/2`, by `Dispatch` or by the
+   limiter.
+6. `mode = LoginDiscovery.mode()`, then `decide(mode, result)` (pure, §7) ->
+   `:neutral | {:match, tenant_ref}`. `result` still carries each match's internal `disclose`
+   boolean; `decide/2` is the first place it is dropped for the response (`Map.take([:slug,
+   :display_name])`). `LoginDiscovery.mode()` and the mode read inside `lookup_by_keys/1` are the
+   same function (`LoginDirectory.deployment_mode/0`), so they agree unless the application env
+   changes between the two reads within one request (a test-only possibility); `decide/2` also
+   forces `:neutral` under `:uniform_plus_email` regardless of `disclose` as defence in depth.
+7. `Dispatch.submit(recipient, mode, result)` -- **always** exactly one notifier-task submission per
+   request, matched or not, so request timing does not depend on a match (§13). It receives the raw
+   `result` (with `disclose`) and `delivery/2` strips it before the notifier sees any tenant.
+8. Emit the outcome event (`:tenant` or `:accepted`, §12.7) and send the response.
 
-There is no branch that returns before step 5 other than the limiter refusal (which is
-input-independent for IP and global buckets and byte-identical for the email bucket).
+On an enabled `POST /` there is no branch that returns before step 5 other than the three `429`
+refusals: the per-IP and global refusals (at the limiter plug, before the body is read; input-
+independent) and the per-email refusal (step 4; byte-identical to the others). Those `429` paths
+issue **zero** queries by design; the "exactly one query" invariant (INV-5, §10, REQ-437 AC) is
+stated for every request that reaches step 5 (D24). `404`, the disabled `404` and a CORS preflight
+(§5.1) also issue zero queries.
 
 ### 5.4 The single query and the closed projection
 
@@ -738,9 +811,13 @@ input-independent for IP and global buckets and byte-identical for the email buc
 @spec Letflow.LoginDirectory.sentinel_keys() :: candidate_keys() | {:error, :pepper_unavailable}
 @spec Letflow.LoginDirectory.current_key_id() :: {:ok, String.t()} | {:error, :pepper_unavailable}
 @spec Letflow.LoginDirectory.lookup_by_keys([email_key(), ...]) ::
-        {:ok, [tenant_ref()]} | {:error, :lookup_failed}
+        {:ok, [tenant_match()]} | {:error, :lookup_failed}
 @spec Letflow.LoginDirectory.lookup_by_email(term()) ::
-        {:ok, [tenant_ref()]} | {:error, :lookup_failed}
+        {:ok, [tenant_match()]} | {:error, :lookup_failed}
+# REQ-437 (D28): the single deployment-mode reader (was private in PR #2223) and its env parser.
+@spec Letflow.LoginDirectory.deployment_mode() :: disclosure_mode()
+@spec Letflow.LoginDirectory.parse_deployment_mode(String.t() | nil) ::
+        {:ok, disclosure_mode() | nil} | {:error, :invalid_mode}
 ```
 
 `lookup_by_email/1` is the convenience composition (invalid input -> sentinel list) that REQ-435's
@@ -818,12 +895,72 @@ a count, a `Location` header, a cookie.
 
 ## 7. (g) Disclosure modes
 
-Application config, not code:
+Application config, not code. **Amended by REQ-437 (D21, D22): the keys live under
+`Letflow.LoginDiscovery`, not under `Letflow.Routers.LoginDiscovery`.**
 
 | Key | Values | Default | Source |
 |---|---|---|---|
-| `config :letflow, Letflow.Routers.LoginDiscovery, mode:` | `:uniform_plus_email`, `:redirect_single` | `:redirect_single` (**ratified default**, 0042 Sign-off 2026-10-04) | `config/config.exs` default; deployment override from env `LETFLOW_LOGIN_DISCOVERY_MODE` in `config/runtime.exs`, unknown value -> raise at boot |
-| `... max_body_bytes:` | positive integer | 2048 | config |
+| `config :letflow, Letflow.LoginDiscovery, mode:` | `:uniform_plus_email`, `:redirect_single` | `:redirect_single` (**ratified default**, 0042 Sign-off 2026-10-04) | `config/config.exs` sets the default in every environment; deployment override from the **optional** env `LETFLOW_LOGIN_DISCOVERY_MODE` in `config/runtime.exs` |
+| `config :letflow, Letflow.LoginDiscovery, max_body_bytes:` | positive integer | 2048 | `config/config.exs`; no env variable |
+| `config :letflow, Letflow.Routers.LoginDiscovery, enabled:` | boolean | `false` in `:prod`, else `true` | **REQ-439, unchanged, still the only key of that module's env** |
+
+**Why a distinct key (D21), verified.** `test/letflow/client_ip_runtime_config_test.exs:55-91`
+(and its dev/prod cases at `:170-229`) boots `mix run --no-start` and asserts the printed value of
+`Application.get_env(:letflow, Letflow.Routers.LoginDiscovery)` is **exactly** `[enabled: true]`
+(or `[enabled: false]`), the whole keyword list. `config/config.exs:68` and `config/runtime.exs:277`
+write only `enabled`. Putting `mode`/`max_body_bytes` there would turn the probe output into
+`[enabled: true, mode: ..., ...]` and fail REQ-439's test. Under `Letflow.LoginDiscovery` that test
+needs no change, and `Letflow.Routers.LoginDiscovery` stays the pure mount-switch namespace. (The
+kernel/`Config` merge of a later `config :letflow, Letflow.LoginDiscovery, mode: x` in
+`runtime.exs` deep-merges the keyword, so `max_body_bytes` survives.)
+
+**`LETFLOW_LOGIN_DISCOVERY_MODE` (D22), exact contract.** OPTIONAL, never required at boot. Parsed
+once in `config/runtime.exs` by `Letflow.LoginDirectory.parse_deployment_mode/1` (same
+"pure parser called from runtime.exs" pattern as `Letflow.Plugs.ClientIp.parse_enabled/2`,
+`runtime.exs:239-249`): `nil`, empty or all-whitespace -> `{:ok, nil}` -> **no override is written**
+and the `config.exs` default `:redirect_single` stands (in every environment, `:prod` included; the
+feature itself stays off outside dev through REQ-439's `enabled`, not through this variable); exactly
+`"uniform_plus_email"` or `"redirect_single"` after trim -> `{:ok, atom}` -> written as
+`config :letflow, Letflow.LoginDiscovery, mode: atom`; anything else (including different case,
+`"uniform"`, `"a,b"`) -> `{:error, :invalid_mode}` -> `runtime.exs` raises at boot with a message that
+names the variable and the two accepted values and **does not echo the supplied value**. The
+parser maps strings to atoms by an explicit clause per value, never `String.to_atom`. It is listed in
+`deploy/.env.example` as an optional blank placeholder (`LETFLOW_LOGIN_DISCOVERY_MODE=`, with a
+comment naming the two values and the default). A subprocess boot test in the style of
+`client_ip_runtime_config_test.exs` (a **new** file, §15.3) covers: unset, empty, whitespace,
+each valid value, an invalid value in `test`, `dev` and `prod` environments (invalid raises; the
+output contains no echo), and asserts the probe's `Letflow.Routers.LoginDiscovery` value is still the
+whole `[enabled: ...]` list. Boot-test caveat: `config/runtime.exs` requires
+`LETFLOW_LOGIN_DIRECTORY_PEPPER` and `LETFLOW_LOGIN_DIRECTORY_PEPPER_ID` in every environment
+(`config/test.exs:26-33` injects them only for `MIX_ENV=test`); the existing REQ-439 `boot/3` helper
+(`client_ip_runtime_config_test.exs:55-72`) passes neither, so the new helper must pass both for
+`dev`/`prod` subprocesses, and the implementer must report whether the existing dev/prod cases pass
+on `main` (not verified in this pass; a finding, not part of this requirement).
+
+**One source of truth for the mode vocabulary (D28).** The deployment-mode atoms
+(`:uniform_plus_email`, `:redirect_single`) already exist in `Letflow.LoginDirectory`
+(`@type disclosure_mode`, `login_directory.ex:79`), in the stored per-tenant strings of REQ-442,
+and in the SQL `disclose` expression. REQ-437 adds **no further spelling of the vocabulary**:
+
+- `Letflow.LoginDirectory.deployment_mode/0` is the **only** function that reads the mode from the
+  application env. PR #2223 made it `defp`, reading
+  `Application.get_env(:letflow, Letflow.Routers.LoginDiscovery, [])[:mode]`; REQ-437 makes it
+  **public** (`@doc`, `@spec ... :: disclosure_mode()`) and re-points it to
+  `Application.get_env(:letflow, Letflow.LoginDiscovery, [])[:mode]`. Behaviour otherwise
+  unchanged: missing/`nil` -> `:redirect_single`; `:redirect_single` -> `:redirect_single`; any
+  other term -> `:uniform_plus_email`; no logging (D29).
+- `Letflow.LoginDirectory.parse_deployment_mode/1` (new, pure) is the only env-string parser.
+- `Letflow.LoginDiscovery.mode/0` is `defdelegate`/a one-line call to
+  `LoginDirectory.deployment_mode/0` and must contain no `case` over the atoms of its own.
+  `@type mode` in `Letflow.LoginDiscovery` is an alias of `LoginDirectory.disclosure_mode()`.
+- `decide/2` and `delivery/2` pattern-match the atom `:redirect_single` (they must, to act on it) and
+  treat every other term as uniform, matching `deployment_mode/0`'s conservative rule; they define no
+  vocabulary list, validator or converter.
+- Consequential test change (D21): `test/letflow/req442_login_directory_disclose_test.exs:129-152`
+  (`Application.put_env/delete_env(:letflow, Letflow.Routers.LoginDiscovery, mode: ...)`) is
+  re-pointed to `Letflow.LoginDiscovery`. Its assertions are unchanged. That test also overwrites
+  and restores the whole `Letflow.Routers.LoginDiscovery` env today; after the change it no longer
+  touches the mount switch at all, removing a hidden interaction with REQ-437's own tests.
 
 **Amended by 0043 D-A / REQ-442:** the configured mode is the deployment default AND ceiling. A
 nullable per-tenant `tenants.login_disclosure_mode` (public schema, PLATFORM_ADMIN-written, audited)
@@ -834,8 +971,8 @@ ONE active match and its `disclose` is true; otherwise neutral (and the list is 
 An unrecognised stored value read in code is treated as uniform.
 
 An unrecognised value read at request time is treated as `:uniform_plus_email` (the most
-conservative) and logs a fixed message once; runtime.exs validation makes that unreachable in a
-deployment.
+conservative), with **no log** (D29; the reader lives in `Letflow.LoginDirectory`, which does not
+log); `runtime.exs` validation makes that unreachable in a deployment.
 
 The original user requirement, recorded as written: "respond uniformly and deliver the tenant
 list by email unless the email matches exactly one tenant". That is **Mode B**, the user's stated
@@ -845,25 +982,48 @@ cost of UX and a mailer. **The default (Mode B) was ratified by `REVIEWER` and
 `SECURITY-REVIEWER` on 2026-10-04 (Q1).** If it is later changed to Mode A, only the `config.exs`
 default changes.
 
-Pure decision and delivery rules (`Letflow.LoginDiscovery`):
+Pure decision and delivery rules (`Letflow.LoginDiscovery`), **amended by 0043 D-A / REQ-437 (D28)**.
+`mode` is the DEPLOYMENT mode; the per-tenant disclosure arrives inside `result` as each match's
+`disclose` boolean (REQ-442; already folded with the deployment mode in the SQL, so the two agree).
 
 ```
-@type mode :: :uniform_plus_email | :redirect_single
+@type mode :: Letflow.LoginDirectory.disclosure_mode()   # alias, no second vocabulary
+@type result :: {:ok, [Letflow.LoginDirectory.tenant_match()]} | {:error, :lookup_failed}
 @type decision :: :neutral | {:match, Letflow.LoginDirectory.tenant_ref()}
 @type delivery :: :none | {:deliver, [Letflow.LoginDirectory.tenant_ref(), ...]}
 
-@spec Letflow.LoginDiscovery.mode() :: mode()
-@spec Letflow.LoginDiscovery.decide(mode(), {:ok, [Letflow.LoginDirectory.tenant_ref()]}
-                                            | {:error, :lookup_failed}) :: decision()
-@spec Letflow.LoginDiscovery.delivery(mode(), {:ok, [Letflow.LoginDirectory.tenant_ref()]}
-                                              | {:error, :lookup_failed}) :: delivery()
+@spec Letflow.LoginDiscovery.mode() :: mode()               # delegates to LoginDirectory.deployment_mode/0
+@spec Letflow.LoginDiscovery.max_body_bytes() :: pos_integer()
+@spec Letflow.LoginDiscovery.decide(mode(), result()) :: decision()
+@spec Letflow.LoginDiscovery.delivery(mode(), result()) :: delivery()
 ```
 
-| Active matches | Mode A decision | Mode A delivery | Mode B decision | Mode B delivery |
+`decide/2` returns `{:match, t}` **iff** `mode == :redirect_single` AND the result is `{:ok, [m]}`
+(exactly one match) AND `m.disclose == true`, where `t == Map.take(m, [:slug, :display_name])`
+(exactly two keys; `disclose` and everything else are dropped here, before any body is built).
+Every other input is `:neutral`: `:uniform_plus_email` whatever any `disclose` says (the ceiling),
+any other `mode` term, zero matches, two or more matches, a single match with `disclose: false`,
+`{:error, :lookup_failed}`.
+
+`delivery/2` (REQ-437 BUILDS 8): `:none` when the result is `{:error, :lookup_failed}`, or `{:ok, []}`,
+or `decide(mode, result)` is a `{:match, _}` (a disclosed single match is never emailed);
+otherwise `{:deliver, list}` where `list` is **all** matches mapped through
+`Map.take([:slug, :display_name])` (so `disclose` never reaches the notifier), order preserved from
+the query (`display_name`, `slug`). `{:deliver, list}` is therefore: two or more matches in either
+mode; exactly one match in `:uniform_plus_email`; exactly one match with `disclose: false` in
+`:redirect_single`.
+
+| Active matches | `:uniform_plus_email` decision | delivery | `:redirect_single` decision | delivery |
 |---|---|---|---|---|
 | 0 / lookup failed | `:neutral` | `:none` | `:neutral` | `:none` |
-| 1 | `:neutral` | `{:deliver, [t]}` | `{:match, t}` | `:none` |
-| >= 2 | `:neutral` | `{:deliver, list}` | `:neutral` | `{:deliver, list}` |
+| 1, `disclose: true` | `:neutral` | `{:deliver, [t]}` | `{:match, t}` | `:none` |
+| 1, `disclose: false` (uniform tenant) | `:neutral` | `{:deliver, [t]}` | `:neutral` | `{:deliver, [t]}` |
+| >= 2 (any flags) | `:neutral` | `{:deliver, list}` | `:neutral` | `{:deliver, list}` |
+
+(Under `:uniform_plus_email` the lookup already returns `disclose: false` for every match, so the
+second row of that column is the same case as the third; the table lists the forced rule
+explicitly so `decide/2` is correct on its own against any input, which the pure table tests
+assert with `disclose: true` supplied under `:uniform_plus_email`.)
 
 Option C (`picker_unauth`) is **not a mode** and has no response field (0042 "Alternatives
 rejected" 2).
@@ -967,6 +1127,25 @@ whole request including the limiter and notifier submission.
 
 **Equivalence class in Mode B: {multi, unknown, malformed, inactive-only, lookup-failure} are
 byte-identical to each other. Single-match is deliberately distinguishable.**
+
+### 10.2a Notes that bind both matrices (REQ-437 corrections D23-D27)
+
+- **"Queries" is 1 only for requests that reach §5.3 step 5.** The three `429` rows, the `404` row,
+  the disabled-mount `404` and an allowed-origin CORS preflight (`204`) are 0 queries. The "no early
+  return" invariant means: on an enabled `POST /` the only returns ahead of the query are the three
+  `429` refusals.
+- **Wrong method or sub-path (`404` row):** the `404` is what an *admitted* request gets. The limiter
+  runs before `:match`, so such a request consumes per-IP and global tokens and a request that finds
+  a bucket empty gets the `429` instead (§5.1).
+- **Malformed rows are `202`, never `400`/`415` (D26).**
+- **Lookup/database failure and "pepper unavailable" rows** are both `202` N, "1 attempted" query
+  (the pepper-unavailable case runs the query with the zero key, §5.3 step 3), 0 deliveries,
+  outcome `:accepted`.
+- **Disabled mount (`enabled` not `true`):** every non-preflight request is the standard `404`, 0
+  queries, 0 limiter state, one `:disabled` event; an allowed-origin CORS preflight is `204` from
+  `Cors` with no event (§5.1).
+- **Deliveries count `deliver_tenant_list/2` calls the double records; the tenant maps the double
+  receives have exactly the keys `slug` and `display_name`** (no `disclose`).
 
 ### 10.3 Timing envelope
 
@@ -1248,6 +1427,8 @@ REQ-437's endpoint, which is the only caller.
 | `enabled` (on `Letflow.Routers.LoginDiscovery`, §12.6) | `false` in `:prod`, `true` in dev/test | disabled mount returns the route-level 404 |
 | `trusted_proxies` (on `Letflow.Plugs.ClientIp`, §12.6) | `[]` | CIDR list of proxies whose `X-Real-IP` is honoured |
 
+The disclosure `mode` and `max_body_bytes` are **not** limiter settings and do not live on any limiter or mount key: they are under `Letflow.LoginDiscovery` (§7, D21).
+
 `config/test.exs` raises the global and per-IP capacities so the suite's shared node-wide table
 does not make unrelated tests flaky; limiter tests override with `Application.put_env` and use
 unique documentation-range IPs (the technique `public_read_rate_limit_test.exs` documents).
@@ -1329,6 +1510,12 @@ disabled mount, emitted by `enabled_gate/2`, §5.1; **always** emitted, not opti
 single `outcome` metadata key and nothing else), `:not_found` (wrong method or path, enabled
 mount only).
 
+- **"One event per request" (D23, D24):** it means one event per request that reaches the mounted
+  router. A CORS preflight answered by `Cors` (§5.1) emits none. A wrong-method request that the
+  limiter admits emits `:not_found`; one the limiter refuses emits its `:rate_limited_*` event, not
+  `:not_found`. A request refused by the per-email bucket emits `:rate_limited_email` and no
+  `:accepted`. The `:accepted` event is emitted for the pepper-unavailable and lookup-failure
+  cases too.
 - **Non-identifying (INV-4):** the metadata carries no email, key, IP address, slug, tenant id or
   count; the 202 is deliberately *not* split into multi/unknown/failed, because that split would
   correlate a counter with an address class. The limiter emits the three `:rate_limited_*`
@@ -1367,8 +1554,9 @@ disclose whether the address exists (the 429 is identical for known and unknown 
           ) :: :ok | {:error, term()}
 
 # Letflow.LoginDiscovery.Dispatch
-@spec submit(recipient_email :: String.t() | nil, mode :: mode(),
-             result :: {:ok, [tenant_ref()]} | {:error, :lookup_failed}) :: :ok
+@spec submit(recipient_email :: String.t() | nil, mode :: Letflow.LoginDiscovery.mode(),
+             result :: Letflow.LoginDiscovery.result()) :: :ok   # result carries tenant_match (with disclose);
+                                                                  # delivery/2 strips it before the adapter call
 ```
 
 - `recipient_email` is the **normalised address the caller typed in this request**, never a stored
@@ -1454,6 +1642,21 @@ no new dependency, CIDR matching is a small pure function over `:inet`);
 the QA vhost, which is outside this repository, is recorded in the handoff as an infrastructure
 action with the exact directives. **Not changed (git diff empty):** `lib/letflow/plugs/
 public_read_rate_limit.ex` and its `bucket.ex`, `auth_pipeline.ex`, `api_pipeline.ex`.
+
+**Supervision placement.** `{Task.Supervisor, name: Letflow.LoginDiscovery.TaskSupervisor, max_children:
+<config max_concurrent, default 100>}` is added to `Letflow.Supervisor.Infrastructure` directly after
+`Letflow.EventStore.RetirementTaskSupervisor` and before the last child `Letflow.Obs.Alerts.TaskSupervisor`
+(`infrastructure.ex`, comment block above the Alerts child). `infrastructure_test.exs` (child ids list
+at `:70-117` and `assert length(ids) == 21` at `:119`) gains the new id in that position and the
+count becomes 22; the surrounding prose counts ("21 expected children") are updated. No new Mix
+dependency is implied by anything in this design: `Plug.Conn`, `Jason`, `:telemetry`,
+`Task.Supervisor` and `:crypto` are already available (`mix.exs:41-55`).
+
+**Request-time reads (no compile-time capture).** `mode` (via `LoginDirectory.deployment_mode/0`),
+`max_body_bytes`, `enabled` and the notifier `adapter`/`timeout_ms` are read with
+`Application.get_env` at request time, never `Application.compile_env`, so tests toggle them with
+`Application.put_env` and restore them in `on_exit`. A test that changes `Letflow.LoginDiscovery`
+env must restore the whole keyword it found.
 
 **Tests required:** empty trust list -> `client_ip == conn.remote_ip` whatever `X-Real-IP` and
 `X-Forwarded-For` say; peer outside the list sending `X-Real-IP` -> ignored; trusted peer with a
@@ -1680,23 +1883,36 @@ output; `mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix
 `test/letflow/routers/login_discovery_test.exs` (the §10 matrices, both modes);
 `test/letflow/login_discovery_test.exs` (pure `decide/2`/`delivery/2` tables);
 `test/letflow/login_discovery/dispatch_test.exs` (notifier failure isolation);
-`test/letflow/routers/login_discovery_timing_test.exs` (tagged sanity bound).
+`test/letflow/routers/login_discovery_timing_test.exs` (tagged sanity bound);
+`test/letflow/login_discovery_runtime_config_test.exs` (subprocess boot test of `LETFLOW_LOGIN_DISCOVERY_MODE`
+and of the untouched `Letflow.Routers.LoginDiscovery` env, §7; also asserts the shipped default
+`:redirect_single` and the notifier adapter key from the evaluated config).
 
-**Dependencies (D-2):** `depends_on` gains `REQ-CIP` (§15.0); the router's chain starts with
-`Letflow.Plugs.ClientIp` (§5.1); the route is **disabled by default in `:prod`** and the boot-time
+**Dependencies (D-2):** `depends_on` gains `REQ-CIP` (§15.0); the router's chain is
+`enabled_gate` -> `Letflow.Plugs.ClientIp` -> `Letflow.Plugs.LoginDiscoveryRateLimit` -> `:match` ->
+`:dispatch` (§5.1, D25); the route is **disabled by default in `:prod`** and the boot-time
 refusal of §12.6 applies. Emits the C-1 counters for `:tenant`, `:accepted`, `:not_found` and (from `enabled_gate/2`, defined in `lib/letflow/routers/login_discovery.ex`, §5.1) `:disabled` (§12.7).
 
 **Change:** `lib/letflow/router.ex` (forward and route-table row); `lib/letflow/supervisor/infrastructure.ex`
 (`Letflow.LoginDiscovery.TaskSupervisor`, before the last child) and
 `test/letflow/supervisor/infrastructure_test.exs` (count `21` -> `22`);
-`config/config.exs` (mode default `:redirect_single`, notifier adapter `Noop`),
-`config/runtime.exs` (`LETFLOW_LOGIN_DISCOVERY_MODE`, boot validation), `config/test.exs` (double
-adapter). **No** OpenAPI file exists to change (D7); the handoff records that fact.
+`config/config.exs` (`config :letflow, Letflow.LoginDiscovery, mode: :redirect_single, max_body_bytes: 2048`
+and `config :letflow, Letflow.LoginDiscovery.Notifier, adapter: Letflow.LoginDiscovery.Notifier.Noop,
+timeout_ms: 5000, max_concurrent: 100`; the `Letflow.Routers.LoginDiscovery` line at `:68` is NOT touched),
+`config/runtime.exs` (optional `LETFLOW_LOGIN_DISCOVERY_MODE` via `LoginDirectory.parse_deployment_mode/1`,
+raising only when set and invalid, §7; the `:277` `enabled` line is NOT touched), `config/test.exs`
+(test-double adapter), `deploy/.env.example` (an optional blank `LETFLOW_LOGIN_DISCOVERY_MODE=` with a
+comment, placed beside `LETFLOW_LOGIN_DISCOVERY_ENABLED`), `lib/letflow/login_directory.ex`
+(`deployment_mode/0` made public and re-pointed to `Letflow.LoginDiscovery`, new
+`parse_deployment_mode/1`, moduledoc/`@doc` updates; no other function changes, no new query;
+D21/D28), `test/letflow/req442_login_directory_disclose_test.exs:129-152` (env key re-pointed, D21),
+`lib/letflow/design` is not otherwise edited. `test/letflow/client_ip_runtime_config_test.exs` is **not**
+modified (it is the constraint that fixed the config shape, D21). **No** OpenAPI file exists to change (D7); the handoff records that fact.
 `lib/letflow/plugs/auth_pipeline.ex` is **not** modified (git diff empty).
 
 **Amended by 0043 D-C (key id).** The endpoint calls `email_keys/1` / `sentinel_keys/0`, passes the
 current key `hd(keys)` to `consume_email/2` (§12.2), and passes the whole list to
-`lookup_by_keys/1` (§5.3-5.4); it never calls the removed single-key `lookup_by_key/1`. A test with
+`lookup_by_keys/1` (§5.3-5.4); it never calls the removed single-key `lookup_by_key/1` **nor `lookup_by_email/1`** (D27). A test with
 a two-pepper configuration (current + previous, one row under each for one tenant) shows a
 Mode B single match is still `200` (one tenant) and byte-identical to the one-pepper case.
 
@@ -1708,8 +1924,9 @@ the malformed inputs (missing email, non-string, empty, 10 000-character, no `@`
 type, invalid JSON, oversize body) all return the neutral response, identical in status and bytes
 to unknown, never a 500, in both modes; an inactive-tenant-only address is byte-identical to
 unknown in both modes, and active-plus-inactive behaves as active-only; **structural timing**:
-exactly one `Repo` query per request (telemetry) for matched, unmatched, inactive and malformed
-input, no path returning before that query, a notifier double that sleeps 2 s does not delay the
+exactly one `Repo` query per request that reaches §5.3 step 5 (telemetry) for matched, unmatched,
+inactive, malformed and pepper-unavailable input (the 429, 404, disabled and preflight paths are
+asserted at zero queries, D24), no other path returning before that query, a notifier double that sleeps 2 s does not delay the
 response; sanity timing per §10.3 (tagged); cross-tenant isolation (no query on the path carries a
 tenant `:prefix`; the route touches only `tenant_login_directory` and `tenants`); no input produces
 401 or 403 (enumeration over the §10 classes); router plug-order proof by behaviour (a
@@ -1734,6 +1951,75 @@ trusted peer land in two per-IP buckets; with an empty trust list a spoofed `X-R
 nothing);** the `depends_on` of REQ-437 contains `REQ-CIP` (§0.3 D11); `mix compile --warnings-as-errors`, `mix format --check-formatted`,
 `mix test` and `mix letflow.check_boundaries` pass; the `SECURITY-REVIEWER` verdict is recorded
 against INV-1, INV-2, INV-4, INV-5, INV-6, INV-8, INV-9 (and INV-7 for the touched SQL).
+
+#### 15.3.1 REQ-437 acceptance-criteria corrections (for `docs/requirements.yaml`)
+
+`docs/requirements.yaml` is outside this change's file scope; `ORCH`/`REQ-ANALYST` copy the wording
+below into the `REQ-437` entry and `REQ-VALIDATOR` accepts it (design governs, §0.3 D21-D29). Each item
+replaces the named text; items not listed (the two-mode byte comparisons, sanity timing, isolation,
+notifier-failure, log-grep, OpenAPI no-op, adapter-key, build/format AC) stand as written.
+
+- **C1 (description header, BUILDS 1 and AC "mount switch"; D21, D22).** Replace "`config :letflow,
+  Letflow.Routers.LoginDiscovery, mode: ... | :redirect_single, env LETFLOW_LOGIN_DISCOVERY_MODE`" with:
+  "`config :letflow, Letflow.LoginDiscovery, mode: :uniform_plus_email | :redirect_single` and
+  `max_body_bytes: 2048` (the `Letflow.Routers.LoginDiscovery` env keeps only `enabled`; REQ-439's
+  test asserts it is exactly `[enabled: boolean]`); env `LETFLOW_LOGIN_DISCOVERY_MODE` is OPTIONAL
+  (unset, empty or whitespace gives `:redirect_single` from `config/config.exs`; a set value other than
+  exactly `uniform_plus_email` or `redirect_single` raises at boot without echoing the value), is
+  listed in `deploy/.env.example` as an optional blank placeholder, and is read by one function,
+  `Letflow.LoginDirectory.deployment_mode/0`, which `Letflow.LoginDiscovery.mode/0` delegates to".
+- **C2 (BUILDS 1, "The chain starts with `Letflow.Plugs.ClientIp`"; D25).** Replace with: "The chain is,
+  in order, `enabled_gate/2`, `Letflow.Plugs.ClientIp`, `Letflow.Plugs.LoginDiscoveryRateLimit`,
+  `:match`, `:dispatch`".
+- **C3 (BUILDS 2 and AC "mount switch"; D21, D23).** Replace "returns the route-level standard 404 for
+  EVERY method and path when disabled" and "with `enabled: false` every method and path returns the
+  standard 404 ... emits exactly one `:disabled` outcome event" with: "with `enabled: false` every
+  NON-PREFLIGHT request (every method and path, including an OPTIONS that is not an allowed-origin
+  CORS preflight, that is one lacking an allowed Origin or an Access-Control-Request-Method header)
+  returns the standard 404 (byte-identical to the router catch-all for the same request), issues zero
+  queries, never invokes ClientIp or the limiter (no limiter state created) and emits exactly one
+  `:disabled` outcome event whose metadata is only `outcome`; an allowed-origin CORS preflight is
+  answered 204 by `Letflow.Plugs.Cors` before the mount (router.ex plugs Cors ahead of every forward)
+  and emits no event, issues no query and creates no limiter state, asserted as a separate test;
+  toggling `enabled` at runtime in the test needs no recompile; the shipped `:prod` default is false;
+  `LETFLOW_LOGIN_DISCOVERY_MODE` is optional: unset or blank gives `:redirect_single`, an unknown
+  value raises at boot (tested by subprocess boot, which also asserts the
+  `Letflow.Routers.LoginDiscovery` env is still exactly `[enabled: ...]`)".
+- **C4 (BUILDS 3 and AC "structural timing"; D24, D27).** Replace "Resolution via the directory's
+  lookup_by_email/1 ... ONE database round trip before any response decision ... there is no
+  early-return branch ahead of the query" and "exactly one Repo query is issued per request ... and no
+  code path returns before that query" with: "the endpoint never calls `lookup_by_email/1`; it computes
+  `email_keys/1` (or `sentinel_keys/0` for malformed input) itself, consumes the per-email bucket on
+  the current key, and calls `lookup_by_keys/1` exactly once. For every request that reaches that call
+  (every 200 and 202: matched, unmatched, inactive, malformed, lookup-failure and pepper-unavailable)
+  exactly one Repo query is issued (counted via telemetry); with no pepper configured the one query is
+  still issued, with the single all-zero 32-byte key, and the response is the neutral 202. The only
+  returns ahead of that query on an enabled POST are the per-IP, global and per-email 429 refusals,
+  which issue zero queries by design; a 404, a disabled-mount 404 and a CORS preflight also issue zero
+  queries. The notifier runs under a supervised task and the handler returns without awaiting it (a
+  notifier double that sleeps 2 s does not delay the response)". The uniform-tenant single-match
+  clause "returns no earlier than the other classes (no early-return branch)" is read the same way.
+- **C5 (AC "malformed inputs"; D26).** Replace "(the neutral response, or the standard 400/415 if the
+  design splits them)" with: "the neutral 202 `{"result":"accepted"}`, byte-identical in status,
+  Content-Type and body to an unknown address, in both modes, never 400, 415, 422 or 500".
+- **C6 (AC "no 401 and no 403 ... chain order"; D24, D25).** Replace "the chain order is ClientIp then
+  the REQ-436 limiter, both ahead of :match" with: "the chain order is enabled_gate, ClientIp, the
+  REQ-436 limiter, then :match, asserted by behaviour: a rate-limited request returns 429 even with an
+  invalid body or a wrong method; because the limiter runs before :match, wrong-method and wrong-path
+  requests consume per-IP and global tokens and receive the 404 only when the limiter admits them".
+- **C7 (BUILDS 6 and AC "outcome counters"; D23, D24).** Append: "'one event per request' means per
+  request that reaches the mounted router: a CORS preflight answered by Cors emits none; a request the
+  limiter refuses emits its `:rate_limited_*` event and not `:not_found` or `:accepted`; `:accepted` is
+  also emitted for lookup-failure and pepper-unavailable".
+- **C8 (BUILDS 8 and per-tenant AC; D28).** Append: "`decide/2` and `delivery/2` take
+  `(deployment_mode, {:ok, [%{slug, display_name, disclose}]} | {:error, :lookup_failed})`;
+  `:uniform_plus_email` forces `:neutral` regardless of `disclose`; `disclose` is stripped with
+  `Map.take([:slug, :display_name])` before any response body or notifier call, asserted by a key-set
+  check on the response and on the tenant maps the notifier double records; the mode vocabulary has one
+  source (`Letflow.LoginDirectory.deployment_mode/0` and `parse_deployment_mode/1`) and
+  `Letflow.LoginDiscovery.mode/0` delegates to it".
+- **C9 (`depends_on`; D21).** No change to the list. Note: the REQ-442 test
+  `test/letflow/req442_login_directory_disclose_test.exs` is edited by REQ-437 to use the new config key.
 
 ### 15.4 REQ-438 -- SPA email-first page (owner `FRONTEND-DEV`)
 
@@ -1825,6 +2111,11 @@ Description-item map: (a) §1, (b) §2, (c) §3, (d) §4, (e) §5, (f) §6, (g) 
 | Q20 | Rolling multi-node rotation deploy: the advisory lock hash differs between old and new pepper, so the ghost-entry race of §3.7 is possible for the rollout window (§3.7 residual) | Rotation is a maintenance-window operation, as the backfill is (§4) | `SECURITY-REVIEWER`, `REVIEWER` |
 | Q21 | `key_id` has no index (D18): `retire_key` filters by it | Not built here; REQ-443 adds an index in its own migration if it measures a need | REQ-443 owner |
 | Q22 | The `CHECK` on `key_id` (D18a) and treating empty env values as unset (D19) are additions to the requirement text | adopted as stated | `REQ-VALIDATOR` |
+| Q23 | REQ-437 (D21): `mode`/`max_body_bytes` placed under `Letflow.LoginDiscovery`, not `Letflow.Routers.LoginDiscovery`; PR #2223's reader and the REQ-442 test are re-pointed | adopted as stated (§7) | `REQ-VALIDATOR`, `REVIEWER` |
+| Q24 | Wrong-method and wrong-path requests drain limiter tokens because the limiter precedes `:match` (D24); a flood of `GET /x` can 429 `POST /` from the same IP | accepted by design (the limiter must not depend on routing); visible through `:rate_limited_ip` (§12.7) | `SECURITY-REVIEWER` |
+| Q25 | Pepper-unavailable degraded state throttles every request through one zero-key per-email bucket (§5.3 step 3) | accepted, unreachable after boot validation | `SECURITY-REVIEWER` |
+| Q26 | The existing REQ-439 dev/prod subprocess boot tests appear not to pass the now-required `LETFLOW_LOGIN_DIRECTORY_PEPPER*` variables (§7 caveat); not verified by running | not fixed here; the new REQ-437 boot test supplies them; implementer reports whether the old cases pass on `main` | `ORCH` |
+| Q27 | `LoginDiscovery.mode()` and the mode read inside `lookup_by_keys/1` are two reads of one function in one request (§5.3 step 6) | accepted; `decide/2` forces `:neutral` under uniform as defence in depth. Alternative (rejected by instruction): call `lookup_by_keys/2` with the read mode | `REVIEWER` |
 
 Gate verdicts are recorded in 0042's "Sign-off" section only; this is rework 2 following
 `SECURITY-REVIEWER`'s FAIL (D-1, D-2, D-3, C-1..C-5), and the gates re-run.

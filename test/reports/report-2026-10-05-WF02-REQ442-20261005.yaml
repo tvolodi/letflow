@@ -1,0 +1,27 @@
+run_id: WF02-REQ442-20261005
+agent: TEST-RUNNER
+date: 2026-10-05
+scope: SCOPED (parent RAM constraint; full suite deferred to CI)
+env: MIX_ENV=test MIX_TEST_PARTITION=r442r, Postgres localhost:5462
+result: PASS
+checks:
+  - cmd: mix compile --warnings-as-errors
+    outcome: exit 0, no output
+  - cmd: mix format --check-formatted
+    outcome: exit 0
+  - cmd: mix letflow.check_boundaries
+    outcome: "mix letflow.check_boundaries: OK -- 965 edges checked, 0 violations"
+  - cmd: mix ecto.migrate / ecto.rollback / ecto.migrate
+    outcome: |
+      up 20261005000001 AddLoginDisclosureModeToTenants (alter table tenants; create check constraint tenants_login_disclosure_mode_check) Migrated
+      down: drop constraint tenants_login_disclosure_mode_check; alter table tenants; Migrated
+      up again: Migrated (all three succeeded)
+  - cmd: mix test (4 req442 files + routers/tenants_test, login_directory*, identity_login_directory*, login_directory/, routers/identity_login_directory_test, backfill mix task test, tenant_config, mobile_tenant_config, tenant_settings, tenant_modules_settings, identity/tenant_test)
+    outcome: "Finished in 461.8 seconds. Result: 338 passed"
+  - cmd: mix test (rate-limit and supervisor infrastructure tests that reference tenant routes / PublicReadRateLimit)
+    files: [plugs/login_discovery_rate_limit/bucket_test, plugs/login_discovery_rate_limit_test, plugs/public_read_rate_limit_test, supervisor/infrastructure_test]
+    outcome: "Result: 43 passed"
+failures: []
+notes:
+  - Full suite not run (scoped by instruction); CI is the full gate.
+  - No test or application code modified. SECURITY-REVIEWER verdict not in this step's scope.

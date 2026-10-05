@@ -1100,23 +1100,80 @@ defmodule Letflow.Identity do
       {:error, :lookup_failed}
   end
 
+  @type patch_opts :: [actor_id: Ecto.UUID.t() | nil, trace_id: String.t() | nil]
+
   @doc """
-  Partial-update of a tenant's `display_name` only, via
-  `Tenant.admin_patch_changeset/2` — see that changeset's own @doc for why
-  `:status` is structurally excluded from this path.
+  Partial-update of a tenant's `display_name` and (REQ-442)
+  `login_disclosure_mode`, via `Tenant.admin_patch_changeset/2` — see that
+  changeset's own @doc for why `:status` is structurally excluded from this path.
+
+  A `display_name`-only patch is a plain `Repo.update/1` (unaudited, as before).
+  When `login_disclosure_mode` actually changes, the update and one audit entry
+  (`tenant.platform_setting.updated`, value-free payload, INV-2) are written in a
+  single transaction in the TARGET tenant's audit chain, so both commit or both
+  roll back. A mode change with no binary `actor_id` in `opts`, a tenant with no
+  provisioned schema registration, or any audit/transaction failure returns
+  `{:error, :audit_failed}` with nothing written.
   """
-  @spec patch_tenant(slug :: String.t(), attrs :: map()) ::
-          {:ok, Tenant.t()} | {:error, :not_found} | {:error, Ecto.Changeset.t()}
-  def patch_tenant(slug, attrs) do
+  @spec patch_tenant(slug :: String.t(), attrs :: map(), patch_opts()) ::
+          {:ok, Tenant.t()}
+          | {:error, :not_found}
+          | {:error, Ecto.Changeset.t()}
+          | {:error, :audit_failed}
+  def patch_tenant(slug, attrs, opts) do
     case Repo.get_by(Tenant, slug: slug) do
       nil ->
         {:error, :not_found}
 
       %Tenant{} = tenant ->
-        tenant
-        |> Tenant.admin_patch_changeset(attrs)
-        |> Repo.update()
+        changeset = Tenant.admin_patch_changeset(tenant, attrs)
+
+        cond do
+          not changeset.valid? ->
+            {:error, changeset}
+
+          Map.has_key?(changeset.changes, :login_disclosure_mode) ->
+            patch_tenant_with_audit(changeset, tenant, opts)
+
+          true ->
+            Repo.update(changeset)
+        end
     end
+  end
+
+  defp patch_tenant_with_audit(changeset, %Tenant{} = tenant, opts) do
+    actor_id = Keyword.get(opts, :actor_id)
+
+    with true <- is_binary(actor_id),
+         %TenantProvisioning.Registration{schema_name: prefix} <-
+           Repo.get_by(TenantProvisioning.Registration, tenant_id: tenant.id) do
+      audit_attrs = %{
+        actor_id: actor_id,
+        action: "tenant.platform_setting.updated",
+        resource_type: "tenant",
+        resource_id: tenant.id,
+        trace_id: Keyword.get(opts, :trace_id),
+        before_state: nil,
+        after_state: %{"changed" => true}
+      }
+
+      Multi.new()
+      |> Multi.update(:tenant, changeset)
+      |> Audit.append_multi(:audit, audit_attrs, prefix)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{tenant: updated}} -> {:ok, updated}
+        {:error, :tenant, %Ecto.Changeset{} = failed, _changes} -> {:error, failed}
+        {:error, _step, _reason, _changes} -> {:error, :audit_failed}
+      end
+    else
+      _no_actor_or_no_registration -> {:error, :audit_failed}
+    end
+  rescue
+    # Fixed message, tenant id only: never the exception (INV-4).
+    _exception ->
+      Logger.error("tenant platform-setting patch failed (tenant_id=#{tenant.id})")
+      {:error, :audit_failed}
   end
 
   @doc """

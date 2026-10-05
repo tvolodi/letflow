@@ -336,6 +336,28 @@ Each is stated, not resolved. None is claimed settled by this record.
    `LETFLOW_LOGIN_DIRECTORY_LEGAL_CONFIRMATION` and its 8-character minimum are proposals.
    Also: the mail library choice goes to `CODE-DESIGNER` (D-B), not to this record.
 
+
+**REVIEWER ruling (REQ-442), 2026-10-05, on conflicts 4-6.** Run WF02-REQ442-20261005.
+- Conflict 6 (ceiling): the CEILING reading of D-A is RATIFIED. `disclose = (deployment mode ==
+  :redirect_single) AND COALESCE(tenant.login_disclosure_mode, 'redirect_single') ==
+  'redirect_single'`. It is the conservative reading of "deployment default as fallback", it
+  preserves 0042's configuration-only kill switch, and no tenant can disclose more than the
+  deployment allows. An upward override of a uniform deployment is NOT adopted; wanting it later
+  needs a new decision record.
+- Conflict 4 (internal `disclose`): ACCEPTED, on the constraint that `disclose` is stripped in
+  `decide/2` and is absent from every response body; no tenant id, realm id or stored mode leaves
+  `LoginDirectory`. An unrecognised stored value read in code is treated as uniform (the column CHECK
+  makes it unreachable).
+- Conflict 5 (0042 prohibition 11 / Decision 3): ACCEPTED as amended by D-A. The selector is
+  PLATFORM_ADMIN-only, audited, and was signed by SECURITY-REVIEWER (INV-1, INV-2, INV-5, INV-6
+  PASS; the 0042 amendments ratified).
+- Premise correction: REQ-442's text said the setting is "audited as other platform-admin tenant
+  updates are". That was wrong: `patch_tenant` and `PATCH /tenants/:slug` wrote no audit entry and no
+  platform-level audit sink exists. REQ-442 audits mode changes only, in the target tenant's chain,
+  in the same transaction, with the neutral value-free action `tenant.platform_setting.updated`.
+  A display_name-only PATCH stays unaudited. Accepted residual: a tenant admin reading `GET /audit`
+  can see that some platform setting changed (no name, no value).
+
 10. **0042 Decision 7's "no mail adapter" scope fence.** Decision 7 lists "no mail adapter (a port
    with a non-delivering default adapter ships; the real adapter is a separate decision)" as
    part of the scope fence. D-B/REQ-441 amends it: a real SMTP adapter is built, and

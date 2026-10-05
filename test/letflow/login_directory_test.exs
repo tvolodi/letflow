@@ -246,7 +246,7 @@ defmodule Letflow.LoginDirectoryTest do
       in_tx(fn -> LoginDirectory.upsert_entry(a.tenant_id, email) end)
 
       assert {:ok, [row]} = LoginDirectory.lookup_by_email(email)
-      assert Map.keys(row) |> Enum.sort() == [:display_name, :slug]
+      assert Map.keys(row) |> Enum.sort() == [:disclose, :display_name, :slug]
       refute is_struct(row)
     end
 

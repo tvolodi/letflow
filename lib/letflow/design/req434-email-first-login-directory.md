@@ -721,6 +721,10 @@ input-independent for IP and global buckets and byte-identical for the email buc
 ```
 @type email_key :: <<_::256>>
 @type tenant_ref :: %{slug: String.t(), display_name: String.t()}
+# Amended by 0043 D-A / REQ-442: the lookup returns tenant_match, not tenant_ref. tenant_ref is
+# retained for reference (it is the response/notifier shape after decide/2). `disclose` is internal:
+# stripped in decide/2, never in a body.
+@type tenant_match :: %{slug: String.t(), display_name: String.t(), disclose: boolean()}
 
 # Current-pepper forms: writers, backfill, limiter (unchanged signatures)
 @spec Letflow.LoginDirectory.email_key(term()) ::
@@ -755,7 +759,7 @@ joined-to-tenants form for a single key (same rows, same order), which is why th
 lookup tests stay valid. The remaining query properties are unchanged and restated:
 `tenants.status == :active`, `tenants.idp_realm_id` not null and not empty (otherwise
 `/api/tenant-config?realm=<slug>` would silently resolve to the default realm,
-`tenant_config.ex:230-249`), `select` building the two-field map directly (the `Tenant` struct is
+`tenant_config.ex:230-249`), `select` building the map directly (slug, display_name and, per 0043 D-A / REQ-442, the internal boolean `disclose`, computed in SQL as a bound `type(^bool, :boolean)` AND `COALESCE(login_disclosure_mode, 'redirect_single') = 'redirect_single'`) (the `Tenant` struct is
 never loaded, so `idp_realm_id`/`id`/`settings` are unrepresentable past the query), ordered by
 `display_name` then `slug` (deterministic), `limit` 50 (bounds work; the primary key bounds
 real cardinality). No `:prefix`: the query touches only public tables. Never a second query.
@@ -820,6 +824,14 @@ Application config, not code:
 |---|---|---|---|
 | `config :letflow, Letflow.Routers.LoginDiscovery, mode:` | `:uniform_plus_email`, `:redirect_single` | `:redirect_single` (**ratified default**, 0042 Sign-off 2026-10-04) | `config/config.exs` default; deployment override from env `LETFLOW_LOGIN_DISCOVERY_MODE` in `config/runtime.exs`, unknown value -> raise at boot |
 | `... max_body_bytes:` | positive integer | 2048 | config |
+
+**Amended by 0043 D-A / REQ-442:** the configured mode is the deployment default AND ceiling. A
+nullable per-tenant `tenants.login_disclosure_mode` (public schema, PLATFORM_ADMIN-written, audited)
+may only tighten it: `disclose = deployment == :redirect_single AND COALESCE(tenant, 'redirect_single')
+== 'redirect_single'`, resolved inside the single lookup query. `decide(mode, result)` becomes
+`decide/2` over the per-match `disclose` flag: disclose slug and display name only if there is exactly
+ONE active match and its `disclose` is true; otherwise neutral (and the list is emailed as before).
+An unrecognised stored value read in code is treated as uniform.
 
 An unrecognised value read at request time is treated as `:uniform_plus_email` (the most
 conservative) and logs a fixed message once; runtime.exs validation makes that unreachable in a
@@ -946,6 +958,7 @@ whole request including the limiter and notifier submission.
 | Unknown | 202 | N | json | 1 | 0 | multi, malformed, inactive-only, failure |
 | Malformed (same members as Mode A) | 202 | N | json | 1 | 0 | same group |
 | Inactive/migrating-tenant-only (or unbound realm) | 202 | N | json | 1 | 0 | same group |
+| Single match in a uniform tenant (0043 D-A / REQ-442) | 202 | N | json | 1 | 1 (list of 1) | unknown, malformed, inactive-only, failure, multi (the Mode B neutral group) |
 | Active + inactive tenant | **200** | **M(active t)** | json | 1 | 0 | the single-active-tenant case |
 | Active + >= 1 other active, plus inactive | 202 | N | json | 1 | 1 (active ones only) | the multi case |
 | Lookup/database failure | 202 | N | json | 1 attempted | 0 | same group |

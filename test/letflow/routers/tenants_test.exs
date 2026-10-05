@@ -221,7 +221,15 @@ defmodule Letflow.Routers.TenantsTest do
       body = Jason.decode!(resp.resp_body)
 
       assert Map.keys(body) |> Enum.sort() ==
-               Enum.sort(["id", "slug", "display_name", "status", "inserted_at", "updated_at"])
+               Enum.sort([
+                 "id",
+                 "slug",
+                 "display_name",
+                 "status",
+                 "login_disclosure_mode",
+                 "inserted_at",
+                 "updated_at"
+               ])
 
       assert body["slug"] == tenant.tenant.slug
       assert body["status"] == "active"

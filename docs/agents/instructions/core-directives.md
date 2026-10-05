@@ -707,7 +707,10 @@ account, not an organization.)*
    when their slot comes, and are merged one at a time.
 3. **Batch filings.** Issue/requirement filings, RUN_DONE log lines and registry bookkeeping
    go into the next functional PR of the same session, or into ONE batched docs PR per slot,
-   never one PR per filing.
+   never one PR per filing. Because the local `docs/issues` record may land later than the queue
+   task, the `register_task` description must be self-sufficient (evidence, fix direction,
+   acceptance criteria); a worker that claims a task whose local record is not on `main` yet
+   works from the queue text and does not re-file.
 4. **Update-branch only when the line is quiet.** If `main` moves under your in-flight PR from a
    source you do not control, tell the supervisor instead of restarting your run in a loop.
    Never `--admin`-merge to get around staleness.

@@ -386,27 +386,36 @@ not allowed (SSRF protection)"}` for blocked URLs at dispatch time).
 
 ## INV-10 — Platform authority is bound to the platform tenant
 
-**Rule.** A platform-scope action — any read or write on the tenant registry, on
-another tenant's data, or on a resource shared by all tenants — is allowed only when
+**Rule.** A platform-scope action — any read or write on the tenant registry or on
+another tenant's data, and any creation, change or deletion of a resource shared by all
+tenants (reading a shared resource is tenant scope only when the response carries no other
+tenant's data or identifiers) — is allowed only when
 the caller's **database-resolved** tenant is the configured platform tenant **and** the
 caller holds a role that grants the permission. A role name alone never confers
 platform authority. If no platform tenant is configured, every platform-scope action is
 denied. Every permission is classified `platform` or `tenant`, and a permission without a
 classification fails the build. A tenant-scope action acts only on the caller's own
-tenant: the target tenant is never taken from a path, query or body value. No role
+tenant. A path, query or body value never selects the tenant; where a tenant-scope route
+carries a tenant identifier, it must equal the caller's database-resolved tenant, and any
+other value is answered exactly like a nonexistent one (INV-5) before any data of that
+tenant is read. No role
 exempts a caller from the deactivated-tenant gate except a platform-tenant
 `PLATFORM_ADMIN`.
 
-**Reference.** Enforced from the merge of Q-960's PR A (until then the code violates it:
-a `PLATFORM_ADMIN` of any tenant can reach platform endpoints — ISS-0993/ISS-0994).
-Until then, SECURITY-REVIEWER applies INV-10 to every change that adds or touches a route or
-a permission; a change that does not touch them is not blocked by the known ISS-0993
-violation. PR A and decision 0046 cite this invariant; neither adds its own. Substance ratified by the
-user (REQ-445 D1-D4).
+**Reference.** Enforced from the merge of Q-960's PR A2, the enforcing merge (A1 is additive
+and logs only; until A2 the code violates it: a `PLATFORM_ADMIN` of any tenant can reach
+platform endpoints — ISS-0993/ISS-0994). PR A and decision 0046 cite this invariant; neither
+adds its own. Substance ratified by the user (REQ-445 D1-D4). Until A2 merges,
+SECURITY-REVIEWER applies INV-10 to every change that adds or touches a route or a permission
+and fails a change only for ADDING a violation of this invariant; the existing ones are tracked
+by ISS-0993 and do not block unrelated changes.
 
-**How to verify.** A cross-tenant negative test per platform-scope route group, with an
-admin of **another** tenant as the caller (not a lower role), asserting the same
-not-found/forbidden response as INV-5. SECURITY-REVIEWER checks every route touched by a
+**How to verify.** A cross-tenant negative test per platform-scope route group with an admin
+of **another** tenant as the caller (not a lower role), asserting the uniform 403 with a
+byte-identical body for matched and unmatched paths; and, for every tenant-scope route that
+carries a tenant or record identifier, a test with another tenant's identifier asserting the
+same response bytes as for a nonexistent identifier (INV-5), with no row of the other tenant
+changed. SECURITY-REVIEWER checks every route touched by a
 change against the platform/tenant classification.
 
 **Severity.** BLOCKER.

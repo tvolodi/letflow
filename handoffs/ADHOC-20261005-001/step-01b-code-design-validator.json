@@ -1,0 +1,57 @@
+{
+  "handoff_id": "7e21c4b8-0f5a-4d93-b6a2-91d8c3e5a702",
+  "run_id": "ADHOC-20261005-001",
+  "workflow_id": "ADHOC",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/ADHOC-20261005-001/step-01b-code-design-validator.json",
+  "created_at": "2026-10-05T03:21:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-434", "REQ-435", "REQ-436", "REQ-437", "REQ-438", "REQ-439", "REQ-440", "REQ-441", "REQ-442", "REQ-443", "REQ-444"],
+    "requirement_text": {
+      "note": "Verbatim descriptions are in handoffs/ADHOC-20261005-001/step-01-code-designer.json context.requirement_text (11 entries, ~58k chars); read only the entries you need to verify the ADR's per-REQ stay/modify/obsolete table. Acceptance criteria for this step are the step-01 task.acceptance_criteria (copied below)."
+    },
+    "source_text": {
+      "step_01_acceptance_criteria": [
+        "ADR file docs/migration/decisions/0044-hybrid-identity-model.md exists, Status: PROPOSED (user ratifies); no implementation code; no edits to docs/requirements.yaml (ORCH separately added a hold marker on REQ-437/438/440-444; that is expected and is not a defect of the ADR)",
+        "Compares O1, O2, O3 each with: description; login step by step; multi-tenant user handling; enumeration/privacy posture; security-invariant impact (INV-1..INV-8 named); migration path from today; cost in requirement-sized steps; operational cost; tenant-admin autonomy; enterprise SSO per tenant; data separation; mobile tier impact",
+        "O3 section covers: directory reused as router (what survives/changes), REQ-434..444 each marked stay/modify/obsolete, person with accounts in both tiers",
+        "Decision matrix, RECOMMENDATION with rationale, explicit risks, phased migration plan in requirement-sized steps, PR #2201 disposition, remaining questions for the user",
+        "Keycloak capability claims NOT asserted from memory: project version (26.2) cited from the repo; every Organizations/brokering capability listed as a SPIKE QUESTION marked UNVERIFIED",
+        "Explicit consistency check against decisions 0002, 0006, 0035, 0038, 0042, 0043 and INV-1..INV-8, each amended/superseded item named with quoted text",
+        "Facts about the repo carry file:line citations verified by reading the file"
+      ]
+    },
+    "related_handoff_ids": ["step-01-code-designer.json"],
+    "artifacts_in": [
+      "docs/migration/decisions/0044-hybrid-identity-model.md",
+      "handoffs/ADHOC-20261005-001/step-01-code-designer.json",
+      "docs/migration/decisions/0002-oidc-integration.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "docs/migration/decisions/0035-frontend-login-delegated-to-keycloak.md",
+      "docs/migration/decisions/0038-tenant-membership-lookup-amendment.md",
+      "docs/migration/decisions/0042-email-first-login-tenant-directory.md",
+      "docs/migration/decisions/0043-email-first-login-ba-decisions.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-ada3a2b6d6b41b710",
+    "branch_name": "docs/ADR-hybrid-identity"
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's ADR docs/migration/decisions/0044-hybrid-identity-model.md (committed at ade9a9dc on branch docs/ADR-hybrid-identity). Verify against the step-01 acceptance criteria. Method: (1) check every acceptance criterion with evidence from the file; (2) SPOT-VERIFY at least 15 file:line citations and at least 5 quoted passages from decisions 0002/0006/0035/0038/0042/0043 and security-invariants.md by opening the cited files in the worktree (quote what you found; any citation that does not match is a defect); (3) confirm no Keycloak capability is asserted as fact beyond the pinned version 26.2 (grep the Keycloak sections for assertions like 'supports', 'can', 'allows' and judge each); (4) confirm the per-REQ table covers REQ-434..444 and the statuses match docs/requirements.yaml; (5) confirm no implementation code; (6) confirm the decision number 0044 is free (ls docs/migration/decisions on origin/main via git ls-tree, and gh pr list for open PRs touching decisions/). Do NOT edit the ADR; report defects as a list with severity (BLOCKER/MAJOR/MINOR) and exact location; ORCH routes rework. Also fill nothing in the ADR's Sign-off section (ORCH records verdicts). Write your verdict into this handoff's 'result' (status PASS or FAIL, summary, issues[]) and set status COMPLETED. Do not spawn further agents.",
+    "acceptance_criteria": [
+      "Every step-01 acceptance criterion is checked with evidence",
+      ">=15 citations and >=5 quotes spot-verified with quoted evidence",
+      "Keycloak assertions audited",
+      "Verdict PASS/FAIL with defect list"
+    ]
+  },
+  "result": null
+}

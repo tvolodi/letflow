@@ -1,0 +1,44 @@
+{
+  "handoff_id": "7d2e5c10-441b-4b7a-8c3e-0441c0de5103",
+  "run_id": "WF02-REQ441-20261005",
+  "workflow_id": "WF-02",
+  "step": "01b-r1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ441-20261005/step-01b-r1-code-design-validator.json",
+  "created_at": "2026-10-05T16:33:00Z",
+  "started_at": "2026-10-05T16:33:00Z",
+  "completed_at": "2026-10-05T16:37:36Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-441"],
+    "requirement_text": {"REQ-441": "see handoffs/WF02-REQ441-20261005/step-01-code-designer.json context.requirement_text"},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req441-mail-notifier-adapter.md",
+      "docs/migration/decisions/0045-mail-library-choice.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ441-20261005"
+  },
+  "task": {
+    "description": "WF-02 step 01b recheck 1 (CODE-DESIGN-VALIDATOR): re-validate the REQ-441 design after rework 1 (G1-G3, M1-M3, F4-F10).",
+    "acceptance_criteria": ["see step-01-code-designer.json task.acceptance_criteria (10 criteria)"]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. G1 fixed (design 2.2: parse/2 returns {:ok, :unset} | {:ok, {:noop, _}} | {:ok, {:smtp, _}} | {:error, {:missing|:invalid, var}}, adapter_choice/parsed dropped, return table plus the four runtime.exs case clauses named). G2 fixed (6.2 AC7: Config.Reader.read!(\"config/runtime.exs\", env: :prod, target: :host), the earlier-raise variables enumerated, a control case, one named fallback). G3 fixed (4.4 item 3 now an obligation proven by open_connections == 0; 6.1 pins Notifier timeout_ms 10_000, and 1_500 with socket timeout 500 for :hang/:slow_drip). M1 present and binding (2.2: parse/2 takes boolean markers for username/password, never values; AC7 marker-password forced-failure case). M2 present and binding (2.1 Transport contract: blocking send in the calling process, no linked/unlinked worker, reopen decision rather than trap_exit workaround; AC5 forced crash with proc_lib reports, all-levels :logger handler, no-surviving-process and open_connections == 0). M3 present and binding (3.4: compile_env flag, true only in config/test.exs, DER CA list only, never verify_none/verify_fun/SNI from env; AC10 grep guards). F4-F10 each mapped in design s10 and present at the cited locations. All 10 ACs still map to concrete elements and tests (6.2). No implementation code (signatures, type shapes, prose, a .env.example names block only). Library runtime claims remain 'to verify against deps/ source'. Decision 0045 s6a mirrors design H1c and is consistent with the design. ELIXIR-DEV config claim VERIFIED on this machine (elixir 1.20.3 / OTP 29): Code.fetch_docs(Config.Reader) for read!/2 lists options :imports, :env, :target. I also ran, via MIX_ENV=test mix run --no-start, Config.Reader.read!(\"config/runtime.exs\", env: :prod, target: :host): with LETFLOW_SECRETS_MASTER_KEY, LETFLOW_LOGIN_DIRECTORY_PEPPER(+_ID) set and DATABASE_URL unset it raised 'environment variable DATABASE_URL is missing' (so DATABASE_URL is the next prod raise, as the design says); with DATABASE_URL added and LETFLOW_LOGIN_DISCOVERY_ENABLED / LETFLOW_TRUSTED_PROXIES unset it returned [:logger, :letflow] (boot_check does not raise because parse_enabled defaults to false in prod). Caveat for TEST-DESIGNER: runtime.exs calls Letflow.Plugs.ClientIp, so the in-process read! only works inside a Mix-loaded VM (plain 'elixir -e' fails with UndefinedFunctionError); an ExUnit test qualifies. target: :host is valid (it is the default config_target). Non-blocking nits listed in issues.",
+    "artifacts_out": [],
+    "issues": [
+      "NON-BLOCKING nit 1 (design 2.3): the tenant block is described as 'exactly two lines' (Organisation, Sign in) 'followed by a third line Code: <slug>'. The intent is three lines (AC9 asserts three tenant-line shapes). Reword to 'exactly three lines' when the design is next touched.",
+      "NON-BLOCKING nit 2 (design 2.2 vs 3.1): secret_marker is defined as 'present, non-empty, no NUL', but 3.1 requires the username to be non-empty after trim and free of CR/LF/NUL. State in 2.2 that the caller applies the per-variable rule from 3.1 when computing each marker (username: trim + CR/LF/NUL; password: untrimmed, NUL only).",
+      "NON-BLOCKING nit 3 (design 6.1): the timeout-case overrides (timeout_ms 1_500, socket_timeout_ms 500) are below the boot-validated ranges (2000..30000; derived minimum 1000). Fine because they are put_env test overrides that bypass parse/2, but say so in one clause to avoid a reader thinking the ranges are violated.",
+      "NON-BLOCKING nit 4 (decision 0045 s4 reason 4 and O3): 'the design's mitigations (section 4 of the design)' is a stale cross-reference; the library-risk mitigations live in design 2.1, 2.2 and 6.2.",
+      "Standing hard stops unchanged and not resolved by this gate: H1 dependency approval (gen_smtp/ranch), H2 env vars/credentials/relay, H3 external infra and SPF/DKIM/DMARC, H4 lawful-basis gate. ELIXIR-DEV must not touch mix.exs/mix.lock until H1 is approved; ORCH should record the supervisor's nod on OQ-3 (call-time secrets) with it."
+    ],
+    "next_action": "Proceed per WF-02 once ORCH has the H1/H2 approvals (design-phase SECURITY-REVIEWER M1-M3 are now folded in, so no further design-phase security round is needed unless CODE-DESIGNER amends the nits). Nits 1-4 may be folded into any later design touch; none gates."
+  },
+  "rework_count": 1
+}

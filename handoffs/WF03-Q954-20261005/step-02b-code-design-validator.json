@@ -1,0 +1,71 @@
+{
+  "handoff_id": "a3f1c8d2-6b47-4e09-8d15-2c7e9f40b6a1",
+  "run_id": "WF03-Q954-20261005",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q954-20261005/step-02b-code-design-validator.json",
+  "created_at": "2026-10-05T11:43:18Z",
+  "started_at": "2026-10-05T11:43:18Z",
+  "completed_at": "2026-10-05T11:43:18Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0987": "queue Q-954 / GH #2209: config/runtime.exs:63 compares secrets_master_key to <<0xFF::256>> (integer 255) instead of 32 bytes of 0xFF."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0987-secrets-master-key-0xff-literal.md",
+      "handoffs/WF03-Q954-20261005/step-01-issue-fixer-diagnose.json",
+      "config/runtime.exs",
+      "lib/letflow/design/req190-secrets-core.md",
+      "test/letflow/secrets_runtime_config_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q954-20261005"
+  },
+  "task": {
+    "description": "WF-03 Step 2b hard gate on CODE-DESIGNER's design for ISS-0987/Q-954.",
+    "acceptance_criteria": [
+      "Design covers the issue fix, regression test and req190 doc fix",
+      "Scope limited to the literal; pepper block untouched",
+      "No implementation code beyond the literal",
+      "Test plan unambiguous and fail-first sound; no key echo",
+      "Claims verified against config/runtime.exs",
+      "Explicit PASS/FAIL with issues list"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Validated lib/letflow/design/iss0987-secrets-master-key-0xff-literal.md against the ISS-0987 issue text (origin/docs/ISS-0987-secrets-master-key-0xff-literal), the step-01 diagnosis and the real files. Verified in config/runtime.exs: line 63 is 'if secrets_master_key == <<0::256>> or secrets_master_key == <<0xFF::256>> do' (dead second operand); the raise at 63-68 names LETFLOW_SECRETS_MASTER_KEY and the class of value only, never interpolating the key; the pepper block's all-0xFF check at line 109 already uses :binary.copy(<<0xFF>>, 32) and its pepper==master-key guard is at line 116, so the design's 'do not touch pepper' scope is right; ld_pepper (lines 90-107) raises 'is missing' when the pepper var is absent, confirming the masking trap (all-0xFF key without pepper vars exits non-zero for the wrong reason), and the design's valid distinct pepper pair plus message assertion handles it; the pepper block follows the key check (line 72 onward), so a fixed key check fires before pepper validation. Verified lib/letflow/design/req190-secrets-core.md section 2 item 4 (lines 199-203) carries the false 'wrapped 32 bytes of 0xFF' literal that Change B corrects. Coverage: Change A (fix), Change B (req190 doc), Change C (3 regression tests: zeros refused, 64xf refused fail-first with message assertion, valid key accepted) map to every issue requirement via the section 5 table. No TBD/deferral (section 6: none). Only code in the design is the one-token literal :binary.copy(<<0xFF>>, 32); no function bodies. Test plan specifies env (MIX_ENV dev, MIX_TEST_PARTITION and MIX_BUILD_PATH nil), pepper pair, marker, exact assertions, full-length no-echo refute, and mutation procedure restricted to a throwaway worktree. Not run: no tests executed (design only; tests do not exist yet).",
+    "artifacts_out": [],
+    "owned_modules": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design says the shared env uses MIX_ENV=dev for all three new cases, while the existing malformed-key test uses MIX_ENV=test. Intentional and correct (dev has no test.exs fallback and the pepper vars are required in non-test envs), but ELIXIR-DEV must not copy the existing test's env. Case 3 (valid key, exit 0) under dev with --no-start depends on config/dev.exs not requiring Postgres at boot; the diagnosis reproduced exit 0 with the marker in exactly this setup, so it is expected to hold.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Exact pepper hex ('ab' x 32) and valid-key hex are given as examples, not fixed. Any 64-lowercase-hex values distinct from each other and from all-0/all-f satisfy the design; the key must not equal the pepper (runtime.exs:116).",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q954-20261005",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: proceed to ELIXIR-DEV with the design (Changes A, B, C); SECURITY-REVIEWER applies (secrets path)."
+  }
+}

@@ -21,6 +21,28 @@ Rules that apply to every step:
   `LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS` and `LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS_ID`
   (rotation only: set both or neither, and each must differ from the current one).
 
+## 0. Command forms: Mix versus the release container
+
+Every command below is written in its Mix form (`mix ...`, for dev, CI and any host with the
+source tree). **A deployed release container has NO Mix** (verified on QA, 2026-10-05, infra task
+T-0154): there the same operations are plain public functions, called through the release's
+`rpc` against the RUNNING node (the application and Repo are already started there). Wrap each call
+in `IO.inspect()` so the result is printed; `rpc` does not set a process exit code, so read the
+printed result (`{:ok, ...}` or `{:error, atom}`) instead of checking an exit status. Output is
+key ids and counts only, never an email or a secret.
+
+| Operation | Mix form | Release form (run inside the container) |
+|---|---|---|
+| Backfill, dry run | `mix letflow.backfill_login_directory --dry-run` | `bin/letflow rpc 'Letflow.LoginDirectory.Backfill.run(dry_run: true) |> IO.inspect()'` |
+| Backfill, for real | `mix letflow.backfill_login_directory` | `bin/letflow rpc 'Letflow.LoginDirectory.Backfill.run() |> IO.inspect()'` |
+| Key status | `mix letflow.login_directory.key_status` | `bin/letflow rpc 'Letflow.LoginDirectory.KeyRotation.key_status() |> IO.inspect()'` |
+| Retire a key id, dry run | `mix letflow.login_directory.retire_key --key-id ID --dry-run` | `bin/letflow rpc 'Letflow.LoginDirectory.KeyRotation.retire_key("ID", dry_run: true) |> IO.inspect()'` |
+| Retire a key id, for real | `mix letflow.login_directory.retire_key --key-id ID` | `bin/letflow rpc 'Letflow.LoginDirectory.KeyRotation.retire_key("ID") |> IO.inspect()'` |
+
+The Mix tasks only wrap these functions. `retire_key` refuses the current key id and an absent
+key id in both forms (`{:error, :current_key_id}` / `{:error, :not_found}`). Where a later
+section says "run X", use the release form on a deployed container.
+
 ## 1. First provisioning (per environment)
 
 1. Generate 32 random bytes as 64 hex characters with a local tool, writing the output

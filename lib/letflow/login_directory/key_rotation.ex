@@ -4,8 +4,9 @@ defmodule Letflow.LoginDirectory.KeyRotation do
   `docs/migration/decisions/0043-email-first-login-ba-decisions.md` D-C; design
   `lib/letflow/design/req434-email-first-login-directory.md` §2.4, §3.9). Driven by
   `mix letflow.login_directory.key_status` and
-  `mix letflow.login_directory.retire_key`; the runbook is
-  `docs/runbooks/login-directory-pepper-rotation.md`.
+  `mix letflow.login_directory.retire_key`, which only wrap the public functions here; a deployed
+  release has no Mix, so the same functions are called through `bin/letflow rpc` (runbook
+  section 0). The runbook is `docs/runbooks/login-directory-pepper-rotation.md`.
 
   Only key **ids** (labels) and row counts cross this module's boundary: never an
   email, an `email_key` or a pepper (INV-4). Every `Repo` call passes `log: false`

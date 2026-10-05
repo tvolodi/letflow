@@ -1,0 +1,47 @@
+{
+  "handoff_id": "8c2d6f14-3b7e-4a59-b0c1-6e9d2a4f7c13",
+  "run_id": "WF02-REQ443-20261005",
+  "workflow_id": "WF-02",
+  "step": "02e",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ443-20261005/step-02e-infra-action.json",
+  "created_at": "2026-10-05T14:00:00Z",
+  "started_at": "2026-10-05T14:00:00Z",
+  "completed_at": "2026-10-05T14:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [
+      "REQ-443"
+    ],
+    "requirement_text": {
+      "REQ-443": "See docs/requirements.yaml REQ-443 (queue Q-951, GH#2205); decision 0043 D-C."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/login_directory/key_rotation.ex",
+      "lib/mix/tasks/letflow.login_directory.key_status.ex",
+      "lib/mix/tasks/letflow.login_directory.retire_key.ex",
+      "docs/runbooks/login-directory-pepper-rotation.md"
+    ],
+    "branch_name": "feat/REQ-443-pepper-rotation-tooling"
+  },
+  "task": {
+    "description": "WF-02 step 02e (ORCH): operator commands for the login-directory pepper rotation tooling",
+    "acceptance_criteria": [
+      "see REQ-443"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "OPERATOR ACTION REFERENCE (no action is required until a rotation is planned). A deployed release container has NO Mix (verified on QA by infra T-0154), so the rotation tooling is called as plain public functions through the release rpc against the running node; wrap each call in IO.inspect so the result is printed (rpc sets no exit status; read the printed {:ok, ...} / {:error, atom}). Output is key ids and row counts only, never an email, an email key or a pepper. KEY STATUS: bin/letflow rpc 'Letflow.LoginDirectory.KeyRotation.key_status() |> IO.inspect()'. BACKFILL (re-keying step): bin/letflow rpc 'Letflow.LoginDirectory.Backfill.run(dry_run: true) |> IO.inspect()' then bin/letflow rpc 'Letflow.LoginDirectory.Backfill.run() |> IO.inspect()'. RETIRE A KEY ID (irreversible deletion of that pepper's rows; refuses the current id and an absent id): dry run first, bin/letflow rpc 'Letflow.LoginDirectory.KeyRotation.retire_key(\"OLD_ID\", dry_run: true) |> IO.inspect()' then bin/letflow rpc 'Letflow.LoginDirectory.KeyRotation.retire_key(\"OLD_ID\") |> IO.inspect()'. Mix forms for dev/CI: mix letflow.login_directory.key_status, mix letflow.login_directory.retire_key --key-id OLD_ID [--dry-run], mix letflow.backfill_login_directory [--dry-run]. Full procedure (first provisioning, planned rotation, emergency rotation, rollback): docs/runbooks/login-directory-pepper-rotation.md. EXTERNAL: ai-dala-infra landscape/secrets-inventory.md needs entries for LETFLOW_LOGIN_DIRECTORY_PEPPER and _PEPPER_ID per environment (not edited from here).",
+    "artifacts_out": [
+      "docs/runbooks/login-directory-pepper-rotation.md"
+    ],
+    "issues": [],
+    "next_action": "Infra owner keeps this as the operator reference for pepper rotation"
+  }
+}

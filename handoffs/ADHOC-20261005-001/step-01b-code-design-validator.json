@@ -9,7 +9,7 @@
   "created_at": "2026-10-05T03:21:00Z",
   "started_at": null,
   "completed_at": null,
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -53,5 +53,79 @@
       "Verdict PASS/FAIL with defect list"
     ]
   },
-  "result": null
+  "result": {
+    "status": "FAIL",
+    "summary": "ADR is accurate and well-sourced: 40+ file:line citations spot-checked and all matched, 14 quotes from 0002/0006/0035/0038/0042/0043 matched verbatim, 0044 is free on origin/main (highest is 0043; the only open PR touching decisions/ is #2201, which edits 0042 only), per-REQ statuses match requirements.yaml (434/436/439 done; 435,437,438,440-444 pending; hold on exactly 437,438,440-444), no implementation code, no TBD, PROPOSED, sign-off all pending. FAIL on one structural acceptance-criterion gap (O3 not given the per-option comparison dimensions) plus minor Keycloak-assertion wording.",
+    "criteria_checked": {
+      "AC1_file_status_no_code_no_yaml_edit_beyond_hold": "PASS - Status: PROPOSED (line 3); 0 code fences, 0 TBD; yaml diff is only 7 hold lines",
+      "AC2_O1_O2_O3_each_compared_on_all_dimensions": "FAIL - see issue 1",
+      "AC3_O3_router_and_REQ_table_and_both_tiers": "PASS - 2.3.2, 2.3.6 (REQ-434..444 each stay/modify), 2.3.3",
+      "AC4_matrix_recommendation_risks_phases_PR2201_questions": "PASS - sections 3, 4, 4.1, 4.2, 4.3, 7",
+      "AC5_keycloak_not_asserted": "PASS with MINOR - 26.2 cited from docker-compose.yml:26; S-1..S-16 all marked UNVERIFIED; see issues 2-3",
+      "AC6_consistency_check": "PASS - section 6 names each amended item with quoted text; quotes verified",
+      "AC7_citations_verified": "PASS - no mismatches found"
+    },
+    "citations_verified": [
+      "docker-compose.yml:26-27 (image keycloak:26.2; start-dev --import-realm)",
+      "priv/keycloak/realms/bpm-default.json:3 (realm), :22 (letflow-web), :48 (letflow-web-audience)",
+      "20260816000001_create_tenants.exs:38 (unique_index idp_realm_id)",
+      "tenant.ex:71 (field idp_realm_id), :42-43 (immutable after creation)",
+      "auth_pipeline.ex:124-133 (authenticate_oidc chain), :269-281 (extract_realm), :343-361 (verify_local_account_state / list_effective_role_names)",
+      "identity.ex:150-151 (resolve_tenant_by_realm Repo.get_by), :724 (list_effective_role_names), :763-768 (sync_role_claims_from_token)",
+      "provider_registry.ex:21-27 (resolve against tenants before worker liveness)",
+      "token_verifier/oidcc.ex:147-156 (single client_id for all realms)",
+      "claim_mapping_config.ex:53-75 (for_realm), :89-97 (default)",
+      "jit_provisioning_config.ex:4-11 (per-realm config)",
+      "routers/tenant_config.ex:230-239 (resolve_realm requires non-empty idp_realm_id), :218-249",
+      "router.ex:111-135 (mounts tenant-config, mobile, metrics, public, v1)",
+      "20260922000011_create_tenant_memberships.exs:28 (tenant_id ref), :34 (unique_index subject_key,tenant_id)",
+      "web/src/auth/tenantConfig.ts:29-47 (stored slug then ?realm=), ProtectedRoute.tsx:9-22 (signinRedirect), tenantOidcRegistry.ts:34-36",
+      "docs/anti-patterns.md:3008-3016 (realm hand-provisioned)",
+      "docs/mobile/requirements.md:55-72, :208-211 (audience scoped to tenant realm); 0012-mobile-tier-stack.md:23 (flutter_appauth)",
+      "lib/letflow/plugs/client_ip.ex and login_discovery_rate_limit.ex exist",
+      "ai-dala-infra landscape/services.md:169,177; hosts/ubuntu-16gb-nbg1-1.md:31-32,203; shared/app-registry.md:239,246,250 (all match)",
+      "security-invariants.md INV-1..INV-9 line ranges (46, 79, 118, 144, 176, 210, 231, 254, 332 headers align with cited ranges)"
+    ],
+    "quotes_verified": [
+      "0002:168-171 'the tenants table ... is the sole source of truth for which OIDC issuers are trusted'",
+      "0002:190-195 'One shared Keycloak host, N realms ... a bare realm slug'",
+      "0006:30-33 D1; 0006:150-152 'nullable only when OIDC is off'; 0006:188-195 'R5 makes the collision unreachable'; 0006:296-297 'reopenable only by superseding this record'; 0006:304-306 re-derive claim",
+      "0035:39-42 'Keycloak-hosted-only login is the correct, working, intended production architecture'; 0035:15-17",
+      "0038:76-81 point 4 realm-resolution chain unchanged; 0038:100-103 no JIT-created tenant_memberships rows",
+      "0042:111-114 Decision 7 scope fence; 0042:160-165 'What remains unchanged'",
+      "0043:187-192 D-E Keycloak-only accounts; 0043:229-233 D-G DEFERRED; decide via an ADR"
+    ],
+    "number_check": "0044 free: git ls-tree origin/main decisions/ ends at 0043; gh pr list shows only #2201 touches decisions/ (it edits 0042). Note: #2201 modifying 0042 is not mentioned in the ADR; informational only.",
+    "issues": [
+      {
+        "id": 1,
+        "severity": "MAJOR",
+        "location": "ADR section 2.3 (O3), lines 300-444, versus the step-01 criterion 'Compares O1, O2, O3 each with: ...'",
+        "defect": "O1 (2.1) and O2 (2.2) each carry labelled paragraphs for: description, login steps, multi-tenant users, enumeration/privacy posture, INV-1..INV-8 impact, migration from today, cost in steps, operational cost, tenant-admin autonomy, enterprise SSO per tenant, data separation, mobile impact. O3 (2.3) has description, login steps (2.3.1) and a person-in-both-tiers case (2.3.3) but NO dedicated treatment of: enumeration/privacy posture as a whole, INV-1..INV-8 impact for O3, migration path from today, total cost in steps, operational cost, tenant-admin autonomy, enterprise SSO per tenant, data separation, mobile impact. These appear only scattered (matrix section 3, 4.2 phases, 6.7 table, R-11, Q10) and not as a per-option statement. Under the no-partial-credit rule this fails.",
+        "fix": "Add labelled subsections to 2.3 for each missing dimension, stating O3 tier-by-tier (shared vs dedicated), with INV-1..INV-8 each named, and a summed step count (Phase 0-4 about 29-30 vs the matrix text 'about 20 gated')."
+      },
+      {
+        "id": 2,
+        "severity": "MINOR",
+        "location": "lines 182-184 (O1 'Enterprise SSO per tenant: Possible in principle per realm (a brokered corporate IdP inside that tenant's realm)'); line 304 O3 description ('optionally a brokered company IdP/SAML inside that realm')",
+        "defect": "States as fact that a Keycloak realm can broker a corporate IdP/SAML, a Keycloak capability beyond the pinned version string, without UNVERIFIED tag (only S-8/S-9 later).",
+        "fix": "Reword to 'intended, subject to spikes S-8..S-10 (UNVERIFIED)'."
+      },
+      {
+        "id": 3,
+        "severity": "MINOR",
+        "location": "line 215 ('User in several tenants. Native: one account, N memberships'), matrix lines 456 and 457 (O2 '++')",
+        "defect": "Multi-membership is asserted as native/clearly best although it rests entirely on S-2 (UNVERIFIED) and on the assumed realisation (a).",
+        "fix": "Mark as 'assumed, UNVERIFIED (S-2)' in the paragraph and in the matrix justification."
+      },
+      {
+        "id": 4,
+        "severity": "MINOR",
+        "location": "lines 819-821 (Hold note)",
+        "defect": "Says REQ-435 'and PR #2201 are held by the same logic', but docs/requirements.yaml carries no hold marker on REQ-435 (only 437,438,440-444); a reader may assume the marker exists.",
+        "fix": "State explicitly that REQ-435 carries no yaml marker and is held only by the existing pepper-provisioning PR hold."
+      }
+    ],
+    "route": "Back to CODE-DESIGNER to fix issue 1 (MAJOR) and issues 2-4 (MINOR); re-validate afterward."
+  }
 }

@@ -179,9 +179,9 @@ repository or in the landscape documents read.
 **Tenant-admin autonomy.** Full inside the realm if the platform operator hands a realm admin
 to the tenant, none by default; Letflow itself exposes no realm administration.
 
-**Enterprise SSO per tenant.** Possible in principle per realm (a brokered corporate IdP inside
-that tenant's realm) but not designed: 0042 Alternative 11 states no realm brokers an IdP
-today. Whether and how: spike S-8..S-10.
+**Enterprise SSO per tenant.** Intended, subject to spikes S-8..S-10 (UNVERIFIED): a corporate
+IdP brokered inside that tenant's realm. Not designed: 0042 Alternative 11 states no realm
+brokers an IdP today, and whether Keycloak 26.2 supports it as needed is not verified here.
 
 **Data separation.** Maximal: separate Keycloak account store per tenant (a realm) AND
 separate Postgres schema per tenant (0006 D1). A realm-level compromise or misconfiguration
@@ -212,7 +212,7 @@ detail; strictly more build). Tenants are chosen after login (a picker) or by UR
 4. If no selector, SPA shows a picker built from the caller's own memberships (authenticated,
    so no enumeration problem).
 
-**User in several tenants.** Native: one account, N memberships; switching is a selector
+**User in several tenants.** Assumed native (UNVERIFIED, spike S-2): one account, N memberships; switching is a selector
 change with the same token, no re-login. This replaces the admin-linked `tenant_memberships`
 (0038) with authoritative memberships.
 
@@ -300,7 +300,8 @@ mobile requirement revision before any mobile work on shared tenants.
 ### 2.3 O3 -- Hybrid with tiers: 'shared' and 'dedicated', one entry point
 
 **Description.** Each tenant declares an auth mode. `dedicated` (default, today's model): own
-realm, optionally a brokered company IdP/SAML inside that realm. `shared` (simple tenants,
+realm, optionally a brokered company IdP/SAML inside that realm (intended, subject to spikes
+S-8..S-10, UNVERIFIED). `shared` (simple tenants,
 e.g. candidate-facing): users live in ONE central realm and belong to the tenant as
 organisation members. One entry point routes a person to the right place by (in order)
 invitation, explicit URL/slug, stored slug, e-mail directory, e-mail domain, default. The O1
@@ -443,6 +444,70 @@ Under O1 every row is `stay`. Under O2 REQ-435, 437, 438, 440, 442, 443, 444 bec
 REQ-436 and 439 survive as generic public-mount machinery, REQ-441 survives for invitations,
 REQ-434 is a sunk, partly moot decision (see section 3).
 
+#### 2.3.7 O3 per-dimension comparison, tier by tier
+
+Same dimensions as 2.1 and 2.2. "Dedicated" = O1 unchanged; "shared" = the O2-like tier.
+Where dedicated is identical to O1 this says so and refers to 2.1. Multi-tenant people: see
+2.3.3. Description and login: 2.3 and 2.3.1.
+
+**Enumeration / privacy posture.** Dedicated: as O1 (2.1). Shared: no pre-login discovery for
+a person who arrives by invitation or URL; if they arrive by e-mail the same directory
+lookup applies, with the same disclosure rules and per-tenant uniform flag (REQ-442), which
+is recommended on for candidate-facing shared tenants. New inference only in Phase 4: the
+domain table discloses "this domain routes to tenant X" (domain-level, R-7). The hosted
+login page's own e-mail behaviour in the shared realm is UNVERIFIED (S-6).
+
+**INV-1..INV-8 impact (O3).**
+- INV-1: dedicated as O1; shared adds a selector whose scoping must be proven (2.3.5); prefix
+  still derived from a server-resolved tenant id.
+- INV-2: dedicated as O1; shared adds a tenant-config shared branch that must stay a
+  hand-built allowlist; roles never from token claims.
+- INV-3: not applicable (both tiers).
+- INV-4: dedicated as O1 (pepper, SMTP); shared adds the Keycloak Admin client credential
+  (Phase 3) with realm-scoped power.
+- INV-5: dedicated as O1; shared adds the "no membership equals no such tenant" class with
+  equal round trips.
+- INV-6: each Phase 2-4 path (selector, `shared_identity_realms`, invitation route, domain
+  routing) needs its own scoping proof.
+- INV-7: unchanged (parameterised Ecto in all new tables).
+- INV-8: unknown selector, missing organisation claim or a Keycloak outage must return typed
+  errors, not raise (both tiers).
+INV-9 as in 6.7.
+
+**Migration path from today.** None for any existing tenant: all stay dedicated, the
+`auth_mode` default preserves behaviour, and no user moves in Phases 0-4. A tenant reaches
+the shared tier only by a new greenfield tenant (Phase 3) or an explicit per-tenant migration
+(Phase 5, not cleanly reversible, R-5).
+
+**Cost in requirement-sized steps.** Summed from 4.2: spike 3-4, Phase 1 (dedicated + router)
+about 8, Phase 2 about 7, Phase 3 about 6, Phase 4 about 5 = about 29-30 in total, of which 8
+are the already-planned O1 work and about 18 (Phases 2-4) are gated on the spikes and on the
+user's answer to question 1. Phase 5 is extra, per tenant. The matrix in section 3 uses these
+numbers. Estimate, wide error bars.
+
+**Operational cost.** Dedicated: as O1 (N realms, per-realm provisioning and backup). Shared:
+one additional realm (the shared realm), one client and mapper set, one backup unit, plus the
+shared realm's trust row. Total realms = dedicated tenants + 1. Memory cost per realm or
+organisation: UNVERIFIED (S-12). Added blast radius: the shared realm only (R-4).
+
+**Tenant-admin autonomy.** Dedicated: as O1. Shared: low; realm policy is platform-wide, and
+admin delegation per organisation is UNVERIFIED (S-5). Default: tenant admins invite and
+deactivate members through Letflow only (question 2).
+
+**Enterprise SSO per tenant.** Dedicated: intended via a brokered corporate IdP in that
+tenant's realm, subject to spikes S-8..S-10 (UNVERIFIED). Shared: not offered; a tenant that
+needs corporate SSO is dedicated. Organisation-level IdP linking (S-4) is a possible later
+alternative, UNVERIFIED.
+
+**Data separation.** Dedicated: as O1 (strongest). Shared: identity store is shared across
+shared tenants; business data still schema-per-tenant with per-tenant `users` rows (2.3.4),
+so INV-1 holds. Isolation between the two tiers is complete (different realms).
+
+**Mobile tier impact.** Dedicated: none (as O1). Shared: the app sends the tenant selector on
+every call, tenant-config needs a shared variant, and MOB-5's "token audience MUST be scoped to
+the tenant realm" (`docs/mobile/requirements.md:208-211`) must be revised for shared tenants
+first (R-11). No mobile change in Phases 0-2.
+
 ---
 
 ## 3. Decision matrix
@@ -453,13 +518,13 @@ measured.
 | Criterion | O1 realm-per-tenant + directory | O2 central realm + organisations | O3 hybrid | One-line justification |
 |---|---|---|---|---|
 | Pre-login discovery risk | 0 | ++ | 0 | O1/O3 carry a bounded single-match inference (0042); O2 has no per-person discovery for shared users. |
-| Multi-tenant people | - | ++ | + | O1 keeps separate accounts; O2 is native; O3 is native within the shared tier only. |
+| Multi-tenant people | - | ++ (assumed, UNVERIFIED: S-2) | + (shared tier only, same assumption) | O1 keeps separate accounts; O2's native multi-membership is assumed, not verified; O3 inherits it within the shared tier only. |
 | Simple/candidate tenants | - | ++ | ++ | Per-tenant realm provisioning is manual (`anti-patterns.md:3008-3016`); shared tier removes it. |
 | Complex/enterprise tenants | + | 0 | ++ | Realm-per-tenant isolates policy and IdP; O2 depends on unverified org-IdP features (S-4, S-8, S-9). |
 | Tenant-admin autonomy | + | - | + | Realm policy is per-tenant in O1/O3-dedicated; platform-wide in O2/O3-shared. |
 | Data separation (identity layer) | ++ | - | + | Realm per tenant is the strongest identity separation; shared realm is one store. |
 | Business-data isolation (INV-1) | ++ | + | + | Unchanged schema-per-tenant; O2/O3-shared add a membership-checked selector that must be proven. |
-| Build cost | + (about 10 steps, 3 done) | -- (about 25-35) | 0 (O1 first, then about 20 gated) | Costs from section 2; O3 pays O1 then adds only if spikes pass. |
+| Build cost | + (about 10 steps, 3 done) | -- (about 25-35) | 0 (about 29-30 in total: 8 Phase 1 = O1, 3-4 spike, 18 gated shared/SSO) | Costs from 2.3.7 and 4.2; O3 pays O1 then adds the gated 18 only if spikes pass. |
 | Operational cost today (tens of tenants) | 0 | + | 0 | Realm count/memory unknown (S-12); O2 consolidates but concentrates blast radius. |
 | Blast radius of one IdP mistake | + | -- | + | One shared realm affects every shared tenant at once. |
 | Migration risk from today | ++ (none) | -- (user `sub` changes, re-link) | + (none until a tenant opts in) | O3 never migrates existing tenants unless the user chooses. |
@@ -816,8 +881,9 @@ numbered 437 and above) carry a temporary hold marker in `docs/requirements.yaml
 purpose is to stop new build work from starting on assumptions that O2 or an amended O3 could
 invalidate while the decision is open. It is not a statement that the work is wrong: under the
 recommendation every one of those requirements is `stay`, so ratification releases the hold
-unchanged and the only cost of the hold is elapsed time. REQ-435 and PR #2201 are held by the
-same logic plus the pre-existing pepper-provisioning hold. The marker is removed by `ORCH` on
+unchanged and the only cost of the hold is elapsed time. REQ-435 carries NO hold marker in
+`docs/requirements.yaml`; it is held only by the pre-existing pepper-provisioning hold on PR
+#2201 / queue task Q-944 (see 4.3), which is independent of this record. The marker is removed by `ORCH` on
 ratification (or when the user rejects O3 in favour of O1, in which case the same).
 
 ---

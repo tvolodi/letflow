@@ -38,6 +38,11 @@ defmodule Letflow.Supervisor.Infrastructure do
   total to 22 -- placed directly after `Letflow.Plugs.PublicReadRateLimit.Bucket`,
   the same "leaf, independently-startable, no ordering dependency" sibling.
 
+  REQ-437 (design `req434-email-first-login-directory.md` s13, s15.3) adds one
+  further child, `Letflow.LoginDiscovery.TaskSupervisor`, bringing the live total
+  to 22 (23 listed below: child 3 is a one-shot `:ignore` hook) -- placed
+  directly before `Letflow.Obs.Alerts.TaskSupervisor` so that child stays LAST.
+
   ## Children, in order
 
   1. `Letflow.Repo`
@@ -67,7 +72,9 @@ defmodule Letflow.Supervisor.Infrastructure do
   19. `Letflow.Engine.Wasm.ModuleVersionRegistry`
   20. `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor`
   21. `Letflow.EventStore.RetirementTaskSupervisor`
-  22. `Letflow.Obs.Alerts.TaskSupervisor`
+  22. `Letflow.LoginDiscovery.TaskSupervisor` (REQ-437: off-request-path
+      notifier tasks of the login-discovery endpoint)
+  23. `Letflow.Obs.Alerts.TaskSupervisor`
 
   ## Ordering guarantees preserved (both load-bearing, unchanged from
   `Letflow.Application`'s own prior flat list)
@@ -78,13 +85,13 @@ defmodule Letflow.Supervisor.Infrastructure do
       `Task.Supervisor.async_nolink/3`; registering it after its dependant
       would leave a window in which a `claim/2` call exits `:noproc` inside
       a pool callback and kills the pool.
-    * ISS-0429: child 22 (`Obs.Alerts.TaskSupervisor`) is the LAST child of
+    * ISS-0429: child 23 (`Obs.Alerts.TaskSupervisor`) is the LAST child of
       this supervisor. Its "must precede either Poller's first tick"
       guarantee is now a SUPERVISOR-BOUNDARY guarantee, not merely a
       list-position fact: `Letflow.Supervisor.Pollers` is started only
       after this entire module's own `Supervisor.start_link/3` call (from
       `Letflow.Application.start/2`) has returned `{:ok, pid}`, which
-      happens only once every one of these 22 children -- including this
+      happens only once every one of these 23 children -- including this
       last one -- has itself finished starting. No interleaving is
       possible between this supervisor's last child starting and
       `Letflow.Supervisor.Pollers`' first child starting, since an entire
@@ -324,6 +331,18 @@ defmodule Letflow.Supervisor.Infrastructure do
       # Obs.Alerts.TaskSupervisor only to preserve THAT child's own
       # documented "must be LAST" invariant below.
       {Task.Supervisor, name: Letflow.EventStore.RetirementTaskSupervisor},
+      # REQ-437 (design req434 s13): dedicated Task.Supervisor for the login-discovery
+      # notifier tasks (Letflow.LoginDiscovery.Dispatch), so request timing does not
+      # depend on mail latency and a notifier crash cannot reach another subsystem.
+      # `max_children` bounds concurrency (config :letflow,
+      # Letflow.LoginDiscovery.Notifier, max_concurrent). No ordering dependency;
+      # placed before Obs.Alerts.TaskSupervisor only to keep THAT child LAST.
+      {
+        Task.Supervisor,
+        # x2: each delivery uses two slots (outer closure + inner async_nolink task).
+        name: Letflow.LoginDiscovery.TaskSupervisor,
+        max_children: 2 * Letflow.LoginDiscovery.Dispatch.max_concurrent()
+      },
       # ISS-0429 (design lib/letflow/design/iss0429-async-alert-hook-delivery.md §1):
       # dedicated Task.Supervisor isolating alert-hook delivery's HTTP POST +
       # retry/backoff loop (Letflow.Obs.Alerts.deliver_with_retry/4, dispatched from

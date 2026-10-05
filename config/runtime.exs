@@ -276,6 +276,25 @@ end
 config :letflow, Letflow.Plugs.ClientIp, trusted_proxies: trusted_proxies
 config :letflow, Letflow.Routers.LoginDiscovery, enabled: login_discovery_enabled
 
+# REQ-437 (design req434 s7, D21/D22): OPTIONAL LETFLOW_LOGIN_DISCOVERY_MODE. Unset,
+# empty or all-whitespace writes nothing, so the config/config.exs default
+# (:redirect_single) stands in every environment; a set value must be exactly
+# uniform_plus_email or redirect_single, anything else stops boot WITHOUT echoing it.
+# Parsed by the single parser Letflow.LoginDirectory.parse_deployment_mode/1. The key is
+# Letflow.LoginDiscovery, never Letflow.Routers.LoginDiscovery (that env stays
+# exactly [enabled: boolean], asserted by REQ-439's runtime-config test).
+case Letflow.LoginDirectory.parse_deployment_mode(System.get_env("LETFLOW_LOGIN_DISCOVERY_MODE")) do
+  {:ok, nil} ->
+    :ok
+
+  {:ok, login_discovery_mode} ->
+    config :letflow, Letflow.LoginDiscovery, mode: login_discovery_mode
+
+  {:error, :invalid_mode} ->
+    raise "environment variable LETFLOW_LOGIN_DISCOVERY_MODE must be unset/blank or exactly " <>
+            "uniform_plus_email or redirect_single. The value is not echoed."
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

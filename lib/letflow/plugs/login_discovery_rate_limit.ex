@@ -106,6 +106,25 @@ defmodule Letflow.Plugs.LoginDiscoveryRateLimit do
   @spec consume_email(binary(), :request | :send, integer()) :: :ok | :rate_limited
   def consume_email(email_key, kind, now_ms)
       when is_binary(email_key) and kind in [:request, :send] do
+    case consume_email_silent(email_key, kind, now_ms) do
+      :ok ->
+        :ok
+
+      :rate_limited ->
+        emit(:rate_limited_email)
+        :rate_limited
+    end
+  end
+
+  @doc """
+  Same bucket and key derivation as `consume_email/3`, but a refusal emits NO
+  outcome event. Used by the notifier task for kind `:send`, whose request
+  already emitted its single outcome (design s12/s15.3.1: a refused send is
+  silent).
+  """
+  @spec consume_email_silent(binary(), :request | :send, integer()) :: :ok | :rate_limited
+  def consume_email_silent(email_key, kind, now_ms \\ System.monotonic_time(:millisecond))
+      when is_binary(email_key) and kind in [:request, :send] do
     config = config()
 
     {key, capacity, refill} =
@@ -119,14 +138,7 @@ defmodule Letflow.Plugs.LoginDiscoveryRateLimit do
            config.send_refill_per_sec}
       end
 
-    case Bucket.consume(key, capacity, refill, now_ms) do
-      :ok ->
-        :ok
-
-      :rate_limited ->
-        emit(:rate_limited_email)
-        :rate_limited
-    end
+    Bucket.consume(key, capacity, refill, now_ms)
   end
 
   @doc """

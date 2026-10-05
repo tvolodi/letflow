@@ -285,3 +285,10 @@ config :letflow, :modules, [
 # REQ-439: explicit test default -- no proxy is trusted, so Letflow.Plugs.ClientIp
 # never honours X-Real-IP unless a test passes :trusted_proxies as plug opts.
 config :letflow, Letflow.Plugs.ClientIp, trusted_proxies: []
+
+# REQ-437: the notifier port's test double (records calls to an owner pid and can
+# raise/exit/sleep); the shipped default in config/config.exs is the Noop adapter.
+config :letflow, Letflow.LoginDiscovery.Notifier,
+  adapter: Letflow.LoginDiscoveryNotifierDouble,
+  timeout_ms: 1_000,
+  max_concurrent: 100

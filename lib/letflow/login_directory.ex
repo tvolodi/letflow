@@ -254,18 +254,45 @@ defmodule Letflow.LoginDirectory do
 
   def lookup_by_keys(_other, _deployment_mode), do: {:error, :lookup_failed}
 
-  # Deployment-wide mode (design 434 s7 config key, owned by REQ-436/437): a
-  # missing key is the ratified default :redirect_single; any unrecognised term
-  # is treated as uniform. Read directly (no upward dependency on LoginDiscovery).
-  defp deployment_mode do
+  @doc """
+  The deployment-wide disclosure mode, the ONLY reader of the mode config
+  (REQ-437, design 434 s7 D21/D28): `config :letflow, Letflow.LoginDiscovery, mode:`.
+  A missing/`nil` value is the ratified default `:redirect_single`;
+  `:redirect_single` stays itself; any other term is treated as the most
+  conservative `:uniform_plus_email`. Never logs (D29).
+  """
+  @spec deployment_mode() :: disclosure_mode()
+  def deployment_mode do
     case :letflow
-         |> Application.get_env(Letflow.Routers.LoginDiscovery, [])
+         |> Application.get_env(Letflow.LoginDiscovery, [])
          |> Keyword.get(:mode) do
       nil -> :redirect_single
       :redirect_single -> :redirect_single
       _other -> :uniform_plus_email
     end
   end
+
+  @doc """
+  The ONLY parser of `LETFLOW_LOGIN_DISCOVERY_MODE` (called by `config/runtime.exs`).
+  `nil`, empty or all-whitespace is `{:ok, nil}` (no override: the config default
+  stands); exactly `"uniform_plus_email"` or `"redirect_single"` after trim is the
+  matching atom (explicit clause per value, never `String.to_atom/1`); anything
+  else is `{:error, :invalid_mode}`. The supplied value is never echoed.
+  """
+  @spec parse_deployment_mode(String.t() | nil) ::
+          {:ok, disclosure_mode() | nil} | {:error, :invalid_mode}
+  def parse_deployment_mode(nil), do: {:ok, nil}
+
+  def parse_deployment_mode(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> {:ok, nil}
+      "uniform_plus_email" -> {:ok, :uniform_plus_email}
+      "redirect_single" -> {:ok, :redirect_single}
+      _other -> {:error, :invalid_mode}
+    end
+  end
+
+  def parse_deployment_mode(_other), do: {:error, :invalid_mode}
 
   @doc """
   Convenience composition of `email_keys/1` and `lookup_by_keys/1`: an invalid

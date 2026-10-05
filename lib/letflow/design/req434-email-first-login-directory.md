@@ -1564,7 +1564,7 @@ disclose whether the address exists (the 429 is identical for known and unknown 
 - **Always one submission per request** (§5.3 step 7): `submit/3` always calls
   `Task.Supervisor.start_child/2` on `Letflow.LoginDiscovery.TaskSupervisor`; the task decides
   inside whether anything is to be delivered (`delivery/2`, §7) and, if so, first consumes the
-  per-address `:send` bucket (a refusal skips the send silently). The request process never
+  per-address `:send` bucket (a refusal skips the send silently: built via `Limiter.consume_email_silent/3`, which emits NO outcome event, so a request emits exactly one). The request process never
   awaits it. `start_child` returning `{:error, _}` (for example the supervisor's `max_children`
   cap, config `max_concurrent`, default 100) or exiting is ignored. So request timing does not
   depend on a match or on mail latency.
@@ -1644,7 +1644,7 @@ action with the exact directives. **Not changed (git diff empty):** `lib/letflow
 public_read_rate_limit.ex` and its `bucket.ex`, `auth_pipeline.ex`, `api_pipeline.ex`.
 
 **Supervision placement.** `{Task.Supervisor, name: Letflow.LoginDiscovery.TaskSupervisor, max_children:
-<config max_concurrent, default 100>}` is added to `Letflow.Supervisor.Infrastructure` directly after
+<2 * config max_concurrent, default 2 * 100; each delivery holds two slots: outer closure + inner async_nolink adapter task>}` is added (the endpoint body read also passes `read_timeout:` from `config :letflow, Letflow.LoginDiscovery, read_timeout:` default 5000 ms; a timeout is the malformed class) to `Letflow.Supervisor.Infrastructure` directly after
 `Letflow.EventStore.RetirementTaskSupervisor` and before the last child `Letflow.Obs.Alerts.TaskSupervisor`
 (`infrastructure.ex`, comment block above the Alerts child). `infrastructure_test.exs` (child ids list
 at `:70-117` and `assert length(ids) == 21` at `:119`) gains the new id in that position and the

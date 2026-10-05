@@ -24,24 +24,58 @@ Rules that apply to every step:
 ## 0. Command forms: Mix versus the release container
 
 Every command below is written in its Mix form (`mix ...`, for dev, CI and any host with the
-source tree). **A deployed release container has NO Mix** (verified on QA, 2026-10-05, infra task
-T-0154): there the same operations are plain public functions, called through the release's
-`rpc` against the RUNNING node (the application and Repo are already started there). Wrap each call
-in `IO.inspect()` so the result is printed; `rpc` does not set a process exit code, so read the
-printed result (`{:ok, ...}` or `{:error, atom}`) instead of checking an exit status. Output is
-key ids and counts only, never an email or a secret.
+source tree). **A deployed release container has NO Mix** (verified on QA, infra task T-0154): there the
+same operations are plain public functions (the Mix tasks only wrap them), called through the
+release's `rpc` against the RUNNING node. The form below worked first try on QA for the dry and real
+backfill run; use it for every operation.
 
-| Operation | Mix form | Release form (run inside the container) |
-|---|---|---|
-| Backfill, dry run | `mix letflow.backfill_login_directory --dry-run` | `bin/letflow rpc 'Letflow.LoginDirectory.Backfill.run(dry_run: true) |> IO.inspect()'` |
-| Backfill, for real | `mix letflow.backfill_login_directory` | `bin/letflow rpc 'Letflow.LoginDirectory.Backfill.run() |> IO.inspect()'` |
-| Key status | `mix letflow.login_directory.key_status` | `bin/letflow rpc 'Letflow.LoginDirectory.KeyRotation.key_status() |> IO.inspect()'` |
-| Retire a key id, dry run | `mix letflow.login_directory.retire_key --key-id ID --dry-run` | `bin/letflow rpc 'Letflow.LoginDirectory.KeyRotation.retire_key("ID", dry_run: true) |> IO.inspect()'` |
-| Retire a key id, for real | `mix letflow.login_directory.retire_key --key-id ID` | `bin/letflow rpc 'Letflow.LoginDirectory.KeyRotation.retire_key("ID") |> IO.inspect()'` |
+**How to run (release form).** Put the expression in a one-line `.exs` file and feed it through
+**STDIN, never inline** (this avoids every shell-quoting problem with quotes, `#{}` and `&`):
 
-The Mix tasks only wrap these functions. `retire_key` refuses the current key id and an absent
-key id in both forms (`{:error, :current_key_id}` / `{:error, :not_found}`). Where a later
-section says "run X", use the release form on a deployed container.
+```
+ssh <host> "docker exec -i letflow-qa-app-1 sh -c 'timeout 300 bin/letflow rpc \"$(cat)\"'" < expr.exs 2>expr.err
+```
+
+- Default exec user and workdir; run it as `bin/letflow` exactly; `timeout 300` is a hang guard.
+- Keep stderr separate (`2>expr.err`): rpc start prints a harmless ESOCK/libsctp warning.
+- Smoke check first: `docker exec letflow-qa-app-1 sh -c 'bin/letflow rpc "IO.puts(Code.ensure_loaded?(Letflow.LoginDirectory.Backfill))"'` prints `true`.
+- The expression is ONE line and **prints its own result with `IO.puts`** (rpc forwards stdout).
+  **Pass/fail = a `SUMMARY` line is present** (for backfill also `failed=0`); an `ERROR <atom>` line
+  is a refusal or failure. Do NOT use the exit status: rpc sets no useful status for an Elixir-level
+  failure. Output is key ids, tenant ids, counts and atoms only, never an email or a secret.
+
+**Key status** (Mix: `mix letflow.login_directory.key_status`):
+
+```elixir
+case Letflow.LoginDirectory.KeyRotation.key_status() do {:ok, rows} -> Enum.each(rows, fn {k, c} -> IO.puts("key_id=#{k} rows=#{c}") end); IO.puts("SUMMARY key_ids=#{length(rows)} rows=#{Enum.sum(Enum.map(rows, &elem(&1, 1)))}"); {:error, e} -> IO.puts("ERROR #{inspect(e)}") end
+```
+
+**Backfill, dry run** (Mix: `mix letflow.backfill_login_directory --dry-run`):
+
+```elixir
+case Letflow.LoginDirectory.Backfill.run(dry_run: true) do {:ok, r} -> Enum.each(r.tenants, fn t -> IO.puts("tenant #{t.tenant_id}: users_read=#{t.users_read} keys=#{t.keys} inserted=#{t.inserted}") end); Enum.each(r.failed, fn f -> IO.puts("tenant #{f.tenant_id}: FAILED reason=#{f.reason}") end); IO.puts("SUMMARY dry_run=#{r.dry_run} tenants=#{length(r.tenants)} failed=#{length(r.failed)} inserted=#{Enum.sum(Enum.map(r.tenants, & &1.inserted))} key_id=#{r.key_id}"); {:error, e} -> IO.puts("ERROR #{inspect(e)}") end
+```
+
+**Backfill, for real** (Mix: `mix letflow.backfill_login_directory`): the same line with `Backfill.run()` instead of `Backfill.run(dry_run: true)`:
+
+```elixir
+case Letflow.LoginDirectory.Backfill.run() do {:ok, r} -> Enum.each(r.tenants, fn t -> IO.puts("tenant #{t.tenant_id}: users_read=#{t.users_read} keys=#{t.keys} inserted=#{t.inserted}") end); Enum.each(r.failed, fn f -> IO.puts("tenant #{f.tenant_id}: FAILED reason=#{f.reason}") end); IO.puts("SUMMARY dry_run=#{r.dry_run} tenants=#{length(r.tenants)} failed=#{length(r.failed)} inserted=#{Enum.sum(Enum.map(r.tenants, & &1.inserted))} key_id=#{r.key_id}"); {:error, e} -> IO.puts("ERROR #{inspect(e)}") end
+```
+
+**Retire a key id, dry run** (Mix: `mix letflow.login_directory.retire_key --key-id OLD_ID --dry-run`; replace `old-key-id` with the id, lowercase `[a-z0-9_-]`):
+
+```elixir
+case Letflow.LoginDirectory.KeyRotation.retire_key("old-key-id", dry_run: true) do {:ok, r} -> IO.puts("SUMMARY key_id=#{r.key_id} rows=#{r.rows} dry_run=#{r.dry_run}"); {:error, e} -> IO.puts("ERROR #{inspect(e)}") end
+```
+
+**Retire a key id, for real** (Mix: `mix letflow.login_directory.retire_key --key-id OLD_ID`):
+
+```elixir
+case Letflow.LoginDirectory.KeyRotation.retire_key("old-key-id") do {:ok, r} -> IO.puts("SUMMARY key_id=#{r.key_id} rows=#{r.rows} dry_run=#{r.dry_run}"); {:error, e} -> IO.puts("ERROR #{inspect(e)}") end
+```
+
+`retire_key` refuses the current key id and an absent key id in both forms (`ERROR :current_key_id` /
+`ERROR :not_found`). Where a later section says "run X", use the release form on a deployed container.
 
 ## 1. First provisioning (per environment)
 

@@ -33695,6 +33695,25 @@ requirements:
       ISS-0994 (queue Q-961), which introduces permission scope and the
       platform tenant.
 
+      AMENDED 2026-10-06 (after the ISS-0993 / Q-960 design). The fix for
+      ISS-0993 (PR A1 and A2) already gives the :Unknown-gated routes named
+      permissions and a scope and adds authorize_target_tenant. This entry
+      requires PR A2 (the enforcing merge) to be on main, and builds nothing
+      that A2 already merged: for each numbered item under BUILDS, first
+      establish from the merged code whether it is done, cite file and line, and
+      build only what is missing. What remains this entry's work in any case:
+      the route-without-policy-key test (item 4), the cross-tenant denial tests
+      in the acceptance criteria, and the scope decision for the promotion
+      permissions. SCOPE RULE: a promotion permission is tenant scope only for a
+      route where the code proves, before any read of another tenant's data,
+      that every tenant the request names is the caller's own database-resolved
+      tenant (the equality rule of the Q-960 design, scope table row 34: for a
+      caller who is not a platform-tenant operator, :test_tenant_id must equal
+      the caller's tenant id, and any other value returns the same 404 as a
+      nonexistent id). A route for which that proof is absent stays platform
+      scope. No pairing of a test tenant with a production tenant exists; do not
+      invent one in this entry.
+
       THE ROUTES (verify the list on the branch with a grep for plain
       get/post/put/patch/delete macros in lib/letflow/routers/, excluding the
       routers mounted outside Letflow.Plugs.ApiPipeline):
@@ -33744,6 +33763,10 @@ requirements:
       - "a test fails when a route under Letflow.Plugs.ApiPipeline is declared without a policy key (demonstrated once by a temporary route in the test itself or by a fixture router)"
       - "every new permission has a scope in the scope table ISS-0994 introduced, and the scope-completeness test passes"
       - "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted; SECURITY-REVIEWER verdict recorded"
+      - "cross-tenant denial with an ADMIN of another tenant as the caller: with two provisioned non-platform tenants A and B, a PLATFORM_ADMIN of A (and a TENANT_ADMIN of A once REQ-447 is merged) calls each re-keyed route with an identifier that belongs to B (a promotion or review id created in B, B's tenant id as :test_tenant_id, a process key that exists only in B) and receives the same status and a byte-identical body as for an identifier that exists nowhere; no row of B changes and no data of B appears in the response; one table-driven test covers every re-keyed route and names each"
+      - "list routes: GET /promotions and GET /promotions/platform-events called by an admin of A, with rows present in B, return no row belonging to any tenant other than A; or the route is platform scope and returns the uniform 403 to that caller; the design states which, per route, with file and line"
+      - "every promotion permission that is tenant scope in the scope table is justified in the design by a file and line showing the own-tenant proof of the SCOPE RULE; a permission without that proof is platform scope; no promotion permission is tenant scope by default"
+    # also requires ISS-0993's fix, PR A2 (enforcing), merged; queue edge is Q-961, which is closed only when A2 merges
     depends_on: [REQ-445]
 
   - id: REQ-447
@@ -33754,9 +33777,9 @@ requirements:
     impl_order: 964  # letflow-queue task id, GH#2235. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user). Queue depends_on: Q-962, Q-963, Q-961.
     description: >
       Implements decisions D4, D5 and D8 of the role-charter decision record
-      (REQ-445). Read that record and docs/roles.md first. Requires ISS-0994
-      (queue Q-961: permission scope, platform tenant) and REQ-446 (named
-      permissions) to be merged.
+      (REQ-445). Read that record and docs/roles.md first. Requires the fix for ISS-0993 (PR A2, the enforcing merge, not only A1;
+      ISS-0994 / queue Q-961 is its duplicate and is closed only when A2 merges)
+      and REQ-446 to be merged.
 
       BUILDS:
       1. Letflow.Api.Authorization: add :TENANT_ADMIN to @roles and the role

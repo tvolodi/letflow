@@ -68,6 +68,12 @@ Enforcement points. Every path that honours `PLATFORM_ADMIN` must be bound to th
 
 1. `Authorization.evaluate_access/2`, the `:Unknown` branch (`authorization.ex` ~931-937).
 2. The catch-all `core_role_allows?(:PLATFORM_ADMIN, _permission)` (`authorization.ex` ~1130).
+   Until REQ-446 has proven or added the source-tenant ownership check (D3 binding condition),
+   `:PromotionsRead`, `:PromotionsManage`, the promote route and the platform-events permission are
+   treated as platform scope FOR THE CATCH-ALL: honoured only for `PLATFORM_ADMIN` in the platform
+   tenant; a `PLATFORM_ADMIN` of any other tenant is denied them.
+2a. `Authorization.is_task_worker_only?/1` (`authorization.ex` 964, used at ~950): it and every other
+   reference to the `PLATFORM_ADMIN` role must use the platform-tenant-aware check.
 3. `Letflow.Plugs.TenantStatus`: the deactivated-tenant exemption for `PLATFORM_ADMIN`
    (`plugs/tenant_status.ex` ~102).
 4. Every hand-built `AccessContext`. Grep finds exactly two constructions:
@@ -122,8 +128,9 @@ permission unless a module's own manifest grants it. `GET /tasks` returns all te
 
 Existing non-platform-tenant `PLATFORM_ADMIN` members and API tokens are migrated to `TENANT_ADMIN`
 (REQ-447). The migration is hygiene. The primary control is the evaluation-time binding of ISS-0993:
-once it lands, a stale `PLATFORM_ADMIN` claim, row or token outside the platform tenant is DENIED at
-evaluation time. Order: ISS-0993 lands before or together with REQ-447; REQ-447 must not ship alone.
+once it lands, a stale `PLATFORM_ADMIN` claim, row or token outside the platform tenant is denied
+every platform-scope permission and the `:Unknown` endpoint at evaluation time, and keeps
+tenant-scope powers in its own tenant only until REQ-447 migrates it (the D4 Transition). Order: ISS-0993 lands before or together with REQ-447; REQ-447 must not ship alone.
 
 ### D9. Deferred, NOT built
 
@@ -143,7 +150,12 @@ source (`lib/letflow/definitions/promotion.ex` ~171-176, `tenant_classifier.(sou
 (`lib/letflow/definitions/promotion_plan.ex` ~179-180; see also the "permission_checker gap"
 section of `lib/letflow/routers/promotions.ex` ~145-160 and the route comment in
 `lib/letflow/routers/tenants.ex` ~196-204, "`:test_tenant_id` is caller-supplied and IS a
-cross-tenant read"). Until that holds, no role other than `PLATFORM_ADMIN` may be granted them. If
+cross-tenant read"). Until that holds, no role other than `PLATFORM_ADMIN` may be granted them, and
+for the catch-all they are treated as platform scope (D2 enforcement point 2): a `PLATFORM_ADMIN` of
+a non-platform tenant is denied them. REQ-446 must ship a test showing that denial, plus a
+cross-tenant negative test (tenant A's admin promoting from tenant B's test tenant gets 403/404 per
+INV-5). REQ-448 must treat the TENANT_ADMIN and TENANT_AUDITOR promotion cells as conditional on
+those tests. If
 neither proof nor check is achievable they are reclassified platform scope and the REQ-447 and
 REQ-448 grants change.
 
@@ -216,14 +228,17 @@ Cross-tenant promotion becomes operator-only for now (product limitation): a cus
 
 ## Open risks and questions
 
-All three questions are NOT ratified; each is recorded with its stated default.
+None of the six items is ratified. Items 1 to 3 are questions and carry their stated defaults;
+items 4 to 6 are risks.
 
 1. Last-admin protection. Removing the last `TENANT_ADMIN` member, or deactivating that user, locks
    a tenant out. OPEN RISK. Default: nothing is built by this series; the risk is recorded here.
 2. Break-glass. Whether a platform operator ever needs supervised access into a customer tenant.
    DEFERRED with D9. Default: no such access exists.
-3. Realm role names in existing tenant realms. A stale `PLATFORM_ADMIN` claim is DENIED at
-   evaluation time once ISS-0993's per-request binding lands; the REQ-447 migration is hygiene (see
+3. Realm role names in existing tenant realms. Once ISS-0993's per-request binding lands, a stale
+   `PLATFORM_ADMIN` claim, row or token outside the platform tenant is denied every platform-scope
+   permission and the `:Unknown` endpoint, and keeps tenant-scope powers in its own tenant only
+   until REQ-447 migrates it; the REQ-447 migration is hygiene (see
    D8 for the order). A realm that still issues `PLATFORM_ADMIN` leaves that tenant with no admin
    until it issues `TENANT_ADMIN`. Default: no alias. REQ-447 handles the data; the issuance paths
    in D2 enforcement point 5 close.

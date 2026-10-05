@@ -54,7 +54,7 @@ configuration; if that is missing, no tenant is the platform tenant (0046 D1, D2
 ## TENANT_AUDITOR
 - Scope: tenant, read-only.
 - Who holds it: compliance officers, auditors, managers.
-- Does: read definitions, instances, all tasks, audit, metrics, attachments, entity data and promotions.
+- Does: read definitions, instances, all tasks, audit, metrics, attachments, entity data, and promotions reads once the ownership proof exists.
 - Must not: write, export, import, manage tokens, users, roles, modules or settings.
 
 ## Matrix

@@ -11,7 +11,8 @@ import { getOidcManager } from './OidcManager'
 import { attemptSilentSwitch } from './tenantOidcRegistry'
 import { tenantRoot } from '@/api/queryKeys'
 import { tenantsApi } from '@/api/tenants'
-import { resetTenantConfigCache } from './tenantConfig'
+import { resetTenantConfigCache, resolveRealmFromUrl } from './tenantConfig'
+import { isEmailFirstLoginEnabled } from './emailFirstFlag'
 import { buildRedirectArgs } from './oidcRedirectArgs'
 
 /** Shared by `login()` (authorization-code-flow callback) and
@@ -86,6 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handle = () => {
       clearToken()
       setSessionState(null)
+      // REQ-438 (design req434 D4): with the email-first flag on and NO realm
+      // known, do not sign in against the default realm. Clearing the session
+      // above is the whole job: ProtectedRoute (which owns router context,
+      // unlike this provider that sits above the router) re-renders
+      // unauthenticated, finds no realm and navigates to /login, carrying the
+      // current path. With a realm stored or in the URL -- or the flag off --
+      // the behaviour is unchanged: re-login into that same realm.
+      if (isEmailFirstLoginEnabled() && resolveRealmFromUrl() === null) return
       void getOidcManager().then(m => {
         void m.signinRedirect(buildRedirectArgs())
       })

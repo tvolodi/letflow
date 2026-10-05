@@ -29,25 +29,35 @@ let _cachedConfig: TenantConfig | null = null
 /**
  * Resolve a realm slug from URL/sessionStorage before falling back to hostname.
  *
- * Priority:
- *   1. sessionStorage key 'bpm_realm_slug' (set on a previous page load)
- *   2. URL query parameter 'realm'  (e.g. http://localhost:8080/?realm=swiftroute)
- *   3. null (caller falls back to hostname lookup)
+ * Priority (REQ-438, design req434 section 11.2 -- an explicit `?realm=` wins):
+ *   1. URL query parameter 'realm'  (e.g. http://localhost:8080/?realm=swiftroute)
+ *      -- overwrites any stored value, so a stale slug cannot beat it
+ *   2. sessionStorage key 'bpm_realm_slug' (set on a previous page load)
+ *   3. null (caller falls back to hostname lookup, or the email-first screen)
+ *
+ * When only one of the two is present the behaviour is unchanged.
  *
  * Side effect: if the slug is found in the URL it is written to sessionStorage
  * so that subsequent navigations within the SPA retain the correct realm.
  */
 export function resolveRealmFromUrl(): string | null {
-  const stored = sessionStorage.getItem(REALM_STORAGE_KEY)
-  if (stored) return stored
-
   const urlRealm = new URLSearchParams(window.location.search).get('realm')
   if (urlRealm) {
-    sessionStorage.setItem(REALM_STORAGE_KEY, urlRealm)
+    storeRealmSlug(urlRealm)
     return urlRealm
   }
 
+  const stored = sessionStorage.getItem(REALM_STORAGE_KEY)
+  if (stored) return stored
+
   return null
+}
+
+/** Persists the realm slug exactly as `resolveRealmFromUrl` does for a `?realm=`
+ *  load. Also used by the email-first page when discovery names a tenant, so
+ *  `buildRedirectArgs` embeds `?realm=<slug>` in the redirect_uri (ISS-0726). */
+export function storeRealmSlug(slug: string): void {
+  sessionStorage.setItem(REALM_STORAGE_KEY, slug)
 }
 
 export async function fetchTenantConfig(hostname: string): Promise<TenantConfig> {

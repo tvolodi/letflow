@@ -292,3 +292,8 @@ config :letflow, Letflow.LoginDiscovery.Notifier,
   adapter: Letflow.LoginDiscoveryNotifierDouble,
   timeout_ms: 1_000,
   max_concurrent: 100
+
+# REQ-441 (design s3.4): compile-time gate for the SMTP transport's TEST-ONLY trust
+# override (a DER CA list replacing the OS store). Set to true here and nowhere else;
+# in every other build the override branch is not compiled.
+config :letflow, Letflow.LoginDiscovery.Notifier.Smtp, allow_test_cacerts: true

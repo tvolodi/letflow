@@ -33328,23 +33328,33 @@ requirements:
 
       BUILDS:
       1. An SMTP adapter module implementing the REQ-437 notifier behaviour
-      (for example Letflow.LoginDiscovery.Notifier.Smtp), plus whatever
-      mailer module the chosen library needs. Library choice (proposal:
-      Swoosh with its SMTP adapter over gen_smtp; alternatives Bamboo or a
-      bare gen_smtp) is made by CODE-DESIGNER and recorded as a decision
-      record; mix.exs gains only that dependency. The hex dependency needs
-      network for mix deps.get; if this environment cannot fetch it, say so
-      explicitly rather than guessing.
+      (Letflow.LoginDiscovery.Notifier.Smtp), with its helper modules
+      Smtp.Message, Smtp.Config and Smtp.Transport (Transport is the only
+      module that names the mail library). Library: gen_smtp ALONE (decision
+      docs/migration/decisions/0045-mail-library-choice.md; chosen by
+      CODE-DESIGNER, a deviation from this entry's original Swoosh-over-
+      gen_smtp proposal, with the reasons recorded there); mix.exs gains only
+      gen_smtp, so mix.lock gains exactly gen_smtp and its dependency ranch
+      (not Swoosh, not Mua) and no mailer module exists. The hex dependency
+      needs network for mix deps.get; if this environment cannot fetch it,
+      say so explicitly rather than guessing.
       2. Configuration by environment reference only (INV-4, no secret in the
       repository): LETFLOW_MAIL_ADAPTER (the adapter selector; unset or
-      unknown keeps the Noop default, unknown value raises at boot),
+      blank keeps the Noop default, an unknown value raises at boot),
       LETFLOW_SMTP_HOST, LETFLOW_SMTP_PORT, LETFLOW_SMTP_USERNAME,
       LETFLOW_SMTP_PASSWORD, LETFLOW_SMTP_TLS (verified TLS by default;
       plaintext only when explicitly set and never in :prod), LETFLOW_MAIL_FROM
-      and the deployment base URL for any link (INV-9). Read once at boot in
-      config/runtime.exs; with the adapter selected, a missing host,
-      credentials or sender raises at boot with a message that echoes no
-      value; .env.example (and deploy/.env.example) document the names with no
+      LETFLOW_PUBLIC_BASE_URL (the deployment base URL for any link, INV-9)
+      and LETFLOW_MAIL_TIMEOUT_MS. Validated at boot in config/runtime.exs:
+      the non-secret values are written to application env, while the SMTP
+      username and password are validated for PRESENCE at boot only (as
+      presence markers; no secret value reaches the parser) and are read from
+      the OS environment at call time via System.get_env, never stored in
+      application env (design req441 s3.5). ALL variables are OPTIONAL with
+      default noop/OFF: nothing is required at boot unless
+      LETFLOW_MAIL_ADAPTER=smtp is selected; then a missing host, port,
+      credentials, sender or base URL raises at boot with a message that
+      echoes no value; .env.example (and deploy/.env.example) document the names with no
       working value. The password is never logged, never in a struct field
       that is inspected or serialised, and never in a crash report.
       3. UNIFORM RESPONSE WHATEVER THE DELIVERY RESULT: delivery runs in the
@@ -33375,19 +33385,20 @@ requirements:
       incomplete configuration refuses to boot (item 2). The enablement gate
       that treats Smtp as a real adapter is REQ-444, not built here.
     open_questions:
-      - "OPEN, decision needed (CODE-DESIGNER, recorded in docs/migration/decisions/): the mail library and, if an external transactional provider is preferred later, the second adapter. SMTP is first by BA decision D-B."
+      - "RESOLVED for the mail library (decision 0045: gen_smtp alone, status PROPOSED pending REVIEWER and SECURITY-REVIEWER sign-off in the implementation review); still OPEN: if an external transactional provider is preferred later, the second adapter. SMTP is first by BA decision D-B."
       - "EXTERNAL dependency, not in this repository: the ai-dala-infra secrets inventory needs entries for the SMTP credentials (LETFLOW_SMTP_USERNAME / LETFLOW_SMTP_PASSWORD) and the chosen SMTP relay per environment (0042 OQ-4 asked who owns the credentials: the platform operator). Recorded, not edited from here."
       - "OPEN, only remaining user/legal decision of the series (0042 OQ-3, decision 0043 D-D): the feature stays off outside dev until a named person confirms the lawful basis and controller; this entry makes the mail adapter real but does not lift that gate. Sender domain SPF/DKIM/DMARC alignment is an infrastructure action outside this repository."
       - "SMTP replies can reveal whether a mailbox exists (a synchronous rejection). This is safe only because the delivery result never reaches the HTTP response; the counters carry no address. Confirm with SECURITY-REVIEWER that the :failed counter's rate is not itself an oracle an operator-visible dashboard could expose per address (it carries no per-address dimension)."
       - "Keycloak Organizations: DEFERRED (BA decision D-G); not relevant to this entry."
+    # NOTE: AC amended 2026-10-05 per design req441 (decision 0045)
     acceptance_criteria:
       - "the Smtp adapter implements Letflow.LoginDiscovery.Notifier (a Mox-style or behaviour-conformance test shows the callbacks and return shapes match REQ-437's port exactly); the port itself is not changed"
       - "delivery against a local SMTP sink started by the test (an in-process listener, no network egress): a multi-tenant address's notifier task sends exactly one message whose recipient is the typed address and whose body lists the active tenants' slugs and display names as plain text with a link built from the configured base URL; the sink receives no other recipient"
       - "uniform response: through the real Letflow.Routers.LoginDiscovery chain, the response bytes for the same multi-tenant POST are byte-identical when the adapter succeeds, returns {:error, _}, raises, exits, times out, and when the SMTP sink refuses the recipient, refuses the connection, or fails TLS; the request process stays alive; status, headers and body compared directly"
-      - "failure handling: after a failed attempt the per-address :send bucket is consumed (a second attempt inside the interval is skipped, not retried); no retry process is started (a grep guard shows no retry loop or Process.send_after on the delivery path); the [:letflow, :login_discovery, :notifier] event is emitted once per attempt with metadata exactly %{outcome: _}"
+      - "failure handling: after a failed attempt the per-address :send bucket is consumed (a second attempt inside the interval is skipped, not retried); no retry process is started (a grep guard shows no retry loop or Process.send_after on the delivery path); the [:letflow, :login_discovery, :notifier] event is emitted by Dispatch only, exactly once per real deliver intent (outcome :delivered, :failed, or :skipped when the :send bucket refuses or the adapter is the Noop default; no event when there is nothing to deliver), with measurement %{count: 1} and metadata exactly %{outcome: _}"
       - "no leak: the full capture_log(level: :debug) output across the success and every failure case above contains no email address, no tenant slug or display name, no SMTP reply text, no password and no exception message text; the typed email is placed in the exception message of the raising double to prove it (design s13 C-4 form); a grep guard shows no start_child/Task.start/spawn with an MFA or argument-list form under lib/letflow/login_discovery/"
       - "no secret in the repository: a grep guard over the tracked tree finds no value assigned to LETFLOW_SMTP_PASSWORD or LETFLOW_SMTP_USERNAME outside the variable names in .env.example/docs, and .env.example names the variables with no working value; quoted"
-      - "boot configuration tested (config/runtime.exs evaluated with a controlled environment): LETFLOW_MAIL_ADAPTER unset keeps Noop; unknown value raises; smtp selected with a missing host, port, sender or credentials raises with a message containing none of the values; a complete configuration boots; plaintext TLS mode raises in :prod"
+      - "boot configuration tested (config/runtime.exs evaluated with a controlled environment): LETFLOW_MAIL_ADAPTER unset keeps Noop; unknown value raises; smtp selected with a missing host, port, sender, base URL or credentials (credentials checked as presence markers only) raises with a message containing none of the values; a complete configuration boots; plaintext TLS mode raises in :prod and for any non-loopback host"
       - "adapter selection: LETFLOW_MAIL_ADAPTER=smtp sets the application-env key `config :letflow, Letflow.LoginDiscovery.Notifier, adapter:` to the Smtp module (and unset leaves Noop), asserted from the evaluated runtime config; this is the same key the enablement gate of REQ-444 reads (the gate itself, and its test with the Smtp module, belong to REQ-444, which depends_on this entry)"
       - "message template: subject and body are fixed strings; a tenant display name containing markup, a newline or a URL is rendered as inert text and produces no extra header and no link other than the configured-base-URL link (header-injection and link-injection test)"
       - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-4, INV-5, INV-8 and INV-9"

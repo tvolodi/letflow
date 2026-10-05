@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ441-20261005/step-02a-elixir-dev.json",
   "created_at": "2026-10-05T16:40:46Z",
   "started_at": "2026-10-05T16:40:46Z",
-  "completed_at": "2026-10-05T16:40:46Z",
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T17:03:56Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -54,10 +54,34 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
-    "next_action": ""
+    "status": "PASS",
+    "summary": "REQ-441 implemented per design: Smtp adapter + Smtp.Message/Config/Transport (gen_smtp alone, decision 0045), Dispatch notifier event, runtime.exs mapping, .env.example blocks, SMTP sink + smoke/no-listening-socket tests. mix.lock gained exactly gen_smtp 1.3.0 + ranch 2.3.0; mix hex.audit clean; gen_smtp source verified for (a)-(f) and quoted in decision 0045 s9. compile --warnings-as-errors, format --check-formatted, check_boundaries pass; scoped tests 205/206 (the one failure is the REQ-437 source guard \"mix.exs is untouched\", expected while mix.exs is uncommitted). Deviations: Transport builds the RFC 5322 message itself instead of :mimemail.encode (mimemail logs the full header list incl. To at DEBUG); gen_smtp read timeouts are not settable (socket_timeout_ms governs connect only, Dispatch brutal_kill is the bound).",
+    "artifacts_out": [
+      "mix.exs",
+      "mix.lock",
+      "config/config.exs",
+      "config/runtime.exs",
+      "config/test.exs",
+      ".env.example",
+      "deploy/.env.example",
+      "lib/letflow/login_discovery/dispatch.ex",
+      "lib/letflow/login_discovery/notifier/smtp.ex",
+      "lib/letflow/login_discovery/notifier/smtp/config.ex",
+      "lib/letflow/login_discovery/notifier/smtp/message.ex",
+      "lib/letflow/login_discovery/notifier/smtp/transport.ex",
+      "test/support/smtp_sink.ex",
+      "test/letflow/login_discovery/notifier/smtp_application_test.exs",
+      "test/letflow/login_discovery/notifier/smtp_smoke_test.exs",
+      "docs/migration/decisions/0045-mail-library-choice.md",
+      "docs/requirements.yaml"
+    ],
+    "issues": [
+      "test/letflow/login_discovery_test.exs \"source guards: mix.exs is untouched\" (REQ-437) fails while mix.exs has an uncommitted diff; it passes once ORCH commits (git diff HEAD) but its intent is now stale: TEST-DESIGNER should update it.",
+      "Non-ASCII message bodies are sent base64 (ASCII bodies 7bit): tests asserting on raw DATA for UTF-8 display names must decode.",
+      "gen_smtp read timeout is a fixed 1200000 ms and the STARTTLS handshake 5000 ms; only connect is settable. Hard bound is Dispatch brutal_kill.",
+      "Sockets on gen_smtp network_failure paths are not closed by the library; they close with the (short-lived) calling task. Proven by the brutal-kill sink test.",
+      "Decision 0045 stays PROPOSED for REVIEWER/SECURITY-REVIEWER sign-off."
+    ],
+    "next_action": "SECURITY-REVIEWER"
   }
 }

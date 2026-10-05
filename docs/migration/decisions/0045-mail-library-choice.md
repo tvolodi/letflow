@@ -1,6 +1,7 @@
 # 0045 -- Mail library for the login-discovery notifier adapter (REQ-441)
 
-Status: PROPOSED. Not ratified. The new hex dependency this record recommends is a HARD STOP:
+Status: PROPOSED. Not ratified (REVIEWER and SECURITY-REVIEWER sign it off in the implementation review).
+The dependency was approved by the supervisor; the chosen library is gen_smtp ALONE (see sections 8 and 9). The new hex dependency this record recommends is a HARD STOP:
 it needs explicit approval from the supervisor / repo owner before ELIXIR-DEV may touch `mix.exs`
 or `mix.lock`. Until then no dependency is added and `mix deps.get` is not run.
 
@@ -229,3 +230,208 @@ Approval of the dependency is conditional on, and ELIXIR-DEV must evidence in it
 - OQ-B. If a later requirement wants HTML or templated mail, is that a trigger to move to O1/O2 (a
   new decision record), or is gen_smtp's `mimemail` enough? Not decided here; not needed by REQ-441.
 - OQ-C. The vendor for the eventual second (HTTP) adapter (O5): out of scope; needs its own record.
+
+## 8. Chosen library (implementation record, REQ-441 step 02a)
+
+Status of this record stays PROPOSED: REVIEWER and SECURITY-REVIEWER sign it off in the implementation
+review. The dependency itself was approved by the supervisor on the condition set recorded in the
+step-02a handoff.
+
+**The chosen library is `gen_smtp` ALONE** (O3): `{:gen_smtp, "~> 1.3"}` in `mix.exs`, resolved to
+gen_smtp 1.3.0 and ranch 2.3.0, the only two new `mix.lock` entries. No Swoosh, no Mua, no Mailer, no
+`mimemail` encoder call (see 9.5).
+
+**Deviation from the requirement's proposal (Swoosh + SMTP adapter over gen_smtp), and why.** The
+requirement permitted "a bare gen_smtp" and delegated the choice to CODE-DESIGNER, so this is within
+scope; it is recorded here because it differs from the proposal text:
+
+1. A `Swoosh.Mailer` wraps delivery in a telemetry span (`[:swoosh, :deliver]`) whose metadata carries
+   the email and the adapter config, including the SMTP password (hex.pm / Swoosh docs per the ORCH
+   research; not re-verified against Swoosh source because Swoosh is not added). REQ-441 forbids the
+   address and the password in telemetry. The safe use of Swoosh is to bypass its Mailer, which is
+   the part that is its value here.
+2. Swoosh's SMTP adapter does not verify TLS unless `tls_options` carry verify mode, CA certs, SNI
+   and a hostname match function (per the Swoosh docs); our code must set all of that anyway.
+3. Swoosh's documented SMTP example uses `retries: 2`; this requirement needs a single attempt.
+4. Lock footprint: 2 new entries (gen_smtp, ranch) against 4 (swoosh, gen_smtp, ranch, idna).
+
+## 9. Verified against deps/gen_smtp 1.3.0 source
+
+Read in this worktree on 2026-10-05, from `deps/gen_smtp/src/` (hex package gen_smtp 1.3.0; lock
+inner checksum `62c3d91f0dcf6ce9db71bcb6881d7ad0d1d834c7f38c13fa8e952f4104a8442e`, outer
+`0b73fbf069864ecbce02fe653b16d3f35fd889d0fdd4e14527675565c39d84e6`; ranch 2.3.0 inner
+`7de7b041a9a6a5091a3aa5898d66c0564be671d87db4f9d63b1b5ee775b097df`, outer
+`6168ec49409d982f7cfbd83dd083144f6cbe67caa4036551d2f0a3ad67c9d023`). `mix hex.audit` output:
+`No retired or security advisory packages found`. Line numbers are those of the shipped files.
+
+### 9.1 (a) Fail-closed STARTTLS
+
+`gen_smtp_client.erl:32` default is `{tls, if_available}` (a fallback to plaintext), so the adapter sets
+`tls: :always`. `gen_smtp_client.erl:780-802`:
+
+```erlang
+try_STARTTLS(Socket, Options, Extensions) ->
+    case {proplists:get_value(tls, Options), proplists:get_value(<<"STARTTLS">>, Extensions)} of
+        {Atom, true} when Atom =:= always; Atom =:= if_available ->
+            ...
+            case {do_STARTTLS(Socket, Options), Atom} of
+                {false, always} ->
+                    quit(Socket),
+                    erlang:throw({temporary_failure, tls_failed});
+                {false, if_available} ->
+                    {Socket, Extensions};
+        ...
+        {always, _} ->
+            quit(Socket),
+            erlang:throw({missing_requirement, tls});
+```
+
+With `always`: a server that does not offer STARTTLS throws `{missing_requirement, tls}` (line 796-798),
+and a failed upgrade throws `{temporary_failure, tls_failed}` (line 785-788); only `if_available`
+continues in plaintext (line 789-791). The `tls_failed` retry fallback to no-TLS
+(`handle_smtp_throw/4`, lines 335-350) is taken only for `if_available`; for `always` it goes to
+`try_next_host/4` (line 349), which with `retries: 0` ends the attempt (9.2). AUTH is attempted after
+`try_STARTTLS` (`open_smtp_session/2`, lines 389-391), so a refused upgrade means zero AUTH, zero
+MAIL FROM. Proven against the sink (`smtp_smoke_test.exs`: no STARTTLS offered, untrusted
+certificate, untrusted default store: `auth == []`, `mail_from == nil`).
+
+`tls_options` reach the upgrade (`gen_smtp_client.erl:811-814`):
+
+```erlang
+catch smtp_socket:to_ssl_client(
+    Socket, [binary | proplists:get_value(tls_options, Options, [])], 5000
+)
+```
+
+which is `ssl:connect(Socket, ssl_connect_options(Options), Timeout)` (`smtp_socket.erl:274-275`).
+The user's `tls_options` REPLACE the library default `[{versions, ['tlsv1', 'tlsv1.1', 'tlsv1.2']}]`
+(`gen_smtp_client.erl:34`; the merge is `lists:ukeymerge` of the user list over the defaults, lines
+201-204), so the adapter passes `verify: :verify_peer`, `cacerts`, `server_name_indication`,
+`customize_hostname_check: [match_fun: :public_key.pkix_verify_hostname_match_fun(:https)]` and
+`versions: [:"tlsv1.3", :"tlsv1.2"]`. A verification failure comes back as `{error, _}`, which falls in
+the `Else -> ... false` clause (lines 832-834), i.e. the `{false, always}` branch above. For implicit TLS
+(`ssl: true`, port 465 style) the same list is passed as `sockopts`, which `connect/2` forwards to
+`ssl:connect/5` (`gen_smtp_client.erl:875`, `smtp_socket.erl:108-109`).
+
+### 9.2 (b) Retries
+
+Default `{retries, 1}` (`gen_smtp_client.erl:38`). `gen_smtp_client.erl:354-381`:
+
+```erlang
+try_next_host({FailureType, Message}, [{_Distance, Host} | _Tail] = Hosts, Options, RetryList) ->
+    Retries = proplists:get_value(retries, Options),
+    RetryCount = proplists:get_value(Host, RetryList),
+    case fetch_next_host(Retries, RetryCount, Hosts, RetryList, Options) of
+        {[], _NewRetryList} ->
+            {error, retries_exceeded, {FailureType, Host, Message}};
+...
+fetch_next_host(0, _RetryCount, [{_Distance, Host} | Tail], RetryList, _Options) ->
+    % done retrying completely
+    {Tail, lists:keydelete(Host, 1, RetryList)};
+```
+
+On the first failure `RetryCount` is `undefined`, so the two `is_integer(RetryCount)` clauses (364, 370)
+are skipped and the `fetch_next_host(0, ...)` clause (375) returns the remaining hosts (`Tail`). With
+`no_mx_lookups: true` (`send_it/2`, lines 280-295, builds a single host `[{0, RelayDomain}]`) `Tail` is
+`[]`, so the result is `{error, retries_exceeded, ...}` after exactly one session. Proven: a 450 reply
+at RCPT and a connection dropped after the greeting each produce exactly one sink connection after a
+wait (`smtp_smoke_test.exs`, "retries").
+
+### 9.3 (c) Blocking send in the calling process
+
+`gen_smtp_client.erl:200-211`:
+
+```erlang
+send_blocking(Email, Options) ->
+    NewOptions = lists:ukeymerge(1, lists:sort(Options), lists:sort(?DEFAULT_OPTIONS)),
+    case check_options(NewOptions) of
+        ok ->
+            send_it(Email, NewOptions);
+```
+
+`send_it/2` (lines 278-314) opens the session, sends and closes in the same process; there is no
+`spawn`. The only `spawn_link` calls are in the NON-blocking `send/3` (line 170) and inside the
+`-ifdef(TEST)` eunit block (lines 1528, 1620). So `send_blocking/2` spawns no linked worker. The
+`timeout` option bounds only the TCP/SSL CONNECT (`gen_smtp_client.erl:870-875`, default 5000); every
+read uses the fixed `-define(TIMEOUT, 1200000)` (line 51; reads at 894 and 913), and the STARTTLS
+handshake is hard-coded to 5000 ms (line 813). So the library has NO overall or per-phase read timeout
+that we can set: the guarantee of a bounded attempt is `Dispatch`'s `Task.yield || Task.shutdown(:brutal_kill)`
+of the inner task, exactly as the design states (design 4.4 item 3: "The sum of phases is not bounded
+by this value; the hard timeout is the guarantee"). The adapter's `socket_timeout_ms` therefore governs
+the connect phase only. `Process.flag(:trap_exit, ...)` is not used.
+
+### 9.4 (d) Socket closure
+
+TCP sockets opened with `gen_tcp:connect` (`smtp_socket.erl:106-107`) are owned by, and linked to, the
+calling process, so they are closed when it ends or is `:brutal_kill`ed. `ssl` connections upgraded or
+opened by `ssl:connect` are bound to their owner the same way by OTP `ssl`. Explicit closure:
+`send_it/2` runs `quit(Socket)` in an `after` clause (lines 311-313); `quit/1` is
+`smtp_socket:send(Socket, "QUIT\r\n"), smtp_socket:close(Socket)` (lines 937-940); the protocol-failure
+paths call `quit(Socket)` before throwing (e.g. lines 787, 797). NOT closed explicitly: the
+`{network_failure, _}` throws (e.g. a recv error or timeout, lines 907 and 925) and an
+unexpected exception inside the session; in those the socket lives until the calling process exits. In
+the adapter the calling process is the short-lived inner Dispatch task, which exits immediately after
+the call (or is killed), so the socket closes with it. Proven by the sink: after a `:brutal_kill` of a
+task blocked on a hanging server, `open_connections/1` reaches 0 and no new process survives
+(`smtp_smoke_test.exs`, "a brutal kill mid-call ...").
+
+### 9.5 (e) Logging and crash reports
+
+- `gen_smtp_client.erl` contains no `?LOG_*` macro. It calls `error_logger:error_msg/1,2` in three
+  places (lines 822, 826, 830): `"Error in ssl upgrade: ~p.~n"` with the `Reason` of a CRASH of
+  `to_ssl_client` (the TLS options, no credentials and no recipient), `"Error in ssl upgrade: socket
+  closed.~n"` and `"SSL not started.~n"`. The password lives only in the `Options` proplist; it is
+  read at lines 602-603 (`to_binary/1`) and sent base64-encoded on the wire. The `trace/3` helper
+  (line 1003) is a no-op unless a `trace_fun` option is given, which the adapter never sets
+  (note that `try_STARTTLS` would pass the whole `Options`, password included, to a `trace_fun`:
+  one more reason it must never be set).
+- `smtp_util.erl:79`: `error_logger:info_msg` only when the node's own FQDN cannot be resolved
+  (contains the local hostname, not the recipient or credentials). It runs because
+  `?DEFAULT_OPTIONS` evaluates `smtp_util:guess_FQDN()` on each send (line 36); the adapter passes an
+  explicit `hostname`, but the default list is still built.
+- `mimemail.erl:409` (`get_header_value/3`): `?LOG_DEBUG("Headers: ~p", [Headers], ?LOGGER_META)` logs
+  the COMPLETE header list, including `To` (the recipient address), at debug on every call, and
+  `mimemail:encode/1` calls it repeatedly. Observed live in this implementation: a first version that
+  used `:mimemail.encode/1` produced `[debug] Headers: [{"From", ...}, {"To", "someone@example.org"}, ...]`
+  in the captured log. This would violate the no-leak criterion, so the adapter does NOT call mimemail:
+  `Smtp.Transport` builds the RFC 5322 message itself (fixed ASCII headers and allow-list-validated
+  addresses; a 7bit body when all-ASCII, base64 otherwise). `gen_smtp_client:send_blocking/2` takes the
+  already-built binary and does not call mimemail. After the change a `capture_log(level: :debug)` test
+  across success, an SMTP rejection and an untrusted-TLS failure contains none of the recipient, the
+  username, the password, the reply text or any tenant text (`smtp_smoke_test.exs`).
+- No crash report can print the options: no process is spawned (9.3), and the adapter wraps the call in
+  `rescue`/`catch` returning `{:error, :failed}` without inspecting any term.
+
+### 9.6 (f) Starting `:gen_smtp` opens no listening socket
+
+`gen_smtp.app.src` (whole file):
+
+```erlang
+{application,gen_smtp,
+             [{description,"The extensible Erlang SMTP client and server library."},
+              {vsn,"1.3.0"},
+              {applications,[kernel,stdlib,crypto,asn1,public_key,ssl,ranch]},
+              {registered,[]},
+              ...
+```
+
+There is no `mod` key: the application has no callback module, so starting it starts no process and
+no listener. A listener exists only when code calls `gen_smtp_server:start/2,3` (server side, which
+uses `ranch`); the adapter never does. Mix lists `gen_smtp` in the letflow application's `applications` automatically (verified in
+`_build/test/lib/letflow/ebin/letflow.app`), and `gen_smtp.app` lists `kernel, stdlib, crypto, asn1,
+public_key, ssl, ranch`, so `ranch` (and the OTP apps) start as its dependencies; no
+`extra_applications` change was needed. Proven by `smtp_application_test.exs`: after stopping
+`:gen_smtp` and `:ranch`, `Application.ensure_all_started(:gen_smtp)` leaves the set of OS sockets in
+the `listen` state unchanged and `:ranch.info/0` reports no listeners.
+
+### 9.7 Other facts the implementation relies on
+
+- `check_options/1` (lines 943-960): `auth: :always` requires `username` and `password`
+  (`{error, no_credentials}` otherwise); the adapter always passes both.
+- Authentication preference is CRAM-MD5, LOGIN, PLAIN, XOAUTH2 among those the server advertises
+  (`?AUTH_PREFERENCE`, lines 44-49); with `auth: :always` and no accepted mechanism the call fails with
+  `{permanent_failure, auth_failed}` (line 611).
+- The EHLO identity is the `hostname` option (`try_EHLO/2`, line 747); the adapter sets it to the
+  sender's domain so the node's FQDN is not advertised.
+- `retries_exceeded`, `no_more_hosts` and `send` error tuples carry the remote reply text; the adapter
+  collapses every non-binary return to `{:error, :failed}` and never inspects or logs them.

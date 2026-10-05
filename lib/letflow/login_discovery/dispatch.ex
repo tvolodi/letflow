@@ -14,11 +14,21 @@ defmodule Letflow.LoginDiscovery.Dispatch do
   Inside the task: `LoginDiscovery.delivery/2` decides whether anything is to be
   delivered; if so the per-address `:send` bucket is consumed first
   (`LoginDiscoveryRateLimit.consume_email_silent(key, :send)`; a refusal skips the
-  send and emits no outcome event, the request already emitted its one); then the configured adapter runs in an inner supervised task under a
-  hard timeout (`timeout_ms`, killed on expiry). A raise, exit, throw, error
-  return or timeout is dropped with one FIXED log line carrying no email,
-  tenant, slug or exception text (INV-4, INV-8); it never reaches the HTTP
-  response.
+  send and emits no `[:letflow, :login_discovery, :outcome]` event, the request
+  already emitted its one). Then the configured adapter runs in an inner
+  supervised task under a hard timeout (`timeout_ms`, killed on expiry). A raise,
+  exit, throw, error return or timeout is dropped with one FIXED log line
+  carrying no email, tenant, slug or exception text (INV-4, INV-8); it never
+  reaches the HTTP response.
+
+  Notifier event (REQ-441): exactly one
+  `[:letflow, :login_discovery, :notifier]` event (measurement `%{count: 1}`,
+  metadata EXACTLY `%{outcome: outcome}`) per real deliver intent, emitted here
+  and never by an adapter. `:delivered`: a real adapter returned `:ok`.
+  `:failed`: anything else, including a timeout and a refused inner start.
+  `:skipped`: the `:send` bucket refused, or the adapter is the Noop default.
+  Nothing-to-deliver shapes emit no notifier event. No handler is attached to
+  this event; exposing it anywhere needs its own security sign-off.
 
   Config: `config :letflow, Letflow.LoginDiscovery.Notifier, adapter:,
   timeout_ms:, max_concurrent:`.
@@ -83,9 +93,12 @@ defmodule Letflow.LoginDiscovery.Dispatch do
   defp run(recipient, mode, result, adapter, timeout) do
     with true <- is_binary(recipient),
          {:deliver, tenants} <- LoginDiscovery.delivery(mode, result),
-         {:ok, [key | _previous]} <- LoginDirectory.email_keys(recipient),
-         :ok <- Limiter.consume_email_silent(key, :send) do
-      deliver(adapter, recipient, tenants, timeout)
+         {:ok, [key | _previous]} <- LoginDirectory.email_keys(recipient) do
+      case Limiter.consume_email_silent(key, :send) do
+        :ok -> deliver(adapter, recipient, tenants, timeout)
+        :rate_limited -> emit_notifier(:skipped)
+        _other -> :ok
+      end
     else
       _skip -> :ok
     end
@@ -93,7 +106,22 @@ defmodule Letflow.LoginDiscovery.Dispatch do
     _kind, _reason -> :ok
   end
 
+  # One notifier event per genuine attempt (REQ-441): the per-address :send
+  # bucket was already consumed, so a failure still counts as the one attempt.
   defp deliver(adapter, recipient, tenants, timeout) do
+    outcome = attempt(adapter, recipient, tenants, timeout)
+
+    if outcome == :failed do
+      Logger.warning("login discovery: notifier delivery did not complete")
+    end
+
+    emit_notifier(outcome)
+  end
+
+  # `:delivered` only means a real adapter reported success; the Noop default
+  # delivers nothing, so it is `:skipped`. A refused or exiting inner start
+  # (after the bucket was spent) is `:failed`, never a silent drop.
+  defp attempt(adapter, recipient, tenants, timeout) do
     task =
       Task.Supervisor.async_nolink(@supervisor, fn ->
         try do
@@ -106,12 +134,17 @@ defmodule Letflow.LoginDiscovery.Dispatch do
       end)
 
     case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
-      {:ok, :ok} ->
-        :ok
-
-      _failed ->
-        Logger.warning("login discovery: notifier delivery did not complete")
-        :ok
+      {:ok, :ok} -> if adapter == @default_adapter, do: :skipped, else: :delivered
+      _failed -> :failed
     end
+  catch
+    _kind, _reason -> :failed
+  end
+
+  # Metadata is EXACTLY %{outcome: outcome}: no address, tenant, slug, reason or
+  # reply text, ever. No handler is attached anywhere (see the moduledoc).
+  defp emit_notifier(outcome) when outcome in [:delivered, :failed, :skipped] do
+    :telemetry.execute([:letflow, :login_discovery, :notifier], %{count: 1}, %{outcome: outcome})
+    :ok
   end
 end

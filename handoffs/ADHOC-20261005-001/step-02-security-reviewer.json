@@ -1,0 +1,49 @@
+{
+  "handoff_id": "3b9f6d20-84c1-4a7e-9d05-c2e8f1a67b03",
+  "run_id": "ADHOC-20261005-001",
+  "workflow_id": "ADHOC",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/ADHOC-20261005-001/step-02-security-reviewer.json",
+  "created_at": "2026-10-05T03:50:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-434", "REQ-435", "REQ-436", "REQ-437", "REQ-438", "REQ-439", "REQ-440", "REQ-441", "REQ-442", "REQ-443", "REQ-444"],
+    "requirement_text": {
+      "note": "Verbatim descriptions: handoffs/ADHOC-20261005-001/step-01-code-designer.json context.requirement_text. This step reviews a decision record, not an implementation; scope the read to the ADR plus the security-relevant sources it cites."
+    },
+    "source_text": {
+      "coordinator_request": "REVIEWER and SECURITY-REVIEWER must check the ADR's consistency with docs/migration/decisions/ especially 0002, 0006, 0035, 0038, 0042, 0043 and security-invariants INV-1..INV-8."
+    },
+    "related_handoff_ids": ["step-01-code-designer.json", "step-01b-code-design-validator.json"],
+    "artifacts_in": [
+      "docs/migration/decisions/0044-hybrid-identity-model.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/migration/decisions/0002-oidc-integration.md",
+      "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "docs/migration/decisions/0028-unauthenticated-read-boundary.md",
+      "docs/migration/decisions/0038-tenant-membership-lookup-amendment.md",
+      "docs/migration/decisions/0042-email-first-login-tenant-directory.md",
+      "docs/migration/decisions/0043-email-first-login-ba-decisions.md",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-2/.claude/worktrees/agent-ada3a2b6d6b41b710",
+    "branch_name": "docs/ADR-hybrid-identity"
+  },
+  "task": {
+    "description": "SECURITY gate on the PROPOSED decision record docs/migration/decisions/0044-hybrid-identity-model.md (CODE-DESIGN-VALIDATOR PASS after 1 rework). It proposes a possible future shared-tier identity model (central realm, tenant selector, membership authorisation, domain-based routing) and a rollout whose Phase 1 is the already-ratified email-first directory. Review as a security design review: (a) the tenant-selector + membership rule and the INV-5 equivalence class (ADR 2.3.5): can a caller with a shared-realm account reach, read or be provisioned into a tenant they are not a member of; is 'JIT off for the shared realm' sufficient; what else could confer cross-tenant access (token claims, group/role mapping, subject collisions, email-verified/unverified emails, account linking, org membership vs local users row, deactivation propagation, token refresh)? (b) the weakening of 0006 s3.2 / R5 claims and 0002 'sole source' sentence: are the amendments honestly stated and bounded? (c) domain-based routing inference (R-7) and enumeration posture vs INV-5 and 0042 standing prohibitions (do the O3 additions keep the discovery response closed and byte-uniform?); (d) INV-1..INV-9 mapping in 2.3.7 and 6.7: is each correct against security-invariants.md (read the invariants file; quote the text you rely on); (e) anything the ADR should say but does not (e.g. account takeover via email change in the central realm, org-admin delegation, break-glass, audit trail per tenant, token audience/issuer pinning, logout/session scope, mobile token storage). Verify claims about this repo by reading the cited files (auth_pipeline.ex, identity.ex etc.). Do NOT edit the ADR. Output verdict RATIFIED/PASS or FAIL with findings classified BLOCKER/MAJOR/MINOR/ADVICE and exact locations; a FAIL means ORCH routes rework to CODE-DESIGNER. Note the ADR is PROPOSED and the user ratifies; your verdict is about security soundness and honesty of the record, not about choosing the option. Write the result into this handoff's 'result' (status PASS/FAIL, summary, issues[]) and set status COMPLETED; do not spawn agents; do not commit.",
+    "acceptance_criteria": [
+      "Each of (a)-(e) addressed with evidence",
+      "INV-1..INV-9 mapping verified against security-invariants.md text",
+      "Verdict with classified findings"
+    ]
+  },
+  "result": null
+}

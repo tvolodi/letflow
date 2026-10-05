@@ -2,13 +2,18 @@
 
 Status: RATIFIED by the user (repo owner) on 2026-10-05, after the role-system audit
 AUDIT-ROLES-20261005 (ISS-0994). Decisions D1..D10 below are settled; this record writes them
-down and does not re-decide them.
+down and does not re-decide them. D2 carries a ratified refinement (config-pinned, fail-closed
+platform tenant), relayed by the supervisor session on 2026-10-06 as the user's ratified
+definition; it supersedes ISS-0994's "config or column" option. ISS-0993's design only implements it.
 
 Date: 2026-10-05. Drafted by `CODE-DESIGNER` (REQ-445, queue task Q-962, GH#2233). Owner: `ORCH`.
 
-Supersedes / amends, by reference only: it supersedes the role COUNT of
-`0013-authorization-role-set.md` and its CANDIDATE addendum (the set of six becomes eight)
-and nothing else in 0013. Where this record narrows or replaces a passage of another record,
+Supersedes / amends, by reference only. Precisely:
+(1) the role COUNT of `0013-authorization-role-set.md` and its CANDIDATE addendum (six becomes
+eight), and nothing else in 0013; (2) the `:ModulesManage` grant sentence of 0039 D5 ("Who may
+install"), see C1; (3) 0013's addendum text calling `POST /users` and `POST /tokens`
+"`PLATFORM_ADMIN`-only" is historical, the current grant is per D5, see C2; (4) 0039 review note R2
+(the `PLATFORM_ADMIN` catch-all) is amended by D4, see C3. Where this record narrows or replaces a passage of another record,
 the "Consistency" section names the passage and the decision. This record never edits 0013 or any
 other existing record.
 
@@ -52,8 +57,30 @@ configuration is missing or invalid, no tenant is the platform tenant, so every 
 permission is denied for every caller. The operator role is the EXISTING `PLATFORM_ADMIN` role,
 honoured ONLY in the platform tenant; there is NO `PLATFORM_OPERATOR` role. A platform-scope
 permission is honoured only for a caller of the platform tenant (INV-10, landing via letflow-3's
-rules PR). The implementing fix for these mechanics is ISS-0993 (Q-960); TENANT_ADMIN
-(REQ-447) is not part of that fix.
+rules PR; INV-10 is not yet in force, and until it lands this record and ISS-0993's acceptance
+criteria are the authority). The config-pinned, fail-closed definition is a USER-RATIFIED
+refinement of D2 (relayed 2026-10-06), superseding ISS-0994's "config or column" option. The
+implementing fix for these mechanics is ISS-0993 (Q-960), whose design only implements this
+definition; TENANT_ADMIN (REQ-447) is not part of that fix.
+
+Enforcement points. Every path that honours `PLATFORM_ADMIN` must be bound to the platform tenant
+(ISS-0993 implements; paths verified by reading and grep on this branch):
+
+1. `Authorization.evaluate_access/2`, the `:Unknown` branch (`authorization.ex` ~931-937).
+2. The catch-all `core_role_allows?(:PLATFORM_ADMIN, _permission)` (`authorization.ex` ~1130).
+3. `Letflow.Plugs.TenantStatus`: the deactivated-tenant exemption for `PLATFORM_ADMIN`
+   (`plugs/tenant_status.ex` ~102).
+4. Every hand-built `AccessContext`. Grep finds exactly two constructions:
+   `Letflow.Plugs.Authorize` (`plugs/authorize.ex` ~103) and `routers/entities.ex` ~2238
+   (`check_unredacted_permission/2`). Both must carry the platform-tenant flag.
+5. Role-claim sync, token issuance (`Identity.create_token/3`), group-member add, role upsert and
+   tenant provisioning: each must refuse to grant, seed or accept `PLATFORM_ADMIN` outside the
+   platform tenant.
+
+Rules for the flag. The platform-tenant flag on `AccessContext` defaults to false and is set only
+from the server-side-configuration-resolved tenant, never from a request, token or claim value.
+The platform tenant itself cannot be deactivated (409; ISS-0994 fix_direction 6). `TENANT_ADMIN`
+is not allowed the `:Unknown` endpoint.
 
 ### D3. Every core permission has exactly one scope
 
@@ -76,8 +103,14 @@ groups, role bindings, API tokens, settings and branding, module and solution in
 
 ### D6. TENANT_AUDITOR (new)
 
-Read-only inside its own tenant. The exact permission list is REQ-448's and is copied into the
-table and into `docs/roles.md`.
+Read-only inside its own tenant. The exact permission list is REQ-448's (build item 1), copied
+here and into the table and `docs/roles.md`: `:DefinitionsRead`, `:InstancesRead`, `:TasksRead`,
+`:AuditRead`, `:MetricsRead`, `:AttachmentsRead`, `:EntitiesDefinitionsRead`, `:EntitiesQuery`,
+`:EntitiesAggregate`, `:EntitiesAttachmentsRead`, `:HelpRead`, `:MembershipsRead`, `:MyModulesRead`
+(already granted to every role), and the read permission(s) REQ-446 introduces for promotions
+(`:PromotionsRead`, subject to the binding condition under D3). Nothing else: no write, manage,
+export, import, token, user, role, module or settings permission, and no module (Catalog)
+permission unless a module's own manifest grants it. `GET /tasks` returns all tenant tasks for it.
 
 ### D7. Unchanged roles
 
@@ -86,7 +119,9 @@ table and into `docs/roles.md`.
 ### D8. Migration of existing admins
 
 Existing non-platform-tenant `PLATFORM_ADMIN` members and API tokens are migrated to `TENANT_ADMIN`
-(REQ-447).
+(REQ-447). The migration is hygiene. The primary control is the evaluation-time binding of ISS-0993:
+once it lands, a stale `PLATFORM_ADMIN` claim, row or token outside the platform tenant is DENIED at
+evaluation time. Order: ISS-0993 lands before or together with REQ-447; REQ-447 must not ship alone.
 
 ### D9. Deferred, NOT built
 
@@ -97,6 +132,24 @@ such access exists.
 ### D10. The role set stays closed
 
 The role set stays closed (0013, 0039 D4): a module cannot create a role.
+
+Binding condition on tenant classification. `:PromotionsRead`, `:PromotionsManage` and
+`POST /tenants/:test_tenant_id/promote/:process_key` are tenant scope ONLY IF REQ-446 proves (citing
+file:line) or adds a source-tenant ownership check. Today the code only rejects a `:production`
+source (`lib/letflow/definitions/promotion.ex` ~171-176, `tenant_classifier.(source_tenant_id) ==
+:production`) and `PromotionPlan.default_permission_checker/2` always returns `true`
+(`lib/letflow/definitions/promotion_plan.ex` ~179-180; see also the "permission_checker gap"
+section of `lib/letflow/routers/promotions.ex` ~145-160 and the route comment in
+`lib/letflow/routers/tenants.ex` ~196-204, "`:test_tenant_id` is caller-supplied and IS a
+cross-tenant read"). Until that holds, no role other than `PLATFORM_ADMIN` may be granted them. If
+neither proof nor check is achievable they are reclassified platform scope and the REQ-447 and
+REQ-448 grants change.
+
+Platform-events. `GET /promotions/platform-events` returns the platform sentinel stream whose
+payloads name other tenants (`lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md`
+section 2.3 point 2, ~lines 262-266: "payload names another tenant by id (`source_tenant_id`)"). It
+is therefore expected PLATFORM scope under its OWN permission, `PLATFORM_ADMIN` only, and must never
+be folded into `:PromotionsRead` unless REQ-446 proves it returns only the caller's rows.
 
 ## Permission scope table (D3)
 
@@ -151,8 +204,9 @@ fixed here; names marked "proposed" may be adjusted by REQ-446 but must keep the
 | `:PromotionsRead` (proposed, REQ-446) | tenant | the GET promotion routes; subject to REQ-446 proving the caller's tenant owns the source test tenant |
 | `:PromotionsManage` (proposed, REQ-446) | tenant | create, plan, approve, reject, apply, run-assertions and cross-tenant promote of the caller's own test/production pairing |
 | `:DefinitionsRollback` (proposed, REQ-446) | tenant | roll back a definition of the caller's tenant |
-| to be named by REQ-446 | platform if `GET /promotions/platform-events` returns other tenants' rows, otherwise it joins `:PromotionsRead` | REQ-446 investigates |
-| `:TenantSettingsManage` (name proposed, REQ-446 / ISS-0993 split) | tenant | `PATCH /tenant/settings` is split off `:TenantsManage` so a tenant can edit its own settings |
+| `:TenantSettingsManage` (name proposed, ISS-0993 split) | tenant | `PATCH /tenant/settings` is split off `:TenantsManage` so a tenant can edit its own settings; attributed to ISS-0993, not REQ-446 |
+| platform-events permission, to be named by REQ-446 | platform | `GET /promotions/platform-events`; `PLATFORM_ADMIN` only (see D3 Platform-events) |
+| route `POST /tenants/:test_tenant_id/promote/:process_key` (planned: takes `:PromotionsManage`) | tenant, conditional | route row; tenant scope only if the D3 binding condition is met |
 
 ## Open risks and questions
 
@@ -162,9 +216,18 @@ All three questions are NOT ratified; each is recorded with its stated default.
    a tenant out. OPEN RISK. Default: nothing is built by this series; the risk is recorded here.
 2. Break-glass. Whether a platform operator ever needs supervised access into a customer tenant.
    DEFERRED with D9. Default: no such access exists.
-3. Realm role names in existing tenant realms. A tenant realm that still issues the claim
-   `PLATFORM_ADMIN` to its admins will resolve to no role after REQ-447. Default: no alias; the
-   tenant realm must issue `TENANT_ADMIN`. REQ-447 handles the data.
+3. Realm role names in existing tenant realms. A stale `PLATFORM_ADMIN` claim is DENIED at
+   evaluation time once ISS-0993's per-request binding lands; the REQ-447 migration is hygiene (see
+   D8 for the order). A realm that still issues `PLATFORM_ADMIN` leaves that tenant with no admin
+   until it issues `TENANT_ADMIN`. Default: no alias. REQ-447 handles the data; the issuance paths
+   in D2 enforcement point 5 close.
+4. The platform tenant losing its last `PLATFORM_ADMIN`. OPEN RISK, same lockout class as risk 1.
+5. A configuration typo fails closed and disables the operator console. Recovery path: fix the
+   configuration and restart; there is no in-band override.
+6. The migration can leave a tenant with zero admins (same lockout class as risk 1).
+
+Checks for REQ-448. Field-level authorisation and redaction apply to `TENANT_AUDITOR`'s reads with no
+role-based bypass (INV-2). Module-settings writes keep secrets by reference only (INV-4).
 
 ## Consistency with existing decision records
 
@@ -210,7 +273,9 @@ platform permission).
 
 ### 0039 (platform / module / solution layering)
 
-> "A new core permission `:ModulesManage`, granted to `PLATFORM_ADMIN` only (same pattern as `:TenantsManage`), gates module install, solution install (D6) and module-settings writes (D7)."
+0039 D5 ("Who may install"):
+
+> "**Who may install.** A new core permission `:ModulesManage`, granted to `PLATFORM_ADMIN` only (same pattern as `:TenantsManage`), gates module install, solution install (D6) and module-settings writes (D7)."
 
 SUPERSEDED by D3 (`:ModulesManage` is tenant scope; "same pattern as `:TenantsManage`" no longer
 holds) and D5 (TENANT_ADMIN holds module and solution install). See C1.
@@ -261,7 +326,7 @@ role, and is separate from the deferred item in D9.
 
 ### Conflicts flagged for REVIEWER
 
-- C1. 0039 D4 states `:ModulesManage` is "PLATFORM_ADMIN only (same pattern as `:TenantsManage`)".
+- C1. 0039 D5 ("Who may install") states `:ModulesManage` is "PLATFORM_ADMIN only (same pattern as `:TenantsManage`)".
   The ratified model (D3 "everything else is tenant scope", D5 "module and solution install" for
   TENANT_ADMIN) makes `:ModulesManage` tenant scope, granted to TENANT_ADMIN. This is a deliberate
   supersession of that sentence by 0046 D3/D5, not an accident; REVIEWER to confirm, and to decide
@@ -272,6 +337,7 @@ role, and is separate from the deferred item in D9.
 - C3. 0039's "`PLATFORM_ADMIN` catch-all ... still covers module permissions" (review note R2)
   becomes true only in the platform tenant (D4); inside a customer tenant module permissions are
   covered by `TENANT_ADMIN` (D5) and by module `role_grants` (D10).
+  Terminology note: 0039's "platform role `CANDIDATE`" means a built-in role, not platform scope.
 
 ## REVIEWER sign-off
 

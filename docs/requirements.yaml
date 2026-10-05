@@ -33009,7 +33009,7 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: 947  # letflow-queue task id, GH#2195. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
+    impl_order: 959  # letflow-queue task id, GH#2219. Re-registered 2026-10-05 by ORCH (supersedes Q-947/GH#2195, blocked: queue dep on blocked Q-254 made it ineligible; REQ-133 is done here). Originally registered 2026-10-04 (WF-01 Step 3).
     description: >
       The web/ half of the feature, per REQ-434's design and decision 0042.
       Credentials are NEVER entered in the SPA (decision 0035's core decision
@@ -33300,7 +33300,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    impl_order: 955  # letflow-queue task id, GH#2213. Re-registered 2026-10-05 by ORCH (supersedes Q-952/GH#2206, blocked: stale queue depends_on). Originally registered 2026-10-05 (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
+    impl_order: 957  # letflow-queue task id, GH#2217. Re-registered 2026-10-05 by ORCH, depends_on Q-946 (REQ-437); supersedes Q-955/GH#2213, Q-952/GH#2206 (both blocked, wrong deps). NOTE: needs a NEW mix dependency (no Swoosh/gen_smtp in mix.exs/mix.lock today), so the flag-and-stop rule applies when it is built.
     description: >
       Implements the real mail adapter behind the notifier PORT that REQ-437
       specifies (Letflow.LoginDiscovery.Notifier, @callback
@@ -33524,7 +33524,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    impl_order: 956  # letflow-queue task id, GH#2214. Re-registered 2026-10-05 by ORCH (supersedes Q-953/GH#2207, blocked: depended on blocked Q-952). Originally registered 2026-10-05 (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
+    impl_order: 958  # letflow-queue task id, GH#2218. Re-registered 2026-10-05 by ORCH, depends_on Q-946, Q-957, Q-951; supersedes Q-956/GH#2214, Q-953/GH#2207 (both blocked).
     description: >
       Makes the hard gate on enabling the feature outside dev (0042 OQ-3: a
       named person must confirm the lawful basis and controller) a TESTABLE

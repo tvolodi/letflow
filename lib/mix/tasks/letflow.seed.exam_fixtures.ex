@@ -164,8 +164,8 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
     Code.ensure_loaded!(Letflow.Entities.Definition.Validator)
     Code.ensure_loaded!(Letflow.Entities.Record.Validator)
 
-    prefix = resolve_tenant_prefix!()
-    candidate = resolve_candidate_user!(prefix)
+    {tenant_id, prefix} = resolve_tenant!()
+    candidate = resolve_candidate_user!(tenant_id, prefix)
 
     {:ok, %{plaintext: token_plaintext}} =
       Identity.create_token(candidate.id, %{roles: ["CANDIDATE"], expires_at: nil},
@@ -210,12 +210,12 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
   # Tenant / candidate resolution
   # ---------------------------------------------------------------------
 
-  defp resolve_tenant_prefix! do
+  defp resolve_tenant! do
     case Identity.resolve_tenant_by_realm(@tenant_realm) do
       {:ok, tenant} ->
         case TenantProvisioning.schema_name_for_tenant(tenant.id) do
           {:ok, prefix} ->
-            prefix
+            {tenant.id, prefix}
 
           {:error, reason} ->
             Mix.raise(
@@ -233,14 +233,15 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
 
   # §4b -- Letflow.Identity.create_user/2 has no idempotency_key mechanism;
   # follow mix letflow.seed's own create-or-resolve pattern.
-  defp resolve_candidate_user!(prefix) do
+  defp resolve_candidate_user!(tenant_id, prefix) do
     case Identity.create_user(
            %{
              "username" => @candidate_username,
              "display_name" => @candidate_display_name,
              "email" => @candidate_email
            },
-           prefix: prefix
+           prefix: prefix,
+           tenant_id: tenant_id
          ) do
       {:ok, user} ->
         user

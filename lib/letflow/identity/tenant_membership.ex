@@ -93,8 +93,18 @@ defmodule Letflow.Identity.TenantMembership do
 
   @email_shape_regex ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+  @doc """
+  The shared light email-shape predicate (REQ-435, design §1.5): true only for
+  a binary matching the `local@domain.tld` shape. Exported so
+  `Letflow.LoginDirectory` and this module's changeset agree on what a valid
+  address is, with one implementation. Not full RFC 5322 validation.
+  """
+  @spec email_shape?(term()) :: boolean()
+  def email_shape?(value) when is_binary(value), do: Regex.match?(@email_shape_regex, value)
+  def email_shape?(_value), do: false
+
   defp validate_email_shape(:subject_key, value) do
-    if is_binary(value) and Regex.match?(@email_shape_regex, value) do
+    if email_shape?(value) do
       []
     else
       [subject_key: "must look like an email address"]

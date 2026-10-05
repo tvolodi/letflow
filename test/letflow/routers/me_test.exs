@@ -84,7 +84,8 @@ defmodule Letflow.Routers.MeTest do
                    "display_name" => "REQ-384 User",
                    "email" => "req384-user-#{suffix}@example.com"
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 tenant_id: tenant_id
                )
 
       conn =
@@ -114,7 +115,8 @@ defmodule Letflow.Routers.MeTest do
                    "display_name" => "Multi",
                    "email" => email
                  },
-                 prefix: schema_name
+                 prefix: schema_name,
+                 tenant_id: tenant_id
                )
 
       other_tenant = insert_tenant!("req384-me-other-#{suffix}")

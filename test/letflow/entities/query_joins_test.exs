@@ -134,7 +134,8 @@ defmodule Letflow.Entities.QueryJoinsTest do
                  "display_name" => username,
                  "email" => "#{username}@example.test"
                },
-               prefix: schema
+               prefix: schema,
+               login_directory: :skip
              )
 
     user

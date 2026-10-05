@@ -95,6 +95,8 @@ Rule, not a list: every Catalog permission is tenant scope.
 tenant: it is not seeded, not issuable and not honoured in any other tenant. It has no power inside
 a customer tenant and no access to a customer's business data.
 
+Transition. D4 takes full effect when REQ-447 merges; between the Q-960 fix and REQ-447 a tenant PLATFORM_ADMIN holds tenant-scope powers only (own tenant; no platform-scope permission; no cross-tenant promotion; the deactivated-tenant exemption already ends with the Q-960 fix).
+
 ### D5. TENANT_ADMIN (new)
 
 Every tenant-scope permission, core and module, in its own tenant; never a platform-scope
@@ -207,6 +209,10 @@ fixed here; names marked "proposed" may be adjusted by REQ-446 but must keep the
 | `:TenantSettingsManage` (name proposed, ISS-0993 split) | tenant | `PATCH /tenant/settings` is split off `:TenantsManage` so a tenant can edit its own settings; attributed to ISS-0993, not REQ-446 |
 | platform-events permission, to be named by REQ-446 | platform | `GET /promotions/platform-events`; `PLATFORM_ADMIN` only (see D3 Platform-events) |
 | route `POST /tenants/:test_tenant_id/promote/:process_key` (planned: takes `:PromotionsManage`) | tenant, conditional | route row; tenant scope only if the D3 binding condition is met |
+
+## Consequences and limitations
+
+Cross-tenant promotion becomes operator-only for now (product limitation): a customer cannot promote test -> production by itself until a tenant pairing model exists. A follow-up requirement for that model (a test tenant bound to its production tenant, verified server-side) is being drafted by `letflow-9a` and is NOT part of 0046; it changes no decision here.
 
 ## Open risks and questions
 

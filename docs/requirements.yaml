@@ -34034,7 +34034,7 @@ requirements:
   - id: REQ-452
     title: "UAT actor roster with declared built-in roles and a refusal-step construct, both enforced by mix letflow.check_uat_scenario_schema"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S7
     impl_order: 969  # letflow-queue task id, GH#2241. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-962.
     description: >

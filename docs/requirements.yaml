@@ -33996,3 +33996,388 @@ requirements:
       - "the run report either shows the actor-to-role mapping diff or states, with the searches performed, that no mapping exists; no scenario file marked ported-verbatim is modified (git diff)"
       - "docs/anti-patterns.md has the new entry; mix letflow.check passes, real output quoted"
     depends_on: [REQ-445, REQ-447]
+
+  - id: REQ-452
+    title: "UAT actor roster with declared built-in roles and a refusal-step construct, both enforced by mix letflow.check_uat_scenario_schema"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    impl_order: 969  # letflow-queue task id, GH#2241. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-962.
+    description: >
+      Follow-up to the role-system audit (AUDIT-ROLES-20261005), approved by
+      the user on 2026-10-06. Read docs/roles.md (REQ-445) first. Two facts
+      found in the audit: (1) no scenario states what built-in role an actor
+      holds; actors are matched to accounts by username heuristics
+      (docs/agents/uat-scenario-schema.md:257-267), so a tenant admin actor
+      ends up on whichever account works, usually PLATFORM_ADMIN; (2) only 7
+      of the 32 files under test/fixtures/uat/scenarios/ mention any refusal,
+      and the schema has no way to say who must NOT be able to do something.
+      This entry makes both machine-checked, so the result does not depend on
+      the authoring model. 29 of the 32 scenario files are marked Ported
+      verbatim and must stay byte-identical, which is why roles live in a
+      separate roster file and not in the scenarios.
+
+      BUILDS:
+      1. Actor roster test/fixtures/uat/actors.yaml: one entry per login
+      actor id used anywhere in the corpus (actor-system-* and actor-any are
+      not logins and are excluded), with: tenant (a tenant slug, or the
+      literal platform for a platform-tenant account), builtin_roles (a
+      non-empty list of names from Letflow.Api.Authorization.roles/0),
+      routing_roles (optional list of process-routing role names), and
+      note (optional). Fill it for every actor in today's corpus from the
+      seed scripts under scripts/ and the realm file; where the truth cannot
+      be established, list the actor under a top-level unresolved key with
+      the searches performed, do not guess.
+      2. Refusal steps: a new optional step-level key expect_refusal: true
+      (documented in docs/agents/uat-scenario-schema.md) meaning the named
+      actor attempts the described action and the scenario passes only if
+      the product refuses it. The step's prose stays business language.
+      3. New rules in lib/mix/tasks/letflow.check_uat_scenario_schema.ex,
+      each with its own rule tag continuing the SCHEMA-n series:
+      (a) every login actor id referenced by any scenario has a roster
+      entry or is listed under unresolved;
+      (b) every builtin_roles value is in Authorization.roles/0 as loaded at
+      check time (so the rule follows REQ-447 and REQ-448 automatically);
+      (c) an actor whose tenant is not platform must not hold
+      PLATFORM_ADMIN;
+      (d) an actor whose tenant is platform may appear only in scenarios
+      whose resolved scope is platform, or in scenarios listed by id in the
+      roster's platform_actor_allowed map with a non-empty reason (for
+      example tenant onboarding);
+      (e) refusal coverage: every resolved scope that has at least one
+      scenario has at least one step with expect_refusal: true, except
+      scopes listed in the roster's refusal_coverage_exempt list. That list
+      starts with the scopes lacking coverage today and may only shrink: a
+      test asserts it is a subset of the initial list, which is frozen in
+      the test itself.
+      4. The schema document describes the roster, the refusal step and the
+      five rules, each with one correct and one rejected example.
+    open_questions:
+      - "Rule (c) will flag today's tenant actors that are seeded as PLATFORM_ADMIN. Before REQ-447 lands there is no TENANT_ADMIN to move them to. Default: such actors are recorded in the roster with their real current role and listed under a dated legacy_platform_admin exemption that REQ-454 empties."
+    acceptance_criteria:
+      - "test/fixtures/uat/actors.yaml exists and mix letflow.check_uat_scenario_schema passes on the corpus; every login actor id found by the task in the corpus is in the roster or under unresolved (the task prints the count of each)"
+      - "one unit test per new rule (a) to (e) shows a fixture corpus that violates only that rule and asserts the task fails naming the rule tag, the file and the actor or scope"
+      - "no file marked Ported verbatim under test/fixtures/uat/scenarios/ is modified (git diff quoted)"
+      - "docs/agents/uat-scenario-schema.md documents the roster, expect_refusal and rules (a) to (e) with a correct and a rejected example each"
+      - "the refusal_coverage_exempt list is asserted to be a subset of the frozen initial list by a test that fails when a scope is added"
+      - "mix compile --warnings-as-errors, mix format --check-formatted, mix test for the touched areas and mix letflow.check pass, real output quoted"
+    depends_on: [REQ-445]
+
+  - id: REQ-453
+    title: "Access rules for BA-<VERTICAL>, UAT-RUNNER and PRODUCT-OWNER: report-do-not-decide, never widen a role, refusal steps executed, access verdict in the sign-off"
+    owner: REQ-ANALYST
+    status: pending
+    stage: S7
+    impl_order: 970  # letflow-queue task id, GH#2242. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-962, Q-969.
+    description: >
+      Follow-up to the role-system audit, approved by the user on 2026-10-06.
+      Agent instruction files and workflow text only; no application code.
+      .claude/agents/ba-analyst.md contains no rule about roles or access;
+      its only related line says the BA does not decide platform-level
+      cross-tenant issues, which in practice means they go unreported.
+      Write every rule so a weak model can follow it without inference:
+      imperative sentences, one rule per bullet, a correct and a forbidden
+      example where the rule is about wording.
+
+      BUILDS:
+      1. .claude/agents/ba-analyst.md, new section Access and roles:
+      (a) every actor a scenario uses must exist in
+      test/fixtures/uat/actors.yaml (REQ-452) with the least built-in role
+      that lets a person in that job do the scenario's steps; never
+      PLATFORM_ADMIN for a tenant person; (b) every scenario set for a
+      vertical includes refusal steps (expect_refusal) written in business
+      language, at least one per sensitive action the vertical has
+      (approving, paying, seeing personal data, changing users); (c)
+      REPORT, DO NOT DECIDE: if a run shows any person seeing another
+      organisation's data, or doing something outside their job, the BA
+      records a domain_issue with severity BLOCKER and suggested_action
+      route_to_security_review, in business language; it does not judge
+      whether it is a defect; (d) NEVER WIDEN A ROLE: when a step is blocked
+      because the actor lacks permission, the BA does not change the actor
+      or its role; it records the block and ORCH files an issue. Amend the
+      Forbidden section so that out of scope no longer reads as do not
+      report.
+      2. Sign-off schema in the same file: a required top-level field
+      access_verdict (PASS, FAIL or NOT_COVERED) with a one-sentence
+      access_note, and route_to_security_review added to the
+      suggested_action values.
+      3. .claude/agents/uat-runner.md: execute an expect_refusal step as the
+      named actor and pass it only when the product refuses; record what the
+      actor saw; a refusal step that succeeds is a FAIL with severity
+      BLOCKER. Never substitute a stronger actor; a missing or
+      under-privileged account is BLOCKED/CREDENTIALS_MISSING as today. The
+      role observed for an actor is compared with the roster and a mismatch
+      is reported.
+      4. .claude/agents/product-owner.md and
+      docs/agents/workflows/WF-05_uat_run.md Step 4: release recommendation
+      is not APPROVED when any BA sign-off has access_verdict FAIL, or
+      NOT_COVERED for a vertical that is not in the roster's
+      refusal_coverage_exempt list; route_to_security_review issues go to
+      SECURITY-REVIEWER through ORCH.
+      5. docs/agents/ORCHESTRATOR.md: the routing line for
+      route_to_security_review.
+    acceptance_criteria:
+      - "ba-analyst.md has the Access and roles section with rules (a) to (d), each as its own bullet, and the Forbidden section no longer tells the BA to leave cross-organisation observations unreported (quote before and after)"
+      - "the sign-off schema in ba-analyst.md contains access_verdict and access_note as required fields and route_to_security_review as a suggested_action value; product-owner.md reads those exact field names"
+      - "uat-runner.md states the pass and fail conditions of an expect_refusal step and the no-substitution rule; WF-05 Step 4 and ORCHESTRATOR.md carry the matching gate and routing lines"
+      - "every field and file name used in the new text exists on the branch (REQ-VALIDATOR greps each one and quotes the result)"
+      - "mix letflow.check passes, real output quoted"
+    depends_on: [REQ-445, REQ-452]
+
+  - id: REQ-454
+    title: "Least privilege for UAT setup: persona seed scripts run as the tenant's TENANT_ADMIN, tenant actors lose PLATFORM_ADMIN"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    impl_order: 971  # letflow-queue task id, GH#2243. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-964, Q-969.
+    description: >
+      Follow-up to the role-system audit, approved by the user on 2026-10-06.
+      The persona seed scripts document a PLATFORM_ADMIN token of the tenant
+      as their required credential (scripts/seed_meridian_persona_actors.sh:13,
+      and the same pattern in seed_swiftroute_persona_actors.sh and
+      seed_vortex_persona_actors.sh; .claude/agents/uat-runner.md:213 repeats
+      it). After REQ-447 that role no longer exists in a customer tenant, so
+      the scripts must be moved to TENANT_ADMIN and the habit of reaching for
+      the platform account removed.
+
+      BUILDS:
+      1. Every script under scripts/ that seeds or prepares a tenant
+      (seed_*_definition.sh, seed_*_persona_actors.sh, seed_vortex_entities.sh,
+      uat_preflight.sh): state in the header the least built-in role the
+      script needs, per call, derived from
+      Letflow.Api.Authorization.endpoint_policy_key/2 and
+      required_permission/1 for each route it calls; change every
+      PLATFORM_ADMIN requirement for a tenant-scope call to the least role
+      (TENANT_ADMIN where user, group or role management is needed,
+      PROCESS_DESIGNER where only definitions are written). A platform
+      account is named only for a platform-scope call (creating the
+      tenant).
+      2. Each script checks at start, through GET /api/v1/me/access if
+      REQ-449 is merged and otherwise through its first call, that the token
+      can do what the script needs, and exits with a clear message naming the
+      missing permission. It never asks for a stronger token.
+      3. test/fixtures/uat/actors.yaml (REQ-452): move every tenant actor
+      still recorded as PLATFORM_ADMIN to its least role and empty the
+      legacy_platform_admin exemption.
+      4. .claude/agents/uat-runner.md and
+      docs/agents/workflows/WF-05_uat_run.md Step 0: replace each mention of
+      a PLATFORM_ADMIN token for tenant preparation.
+      5. Run the changed scripts against a local instance (docker compose)
+      with a TENANT_ADMIN token and quote the output. If the QA host is not
+      reachable from this environment, say so; do not claim a QA run.
+    open_questions:
+      - "QA accounts are seeded by the ai-dala-infra repository, not this one. Default: list in the run report the QA accounts that need TENANT_ADMIN and report it to ORCH as an external dependency; do not edit another repository."
+    acceptance_criteria:
+      - "no script under scripts/ names PLATFORM_ADMIN as the credential for a tenant-scope call (grep quoted); each script header lists the least role per call"
+      - "each changed script, run locally against a provisioned non-platform tenant with a TENANT_ADMIN token, completes with the same seeded result as before (output quoted) and, run with a TASK_WORKER token, exits non-zero naming the missing permission before changing anything"
+      - "the roster has no tenant actor holding PLATFORM_ADMIN and no legacy_platform_admin exemption; mix letflow.check_uat_scenario_schema passes"
+      - "uat-runner.md and WF-05 contain no instruction to use a PLATFORM_ADMIN token for tenant preparation (grep quoted)"
+      - "mix letflow.check passes, real output quoted"
+    depends_on: [REQ-447, REQ-452]
+
+  - id: REQ-455
+    title: "Process definition validator: close the mechanical gaps (reachability to and from an end, decision without a default route, later-needed data never collected, unbound task roles at install)"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    impl_order: 972  # letflow-queue task id, GH#2244. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user).
+    description: >
+      Approved by the user on 2026-10-06. Process design gaps are found late,
+      in UAT: 35 files under docs/issues/ mention a dead end, an unreachable
+      step or a missing default route (recent: ISS-0928 no_matching_edge on a
+      service task in kyc-routing, ISS-0929). Letflow.Definitions.Graph
+      already checks a good deal (violation codes at
+      lib/letflow/definitions/graph.ex:207-234: missing start or end node,
+      dangling edge, isolated node, cycle without gateway, missing role,
+      missing edge condition, multiple default edges,
+      human_task_no_fallback_edge and more). This entry adds only what is
+      missing, as deterministic checks that run wherever the existing ones
+      run, so they do not depend on any model.
+
+      FIRST STEP (CODE-DESIGNER): for each candidate check below, establish
+      by reading graph.ex, semantic_validation.ex and their tests whether it
+      already exists, exists partly, or is missing, and record the finding
+      with file and line. Build only the missing part.
+
+      CANDIDATE CHECKS:
+      1. Reachability: every node is reachable from the start node, and from
+      every node at least one end node is reachable. (check_isolated_nodes
+      looks at a node's own edges; establish whether a connected island or a
+      trap with no way out is caught.)
+      2. Decision without a default route: an exclusive gateway, and any
+      other node kind whose outgoing edges all carry conditions (ISS-0928
+      was a service task), has no is_default edge, so an instance can stop
+      with no matching route. Establish which node kinds can have
+      conditional outgoing edges and cover all of them.
+      3. Data used before it is collected: an edge condition or form
+      expression reads a variable that no form, service output or
+      sub-process output on ANY path from the start to that point can have
+      set. Reuse the declared-fields machinery of SemanticValidation; report
+      only the case where no path sets it (certain), not the case where some
+      path does not (that is a judgment for PROCESS-AUDITOR, REQ-456).
+      4. Unbound task roles at install: when a definition or solution pack is
+      installed or activated in a tenant, every role a human task routes to
+      that has no tenant_role binding in that tenant is listed. Decision
+      0029 section 2 keeps required roles advisory and role seeding out of
+      packs; do not change that. This is a reported warning in the
+      validation result and the install response, never a silent pass and
+      never an automatic binding.
+      New findings in 1 to 3 are violations (activation is refused, same as
+      the existing codes). State in the design whether any definition
+      shipped in priv/ or seeded by scripts/ fails a new check; if one does,
+      report it to ORCH as an issue with the definition and node named, and
+      do not weaken the check.
+    open_questions:
+      - "A definition already active in a tenant that fails a new check keeps running. Default: new checks apply at validate, activate and import time only; nothing is deactivated."
+    acceptance_criteria:
+      - "the design lists each candidate check as exists, partly exists or missing, with file and line evidence, and CODE-DESIGN-VALIDATOR re-verifies each classification"
+      - "for each check that was built: one test with a minimal definition that violates only that check and asserts the new violation code and the offending node or edge id, and one test showing a valid neighbour case passes"
+      - "the ISS-0928 shape (a service task with only conditional outgoing edges and no default) is rejected at validation, with a test"
+      - "check 4: installing a definition whose human task routes to an unbound role returns the role names in the warning list and binds nothing (tenant_role row count unchanged)"
+      - "every process definition shipped in the repository or seeded by scripts/ is run through the validator in a test; each failure is either fixed in the same change or filed as an issue and named in the run report"
+      - "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted"
+    depends_on: []
+
+  - id: REQ-456
+    title: "New agent PROCESS-AUDITOR: independent hard gate on process designs, scenarios and their role use, before UAT"
+    owner: REQ-ANALYST
+    status: pending
+    stage: S7
+    impl_order: 973  # letflow-queue task id, GH#2245. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-962, Q-969, Q-972.
+    description: >
+      Approved by the user on 2026-10-06. No role in the roster reviews a
+      process design before it is run: BA-<VERTICAL> authors scenarios and
+      signs off its own vertical's results, and the only automated checks are
+      structural. That breaks this project's rule that every producing step
+      has a validating step. This entry defines the missing validator,
+      following the precedent of REQ-359 (BA role) and REQ-361
+      (PRODUCT-OWNER): role file, roster entries, workflow step, artefact.
+      Write the role file so a weak model can execute it: numbered
+      procedure, closed checklists, closed verdict values, examples.
+
+      BUILDS:
+      1. .claude/agents/process-auditor.md. AGENT_ID PROCESS-AUDITOR.
+      Independence: it never authors or edits a definition, a scenario, a
+      seed script or the roster, and never signs off run results. Inputs: the
+      process definitions and forms of one scope (vertical or platform), its
+      scenarios, test/fixtures/uat/actors.yaml, the seed scripts, docs/roles.md,
+      and the validator output of REQ-455. It reads; it does not run a UAT.
+      Checklist, each item answered YES, NO or NOT_APPLICABLE with evidence:
+      A. Missing business paths: for every approval or decision, is there a
+      rejection outcome, a rework or correction loop where the business
+      needs one, and an end for each outcome; for every human task, what
+      happens if nobody acts (timer, escalation or an explicit statement
+      that waiting forever is intended).
+      B. Separation of duties: can the same person both request and approve,
+      or both enter and verify, given the roles the tasks route to and the
+      roster.
+      C. Data on some paths only: a decision reads a value that at least one
+      path to it does not collect (the certain case is REQ-455's).
+      D. Consistency inside the scope: every scenario step corresponds to a
+      step the process has and the reverse for every human task; every role
+      a task routes to has an actor in the roster; every actor has the least
+      built-in role for its steps (docs/roles.md).
+      E. Access: the scenarios contain a refusal step for each sensitive
+      action (approve, pay, see personal data, change users); no admin actor
+      performs ordinary business steps; no tenant actor depends on a platform
+      permission.
+      F. Consistency across scopes: the same business concept (for example
+      an approval with a limit) is not modelled in two incompatible ways
+      without a stated reason.
+      Verdict PASS, PASS_WITH_FINDINGS or FAIL; any BLOCKER finding is FAIL.
+      Findings state the business consequence in plain language and are
+      handed to ORCH, which files them per
+      docs/agents/protocols/ISSUE_QUEUE.md.
+      2. Artefact test/uat-reports/process-audit-<scope>-<run_id>.yaml with a
+      schema in the role file: scope, audited inputs with a content digest
+      of each file, the checklist answers, findings (id, severity, checklist
+      item, business description, affected definition or scenario,
+      suggested owner), verdict.
+      3. docs/agents/workflows/WF-05_uat_run.md: a new step between
+      environment preparation and the run. ORCH dispatches PROCESS-AUDITOR
+      for a scope when no audit artefact exists whose input digests match
+      the current files; an unchanged scope is not re-audited. A FAIL
+      verdict blocks UAT-RUNNER for that scope only. This keeps the gate off
+      the per-run path when nothing changed.
+      4. docs/agents/AGENT_SYSTEM.md (roster row, capability row: read yes,
+      write process-audit reports only, no shell beyond read-only search,
+      no merge), docs/agents/ORCHESTRATOR.md (routing and the gate),
+      CLAUDE.md roster table.
+      5. .claude/agents/product-owner.md: reads the audit verdicts of the
+      run's scopes; a scope with no PASS or PASS_WITH_FINDINGS audit is not
+      APPROVED.
+    open_questions:
+      - "Model for this agent. Default: the same default as the other validating roles; no model override in the role file."
+      - "Whether SECURITY-REVIEWER also reviews seed scripts. Default: PROCESS-AUDITOR covers scenarios, roster and seed-script role use under checklist E; SECURITY-REVIEWER stays on code and is called only through a finding."
+    acceptance_criteria:
+      - ".claude/agents/process-auditor.md exists with the independence rules, the numbered procedure, checklist items A to F with the three answer values, the verdict values and the artefact schema"
+      - "AGENT_SYSTEM.md roster and capability tables, ORCHESTRATOR.md and CLAUDE.md each list PROCESS-AUDITOR, and the capability row grants no write outside test/uat-reports/process-audit-*"
+      - "WF-05 contains the audit step with the digest rule (unchanged scope is not re-audited) and the FAIL-blocks-that-scope rule; product-owner.md reads the audit verdict"
+      - "every file path, field name and mix task named in the new text exists on the branch or is created by this entry (REQ-VALIDATOR greps each and quotes the result)"
+      - "mix letflow.check passes, real output quoted"
+    depends_on: [REQ-445, REQ-452, REQ-455]
+
+  - id: REQ-457
+    title: "Refusal scenarios for every vertical: who must not be able to do what, authored per vertical and run"
+    owner: "BA-<VERTICAL>"
+    status: pending
+    stage: S7
+    impl_order: 974  # letflow-queue task id, GH#2246. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-964, Q-965, Q-969, Q-970.
+    description: >
+      Approved by the user on 2026-10-06. After REQ-452 the scenario checker
+      knows refusal steps and carries a list of scopes exempt from refusal
+      coverage. This entry empties that list. ORCH dispatches the BA role
+      once per scope that has scenarios today (bilimbaga, meridian,
+      swiftroute, vortex, platform), under the rules REQ-453 added.
+
+      BUILDS, per scope:
+      1. One or more NEW scenario files under
+      test/fixtures/uat/scenarios/<scope>/ (existing files marked Ported
+      verbatim are not edited) containing expect_refusal steps in that
+      vertical's business language: at least one per sensitive action the
+      vertical's processes have (approving, paying or releasing, seeing
+      personal or commercially sensitive data, changing users or roles),
+      each attempted by the nearest person who must not be able to do it
+      (for example the requester trying to approve their own request; a
+      person from one branch opening another branch's record). For the
+      platform scope: a customer's TENANT_ADMIN attempting to see or change
+      another customer (the ISS-0994 case) and a TENANT_AUDITOR attempting a
+      change.
+      2. Roster entries in test/fixtures/uat/actors.yaml for any new actor,
+      with the least built-in role.
+      3. Remove the scope from refusal_coverage_exempt.
+      4. A WF-05 run of the new scenarios for that scope and a BA sign-off
+      carrying access_verdict. A refusal step that the product does not
+      refuse is a finding, not a reason to rewrite the scenario.
+    open_questions:
+      - "Accounts for new actors on QA are seeded outside this repository. Default: run locally where the actors can be seeded by scripts/; list the QA accounts needed in the run report."
+    acceptance_criteria:
+      - "each of the five scopes has at least one new scenario file with at least one expect_refusal step per sensitive action named in that scope's sign-off note, and refusal_coverage_exempt is empty"
+      - "mix letflow.check_uat_scenario_schema passes; no file marked Ported verbatim is modified (git diff quoted)"
+      - "the platform scope contains the cross-customer refusal (a TENANT_ADMIN of one tenant refused on another tenant) and the auditor-cannot-change refusal"
+      - "for each scope a UAT report and a BA sign-off with access_verdict exist under test/uat-reports/, or the run report states exactly which steps were BLOCKED and why; every refusal step that was NOT refused is filed as an issue through ORCH"
+      - "all prose in the new scenarios passes the BA language rule (no HTTP paths, ids or code)"
+    depends_on: [REQ-447, REQ-448, REQ-452, REQ-453]
+
+  - id: REQ-458
+    title: "Baseline process audit: first PROCESS-AUDITOR pass over the existing verticals, findings filed as issues"
+    owner: PROCESS-AUDITOR
+    status: pending
+    stage: S7
+    impl_order: 975  # letflow-queue task id, GH#2247. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-973.
+    description: >
+      Approved by the user on 2026-10-06. Once the PROCESS-AUDITOR role
+      exists (REQ-456), ORCH dispatches it once per scope that has process
+      definitions and scenarios today (bilimbaga, meridian, swiftroute,
+      vortex, platform) to audit what was built before the gate existed.
+      Analysis only: nothing is fixed in this entry. Every finding becomes a
+      queued issue (docs/agents/protocols/ISSUE_QUEUE.md), written so that a
+      weaker model can fix it: the definition or scenario and the step
+      named, the business consequence, a fix direction, testable acceptance
+      criteria.
+    acceptance_criteria:
+      - "one artefact test/uat-reports/process-audit-<scope>-<run_id>.yaml per scope, each with every checklist item A to F answered and the input digests recorded"
+      - "every finding with severity BLOCKER or MAJOR has a docs/issues/ISS-NNNN.yaml record with queue_ref and github_ref from the register_task response; MINOR findings are at least listed in the artefact"
+      - "no process definition, scenario, seed script or roster file is modified by this entry (git diff quoted)"
+      - "the run report gives, per scope, the verdict and the count of findings by severity"
+    depends_on: [REQ-456]

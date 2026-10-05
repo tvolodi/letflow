@@ -52,25 +52,42 @@ defmodule Letflow.Api.AuthorizedRouter do
   as a wrapped-function argument the way the deleted
   `with_authorized_scope/4` helpers used to pass it.
 
-  A route that must intentionally NOT declare a policy key (there is none
-  today — every route across every router under `Letflow.Plugs.ApiPipeline`
-  either has one or is named on the enforcement test's explicit allowlist,
-  design §4) is declared with the plain `get`/`post`/`patch`/`delete`
-  macros `use Plug.Router` still provides — `Letflow.Plugs.Authorize` still
-  runs for it and evaluates it as `:Unknown` (fail-closed-EXCEPT-
-  `PLATFORM_ADMIN`), it is just not recorded into `@authz_routes` and so
-  must be named on the enforcement test's allowlist or the test fails.
+  ## No plain verb macros (ISS-0993 G0)
+
+  `use Letflow.Api.AuthorizedRouter` re-imports `Plug.Router` WITHOUT the plain
+  `get`/`post`/`put`/`patch`/`delete`/`head`/`options` macros (keeping only
+  `match/2,3` and `forward/2`), so a route declared with a plain verb macro no
+  longer compiles: every route carries an explicit policy key via `authz_*`,
+  and none can resolve to `:Unknown`. The router's own catch-all is declared
+  with `authz_unmatched(:platform_prefix | :ordinary)`, which attaches a private
+  marker key (`:UnmatchedPlatformPath` / `:UnmatchedRoute`, see
+  `Letflow.Api.Authorization.evaluate_access/2` rule 1a) and answers the same 404.
   """
 
   defmacro __using__(_opts) do
     quote do
       use Plug.Router
 
+      # ISS-0993 G0: re-import Plug.Router WITHOUT the plain get/post/put/patch/
+      # delete/head/options macros (a later `import` of the same module replaces
+      # the earlier one), keeping `match/2,3` for the router's own `match _`
+      # catch-all and `forward/2`. A route declared with a plain-verb macro
+      # therefore no longer compiles; every route must use `authz_*` and so
+      # carries an explicit policy key (never `:Unknown`).
+      import Plug.Router, only: [match: 2, match: 3, forward: 2]
+
       Module.register_attribute(__MODULE__, :authz_routes, accumulate: true)
       @before_compile Letflow.Api.AuthorizedRouter
 
       import Letflow.Api.AuthorizedRouter,
-        only: [authz_get: 3, authz_post: 3, authz_put: 3, authz_patch: 3, authz_delete: 3]
+        only: [
+          authz_get: 3,
+          authz_post: 3,
+          authz_put: 3,
+          authz_patch: 3,
+          authz_delete: 3,
+          authz_unmatched: 1
+        ]
 
       plug(:match)
       plug(Letflow.Plugs.Authorize)
@@ -106,6 +123,34 @@ defmodule Letflow.Api.AuthorizedRouter do
 
   defmacro authz_delete(path, policy_key, do: block) do
     build_route("DELETE", :delete, path, policy_key, block)
+  end
+
+  @doc """
+  Declares a router's catch-all (ISS-0993 design section 7.5). Replaces
+  `match _ do Response.not_found(conn) end`: sets the private marker policy key
+  for the request and answers the same zero-detail 404.
+
+    * `:platform_prefix` -> marker `:UnmatchedPlatformPath` (routers mounted at
+      `/tenants`, `/onboarding`, `/platform-migrations`, `/event-retention`,
+      `/admin/services`): only a platform-tenant `PLATFORM_ADMIN` reaches the 404;
+      every other caller gets the same 403 as a matched platform route (OQ-4).
+    * `:ordinary` -> marker `:UnmatchedRoute` (every other router): `PLATFORM_ADMIN`
+      reaches the 404, other roles get 403, exactly the pre-fix outcome.
+
+  A catch-all is not a route, so it is not recorded in `__authz_routes__/0`.
+  """
+  defmacro authz_unmatched(kind) when kind in [:platform_prefix, :ordinary] do
+    marker =
+      case kind do
+        :platform_prefix -> :UnmatchedPlatformPath
+        :ordinary -> :UnmatchedRoute
+      end
+
+    quote do
+      Plug.Router.match _, private: %{policy_key: unquote(marker)} do
+        Letflow.Api.Response.not_found(var!(conn))
+      end
+    end
   end
 
   # Generates a plain, fully-qualified Plug.Router.match/3 call (never

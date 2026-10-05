@@ -26,9 +26,7 @@ defmodule Letflow.Routers.TenantSolutions do
     handle_install(conn)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── POST /tenant/solutions ─────────────────────────────────────────────────
 

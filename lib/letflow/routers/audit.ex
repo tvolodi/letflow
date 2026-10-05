@@ -152,9 +152,7 @@ defmodule Letflow.Routers.Audit do
     handle_list(conn)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── GET /audit (design §6) ────────────────────────────────────────────────
 

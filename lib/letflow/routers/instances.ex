@@ -429,9 +429,7 @@ defmodule Letflow.Routers.Instances do
     handle_list(conn)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── POST /instances/:id/rebind-pins (design §10) ──────────────────────────
 

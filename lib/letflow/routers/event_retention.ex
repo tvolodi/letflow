@@ -20,6 +20,21 @@ defmodule Letflow.Routers.EventRetention do
   always system-computed, never caller-supplied, so there is no
   caller-controlled `year`/`month` input to validate at all.
 
+  ## Scope rule (ISS-0993 / ISS-0994): PLATFORM scope
+
+  `:TenantsManage` is a PLATFORM-scope permission
+  (`Letflow.Api.Authorization.permission_scope/1`): it is honoured only for a
+  `PLATFORM_ADMIN` whose database-resolved tenant is the configured platform
+  tenant (`Letflow.PlatformTenant`, `LETFLOW_PLATFORM_TENANT_ID`; unset means
+  nobody). A `PLATFORM_ADMIN` of any other tenant gets 403. Wording in this
+  moduledoc that calls the permission "`PLATFORM_ADMIN`-only" is superseded by
+  this rule. A1 runs the check in shadow mode: enforcement is still the legacy
+  outcome, and a `platform_scope_shadow_deny` line is logged where A2 will deny.
+  Under A2 an unmatched sub-path of this mount answers the same 403 for a
+  non-operator (decision point
+  design OQ-4, introduced in A2). This
+  router's catch-all is `authz_unmatched(:platform_prefix)`.
+
   ## Permission decision -- reused, not new: `:TenantsManage`
 
   All three routes require `:TenantsManage` (`Letflow.Api.Authorization`,
@@ -63,9 +78,7 @@ defmodule Letflow.Routers.EventRetention do
     handle_status(conn, conn.params["id"])
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:platform_prefix)
 
   # ── GET /summary ──────────────────────────────────────────────────────
 

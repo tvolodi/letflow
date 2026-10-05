@@ -97,9 +97,7 @@ defmodule Letflow.Routers.Services do
     handle_list(conn)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── GET /services (design §4) ─────────────────────────────────────────────
 

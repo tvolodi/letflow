@@ -6,9 +6,11 @@ defmodule Letflow.Routers.TenantSettings do
   `lib/letflow/design/req382-tenant-branding-write-path.md` for the full
   design.
 
-  One route: `PATCH /` (full path `/tenant/settings`), gated by the existing
-  `:TenantsManage` permission (`PLATFORM_ADMIN`-only — see design §1 for why
-  this reuses that permission rather than minting a new one). Unlike
+  One route: `PATCH /` (full path `/tenant/settings`), gated by the dedicated
+  `:TenantSettingsManage` permission (ISS-0993: TENANT scope, held by
+  `PLATFORM_ADMIN` of the caller's own tenant through the interim catch-all, C6;
+  it used to reuse `:TenantsManage`, which is now the PLATFORM-scope registry
+  permission). Works for a `PLATFORM_ADMIN` of any tenant on its OWN tenant only.
   `Letflow.Routers.Tenants`, there is **no target-tenant path parameter** —
   the tenant patched is always the caller's own, from
   `conn.assigns.auth_context.tenant_id` (design §1's "difference from
@@ -35,13 +37,11 @@ defmodule Letflow.Routers.TenantSettings do
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.TenantSettings
 
-  authz_patch "/", :TenantsManage do
+  authz_patch "/", :TenantSettingsManage do
     handle_patch(conn)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   # ── PATCH /tenant/settings (design §3) ──────────────────────────────────
 

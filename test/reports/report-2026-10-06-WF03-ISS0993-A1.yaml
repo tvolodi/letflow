@@ -1,0 +1,18 @@
+run_id: WF03-ISS0993-A1-20261006
+step: "RELEASE-VALIDATOR independent re-verification (PR A1, additive + shadow)"
+agent: RELEASE-VALIDATOR
+generated_at: "2026-10-06"
+branch: fix/ISS-0993-A1-platform-scope-shadow
+scope: A1 files staged, not committed
+commands:
+  - "mix compile --warnings-as-errors --force (MIX_ENV=dev, partition var unset: the mix task refuses MIX_TEST_PARTITION outside MIX_ENV=test): rc 0, 300 files"
+  - "mix format --check-formatted: rc 0"
+  - "mix letflow.check_boundaries: OK, 917 edges, 0 violations"
+  - "MIX_ENV=test MIX_TEST_PARTITION=3 mix test (narrowed set, see below) --include slow: 587 passed, 0 failures, 252.2 s"
+  - "full requested set (test/letflow/api + plugs + routers dirs) exceeded the 10 minute budget and was stopped"
+narrowed_set: "test/letflow/api (whole dir), platform_tenant_test, platform_tenant_runtime_config_test, plugs/platform_scope_facts_test, plugs/tenant_status_test, definitions/promotion_access_test, routers/platform_scope_shadow_test, promotion_scope_legacy_test, tenant_settings_scope_test, tenants_test, tenant_settings_test, req077_promotion_pipeline_test"
+not_run: "mix letflow.check.test and scripts/test_parallel.sh (full suite; excluded by the task for RAM). Captured test output contains zero occurrences of 'default values for the optional arguments'."
+verdict_overall: PASS (A1 may be committed), with the two notes below
+notes:
+  - "legacy finding confirmed pre-existing: tenants.ex handle_promote is unchanged by A1 (diff is docs plus the authz_post key only); a never-provisioned tenant id raises today; A2 must make it the uniform 404 via TenantTarget before any lookup"
+  - "mix letflow.check.test not run locally; CI must run it"

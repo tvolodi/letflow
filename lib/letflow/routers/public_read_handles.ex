@@ -36,9 +36,7 @@ defmodule Letflow.Routers.PublicReadHandles do
     handle_issue(conn)
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:ordinary)
 
   defp handle_issue(conn) do
     tenant_id = conn.assigns.auth_context.tenant_id

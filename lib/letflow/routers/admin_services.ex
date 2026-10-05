@@ -32,23 +32,18 @@ defmodule Letflow.Routers.AdminServices do
   `Letflow.Api.Authorization.endpoint_policy_key/2` already maps
   `GET "/admin/services"` to `:AdminServicesRead` and any `POST`/`PATCH`/
   `DELETE` on a path starting with `"/admin/services"` to
-  `:AdminServicesManage`; `required_permission/1` already maps both keys to
-  `:UsersGroupsRolesManage`, held only by `:PLATFORM_ADMIN` (that role's own
-  `role_allows?/2` catch-all clause) — no other role holds it, so a caller
-  with only `:ServicesRead` (or any non-`PLATFORM_ADMIN` role) gets `403`
-  before any handler below runs. No new `endpoint_policy_key`/
-  `required_permission` clause, no new permission atom —
-  `lib/letflow/api/authorization.ex` is not modified by this requirement.
-
-  `required_permission/1`'s own comment above this clause
-  (`# platform-admin enforced in handler, per Zig's comment`) is stale — no
-  handler-level `PLATFORM_ADMIN`-only check exists anywhere in this router;
-  the `:UsersGroupsRolesManage` permission mapping alone is what restricts
-  these two policy keys to `PLATFORM_ADMIN`. This router does not add a
-  second, handler-side gate (unnecessary, and out of this requirement's
-  scope) — flagged for REVIEWER to decide whether the comment itself should
-  be corrected in a future, `authorization.ex`-scoped requirement (design
-  §3).
+  `:AdminServicesManage`; `required_permission/1` maps both keys to
+  `:PlatformServicesManage` (ISS-0993), a PLATFORM-scope permission. The
+  global service catalogue is classified PLATFORM because `list_all/1`
+  performs no tenant filtering (every tenant's entries with `owner_tenant_id`
+  are visible and writable) and the table is global. It is honoured only for a
+  `PLATFORM_ADMIN` whose database-resolved tenant is the configured platform
+  tenant (`Letflow.PlatformTenant`); a `PLATFORM_ADMIN` of any other tenant
+  gets `403` and never sees another tenant's `owner_tenant_id`. (These keys
+  used to map to the tenant permission `:UsersGroupsRolesManage` by accident.)
+  The tenant-facing catalogue is the separate, tenant-filtered `GET /services`.
+  A1 runs the platform check in shadow mode: enforcement is the legacy outcome
+  and a `platform_scope_shadow_deny` line is logged where A2 will deny.
 
   ## `GET /` — `Letflow.ServiceCatalog.list_all/1` (design §5, REVISED in
   ## rework iteration 2 — FLAGGED FOR REVIEWER SIGN-OFF, not pre-approved)
@@ -165,9 +160,7 @@ defmodule Letflow.Routers.AdminServices do
     handle_retire(conn, conn.params["service_id"])
   end
 
-  match _ do
-    Response.not_found(conn)
-  end
+  authz_unmatched(:platform_prefix)
 
   # ── GET /admin/services (design §5, revised) ──────────────────────────────
   #

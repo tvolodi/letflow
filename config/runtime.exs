@@ -346,6 +346,29 @@ mail_adapter =
               "(none only for a loopback host and never in :prod)."
   end
 
+# ISS-0993 / ISS-0994 (design iss0993-platform-scope-separation.md section 3): OPTIONAL
+# LETFLOW_PLATFORM_TENANT_ID, the tenants.id UUID of the platform tenant (not a secret,
+# never echoed). Unset, empty or whitespace writes nothing (config/config.exs default
+# nil: nobody has platform scope) and boot continues. Malformed stops boot WITHOUT
+# echoing the value. Parsed by the single parser Letflow.PlatformTenant.parse_env/1.
+case Letflow.PlatformTenant.parse_env(System.get_env("LETFLOW_PLATFORM_TENANT_ID")) do
+  {:ok, nil} ->
+    # A1 text only (A2 replaces it). Silent under :test, where the pin is always unset.
+    if config_env() != :test do
+      IO.puts(
+        :stderr,
+        "[warning] LETFLOW_PLATFORM_TENANT_ID is unset: platform scope is not enforced yet (shadow mode)."
+      )
+    end
+
+  {:ok, platform_tenant_id} ->
+    config :letflow, Letflow.PlatformTenant, tenant_id: platform_tenant_id
+
+  {:error, :invalid_uuid} ->
+    raise "environment variable LETFLOW_PLATFORM_TENANT_ID must be unset/blank or a UUID. " <>
+            "The value is not echoed."
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

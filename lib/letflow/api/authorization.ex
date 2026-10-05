@@ -306,6 +306,11 @@ defmodule Letflow.Api.Authorization do
           | :MembershipsRead
           | :ModulesManage
           | :MyModulesRead
+          | :PlatformServicesManage
+          | :TenantSettingsManage
+          | :PromotionsRead
+          | :PromotionsManage
+          | :DefinitionsRollback
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -358,6 +363,12 @@ defmodule Letflow.Api.Authorization do
           | :MembershipsRead
           | :ModulesManage
           | :MyModulesRead
+          | :TenantSettingsManage
+          | :PromotionsRead
+          | :PromotionsManage
+          | :DefinitionsRollback
+          | :UnmatchedPlatformPath
+          | :UnmatchedRoute
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -406,15 +417,36 @@ defmodule Letflow.Api.Authorization do
     :MembershipsRead,
     :ModulesManage,
     :MyModulesRead,
-    :EntitiesRestrictionsManage
+    :EntitiesRestrictionsManage,
+    # ISS-0993 (design iss0993-platform-scope-separation.md section 5)
+    :PlatformServicesManage,
+    :TenantSettingsManage,
+    :PromotionsRead,
+    :PromotionsManage,
+    :DefinitionsRollback
   ]
+
+  # ISS-0993 section 5: every core permission has exactly one scope. A test
+  # asserts this map's key set equals core_permissions/0, so a new core
+  # permission without a scope fails the suite. :MetricsRead is TENANT scope
+  # (OQ-13, ratified: /health and /metrics routes are global-public and stay
+  # outside the pin; only the permission atom is classified).
+  @platform_permissions [:TenantsManage, :PlatformServicesManage]
+
+  @permission_scope Map.new(
+                      @permissions,
+                      fn permission ->
+                        {permission,
+                         if(permission in @platform_permissions, do: :platform, else: :tenant)}
+                      end
+                    )
 
   @doc "All six `Role` values, R-Co's exact names plus ISS-0646's `CANDIDATE`. See `roles_from_strings/1` for untrusted-input conversion."
   @spec roles() :: [role()]
   def roles, do: @roles
 
   @doc """
-  All thirty-five core `Permission` values — R-Co's fourteen, plus REQ-075's
+  All forty core `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -431,7 +463,9 @@ defmodule Letflow.Api.Authorization do
   `entity_type_restrictions`/`user_entity_type_grants` — a distinct
   permission from `:EntitiesDefinitionsWrite`, per
   `lib/letflow/design/iss0935-vortex-entity-seed.md` §1.3's own
-  justification for not reusing it).
+  justification for not reusing it), plus ISS-0993's `:PlatformServicesManage`,
+  `:TenantSettingsManage`, `:PromotionsRead`, `:PromotionsManage` and
+  `:DefinitionsRollback`. Each has exactly one scope, see `permission_scope/1`.
 
   The stated core count is asserted against `length(core_permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -442,7 +476,7 @@ defmodule Letflow.Api.Authorization do
   def core_permissions, do: @permissions
 
   @doc """
-  Every permission the platform recognizes: the thirty-four core
+  Every permission the platform recognizes: the core
   `Permission` values above (`core_permissions/0`), followed by every
   registered module's own declared permissions
   (`Letflow.Modules.Catalog.permissions/0`, REQ-400/REQ-401, D4) — computed,
@@ -456,15 +490,57 @@ defmodule Letflow.Api.Authorization do
   @spec permissions() :: [permission() | atom()]
   def permissions, do: core_permissions() ++ Letflow.Modules.Catalog.permissions()
 
+  @doc """
+  The scope of a permission, `:platform` or `:tenant` (ISS-0993 section 5; pure
+  and total). A core permission is looked up in the compile-time table; an atom
+  in `Letflow.Modules.Catalog.permissions/0` is `:tenant` (every module
+  permission is tenant scope, REQ-445 D3); ANY OTHER term is `:platform`
+  (fail closed: an unclassified permission is never honoured outside the
+  platform tenant).
+  """
+  @spec permission_scope(permission() | atom() | term()) :: :platform | :tenant
+  def permission_scope(permission) do
+    case Map.fetch(@permission_scope, permission) do
+      {:ok, scope} ->
+        scope
+
+      :error ->
+        if is_atom(permission) and permission in Letflow.Modules.Catalog.permissions(),
+          do: :tenant,
+          else: :platform
+    end
+  end
+
+  @doc "The permissions of `:platform` scope, derived from the scope table."
+  @spec platform_permissions() :: [permission()]
+  def platform_permissions, do: @platform_permissions
+
+  @doc """
+  C6 decision point (interim, UNRATIFIED departure from REQ-445 D4 until
+  REQ-447): when `true`, a `PLATFORM_ADMIN` of any tenant keeps the
+  catch-all over TENANT-scope permissions in its OWN tenant (own-tenant powers
+  only; no platform-scope permission, no cross-tenant promotion). Set to
+  `false` to honour `PLATFORM_ADMIN` only in the platform tenant everywhere.
+  """
+  @spec tenant_platform_admin_own_tenant_powers?() :: boolean()
+  def tenant_platform_admin_own_tenant_powers?,
+    do: Application.get_env(:letflow, :tenant_platform_admin_own_tenant_powers, true) != false
+
   defmodule AccessContext do
     # PROVENANCE (historical, not current decision authority):
-    @moduledoc "Ports `authorization.zig`'s `AccessContext` struct."
+    @moduledoc """
+    Ports `authorization.zig`'s `AccessContext` struct. ISS-0993 adds
+    `platform_tenant?` (default `false`, not enforced, so every existing
+    construction stays valid and fails closed): whether the caller's
+    database-resolved tenant is the configured platform tenant.
+    """
     @enforce_keys [:user_id, :roles]
-    defstruct [:user_id, :roles]
+    defstruct [:user_id, :roles, platform_tenant?: false]
 
     @type t :: %__MODULE__{
             user_id: String.t(),
-            roles: [Letflow.Api.Authorization.role()]
+            roles: [Letflow.Api.Authorization.role()],
+            platform_tenant?: boolean()
           }
   end
 
@@ -660,17 +736,13 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/tenants/:slug/deactivate"), do: :TenantsManage
   def endpoint_policy_key("POST", "/tenants/:slug/reactivate"), do: :TenantsManage
 
-  # REQ-382 -- authenticated write path onto the caller's OWN tenant.settings
-  # (Letflow.Routers.TenantSettings), a top-level sibling router mounted at
-  # /tenant/settings (not /tenants/:slug -- there is no target-tenant path
-  # parameter at all; the tenant patched is always the caller's own, from
-  # conn.assigns.auth_context.tenant_id). Reuses the existing :TenantsManage
-  # permission -- same risk class and same PLATFORM_ADMIN-only intent as
-  # Letflow.Routers.Tenants, Letflow.Routers.Onboarding,
-  # Letflow.Routers.PlatformMigrations, and Letflow.Routers.EventRetention
-  # (design doc lib/letflow/design/req382-tenant-branding-write-path.md §1).
-  # No new permission added.
-  def endpoint_policy_key("PATCH", "/tenant/settings"), do: :TenantsManage
+  # REQ-382 / ISS-0993 -- authenticated write path onto the caller's OWN
+  # tenant.settings (Letflow.Routers.TenantSettings), mounted at /tenant/settings
+  # (no target-tenant parameter: the tenant patched is always the caller's own,
+  # from conn.assigns.auth_context.tenant_id). Own-tenant, TENANT scope: the
+  # dedicated :TenantSettingsManage permission (it was :TenantsManage, which is
+  # now the PLATFORM-scope registry permission).
+  def endpoint_policy_key("PATCH", "/tenant/settings"), do: :TenantSettingsManage
 
   # REQ-076 -- onboarding (Letflow.Routers.Onboarding), a top-level sibling
   # router mounted at /onboarding (not under Letflow.Routers.Identity's own
@@ -703,6 +775,39 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("GET", "/event-retention/summary"), do: :TenantsManage
   def endpoint_policy_key("POST", "/event-retention/retirements"), do: :TenantsManage
   def endpoint_policy_key("GET", "/event-retention/retirements/:id"), do: :TenantsManage
+
+  # ISS-0993 -- the twelve routes that used to be declared with plain
+  # get/post macros (no policy key -> :Unknown) now carry explicit keys, all
+  # TENANT scope (design iss0993-platform-scope-separation.md section 7.2, rows
+  # 23-34). Cross-tenant naming (a source/target tenant other than the caller's)
+  # is separately operator-only (Letflow.PlatformTenant.cross_tenant_promotion_operator_only?/0,
+  # OQ-2); own-tenant review lifecycle and definition rollback stay tenant scope.
+  def endpoint_policy_key("POST", path) when path in ["/promotions", "/promotions/plan"],
+    do: :PromotionsManage
+
+  def endpoint_policy_key("POST", path)
+      when path in [
+             "/promotions/:id/approve",
+             "/promotions/:id/reject",
+             "/promotions/:id/apply",
+             "/promotions/:review_id/run-assertions"
+           ],
+      do: :PromotionsManage
+
+  def endpoint_policy_key("GET", path)
+      when path in [
+             "/promotions",
+             "/promotions/platform-events",
+             "/promotions/:id",
+             "/promotions/:id/context"
+           ],
+      do: :PromotionsRead
+
+  def endpoint_policy_key("POST", "/definitions/:process_key/rollback"),
+    do: :DefinitionsRollback
+
+  def endpoint_policy_key("POST", "/tenants/:test_tenant_id/promote/:process_key"),
+    do: :PromotionsManage
 
   # REQ-076 -- role registry routes (Letflow.Routers.Identity, mounted
   # relative to /identity, matching the "/tokens" convention above). A new,
@@ -938,13 +1043,33 @@ defmodule Letflow.Api.Authorization do
           %AccessDecision{kind: :Deny403, task_scope: nil}
         end
 
+      # ISS-0993 rule 1a (design section 6/7.5): router catch-all markers (not
+      # permissions, not routes). :UnmatchedPlatformPath (the five platform
+      # prefixes) lets only a platform-tenant PLATFORM_ADMIN reach the router's
+      # 404, so every other caller gets the same 403 as a matched platform
+      # route (OQ-4). :UnmatchedRoute keeps today's outcome everywhere else.
+      endpoint == :UnmatchedPlatformPath ->
+        if ctx.platform_tenant? == true and has_role?(ctx.roles, :PLATFORM_ADMIN),
+          do: %AccessDecision{kind: :Allow, task_scope: nil},
+          else: %AccessDecision{kind: :Deny403, task_scope: nil}
+
+      endpoint == :UnmatchedRoute ->
+        if has_role?(ctx.roles, :PLATFORM_ADMIN),
+          do: %AccessDecision{kind: :Allow, task_scope: nil},
+          else: %AccessDecision{kind: :Deny403, task_scope: nil}
+
       endpoint == :MetricsRead ->
         %AccessDecision{kind: :Allow, task_scope: :all}
 
       true ->
         required = required_permission(endpoint)
 
-        if not has_permission?(ctx.roles, required) do
+        # ISS-0993 rule 3: a platform-scope permission is denied unless the
+        # caller is a PLATFORM_ADMIN of the platform tenant; evaluated before
+        # the role matrix so the PLATFORM_ADMIN catch-all cannot bypass it.
+        # (A1: Letflow.Plugs.Authorize forces platform_tenant? to true for
+        # enforcement and uses the real value only for shadow logging.)
+        if not has_permission_in_scope?(ctx.roles, required, ctx.platform_tenant?) do
           %AccessDecision{kind: :Deny403, task_scope: nil}
         else
           if endpoint == :TasksList and is_task_worker_only?(ctx.roles) do
@@ -1010,11 +1135,18 @@ defmodule Letflow.Api.Authorization do
   def required_permission(:WebhookSubscriptionsManage), do: :WebhooksManage
   # any authenticated role — matches Zig's comment on this branch
   def required_permission(:ServicesRead), do: :DefinitionsRead
-  # platform-admin enforced in handler, per Zig's comment
+  # ISS-0993: the global service catalogue is PLATFORM scope. These keys used to
+  # map to :UsersGroupsRolesManage (a tenant permission) by accident; no
+  # non-PLATFORM_ADMIN role held it, so no grant changes.
   def required_permission(key) when key in [:AdminServicesManage, :AdminServicesRead],
-    do: :UsersGroupsRolesManage
+    do: :PlatformServicesManage
 
   def required_permission(:TenantsManage), do: :TenantsManage
+  # ISS-0993 identity clauses (policy-key name == permission name).
+  def required_permission(:TenantSettingsManage), do: :TenantSettingsManage
+  def required_permission(:PromotionsRead), do: :PromotionsRead
+  def required_permission(:PromotionsManage), do: :PromotionsManage
+  def required_permission(:DefinitionsRollback), do: :DefinitionsRollback
   def required_permission(:RolesManage), do: :RolesManage
   def required_permission(:AttachmentsManage), do: :AttachmentsManage
   def required_permission(:AttachmentsRead), do: :AttachmentsRead
@@ -1080,6 +1212,30 @@ defmodule Letflow.Api.Authorization do
   @spec has_permission?([role()], permission()) :: boolean()
   def has_permission?(roles, permission) do
     Enum.any?(roles, &role_allows?(&1, permission))
+  end
+
+  @doc """
+  ISS-0993 rule 3 plus `has_permission?/2`: a `:platform`-scope permission is
+  honoured only when `platform_tenant?` is `true` AND `:PLATFORM_ADMIN` is among
+  `roles`. A tenant-scope permission follows the role matrix unchanged
+  (C6, see `tenant_platform_admin_own_tenant_powers?/0`). `role_allows?/2` is
+  unchanged. Fail closed on a non-`true` `platform_tenant?`.
+  """
+  @spec has_permission_in_scope?([role()], permission() | atom(), boolean()) :: boolean()
+  def has_permission_in_scope?(roles, permission, platform_tenant?) do
+    case permission_scope(permission) do
+      :platform ->
+        platform_tenant? == true and has_role?(roles, :PLATFORM_ADMIN) and
+          has_permission?(roles, permission)
+
+      :tenant ->
+        effective_roles =
+          if platform_tenant? == true or tenant_platform_admin_own_tenant_powers?() == true,
+            do: roles,
+            else: List.delete(roles, :PLATFORM_ADMIN)
+
+        has_permission?(effective_roles, permission)
+    end
   end
 
   @doc "Ports `hasRole/2` (L178-183) exactly."

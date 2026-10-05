@@ -368,7 +368,18 @@ defmodule Letflow.Plugs.AuthPipeline do
   end
 
   defp attach_auth_context(conn, tenant_id, user_id, roles) do
-    assign(conn, :auth_context, %{user_id: user_id, tenant_id: tenant_id, roles: roles})
+    # ISS-0993 (design section 4): the two scope facts are stored as a
+    # CACHE/assertion only. No authorization decision reads them; consumers
+    # recompute via Letflow.PlatformTenant from tenant_id and roles.
+    facts = Letflow.PlatformTenant.scope_facts(tenant_id, roles)
+
+    assign(conn, :auth_context, %{
+      user_id: user_id,
+      tenant_id: tenant_id,
+      roles: roles,
+      platform_tenant?: facts.platform_tenant?,
+      platform_scope?: facts.platform_scope?
+    })
   end
 
   defp reject(conn, status, error, detail) do

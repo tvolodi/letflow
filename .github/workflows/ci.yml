@@ -109,6 +109,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Merge queue: GitHub runs the required checks on a temporary
+  # `gh-readonly-queue/main/...` branch holding the PR merged onto the latest
+  # main (+ queued PRs ahead of it), so a PR no longer has to be re-run by hand when
+  # main moves. The job names below are the required-status-check contexts and report
+  # unchanged on this event. cd.yml is unaffected: it only fires for CI runs on branch
+  # `main`, never for a gh-readonly-queue/* branch.
+  merge_group:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -169,6 +176,15 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            # Merge queue (A3): the same path regex as for a PR decides which gates run,
+            # over this queue entry's own range. With stacked entries base_sha is the
+            # previous entry's commit, so a docs-only entry behind a code entry does not
+            # re-run the code ahead of it; the push-to-main run above (ISS-0840) always
+            # runs every gate after each queue merge and is the final backstop. Every
+            # fail-safe below (empty/zero SHA, unreachable base => all gates) still applies.
+            BASE_SHA="${{ github.event.merge_group.base_sha }}"
+            HEAD_SHA="${{ github.event.merge_group.head_sha }}"
           else
             BASE_SHA=""
             HEAD_SHA=""

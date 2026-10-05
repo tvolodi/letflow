@@ -348,8 +348,17 @@ defmodule Letflow.LoginDiscoveryTest do
       assert "LETFLOW_LOGIN_DISCOVERY_MODE=" in lines
     end
 
+    # config/dev.exs refuses a set MIX_TEST_PARTITION (ISS-0015 guard) and CI's partitioned run
+    # exports it, so clear it for the duration of the read and restore it afterwards.
     defp read_config(env) do
-      Config.Reader.read!("config/config.exs", env: env, target: :host)
+      saved = System.get_env("MIX_TEST_PARTITION")
+      System.delete_env("MIX_TEST_PARTITION")
+
+      try do
+        Config.Reader.read!("config/config.exs", env: env, target: :host)
+      after
+        if saved, do: System.put_env("MIX_TEST_PARTITION", saved)
+      end
     end
   end
 

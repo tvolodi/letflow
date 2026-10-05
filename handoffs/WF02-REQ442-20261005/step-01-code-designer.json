@@ -8,7 +8,7 @@
     "file":  "handoffs/WF02-REQ442-20261005/step-01-code-designer.json",
     "created_at":  "2026-10-05T11:54:34Z",
     "started_at":  "2026-10-05T11:54:34Z",
-    "completed_at":  "2026-10-05T11:57:20Z",
+    "completed_at":  "2026-10-05T12:00:23Z",
     "status":  "COMPLETED",
     "priority":  "NORMAL",
     "context":  {
@@ -50,14 +50,14 @@
              },
     "result":  {
                    "status":  "PASS",
-                   "summary":  "Design written. Existing route PATCH /api/v1/tenants/:slug (Routers.Tenants.handle_patch -\u003e Identity.patch_tenant -\u003e Tenant.admin_patch_changeset) is extended; no new route. Migration 20261005000001, nullable string + CHECK, public only. LoginDirectory gets lookup_by_keys/2 with disclose computed in the single query, match type %{slug,display_name,disclose}. Only Routers.Tenants.tenant_map/1 (platform admin) gains the key; all other shapers are explicit allowlists and get byte-level refute tests. Open questions: Q1 requirement says audited like other platform-admin tenant updates but patch_tenant is unaudited today and audit chains are per-tenant (design audits a mode change in the target tenant chain with a value-free payload; tenant admins may see the event); Q2 ceiling vs override; Q3 deployment_mode reader since LoginDiscovery does not exist; Q4 tenant_map 7th key changes exact-6-keys tests; Q5 wording amendments need REVIEWER/SECURITY-REVIEWER; Q6 Bilimbaga operator action.",
+                   "summary":  "REWORK 1 applied. (1) Audit FINAL: only mode changes audited, target tenant chain, same txn, action tenant.platform_setting.updated, after_state {changed:true}, no value; premise it is audited like other platform-admin updates recorded as wrong; Q1 removed. (2) Failure: pre-check Repo.get_by(TenantProvisioning.Registration) + rescue around the txn -\u003e {:error,:audit_failed} -\u003e Response.internal_error (500, existing problem envelope, fixed body). (3) Tenant has no @type t; do not add. (4) patch_tenant/3 with full @spec, router clause per tag, actor from conn.assigns.auth_context.user_id, nil actor refused fail-closed. (5) disclose is a single fragment with pinned type(^deployment_allows?, :boolean) and column placeholder; equivalence with bound mode stated. Q2 ceiling kept, flagged for REVIEWER.",
                    "artifacts_out":  [
                                          "lib/letflow/design/req442-per-tenant-login-disclosure-mode.md"
                                      ],
                    "issues":  [
-                                  "Requirement premise that platform-admin tenant updates are audited is false for PATCH /tenants/:slug; see design P6/Q1"
+
                               ],
                    "next_action":  "CODE-DESIGN-VALIDATOR"
                },
-    "rework_count":  0
+    "rework_count":  1
 }

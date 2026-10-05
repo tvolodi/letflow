@@ -55,7 +55,9 @@ Design only: signatures, shapes, constraints. No implementation bodies.
   (which says it casts only `:display_name`) are updated.
 - Untouched, and still must NOT cast the new field: `create_changeset/3`, `update_changeset/2`, `status_changeset/2`,
   `settings_changeset/2`. A test asserts each of these produces no change for `%{"login_disclosure_mode" => ...}`.
-- Add the field to the `@type t` if the module declares one (`Tenant.t()` is used by callers; follow whatever it is).
+- No `@type t` change: verified by grep that `lib/letflow/identity/tenant.ex` declares NO `@type t` (callers' `Tenant.t()`
+  specs resolve through the struct's auto-generated type). ELIXIR-DEV adds the field to the schema block only and
+  does NOT introduce a `@type t`.
 - Semantics on PATCH: key absent = no change; `null` = reset to NULL (deployment fallback); a value outside the two
   modes = changeset error -> existing `Response.unprocessable(conn, "validation failed")`.
 
@@ -84,32 +86,64 @@ Route (existing, extended; no new route): `PATCH /api/v1/tenants/:slug` -> `Rout
   `test/letflow/routers/tenants_test.exs` must change to 7 (flag for TEST-DESIGNER). Update the "Exactly 6 keys"
   comment.
 
-`Identity.patch_tenant/2`:
-- Signature unchanged: `@spec patch_tenant(slug :: String.t(), attrs :: map()) :: {:ok, Tenant.t()} | {:error, :not_found}
-  | {:error, Ecto.Changeset.t()}`, with one added error: `{:error, :audit_failed}`. Its `@doc` ("display_name only") is
-  updated.
+`Identity.patch_tenant/3` (replaces `patch_tenant/2`; P3 shows no other caller, so no arity-2 delegate is kept):
+
+```
+@type patch_opts :: [actor_id: Ecto.UUID.t() | nil, trace_id: String.t() | nil]
+@spec patch_tenant(slug :: String.t(), attrs :: map(), patch_opts()) ::
+        {:ok, Tenant.t()}
+        | {:error, :not_found}
+        | {:error, Ecto.Changeset.t()}
+        | {:error, :audit_failed}
+```
+
+Router clause per tag in `handle_patch/2` (the existing `get_tenant_by_slug` pre-check stays):
+`{:ok, tenant}` -> `Response.ok(conn, tenant_map(tenant))`; `{:error, %Ecto.Changeset{}}` ->
+`Response.unprocessable(conn, "validation failed")` (unchanged); `{:error, :not_found}` -> `Response.not_found(conn)`
+(unchanged); `{:error, :audit_failed}` -> `Response.internal_error(conn)`, i.e. HTTP 500 with the platform's existing
+RFC 9457 problem envelope, `type` ending `internal-error`, `title` "Internal Server Error", and the fixed
+`@internal_error_detail` (the helper takes no detail, so the body cannot vary with the cause; INV-4). The PATCH is
+rolled back: the tenant row is unchanged.
+
+Actor id and trace id source: `conn.assigns.auth_context.user_id` and `conn.assigns[:trace_id]`, exactly as
+`Routers.TenantSettings` reads them (`tenant_settings.ex`, the audit attrs block). The router passes
+`[actor_id: ..., trace_id: ...]`. Nil-actor policy: `Audit.entry_attrs` permits a nil `actor_id`, but this path does NOT.
+When the mode is changing and `actor_id` is not a binary, `patch_tenant/3` returns `{:error, :audit_failed}` before any
+write (a security-attribute change with no attributable actor is refused, fail closed). A display_name-only patch does
+not need or check the actor.
 - Behaviour: load by slug; build `admin_patch_changeset/2`; if the changeset is invalid return `{:error, changeset}`;
   if `login_disclosure_mode` is among the changes (value actually differs), run the tenant update and the audit insert
   in ONE `Repo.transaction` (`Ecto.Multi`: `:tenant` update, then `Audit.append_multi/4`), so the audit row and the
   mutation commit or roll back together (the established pattern of `create_user/2` etc.). If it is not among the
   changes (e.g. a display_name-only patch), behaviour is exactly as today: plain `Repo.update/1`, no audit (matches
   the status quo that this route is unaudited, P6; this requirement does not retrofit audit onto display_name).
-- Audit entry attrs (type `Letflow.Audit.entry_attrs()`): `actor_id` = the calling PLATFORM_ADMIN's user id;
-  `action` = `"tenant.login_disclosure_mode.set"`; `resource_type` = `"tenant"`; `resource_id` = the target tenant id;
-  `trace_id` = `conn.assigns[:trace_id]`; `prefix` = the TARGET tenant's schema, resolved by
-  `TenantProvisioning.schema_name_for_tenant(tenant.id)` (NOT the caller's own `scoped_opts` prefix: the platform
-  admin acts on another tenant). Because `patch_tenant/2` currently takes no caller context, it gains an options
-  argument: `patch_tenant(slug, attrs, opts)` with `opts :: [actor_id: Ecto.UUID.t(), trace_id: String.t() | nil]`
-  (arity 2 remains as a delegate with no audit context only if a non-HTTP caller exists; P3 says none does, so the
-  arity-2 function is replaced, not kept).
-- **INV-2 constraint on the audit payload (open question Q1 below):** `before_state` and `after_state` must NOT contain
-  the mode value, because tenant admins can read the tenant's audit chain (verify at build: `GET /api/v1/audit`
-  permission). Design default: `before_state: nil`, `after_state: %{"changed" => true}`. The value is visible to
-  PLATFORM_ADMIN through `tenant_map/1`.
-- If the tenant has no provisioned schema, `schema_name_for_tenant/1` or `tenant_id_for_schema_name/1` yields an error:
-  the transaction rolls back and the function returns `{:error, :audit_failed}`; the router maps it to the existing
-  generic 500 helper of the `Response` module (ELIXIR-DEV locates it; INV-4: no reason term or query text in the
-  body or log).
+- **FINAL audit decision (resolves the former open question Q1; no further decision is pending).**
+  Premise correction recorded for ORCH/DOC-UPDATER: the requirement's phrase "audited as other platform-admin tenant
+  updates are" is wrong, because no platform-admin tenant update (including `PATCH /tenants/:slug`) is audited today
+  (P6, re-verified by the CODE-DESIGN-VALIDATOR) and no platform-level audit sink exists. AC2's "the change is audited"
+  is satisfied by auditing a mode change in the TARGET tenant's chain, in the same transaction as the update. Audit rows
+  are not retro-fitted to display_name patches.
+- Audit entry attrs (type `Letflow.Audit.entry_attrs()`): `actor_id` = the validated actor (above);
+  `action` = `"tenant.platform_setting.updated"` (neutral: it does not name the attribute, so a tenant-side audit
+  reader learns only that some platform-managed tenant setting changed); `resource_type` = `"tenant"`;
+  `resource_id` = the target tenant id; `trace_id` = the passed trace id; `before_state` = `nil`;
+  `after_state` = `%{"changed" => true}` (INV-2: no mode value, no attribute name, because `GET /audit` returns
+  `before_state`/`after_state` verbatim and `:AuditRead` is held by PROCESS_OPERATOR and wider). The mode value is
+  visible only to PLATFORM_ADMIN through `tenant_map/1`.
+- Audit prefix: the TARGET tenant's schema name taken from its registration row, NOT from the caller's `scoped_opts`
+  and NOT from the pure `TenantProvisioning.schema_name_for_tenant/1` (which only derives a name and never checks
+  provisioning).
+- **Audit failure mechanism (verified: `schema_name_for_tenant/1` and `tenant_id_for_schema_name/1` are pure and do not
+  detect an unprovisioned tenant, and `Audit.insert_entry/3` would raise `undefined_table` rather than return an
+  error).** Two layers, both mapped to the one tag `{:error, :audit_failed}`:
+  1. Pre-check, before any write, only when the mode is changing: `Repo.get_by(TenantProvisioning.Registration,
+     tenant_id: tenant.id)`; `nil` -> `{:error, :audit_failed}` (tenant row without a provisioned schema; nothing
+     written). Otherwise the audit prefix is `registration.schema_name`.
+  2. The `Repo.transaction` (`:tenant` update + `Audit.append_multi/4`) is wrapped in a `rescue` clause that catches any
+     exception and returns `{:error, :audit_failed}`; it logs one fixed message naming only the tenant id (INV-4: never
+     the exception, query text or connection detail). An `{:error, :audit, _reason, _changes}` Multi result maps to
+     the same tag. In every failing case the transaction has rolled back, so the mode is unchanged.
+  The router maps the tag to HTTP 500 with the existing problem envelope (above).
 
 Authorisation matrix (all through the existing `Authorization.evaluate_access/2` `:TenantsManage` gate; nothing is
 loosened): PLATFORM_ADMIN -> 200 and value set; TENANT_ADMIN -> existing platform refusal (403 per
@@ -127,7 +161,7 @@ new `%Tenant{}` field, so the absence is by construction. The test plan asserts 
 | `Routers.MobileTenantConfig` (`GET /api/mobile/tenant-config`) | pre-auth | none | same byte-level refute, set and unset |
 | `Routers.TenantSettings` GET/PATCH response (`settings_response_map/2`) | tenant admin | none | byte-level refute on GET and PATCH; plus a PATCH whose body carries `login_disclosure_mode` (top level and inside `settings`) is rejected/ignored and the column is unchanged |
 | `Routers.Me` (`home_tenant_json/1`, `membership_json/1`) | any authenticated user | none | byte-level refute, set and unset |
-| Tenant-admin-readable audit entries (`GET /audit`) | tenant admin | none, but see Q1 | the entry written by section 3 contains no mode value (byte-level) |
+| Tenant-admin-readable audit entries (`GET /audit`) | tenant admin | none (neutral action name, value-free payload) | the entry written by section 3 contains no mode value (byte-level) |
 | `Routers.Tenants.tenant_map/1` | PLATFORM_ADMIN | add key | key present on GET/PATCH responses with the value (or `null`) |
 
 A grep gate (a test using `File.read!` over `lib/letflow/routers/**/*.ex` and `lib/letflow/modules/**/*.ex`) asserts
@@ -174,7 +208,22 @@ disclose = ($deployment_allows::boolean)
            AND COALESCE(tenants.login_disclosure_mode, 'redirect_single') = 'redirect_single'
 ```
 
-where `$deployment_allows` is the bound boolean parameter (never string-built SQL; INV-7). `select` still builds the map
+where `$deployment_allows` is the bound boolean parameter (never string-built SQL; INV-7).
+
+Ecto expression form (pinned): the `select` map's `disclose:` value is a single `fragment/1` with the SQL text a literal
+and ONE `?` placeholder for each of two arguments: the pinned bound parameter `type(^deployment_allows?, :boolean)`
+(a `^` pin, so it travels as a Postgrex bound parameter, never interpolated) and the column reference
+`t.login_disclosure_mode`. The literal comparison `COALESCE(?, 'redirect_single') = 'redirect_single'` and the `AND`
+live inside that fragment. No `Ecto.Query.dynamic/2`, no string concatenation, no `Code.eval`. `deployment_allows?` is
+a local boolean computed in Elixir from the second argument of `lookup_by_keys/2` (exactly `:redirect_single` -> `true`,
+anything else -> `false`).
+
+Equivalence with the requirement text ("the deployment mode is bound as a parameter"): the mode is a two-valued
+atom, and the SQL rule only ever asks "is the deployment mode `redirect_single`". Binding the derived boolean
+`deployment_mode == :redirect_single` carries exactly that one bit, so the truth table of
+`(deployment is redirect_single) AND COALESCE(...) = 'redirect_single'` is identical to binding the mode string and
+comparing in SQL; it additionally makes any unrecognised deployment term collapse to `false` (uniform) in Elixir before
+it reaches the database, which satisfies requirement item 4. `select` still builds the map
 directly: `%{slug, display_name, disclose}`. `Tenant` is still never loaded, so `id`, `idp_realm_id`, `settings` and
 `login_disclosure_mode` are unrepresentable past the query. Consequences, all intended:
 - tenant NULL falls back to the deployment mode (both rows of the matrix);
@@ -241,10 +290,10 @@ row reads NULL.
 
 AC2 authorisation (`tenants_test.exs`, extending its AC1/AC2 matrix style):
 PLATFORM_ADMIN `PATCH` with each valid value -> 200, DB value set, response key present; with `null` -> NULL; with
-`"picker_unauth"` -> 422, row unchanged; audit row exists with action `tenant.login_disclosure_mode.set`, actor, target
+`"picker_unauth"` -> 422, row unchanged; audit row exists with action `tenant.platform_setting.updated`, actor, target
 tenant id, in the target tenant's chain, and contains no mode value; TENANT_ADMIN and ordinary user -> platform
 refusal, row unchanged, no audit row; tenant settings route with body key `login_disclosure_mode` (top level and inside
-`settings`) -> rejected/ignored, column unchanged; display_name-only patch writes no audit row; failed audit (unprovisioned
+`settings`) -> rejected/ignored, column unchanged; display_name-only patch writes no audit row; nil actor on a mode change -> 500 problem envelope, row unchanged; mode change on a tenant row with no `tenant_schemas` registration -> 500 problem envelope with the fixed internal-error body, row unchanged, no raise; failed audit (unprovisioned
 schema) rolls back the update.
 
 AC3 exposure: byte-level `refute body =~ "login_disclosure_mode"` on each row of the section-4 table, for a tenant with the
@@ -271,14 +320,11 @@ INV-1, INV-2, INV-5, INV-6 (and INV-4/INV-7 for the log and bound-parameter poin
 
 ## 10. Open questions (none silently resolved)
 
-- **Q1 (audit)**: The requirement says "audited as other platform-admin tenant updates are", but no platform-admin tenant
-  update is audited today (P6) and no platform-level audit sink exists. This design audits only a mode change, into the
-  TARGET tenant's chain, with a value-free payload to preserve INV-2. If `GET /audit` is readable by tenant admins, the
-  tenant admin can see THAT the setting was changed (not its value). If REQ-VALIDATOR/SECURITY-REVIEWER consider the
-  existence of the event a leak, the alternative is a log-only record or a new platform audit table (out of this
-  requirement's size). Needs a decision before build.
-- **Q2 (ceiling vs override)**: carried from the requirement/0043 conflict 6: the ceiling reading is implemented; if the BA
-  meant a tenant may enable disclosure under a uniform deployment default, the SQL rule and the kill switch change.
+- **Q1 (audit): RESOLVED, no longer open.** See section 3 "FINAL audit decision" (ORCH ruling and CODE-DESIGN-VALIDATOR
+  ruling agree). Kept as a numbered line only so cross-references stay stable.
+- **Q2 (ceiling vs override)**: carried from the requirement/0043 conflict 6. The ceiling reading is the BUILD decision;
+  it is flagged for REVIEWER. If the BA meant a tenant may enable disclosure under a uniform deployment default, the SQL
+  rule and the kill switch change.
 - **Q3 (deployment-mode reader)**: `deployment_mode/0` reads the config key of design 434 s7 directly because
   `Letflow.LoginDiscovery.mode/0` does not exist. REQ-437 should either keep this reader as the single source or replace
   its body, and must not introduce a second reader that can disagree. The config key itself is created by REQ-437/436, so

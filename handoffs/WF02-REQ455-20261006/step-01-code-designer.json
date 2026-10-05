@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ455-20261006/step-01-code-designer.json",
   "created_at": "2026-10-05T23:26:51Z",
   "started_at": "2026-10-05T23:26:51Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-05T23:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -44,6 +44,38 @@
       "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req455-definition-validator-gaps.md. Classification: check 1 (reachability from start / path to end) MISSING; check 2 (default route) PARTLY EXISTS (HUMAN_TASK = CHK-19; EXCLUSIVE_GATEWAY missing; conditional edges on service/timer/sub-process already refused by CHK-14); check 3 PARTLY EXISTS (REQ-372 undeclared-variable on gateway edges only; form expressions already same-form scoped); check 4 MISSING. Plan: new Graph.validate_flow/1 (CHK-22 :unreachable_node, CHK-23 :no_path_to_end, CHK-24 :no_default_route) wired into create/update/validate/activate; data-flow class inside SemanticValidation.validate/2 (:variable_never_collected); new Letflow.Definitions.RoleBinding with warnings appended to existing install warnings list and an additive warnings key on the validate 200 body. Probes (mix run --no-start, dev) confirmed classifications empirically. 12 shipped graphs pass existing validators; 11 of 12 would fail CHK-24 (gateways without default); design fixes them in-change following ISS-0928 precedent and asks ORCH to file one BA-owned issue for the proposed default targets.",
+    "artifacts_out": [
+      "lib/letflow/design/req455-definition-validator-gaps.md"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "11 of 12 shipped process definitions have EXCLUSIVE_GATEWAY nodes with no is_default edge and would fail new CHK-24: QA meridian_loan_origination v1.3 (eligibility-gate, authority-routing); meridian_regulatory_compliance_review v1.3 (severity-routing, post-remediation-check); swiftroute v1.1 (ceo-approval-gate); vortex_production_order_release v1.1 (budget-gate); vortex_supplier_quality_deviation v1.2 (false-positive-check, severity-routing); simulation yaml meridian/process_claim_intake (kyc-routing, eligibility-gate, authority-routing), meridian/process_policy_binding (severity-routing, post-remediation-check), swiftroute/process_route_approval (ceo-approval-gate), swiftroute/process_shipment_dispatch (injury-check), vortex/process_quality_check (budget-gate), vortex/process_work_order (false-positive-check, severity-routing). Design fixes them in the same change with proposed default targets; ORCH to file one BA-owned issue to confirm the business routing.",
+        "affected_requirement": "REQ-455"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Requirement text says ISS-0928 was a service task; ISS-0928.yaml records an EXCLUSIVE_GATEWAY (kyc-routing) with no default. The literal service-task-with-only-conditional-edges shape is already rejected by CHK-14 :unexpected_edge_condition. Design tests both shapes.",
+        "affected_requirement": "REQ-455"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Modules.Installs.install/3 discards the pack install result, so check-4 warnings do not reach the module-install response; existing role_mapping_checklist.bound compares against static platform roles, not tenant_role rows. Both reported, not changed.",
+        "affected_requirement": "REQ-455"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ455-20261006",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Dispatch CODE-DESIGN-VALIDATOR step 01b; ORCH to decide OQ-2..OQ-9 defaults and file the BA fixture-default-routes issue."
+  },
   "rework_count": 0
 }

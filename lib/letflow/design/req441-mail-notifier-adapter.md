@@ -9,6 +9,8 @@ Binding inputs: decisions 0042, 0043 (D-B, D-D), 0044 (Phase 1 only), design
 `lib/letflow/design/req434-email-first-login-directory.md` section 13 ("Notifier port") and C-4,
 `docs/agents/instructions/security-invariants.md` INV-4/5/8/9, `docs/anti-patterns.md`.
 
+Rework 1 (2026-10-05) folded in: CODE-DESIGN-VALIDATOR issues G1-G3 and SECURITY-REVIEWER M1-M3, F4-F10; the map is in section 10.
+
 Reading order follows the handoff: 0 premises, 1 library decision, 2 module list and message
 contract, 3 configuration, 4 failure handling and Dispatch changes, 5 hard stops, 6 tests mapped to
 every acceptance criterion, 7 files to touch, 8 SECURITY-REVIEWER focus, 9 open questions.
@@ -134,7 +136,17 @@ Port, `Noop` and the test double are unchanged. New modules (names are binding; 
 | `Letflow.LoginDiscovery.Notifier.Smtp` | `notifier/smtp.ex` | `@behaviour Letflow.LoginDiscovery.Notifier`. The adapter: composes (via `Smtp.Message`), reads the operator config (via `Smtp.Config.runtime/0`), resolves credentials at the point of use, calls `Smtp.Transport`, maps the result to `:ok or {:error, reason}`. Logs nothing, emits nothing, never `inspect`s a library return. |
 | `Letflow.LoginDiscovery.Notifier.Smtp.Message` | `notifier/smtp/message.ex` | PURE. Builds the fixed-template message from `(recipient, tenants, base_url, from)`; validates the recipient; sanitises tenant text. No I/O, no config reads, no library. |
 | `Letflow.LoginDiscovery.Notifier.Smtp.Config` | `notifier/smtp/config.ex` | PURE parse/validate of the environment map into the application-env shape (used by `config/runtime.exs`), plus `runtime/0` which reads the already-validated non-secret app env at call time. Never returns or stores a credential. |
-| `Letflow.LoginDiscovery.Notifier.Smtp.Transport` | `notifier/smtp/transport.ex` | The ONLY module that names the mail library. One function: send a composed message with explicit connection options. Replaceable (gen_smtp / Swoosh / Mua) without touching anything else. |
+| `Letflow.LoginDiscovery.Notifier.Smtp.Transport` | `notifier/smtp/transport.ex` | The ONLY module that names the mail library. One function: send a composed message with explicit connection options. Replaceable (gen_smtp / Swoosh / Mua) without touching anything else. Bound by the single-process contract below. |
+
+**Transport contract (binding, M2).** `send_message/4` performs the send by the library's BLOCKING
+API in the CALLING process (the inner Dispatch task), and no process the call starts may outlive the
+call or be able to kill the caller through a link. Two failure shapes this excludes: a LINKED worker
+whose crash sends an exit signal that `try/catch` cannot catch and whose termination report can print
+the options (the password); an UNLINKED worker that survives `Task.shutdown(task, :brutal_kill)` and
+leaves the socket and a relay slot open. If the chosen library cannot meet the contract (1.3 item 6),
+ELIXIR-DEV stops and the library decision reopens (decision 0045 fallback trigger); it is NOT worked
+around with `Process.flag(:trap_exit, true)` or by wrapping the worker. The contract is proven, not
+assumed, by the AC5 forced-crash and no-surviving-process tests (6.2).
 
 No `use Swoosh.Mailer` module exists under any option. No GenServer, no supervisor child, no new
 process: the existing `Letflow.LoginDiscovery.TaskSupervisor` inner task is the only process.
@@ -173,21 +185,45 @@ shapes are unverified (1.3 item 5).
 ```
 # Letflow.LoginDiscovery.Notifier.Smtp.Config
 @type tls_mode :: :starttls | :tls | :none
-@type adapter_choice :: :noop | :smtp
-@type parsed :: %{
-        adapter: module(),                                # Noop or Smtp (the value written to app env)
-        notifier: keyword(),                              # [adapter: module()] plus [timeout_ms: pos_integer()] when smtp
-        smtp: keyword() | nil                              # nil for noop; non-secret fields only (section 3.2)
+@type secret_marker :: boolean()      # computed by the CALLER: value present, non-empty, no NUL
+@type env_input :: %{                 # what runtime.exs passes; contains NO secret value (M1)
+        optional(String.t()) => String.t() | nil
+        # exceptions, always booleans never strings:
+        #   "LETFLOW_SMTP_USERNAME" => secret_marker(), "LETFLOW_SMTP_PASSWORD" => secret_marker()
       }
-@spec parse(env :: %{optional(String.t()) => String.t() | nil}, config_env :: atom()) ::
-        {:ok, parsed()} | {:error, {:missing | :invalid, var :: String.t()}}
+@type noop_parsed :: %{notifier: [adapter: module()]}                      # adapter is Notifier.Noop
+@type smtp_parsed :: %{notifier: [adapter: module(), timeout_ms: pos_integer()],
+                       smtp: [host: String.t(), port: 1..65535, tls: tls_mode(), from: String.t(),
+                              base_url: String.t(), socket_timeout_ms: pos_integer()]}
+@spec parse(env :: env_input(), config_env :: atom()) ::
+        {:ok, :unset} | {:ok, {:noop, noop_parsed()}} | {:ok, {:smtp, smtp_parsed()}}
+        | {:error, {:missing | :invalid, var :: String.t()}}
 @spec runtime() :: {:ok, runtime_config} | {:error, :not_configured}
   # runtime_config :: %{host: String.t(), port: 1..65535, tls: tls_mode(), from: String.t(),
   #                     base_url: String.t(), socket_timeout_ms: pos_integer()}   -- no credential
 ```
 
-`parse/2` returns the NAME of the offending variable and the failure kind, never a value. It validates
-presence of `LETFLOW_SMTP_USERNAME` and `LETFLOW_SMTP_PASSWORD` but returns neither.
+Return contract of `parse/2`, in words (the former `adapter_choice` and `parsed` types are dropped):
+
+| Input | Return | What `runtime.exs` does |
+|---|---|---|
+| `LETFLOW_MAIL_ADAPTER` unset, empty or whitespace-only | `{:ok, :unset}` | nothing: writes no key (so the `config/test.exs` double and the `config/config.exs` Noop default stand) |
+| exactly `noop` | `{:ok, {:noop, %{notifier: [adapter: Noop]}}}` | writes the `Letflow.LoginDiscovery.Notifier` key `adapter: Noop` only |
+| exactly `smtp` and all variables valid | `{:ok, {:smtp, smtp_parsed}}` | writes the two namespaces of 3.2 |
+| unknown adapter value, or `smtp` with a missing/invalid variable | `{:error, {:missing or :invalid, "VAR_NAME"}}` | raises fixed text naming the variable; no value |
+
+The `runtime.exs` case clauses are, in order: `{:ok, :unset}` does nothing; `{:ok, {:noop, parsed}}`
+writes the notifier key; `{:ok, {:smtp, parsed}}` writes both namespaces; `{:error, {kind, var}}` raises
+fixed text built from `var` and `kind` only (same shape as the REQ-437 mode block,
+`config/runtime.exs:286-296`).
+
+**No secret enters `parse/2` (M1).** `parse/2` is a pure function whose arguments appear in a
+`FunctionClauseError` or stack trace if it fails unexpectedly, which would print the password to boot
+output and CI logs. So `runtime.exs` builds `env_input` itself: every non-secret variable as its raw
+string, and for `LETFLOW_SMTP_USERNAME` and `LETFLOW_SMTP_PASSWORD` a boolean marker computed in
+`runtime.exs` (the `System.get_env/1` result is a binary, non-empty, with no NUL). The secret value is
+never bound to a name that is passed on, and `parse/2` has no clause that accepts a binary for those two
+keys. `parse/2` reports a false marker as `{:error, {:missing, "LETFLOW_SMTP_PASSWORD"}}`.
 
 ```
 # Letflow.LoginDiscovery.Notifier.Smtp.Transport      (the only module naming the mail library)
@@ -209,7 +245,7 @@ binding):
 - Body, plain text only (`text/plain; charset=UTF-8`), no HTML part:
   - fixed intro line: `You asked for the organisations you can sign in to with this email address.`
   - for each tenant, in the order given, one block of exactly two lines:
-    `Organisation: <display_name>` and `Sign in: <link>`, followed by a third line `Code: <slug>`;
+    `Organisation: "<display_name>"` and `Sign in: <link>`, followed by a third line `Code: <slug>`;
     blocks separated by one blank line.
   - fixed outro lines: `If you did not ask for this, you can ignore this message.` and
     `Do not forward this message.`
@@ -220,28 +256,38 @@ Rules (each is a test in 6, AC9):
 
 1. **No header is built from tenant text.** Display names and slugs appear only in the body. The only
    request-derived header value is `To`.
-2. **Recipient validation (`valid_address?/1`).** Reject, returning `{:error, :invalid_recipient}`,
-   when the value is longer than 254 bytes or contains any of: NUL, any ASCII control character
-   (including CR and LF), space or tab, `<`, `>`, `,`, `;`, `"`, `\`, `(`, `)`, `[`, `]`, `:`, any
-   non-ASCII byte (no SMTPUTF8; internationalised addresses are simply not delivered, OQ-8), or when it
-   does not contain exactly one `@` with a non-empty local part and a non-empty domain part. The
-   recipient reaching the adapter is already the normalised address typed in the request (design s13),
-   but the adapter does not trust that.
-3. **Sender validation.** `LETFLOW_MAIL_FROM` is checked by the same `valid_address?/1` at boot.
-4. **Tenant text is inert.** `sanitize_text/1` (used for display names and slugs as printed) does, in
-   order: reject (`{:error, :invalid_message}`) a value that is not valid UTF-8 or longer than 256
-   bytes before sanitising; replace CR, LF, NUL and every other C0/C1 control character and DEL with a
-   single space; remove Unicode bidirectional controls (U+202A..U+202E, U+2066..U+2069, U+200E/F) and
-   zero-width characters (U+200B..U+200D, U+2060, U+FEFF); collapse runs of whitespace to one space;
-   trim; replace every occurrence of `://` with `[://]` so no scheme-qualified URL survives in tenant
-   text and plain-text mail clients have nothing to auto-link by scheme; replace a leading `www.`
-   (case-insensitive, at a word start) with `www[.]`; and replace `@` with `[at]` so tenant text cannot
-   form a mailto-style token. An empty result becomes the fixed text `(unnamed)`. A HTML-looking
-   display name (`<script>`, `&amp;`) is NOT escaped because the body is plain text and is never
-   rendered as HTML by this adapter; it is only length-bounded and defanged as above. Residual risk:
-   a bare domain name inside a display name may still be auto-linked by some mail clients (OQ-9);
-   the acceptance criterion is met because the message contains no tenant-derived `scheme://` and no
-   URL not starting with the configured base URL.
+2. **Recipient validation (`valid_address?/1`) is an ALLOW-list (F7).** Accept only: exactly one `@`;
+   a local part of 1..64 bytes drawn from `[A-Za-z0-9._+-]` (no leading or trailing dot, no `..`);
+   a domain of dot-separated labels, each 1..63 bytes from `[A-Za-z0-9-]`, no label starting or ending
+   with a hyphen, at least one dot, no leading/trailing dot; total length at most 254 bytes. Everything
+   else returns `{:error, :invalid_recipient}` (this covers CR, LF, NUL, spaces, `<>`, `,`, `;`, `:`,
+   quotes, backslash, brackets, parentheses, `%`, `!`, `|`, backtick, braces, `$`, `*`, every non-ASCII
+   byte (no SMTPUTF8, OQ-8), IP-literal domains and quoted local parts, without enumerating them). The
+   recipient reaching the adapter is already the DB-normalised address (trim + downcase of an address
+   that exists as an active user's email, `TenantMembership.normalize_subject_key/1`), but the adapter
+   does not trust that.
+3. **Sender validation.** `LETFLOW_MAIL_FROM` is checked by the same `valid_address?/1` at boot. Its
+   domain also supplies the EHLO hostname and the `Message-ID` domain (F8c): `Transport` passes the
+   sender domain explicitly as the EHLO identity and the composed message carries a `Message-ID` whose
+   domain is the same, so the node's internal FQDN is never advertised (the sink transcript asserts the
+   EHLO argument; the header test asserts the Message-ID domain). How the library accepts these two
+   values: to verify (1.3 items 1 and 8).
+4. **Tenant text is inert.** `sanitize_text/1` (display names and the slug as printed) does, in order:
+   reject (`{:error, :invalid_message}`) a value that is not valid UTF-8; replace CR, LF, NUL and every
+   other C0/C1 control character and DEL with a single space; remove Unicode bidirectional controls
+   (U+202A..U+202E, U+2066..U+2069, U+200E/F) and zero-width characters (U+200B..U+200D, U+2060,
+   U+FEFF); collapse runs of whitespace to one space; trim; replace every `://` with `[://]`; replace a
+   leading `www.` (case-insensitive, at a word start) with `www[.]`; replace `@` with `[at]`; then
+   TRUNCATE (F6) the display name to at most 80 characters at a codepoint boundary (an over-long value
+   is truncated, never a reason to reject the message: one over-long name must not suppress delivery for
+   every user of that tenant) and the slug to 64 characters. An empty result becomes the fixed text
+   `(unnamed)`. The display name is printed as a QUOTED, LABELLED value (`Organisation: "<name>"`), so
+   attacker text can never start a sentence or an instruction line. HTML-looking text (`<script>`,
+   `&amp;`) is not escaped because the body is plain text and never rendered as HTML; it is only
+   truncated and defanged. Residual (F6, OQ-9): a tenant admin can create a user with a victim's address
+   and thereby mail the victim an attacker-chosen name (80 characters, quoted) from the platform sender;
+   bounded to one mail per address per 900 s by the `:send` bucket and mitigated by the fixed "If you did
+   not ask for this" line. Printing only the slug would remove it; left to the owner.
 5. **Link.** The only URLs in the body are `tenant_link(base_url, slug)` = `<base_url>/?realm=<slug
    encoded with URI.encode_www_form/1>` (every character outside the unreserved set is
    percent-encoded; so no `/`, `?`, `&`, `#`, `%0d` or `@` can alter the link). `base_url` is the
@@ -268,14 +314,14 @@ REQ-437/439 block, outside the `:prod`-only block, like those), through `Smtp.Co
 | Variable | Required when | Default if unset | Validation (failure raises at boot, naming the variable only) |
 |---|---|---|---|
 | `LETFLOW_MAIL_ADAPTER` | never | unset or blank: Noop is kept, NOTHING is written to app env (so `config/test.exs`'s double survives) | After trimming: exactly `noop` (writes the Noop module) or `smtp`; any other value raises. Case-sensitive. |
-| `LETFLOW_SMTP_HOST` | adapter `smtp` | none | Non-empty, at most 253 bytes, characters `A-Za-z0-9.-` or an IP literal (`:` allowed only for IPv6), no whitespace or control characters. |
+| `LETFLOW_SMTP_HOST` | adapter `smtp` | none | Non-empty, at most 253 bytes, a DNS name (dot-separated labels of `A-Za-z0-9-`) or an IP literal (IPv6 may contain `:`), no whitespace or control characters. An IP-literal host is allowed only with `LETFLOW_SMTP_TLS=none` (loopback, below); with `starttls` or `tls` a DNS name is REQUIRED, because verification then needs SNI and a hostname match and OTP does not send an IP as SNI (F8b). No IP-SAN path is designed. |
 | `LETFLOW_SMTP_PORT` | adapter `smtp` | none (no default port: 25, 465 and 587 mean different TLS modes) | Integer text, 1..65535. |
 | `LETFLOW_SMTP_USERNAME` | adapter `smtp` | none | Non-empty after trim; no CR/LF/NUL. Presence-validated at boot, NOT copied to app env (3.5). |
 | `LETFLOW_SMTP_PASSWORD` | adapter `smtp` | none | Non-empty (not trimmed; leading/trailing spaces are significant); no NUL. Presence-validated at boot, NOT copied to app env (3.5). |
-| `LETFLOW_SMTP_TLS` | never | unset or blank: `starttls` | Exactly `starttls` (connect plain, REQUIRE STARTTLS, verified), `tls` (implicit TLS from the first byte, verified), or `none` (plaintext, no TLS). `none` raises when `config_env() == :prod`. Anything else raises. |
+| `LETFLOW_SMTP_TLS` | never | unset or blank: `starttls` | Exactly `starttls` (connect plain, REQUIRE STARTTLS, verified), `tls` (implicit TLS from the first byte, verified), or `none` (plaintext, no TLS). `none` is accepted only when BOTH `config_env() != :prod` AND the host is loopback (`localhost`, `127.0.0.0/8`, `::1`); otherwise it raises naming `LETFLOW_SMTP_TLS` (F8a: a staging build under another environment name can never send AUTH in cleartext to a network host). Anything else raises. |
 | `LETFLOW_MAIL_FROM` | adapter `smtp` | none | `Smtp.Message.valid_address?/1`. Bare mailbox only. |
 | `LETFLOW_PUBLIC_BASE_URL` | adapter `smtp` | none | `URI.parse`-based: scheme `https` (also `http` when `config_env() != :prod`), non-empty host, no userinfo, no query, no fragment; trailing `/` stripped; length at most 200 bytes. |
-| `LETFLOW_MAIL_TIMEOUT_MS` | never | unset or blank: 15000 | Integer text, 2000..60000. Sets the Dispatch hard timeout for the smtp adapter (4.4). |
+| `LETFLOW_MAIL_TIMEOUT_MS` | never | unset or blank: 15000 | Integer text, 2000..30000 (ceiling lowered from 60000, F9). Sets the Dispatch hard timeout for the smtp adapter (4.4). |
 
 The value of a variable is never echoed by any message (INV-4): each raise is fixed text of the form
 "environment variable NAME is missing or invalid; the value is not echoed", plus for the TLS and
@@ -289,7 +335,8 @@ Boot behaviour matrix (each row is an AC7/AC8 test):
 | `noop` | boots; writes `adapter: Noop` |
 | unknown value | raises naming `LETFLOW_MAIL_ADAPTER`, value not echoed |
 | `smtp` + any of host, port, username, password, from, base URL missing/blank/invalid | raises naming exactly that variable, value not echoed |
-| `smtp` + `LETFLOW_SMTP_TLS=none` in `:prod` | raises naming `LETFLOW_SMTP_TLS` |
+| `smtp` + `LETFLOW_SMTP_TLS=none` in `:prod`, or with a non-loopback host in any environment | raises naming `LETFLOW_SMTP_TLS` |
+| `smtp` + an IP-literal host with `starttls` or `tls` | raises naming `LETFLOW_SMTP_HOST` |
 | `smtp` + complete valid set | boots; writes `adapter: Smtp`, `timeout_ms`, and the `Smtp` env (3.2) |
 
 Failure order for several simultaneous errors is the table order (first error raised); values are
@@ -307,7 +354,7 @@ never listed.
 `adapter:` is the exact key the REQ-444 enablement gate reads (AC8); the gate itself is not built
 here. `max_concurrent` is untouched. Non-secret values only in this env: host, port, TLS mode, sender,
 base URL, timeout. `socket_timeout_ms` is derived by `Config.parse/2` as `max(1000, div(timeout_ms, 4))`
-(per-phase socket timeout, strictly below the Dispatch timeout, 4.4).
+(per-phase socket timeout, strictly below the Dispatch timeout, 4.4). The `Smtp` env is read at call time, so a test may `put_env` its own value.
 
 ### 3.3 Base URL normalisation
 
@@ -315,14 +362,19 @@ Stored in normalised form so `tenant_link/2` never re-parses user-influenced tex
 config (not tenant-controlled), so INV-9's private-range rule does not apply to it (3.6); the scheme
 rule above is the part of INV-9's intent that is still useful.
 
-### 3.4 Test-only TLS trust override
+### 3.4 Test-only TLS trust override (M3; decides former OQ-4)
 
-`Smtp.Transport` accepts, via its `opts`, an optional CA-certificate list to trust in place of the OS
-store. `Smtp` fills it from `Application.get_env(:letflow, Letflow.LoginDiscovery.Notifier.Smtp)[:tls_cacerts]`.
-No environment variable can set it and `Config.parse/2` never writes it; production never has it.
-It exists so the TLS tests can validate success against a sink with a generated test CA while the default
-path (no override) rejects an untrusted certificate (AC3 TLS-failure case). Flagged for SECURITY-REVIEWER
-(OQ-4): an attacker who can write the app env already controls the node.
+The override is physically absent from production code. `Smtp.Transport` reads a compile-time flag
+(`Application.compile_env/3`, key `:allow_test_cacerts`, default `false`, in the
+`Letflow.LoginDiscovery.Notifier.Smtp` namespace) that is set to `true` ONLY in `config/test.exs`. Only
+when the flag is `true` at compile time is the override branch compiled; in every other environment the
+branch does not exist and an app-env key `tls_cacerts` is ignored. The override accepts one thing: a
+list of DER-encoded CA certificates that REPLACES the OS store for that call. It can never express
+`verify_none`, a `verify_fun` or a `server_name_indication`: those options are not accepted from app env
+by any code path (verify mode, SNI and hostname match are fixed in `Transport`). No environment variable
+can set the key and `Config.parse/2` never writes it. A guard test (6.2, AC10 row) scans the tracked
+tree: `allow_test_cacerts` is set to `true` only in `config/test.exs`, and `lib/` contains no
+`verify_none` or `verify_fun`.
 
 ### 3.5 Credentials (INV-4)
 
@@ -342,13 +394,16 @@ and hands it straight on. Why not the alternatives:
   plain map in `Application.get_all_env`, and still appears in a process dictionary or crash args.
 
 Residual and honest: the OS environment of the BEAM process is itself readable by anything running
-inside the node (`System.get_env/0`); this is the same exposure every other `System.get_env`
-secret in the codebase has (INV-4's own reference pattern). The "read once at boot" wording of the
+inside the node (`System.get_env/0`); this is INV-4's own stated pattern ("resolves it at the point of use from environment/config").
+Correction of an earlier imprecision: call-time reading is STRICTER than precedent, not equal to it; the
+login-directory pepper is written into app env by `config/runtime.exs` (around line 145). The stricter
+choice is deliberate because these credentials authenticate to an external system. The "read once at boot" wording of the
 requirement is satisfied for validation and for every non-secret value; the two secrets are read at
 call time on purpose. The credential argument lives only in the inner task's stack for the duration of
 one call; no function returns it; `Smtp` has no struct holding it. Leak vectors that remain to test, not
-assume: the library's own process arguments in a crash report (1.3 item 6), library logging (item 7),
-and an exception message that embeds options (adapter wraps the call so none is surfaced). AC5 tests all
+assume: the library's own process arguments in a crash report (Transport contract, 2.1; 1.3 item 6),
+library logging (item 7), an exception message that embeds options (the adapter wraps the call so none
+is surfaced), and the boot path (M1: no secret value is passed to `parse/2`). AC5 tests all
 three with a recognisable password marker.
 
 ### 3.6 INV-9 and the SMTP host
@@ -377,9 +432,12 @@ LETFLOW_SMTP_USERNAME=
 LETFLOW_SMTP_PASSWORD=
 LETFLOW_MAIL_FROM=
 LETFLOW_PUBLIC_BASE_URL=
-# Optional: starttls (default) | tls | none (none refused in prod)
+# Optional: starttls (default) | tls | none (none only for a loopback host and never in prod)
 LETFLOW_SMTP_TLS=
-# Optional: milliseconds, 2000..60000, default 15000 (hard timeout of one delivery attempt)
+# Optional: milliseconds, 2000..30000, default 15000 (hard timeout of one delivery attempt).
+# Capacity note: up to max_concurrent (default 100) deliveries may hold a relay connection at
+# once; set the relay's per-account connection limit >= that, or lower max_concurrent.
+# The outbound rate ceiling is the global login-discovery limiter, not this setting.
 LETFLOW_MAIL_TIMEOUT_MS=
 ```
 
@@ -408,7 +466,8 @@ Mapping of delivery results (all inside the notifier task):
 | Adapter exceeds `timeout_ms` | n/a (`Task.shutdown(task, :brutal_kill)`) | `nil` | `:failed` | fixed line | none |
 | `:send` bucket refused | adapter not called | `:rate_limited` from `consume_email_silent` | `:skipped` | none | none |
 | Nothing to deliver (no match, disclosed single match, failed lookup), non-binary recipient, `email_keys` failure | adapter not called | `:none`, `false` or an error tuple | no event | none | none |
-| `start_child` refused (`max_children`) or exits | task never starts | n/a | no event | none | none |
+| Outer `start_child` refused (`max_children`) or exits | task never starts | n/a | no event (the bucket was not yet consumed) | none | none |
+| INNER `async_nolink` refused or exits after the bucket was consumed (F5) | adapter not called | the start itself fails | `:failed` | the fixed line | none |
 
 No automatic retry (REQ-441 item 3): `Transport` passes zero retries to the library (1.3 item 2) and
 Dispatch has no retry. The `:send` bucket is consumed BEFORE the adapter runs (existing order, P4),
@@ -437,8 +496,13 @@ Exactly where, and the decision:
   attempt inside the interval is skipped" to be observable, and the bucket is the only place a deliver
   intent is dropped. Justification for (b): the Noop adapter is a real code path that returns `:ok`
   today; labelling it `:skipped` keeps `:delivered` meaning "a relay accepted a message".
+- `:failed` also covers (F5) a refusal or exit of the INNER `Task.Supervisor.async_nolink` start. That
+  refusal happens after `consume_email_silent(key, :send)` already spent the token, so it is a deliver
+  intent that failed: the address loses its 900 s window and the loss must be visible. The Dispatch edit
+  wraps the inner start in the same function-level isolation so the start failure becomes the `:failed`
+  event plus the fixed log line, never a silent drop.
 - NOT emitted (no event at all): nothing-to-deliver (`:none`), non-binary recipient, `email_keys`
-  failure, `start_child` refusal. Reason: those are the "no match" shapes. An event there would make the
+  failure, outer `start_child` refusal. Reason: those are the "no match" shapes. An event there would make the
   notifier counter's `delivered+failed+skipped` total equal the number of requests, and its split
   would then expose the match rate per request; emitting only on a real deliver intent keeps the
   counter at one event per genuine attempt, the unit AC4 and REQ-441 item 3 use ("once per attempt"),
@@ -457,11 +521,19 @@ task. A telemetry handler that raises is detached by `:telemetry` and cannot fai
 is updated to describe the event. The adapter returns the same shapes as before, so the port and the
 double are untouched.
 
-### 4.3 Counter exposure
+### 4.3 Counter exposure and saturation (F4, F5)
 
 No handler is attached to the new event in this requirement (P13); the Prometheus registry is not
-changed. Whether to expose it as a metric is a separate decision (OQ-5): the event has no per-address
-dimension by construction (metadata is exactly `%{outcome: _}`).
+changed. The aggregate residual (the attempt count equals the number of requests whose address matched,
+visible in rate and time to anyone who can scrape a metric) is acceptable ONLY while no handler exists.
+Binding record: any future metric, dashboard or log-derived exposure of this event needs its own
+SECURITY-REVIEWER sign-off and must never add an address, tenant, slug or reason label; the log line
+stays fixed. A guard test enforces the "no handler" state (6.2, AC4 row). Saturation of the delivery
+supervisor: decision (F5, optional part) NOT to add a separate submit-time saturation event in this
+requirement. Reason: the outer `start_child` refusal is match-independent and is already invisible by
+design (REQ-437), a new event is new surface to review, and the capacity bound (4.4 item 4, F9 tests)
+plus the `:failed` on inner refusal give the operator the signal that matters. It can be added later as
+its own event name (match-independent by construction) without changing this design.
 
 ### 4.4 Timeout versus real SMTP (explicit design decision)
 
@@ -472,19 +544,23 @@ killed and counted `:failed`. Decision:
 
 1. The global default in `config/config.exs` stays 5000 (Noop and the test double are unaffected).
 2. When `LETFLOW_MAIL_ADAPTER=smtp`, `runtime.exs` writes `timeout_ms:` = `LETFLOW_MAIL_TIMEOUT_MS`
-   (default 15000, range 2000..60000). Dispatch already reads `timeout_ms` per `submit/3`, so no
-   Dispatch change is needed for this.
-3. The adapter's own per-phase socket timeout is `socket_timeout_ms = max(1000, div(timeout_ms, 4))`
-   (3750 ms by default), strictly below the hard timeout, so a single stalled phase fails the attempt
-   cleanly (library closes its socket) well before Dispatch's `brutal_kill`. The sum of phases is not
-   bounded by this value; the hard timeout is the guarantee, and a test proves a slow-drip sink is
-   killed and leaves no open connection.
-4. Capacity: each delivery holds two `TaskSupervisor` slots for at most `timeout_ms` (Dispatch
-   `max_concurrent/0` doc); at 15 s and the default 100 concurrent, a flood of distinct addresses is
-   bounded by the existing per-IP and global limiter and the `max_children` cap, which drop silently.
-   No change; stated so REVIEWER need not rediscover it.
-
----
+   (default 15000, range 2000..30000). Dispatch already reads `timeout_ms` per `submit/3`, so no Dispatch
+   change is needed for this.
+3. The adapter's per-phase socket timeout is `socket_timeout_ms = max(1000, div(timeout_ms, 4))`
+   (3750 ms by default), strictly below the hard timeout. Intent: a single stalled phase should fail the
+   attempt before Dispatch's `brutal_kill`. Whether the library honours the value per phase and CLOSES
+   its socket when it gives up is NOT assumed (1.3 items 1 and 6); it is an OBLIGATION of the chosen
+   transport, verified by the hard-timeout tests: after the `:hang` and `:slow_drip` scripts the sink's
+   `open_connections/1` must reach 0 within a bounded wait, and no process started by the call may be
+   alive (AC5 row). The sum of phases is not bounded by this value; the hard timeout is the guarantee.
+4. Capacity (F9): the outbound ceiling is the global login-discovery limiter (about 10 requests/s, burst
+   60; per IP 0.5/s, burst 10) and the per-address `:send` bucket (one mail per normalised registered
+   address per 900 s, so about 4 mails/hour to one victim), not this setting; there is no amplifier. Each
+   delivery holds two `TaskSupervisor` slots for at most `timeout_ms`, so up to `max_concurrent` (default
+   100) relay connections may be open at once and a relay outage with 30 s holds can starve legitimate
+   deliveries (visible as `:failed`). Operators must set the relay's per-account connection limit to at
+   least `max_concurrent`, or lower `max_concurrent` for smtp (documented in `.env.example`, 3.7). Tests
+   in 6.2 (AC4 row) bound both numbers.
 
 ## 5. Hard-stop checklist (all need a supervisor / user decision; none is made here)
 
@@ -493,6 +569,7 @@ killed and counted `:failed`. Decision:
 | H1 | New runtime dependency: `gen_smtp` (recommended; transitive `ranch`). Alternatives: `swoosh` + `gen_smtp` (+ `ranch`, `idna`) or `swoosh` + `mua` (+ `mail`, `idna`). Version constraint to be chosen at add time (hex.pm shows gen_smtp 1.3.0, 2025-05-30). ELIXIR-DEV must not touch `mix.exs`/`mix.lock` or run `mix deps.get` before approval. `mix deps.get` needs network; if unavailable ELIXIR-DEV must say so. | supervisor / owner approval | decision 0045 |
 | H2 | New environment variables: `LETFLOW_MAIL_ADAPTER`, `LETFLOW_SMTP_HOST`, `LETFLOW_SMTP_PORT`, `LETFLOW_SMTP_USERNAME`, `LETFLOW_SMTP_PASSWORD`, `LETFLOW_SMTP_TLS`, `LETFLOW_MAIL_FROM`, `LETFLOW_PUBLIC_BASE_URL`, `LETFLOW_MAIL_TIMEOUT_MS`; new real credentials and an SMTP relay host per environment | operator / owner | this file 3, REQ-441 open questions |
 | H3 | External infrastructure (not in this repository): ai-dala-infra secrets-inventory entries for the SMTP username/password and the relay per environment (0042 OQ-4: the platform operator owns the credentials); sender-domain SPF / DKIM / DMARC alignment; a deployed `.env` change before any environment sets `LETFLOW_MAIL_ADAPTER=smtp`. Recorded, not edited from here. | operator | REQ-441 open questions |
+| H1c | Conditions on the approval of H1 (F10): the lock entries are pinned by hash and `mix hex.audit` is run with its real output quoted; ELIXIR-DEV proves starting the `:gen_smtp` application opens no listening socket (a test, or the application is not started); `deps/` source is read and quoted for every 1.3 item; fail-closed STARTTLS is proven by the `{:no_starttls_offered}` script (zero AUTH, zero MAIL FROM, no password bytes on the wire); if Swoosh is chosen instead: no `use Swoosh.Mailer` (grep guard), no handler on `[:swoosh, ...]`, `config :swoosh, :api_client, false`, retries 0, and the adapter config holding the password built only inside the inner task. | supervisor / owner, then SECURITY-REVIEWER | decision 0045 |
 | H4 | Legal gate unchanged: 0042 OQ-3 / 0043 D-D lawful basis and controller. This requirement does not lift it; REQ-444 owns the boot refusal. | named person | 0043 D-D |
 
 Deploy-order note for ORCH: because `runtime.exs` only acts when `LETFLOW_MAIL_ADAPTER` is set, merging
@@ -535,6 +612,8 @@ data}]`, `connections(sink) :: non_neg_integer()`, `open_connections(sink) :: no
 `stop(sink) :: :ok`. It is test-support only (`test/support`, compiled in `:test`), never referenced
 from `lib/`.
 
+Per-test setup MUST set `Notifier` `timeout_ms` explicitly (G3): `config/test.exs` sets 1000, which is below the TLS/STARTTLS success path and far below the 15000 smtp default, so success cases that inherit it are timing-dependent. Values: `10_000` for every success and failure case, `1_500` only for the `:hang` and `:slow_drip` timeout cases (with `socket_timeout_ms` set to `500` there). The setup restores the previous env in `on_exit`.
+
 Per-test setup puts the sink's port into the `Smtp` app env (host `127.0.0.1`, `tls: :none` for the
 plaintext cases, `:starttls` + the generated CA override for the TLS cases), sets
 `LETFLOW_SMTP_USERNAME`/`PASSWORD` in the OS env to compile-time-built markers via `System.put_env`
@@ -547,18 +626,19 @@ restored in `on_exit`, and points `Notifier` `adapter:` at `Smtp`; everything is
 | AC1 | `test/letflow/login_discovery/notifier/smtp_test.exs` "conforms to the port" | `Notifier.behaviour_info(:callbacks) == [deliver_tenant_list: 2]` (port unchanged); `Smtp.module_info(:attributes)[:behaviour]` includes `Notifier`; `function_exported?(Smtp, :deliver_tenant_list, 2)`; return shapes: `:ok` against the accepting sink, `{:error, reason}` with `reason` in the closed set against every failing sink; plus a diff guard that `lib/letflow/login_discovery/notifier.ex` is unchanged (`git diff --quiet main -- <file>`). (No Mox in `mix.exs`; a behaviour-conformance test is the form used.) |
 | AC2 | same file, "delivers one message": call `Dispatch.submit/3` with `Smtp` selected and a multi-tenant lookup result, wait for the notifier event, then read the sink | exactly one message; `rcpts == [typed_address]` and no other recipient on any connection; the DATA body contains each active tenant's slug and display name as plain text and the link `<configured base>/?realm=<encoded slug>`; the raw DATA has `Content-Type: text/plain`; the sink saw one connection, one `MAIL FROM` equal to the configured sender. Also a direct `Smtp.deliver_tenant_list/2` case. |
 | AC3 | `test/letflow/routers/login_discovery_notifier_uniform_test.exs` | For the same multi-tenant POST through the real router (and a baseline with the Noop adapter), compare `conn.status`, the full `resp_headers` and `resp_body` with `==` for: double `:ok`, `:error`, `:raise`, `:exit`, `{:sleep, ms > timeout_ms}`; and with the real `Smtp` adapter against the sink for: accept, `{:refuse_rcpt, _}`, `:refuse_connection`, `{:starttls, :untrusted}`, `:drop_after_greeting`, `:hang`. All must equal the baseline bytes. `Process.alive?(test_pid)` (the request process) after each. The test waits for the notifier event (not `Process.sleep`) before leaving each case so the next case is not racing. |
-| AC4 | `test/letflow/login_discovery/dispatch_notifier_event_test.exs` (and extension of `dispatch_test.exs` if it overlaps) | (a) a failing attempt consumes the `:send` bucket: with `send_capacity: 1` and a negligible refill, attempt 1 vs the failing sink gives one `:failed` event and one sink connection; a second `submit` for the same address in the interval gives one `:skipped` event and ZERO new sink connections (not retried); (b) event shape: a telemetry handler attached by the test receives, per attempt, exactly one `{[:letflow, :login_discovery, :notifier], %{count: 1}, metadata}` with `metadata == %{outcome: _}` (`==` on the map, so no extra key) and the outcome is `:delivered`, `:failed`, `:failed`, `:failed`, `:skipped` for ok / error / raise+exit / timeout / bucket refused respectively; the Noop adapter gives `:skipped`; nothing-to-deliver, disclosed single match and a lookup failure emit NO notifier event; (c) a `{:tempfail_rcpt, _}` and a `:drop_after_greeting` sink each see exactly ONE connection after a wait longer than any plausible retry (proves no library-level retry); (d) grep guard (a `test/letflow/login_discovery/no_retry_guard_test.exs` or an existing structural test extended): `git grep` over `lib/letflow/login_discovery/` and `lib/letflow/login_discovery.ex` finds no `Process.send_after`, `:timer.send_after`, `:timer.apply_after`, `:timer.send_interval`, `retry`/`retries` (case-insensitive) outside `smtp/transport.ex` where `retries: 0` is the single permitted occurrence (asserted by line content), and no recursion of the delivery function. |
-| AC5 | `test/letflow/login_discovery/notifier_no_leak_test.exs` | One `capture_log(level: :debug)` wrapper across: success, rejected recipient (sink reply text carries `SINKREPLYMARKER` and echoes the recipient), refused connection, untrusted TLS, `:hang` timeout, double raise/exit with the typed email in the message, and an invalid-UTF-8 display name through `Smtp` (forces the encoder error path). The output must contain NONE of: the typed address and its lowercase form, any slug, any display name, `SINKREPLYMARKER`, the compile-time-built password marker and username marker, any exception message text (the raising double's message contains the typed address, so the first assertion already covers it, design s13 C-4 form). Also: `Application.get_all_env(:letflow)` rendered with `inspect/2` (large limit) contains neither marker, and no struct is defined in the new modules (a grep for `defstruct` over the new files finds none). Structural grep guard: `start_child`, `Task.start`, `spawn` under `lib/letflow/login_discovery/` appear only in closure form (extends the REQ-437 structural test if it exists; otherwise added). |
+| AC4 | `test/letflow/login_discovery/dispatch_notifier_event_test.exs` (and extension of `dispatch_test.exs` if it overlaps) | (a) a failing attempt consumes the `:send` bucket: with `send_capacity: 1` and a negligible refill, attempt 1 vs the failing sink gives one `:failed` event and one sink connection; a second `submit` for the same address in the interval gives one `:skipped` event and ZERO new sink connections (not retried); (b) event shape: a telemetry handler attached by the test receives, per attempt, exactly one `{[:letflow, :login_discovery, :notifier], %{count: 1}, metadata}` with `metadata == %{outcome: _}` (`==` on the map, so no extra key) and the outcome is `:delivered`, `:failed`, `:failed`, `:failed`, `:skipped` for ok / error / raise+exit / timeout / bucket refused respectively; the Noop adapter gives `:skipped`; nothing-to-deliver, disclosed single match and a lookup failure emit NO notifier event; an INNER `async_nolink` refusal (supervisor saturated after the bucket was consumed) gives one `:failed` event and the fixed log line (F5); (c) a `{:tempfail_rcpt, _}` and a `:drop_after_greeting` sink each see exactly ONE connection after a wait longer than any plausible retry (no library-level retry); (d) grep guard: over `lib/letflow/login_discovery/` and `lib/letflow/login_discovery.ex` no `Process.send_after`, `:timer.send_after`, `:timer.apply_after`, `:timer.send_interval`, and no `retry`/`retries` (case-insensitive) outside `smtp/transport.ex`, where `retries: 0` is the single permitted occurrence (asserted by line content); (e) F4 guard: no `:telemetry.attach`/`attach_many` in `lib/` names an event beginning `[:letflow, :login_discovery` (the registry's four events are asserted exactly, P13); (f) F9 capacity tests: N distinct addresses at the limiter burst produce at most `burst` sink messages; with `2 * max_concurrent + 1` simultaneous submits no more than `max_concurrent` connections ever reach the sink (sink `:hang`, `max_concurrent` set small in the test). |
+| AC5 | `test/letflow/login_discovery/notifier_no_leak_test.exs` | One `capture_log(level: :debug)` wrapper PLUS an attached `:logger` handler at all levels (so crash reports that bypass the Logger translator are seen) across: success, rejected recipient (sink reply text carries `SINKREPLYMARKER` and echoes the recipient), refused connection, untrusted TLS, `:hang` timeout, double raise/exit with the typed email in the message, an invalid-UTF-8 display name through `Smtp` (forces the encoder error path), and a FORCED Transport/library-path failure (a test seam or deliberately malformed connection option) that makes the call crash inside the library, including `proc_lib` crash reports (M2a). The captured output must contain NONE of: the typed address and its lowercase form, any slug, any display name, `SINKREPLYMARKER`, the compile-time-built password and username markers, any exception message text (the raising double's message contains the typed address, design s13 C-4 form). Also (M2b): after the brutal_kill paths (`:hang`, `:slow_drip`) and after the forced crash, every process that was not in `Process.list/0` before the call is gone within a bounded wait (no surviving worker, no linked or unlinked leftover) and the sink's `open_connections/1` is 0. Also: `Application.get_all_env(:letflow)` rendered with `inspect/2` (large limit) contains neither marker, and no struct is defined in the new modules (a grep for `defstruct` over the new files finds none). Structural grep guard: `start_child`, `Task.start`, `spawn` under `lib/letflow/login_discovery/` appear only in closure form (extends the REQ-437 structural test if it exists; otherwise added). |
 | AC6 | `test/letflow/no_smtp_secret_guard_test.exs` | `git ls-files` content scan: no line matching `LETFLOW_SMTP_(PASSWORD|USERNAME)\s*[=:]\s*\S` (a non-empty assigned value) in any tracked file; the two `.env.example` files contain `LETFLOW_SMTP_USERNAME=` and `LETFLOW_SMTP_PASSWORD=` followed by nothing (exact line match, quoted in the report). The guard's own file builds its pattern from pieces so it does not trip itself; the tests that need values use `System.put_env` with names held in module attributes and values built at compile time (P16 precedent), not `NAME=value` text. |
-| AC7 | `test/letflow/mail_runtime_config_test.exs` (`@moduletag :slow`, same child `mix run --no-start` technique as P16, MIX_ENV `test` and `dev`) plus `Config.Reader.read!/2` with `env: :prod` for the prod-only case (the option to verify against the Elixir docs of the pinned version) | unset keeps the pre-existing adapter (dev: Noop; test: the double) and writes no Smtp env; `noop` boots with Noop; unknown value exits non-zero, names `LETFLOW_MAIL_ADAPTER`, output contains the supplied value NOWHERE; `smtp` with each of host, port, username, password, from, base URL missing (one at a time) exits non-zero naming exactly that variable and containing none of the other variables' values; invalid port, invalid base URL (query, userinfo, ftp scheme, http in prod), invalid TLS keyword, out-of-range timeout each raise without echo; a complete valid set boots and the probe prints the evaluated env; `LETFLOW_SMTP_TLS=none` boots in `dev`/`test` and RAISES in `prod` (the `:prod` raise also asserts the message does not contain the host). The complete-set boot also asserts the password and username markers do not appear in `Application.get_all_env(:letflow)` (3.5). |
+| AC7 | `test/letflow/mail_runtime_config_test.exs` (`@moduletag :slow`, `async: false`). Non-prod cases: child `mix run --no-start` technique of P16, MIX_ENV `test` and `dev`. PROD cases (pinned, G2): in-process `Config.Reader.read!("config/runtime.exs", env: :prod, target: :host)`, which returns the evaluated config keyword list (nothing is applied to the VM); the test asserts on the returned value. If that call rejects the `env:`/`target:` options on the pinned Elixir (1.20.3), the pinned fallback is a child VM `MIX_ENV=prod mix run --no-start` (the prod build is compiled once, `@moduletag :slow`); no other mechanism. Before the mail raise can be the thing under test, the prod run must get past every earlier raise in `config/runtime.exs`, so the test sets, via `System.put_env` restored in `on_exit` with values built at compile time or generated: `LETFLOW_SECRETS_MASTER_KEY` (valid 64 lowercase hex), `LETFLOW_LOGIN_DIRECTORY_PEPPER` (valid 64 hex) and `LETFLOW_LOGIN_DIRECTORY_PEPPER_ID`, the previous-pepper pair unset, `DATABASE_URL` (a dummy `ecto://` URL), and leaves `LETFLOW_LOGIN_DISCOVERY_ENABLED` and `LETFLOW_TRUSTED_PROXIES` unset (so `boot_check` cannot raise first). A control case first asserts the same environment with a COMPLETE valid smtp set and `LETFLOW_SMTP_TLS` unset boots (`read!` returns), proving any later raise is the mail one. | unset keeps the pre-existing adapter (dev: Noop; test: the double) and writes no Smtp env (`parse/2` returned `{:ok, :unset}`); `noop` boots with Noop; unknown value exits non-zero, names `LETFLOW_MAIL_ADAPTER`, output contains the supplied value NOWHERE; `smtp` with each of host, port, username, password, from, base URL missing (one at a time) exits non-zero naming exactly that variable and containing none of the other variables' values; invalid port, invalid base URL (query, userinfo, ftp scheme, http in prod), invalid TLS keyword, out-of-range timeout (below 2000, above 30000), IP-literal host with `starttls` each raise without echo; a complete valid set boots and the probe prints the evaluated env; PROD: `LETFLOW_SMTP_TLS=none` raises (message names `LETFLOW_SMTP_TLS`, contains neither the host nor any other value), and in dev/test `none` boots only for a loopback host and raises for a non-loopback host. M1 case: force a `parse/2` failure (an invalid value for a non-secret variable while the password variable is set to the compile-time-built password marker) and assert the marker is absent from the child VM's stdout and stderr and from the raised message; also assert the marker is absent from `Application.get_all_env(:letflow)` after a complete-set boot (3.5). |
 | AC8 | same file | complete `smtp` set: `Application.get_env(:letflow, Letflow.LoginDiscovery.Notifier)[:adapter] == Letflow.LoginDiscovery.Notifier.Smtp`, `timeout_ms == 15000` (and the env value when set); unset (dev run) leaves `Letflow.LoginDiscovery.Notifier.Noop`. The key asserted is character-for-character `Letflow.LoginDiscovery.Notifier, adapter:` (the key REQ-444 reads). |
-| AC9 | `test/letflow/login_discovery/notifier/smtp_message_test.exs` (unit, `async: true`, no sink) + one sink case | `compose/3` over hostile display names (CR LF with `Bcc:` and a blank-line body split, `<script>`, `http://evil.example/x`, `javascript:alert(1)`, `www.evil.example`, `a@evil.example`, bidi controls, zero-width, over-length, invalid UTF-8, empty) and hostile slugs: the composed `subject` equals the fixed string; the composed map has exactly the keys `from to subject body`; the body contains no `\r`, no NUL, and every line is a fixed line or one of the three tenant-line shapes; every URL-like token (`[A-Za-z][A-Za-z0-9+.-]*://\S+`) in the body starts with the configured base URL, and the number of URLs equals the number of tenants; no tenant-derived `://`. `tenant_link/2` over slugs containing `/ ? & # % @ ..` and non-ASCII is percent-encoded and parses back (`URI.parse`) to host == the base host. Recipient cases: CR/LF, `,`, `<>`, space, non-ASCII, two `@`, over-length each return `{:error, :invalid_recipient}` and the sink case proves NO connection is made. Sink case: a hostile display-name multi-tenant delivery; the sink's raw header block contains exactly the allow-listed header names (From, To, Subject, Date, Message-ID, MIME-Version, Content-Type, Content-Transfer-Encoding) and no others, and contains no `Bcc`. StreamData property (stream_data is in `mix.exs`): for arbitrary binaries as display names and slugs, `compose/3` never raises, and any `{:ok, composed}` satisfies the invariants above. |
-| AC10 | pipeline gates | `mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas (`test/letflow/login_discovery*`, the new files, `test/letflow/routers/login_discovery*`), `mix letflow.check_boundaries`; ELIXIR-DEV and TEST-RUNNER quote the real output; the SECURITY-REVIEWER verdict is recorded against INV-4, INV-5, INV-8, INV-9 (8). `mix letflow.check_boundaries`: new modules live under `Letflow.LoginDiscovery.*`; `Smtp.Transport` is the only module that references the mail library (the boundary check, if it supports it, is extended; otherwise a grep test: `:gen_smtp` appears only in `transport.ex`). |
+| AC9 | `test/letflow/login_discovery/notifier/smtp_message_test.exs` (unit, `async: true`, no sink) + one sink case | `compose/3` over hostile display names (CR LF with `Bcc:` and a blank-line body split, `<script>`, `http://evil.example/x`, `javascript:alert(1)`, `www.evil.example`, `a@evil.example`, bidi controls, zero-width, over-length (truncated to 80 characters, message still composed), invalid UTF-8, empty) and hostile slugs: the composed `subject` equals the fixed string; the composed map has exactly the keys `from to subject body`; the body contains no `\r`, no NUL, and every line is a fixed line or one of the three tenant-line shapes (the display name always inside quotes); every URL-like token (`[A-Za-z][A-Za-z0-9+.-]*://\S+`) in the body starts with the configured base URL, and the number of URLs equals the number of tenants; no tenant-derived `://`. `tenant_link/2` over slugs containing `/ ? & # % @ ..` and non-ASCII is percent-encoded and parses back (`URI.parse`) to host == the base host. Recipient allow-list (F7): each of CR/LF, `,`, `<>`, space, `%`, `!`, `|`, backtick, `$`, `*`, quotes, non-ASCII, two `@`, IP-literal domain, leading/trailing dot, `..`, over-length returns `{:error, :invalid_recipient}` and the sink case proves NO connection is made; plain `a.b+c@example.org` passes. Sink case: a hostile display-name multi-tenant delivery; the raw header block contains exactly the allow-listed header names (From, To, Subject, Date, Message-ID, MIME-Version, Content-Type, Content-Transfer-Encoding) and no others, no `Bcc`, the `Message-ID` domain equals the sender's domain, and the sink transcript's EHLO argument equals the sender's domain, not the node hostname (F8c). StreamData property: for arbitrary binaries as display names and slugs, `compose/3` never raises, and any `{:ok, composed}` satisfies the invariants above. |
+| AC10 | pipeline gates | `mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas (`test/letflow/login_discovery*`, the new files, `test/letflow/routers/login_discovery*`), `mix letflow.check_boundaries`; ELIXIR-DEV and TEST-RUNNER quote the real output; the SECURITY-REVIEWER verdict is recorded against INV-4, INV-5, INV-8, INV-9 (8). `mix letflow.check_boundaries`: new modules live under `Letflow.LoginDiscovery.*`; `Smtp.Transport` is the only module that references the mail library (a grep test: `:gen_smtp` appears only in `transport.ex`). Guard tests (M3): `allow_test_cacerts` is set to `true` only in `config/test.exs`; `lib/` contains no `verify_none` or `verify_fun`; with the flag off, a `tls_cacerts` app-env value has no effect (a unit test against the non-test code path is not possible in the test build, so this is covered by the grep guard plus a compile-time review item for SECURITY-REVIEWER). |
 
 Additional tests beyond the ten criteria (design obligations):
 
 - `Dispatch` unit: bucket-refused gives `:skipped` and no adapter call; the notifier event is emitted
   even when the fixed warning is logged; `submit/3` still returns `:ok` immediately.
+- TLS-mode and host rules (F8): `tls: :none` with a non-loopback host is refused at boot (AC7); a DNS-name host with `starttls` is accepted and the TLS server name sent by the client equals the host (sink records the SNI).
 - Fail-closed STARTTLS: script `{:no_starttls_offered}` with mode `:starttls`; the sink records zero
   `MAIL FROM`, zero `AUTH` and no password bytes on the wire (the adapter never downgrades).
 - Verified TLS success: script `{:starttls, :trusted}` with the generated CA override; one message
@@ -606,16 +686,18 @@ INV-4 (secrets by reference)
 1. Confirm no credential enters app env, a struct, a closure, telemetry or a return value (3.5); the
    username/password resolve via `System.get_env/1` in `Smtp` and live only as an argument to
    `Transport.send_message/4`.
-2. The highest unknown: does the chosen library spawn a worker whose crash report prints its
-   arguments (1.3 item 6)? Read the source, then confirm with the AC5 marker test across the kill
-   (`brutal_kill`) path and a worker crash.
+2. (M2) Transport contract in 2.1: a blocking send in the calling process, no linked or unlinked
+   worker. Read the library source (1.3 item 6), then confirm with the AC5 forced-crash, proc_lib
+   crash-report and no-surviving-process tests. If the library cannot meet it the decision reopens.
+   (M1) No secret value reaches `Config.parse/2` (2.2). (M3) The CA override is compile-time gated
+   (3.4).
 3. Library logging (1.3 item 7). If any, the contingency filter must be specified before merge.
 4. No-secret grep guard (AC6) and `.env.example` shape.
 5. `Application.get_all_env(:letflow)` carries host/port/sender/base URL only.
 
 INV-5 (indistinguishability) and uniformity
 6. The HTTP response is independent of delivery (4.1, AC3 byte equality across 9 delivery results).
-7. The notifier counter: metadata is exactly `%{outcome: _}`, no per-address dimension, no reason, no
+7. (F4) The notifier counter stays inert: no handler, guard test in AC4 row (e); any exposure needs a new sign-off. The counter: metadata is exactly `%{outcome: _}`, no per-address dimension, no reason, no
    reply text. Aggregate residual: a counter of attempts shows that some addresses have tenants. Confirm
    acceptable, and that exposing it on a dashboard needs a separate decision (OQ-5). REQ-441's own open
    question 4 (is `:failed` an oracle?) is answered here as: not per address; the decision on any future
@@ -652,12 +734,10 @@ Other
   (decision 0045 OQ-A). Approval of the dependency is a hard stop (H1).
 - OQ-2. Do all items in 1.3 hold for the chosen library? Answered by ELIXIR-DEV reading `deps/` source
   after approval; any "no" amends this design.
-- OQ-3. Credentials-at-call-time (3.5) versus the requirement's "read once at boot": this design reads
-  the two secrets at call time and validates presence at boot. Is this deviation acceptable, or does the
-  supervisor prefer storing them in app env (inspectable) for literal compliance?
-- OQ-4. The test-only CA override (3.4) read from app env: acceptable, or should the TLS tests use a
-  differently-scoped seam (for example a compile-time-only option)? SECURITY-REVIEWER to decide.
-- OQ-5. Should the `[:letflow, :login_discovery, :notifier]` event be surfaced by the Prometheus
+- OQ-3. RESOLVED by SECURITY-REVIEWER (design-phase): credentials at call time, not in app env, ACCEPTED.
+  ORCH still records the supervisor's nod together with the dependency approval.
+- OQ-4. RESOLVED by M3 (3.4): compile-time-gated, CA-list-only override.
+- OQ-5. RESOLVED with F4 (4.3): no handler, guard test, any exposure needs its own sign-off. Previously: should the notifier event be surfaced by the Prometheus
   registry? Not done here. And: is the `:skipped`-for-Noop and the "no event when nothing to deliver"
   choice (4.2) accepted? The alternative (emit `:skipped` for every nothing-to-deliver task) makes the
   counter a per-request match-rate signal and is rejected here.
@@ -677,3 +757,24 @@ Other
   by Dispatch: this design reuses `timeout_ms` (no Dispatch signature change). Confirm.
 - OQ-13. External, not in this repository: the ai-dala-infra secrets inventory and SPF/DKIM/DMARC
   (H3), and the lawful-basis gate (H4).
+
+---
+
+## 10. Rework 1 change map (2026-10-05)
+
+| Finding | What changed | Where |
+|---|---|---|
+| G1 (validator) | `parse/2` return type is `{:ok, :unset} / {:ok, {:noop, _}} / {:ok, {:smtp, _}} / {:error, {kind, var}}`; `adapter_choice` and `parsed` dropped; the four `runtime.exs` case clauses named | 2.2 |
+| G2 | `:prod` boot-test mechanism pinned: `Config.Reader.read!("config/runtime.exs", env: :prod, target: :host)`, exact earlier-raise variables to set, a control case, one named fallback | 6.2 AC7 |
+| G3 | "library closes its socket" is now an obligation proven by `open_connections == 0`; tests selecting Smtp set `timeout_ms` explicitly (10000, and 1500 with socket timeout 500 for the timeout cases) | 4.4 item 3, 6.1 |
+| G (note) | call-time secret reading is stricter than precedent (pepper is in app env, `runtime.exs` ~145) | 3.5 |
+| M1 | `parse/2` takes presence markers for the two secrets, never values; AC7 marker-password forced-failure case | 2.2, 6.2 AC7 |
+| M2 | Transport contract: blocking send in the calling process, no worker; reopen the decision if impossible; AC5 forced crash with `proc_lib` reports, all-levels `:logger` handler, no-surviving-process and `open_connections == 0` after kill paths | 2.1, 6.2 AC5, 8 |
+| M3 | override compiled only under a compile-time flag set only in `config/test.exs`; DER CA list only; never verify, verify_fun or SNI from env; grep guards | 3.4, 6.2 AC10 |
+| F4 | no handler on `[:letflow, :login_discovery, ...]` guard test; future exposure needs sign-off | 4.3, 6.2 AC4(e) |
+| F5 | inner `async_nolink` refusal after bucket consumption emits `:failed` + fixed log; separate saturation event decided NOT added, with reasons | 4.1, 4.2, 4.3 |
+| F6 | display name truncated to 80 chars (slug 64), never reject-all; printed as quoted labelled value; residual recorded | 2.3 rule 4 |
+| F7 | recipient validation is an allow-list; cases `% ! \|` etc. tested; same function for the sender | 2.3 rule 2, 6.2 AC9 |
+| F8 | `tls=none` only for a loopback host and never prod; DNS name required with TLS (no IP SNI); explicit EHLO hostname and Message-ID domain from the sender domain, asserted | 3.1, 2.3 rule 3, 6.2 |
+| F9 | timeout ceiling 30000; relay-connection-limit documentation; capacity tests | 3.1, 3.7, 4.4, 6.2 AC4(f) |
+| F10 | approval conditions (hash pin, `mix hex.audit`, no listening socket, deps/ source quoted, fail-closed STARTTLS proof, Swoosh variants) | 5 (H1c), decision 0045 |

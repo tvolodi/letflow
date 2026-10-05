@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ441-20261005/step-01-code-designer.json",
   "created_at": "2026-10-05T16:20:00Z",
   "started_at": "2026-10-05T16:20:00Z",
-  "completed_at": "2026-10-05T16:28:35Z",
+  "completed_at": "2026-10-05T16:36:03Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
@@ -58,7 +58,7 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Phase 1 design written. Recommends gen_smtp alone (2 new lock entries) over the requirement's Swoosh proposal; decision record 0045 is PROPOSED and the dependency add is a hard stop awaiting supervisor/owner approval. Design covers modules (Smtp, Smtp.Message pure composer, Smtp.Config, Smtp.Transport as the only library-naming module), exact message contract and header/link-injection defences, env vars and runtime.exs validation without echoing values, credentials read at call time from the OS env (not app env), the new [:letflow,:login_discovery,:notifier] event to be added in Dispatch (delivered/failed/skipped; skipped for bucket refusal and Noop; no event when nothing to deliver), 15000 ms default hard timeout when smtp is selected with a per-phase socket timeout below it, in-process SMTP sink design, and a test mapping for all 10 acceptance criteria. Library runtime behaviour is listed as to-verify against deps/ source after approval.",
+    "summary": "REWORK 1 applied (design-only). Validator FAIL items G1-G3 and SECURITY-REVIEWER M1-M3, F4-F10 folded into lib/letflow/design/req441-mail-notifier-adapter.md (change map in section 10) and decision 0045 (section 6a approval conditions). Recommendation unchanged: gen_smtp alone, PROPOSED, dependency add still a hard stop.\nPhase 1 design written. Recommends gen_smtp alone (2 new lock entries) over the requirement's Swoosh proposal; decision record 0045 is PROPOSED and the dependency add is a hard stop awaiting supervisor/owner approval. Design covers modules (Smtp, Smtp.Message pure composer, Smtp.Config, Smtp.Transport as the only library-naming module), exact message contract and header/link-injection defences, env vars and runtime.exs validation without echoing values, credentials read at call time from the OS env (not app env), the new [:letflow,:login_discovery,:notifier] event to be added in Dispatch (delivered/failed/skipped; skipped for bucket refusal and Noop; no event when nothing to deliver), 15000 ms default hard timeout when smtp is selected with a per-phase socket timeout below it, in-process SMTP sink design, and a test mapping for all 10 acceptance criteria. Library runtime behaviour is listed as to-verify against deps/ source after approval.",
     "artifacts_out": [
       "lib/letflow/design/req441-mail-notifier-adapter.md",
       "docs/migration/decisions/0045-mail-library-choice.md"
@@ -87,8 +87,13 @@
       {
         "severity": "MINOR",
         "description": "ORCH-authored handoff carried a non-schema null top-level key task_notes (lint H3); removed by CODE-DESIGNER so the file lints clean."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Rework 1: Config.Reader.read!(path, env: :prod, target: :host) pinned for prod boot tests with a named child-VM MIX_ENV=prod fallback; option acceptance on Elixir 1.20.3 is not verified in this phase (design-only)."
       }
     ],
     "next_action": "CODE-DESIGN-VALIDATOR"
-  }
+  },
+  "rework_count": 1
 }

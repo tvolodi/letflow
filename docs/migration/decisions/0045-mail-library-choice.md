@@ -207,6 +207,22 @@ decision is reopened toward O2, it is not worked around.
 4. **Legal gate (unchanged)**: 0042 OQ-3 / 0043 D-D lawful basis and controller. This work makes the
    adapter real; it does not lift the gate that keeps the feature off outside dev.
 
+## 6a. Conditions on the approval (SECURITY-REVIEWER design review, rework 1)
+
+Approval of the dependency is conditional on, and ELIXIR-DEV must evidence in its handoff:
+1. Lock entries pinned by hash; `mix hex.audit` run and its real output quoted.
+2. Starting the `:gen_smtp` application opens no listening socket (gen_smtp also ships server-side code
+   and uses ranch): a test proves it, or the application is not started.
+3. `deps/gen_smtp` source read and quoted for every item of design section 1.3, including the binding
+   single-process Transport contract (a blocking send in the calling process, no linked or unlinked
+   worker; if the library cannot meet it, this decision reopens toward Swoosh + Mua, it is not worked
+   around).
+4. Fail-closed STARTTLS proven against the in-process sink (server offers no STARTTLS: zero AUTH, zero
+   MAIL FROM, no password bytes on the wire).
+5. If Swoosh is chosen instead: no `use Swoosh.Mailer` (grep guard), no handler on `[:swoosh, ...]`,
+   `config :swoosh, :api_client, false`, retries 0, and the adapter config holding the password built
+   only inside the inner task.
+
 ## 7. Open questions on the decision
 
 - OQ-A. Supervisor choice between O3 (recommended), O1 and O2, given section 4.

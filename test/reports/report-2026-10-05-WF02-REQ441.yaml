@@ -1,0 +1,57 @@
+run_id: WF02-REQ441-20261005
+step: "WF-02 Step 5"
+agent: RELEASE-VALIDATOR
+generated_at: "2026-10-05T17:57:30Z"
+branch: feature/WF02-REQ441-20261005
+scope: "REQ-441 (Q-957), SMTP adapter behind the login-discovery notifier port; committed tree at 399ec966"
+commands:
+  compile: "MIX_ENV=test MIX_TEST_PARTITION=441k mix compile --force --warnings-as-errors -> Compiling 342 files, Generated letflow app, exit 0"
+  format: "mix format --check-formatted -> exit 0, no output"
+  boundaries: "mix letflow.check_boundaries -> OK -- 1011 edges checked, 0 violations"
+  hex_audit: "mix hex.audit -> No retired or security advisory packages found"
+  test_scoped_all: "mix test (login_discovery dir, login_discovery_test, login_discovery_runtime_config_test, mail_runtime_config_test, no_smtp_secret_guard_test, req441_source_guards_test, routers/login_discovery_notifier_uniform_test, docs/requirement_status_invariants_test) -> Result: 492 passed"
+  test_scoped_warnings: "same set minus invariants/runtime-config with --warnings-as-errors -> Result: 454 passed, exit 0; grep -c 'default values for the optional arguments' = 0"
+  not_run: "scripts/test_parallel.sh and mix letflow.check.test (full suite) NOT run: ORCH instruction was scoped runs only (RAM). Dead-default hazard covered by the --warnings-as-errors run above over every REQ-441 test file (0 hits)."
+criteria:
+  - ac: 1
+    verdict: VERIFIED
+    evidence: "git diff main...HEAD on lib/letflow/login_discovery/notifier.ex is empty (port unchanged); smtp_test.exs AC1 conformance tests pass"
+  - ac: 2
+    verdict: VERIFIED
+    evidence: "smtp_test.exs AC2 sink delivery (one message, rcpts == [typed], base-URL link) in the 492 passed"
+  - ac: 3
+    verdict: VERIFIED
+    evidence: "routers/login_discovery_notifier_uniform_test.exs (5 double results + 9 sink scripts, byte-identical fingerprint) passed"
+  - ac: 4
+    verdict: VERIFIED
+    evidence: "dispatch_notifier_event_test.exs passed; Dispatch.deliver/attempt/emit_notifier read in diff: bucket consumed before adapter, event metadata exactly %{outcome: _}; independent grep of lib/letflow/login_discovery finds no send_after/:timer, only start_child with closure, and 'retries: 0' in transport.ex"
+  - ac: 5
+    verdict: VERIFIED
+    evidence: "notifier_no_leak_test.exs passed (14 cases, capture_log plus all-levels logger handler); source guards for start_child/spawn forms passed"
+  - ac: 6
+    verdict: VERIFIED
+    evidence: "no_smtp_secret_guard_test.exs passed; independent git grep for an assigned value to LETFLOW_SMTP_USERNAME/PASSWORD finds only blank 'NAME=' lines in .env.example, deploy/.env.example and the design doc"
+  - ac: 7
+    verdict: VERIFIED
+    evidence: "mail_runtime_config_test.exs passed (evaluates real config/runtime.exs; unset/unknown/missing/plaintext-in-prod/complete)"
+  - ac: 8
+    verdict: VERIFIED
+    evidence: "mail_runtime_config_test.exs AC8; runtime.exs binds mail_adapter and writes config :letflow, Letflow.LoginDiscovery.Notifier, adapter: Smtp module; Dispatch treats only the Noop default as :skipped, so Smtp is the delivering module REQ-444 will read"
+  - ac: 9
+    verdict: VERIFIED
+    evidence: "smtp_message_test.exs (hostile names/slugs, properties) and smtp_encoder_test.exs (wire headers, dot-stuffing) passed"
+  - ac: 10
+    verdict: VERIFIED
+    evidence: "compile, format, boundaries, hex.audit, scoped tests all exit 0 as quoted above; SECURITY-REVIEWER 02c PASS (INV-4 call-time read ratified, INV-5, INV-8, INV-9) recorded in handoff step-02c"
+other_checks:
+  mix_lock: "git diff main...HEAD -- mix.lock shows exactly 2 added lines (gen_smtp 1.3.0, ranch 2.3.0), no removals; mix.exs adds only {:gen_smtp, \"~> 1.3\"}"
+  gates: "CODE-DESIGN-VALIDATOR r1 PASS (step-01b-r1); design SECURITY-REVIEWER PASS conditional M1-M3 (step-01c), conditions carried; SECURITY-REVIEWER 02c PASS; REVIEWER 02d PASS; TEST-DESIGN-VALIDATOR 03b PASS; TEST-RUNNER 04 PASS"
+  env_examples: "all nine LETFLOW_MAIL_*/SMTP_*/PUBLIC_BASE_URL variables are bare 'NAME=' lines in .env.example and deploy/.env.example, commented optional"
+  requirement_entry: "REQ-441 in docs/requirements.yaml amended (AC comment 'AC amended 2026-10-05 per design req441 (decision 0045)'), status still in_progress"
+  decision_records: "no earlier decision record contradicted; decision 0045 line 3 still 'Status: PROPOSED' (pending DOC-UPDATER sign-off edit)"
+  scope: "lib/config changes limited to config/{config,runtime,test}.exs, dispatch.ex, notifier/smtp*.ex; working tree clean except untracked letflow-3.code-workspace"
+gaps:
+  - "PENDING for DOC-UPDATER (not a fail): decision 0045 PROPOSED->ACCEPTED sign-off edit (REVIEWER 02d finding 1), requirement status flip to done, status event."
+  - "NON-BLOCKING known leftovers: Transport.send_message/4 unused 4th argument; MIME-encoder residual."
+  - "Full suite (test_parallel.sh / mix letflow.check.test) not run by this validator per scoped-run instruction; CI is the remaining full-suite checkpoint."
+verdict: PASS

@@ -54,50 +54,20 @@
     ]
   },
   "result": {
-    "status": "FAIL",
-    "revalidation_of": "rework 2, commit 3ea301b8 (ADR now 1042 lines). Prior verdicts: rework 0 FAIL, rework 1 PASS.",
-    "summary": "Original step-01 criteria still hold: nothing removed, Status PROPOSED (line 3), sign-off all pending (lines 1023-1038), no code fences, no TBD. Section numbering and cross-references resolve (2.3.4 <-> 2.3.5 items 4a/4b, 2.3.8 item 7 -> 2.3.4(a), 6.5 -> 2.3.2 item 3, R-7, S-11, 0028 s6, 4.2 'S-1..S-16'); step totals unchanged (29-30); the new 2.3.8, 2.3.9 and 6.5 do not contradict 2.1/2.2/2.3.7/4.x/matrix. FAIL only because the strict Keycloak criterion (no Keycloak behaviour asserted without an UNVERIFIED tag) is breached by new text in 2.3.5 item 6, 2.3.8 and 2.3.9, plus two spike-reference mismatches. All defects are MINOR wording/tag fixes; no structural change needed.",
+    "status": "PASS",
+    "revalidation_of": "rework 3, commit 4afc2ca6. Verdict history: rework 0 FAIL (1 MAJOR + 3 MINOR), rework 1 PASS, rework 2 FAIL (4 MINOR), rework 3 PASS.",
+    "summary": "All four MINOR defects (V1-V4) from the rework-2 check are resolved. 2.3.9 e-mail-edit/linking bullet is now 'ASSUMED RISK, UNVERIFIED (S-18)' and says 'may allow'; SSO-session and mobile-refresh-token bullets are 'ASSUMED, UNVERIFIED (S-14, S-6)' and '(S-14, S-17)'; 2.3.5 item 6 is 'ASSUMED, UNVERIFIED (S-17, S-14)' with the token-lifetime value also UNVERIFIED; 2.3.8 item 2 now cites S-18 and states S-15 covers only 'Login with email'. New S-17 (access-token lifetime and revocation) and S-18 (self-registration, e-mail verification, e-mail edit, broker linking) are defined in 5.2 (lines 844-851), each marked UNVERIFIED. Phase 0 row (line 729) says S-1..S-18; line 201 'S-1..S-7' is O2's own subset and remains correct; every S-n cite (S-6, S-14, S-17, S-18) resolves to a matching definition. Status PROPOSED (line 3); sign-off entries all pending (lines 1056-1072); 0 code fences; 0 TBD. New config citations match.",
     "new_citations_verified": [
-      "auth_pipeline.ex:152-191: distinguishable 401 'token realm does not match tenant' and 403 'JIT provisioning disabled for this realm'",
-      "identity.ex:127 provision_oidc_user; :1752-1756, :1805, :1865-1867 sync_role_claims_from_token call sites including nil role_claims_synced_at",
-      "jit_provisioning_config.ex:43-59 (for_realm falls back to default/1) and :72-80 (default: enabled: true, default_status: :active, default_roles: [])",
-      "claim_mapping_config.ex:53-75 absent-realm fallback",
-      "auth_pipeline.ex:353-363 live users.status read per request",
-      "security-invariants.md:199-204 INV-5 byte-identical responses with comparable round trips",
-      "0006:138-141 and 20260816000001_create_tenants.exs:38-41 (tenants_idp_realm_id_partial_index)",
-      "0042 Standing prohibitions 6 (only 200/202/429/404), 7 (one DB round trip, no second query), 9, 10 (directory never consulted by authenticated path), 11, 13; 0042 Alternatives 10-11 (lines 454-458)",
-      "0028:85 'Rate limiting is a precondition of mounting' (backs '0028 s6')"
+      "config/prod.exs:32-38: config :letflow, :oidc_jit_provisioning with only \"bpm-default\" (enabled: true, default_status: :active, default_roles: [])",
+      "config/dev.exs:137-143: identical single \"bpm-default\" entry",
+      "config/test.exs:171-176: \"bpm-default\" entry; the map continues with \"jit-disabled-test-realm\" (enabled: false) at 177-181, so '(test.exs adds test realms)' is accurate (one extra realm)",
+      "ADR 5.2 S-17 (lines 844-847) and S-18 (lines 848-851) text read and matches the references at lines 508, 611, 631, 644",
+      "ADR line 729 Phase 0 'S-1..S-18'; line 201 'S-1..S-7' (O2 organisation subset)",
+      "Sign-off lines 1056, 1057, 1067, 1071 all pending",
+      "jit_provisioning_config.ex:43-59,72-80 fail-open default (rechecked, matches the 'ordering matters' claim)",
+      "hosts/ubuntu-16gb-nbg1-1.md:203 QA realms bilimbaga, swiftroute, meridian, vortex (rechecked earlier, matches)"
     ],
-    "issues": [
-      {
-        "id": 1,
-        "severity": "MINOR",
-        "location": "2.3.9 first bullet (~line 609-612)",
-        "defect": "States as fact that Keycloak profile e-mail edits and first-broker-login linking by e-mail can transfer an account; Keycloak behaviour asserted with no UNVERIFIED tag or spike reference.",
-        "fix": "Reword as a risk to check, e.g. 'if the shared realm allows e-mail edits or e-mail-based broker linking (UNVERIFIED, S-8/S-15)'."
-      },
-      {
-        "id": 2,
-        "severity": "MINOR",
-        "location": "2.3.9 bullets 'Cross-tenant SSO session' (~line 618) and 'Mobile refresh token' (~line 620)",
-        "defect": "'One shared-realm SSO session spans all the user's shared tenants' and 'one refresh token is valid for every shared tenant' assert Keycloak session/token behaviour untagged.",
-        "fix": "Prefix 'assumed, UNVERIFIED (S-14)'."
-      },
-      {
-        "id": 3,
-        "severity": "MINOR",
-        "location": "2.3.5 item 6 (~lines 487-490) and S-14 (line 810)",
-        "defect": "'A Keycloak-side disable ... does NOT revoke already-issued access tokens' is asserted as Keycloak behaviour; and it points to S-14 for access-token lifetime, but S-14 only asks about refresh-token lifetime, session and logout.",
-        "fix": "Tag the revocation behaviour UNVERIFIED and add 'access-token lifetime and revocation of issued tokens' to S-14."
-      },
-      {
-        "id": 4,
-        "severity": "MINOR",
-        "location": "2.3.8 item 2 (~line 590) and S-15 (line 813)",
-        "defect": "Cites S-15 for shared-realm self-registration and email_verified behaviour, but S-15 is only 'Login with email'.",
-        "fix": "Extend S-15 to cover self-registration and the email_verified claim, or add a new spike question."
-      }
-    ],
-    "route": "Back to CODE-DESIGNER for four wording/tag fixes (no structural change); a quick re-check suffices."
+    "issues": [],
+    "route": "PASS. Proceed to remaining gates / user ratification."
   }
 }

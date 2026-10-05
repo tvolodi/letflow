@@ -1,0 +1,47 @@
+id: ISS-0993
+title: "Cross-tenant exposure: tenant-scoped PLATFORM_ADMIN can reach platform-wide tenant administration endpoints"
+discovered_by: ORCH
+discovered_in_run: WF03-FILE-CROSS-TENANT-20261005
+discovered_at: "2026-10-05T18:25:00Z"
+severity: BLOCKER
+owner: ELIXIR-DEV (after CODE-DESIGNER); SECURITY-REVIEWER mandatory
+description: >
+  The :TenantsManage permission conflates "manage my own tenant" (PATCH /tenant/settings,
+  REQ-382) with "manage ALL tenants" (/tenants*, /onboarding, /platform-migrations). It is held by
+  PLATFORM_ADMIN, which is a TENANT role: users in any tenant realm get it. Handlers in
+  lib/letflow/routers/tenants.ex take the slug from the path and do not compare it with
+  conn.assigns.auth_context.tenant_id, so a tenant-scoped PLATFORM_ADMIN reaches platform-wide
+  tenant administration.
+
+  Evidence (read-only probe on QA https://qa.bizdala.com, build == origin/main at ~2026-10-05,
+  token of bilimbaga-admin-user, a tenant-scoped PLATFORM_ADMIN in the bilimbaga realm; counts and
+  status codes only):
+    GET /api/v1/tenants                 -> 200, listing 6 tenants (all registered tenants, not only its own)
+    GET /api/v1/tenants/<other slug>    -> 200
+    GET /api/v1/admin/services          -> 200, items carry owner_tenant_id
+    GET /api/v1/onboarding              -> 400 (reachable; needs params)
+  Not probed (writes), same :TenantsManage permission: PATCH /tenants/:slug,
+  POST /tenants/:slug/deactivate|reactivate, POST /tenants, POST /onboarding,
+  POST /platform-migrations/rollouts. PATCH /tenant/settings (own tenant) is the intended use.
+
+  Related UI finding: web/src/components/layout/AppShell.tsx:23-60 shows platform-operator items
+  (Tenants, Register Tenant, Health, Metrics, Services, Platform Migrations, Event Retention) to
+  any PLATFORM_ADMIN. A separate UX requirement (separate platform-operator navigation) follows
+  after the fix and is deliberately NOT filed here.
+
+  Invariants violated (docs/agents/instructions/security-invariants.md): INV-1 (tenant data
+  isolation: other tenants' records returned), INV-2 (server-side field authorisation: owner_tenant_id
+  and other tenants' fields exposed), INV-5 (a tenant-scoped caller can enumerate other tenants),
+  INV-6 (the data-access paths do not prove scoping).
+
+  Suggested direction (not a design): a distinct platform-operator permission/role (not a tenant
+  realm role) for the cross-tenant endpoints; keep an own-tenant permission for /tenant/settings;
+  cross-tenant negative tests (a tenant-A PLATFORM_ADMIN gets 403 on /tenants*, /onboarding,
+  /platform-migrations, and on /admin/services data of other tenants); SECURITY-REVIEWER mandatory.
+affected_files:
+  - lib/letflow/api/authorization.ex
+  - lib/letflow/routers/tenants.ex
+  - web/src/components/layout/AppShell.tsx
+queue_ref: Q-960   # queue title reads "ISS-0960: ..." because the allocator derived it; ISS-0960 was already taken locally (closed duplicate of ISS-0970), so the local id is ISS-0993. Never derive; read this field.
+github_ref: GH-2229
+status: open

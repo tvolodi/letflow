@@ -518,3 +518,14 @@ mode this whole system exists to prevent. When a check is ambiguous, it is a "no
 > gap found live" section, ISS-0467) — this paragraph closes that specific
 > silence; see `GIT_MERGE.md`'s own Precondition section for the corresponding
 > prohibition.
+
+
+---
+
+## 11. Merge slots and CI discipline
+
+Merging follows the serial-slot protocol in `docs/agents/instructions/core-directives.md`
+("Merge Discipline"): one PR per issue; no docs/chore merges while a functional PR is in CI;
+filings batched; CI failures classified and a repeat treated as a defect; CI-shaped local run
+before every push. Overlap checks (queue id + GH number + open PRs + `main`) precede both
+filing (`ISSUE_QUEUE.md`) and WF-03 (Step 0).

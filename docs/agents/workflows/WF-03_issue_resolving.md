@@ -62,6 +62,16 @@ isn't specified yet, that's a new requirement — WF-01 then WF-02.
 [OUTPUT: ISS-NNNN resolved; fix merged to main with a regression test]
 ```
 
+## Step 0 — Overlap check (before any work, before claiming)
+
+Before ISSUE-FIXER (or anyone) starts, ORCH confirms the issue is not already being fixed:
+`gh pr list` and each open PR's changed files, `main` (is it already fixed?), and sibling
+sessions' branches. Identify the work by **queue id + GH number** (the local `ISS-NNNN` may
+be a renumbered alias). Duplicates have happened (Q-926 was fixed twice in parallel; Q-935 was
+fixed by an unrelated PR), and a skipped check costs a whole pipeline run. If an in-flight PR
+covers the acceptance criteria, do not implement: release the lock, and close the GH issue
+against that PR after it merges.
+
 ## Step 0.5 — Registry lookup
 
 **Agent:** `ISSUE-FIXER`

@@ -380,3 +380,31 @@ not allowed (SSRF protection)"}` for blocked URLs at dispatch time).
     the `:httpc` (or future HTTP client) call.
 
 **Severity.** BLOCKER.
+
+
+---
+
+## INV-10 — Platform authority is bound to the platform tenant
+
+**Rule.** A platform-scope action — any read or write on the tenant registry, on
+another tenant's data, or on a resource shared by all tenants — is allowed only when
+the caller's **database-resolved** tenant is the configured platform tenant **and** the
+caller holds a role that grants the permission. A role name alone never confers
+platform authority. If no platform tenant is configured, every platform-scope action is
+denied. Every permission is classified `platform` or `tenant`, and a permission without a
+classification fails the build. A tenant-scope action acts only on the caller's own
+tenant: the target tenant is never taken from a path, query or body value. No role
+exempts a caller from the deactivated-tenant gate except a platform-tenant
+`PLATFORM_ADMIN`.
+
+**Reference.** Enforced from the merge of Q-960's PR A (until then the code violates it:
+a `PLATFORM_ADMIN` of any tenant can reach platform endpoints — ISS-0993/ISS-0994). PR A
+and decision 0046 cite this invariant; neither adds its own. Substance ratified by the
+user (REQ-445 D1-D4).
+
+**How to verify.** A cross-tenant negative test per platform-scope route group, with an
+admin of **another** tenant as the caller (not a lower role), asserting the same
+not-found/forbidden response as INV-5. SECURITY-REVIEWER checks every route touched by a
+change against the platform/tenant classification.
+
+**Severity.** BLOCKER.

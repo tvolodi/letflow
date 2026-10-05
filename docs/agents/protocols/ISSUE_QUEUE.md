@@ -70,6 +70,27 @@ rule this section replaces was *also* documented, and documentation alone did no
 it true — which is this project's own producer/validator principle applied to its
 own conventions.
 
+## Filing step 0 — overlap check and next-free number (before `register_task`)
+
+*(Added 2026-10-06: ISS-0994 duplicated ISS-0993 at filing time, ten minutes apart; and the
+queue's `issue_ref` has repeatedly collided with an existing local `docs/issues/ISS-NNNN.yaml`.)*
+
+Before ORCH calls `register_task` for a finding, it checks, and records the result in the
+issue text, all four of:
+1. **Queue:** an existing task with the same symptom (`GET /tasks`, read-only).
+2. **GitHub:** an existing issue with the same symptom (`gh issue list --search ...`).
+3. **Open PRs:** `gh pr list` plus each PR's changed files, since someone may already be
+   fixing or filing it.
+4. **`main`:** `docs/issues/` and the code (the defect may already be fixed).
+
+If a duplicate or an in-flight fix exists, add a comment to it instead of filing.
+
+**Local numbering.** The queue's `issue_ref` is NOT guaranteed to be a free local number.
+Before writing `docs/issues/<issue_ref>.yaml`, check that the filename is free on `main`, on
+every open PR (`gh pr view N --json files`) and on remote branches. If it is taken, pick the next
+free `ISS-NNNN`, keep the queue's number in `queue_ref` with a comment (the ISS-0950 / ISS-0987
+precedent), and always identify the work by **queue id + GH number**, never by an ISS number alone.
+
 ## Procedure
 
 **Updated 2026-08-20 (ISS-0086/GH#303's own resolution run).** Steps 2-3 previously

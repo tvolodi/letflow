@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ442-20261005/step-02c-security-reviewer.json",
   "created_at": "2026-10-05T12:16:22Z",
   "started_at": "2026-10-05T12:16:22Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T12:17:33Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -39,11 +39,15 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
+    "status": "PASS",
+    "summary": "IN SCOPE (migration, response shaping, platform-admin write path, lookup query). Verdict PASS, 0 blockers. INV-1 APPLIES-PASS: tenants is a public-schema table; the migration adds a nullable column plus CHECK to public tenants only and is not added to tenant_scoped_migrations; no tenant business data is touched; the LoginDirectory query stays prefix-less on public tables with log:false preserved, and returns only slug, display_name and disclose (no tenant_id, idp_realm_id or stored mode); the audit entry goes through Audit.append_multi into the TARGET tenant's chain, with the prefix resolved server-side from the Registration, not caller-supplied. INV-2 APPLIES-PASS: login_disclosure_mode appears in lib/ only in tenant.ex, identity.ex, login_directory.ex and routers/tenants.ex; the only response shaper carrying it is tenants.ex tenant_map/1 behind :TenantsManage (PLATFORM_ADMIN-only, no own-tenant carve-out); tenant_config, mobile_tenant_config, tenant_settings and onboarding are hand-built allowlists untouched by the diff; the TenantSettings closed key vocabulary (app_name logo_url brand_colors locales default_locale) rejects the key on PATCH /tenant/settings; the field is cast only in admin_patch_changeset/2 (settings_changeset casts :settings only). The audit payload is value-free (after_state {changed:true}, before_state nil), the action name is neutral (tenant.platform_setting.updated), and it is written in the same Multi as the update; a nil/non-binary actor, missing registration, step failure or raise returns {:error,:audit_failed} -> 500 with nothing written (fails closed); the rescue logs only a fixed message and tenant id (INV-4). INV-3 N/A (no Lua/WASM). INV-4 APPLIES-PASS (no secrets touched). INV-5 APPLIES-PASS/unchanged: PATCH /tenants/:slug authorisation precedes lookup and the existing 404 path is unchanged; the pre-auth lookup gains no new observable branch (disclose is a bound-boolean SQL expression in the same single query, constant work); the Mode B equivalence class {multi, unknown, malformed, inactive-only, lookup-failure} is intact and merely enlarged by 'single match in a uniform tenant'. INV-6 APPLIES-PASS: this note is the scoping proof. INV-7 APPLIES-PASS: no Repo.query or string-built SQL; the fragment interpolates only a column reference and a type(^bool,:boolean) bound parameter; the migration is static DDL. INV-8 APPLIES-PASS: patch_tenant uses with/cond and typed results, the lookup keeps rescue -> {:error,:lookup_failed}, no bare {:ok,_}= matches added. INV-9 N/A. Ceiling semantics verified in code: disclose = (deployment mode == :redirect_single) AND COALESCE(mode,'redirect_single')='redirect_single'; a missing deployment key -> redirect_single, any other term -> forced uniform, so the 0042 configuration-only kill switch is preserved. DECISION-RECORD AMENDMENTS: 0042 Standing prohibition 4 (internal disclose boolean in the match, never leaves decide/2, response allowlist unchanged) RATIFIED. 0042 prohibition 11 / Decision 3 (per-tenant selector with deployment fallback and ceiling, PLATFORM_ADMIN-only, audited) RATIFIED, conditional on decision 0043 D-A being the amending record and REVIEWER confirming the ceiling reading. Method: read git diff main...HEAD for lib/, priv/, test/; grepped lib/ for the field and all patch_tenant callers (router only); checked authorization.ex endpoint_policy_key mapping and audit actor_id has no FK. Read-only gate: tests were not run; ELIXIR-DEV's quoted migrate/rollback/CHECK/compile/boundary output was not independently re-run.",
     "artifacts_out": [],
-    "issues": [],
-    "next_action": null
+    "issues": [
+      "NON-BLOCKING (TEST-DESIGNER): AC2/AC3/AC4 tests still to be written, notably PATCH null-reset through the HTTP route (Validation allowed_values with nil is smoke-tested only at Identity level); TENANT_ADMIN and ordinary-user refusal on PATCH /tenants/:slug carrying the key; PATCH /tenant/settings with the key rejected; byte-level absence of login_disclosure_mode in /api/tenant-config, the mobile variant, tenant_settings and onboarding responses with the value set; audit row value-free; audit-failure path (nil actor) leaves the tenant unchanged.",
+      "NON-BLOCKING (REVIEWER/DOC-UPDATER): confirm the ceiling reading; amend design 434 s5.4/s7 and decision 0043. REQ-437 decide/2 must collapse disclose=false into the same neutral response as multi/unknown so the equivalence class holds.",
+      "NON-BLOCKING: a display_name-only PATCH remains unaudited (pre-existing, unchanged)."
+    ],
+    "next_action": "REVIEWER"
   },
   "rework_count": 0
 }

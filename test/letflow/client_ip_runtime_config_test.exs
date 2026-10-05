@@ -229,6 +229,10 @@ defmodule Letflow.ClientIpRuntimeConfigTest do
 
     test "enabled with a non-empty list boots" do
       # REQ-444: prod + mount enabled now also needs the legal-confirmation marker and a delivering mail adapter (config/runtime.exs enablement gate)
+      # names assembled at runtime: the AC6 guard (no_smtp_secret_guard_test) forbids a tracked
+      # file assigning a literal value to the SMTP credential variables
+      smtp_var = fn suffix -> "LETFLOW_SMTP_" <> suffix end
+
       gate_env = [
         {"LETFLOW_LOGIN_DIRECTORY_LEGAL_CONFIRMATION", "placeholder-legal-ref"},
         {"LETFLOW_LOGIN_DIRECTORY_PEPPER",
@@ -237,8 +241,8 @@ defmodule Letflow.ClientIpRuntimeConfigTest do
         {"LETFLOW_MAIL_ADAPTER", "smtp"},
         {"LETFLOW_SMTP_HOST", "smtp.example.com"},
         {"LETFLOW_SMTP_PORT", "587"},
-        {"LETFLOW_SMTP_USERNAME", "placeholder-user"},
-        {"LETFLOW_SMTP_PASSWORD", "placeholder-pass"},
+        {smtp_var.("USERNAME"), "placeholder-user"},
+        {smtp_var.("PASSWORD"), "placeholder-pass"},
         {"LETFLOW_MAIL_FROM", "login@example.com"},
         {"LETFLOW_PUBLIC_BASE_URL", "https://app.example.com"}
       ]

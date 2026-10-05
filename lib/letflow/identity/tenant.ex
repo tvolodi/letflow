@@ -79,8 +79,22 @@ defmodule Letflow.Identity.Tenant do
     # real DB-assigned value (ISS pending, found via REQ-391's merge-reconciliation CI).
     field(:storage_allowance_bytes, :integer, read_after_writes: true)
 
+    # REQ-442: per-tenant login disclosure mode (platform-security attribute).
+    # NULL = use the deployment-wide mode. Cast ONLY by admin_patch_changeset/2
+    # (PLATFORM_ADMIN); never in any pre-auth or tenant-admin-readable shape (INV-2).
+    field(:login_disclosure_mode, :string)
+
     timestamps()
   end
+
+  @login_disclosure_modes ["uniform_plus_email", "redirect_single"]
+
+  @doc """
+  The two values `login_disclosure_mode` may hold (a NULL means "use the
+  deployment-wide mode"); mirrors the `tenants_login_disclosure_mode_check` CHECK.
+  """
+  @spec login_disclosure_modes() :: [String.t()]
+  def login_disclosure_modes, do: @login_disclosure_modes
 
   @default_tenant_slug "bpm-default"
 
@@ -128,7 +142,10 @@ defmodule Letflow.Identity.Tenant do
 
   @doc """
   Changeset for `PATCH /tenants/:slug` (REQ-075) — casts **only**
-  `:display_name`. `:status` is deliberately absent from this changeset's
+  `:display_name` and (REQ-442) `:login_disclosure_mode`, the latter validated
+  against `login_disclosure_modes/0` (`nil` is allowed: reset to the deployment
+  fallback). It is the only changeset that casts `:login_disclosure_mode`.
+  `:status` is deliberately absent from this changeset's
   cast list (a real, flagged divergence from `update_changeset/2`'s cast
   list, which includes `:status` — see
   `lib/letflow/design/req075-tenant-administration-routes.md` §6.4): this is
@@ -140,7 +157,10 @@ defmodule Letflow.Identity.Tenant do
   """
   @spec admin_patch_changeset(t :: %__MODULE__{}, attrs :: map()) :: Ecto.Changeset.t()
   def admin_patch_changeset(tenant, attrs) do
-    cast(tenant, attrs, [:display_name])
+    tenant
+    |> cast(attrs, [:display_name, :login_disclosure_mode])
+    |> validate_inclusion(:login_disclosure_mode, @login_disclosure_modes)
+    |> check_constraint(:login_disclosure_mode, name: :tenants_login_disclosure_mode_check)
   end
 
   @doc """

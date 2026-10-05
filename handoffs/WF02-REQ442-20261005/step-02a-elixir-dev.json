@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ442-20261005/step-02a-elixir-dev.json",
   "created_at": "2026-10-05T12:01:31Z",
   "started_at": "2026-10-05T12:01:31Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T12:15:53Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -45,11 +45,25 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
-    "next_action": null
+    "status": "PASS",
+    "summary": "Implemented design req442 on branch feature/WF02-REQ442-20261005 (not committed/pushed). Migration 20261005000001 (up/down, public tenants only, nullable varchar, CHECK tenants_login_disclosure_mode_check). Tenant field + login_disclosure_modes/0 + admin_patch_changeset/2 casts display_name+login_disclosure_mode with validate_inclusion. Identity.patch_tenant/3 (no arity-2): mode change => Multi tenant update + Audit.append_multi in target tenant chain (registration schema_name), action tenant.platform_setting.updated, after_state %{changed=>true}; nil actor / no registration / any failure => {:error,:audit_failed}; display_name-only patch unchanged (plain update, unaudited). Router: @patch_schema entry with allowed_values, passes actor_id/trace_id, :audit_failed => Response.internal_error, tenant_map 7th key. LoginDirectory: tenant_match type, lookup_by_keys/2, private deployment_mode/0, disclose via single fragment with pinned type(^bool,:boolean) bound param; still one query, no prefix, log:false. VERIFIED (MIX_TEST_PARTITION=r442 MIX_ENV=test, DB letflow_testr442): `mix ecto.migrate` / `mix ecto.rollback` (log: drop constraint tenants_login_disclosure_mode_check; alter table tenants) / `mix ecto.migrate` all succeeded. information_schema: rows [[\"public\",\"login_disclosure_mode\",\"YES\"]] (public only, nullable). INSERT with picker_unauth => code: :check_violation, message: new row for relation \"tenants\" violates check constraint \"tenants_login_disclosure_mode_check\" (pg_code 23514); rows with non-null mode afterwards: 0. `mix compile --warnings-as-errors` clean; `mix format --check-formatted` => FMT_OK; `mix letflow.check_boundaries` => OK -- 965 edges checked, 0 violations. Scoped tests: tenants_test + login_directory_test + login_directory/ + identity/ => 166/167 initially, the 1 failure was the closed-projection key assertion (now [:disclose,:display_name,:slug]); login_directory_test.exs rerun => 49 passed; tenants_test updated 6->7 keys (ran in the 166 pass). A throwaway smoke test (deleted, not left in repo) confirmed: disclose matrix redirect_single x {NULL,redirect_single}=>true, redirect_single x uniform=>false, uniform deployment x {NULL,redirect_single}=>false, junk deployment=>false; patch with nil actor=>:audit_failed; picker_unauth=>changeset error; valid patch => one audit row action tenant.platform_setting.updated, after_state {\"changed\":true}; null resets to NULL.",
+    "artifacts_out": [
+      "priv/repo/migrations/20261005000001_add_login_disclosure_mode_to_tenants.exs",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/routers/tenants.ex",
+      "lib/letflow/login_directory.ex",
+      "test/letflow/routers/tenants_test.exs",
+      "test/letflow/login_directory_test.exs"
+    ],
+    "issues": [
+      "Not done (left to TEST-DESIGNER per task): final tests for AC2 authz matrix, AC3 byte-level exposure, AC4 lookup matrix with telemetry, migration test, grep gate.",
+      "Design 434 s5.4/s7 doc amendment pointer not made (doc only; DOC-UPDATER).",
+      "Moduledoc/tenant.ex provenance text still says six keys in places inside router moduledoc history; harmless.",
+      "Router PATCH relies on Validation allowed_values skipping nil for null-reset; smoke-tested at Identity level only, not through HTTP route: TEST-DESIGNER should cover PATCH null via router.",
+      "Operational: dev log shows warning LETFLOW_LOGIN_DISCOVERY_ENABLED true with empty trusted proxies (pre-existing env, unrelated)."
+    ],
+    "next_action": "SECURITY-REVIEWER"
   },
   "rework_count": 0
 }

@@ -21,7 +21,7 @@ defmodule Letflow.Routers.Tenants do
   | create      | `POST /tenants`                       | `Identity.create_tenant/1` -> `TenantOnboarding.provision_and_migrate/1` | `:TenantsManage` | 201, `tenant_map/1`         |
   | list        | `GET /tenants`                        | `Identity.list_tenants/1`                                                                                | `:TenantsManage` | 200, paginated `tenant_map`  |
   | get         | `GET /tenants/:slug`                  | `Identity.get_tenant_by_slug/1`                                                                          | `:TenantsManage` | 200, `tenant_map/1`         |
-  | patch       | `PATCH /tenants/:slug`                | `Identity.get_tenant_by_slug/1` then `Identity.patch_tenant/2`                                           | `:TenantsManage` | 200, `tenant_map/1`         |
+  | patch       | `PATCH /tenants/:slug`                | `Identity.get_tenant_by_slug/1` then `Identity.patch_tenant/3`                                           | `:TenantsManage` | 200, `tenant_map/1`         |
   | deactivate  | `POST /tenants/:slug/deactivate`      | `Identity.deactivate_tenant/1`                                                                           | `:TenantsManage` | 200, `tenant_map/1`         |
   | reactivate  | `POST /tenants/:slug/reactivate`      | `Identity.reactivate_tenant/1`                                                                           | `:TenantsManage` | 200, `tenant_map/1`         |
 
@@ -114,7 +114,8 @@ defmodule Letflow.Routers.Tenants do
 
   ## Response allowlist (design §8)
 
-  `tenant_map/1` is a hand-built map with exactly the six keys named in its
+  `tenant_map/1` is a hand-built map with exactly the seven keys (six plus REQ-442's
+  PLATFORM_ADMIN-only `login_disclosure_mode`) named in its
   own @doc — never a `Jason.Encoder` derivation over `%Letflow.Identity.Tenant{}`.
   `idp_realm_id` is deliberately excluded (design's own OQ-6, ELIXIR-DEV's
   call, confirmed here: no confirmed precedent from R-Co's `serializeTenant`
@@ -326,6 +327,12 @@ defmodule Letflow.Routers.Tenants do
       reject_empty_string: true,
       min_length: 1,
       max_length: 255
+    },
+    %FieldConstraint{
+      name: "login_disclosure_mode",
+      required: false,
+      type: :string,
+      allowed_values: ["uniform_plus_email", "redirect_single"]
     }
   ]
 
@@ -340,10 +347,16 @@ defmodule Letflow.Routers.Tenants do
             Response.send_problem(conn, Validation.problem(field_errors))
 
           {:ok, attrs} ->
-            case Identity.patch_tenant(slug, attrs) do
+            opts = [
+              actor_id: conn.assigns.auth_context.user_id,
+              trace_id: conn.assigns[:trace_id]
+            ]
+
+            case Identity.patch_tenant(slug, attrs, opts) do
               {:ok, tenant} -> Response.ok(conn, tenant_map(tenant))
               {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
               {:error, :not_found} -> Response.not_found(conn)
+              {:error, :audit_failed} -> Response.internal_error(conn)
             end
         end
     end
@@ -461,9 +474,10 @@ defmodule Letflow.Routers.Tenants do
   # ── Response allowlist (design §8) ──────────────────────────────────────
 
   @doc false
-  # Exactly 6 keys, hand-built -- never a Jason.Encoder derivation over the
+  # Exactly 7 keys, hand-built -- never a Jason.Encoder derivation over the
   # full %Tenant{} struct. `idp_realm_id` is deliberately excluded (OQ-6,
-  # see moduledoc).
+  # see moduledoc). `login_disclosure_mode` (REQ-442) is PLATFORM_ADMIN-only
+  # here; this is the one shaper allowed to carry it (INV-2).
   @spec tenant_map(Tenant.t()) :: map()
   defp tenant_map(%Tenant{} = tenant) do
     %{
@@ -471,6 +485,7 @@ defmodule Letflow.Routers.Tenants do
       "slug" => tenant.slug,
       "display_name" => tenant.display_name,
       "status" => Atom.to_string(tenant.status),
+      "login_disclosure_mode" => tenant.login_disclosure_mode,
       "inserted_at" => iso8601(tenant.inserted_at),
       "updated_at" => iso8601(tenant.updated_at)
     }

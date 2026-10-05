@@ -28,6 +28,15 @@ defmodule Letflow.LoginDirectory do
   (length 1 or 2, a function of deployment state, never of the input);
   `lookup_by_keys/1` is dual-read over that list.
 
+  ## Per-tenant disclosure (REQ-442, decision 0043 D-A)
+
+  The lookup's internal match type is `tenant_match` (`slug`, `display_name` and a
+  boolean `disclose`, computed in the same single query: deployment mode is
+  `:redirect_single` AND the tenant's `login_disclosure_mode` is NULL or
+  `redirect_single`). `disclose` is consumed by the decision function and stripped
+  before any response is built; no tenant id, realm id or stored mode leaves
+  this module.
+
   ## Writers
 
   `upsert_entry/2` and `remove_entry_if_unreferenced/3` must run inside a
@@ -67,7 +76,9 @@ defmodule Letflow.LoginDirectory do
 
   @type email_key :: <<_::256>>
   @type candidate_keys :: [email_key(), ...]
+  @type disclosure_mode :: :uniform_plus_email | :redirect_single
   @type tenant_ref :: %{slug: String.t(), display_name: String.t()}
+  @type tenant_match :: %{slug: String.t(), display_name: String.t(), disclose: boolean()}
 
   @type plan_step ::
           {:upsert, email :: String.t()}
@@ -188,13 +199,25 @@ defmodule Letflow.LoginDirectory do
   keys), so a tenant is returned once even when a person holds a row under each
   key. Active tenants with a bound (non-empty) `idp_realm_id` only, ordered by
   `display_name` then `slug`, limited to 50. Returns plain maps holding only
-  `slug` and `display_name` (the `Tenant` struct is never loaded). Touches public
-  tables only (no `:prefix`); one Repo round trip, `log: false`. Any other
-  argument, or a failure, is `{:error, :lookup_failed}`.
+  `slug`, `display_name` and the internal `disclose` boolean (REQ-442; the `Tenant`
+  struct is never loaded). Touches public tables only (no `:prefix`); one Repo
+  round trip, `log: false`. Any other argument, or a failure, is
+  `{:error, :lookup_failed}`.
+
+  `lookup_by_keys/1` reads the deployment mode from config; `lookup_by_keys/2`
+  takes it explicitly. Exactly `:redirect_single` lets a tenant disclose; any other
+  term (including `:uniform_plus_email`) forces `disclose: false` for every tenant
+  (the deployment mode is a ceiling, preserving the 0042 kill switch).
   """
-  @spec lookup_by_keys(candidate_keys()) :: {:ok, [tenant_ref()]} | {:error, :lookup_failed}
-  def lookup_by_keys([_ | _] = keys) when length(keys) <= 2 do
+  @spec lookup_by_keys(candidate_keys()) :: {:ok, [tenant_match()]} | {:error, :lookup_failed}
+  def lookup_by_keys(keys), do: lookup_by_keys(keys, deployment_mode())
+
+  @spec lookup_by_keys(candidate_keys(), disclosure_mode() | term()) ::
+          {:ok, [tenant_match()]} | {:error, :lookup_failed}
+  def lookup_by_keys([_ | _] = keys, deployment_mode) when length(keys) <= 2 do
     if Enum.all?(keys, &match?(<<_::binary-size(32)>>, &1)) do
+      deployment_allows? = deployment_mode == :redirect_single
+
       directory =
         from(d in TenantLoginDirectoryEntry,
           where: d.tenant_id == parent_as(:tenant).id and d.email_key in ^keys,
@@ -209,7 +232,16 @@ defmodule Letflow.LoginDirectory do
               t.idp_realm_id != "",
           order_by: [asc: t.display_name, asc: t.slug],
           limit: @lookup_limit,
-          select: %{slug: t.slug, display_name: t.display_name}
+          select: %{
+            slug: t.slug,
+            display_name: t.display_name,
+            disclose:
+              fragment(
+                "? AND COALESCE(?, 'redirect_single') = 'redirect_single'",
+                type(^deployment_allows?, :boolean),
+                t.login_disclosure_mode
+              )
+          }
         )
 
       {:ok, Repo.all(query, log: false)}
@@ -220,13 +252,26 @@ defmodule Letflow.LoginDirectory do
     _exception -> {:error, :lookup_failed}
   end
 
-  def lookup_by_keys(_other), do: {:error, :lookup_failed}
+  def lookup_by_keys(_other, _deployment_mode), do: {:error, :lookup_failed}
+
+  # Deployment-wide mode (design 434 s7 config key, owned by REQ-436/437): a
+  # missing key is the ratified default :redirect_single; any unrecognised term
+  # is treated as uniform. Read directly (no upward dependency on LoginDiscovery).
+  defp deployment_mode do
+    case :letflow
+         |> Application.get_env(Letflow.Routers.LoginDiscovery, [])
+         |> Keyword.get(:mode) do
+      nil -> :redirect_single
+      :redirect_single -> :redirect_single
+      _other -> :uniform_plus_email
+    end
+  end
 
   @doc """
   Convenience composition of `email_keys/1` and `lookup_by_keys/1`: an invalid
   input uses the sentinel keys. An unavailable pepper is `{:error, :lookup_failed}`.
   """
-  @spec lookup_by_email(term()) :: {:ok, [tenant_ref()]} | {:error, :lookup_failed}
+  @spec lookup_by_email(term()) :: {:ok, [tenant_match()]} | {:error, :lookup_failed}
   def lookup_by_email(email) do
     case email_keys(email) do
       {:ok, keys} ->

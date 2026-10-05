@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ441-20261005/step-03b-test-design-validator.json",
   "created_at": "2026-10-05T17:43:28Z",
   "started_at": "2026-10-05T17:43:28Z",
-  "completed_at": "2026-10-05T17:43:28Z",
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T17:46:11Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -50,10 +50,23 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
+    "status": "COMPLETED",
+    "summary": "PASS. All 10 acceptance criteria map to runnable, unskipped tests (no @tag/@moduletag :skip, no TODO, no ExUnit exclude covering them; test_helper excludes only :keycloak/:wasm_hang/:lua_wallclock_race). Independent runs with MIX_ENV=test MIX_TEST_PARTITION=441i: (a) notifier/ dir + mail_runtime_config_test + req441_source_guards_test + no_smtp_secret_guard_test = 303 passed, exit 0; (b) dispatch_notifier_event_test + notifier_no_leak_test + login_discovery_notifier_uniform_test + login_discovery_test + dispatch_test = 151 passed, exit 0. Isolation: every ExUnit.Case touching Application env/named processes/ports is async: false (only the pure message test, secret-guard and source-guard tests are async: true); sink binds 127.0.0.1 with an OS-assigned port, no outbound egress; SMTP credentials appear only as runtime-built fake values via System.put_env. Re-grep of the tracked tree finds no value assigned to LETFLOW_SMTP_USERNAME/PASSWORD in code or .env files (only prose/quoted-pattern mentions in handoff and design docs, which the guard's refined shapes deliberately ignore). Prior-gate findings covered: stale mix.exs git-diff guard replaced by content assertion (login_discovery_test.exs:434); AC6 grep guard; F4 telemetry-handler guard; allow_test_cacerts compile-time gate guard; F9 capacity (12 requests at burst 5, 201 submits vs max_concurrent); encoder tests (REVIEWER finding 3); AC8 mail_adapter variable equality. Mutants applied by me (spec's code-already-existed fail-first rule): MUTANT A transport.ex line 76 'retries: 0' -> 'retries: 3' run against dispatch_notifier_event_test + smtp_test + req441_source_guards_test: 56/63 passed, 7 failed (retries guard in SR, bucket-after-drop, no-retry-on-drop, EV retry grep guard, 3 SM TLS/STARTTLS single-attempt tests). MUTANT B message.ex line 164 URI.encode_www_form(slug) -> raw slug run against smtp_message_test + smtp_encoder_test: 104/112 passed, 8 failed (hostile-slug cases, tenant_link encoding, property, two wire-level injection tests). Both reverted with git checkout -- <file>; 'git status --porcelain lib/ test/ config/ mix.exs' empty and re-run of message+encoder+source-guard tests = 124 passed. Unmodified tree only untracked letflow-3.code-workspace (pre-existing, not mine). Not re-run by me: full suite, compile/format/boundaries (AC10 non-ExUnit parts belong to TEST-RUNNER).",
     "artifacts_out": [],
-    "issues": [],
-    "next_action": ""
+    "issues": [
+      {
+        "severity": "INFO",
+        "detail": "1. Mutation evidence is my own measured counts (A: 7 of 63 failed; B: 8 of 112 failed), not copied from the spec's M1/M7 rows."
+      },
+      {
+        "severity": "INFO",
+        "detail": "2. AC10's compile --warnings-as-errors, format --check-formatted, check_boundaries and the SECURITY-REVIEWER record (step-02c PASS) are not ExUnit tests; TEST-RUNNER must quote real output for them."
+      },
+      {
+        "severity": "INFO",
+        "detail": "3. Spec's disclosed limit accepted: no genuine in-library error-level crash could be induced; mitigated by the :proc_lib positive control proving the collector sees a leaking crash report."
+      }
+    ],
+    "next_action": "TEST-RUNNER"
   }
 }

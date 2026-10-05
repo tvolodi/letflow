@@ -1,0 +1,133 @@
+# REQ-452: UAT actor roster. One entry per login actor id used in the scenario corpus
+# (actor-system-* and actor-any are not logins). Checked by
+# mix letflow.check_uat_scenario_schema (SCHEMA-7..12); see docs/agents/uat-scenario-schema.md.
+#
+# Evidence: scripts/seed_{meridian,swiftroute,vortex}_persona_actors.sh (persona lines give
+# routing_roles; their headers state TASK_WORKER is implicit for every persona),
+# scripts/uat_preflight.sh (actor-platform-admin needs a seeded PLATFORM_ADMIN user),
+# priv/keycloak/realms/bpm-default.json (only users: admin-user, designer-user, operator-user,
+# worker-user; no actor-* accounts). Anything not established is under `unresolved`.
+actors:
+  actor-platform-admin:
+    tenant: platform
+    builtin_roles: [PLATFORM_ADMIN]
+    routing_roles: []
+    note: "scripts/uat_preflight.sh: actor-platform-admin needs a seeded PLATFORM_ADMIN user (qa-login admin-user)"
+
+  actor-meridian-ben:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-credit-manager]
+    note: "seed_meridian_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
+  actor-meridian-miriam:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-risk-manager]
+    note: "seed_meridian_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
+  actor-meridian-claudia:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-compliance-officer]
+    note: "seed_meridian_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
+  actor-meridian-julia:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-credit-director, role-committee-member]
+    note: "seed_meridian_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
+  actor-meridian-thomas:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-committee-member, role-cro]
+    note: "seed_meridian_persona_actors.sh PERSONAS line; role-cro inferred from org structure per script header; TASK_WORKER implicit"
+  actor-meridian-eva:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-committee-member, role-ceo]
+    note: "seed_meridian_persona_actors.sh PERSONAS line; role-ceo inferred from org structure per script header; TASK_WORKER implicit"
+  actor-meridian-marcus:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-loan-ops]
+    note: "seed_meridian_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
+  actor-meridian-lars:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_meridian_persona_actors.sh PERSONAS line (no routing role); TASK_WORKER implicit per script header"
+  actor-meridian-sophie:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_meridian_persona_actors.sh PERSONAS line (no routing role); TASK_WORKER implicit per script header"
+
+  actor-swiftroute-lena:
+    tenant: swiftroute
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_swiftroute_persona_actors.sh: Dispatcher, TASK_WORKER only"
+  actor-swiftroute-marco:
+    tenant: swiftroute
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-ops-manager]
+    note: "seed_swiftroute_persona_actors.sh: Ops Manager, TASK_WORKER + role-ops-manager"
+  actor-swiftroute-alice:
+    tenant: swiftroute
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-ceo]
+    note: "seed_swiftroute_persona_actors.sh: CEO, TASK_WORKER + role-ceo. Scenario swiftroute/tenant-onboarding-happy.yaml names her alias tenant_admin, but no seed grants her an admin role (no TENANT_ADMIN until REQ-447)"
+
+  actor-vortex-sabine:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-production-manager]
+    note: "seed_vortex_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
+  actor-vortex-stefan:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-controller]
+    note: "seed_vortex_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
+  actor-vortex-karl:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-quality-manager]
+    note: "seed_vortex_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
+  actor-vortex-anna:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_vortex_persona_actors.sh PERSONAS line (no routing role); TASK_WORKER implicit per script header"
+  actor-vortex-nina:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_vortex_persona_actors.sh PERSONAS line (no routing role); TASK_WORKER implicit per script header"
+  actor-vortex-felix:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-procurement-manager]
+    note: "seed_vortex_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
+
+# Actors whose built-in role could not be established. A recorded gap, not a pass for SCHEMA-8..10.
+unresolved:
+  actor-swiftroute-tobias:
+    searched:
+      - "scripts/seed_swiftroute_persona_actors.sh: persona list is lena, marco, alice only; tobias absent"
+      - "priv/keycloak/realms/bpm-default.json: no such user"
+      - "grep -r actor-swiftroute-tobias scripts priv: no seed or realm hit; used only in swiftroute/shipment-ops-timeout-escalation.yaml"
+  actor-bilimbaga-candidate:
+    searched:
+      - "scripts/seed_*_persona_actors.sh: no bilimbaga seed script exists"
+      - "priv/keycloak/realms/bpm-default.json: no such user (the realm defines a CANDIDATE role but no actor account)"
+      - "grep -r actor-bilimbaga-candidate scripts priv: no hit; scripts/uat_preflight.sh only labels candidate-like actors heuristically"
+
+# Scenario id -> reason a platform-tenant actor may appear outside scope platform.
+platform_actor_allowed:
+  swiftroute-tenant-onboarding-happy: "tenant onboarding is performed by the platform operator"
+
+# Scopes with at least one scenario and no expect_refusal step on the day of landing (may only shrink).
+refusal_coverage_exempt: [bilimbaga, meridian, platform, swiftroute, vortex]
+
+# Tenant actors seeded as PLATFORM_ADMIN, dated; REQ-454 empties this map. Empty today: no seed or
+# realm evidence shows any tenant actor holding PLATFORM_ADMIN (the seed scripts' QA_AUTH_TOKEN user
+# is a separate admin account, not a scenario actor).
+legacy_platform_admin: {}

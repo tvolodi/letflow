@@ -238,10 +238,121 @@ file's header comment for its scope and lifecycle.
   human/agent reading it would obtain that fact's value; the mechanical check
   cannot and does not check this (semantic, not mechanical).
 
+## Actor roster (`test/fixtures/uat/actors.yaml`) — REQ-452
+
+Scenario files do not state what built-in role an actor holds (29 of the 32 are
+`Ported verbatim` and must stay byte-identical), so roles live in one separate
+roster file, outside `scenarios/**`. Keys, all strings:
+
+```yaml
+actors:                                  # required, non-empty; key = login actor id
+  actor-platform-admin:
+    tenant: platform                     # tenant slug, or the literal "platform"
+    builtin_roles: [PLATFORM_ADMIN]      # non-empty; names from Authorization.roles/0
+    routing_roles: []                    # optional; process-routing role names
+    note: "free text"                    # optional
+unresolved:                              # optional; actors whose role could not be established
+  actor-swiftroute-tobias:
+    searched:                            # required, non-empty: the searches performed
+      - "scripts/seed_swiftroute_persona_actors.sh: tobias absent"
+platform_actor_allowed:                  # optional; scenario `id` -> non-empty reason
+  swiftroute-tenant-onboarding-happy: "tenant onboarding is performed by the platform operator"
+refusal_coverage_exempt: [bilimbaga]     # optional; scopes exempt from rule (e); may only shrink
+legacy_platform_admin:                   # optional; tenant actors seeded as PLATFORM_ADMIN
+  actor-acme-bob:
+    since: "2026-10-06"                  # ISO date
+    reason: "no TENANT_ADMIN until REQ-447"
+    removed_by: REQ-454
+```
+
+A *login actor* is any id in a scenario's top-level `actors:` values or a step `actor:`
+that starts with `actor-`, excluding `actor-system-*` and `actor-any`. `unresolved`
+is a recorded gap (never guess a role); an actor there is exempt from rules (b)-(d).
+
+Correct: the example above (every key valid). Rejected (`SCHEMA-12`, roster path as file):
+
+```yaml
+actors: {}
+```
+```
+[SCHEMA-12] test/fixtures/uat/actors.yaml: `actors:` is missing, not a mapping, or empty
+```
+
+A missing, unreadable or unparseable roster is one `SCHEMA-12` violation and the
+cross-file rules (a)-(e) are then skipped. The task prints
+`Actor roster: <path> -- <n> login actor(s) in corpus: <i> in roster, <u> unresolved, <m> missing`.
+
+## Refusal step (`expect_refusal`) — REQ-452
+
+Optional boolean step key, in flat `steps:` and in `branches[].steps`:
+
+```yaml
+- step: 4
+  actor: viewer
+  action: The viewer tries to delete the approved order
+  expect_refusal: true
+```
+
+`true` means the named actor attempts the described action and the scenario passes
+**only if the product refuses it**; the `action:` prose stays business language. Absent
+means `false`. UAT-RUNNER treats an unrefused attempt as a failed step. Only the literal
+`true` counts toward rule (e). A non-boolean value is rejected:
+
+```yaml
+  expect_refusal: "yes"
+```
+```
+[SCHEMA-12] test/fixtures/uat/scenarios/acme/order.yaml: step 4: expect_refusal must be a boolean
+```
+
+## Actor and refusal rules (a)-(e) — REQ-452
+
+Violations print as `[<RULE>] <file>: <message>`. Rule (b) reads
+`Letflow.Api.Authorization.roles/0` at check time, so new roles need no edit here.
+
+**(a) `SCHEMA-7` — every login actor is in the roster or `unresolved`.**
+Correct: scenario `actors: {buyer: actor-acme-bob}` with `actor-acme-bob` under roster `actors:`.
+Rejected (no entry anywhere):
+```
+[SCHEMA-7] test/fixtures/uat/scenarios/acme/order.yaml: login actor "actor-acme-bob" has no entry in test/fixtures/uat/actors.yaml under actors: or unresolved:
+```
+
+**(b) `SCHEMA-8` — every `builtin_roles` value is a known role.**
+Correct: `builtin_roles: [TASK_WORKER]`. Rejected: `builtin_roles: [TENANT_BOSS]`:
+```
+[SCHEMA-8] test/fixtures/uat/actors.yaml: actor "actor-acme-bob" lists builtin_roles value "TENANT_BOSS" which is not in Authorization.roles/0 (PLATFORM_ADMIN, PROCESS_DESIGNER, ...)
+```
+
+**(c) `SCHEMA-9` — a non-platform actor must not hold `PLATFORM_ADMIN`.**
+Correct: `tenant: acme`, `builtin_roles: [TASK_WORKER]` (or listed under `legacy_platform_admin`).
+Rejected: `tenant: acme`, `builtin_roles: [PLATFORM_ADMIN]`, no legacy entry:
+```
+[SCHEMA-9] test/fixtures/uat/actors.yaml: actor "actor-acme-bob" has tenant "acme" (not platform) but holds PLATFORM_ADMIN and is not listed under legacy_platform_admin
+```
+
+**(d) `SCHEMA-10` — a platform actor only in scope `platform`, or an allowed scenario.**
+Correct: `actor-platform-admin` in a `scope: platform` scenario, or in scenario id
+`swiftroute-tenant-onboarding-happy` listed under `platform_actor_allowed` with a reason.
+Rejected: the same actor in a `scope: acme` scenario `acme-order` not listed:
+```
+[SCHEMA-10] test/fixtures/uat/scenarios/acme/order.yaml: platform actor "actor-platform-admin" appears in scenario "acme-order" whose resolved scope is "acme"; allowed only in scope platform or when the scenario id is listed in platform_actor_allowed with a non-empty reason
+```
+
+**(e) `SCHEMA-11` — every scope has a refusal step, or is exempt.**
+Correct: at least one scenario of scope `acme` has a step with `expect_refusal: true`, or
+`refusal_coverage_exempt: [acme]`. Rejected: scope `acme` with 1 scenario, no refusal step,
+not exempt (reported on the first scenario path of the scope, sorted):
+```
+[SCHEMA-11] test/fixtures/uat/scenarios/acme/order.yaml: resolved scope "acme" has 1 scenario(s) and none has a step with expect_refusal: true; add one or list "acme" under refusal_coverage_exempt
+```
+`refusal_coverage_exempt` may only shrink: a test asserts it is a subset of the list
+frozen in the test file.
+
 ## Mechanical rules enforced by `mix letflow.check_uat_scenario_schema`
 
 Each a distinct `rule` tag in that task's output — see the module's own
-`@moduledoc` for the authoritative list (`SCHEMA-0` through `SCHEMA-6`). In
+`@moduledoc` for the authoritative list (`SCHEMA-0` through `SCHEMA-12`; 7-11 are the
+roster/refusal rules above, 12 the roster-shape and `expect_refusal` type check). In
 summary: the corpus is non-empty; each file parses as YAML; `id`/`title`/
 `version` are present; a resolved `scope` exists; a file uses exactly one of
 `steps:`+`expected_outcomes:` / `branches:`; each branch has a valid `name`/
@@ -251,6 +362,9 @@ correctness of a `scope` classification or a `fact` choice — see the
 classification-rule note above.
 
 ## How the preflight reads a scenario
+
+(An actor's built-in role is not read from the scenario or guessed from the username: the
+source is `test/fixtures/uat/actors.yaml`. The preflight script itself is unchanged.)
 
 `scripts/uat_preflight.sh` (WF-05 Step 0) builds its PRECONDITIONS manifest from:
 `company_id`/`scope` (tenant + Keycloak realm; `platform` = the default realm),

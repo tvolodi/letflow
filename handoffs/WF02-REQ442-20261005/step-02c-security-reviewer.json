@@ -1,0 +1,49 @@
+{
+  "handoff_id": "fb84505e-c2c3-44d4-ae13-170ea724e111",
+  "run_id": "WF02-REQ442-20261005",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ442-20261005/step-02c-security-reviewer.json",
+  "created_at": "2026-10-05T12:16:22Z",
+  "started_at": "2026-10-05T12:16:22Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [
+      "REQ-442"
+    ],
+    "requirement_text": {
+      "REQ-442": "Decision D-A: Mode B (:redirect_single) stays the deployment-wide default; the disclosure mode becomes configurable per tenant with the deployment-wide mode as the fallback; 'uniform' (Mode A) is RECOMMENDED for candidate-facing tenants (for example Bilimbaga exam candidates). Rate limiting stays on in all modes. SIZING ANSWER: this does NOT fit REQ-437's sizing. It needs a schema change on tenants (public schema), a platform-admin write path with authorisation and response-shaping checks, and a change to the lookup query owned by REQ-435, none of which REQ-437 touches; REQ-437 is already one full turn. So it is its own requirement, and REQ-437 consumes its result.\nThe lookup happens by email BEFORE the tenant is known, so the effective-mode rule is defined over the MATCH SET (ORCH proposal, checked against design s10 and recorded in decision 0043): disclose slug and display name only if there is exactly ONE active match AND that tenant's effective mode is redirect_single; otherwise return the neutral response (and, as before, email the list). A uniform-tenant address is thereby indistinguishable from an unknown one. Checked against the ratified invariants: it does not break the Mode B equivalence class {multi, unknown, malformed, inactive-only, lookup-failure} (it only enlarges it with 'single match in a uniform tenant'), the single-query and no-early-return rules, the constant-work rule (the effective mode is computed in the same query; delivery stays one unconditional off-path submission) or the closed response allowlist; it DOES touch three ratified wordings, flagged below.\nBUILDS: 1. A migration adding tenants.login_disclosure_mode (public schema, nullable string, CHECK in ('uniform_plus_email','redirect_single'); NULL = use the deployment-wide default). NOT stored in the tenant :settings blob: that blob has a closed key vocabulary whose values reach the pre-authentication /api/tenant-config and a tenant-admin write path (REQ-382), and the mode is a platform-security attribute that a tenant admin must not set or read. Reversible. 2. The Tenant schema field and a changeset path writable ONLY by PLATFORM_ADMIN through the existing platform-admin tenant update route (locate by grep which route calls Tenant.admin_patch_changeset/2 and extend that path; no new route unless none exists, in which case say so and stop for REQ-VALIDATOR). The change is audited as other platform-admin tenant updates are. A tenant admin's settings route rejects the key (closed vocabulary already does); GET /api/tenant-config and every tenant-admin-readable tenant shape do NOT contain it (INV-2); the platform-admin tenant response may. 3. LOOKUP EXTENSION in Letflow.LoginDirectory (REQ-435): the single query additionally yields, per matched tenant, a boolean disclose computed in SQL: the deployment mode is bound as a parameter; disclose = (deployment mode is redirect_single) AND COALESCE(tenants.login_disclosure_mode, 'redirect_single') = 'redirect_single'. The deployment-wide mode is thereby the fallback (tenant NULL) AND the ceiling (deployment :uniform_plus_email forces every tenant uniform, preserving 0042's configuration-only kill switch). The internal match type becomes %{slug, display_name, disclose}; disclose is consumed by REQ-437's decide/2 and is stripped before any response is built, so the response allowlist is unchanged. Still exactly one query, no tenant :prefix. 4. An unrecognised stored value cannot occur (CHECK); an unrecognised value read in code is treated as uniform.\n\nOPEN QUESTIONS: [\"CONFLICTS FLAGGED FOR REVIEWER (decision 0043), not silently resolved: (1) 0042 Standing prohibition 4 and design s5.4 say the lookup returns plain maps with ONLY slug and display_name; this entry adds an internal disclose boolean that never leaves the decision function. (2) 0042 Standing prohibition 11 makes any change to the disclosure shape a security change needing SECURITY-REVIEWER sign-off and an amendment to 0042; per-tenant selection is not a third mode but is a new selector, so SECURITY-REVIEWER must sign this entry and decision 0043 D-A is the amending record. (3) Design s7 and 0042 Decision 3 define the mode as a single deployment-wide config; this entry makes it per-tenant with the deployment value as fallback and CEILING. The ceiling is the conservative reading of 'deployment-wide default as fallback' (a tenant can opt into uniform, but cannot opt into disclosure the deployment has switched off); if the BA meant a tenant may also override a uniform deployment default upward, the SQL rule and the kill-switch property change and REVIEWER must decide.\", \"Who may set it: PLATFORM_ADMIN only is proposed. Whether Bilimbaga (candidate-facing) should be set to uniform_plus_email by a data migration or by an operator action after deploy is an operational choice for ORCH/the operator; this entry ships no tenant-specific data change (decision 0022 bucket rule: nothing here names exams).\", \"Keycloak Organizations: DEFERRED (BA decision D-G, decision 0043); decide via an ADR when the tenant count grows.\"]"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req442-per-tenant-login-disclosure-mode.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ442-20261005"
+  },
+  "task": {
+    "description": "WF-02 step 2c (SECURITY-REVIEWER) HARD GATE: git diff origin/main...HEAD. In scope (tenant-data path, migration, response shaping, per-tenant selection, platform-admin-only authz, audit). Verdict against INV-1..INV-8 and explicitly INV-1, INV-2, INV-5, INV-6 per AC7. Specifically verify: only PLATFORM_ADMIN can set (matrix: TENANT_ADMIN/ordinary user), tenant settings route rejects key, no response except platform-admin tenant response carries login_disclosure_mode (search every tenant shaper, incl. mobile config, /api/tenant-config, tenant-admin GET/PATCH shapes), audit payload value-free and action name neutral, audit failure path fails closed, lookup SQL parameterised (INV-7), single query/no prefix/log:false, disclose stripped before any response, ceiling semantics, Mode B equivalence class intact, and that the amendments of 0042 prohibitions 4 and 11 flagged in decision 0043 are acceptable (state RATIFIED/not). Read-only; write findings in the handoff.",
+    "acceptance_criteria": [
+      "`mix ecto.migrate` and `mix ecto.rollback` both succeed; tenants.login_disclosure_mode exists in the public schema only, is nullable, and the CHECK rejects any value other than the two modes (an insert of 'picker_unauth' fails), real output quoted; existing tenants read NULL",
+      "write authorisation: PLATFORM_ADMIN sets the value through the existing platform-admin tenant update route and the change is audited; a TENANT_ADMIN and an ordinary user get the platform's existing refusal; a request body carrying the key to the tenant settings route is rejected by the closed vocabulary; tested through the authorization matrix",
+      "no exposure: byte-level assertions that GET /api/tenant-config?realm=<slug> (and the mobile variant) and every tenant-admin-readable tenant/settings response contain no login_disclosure_mode key, for tenants with the value set and unset (INV-2); the platform-admin tenant response is allowed to contain it",
+      "lookup matrix, one test per cell, each asserting disclose and exactly one query (telemetry): deployment redirect_single with tenant NULL -> true; deployment redirect_single with tenant redirect_single -> true; deployment redirect_single with tenant uniform_plus_email -> false; deployment uniform_plus_email with tenant NULL or redirect_single or uniform_plus_email -> false (ceiling); an inactive or unbound-realm tenant yields no row whatever its mode",
+      "the internal match type carries disclose and no other new field; a test over the lookup function's return and a grep show no login_disclosure_mode, tenant id or idp_realm_id is returned past the lookup; the response allowlist test of REQ-437 passes unmodified",
+      "no prefix: the lookup still issues no query carrying a tenant :prefix; log: false on every directory Repo call is preserved",
+      "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-1, INV-2, INV-5 and INV-6"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": null
+  },
+  "rework_count": 0
+}

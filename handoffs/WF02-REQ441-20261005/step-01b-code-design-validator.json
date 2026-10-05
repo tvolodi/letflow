@@ -1,0 +1,42 @@
+{
+  "handoff_id": "7d2e5c10-441b-4b7a-8c3e-0441c0de5102",
+  "run_id": "WF02-REQ441-20261005",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ441-20261005/step-01b-code-design-validator.json",
+  "created_at": "2026-10-05T16:29:00Z",
+  "started_at": "2026-10-05T16:29:00Z",
+  "completed_at": "2026-10-05T16:30:35Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-441"],
+    "requirement_text": {"REQ-441": "see handoffs/WF02-REQ441-20261005/step-01-code-designer.json context.requirement_text"},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req441-mail-notifier-adapter.md",
+      "docs/migration/decisions/0045-mail-library-choice.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ441-20261005"
+  },
+  "task": {
+    "description": "WF-02 step 01b (CODE-DESIGN-VALIDATOR): hard gate on the REQ-441 design and proposed decision 0045.",
+    "acceptance_criteria": ["see step-01-code-designer.json task.acceptance_criteria (10 criteria)"]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL (narrow, reworkable in one pass). Verified by reading: port (notifier.ex) one callback, unchanged by design; Dispatch emits no notifier event today and logs one fixed warning (dispatch.ex:113) so the event is correctly designed as new Dispatch work; Dispatch order/timeout/closure claims match; Noop and the double match the design (the double's :sleep returns :ok, correctly noted); config.exs/test.exs adapter key, runtime.exs patterns, both .env.example files, and the metrics registry (4 events, nothing on login_discovery) all match. All 10 ACs map to concrete elements and tests; no implementation bodies (signatures and type shapes only); library runtime claims are marked 'to verify against deps/ source' (anti-patterns dependency-claims entry honoured); hard stops H1-H4 surfaced in design s5 and decision 0045 s6. hex.pm sanity check (read-only): gen_smtp 1.3.0 (2025-05-30, requires ranch >=1.8.0, non-optional), ranch 2.3.0 (no deps), swoosh 1.28.1 (idna >=6 <8, jason, mime, telemetry required; gen_smtp ~>0.13 or ~>1.0, mua ~>0.2.3, mail ~>0.2 all optional), idna 7.1.0, mua 0.2.6 (castore optional only), mail 0.5.2 (no deps): table in 0045 s2/s3 is consistent. Judgments: (a) Dispatch event semantics ACCEPTED: one event per genuine attempt (delivery returned {:deliver,_} and a key was derived), :skipped for bucket refusal and Noop, no event for nothing-to-deliver; metadata exactly %{outcome: _}; it is a different event name from [:letflow,:login_discovery,:outcome] so REQ-437's one-outcome-per-request is untouched. (b) Deviation 'secrets read at call time, not once at boot' ACCEPTED without re-asking: INV-4 itself says 'resolves it at the point of use from environment/config (System.get_env/1...)', presence is validated at boot, no non-secret is deferred; ORCH should still record the supervisor's nod on OQ-3 together with the dependency approval. Note the design's remark that this matches 'every other System.get_env secret in the codebase' is imprecise: the login-directory pepper IS written to app env (config/runtime.exs:145); the call-time choice is stricter than precedent, not equal to it. FAIL reasons are three precision gaps listed in issues.",
+    "artifacts_out": [],
+    "issues": [
+      "design 2.2 Smtp.Config.parse/2 (BLOCKING, ambiguous signature): the unset/blank LETFLOW_MAIL_ADAPTER case must write NOTHING to app env (s3.1, P8), but the return type parsed() has adapter: module() and notifier: keyword() as mandatory, and adapter_choice is declared but never used. ELIXIR-DEV cannot tell what parse/2 returns for unset (an {:ok, nil}? an {:ok, %{adapter: nil...}}? like parse_deployment_mode's {:ok, nil}?). Fix: state the return as written text, e.g. {:ok, :unset} | {:ok, parsed()} | {:error, {:missing | :invalid, var}}, or make the fields nullable; drop or use adapter_choice; also state what parse/2 returns for 'noop' (notifier: [adapter: Noop] only, smtp: nil) and name the runtime.exs case clauses.",
+      "design 6.2 AC7 (BLOCKING, deferral): the ':prod' boot cases (plaintext TLS raises in prod; https-only base URL in prod) are tested via 'Config.Reader.read!/2 with env: :prod (the option to verify against the Elixir docs of the pinned version)'. A design may not defer the mechanism of an acceptance-criterion test. Pin it: name the exact call (Config.Reader.read!(path, env: :prod, target: :elixir) or the child-VM alternative), state which other prod-only variables (DATABASE_URL and the rest of the prod block in config/runtime.exs) the test must set so the prod block does not raise first, and that the raise under test is the mail one (message names LETFLOW_SMTP_TLS and echoes no value).",
+      "design 4.4 item 3 / 6.2 (BLOCKING, unverified library claim stated as fact): '(library closes its socket)' on a stalled phase is asserted as behaviour of gen_smtp, contrary to the design's own rule that library runtime behaviour is only 'to verify'. Rephrase as an obligation verified by the hard-timeout test (open_connections/1 == 0), not an assumption; the same sentence ('so a single stalled phase fails the attempt cleanly') depends on 1.3 item 1/6 being true. Also state in 6.1 per-test setup that tests selecting Smtp must set Notifier timeout_ms explicitly (config/test.exs sets 1000, below the TLS/STARTTLS success path and the 15000 smtp default), otherwise the AC2/AC3 success cases are timing-dependent; give the value."
+    ],
+    "next_action": "Rework CODE-DESIGNER: resolve issues 1-3 in lib/letflow/design/req441-mail-notifier-adapter.md only (decision 0045 needs no change), then re-submit to CODE-DESIGN-VALIDATOR. Independently of the rework, the dependency approval (H1), env vars/credentials/relay (H2), infra secrets inventory + SPF/DKIM/DMARC (H3) and the lawful-basis gate (H4) are supervisor/owner hard stops that ELIXIR-DEV cannot start without; ORCH must obtain them and record the OQ-3 (call-time secrets) and library (gen_smtp vs Swoosh) answers. Optional minor: OQ-12 (shared timeout_ms) and OQ-5 are acceptable as designed."
+  },
+  "rework_count": 0
+}

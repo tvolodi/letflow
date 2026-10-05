@@ -95,6 +95,29 @@ REQ-446 names (marked planned). Platform scope: `:TenantsManage` and whatever RE
 platform. Everything else, and every module (`Letflow.Modules.Catalog`) permission, is tenant scope.
 Rule, not a list: every Catalog permission is tenant scope.
 
+Binding condition on tenant classification. `:PromotionsRead`, `:PromotionsManage` and
+`POST /tenants/:test_tenant_id/promote/:process_key` are tenant scope ONLY IF REQ-446 proves (citing
+file:line) or adds a source-tenant ownership check. Today the code only rejects a `:production`
+source (`lib/letflow/definitions/promotion.ex` ~171-176, `tenant_classifier.(source_tenant_id) ==
+:production`) and `PromotionPlan.default_permission_checker/2` always returns `true`
+(`lib/letflow/definitions/promotion_plan.ex` ~179-180; see also the "permission_checker gap"
+section of `lib/letflow/routers/promotions.ex` ~145-160 and the route comment in
+`lib/letflow/routers/tenants.ex` ~196-204, "`:test_tenant_id` is caller-supplied and IS a
+cross-tenant read"). Until that holds, no role other than `PLATFORM_ADMIN` may be granted them, and
+for the catch-all they are treated as platform scope (D2 enforcement point 2): a `PLATFORM_ADMIN` of
+a non-platform tenant is denied them. REQ-446 must ship a test showing that denial, plus a
+cross-tenant negative test (tenant A's admin promoting from tenant B's test tenant gets 403/404 per
+INV-5). REQ-448 must treat the TENANT_ADMIN and TENANT_AUDITOR promotion cells as conditional on
+those tests. If
+neither proof nor check is achievable they are reclassified platform scope and the REQ-447 and
+REQ-448 grants change.
+
+Platform-events. `GET /promotions/platform-events` returns the platform sentinel stream whose
+payloads name other tenants (`lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md`
+section 2.3 point 2, ~lines 262-266: "payload names another tenant by id (`source_tenant_id`)"). It
+is therefore expected PLATFORM scope under its OWN permission, `PLATFORM_ADMIN` only, and must never
+be folded into `:PromotionsRead` unless REQ-446 proves it returns only the caller's rows.
+
 ### D4. PLATFORM_ADMIN
 
 `PLATFORM_ADMIN` keeps its name and its allow-everything rule but exists only in the platform
@@ -141,29 +164,6 @@ such access exists.
 ### D10. The role set stays closed
 
 The role set stays closed (0013, 0039 D4): a module cannot create a role.
-
-Binding condition on tenant classification. `:PromotionsRead`, `:PromotionsManage` and
-`POST /tenants/:test_tenant_id/promote/:process_key` are tenant scope ONLY IF REQ-446 proves (citing
-file:line) or adds a source-tenant ownership check. Today the code only rejects a `:production`
-source (`lib/letflow/definitions/promotion.ex` ~171-176, `tenant_classifier.(source_tenant_id) ==
-:production`) and `PromotionPlan.default_permission_checker/2` always returns `true`
-(`lib/letflow/definitions/promotion_plan.ex` ~179-180; see also the "permission_checker gap"
-section of `lib/letflow/routers/promotions.ex` ~145-160 and the route comment in
-`lib/letflow/routers/tenants.ex` ~196-204, "`:test_tenant_id` is caller-supplied and IS a
-cross-tenant read"). Until that holds, no role other than `PLATFORM_ADMIN` may be granted them, and
-for the catch-all they are treated as platform scope (D2 enforcement point 2): a `PLATFORM_ADMIN` of
-a non-platform tenant is denied them. REQ-446 must ship a test showing that denial, plus a
-cross-tenant negative test (tenant A's admin promoting from tenant B's test tenant gets 403/404 per
-INV-5). REQ-448 must treat the TENANT_ADMIN and TENANT_AUDITOR promotion cells as conditional on
-those tests. If
-neither proof nor check is achievable they are reclassified platform scope and the REQ-447 and
-REQ-448 grants change.
-
-Platform-events. `GET /promotions/platform-events` returns the platform sentinel stream whose
-payloads name other tenants (`lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md`
-section 2.3 point 2, ~lines 262-266: "payload names another tenant by id (`source_tenant_id`)"). It
-is therefore expected PLATFORM scope under its OWN permission, `PLATFORM_ADMIN` only, and must never
-be folded into `:PromotionsRead` unless REQ-446 proves it returns only the caller's rows.
 
 ## Permission scope table (D3)
 
@@ -362,8 +362,10 @@ role, and is separate from the deferred item in D9.
 
 ## REVIEWER sign-off
 
-pending
+REVIEWER (pass 3, 2026-10-06, REQ-445 / Q-962): PASS. D4 Transition, D8 and open risk 3 are consistent; the Transition leaves D4's end state unchanged; no unratified decision added; no contradiction with D1..D10, REQ-446/447/448 or 0047. Earlier passes failed on D2 provenance, 0039 D4/D5 citation, supersession header, D6 list, and Transition vs D8 wording; all fixed.
+Note: D2's config-pinned/fail-closed refinement rests on the user's ratification as relayed by the supervisor session on 2026-10-06; ORCH keeps that traceable. Non-blocking: point 5 says "ISS-0993 implements" while REQ-447 build 2 owns the same refusals.
 
 ## SECURITY-REVIEWER sign-off
 
-pending
+SECURITY-REVIEWER (pass 3, 2026-10-06, REQ-445 / Q-962): PASS. INV-1/INV-5/INV-10 reasoning checked against D2 (points 1-5, 2a), the D3 binding condition, the D4 Transition and the D8 order. Tenant PLATFORM_ADMIN promotion/platform-events exposure closed.
+Conditions carried forward: REQ-446 must ship the tenant-PLATFORM_ADMIN denial test plus a cross-tenant negative test; REQ-448 promotion cells stay conditional on them; REQ-447 must not ship before ISS-0993; re-review required on the Q-960 code and on REQ-446 before any promotions permission goes to a non-platform role. Suggested (REQ-ANALYST): add those criteria to REQ-446.

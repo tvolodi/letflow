@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { ProtectedRoute } from '@/auth/ProtectedRoute'
 import OidcCallbackPage from '@/pages/OidcCallbackPage'
+import { LoginRoute } from '@/pages/LoginPage'
 import { AuthenticatedShellRoot } from '@/components/layout/AuthenticatedShellRoot'
 // ISS-0822: ProcessModulesPage import removed — Letflow.Routers.ProcessModules is
 // deferred to S5 (process-module packaging); no backend is mounted and the page
@@ -44,6 +45,13 @@ export const router = createBrowserRouter([
   {
     path: '/auth/callback',
     element: <OidcCallbackPage />,
+  },
+  {
+    // REQ-438: public email-first login screen, outside ProtectedRoute. Only
+    // reached when VITE_EMAIL_FIRST_LOGIN is on (ProtectedRoute routes here);
+    // with the flag off nothing links to it.
+    path: '/login',
+    element: <LoginRoute />,
   },
   {
     path: '/',

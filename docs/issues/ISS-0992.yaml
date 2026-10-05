@@ -1,0 +1,24 @@
+id: ISS-0992
+title: "REQ-438 real-flow e2e not run: needs two tenant realms in Keycloak, a populated login directory, a flag-on SPA build and realm 'Login with email' (infra gap, blocked until the enablement gate)"
+discovered_by: FRONTEND-DEV / RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ438-20261005 (Q-959)
+severity: MINOR
+owner: "UAT-RUNNER (after infra provisions the prerequisites and the REQ-444 gate allows enabling)"
+description: >
+  REQ-438's last-but-one criterion asks for a real-flow e2e run against a Keycloak with two tenants'
+  realms showing a bilimbaga user arriving at the bilimbaga realm login with the username pre-filled,
+  OR the infra gap recorded as a blocker (as ISS-0727 was). This is that blocker. The Playwright spec
+  web/tests/e2e/req438-email-first-login.e2e.spec.ts is written and states in its header that it was
+  not run. It cannot run in the build environment because it needs: (1) two tenant realms in Keycloak
+  with users, (2) the login directory populated (REQ-435 backfill run in that environment; the pepper
+  provisioned), (3) the REQ-437 mount enabled (LETFLOW_LOGIN_DISCOVERY_ENABLED=true with trusted
+  proxies, REQ-439, which stays off until the REQ-444 gate: legal confirmation per 0042 OQ-3, a
+  delivering mail adapter REQ-441, the rotation runbook REQ-443), (4) a web build with
+  VITE_EMAIL_FIRST_LOGIN=true, and (5) 'Login with email' enabled on the realm (login_hint pre-fills
+  the username field only). Unit/component tests cover every precedence and state path with a mocked
+  discovery client.
+affected_files:
+  - web/tests/e2e/req438-email-first-login.e2e.spec.ts
+queue_ref: Q-959
+github_ref: GH-2219
+status: open

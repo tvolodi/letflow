@@ -1,0 +1,53 @@
+run_id: WF02-REQ438-20261005
+step: "WF-02 Step 5"
+agent: RELEASE-VALIDATOR
+generated_at: "2026-10-05T21:30:00Z"
+branch: feat/REQ-438-email-first-login-spa
+scope: "REQ-438 (Q-959), staged not committed; web/ only plus docs/issues/ISS-0992.yaml"
+commands:
+  type_check: "npm run type-check -> tsc -b exit 0, no output"
+  lint: "npm run lint -> eslint --max-warnings 0, exit 0, no output"
+  test: "npm run test -> Test Files 152 passed (152); Tests 1070 passed (1070); no timeouts"
+  guards: "npm run guards -> build OK; bundle-scan etc: Test Files 4 passed (4), Tests 52 passed (52)"
+  not_run: "mix letflow.check.test / scripts/test_parallel.sh: no lib/, priv/, test/ change (web only)"
+criteria:
+  - ac: 1
+    verdict: VERIFIED
+    evidence: "ProtectedRoute.tsx needsEmailFirst + Navigate; ProtectedRoute.emailFirst.test.tsx 'flag on, no realm known' asserts zero signinRedirect"
+  - ac: 2
+    verdict: VERIFIED
+    evidence: "tenantConfig.ts resolveRealmFromUrl (?realm= first, overwrites stored); precedence rows 1-5 each a test in ProtectedRoute.emailFirst.test.tsx plus precedence.test.ts; existing tests unmodified (git diff --cached shows only A for tests)"
+  - ac: 3
+    verdict: VERIFIED
+    evidence: "LoginPage.tsx runDiscovery; LoginPage.test.tsx single-tenant test (store, once, ?realm=, login_hint, zero input[type=password])"
+  - ac: 4
+    verdict: VERIFIED_WEAK
+    evidence: "Identical-DOM test feeds the same mocked 'accepted' outcome 3 times; real collapse proven in loginDiscovery.test.ts and by static page DOM. Acceptable, not tautology-proof."
+  - ac: 5
+    verdict: VERIFIED
+    evidence: "LoginPage.test.tsx error cases (distinct text, retry, org control), org code navigation tests from idle/429/network/malformed/neutral"
+  - ac: 6
+    verdict: VERIFIED
+    evidence: "AuthProvider.tsx:90-97 early return; AuthProvider.emailFirst.test.tsx (4 session-expired rows + logout)"
+  - ac: 7
+    verdict: VERIFIED
+    evidence: "ProtectedRoute Navigate state.from; LoginPage fromPath -> buildRedirectArgs/isSafeRestorePath; tests safe path, '//evil', '/weird%20path'"
+  - ac: 8
+    verdict: VERIFIED
+    evidence: "loginMessages.ts en/ru/kk equal key sets; login-i18n-grep.test.ts with seeded failing fixture"
+  - ac: 9
+    verdict: PARTIAL_BY_DESIGN
+    evidence: "check passes; e2e spec exists, header states it was not run; infra gap recorded as docs/issues/ISS-0992.yaml (staged, queue_ref Q-959)"
+  - ac: 10
+    verdict: VERIFIED
+    evidence: "no disclosure vocabulary in web/src login code (repo-wide grep hits are unrelated English words); 202 DOM test present"
+  - ac: 11
+    verdict: VERIFIED_CONDITIONAL
+    evidence: ".env.example sets false; emailFirstFlag.test.ts scans env/deploy/.github/vite config. PR body must state dependency on REQ-444."
+  - ac: 12
+    verdict: VERIFIED
+    evidence: "git diff --cached --name-only: only web/* and docs/issues/ISS-0992.yaml; nothing under lib/ priv/ apps/ config/"
+gaps:
+  - "MINOR: /login is registered unconditionally; with the flag off a direct visit still renders the page (discovery call would 404 -> network_error state, org code still works). Not required by an AC but 'flag disables the screen' is only enforced by ProtectedRoute."
+  - "PROCESS: PR description must state enabling depends on REQ-444 gate (AC 11)."
+verdict: PASS

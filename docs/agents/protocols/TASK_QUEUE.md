@@ -250,6 +250,18 @@ recorded as known anomalies in the index.
 
 ---
 
+## Identify a task by queue id AND GH number
+
+*(Added 2026-10-06.)* Queue task ids, GitHub issue numbers and local `ISS-NNNN` numbers are three
+independent registries. A message, PR title, branch or handoff that names a task states the **queue
+id and the GH number** (`Q-955 / GH #2213`); an ISS or REQ number alone is not an identifier.
+When a task is re-registered (stale `depends_on` cannot be edited), the old queue id is marked
+blocked and the new id is announced explicitly; never reuse the old one.
+
+`depends_on` cannot be edited after `register_task`. Before registering, read the requirement's
+`depends_on` line in full in `docs/requirements.yaml` and map each REQ to its CURRENT queue id; a
+wrong mapping forces a re-registration (Q-955/Q-956 and Q-947 each needed one).
+
 ## The four mutating functions
 
 `GET /tasks` (above) is the fifth, read-only operation — the four below are the ones

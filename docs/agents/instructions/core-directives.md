@@ -688,3 +688,49 @@ quietly satisfy it by other means.
 Test reports, requirement status, release decisions, issue records — all YAML, matching
 the format Letflow's `docs/status/requirement_status.yaml` and `docs/requirements.yaml`
 already use.
+
+
+---
+
+## ⛔ Merge Discipline: Serial Slots, One PR Per Issue, Batched Filings
+
+*(Added 2026-10-06 from the Q-957 incident: one PR was restarted FIVE times — about 35 minutes
+of backend CI each — because docs-only PRs kept landing on `main` mid-run. The repo requires an
+up-to-date branch (`strict` status checks) and has no merge queue: the repo is owned by a User
+account, not an organization.)*
+
+1. **One PR per issue/requirement.** Do not bundle unrelated fixes; do not split one issue
+   across several PRs without a reason recorded in the PR body.
+2. **Serial merge slots.** The supervisor (or, with no supervisor, the ORCH of the session that
+   first opened a functional PR) announces merge slots. **Nobody merges a docs/chore/bookkeeping
+   PR while a functional PR is in CI.** Docs and chore PRs wait for a slot, are rebased only
+   when their slot comes, and are merged one at a time.
+3. **Batch filings.** Issue/requirement filings, RUN_DONE log lines and registry bookkeeping
+   go into the next functional PR of the same session, or into ONE batched docs PR per slot,
+   never one PR per filing. Because the local `docs/issues` record may land later than the queue
+   task, the `register_task` description must be self-sufficient (evidence, fix direction,
+   acceptance criteria); a worker that claims a task whose local record is not on `main` yet
+   works from the queue text and does not re-file.
+4. **Update-branch only when the line is quiet.** If `main` moves under your in-flight PR from a
+   source you do not control, tell the supervisor instead of restarting your run in a loop.
+   Never `--admin`-merge to get around staleness.
+
+---
+
+## ⛔ CI Failures Are Classified; A Repeat Is A Defect; Run CI-Shaped Locally First
+
+*(Added 2026-10-06.)*
+
+1. **Failure-class field.** Every time a PR's CI fails, record in the PR (comment or body) a
+   **failure class**: `flake` (the test passed on identical code on rerun and the cause is
+   timing/infra), `defect` (reproducible in this PR's code or its base), or `infra`
+   (runner/queue/network). Cite the failing test file and the run id.
+2. **A second failure of the same file or class is a defect, not a flake.** Do not rerun a
+   second time; diagnose it (ISS-0977 / RT-6 recurred exactly this way).
+3. **CI-shaped local run before every push.** Stage the files first (the handoff and
+   requirement-status checks read the git index), export `MIX_TEST_PARTITION` as `scripts/test_parallel.sh` does (e.g. 3) for
+   subprocess/config tests (the workflows do not set it themselves), and run the checks the gate runs: `mix compile --warnings-as-errors`,
+   `mix format --check-formatted`, `mix letflow.lint_handoffs`, `mix letflow.check_issue_refs`,
+   `mix letflow.check_boundaries`, and, if any status volume or the index changed,
+   `test/docs/requirement_status_invariants_test.exs` (A9: the index `entries:` count must equal
+   the on-disk entries after every merge of `main`).

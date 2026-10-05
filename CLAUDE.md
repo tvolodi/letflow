@@ -143,6 +143,8 @@ summarized here:
   for every later stage — if a stage's requirement seems to need a
   framework/library choice that contradicts one already on record,
   flag it and get REVIEWER sign-off rather than quietly diverging.
+- **Merge discipline** (`core-directives.md`): one PR per issue; no docs/chore merges while a functional PR is in CI;
+  classify every CI failure (a repeat is a defect); run CI-shaped locally before pushing; overlap-check before filing.
 - Check `docs/anti-patterns.md` before non-trivial changes, and add to
   it when you find a mistake worth not repeating.
 

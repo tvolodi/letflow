@@ -85,7 +85,9 @@ unchanged).
    only by email) and `:redirect_single` (Mode B: exactly one active-tenant match returns
    `{slug, display_name}`; several matches or none return the same neutral response, and
    the list for several is emailed). **Default: Mode B** (ratified by `REVIEWER` and `SECURITY-REVIEWER`, 2026-10-04, see Sign-off), switchable to Mode A
-   by config. Ratification was required because Mode B discloses "this email has an account in tenant Y" to an
+   by config. *(Amended by 0043 D-A / REQ-442: the config value is now the deployment default AND
+   ceiling; a nullable per-tenant `login_disclosure_mode` may only tighten it to Mode A. See 0043
+   "REVIEWER ruling (REQ-442)".)* Ratification was required because Mode B discloses "this email has an account in tenant Y" to an
    unauthenticated caller for single matches, bounded only by rate limiting. A third
    option, an unauthenticated tenant picker (`picker_unauth`), is **not built** (see
    "Alternatives rejected").
@@ -245,7 +247,10 @@ promise.
    field beyond **`slug` and `display_name`**. Response maps are hand-built with literal
    keys, never derived from an Ecto struct (INV-2; 0028's projection rule). The lookup
    function returns plain maps containing only those two fields, so the other fields are
-   unrepresentable past the query. The SPA derives the authority from the existing
+   unrepresentable past the query. *(Amended by 0043 D-A / REQ-442: the lookup's internal match map
+   additionally carries a boolean `disclose`, consumed and stripped inside `decide/2`; it never
+   reaches a response body and no tenant id, realm id or stored mode leaves `LoginDirectory`.
+   REVIEWER accepted this reading of "past the query" as "past `decide/2`".)* The SPA derives the authority from the existing
    `GET /api/tenant-config?realm=<slug>`.
 5. **No bulk, list, search or paginated variant.** One email per request, `POST` only,
    email in the JSON body only, no array form, no cursor, no `GET`, no query-string email.
@@ -276,7 +281,9 @@ promise.
 11. **Adding a field to either success response shape, adding a third disclosure mode, or
     returning tenant names for the multi-match case is a security change, not a feature**:
     it needs `SECURITY-REVIEWER` sign-off against INV-2 and INV-5 in the requirement that
-    adds it, and an amendment to this record.
+    adds it, and an amendment to this record. *(Amended by 0043 D-A / REQ-442: per-tenant selection
+    is a new selector, not a third mode; SECURITY-REVIEWER signed it against INV-1, INV-2, INV-5 and
+    INV-6, and 0043 D-A is the amending record.)*
 12. **The notifier's egress is bounded**: a fixed message template carrying no text derived
     from the request other than the recipient address, at most one send per address per
     configured minimum interval, and no URL derived from tenant-controlled text (INV-9).

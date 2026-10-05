@@ -33395,7 +33395,7 @@ requirements:
   - id: REQ-442
     title: "Per-tenant login disclosure mode (BA decision D-A): a platform-admin-only tenant setting that selects uniform or single-match disclosure for the email-first lookup, with the deployment-wide mode as fallback and ceiling, resolved inside the single lookup query"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 950  # letflow-queue task id, GH#2204. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
     description: >

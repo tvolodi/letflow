@@ -594,3 +594,40 @@ history:
       acceptance criteria and passed it for closure; report
       test/reports/report-2026-10-05-WF02-REQ440-VERIFY.yaml. Minor test
       gaps filed as docs/issues/ISS-0990.yaml.
+  - req: REQ-442
+    event: started
+    agent: ORCH
+    at: "2026-10-05T11:56:00Z"
+    note: >
+      WF-02 run WF02-REQ442-20261005 (GH#2204) started on
+      branch feature/WF02-REQ442-20261005. The started event was not logged at
+      pickup; recorded retroactively by DOC-UPDATER at Step 6 using the run's
+      recorded start time.
+
+  - req: REQ-442
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T13:00:36Z"
+    note: >
+      Per-tenant login disclosure mode (BA decision D-A) complete (GH#2204):
+      nullable tenants.login_disclosure_mode (public schema, CHECK on the two
+      modes), PLATFORM_ADMIN-only write through the platform-admin tenant
+      update route, and the effective mode resolved inside the single
+      prefix-less lookup query as disclose = deployment mode is
+      redirect_single AND COALESCE(tenant value, redirect_single) is
+      redirect_single (deployment mode is default AND ceiling). The
+      requirement premise "audited as other platform-admin tenant updates are"
+      was WRONG: patch_tenant was unaudited. REQ-442 adds audit for mode
+      changes only (neutral, value-free action tenant.platform_setting.updated
+      in the target tenant's chain, same transaction); a display_name-only
+      PATCH stays unaudited. The CEILING reading was ratified by REVIEWER
+      (recorded in decision 0043, with amendment notes on 0042 prohibitions 4
+      and 11 and Decision 3, and design req434 s5.4/s7/s10.2). SECURITY-REVIEWER
+      PASS on INV-1, INV-2, INV-5, INV-6, 0042 amendments ratified. Bilimbaga
+      uniform is an operator action; no data change ships. Verification was
+      SCOPED runs only; CI is the full gate. Non-blocking follow-ups: a
+      type-safety issue (login_disclosure_mode as :string with the vocabulary
+      duplicated in four places vs Ecto.Enum) is NOT yet filed under
+      docs/issues; REQ-437 must call lookup_by_keys/1 only and keep its
+      deployment-mode reader in agreement with LoginDirectory.deployment_mode/0.
+      Branch feature/WF02-REQ442-20261005.

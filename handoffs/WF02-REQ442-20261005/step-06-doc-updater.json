@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ442-20261005/step-06-doc-updater.json",
   "created_at": "2026-10-05T12:58:57Z",
   "started_at": "2026-10-05T12:58:57Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T13:00:36Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -37,11 +37,22 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
-    "next_action": null
+    "status": "PASS",
+    "summary": "REQ-442 flipped pending->done in docs/requirements.yaml. Appended retroactive started (2026-10-05T11:56:00Z) and done events to volume 26; v26 now 19 entries, 613 lines / 36101 bytes, 0 deletions per git diff --numstat, no roll. Index entries counter 17->19 with note. Wrote 0043 REVIEWER ruling (REQ-442), 0042 amendment notes (Decision 3, prohibitions 4 and 11), design req434 s5.4 (tenant_match), s7 (deployment default and ceiling, decide/2) and s10.2 row. README not changed: no documented behaviour altered (grep found no related text). Done note records scoped-runs-only, premise correction, ceiling ratification, Bilimbaga operator action, SECURITY-REVIEWER verdict. Gap flagged: REVIEWER's non-blocking type-safety issue (login_disclosure_mode :string vs Ecto.Enum, vocabulary duplicated four times) is NOT filed under docs/issues (needs queue ref/ID allocation by ORCH).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v26.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/migration/decisions/0042-email-first-login-tenant-directory.md",
+      "docs/migration/decisions/0043-email-first-login-ba-decisions.md",
+      "lib/letflow/design/req434-email-first-login-directory.md",
+      "handoffs/WF02-REQ442-20261005/step-06-doc-updater.json"
+    ],
+    "issues": [
+      "ORCH: file docs/issues entry tagged type-safety for login_disclosure_mode (string vs Ecto.Enum, vocabulary in four places); not filed here.",
+      "No docs/migration/stage-N file was named by the acceptance criteria; none checked."
+    ],
+    "next_action": "ORCH: commit, push, open PR, wait for CI (full gate), merge."
   },
   "rework_count": 0
 }

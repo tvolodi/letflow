@@ -1,0 +1,53 @@
+{
+  "handoff_id": "7eee64e4-266e-4e2f-b6be-5691682306de",
+  "run_id": "WF03-Q954-20261005",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-Q954-20261005/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-10-05T11:41:40Z",
+  "started_at": "2026-10-05T11:41:40Z",
+  "completed_at": "2026-10-05T11:41:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0987": "queue Q-954 / GH #2209 (local record ISS-0987 on PR #2210 branch docs/ISS-0987-secrets-master-key-0xff-literal; queue issue_ref ISS-0954 collides with an unrelated local file). config/runtime.exs ~line 63 compares secrets_master_key to <<0xFF::256>> (integer 255) instead of 32 bytes of 0xFF."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "config/runtime.exs",
+      "lib/letflow/design/req190-secrets-core.md",
+      "test/letflow/secrets_runtime_config_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q954-20261005"
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 + Step 1 (diagnose only) for Q-954 / GH #2209 (ISS-0987).",
+    "acceptance_criteria": [
+      "Registry lookup result stated",
+      "Root cause with file:line citations, reproduced",
+      "Exact needed change list"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REGISTRY (Step 0.5): docs/issues/ has no entry for this symptom (grep for 0xFF/master key hits only ISS-0533 and ISS-0702, which merely mention setting LETFLOW_SECRETS_MASTER_KEY). Not a recurrence. Local record is ISS-0987 on origin/docs/ISS-0987-secrets-master-key-0xff-literal (PR #2210), intentionally not created on this branch.\n\nREPRODUCED (real output). (1) elixir -e 'IO.inspect(<<0xFF::256>> == :binary.copy(<<0xFF>>,32)); IO.inspect(:binary.decode_unsigned(<<0xFF::256>>))' -> false / 255. So <<0xFF::256>> is the 256-bit integer 255 (31 zero bytes then 0xFF). (2) Subprocess, MIX_ENV=dev, MIX_TEST_PARTITION/MIX_BUILD_PATH unset, mix run --no-start, LETFLOW_SECRETS_MASTER_KEY=64x'f' plus LETFLOW_LOGIN_DIRECTORY_PEPPER=<64 hex 'ab'*32> and _ID=p1 -> prints booted_past_config (exit 0): the all-0xFF key is NOT refused. (3) Same with 64 zeros -> RuntimeError 'is a trivially-guessable value (all-zeros or all-0xFF)': the all-zeros half works.\n\nROOT CAUSE: config/runtime.exs:63 'if secrets_master_key == <<0::256>> or secrets_master_key == <<0xFF::256>>'. Second operand is the integer 255 as 256 bits, never equal to 32 bytes of 0xFF, so that branch is dead. Same wrong literal documented in lib/letflow/design/req190-secrets-core.md:200 (which even says 'wrapped 32 bytes of 0xFF' - false). Correct form already exists at config/runtime.exs:109 (pepper block): ':binary.copy(<<0xFF>>, 32)'; do not refactor it. Existing test test/letflow/secrets_runtime_config_test.exs only covers missing and malformed, never the trivially-guessable branch, which is why nothing caught it.\n\nNEEDED CHANGE: (A) config/runtime.exs:63 replace <<0xFF::256>> with :binary.copy(<<0xFF>>, 32); (B) lib/letflow/design/req190-secrets-core.md:200 same literal fix in prose; (C) regression tests in test/letflow/secrets_runtime_config_test.exs: all-zeros refused, 64x'f' refused, valid random key accepted.\n\nTEST TRAP for the designer (important): config/runtime.exs now requires LETFLOW_LOGIN_DIRECTORY_PEPPER and _ID in every non-test env (REQ-435). Evidence: 64x'f' key without pepper vars under MIX_ENV=dev exits 1 with 'LETFLOW_LOGIN_DIRECTORY_PEPPER is missing'. A regression test spawning MIX_ENV=dev without pepper vars would therefore see a non-zero exit for the all-0xFF case and falsely pass before the fix. The new tests MUST supply valid pepper vars (distinct from the key) and assert output =~ 'trivially-guessable' (not merely non-zero exit); the valid-key case must assert exit 0 / booted marker. Use env nil for MIX_TEST_PARTITION and MIX_BUILD_PATH as the existing tests do. Also run with --no-start where possible. SEQUENCING: per ISS-0987, PR #2201 (Q-944, edits config/runtime.exs) must merge before a PR editing runtime.exs; current HEAD b01b785e already contains the #2201 commit. Severity MINOR; SECURITY-REVIEWER applies (secrets path). No lib/ change.",
+    "artifacts_out": [],
+    "owned_modules": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "mix letflow.lint_handoffs not run (memory tight); handoffs/registry.json entry for WF03-Q954-20261005 not written (ORCH-owned).",
+        "affected_requirement": null
+      }
+    ],
+    "next_action": "Route to CODE-DESIGNER for fix design (runtime.exs:63 literal, design doc line 200, regression tests that supply pepper vars and assert the trivially-guessable message)."
+  }
+}

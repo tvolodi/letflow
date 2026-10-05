@@ -1,0 +1,46 @@
+{
+  "handoff_id": "e4a92c17-6b3d-4d85-8f10-3c7a5b9d2e64",
+  "run_id": "WF03-Q954-20261005",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q954-20261005/step-04b-test-design-validator.json",
+  "created_at": "2026-10-05T11:47:00Z",
+  "started_at": "2026-10-05T11:47:00Z",
+  "completed_at": "2026-10-05T11:48:18Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0987": "queue Q-954 / GH#2209: secrets master key all-0xFF refusal compared against <<0xFF::256>> (integer 255), dead code."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/secrets_runtime_config_test.exs",
+      "lib/letflow/design/iss0987-secrets-master-key-0xff-literal.md",
+      "handoffs/WF03-Q954-20261005/step-04-test-designer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q954-20261005"
+  },
+  "task": {
+    "description": "WF-03 Step 4b hard gate on TEST-DESIGNER: check design coverage, discriminating assertions, fixture self-sufficiency; independently apply the <<0xFF::256>> mutant and quote measured counts.",
+    "acceptance_criteria": [
+      "Every design AC has a test",
+      "Assertions discriminating",
+      "Mutant independently applied with counts, then reverted and verified",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Coverage vs design section 5: 0xFF refused = test 'all-0xFF ... refused'; zeros refused = 'all-zeros ... refused'; valid key accepted = third test (exit 0, marker present, no 'trivially-guessable'); no key echo = refute output =~ full 64-char key in the shared helper; pepper not masking = shared env with valid distinct pepper pair (ab x 32, id p1) in all three; Change B (docs) is not a test criterion. Assertions are discriminating: refused cases assert exit != 0, 'trivially-guessable', 'LETFLOW_SECRETS_MASTER_KEY', marker absence and no key echo, not just nonzero exit. Valid-key test asserts the key differs from the pepper. Fixtures self-sufficient: each test spawns its own mix run with explicit env, MIX_TEST_PARTITION/MIX_BUILD_PATH nil'd, async-safe, no shared state, no @tag :skip, no TODO, no secrets (test-only pepper/key literals). Independent mutant (my own run, working tree, MIX_TEST_PARTITION=q954b, env from .env, scoped to the file): config/runtime.exs line 63 changed to 'secrets_master_key == <<0xFF::256>>' -> 'Result: 4/5 passed, Failed: 1 test', failing assert_refused_as_trivial(String.duplicate(\"f\", 64)) (secrets_runtime_config_test.exs:145 via :159) with output 'booted_past_config' (exit 0 marker printed); zeros and valid-key tests stayed green. Reverted via git checkout -- config/runtime.exs; verified 'git status --porcelain lib/ config/ test/' empty, line 63 back to ':binary.copy(<<0xFF>>, 32)', and file re-run 'Result: 5 passed'. git status --porcelain showed only the untracked letflow-3.code-workspace before and after. Only the fail-first/mutant-1 was re-run by me; TEST-DESIGNER's second mutant (drop zeros operand, 4/5) was not re-run (not required).",
+    "issues": [],
+    "route_back": null
+  }
+}

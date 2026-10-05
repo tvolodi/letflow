@@ -1,0 +1,57 @@
+{
+  "handoff_id": "8b2d4f6a-1c3e-4a57-9d80-5e7f1a2b3c94",
+  "run_id": "WF03-Q954-20261005",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-Q954-20261005/step-03c-security-reviewer.json",
+  "created_at": "2026-10-05T11:44:31Z",
+  "started_at": "2026-10-05T11:44:31Z",
+  "completed_at": "2026-10-05T11:44:31Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0987": "queue Q-954 / GH #2209: config/runtime.exs rejected <<0xFF::256>> (integer 255) instead of 32 bytes of 0xFF, so the all-0xFF refusal of LETFLOW_SECRETS_MASTER_KEY was dead code."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "config/runtime.exs",
+      "lib/letflow/design/req190-secrets-core.md"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q954-20261005"
+  },
+  "task": {
+    "description": "WF-03 Step 3c: review commit d67616ea (git show) against security-invariants.md INV-1..INV-9 and decision 0016.",
+    "acceptance_criteria": [
+      "INV-1..8 each addressed",
+      "All-0xFF key rejected; all-zeros still rejected",
+      "Error message does not echo key",
+      "Pepper block untouched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope": "IN SCOPE: secret-resolution path (INV-4) - config/runtime.exs LETFLOW_SECRETS_MASTER_KEY boot check. Design-doc wording change in req190-secrets-core.md is documentation only. Handoff JSON in the commit is not application code.",
+    "invariants": {
+      "INV-1": "NOT-APPLICABLE - no tenant-scoped table, schema, migration or query touched.",
+      "INV-2": "NOT-APPLICABLE - no API response shaping changed.",
+      "INV-3": "NOT-APPLICABLE - no Lua/WASM host capability changed.",
+      "INV-4": "APPLIES - PASS. The only code change is line 63, second operand of the trivial-key guard: <<0xFF::256>> -> :binary.copy(<<0xFF>>, 32). Verified with elixir: <<0xFF::256>> == :binary.copy(<<0xFF>>, 32) is false (the former is the integer 255, 31 zero bytes then 0xFF; old check was dead code), :binary.copy(<<0xFF>>, 32) equals the decoded 64-char 'f' string, and <<0::256>> == :binary.copy(<<0>>, 32) is true so the all-zeros operand is unchanged and still rejects. Raise message is unchanged and contains no interpolation, so it does not echo the key or hex string. No default or fallback key introduced; absence/malformed/length checks above it untouched. The pepper (LETFLOW_LOGIN_DIRECTORY_PEPPER*) block is not in the diff. Grep of the diff for hardcoded secret literals: none (the 0xFF/zero literals are rejection sentinels, not keys). Consistent with decision 0016 (no hardcoded/trivial master key).",
+      "INV-5": "NOT-APPLICABLE - no lookup-by-ID endpoint added.",
+      "INV-6": "This handoff is the scoping/applicability proof.",
+      "INV-7": "NOT-APPLICABLE - no SQL touched.",
+      "INV-8": "NOT-APPLICABLE - boot-time deliberate raise on invalid config is intentional fail-fast, not a request-path crash; no new bare pattern matches.",
+      "INV-9": "NOT-APPLICABLE - no outbound URL handling."
+    },
+    "note": "Residual (non-blocking, out of this diff): only two literal sentinels are rejected; other low-entropy keys pass. That is the design's stated scope.",
+    "issues": [],
+    "route_back_to": null
+  }
+}

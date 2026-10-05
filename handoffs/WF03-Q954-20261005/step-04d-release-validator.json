@@ -1,0 +1,63 @@
+{
+  "handoff_id": "df50bab6-51e6-4dc3-a191-d97a3ec76693",
+  "run_id": "WF03-Q954-20261005",
+  "workflow_id": "WF-03",
+  "step": "04d",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-Q954-20261005/step-04d-release-validator.json",
+  "created_at": "2026-10-05T11:49:57Z",
+  "started_at": null,
+  "completed_at": "2026-10-05T11:49:57Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0987": "config/runtime.exs secrets master key boot check does not reject an all-0xFF key: <<0xFF::256>> is integer 255 (Q-954 / GH#2209)"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "config/runtime.exs",
+      "lib/letflow/design/req190-secrets-core.md",
+      "test/letflow/secrets_runtime_config_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "feature/WF03-Q954-20261005"
+  },
+  "task": {
+    "description": "WF-03 Step 4d: independently re-verify ISS-0987 before issue close.",
+    "acceptance_criteria": [
+      "Fix present in config/runtime.exs",
+      "Design doc fixed in req190 doc",
+      "Regression tests present (all-zeros, all-0xFF, valid key)",
+      "Independent scoped test re-run",
+      "compile/format/lint/check_issue_refs clean",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Issue re-read from origin/docs/ISS-0987-secrets-master-key-0xff-literal:docs/issues/ISS-0987.yaml. config/runtime.exs line 63 now 'secrets_master_key == <<0::256>> or secrets_master_key == :binary.copy(<<0xFF>>, 32)' (pepper check at line 109 already used the correct form); the diff vs origin/main in config/ is that single line. lib/letflow/design/req190-secrets-core.md step 4 corrected to :binary.copy(<<0xFF>>, 32) with a note that <<0xFF::256>> is integer 255. test/letflow/secrets_runtime_config_test.exs adds 3 tests (all-zeros refused, all-0xFF refused, valid key boots) using a valid pepper pair so the pepper check cannot mask the result, and asserting the key value is not echoed. Independent run with MIX_TEST_PARTITION=q954c: test/letflow/secrets_runtime_config_test.exs 'Result: 5 passed'. mix compile --warnings-as-errors --force: 'Compiling 289 files (.ex) / Generated letflow app', no warnings. mix format --check-formatted: no output (clean). mix letflow.lint_handoffs: 'OK -- 0 new violations across 3336 handoff files under handoffs (25 pre-existing grandfathered, traced to ISS-0190)' (H5 registry informational lists unchanged, include this run id as not yet registered). mix letflow.check_issue_refs: 'OK -- every cross-reference is prefixed and well-formed' (582 files; ISS-0987 not present on this branch, no effect). lib/ diff vs origin/main is design doc only (no lib .ex changes). Full suite and mix letflow.check.test not run per task instruction (RAM).",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "mix letflow.check.test and the full suite were not run in this validation (scoped run only, per orchestrator instruction); CI is the remaining gate.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-Q954-20261005",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to WF-03 commit/PR; ISS-0987 is filed on its own docs branch and must be closed there/after merge."
+  }
+}

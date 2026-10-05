@@ -197,8 +197,10 @@ default value returned at any step):**
    to 32 bytes) but is asserted explicitly as its own step rather than
    trusted as a corollary, per "no speculation."
 4. Literal-value rejection: the decoded 32 bytes are NOT `<<0::256>>`
-   (all-zeros) and NOT `<<0xFF::256>>` (wrapped 32 bytes of `0xFF`, i.e. the
-   64-char string `"f" * 64`) — compared as raw bytes, not as the hex
+   (all-zeros) and NOT `:binary.copy(<<0xFF>>, 32)` (32 bytes of `0xFF`, i.e.
+   the 64-char string `"f" * 64`; note `<<0xFF::256>>` is the integer 255 —
+   31 zero bytes then `0xFF` — and must not be used) — compared as raw
+   bytes, not as the hex
    string, so this check cannot be bypassed by re-encoding — fails →
    `raise`.
 

@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ441-20261005/step-04-test-runner.json",
   "created_at": "2026-10-05T17:46:29Z",
   "started_at": "2026-10-05T17:46:29Z",
-  "completed_at": "2026-10-05T17:46:29Z",
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T17:54:07Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -49,10 +49,13 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
+    "status": "PASS",
+    "summary": "PASS. Tree clean (only untracked letflow-3.code-workspace). (1) MIX_ENV=test mix compile --force --warnings-as-errors: 342 files, 'Generated letflow app', exit 0. (2) mix format --check-formatted: exit 0. (3) mix letflow.check_boundaries: OK -- 917 edges checked, 0 violations; mix letflow.lint_handoffs: OK -- 0 new violations across 3359 handoff files (25 grandfathered); mix letflow.check_issue_refs: OK, 586 files. (4) ExUnit MIX_TEST_PARTITION=441j in 2 batches: batch A (login_discovery dir, login_discovery_test, routers/login_discovery_{mount,notifier_uniform,test,timing}, mail_runtime_config, no_smtp_secret_guard, req441_source_guards, login_discovery_runtime_config, plugs/login_discovery_rate_limit*) = 'Result: 602 passed'; batch B (admission*, application, client_ip*, identity_login_directory*, login_directory dir+runtime_config+test, obs/logger, req442*, router_test, routers/identity_login_directory, routers/req442*, secrets_runtime_config, supervisor dir, migration_replay_boot, mix/tasks login_directory tasks) = 'Result: 517 passed'. Total 1119 passed, 0 failed. (5) MIX_TEST_PARTITION=3 on the runtime-config/subprocess-shaped files (mail/login_discovery/login_directory/admission/client_ip/secrets runtime_config, no_smtp_secret_guard, req441_source_guards, smtp_application, application, infrastructure) = 'Result: 233 passed'. (6) test/docs/requirement_status_invariants_test.exs = 'Result: 25 passed'. (7) mix hex.audit: 'No retired or security advisory packages found'; git diff origin/main -- mix.lock shows exactly 2 added entries (gen_smtp 1.3.0, ranch 2.3.0), 0 removed. Full suite not run per instructions (CI is the full gate).",
     "artifacts_out": [],
-    "issues": [],
-    "next_action": ""
+    "issues": [
+      "Environment note, not a failure: docker compose up -d for this checkout failed to bind postgres host port 5472 (already allocated by letflow-2-postgres-1; this checkout's .env sets LETFLOW_DB_PORT=5472). Tests ran against that shared Postgres using unique partitions 441j and 3 with no collisions observed.",
+      "lint_handoffs prints H5 registry-coverage drift (run_ids on disk not in registry.json, pre-existing, informational); tool exit 0."
+    ],
+    "next_action": "Proceed to RELEASE-VALIDATOR / push and CI full-suite gate."
   }
 }

@@ -9,4 +9,15 @@ description: >
   Accounts for simulation org-structure personas actor-meridian-oliver, actor-vortex-dirk (role-ceo), actor-vortex-max, actor-vortex-claudia do not exist on QA: absent from ai-dala-infra qa-uat-env.sh registry (T-0150 provisioned only scenario-referenced actors). Naming is consistent (actor-<realm>-<name>); truly absent, not misnamed. Letflow persona seeds skip them (ISS-0953); vortex role-ceo group stays empty so vortex paths routed to role-ceo cannot be claimed. No current UAT scenario references these actors. Request: provision (dirk then joins role-ceo on persona-seed re-run) and add to qa-uat-env.sh, or declare them out of QA scope and drop them from the seed PERSONAS tables.
 queue_ref: Q-933  # queue issue_ref ISS-0933 may collide with an existing local file; local filename ISS-0962
 github_ref: GH-2120
-status: open
+status: resolved
+resolved_in_run: ai-dala-infra T-0158 (2026-10-05)
+resolved_at: "2026-10-05T18:21:22Z"  # queue Q-933 / GH-2120 status done, updated_at
+resolution_note: >
+  Completed outside this repo by ai-dala-infra task T-0158 (run
+  2026-10-05-letflow-qa-provision-persona-accounts-001): Keycloak accounts actor-meridian-oliver
+  (realm meridian) and actor-vortex-dirk, actor-vortex-max, actor-vortex-claudia (realm vortex)
+  created with realm role TASK_WORKER, authenticate via the QA IdP (validator PASS), registered in
+  qa-uat-env.sh/.ps1 (evidence: ai-dala-infra landscape/hosts/ubuntu-16gb-nbg1-1.md, "Persona
+  accounts (T-0158, 2026-10-05)"). Dirk's role-ceo group membership is letflow-side (persona-seed
+  re-run), recorded there as done by T-0160. No letflow code change. GitHub GH-2120 closure is the
+  queue's concern (Q-933 is already done).

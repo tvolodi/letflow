@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ442-20261005/step-05-release-validator.json",
   "created_at": "2026-10-05T12:51:08Z",
   "started_at": "2026-10-05T12:51:08Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T12:59:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -39,11 +39,13 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
+    "status": "PASS",
+    "summary": "Scoped (no full suite per parent constraint) independent re-verification: all 7 ACs PASS. AC1 PASS: MIX_TEST_PARTITION=r442x ecto.migrate/rollback/migrate all succeeded (fresh partition DB created): 'create check constraint tenants_login_disclosure_mode_check on table tenants' / rollback 'drop constraint ... alter table tenants' / re-migrate OK. Migration adds nullable string, no default, public tenants only; schema test covers 'picker_unauth' rejection (3 refs) and NULL reads for existing rows. | AC2 PASS: Identity.patch_tenant/3 (Multi update + Audit.append_multi, fail-closed :audit_failed) via existing PATCH /tenants/:slug (:TenantsManage); req442_tenants_mode_test.exs covers PLATFORM_ADMIN set + audit row, authz matrix 403 for TENANT_ADMIN/ordinary/no role, settings-route rejection. All passed. | AC3 PASS: req442_mode_exposure_test.exs asserts no mode bytes on /api/tenant-config, /api/mobile/tenant-config, PATCH /tenant/settings, /me/memberships for set and unset; tenants_test tenant_map has 7 keys only in the platform-admin Routers.Tenants shape. grep of lib/ shows login_disclosure_mode only in login_directory.ex, identity/tenant.ex, identity.ex, routers/tenants.ex. | AC4 PASS: req442_login_directory_disclose_test.exs has one test per matrix cell (deployment redirect_single x NULL/redirect_single/uniform -> true/true/false; deployment uniform x 3 -> false; inactive/migrating/nil/empty realm yield no row), telemetry-based single-query check; passed. | AC5 PASS (allowlist clause N/A): tenant_match is %{slug, display_name, disclose} only (exact-keys test + source grep; no id/idp_realm_id/stored mode returned). REQ-437 allowlist test does not exist yet (no test file for 437 / login discovery found) so 'unmodified' is N/A, confirmed. | AC6 PASS: lookup query has no :prefix, exactly one Repo.all(query, log: false); tests for no-prefix, log:false and source gate passed. | AC7 PASS for scoped gate: mix compile --warnings-as-errors --force rc=0; mix format --check-formatted rc=0; 'mix letflow.check_boundaries: OK -- 965 edges checked, 0 violations'; 8 files (4 req442 + tenants_test, login_directory_test, tenant_config_test, mobile_tenant_config_test) 'Result: 175 passed', rc=0, 0 'default values for the optional arguments' hits. SECURITY-REVIEWER (step-02c) verdict PASS 0 blockers recorded against INV-1/2/5/6; REVIEWER (step-02d) PASS. | Other checks: config/runtime.exs and all of config/ untouched vs merge-base 5b56822a (git diff vs stale origin/main shows runtime.exs only because main advanced with Q-954/ISS-0987); no new env var in the touched lib files; docs/requirements.yaml REQ-442 still status: pending (DOC-UPDATER to flip). CAVEAT: I ran `mix letflow.check.test`, which shells to the FULL scripts/test_parallel.sh (I did not know it was full-suite; it contradicts the scoped constraint); it exited 1 (\"scripts/test_parallel.sh exited 1 (real test failure/error)\") after roughly a minute and its partition logs were already cleaned up, so the cause is undiagnosed (could be resource pressure or a pre-existing failure; not attributed to REQ-442 since all 175 targeted tests pass). Full-suite verification is therefore NOT established here; recommend CI / a full run on a machine with RAM before merge.",
     "artifacts_out": [],
-    "issues": [],
-    "next_action": null
+    "issues": [
+      "mix letflow.check.test (full suite) exited 1 in this worktree; log dir removed, cause undiagnosed; full-suite state unverified by RELEASE-VALIDATOR. Not caused by anything identified in REQ-442 scope."
+    ],
+    "next_action": "DOC-UPDATER"
   },
   "rework_count": 0
 }

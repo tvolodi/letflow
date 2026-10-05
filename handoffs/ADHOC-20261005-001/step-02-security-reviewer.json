@@ -8,7 +8,7 @@
   "file": "handoffs/ADHOC-20261005-001/step-02-security-reviewer.json",
   "created_at": "2026-10-05T03:50:00Z",
   "started_at": null,
-  "completed_at": "2026-10-05T03:26:11Z",
+  "completed_at": "2026-10-05T03:32:04Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
@@ -61,102 +61,88 @@
     ]
   },
   "result": {
-    "status": "FAIL",
-    "summary": "SECURITY-REVIEWER verdict on PROPOSED 0044: FAIL (rework to CODE-DESIGNER; additive text, recommendation need not change). 0 BLOCKER, 6 MAJOR, 3 MINOR, 1 ADVICE. Scope: design record only, no code diff; tenant-data-path scope test met by subject matter (identity/tenancy); INV-6 applied as a design-intent review. The ADR is largely honest: JIT-off, selector-as-hint, roles-from-local-groups, per-tenant users rows, PROPOSED status, spike gating, and the 0006 s3.2 / 0002 / 0038 point 4 amendments are stated and bounded; citations to auth_pipeline.ex, identity.ex, tenant_config.ex, jit_provisioning_config.ex and 0006/0042 passages verified against the files. FAIL drivers: SR-1 (6.5 says 0042 prohibitions untouched but domain routing breaks 6, 7, 11), SR-2 (0006 s3.2 replacement is an app-level invariant presented without saying it downgrades a DB constraint; no single-writer rule), SR-3 (JIT-off fails open today: JitProvisioningConfig default enabled: true; role-claim sync could copy shared roles), SR-4 (no disjointness between shared realm and tenants.idp_realm_id), SR-5 (INV-5 equivalence under-specified: status vs membership order, round-trip parity, distinguishable pipeline bodies), SR-6 (invitation binding / email_verified / token lifecycle absent). INV mapping in 2.1, 2.3.7 and 6.7: line ranges (46-75, 79-114, 118-140, 144-172, 176-206, 210-227, 231-250, 254-290, 332-382) match security-invariants.md and per-invariant content is correct except 2.1's INV-9 wording (SR-7). 2.3.7 lists INV-1..INV-8 and refers to 6.7 for INV-9: acceptable. By item: (a) sound in principle (prefix from resolved tenant id; roles from local groups read live per request) but SR-3/4/5/6/9; (b) amendments honest and bounded except SR-2, SR-8; (c) SR-1; (d) verified, SR-7; (e) SR-6, SR-9, SR-10. Not a verdict on choosing O1/O2/O3.",
+    "status": "PASS",
+    "round": 2,
+    "summary": "SECURITY-REVIEWER re-review of 0044 after rework 2 (commit 3ea301b8): PASS. 0 BLOCKER, 0 MAJOR, 4 MINOR, 1 ADVICE. All of SR-1..SR-9 are resolved in the text and SR-10 is carried as 2.3.9; the previous FAIL drivers (domain routing vs 0042 prohibitions, 0006 s3.2 downgrade, fail-open JIT default, realm disjointness, INV-5 ordering/decoy/collapsed response, invitation security) are now stated correctly and bounded. Coherence check: 'never a 200 in Mode A / uniform tenant' plus 'one joined constant-work query' is consistent with 0042 prohibitions 6, 7, 11 (6.5 correctly lists them as AMENDS for Phase 4) and with 0043 D-A (200 only for exactly one active match with disclose true; uniform tenant byte-identical to unknown); the only gap is that the named residual oracle is understated (N-1). Quotes verified against sources (14 checked, all match modulo em-dash rendering and ellipses): 0002:168-171 (sole source of truth) and 190-195 (one shared host, N realms, bare realm slug); 0035:39-42 (Keycloak-hosted-only login is the correct, working, intended production architecture) and 15-17 (no /login route; file is 0035-frontend-login-delegated-to-keycloak.md); 0038:65-75, 76-81 (point 4), 100-103 (no automatic/JIT membership rows); 0043:229-233 (D-G deferred) and 187-192 (D-E); 0042:111-114 (scope fence), 160-163 (what remains unchanged); 0006:296-297 (7.3), 188-195, 303-306. INV-1..INV-9 mapping in 2.1, 2.3.7, 6.7 re-checked against security-invariants.md: correct. The remaining MINORs are wording/scope fixes that Phase 2 acceptance can absorb; none changes the soundness of the proposal. Not a verdict on choosing O1/O2/O3.",
+    "previous_findings_status": {
+      "SR-1": "RESOLVED: 2.3.2 item 3 now forbids a second-lookup fallback (one joined constant-work query, or not at discovery), never a 200 in Mode A / uniform tenant; 6.5 lists AMENDS for prohibitions 6, 7, 11 and narrows CONSISTENT to 1-5, 8-10, 12-14 in Phases 1-3; R-7 and Phase 4 row updated. Coherent with 0043 D-A (200 only when exactly one active match AND disclose true; uniform tenants byte-identical to unknown). See N-1 for a residual understatement.",
+      "SR-2": "RESOLVED: 2.3.4 and 6.2 call it a DOWNGRADE from DB constraint to application invariant, require one dedicated writer distinct from provision_oidc_user/4, refusal in create_user/2 and update_user_profile/3 (both exist, identity.ex:227, 337) and a DB backstop or explicit statement. Minor wording residual N-4.",
+      "SR-3": "RESOLVED: 2.3.5 4a (structural branch, never calls provision_oidc_user/sync_role_claims_from_token) and 4b (fail-open default documented with accurate citations, absent-realm test as Phase 2 acceptance). Residual N-2.",
+      "SR-4": "RESOLVED: 2.3.4 rules (i) disjointness (changeset, creation, trigger or boot assertion) and (ii) realm kind decided once before resolve_tenant; S-11 and Phase 2 row carry them.",
+      "SR-5": "RESOLVED: 2.3.5 item 3 fixes ordering slug -> membership -> status, one collapsed byte-identical response (distinct current bodies named), decoy query for round-trip parity, Phase 2 tests for equal round trips and bytes. Advice N-5.",
+      "SR-6": "RESOLVED: new 2.3.8 covers binding to (realm, sub), email_verified and address match, 128-bit hashed single-use expiring token, leak handling, rate limiting, collapsed response, single writer. Contradiction N-3 on path vs fragment.",
+      "SR-7": "RESOLVED: 2.1 INV-9 wording now correct (no tenant-controlled outbound URL; notifier carries no tenant-derived URL).",
+      "SR-8": "RESOLVED: S-11 now requires full issuer check and that a shared-realm token cannot satisfy a dedicated chain.",
+      "SR-9": "RESOLVED: org-claim rule stated once (2.3.5 item 5; 2.2 points to it; refusal only for a per-organisation token naming a different org); item 6 states revocation bound and offboarding.",
+      "SR-10": "RESOLVED as advice: 2.3.9 adds mutable email / no auto-link by email, break-glass, per-tenant audit, SSO/logout scope, mobile refresh token, directory never membership source."
+    },
     "issues": [
       {
-        "id": "SR-1",
-        "severity": "MAJOR",
-        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 6.5 (first bullet), 2.3.1 steps 2-3, 2.3.2 item 3, 2.3.7, R-7",
-        "finding": "Domain-based routing is described as leaving the discovery contract 'unchanged' and 6.5 marks 0042 Standing prohibitions 1-14 CONSISTENT. A domain fallback consulted 'only when the directory returns nothing' (2.3.2 item 3) breaks prohibition 7 (one DB round trip before any response decision, no second query; 0042 lines 257-260) because the miss path now runs a second query, a timing signal between 'email known' and 'email unknown at a routed domain'. It also turns the 202 into a 200 {slug, display_name} for ANY local part at a routed domain, including Mode A (never meant to disclose) and per-tenant uniform tenants (REQ-442): an input-differentiated response against prohibition 6 and a new disclosure source under prohibition 11. R-7's mitigation says 'uniform response' without saying how a 200 for a routed domain can be uniform with a 202 for an unrouted one.",
-        "required": "Move domain routing from CONSISTENT to AMENDS (0042 prohibitions 6, 7, 11) in 6.5. State that Phase 4 must either do one joined query (directory plus domain table, constant work on all paths) and answer domain-routed results only through the same Mode/uniform rules (never 200 in Mode A/uniform), or give nothing tenant-specific at the discovery step and route by domain elsewhere. Name the residual domain-level oracle explicitly."
-      },
-      {
-        "id": "SR-2",
-        "severity": "MAJOR",
-        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.4 (0006 s3.2 bullet), 2.3.5 item 3, R-1",
-        "finding": "The 0006 s3.2 amendment is stated honestly as 'false BY DESIGN', but the replacement guarantee ('a row exists in schema T only if an invitation or admin action created it') is an application-level property, whereas the guarantee replaced was DB-enforced (tenants_idp_realm_id_partial_index, 0006 lines 138-141, 188-195). The ADR does not say it is a downgrade from a database constraint to code discipline and does not require it to be structural. provision_oidc_user/4 (identity.ex:127; upsert at 1745-1848) IS the JIT insert, so 'invitation acceptance through the same Identity functions' (2.3.2) would keep the JIT path alive; other users writers (create/update around identity.ex:216, 327) could also set external_realm to the shared realm.",
-        "required": "Amend 2.3.4 and 6.2 to say the guarantee moves from DB constraint to application invariant. Require (a) a single dedicated writer for shared-realm users rows (invitation acceptance), distinct from provision_oidc_user, (b) every other writer refuses a shared external_realm, (c) a DB backstop where feasible (trigger/CHECK against shared_identity_realms, or invitation reference NOT NULL) or an explicit statement that none is feasible."
-      },
-      {
-        "id": "SR-3",
-        "severity": "MAJOR",
-        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.2 'What the caller can NOT choose', 2.3.5 item 4, R-9; lib/letflow/oidc/jit_provisioning_config.ex:37-80",
-        "finding": "'JIT off for the shared realm' is necessary but the ADR does not note it is configuration that FAILS OPEN today: JitProvisioningConfig.for_realm/1 falls back to default/1 = enabled: true, default_status: :active for any realm absent from config :letflow, :oidc_jit_provisioning. A shared realm missing from that map (or a key typo) is JIT-on, which is exactly the R-1 scenario. Same keyed-by-realm fallback applies to ClaimMappingConfig and to sync_role_claims_from_token (identity.ex:1752-1756, 1805, 1865-1867), which also runs on first login of an existing row whose marker is nil: with realm-wide shared roles in the token it could copy a shared-realm ADMIN role into every tenant where the user has a row.",
-        "required": "Require the shared-realm branch to be structural: selected by the shared_identity_realms row, it must never call provision_oidc_user or sync_role_claims_from_token, and the fallback for an unconfigured realm must become deny (typed error) not enabled: true. Add as a Phase 2 acceptance property with a test that a shared realm absent from every config map still cannot create a row."
-      },
-      {
-        "id": "SR-4",
-        "severity": "MAJOR",
-        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.4 (new platform-level binding), 6.1; auth_pipeline.ex:126-133; identity.ex:150-151, 192-195",
-        "finding": "The ADR does not require shared_identity_realms and tenants.idp_realm_id to be DISJOINT. The pipeline resolves tenant by realm first (auth_pipeline.ex:128). If the shared realm name were ever also bound as some tenant's idp_realm_id (admin or seed mistake; the unique index on tenants alone cannot prevent it), every shared-realm token would authenticate into that dedicated tenant through the unchanged chain, with default-on JIT (SR-3). Position of the new branch relative to resolve_tenant/guard_realm_ownership is also unspecified.",
-        "required": "Add a cross-table disjointness rule (Tenant.create_changeset, shared-realm creation, plus DB trigger or boot assertion) and state that the realm-kind decision (dedicated vs shared) is made once, before resolve_tenant, from the revocable DB row."
-      },
-      {
-        "id": "SR-5",
-        "severity": "MAJOR",
-        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.5 items 3 and 6, 6.7 INV-5 row; auth_pipeline.ex:152-191",
-        "finding": "The INV-5 equivalence class ('no membership equals no such tenant, equal round trips') is under-specified. (i) Item 6 enforces TenantStatus 'after resolution'; if status is checked before membership a non-member sees 403 for inactive/migrating tenants but 404 for non-existent ones, an existence oracle. Membership must be decided first, status second. (ii) A non-existent slug costs zero tenant-schema queries while a real tenant costs a users lookup; round-trip parity needs a deliberate decoy query, which the ADR does not say. (iii) handle_auth_error today emits distinguishable bodies (401 'token realm does not match tenant', 403 'JIT provisioning disabled for this realm', 403 'account is inactive'); the selector path must collapse unknown slug, non-member and not-invited into one status and body. INV-5 requires byte-identical bodies and comparable round trips (security-invariants.md lines 199-204).",
-        "required": "State the ordering (slug -> membership -> status), the uniform-cost mechanism, and the single collapsed response. A caller's own inactive row revealing itself is acceptable; it must not reveal other tenants."
-      },
-      {
-        "id": "SR-6",
-        "severity": "MAJOR",
-        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.1 step 1, 2.3.2 item 4, 2.3.4 ('invitation acceptance'); absent elsewhere",
-        "finding": "Invitation is the ONLY way a shared-tier users row is created, yet the ADR says nothing on how an invitation binds to a person: tie to the authenticated (shared realm, sub) at acceptance (binding by email would be account linking by email), whether email_verified must be true and match the invited address (the string email_verified appears nowhere in the ADR), token entropy/expiry/single-use/hashed storage, protection of /invite/<token> from access logs and Referer, rate limiting. Citing 0028 is a weak analogy: 0028 handles gate unauthenticated READS; an invitation token is a bearer capability to MUTATE membership. With self-registration on in the shared realm, an attacker could register victim@x unverified and accept the invitation addressed to victim@x.",
-        "required": "Add an invitation-security subsection, or an explicit list of constraints Phase 2/3 must carry: binding to sub, verified-email requirement, token lifecycle, URL-leak handling, INV-5/INV-6 treatment of the /invite route."
-      },
-      {
-        "id": "SR-7",
+        "id": "N-1",
         "severity": "MINOR",
-        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.1 'Security-invariant impact' last bullet",
-        "finding": "'INV-9: no server-built redirect from tenant text' misstates INV-9. INV-9 (security-invariants.md 332-382) concerns server-originated outbound HTTP requests to tenant-controlled URLs (https-only plus private-range rejection before each request). 6.7 and 2.2 describe it correctly; 2.1 does not.",
-        "required": "Reword: no tenant-controlled outbound URL is requested by Letflow in Phase 1; notifier carries no tenant-derived URL (0042 prohibition 12)."
+        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.2 item 3 (residual oracle), R-7, 2.3.7",
+        "finding": "The named residual says 'domain-level, not person-level'. Under form (a) it is not purely domain-level: at a routed domain a lone routed tenant gives 200 (disclosing tenant), but if the same address ALSO has a directory row in another tenant the match set is multi (0043 D-A: 200 only for exactly ONE active match), so the response is 202. 200 vs 202 therefore reveals, for any mailbox at that domain, whether it is registered in some other tenant. Also, for a uniform tenant a domain match would e-mail a tenant list to any local part at the domain, including mailboxes that do not exist (notifier amplification, bounded by the per-address and per-IP limits). Not a prohibition breach (the 0042 single-match inference is already accepted) but the record understates it.",
+        "required": "Restate the residual to include 'address also registered elsewhere' and the notifier behaviour for domain-only matches; require dedupe by tenant when the same tenant matches by directory and by domain; decide whether domain-only matches may trigger e-mail at all."
       },
       {
-        "id": "SR-8",
+        "id": "N-2",
         "severity": "MINOR",
-        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.4 (0002 'sole source'), 6.1, S-11; oidcc.ex:147-156",
-        "finding": "The 0002 amendment is correctly bounded and honest (revocable database row, same trust gate). Residual: the verifier uses ONE config client_id for all realms and extract_realm keeps only the realm slug from iss, ignoring the issuer host; a shared realm adds a second realm class under the same audience check. S-11 asks only whether validation passes, not whether it is narrow enough.",
-        "required": "Add to S-11/Phase 2 acceptance: full issuer (base URL plus realm) is checked, and a token from the shared realm client cannot satisfy a dedicated tenant's chain (see SR-4)."
+        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.5 item 4b, Phase 2 acceptance; config/prod.exs:32-38, config/dev.exs:137-143",
+        "finding": "4b says the unconfigured-realm fallback 'must become a typed deny' and requires a test. The ADR does not note that every existing dedicated realm other than bpm-default (QA: bilimbaga, swiftroute, meridian, vortex) is absent from the JIT map in config/prod.exs and dev.exs and today relies on the fail-open default. A global deny would block their first-time logins. The statement needs scope: either deny for realms classed shared (the shared branch never reads these maps per 4a), or an explicit prior step adding entries for all existing realms.",
+        "required": "State the scope and the ordering (populate explicit entries for existing realms, then flip the default)."
       },
       {
-        "id": "SR-9",
+        "id": "N-3",
         "severity": "MINOR",
-        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.2 selector paragraph vs 2.3.5 item 5; S-3; R-9",
-        "finding": "2.2 says a disagreeing org claim 'refuses the request' while 2.3.5 item 5 calls it 'a cross-check, never the authority'. A claim listing all memberships (S-3) can legitimately differ from the selector. Deactivation propagation is only half-stated: Letflow deactivation is immediate per request (auth_pipeline.ex:353-363 reads users.status live, verified), but a Keycloak-side disable or sub change does not revoke already-issued access tokens until expiry, and central account deletion leaves orphan rows keyed to a dead sub.",
-        "required": "Make the org-claim rule consistent; state the access-token lifetime as the revocation bound; add an offboarding procedure fanning central disable/deletion out to local users rows."
+        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.1 step 1, 2.3.2 item 4, 6.3 versus 2.3.8 item 4",
+        "finding": "The route is written `/invite/<opaque token>` (path) in 2.3.1/2.3.2/6.3, but 2.3.8 item 4 requires the token not to reach access logs and to be read from the URL fragment. A path segment is sent to the SPA host and appears in its access logs; only a fragment (`/invite#<token>`) does not. Internal contradiction.",
+        "required": "Change the route form to a fragment (or state the path form is logged-and-hashed and why acceptable) consistently."
       },
       {
-        "id": "SR-10",
+        "id": "N-4",
+        "severity": "MINOR",
+        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.4 replacement guarantee ('invitation or admin action created it'), 2.2 ('or equivalent'), Phase 5 / 2.2 migration (re-link by email)",
+        "finding": "The replacement guarantee still says rows exist only if 'an invitation or admin action created it', while (a)/(b) in the same bullet say exactly ONE writer (invitation acceptance) and create_user/2 must refuse shared realms. 2.2 keeps 'tenant-admin invitation or equivalent'. The Phase 5 re-link tool matches by email and rewrites external_realm/external_id, which would be a second writer of shared-realm rows and is account linking by e-mail, against 2.3.9 and 2.3.8 item 1.",
+        "required": "Reword the guarantee to 'only the invitation-acceptance writer'; drop 'or equivalent'; require Phase 5 re-link to be an operator tool bound to a verified (realm, sub) and to be listed as the sole exception to the single writer."
+      },
+      {
+        "id": "N-5",
         "severity": "ADVICE",
-        "where": "ADR omissions (task item e)",
-        "finding": "Not covered and worth a line each in Phase 2/3 scope: (1) account takeover via mutable email in the central realm (profile email edit, first-broker-login linking by email) since invitations, domain routing and the directory all key on email; (2) Q5 break-glass admin needs audit trail and credential custody (INV-4); (3) per-tenant audit trail of membership grants/removals and shared-realm logins that does not require reading the central realm; (4) logout/session scope: the shared-realm SSO session spans tenants (S-14 asks, no requirement); (5) mobile token storage: one shared-realm refresh token is valid for every tenant of the user, unlike per-realm tokens, so the MOB-5 revision must address storage and per-tenant binding; (6) make explicit that the directory (0042 prohibition 10) never becomes the shared-tier membership source.",
-        "required": "None blocking."
+        "where": "docs/migration/decisions/0044-hybrid-identity-model.md 2.3.5 item 3 'Uniform cost'",
+        "finding": "'Fixed decoy target' is not defined. For parity the decoy must run the same query shape against a real tenant-schema users table with the same indexes, and the unknown-slug and non-member paths must also match in schema derivation and error construction cost; round-trip count alone is a weak proxy for timing.",
+        "required": "Define the decoy and add a coarse timing assertion to the Phase 2 tests, or accept round trips as the INV-5 standard (as security-invariants.md:199-204 words it)."
       }
     ],
-    "invariants_assessed": {
-      "INV-1": "APPLIES (design intent): prefix stays derived from server-resolved tenant id; selector path needs scoping proof. No violation in the record; see SR-2, SR-4.",
-      "INV-2": "APPLIES: tenant-config shared branch must be a hand-built allowlist, roles never from token; ADR says so. SR-3 for role-claim sync.",
-      "INV-3": "NOT-APPLICABLE (no Lua/WASM).",
-      "INV-4": "APPLIES: pepper/SMTP by reference; Keycloak Admin client credential and break-glass admin are new standing secrets (SR-10); invitation tokens hashed at rest (SR-6).",
-      "INV-5": "APPLIES: equivalence class under-specified (SR-5); domain routing uniformity (SR-1).",
-      "INV-6": "APPLIES: ADR defers per-path proofs to Phase 2-4; this is the design-level pass; Phase 2 re-derivation of 0006 s3.2 still required.",
-      "INV-7": "APPLIES, no concern in a design record (parameterised Ecto for new tables).",
-      "INV-8": "APPLIES: typed errors for unknown selector / missing org claim / Keycloak outage; ADR states this.",
-      "INV-9": "APPLIES in later phases (Admin client forwarding IdP URLs, R-6); 2.1 wording wrong (SR-7)."
-    },
+    "quotes_verified": [
+      "0002:168-171",
+      "0002:190-195",
+      "0035:39-42",
+      "0035:15-17",
+      "0038:65-75",
+      "0038:76-81",
+      "0038:100-103",
+      "0043:229-233",
+      "0043:187-192",
+      "0042:111-114",
+      "0042:160-163",
+      "0006:296-297",
+      "0006:188-195",
+      "0006:303-306"
+    ],
     "files_read": [
       "docs/migration/decisions/0044-hybrid-identity-model.md",
       "docs/agents/instructions/security-invariants.md",
+      "docs/migration/decisions/0002-oidc-integration.md",
       "docs/migration/decisions/0006-identity-tables-schema-per-tenant.md",
+      "docs/migration/decisions/0035-frontend-login-delegated-to-keycloak.md",
+      "docs/migration/decisions/0038-tenant-membership-lookup-amendment.md",
       "docs/migration/decisions/0042-email-first-login-tenant-directory.md",
+      "docs/migration/decisions/0043-email-first-login-ba-decisions.md",
       "lib/letflow/plugs/auth_pipeline.ex",
       "lib/letflow/identity.ex",
       "lib/letflow/oidc/jit_provisioning_config.ex",
-      "lib/letflow/oidc/token_verifier/oidcc.ex",
-      "lib/letflow/routers/tenant_config.ex"
-    ],
-    "not_read_in_full": "0002, 0028, 0035, 0038, 0043 not re-read in full; ADR quotes of them were not independently re-verified beyond what the cited 0006/0042 text and the code show."
+      "config/prod.exs",
+      "config/dev.exs"
+    ]
   }
 }

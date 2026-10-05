@@ -200,11 +200,13 @@ Design: `lib/letflow/design/iss0993-platform-scope-separation.md`.
 - A handler that receives a tenant identifier from the request must call
   `Letflow.Api.TenantTarget.authorize_target_tenant/2` before any lookup and map
   `{:error, :not_found}` to the zero-argument `Response.not_found/1` (404, INV-5).
-  (Wired in A2; in A1 the helper exists but no handler calls it yet.)
+  `:Unknown` is denied for every role, so a route without an explicit key answers 403.
 - Promotion access goes through `Letflow.Definitions.PromotionAccess.checker_for/1`, not an
-  allow-all checker. (Wired in A2; in A1 it exists but no call site uses it yet.)
-- Never log tenant ids, role names or tokens (the platform shadow log carries only the
-  policy key and one boolean).
+  allow-all checker (the old default was deleted).
+- `POST /identity/roles` refuses the `PLATFORM_ADMIN` name unless the caller holds platform
+  scope (`Authorization.platform_admin_name?/1`); the platform tenant can never be
+  deactivated (`Identity.deactivate_tenant/1` returns `:platform_tenant_protected`).
+- Never log tenant ids, role names or tokens; denial responses are fixed shapes.
 
 ---
 

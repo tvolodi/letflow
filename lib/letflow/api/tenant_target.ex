@@ -4,8 +4,8 @@ defmodule Letflow.Api.TenantTarget do
   query or body) is the caller's own tenant, or that the caller holds platform
   scope (ISS-0993 design section 8). Pure: no DB, no `Repo`.
 
-  A1 ships this helper and does NOT call it from any handler yet (A2 wires it
-  into the platform and promotion handlers).
+  Called by the tenant-naming handlers (`Letflow.Routers.Tenants`,
+  `Letflow.Routers.Promotions`) before any lookup of the named tenant.
 
   Rules, in order:
 

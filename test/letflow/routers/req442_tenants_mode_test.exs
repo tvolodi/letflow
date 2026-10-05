@@ -18,6 +18,7 @@ defmodule Letflow.Routers.Req442TenantsModeTest do
   import Plug.Conn
   import Ecto.Query, only: [from: 2]
 
+  alias Letflow.Support.PlatformTenantFixture
   alias Letflow.Audit.Entry
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
@@ -49,11 +50,10 @@ defmodule Letflow.Routers.Req442TenantsModeTest do
       end
 
     conn
-    |> assign(:auth_context, %{
-      user_id: user_id,
-      tenant_id: Ecto.UUID.generate(),
-      roles: roles
-    })
+    |> assign(
+      :auth_context,
+      PlatformTenantFixture.operator_auth_context(user_id, Ecto.UUID.generate(), roles)
+    )
     |> assign(:trace_id, "req442-trace-id")
   end
 

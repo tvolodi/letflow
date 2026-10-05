@@ -576,6 +576,24 @@ defmodule Letflow.Api.Authorization do
     |> Enum.uniq()
   end
 
+  @doc """
+  ISS-0993 hardening H1 (design section 10): true iff `name` is, or could be
+  mistaken for, the `PLATFORM_ADMIN` role name. ONE predicate for the
+  `POST /roles` guard: it is built on `roles_from_strings/1` (the parser that
+  turns stored and token role strings into roles, so any alias the parser later
+  accepts is covered by construction) OR a deliberately stricter fold
+  (`String.trim/1` + `String.upcase/1`) so a later loosening of the parser
+  cannot open a bypass. A non-binary `name` is `false` (the handler 422s it
+  before this check).
+  """
+  @spec platform_admin_name?(term()) :: boolean()
+  def platform_admin_name?(name) when is_binary(name) do
+    :PLATFORM_ADMIN in roles_from_strings([name]) or
+      name |> String.trim() |> String.upcase() == "PLATFORM_ADMIN"
+  end
+
+  def platform_admin_name?(_other), do: false
+
   defp role_from_string("PLATFORM_ADMIN"), do: :PLATFORM_ADMIN
   defp role_from_string("PROCESS_DESIGNER"), do: :PROCESS_DESIGNER
   defp role_from_string("PROCESS_OPERATOR"), do: :PROCESS_OPERATOR
@@ -1036,12 +1054,11 @@ defmodule Letflow.Api.Authorization do
   @spec evaluate_access(AccessContext.t(), endpoint_policy_key()) :: AccessDecision.t()
   def evaluate_access(%AccessContext{} = ctx, endpoint) do
     cond do
+      # ISS-0993 rule 1 (design section 6, A2): `:Unknown` is denied for EVERY
+      # role, PLATFORM_ADMIN included. Every route declares an explicit key;
+      # router catch-alls carry the markers below instead.
       endpoint == :Unknown ->
-        if has_role?(ctx.roles, :PLATFORM_ADMIN) do
-          %AccessDecision{kind: :Allow, task_scope: nil}
-        else
-          %AccessDecision{kind: :Deny403, task_scope: nil}
-        end
+        %AccessDecision{kind: :Deny403, task_scope: nil}
 
       # ISS-0993 rule 1a (design section 6/7.5): router catch-all markers (not
       # permissions, not routes). :UnmatchedPlatformPath (the five platform
@@ -1067,8 +1084,6 @@ defmodule Letflow.Api.Authorization do
         # ISS-0993 rule 3: a platform-scope permission is denied unless the
         # caller is a PLATFORM_ADMIN of the platform tenant; evaluated before
         # the role matrix so the PLATFORM_ADMIN catch-all cannot bypass it.
-        # (A1: Letflow.Plugs.Authorize forces platform_tenant? to true for
-        # enforcement and uses the real value only for shadow logging.)
         if not has_permission_in_scope?(ctx.roles, required, ctx.platform_tenant?) do
           %AccessDecision{kind: :Deny403, task_scope: nil}
         else

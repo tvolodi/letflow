@@ -12,8 +12,9 @@ defmodule Letflow.Plugs.TenantStatus do
      specific to check 2 below). Runs for **every** HTTP method, including
      `GET`/`HEAD`, matching R-Co's `enforceTenantActiveForOperation`/
      `isTenantInactive` (`src/identity/service.zig:133-151`,
-     `src/api/middleware/auth.zig:1663-1674`). PLATFORM_ADMIN callers are
-     exempt. Authorized exactly in this shape by REVIEWER — see
+     `src/api/middleware/auth.zig:1663-1674`). ISS-0993 (A2): the exemption now applies ONLY
+     to a `PLATFORM_ADMIN` of the platform tenant (`Letflow.PlatformTenant`); a
+     `PLATFORM_ADMIN` of the inactive tenant itself is halted. Authorized exactly in this shape by REVIEWER — see
      `docs/migration/stage-4-api-surface.md`'s 2026-08-22 (REQ-075) sign-off
      entry; do not narrow to write-only or widen the exemption without a
      fresh sign-off.
@@ -57,14 +58,12 @@ defmodule Letflow.Plugs.TenantStatus do
 
   import Plug.Conn
 
-  alias Letflow.Api.Authorization
   alias Letflow.Identity.Tenant
+  alias Letflow.PlatformTenant
   alias Letflow.Repo
 
   @write_methods ~w(POST PUT PATCH DELETE)
   @retry_after_seconds "30"
-  # ISS-0808: atom form so the comparison uses the same type as Authorization.roles_from_strings/1.
-  @platform_admin :PLATFORM_ADMIN
 
   @impl Plug
   def init(opts), do: opts
@@ -91,15 +90,17 @@ defmodule Letflow.Plugs.TenantStatus do
         conn
 
       %Tenant{} = tenant ->
-        # ISS-0808: use Authorization.roles_from_strings/1 rather than a raw
-        # string-list check so this path shares the same normalization as every
-        # other authorization consumer. If roles_from_strings/1 ever changes its
-        # handling (case, aliasing, a role rename), this check moves with it.
+        # ISS-0993 / INV-10 (A2): the deactivated-tenant exemption belongs ONLY
+        # to a PLATFORM_ADMIN of the platform tenant. The facts are recomputed
+        # from the resolved row id and the raw role strings through
+        # PlatformTenant.scope_facts/2 (which parses roles with
+        # Authorization.roles_from_strings/1, the ISS-0808 normalisation), so a
+        # PLATFORM_ADMIN of the deactivated tenant itself is halted.
         raw_roles = get_in(conn.assigns, [:auth_context, :roles]) || []
-        roles = Authorization.roles_from_strings(raw_roles)
+        platform_scope? = PlatformTenant.scope_facts(tenant.id, raw_roles).platform_scope?
 
         cond do
-          tenant.status == :inactive and @platform_admin not in roles ->
+          tenant.status == :inactive and not platform_scope? ->
             reject_inactive(conn)
 
           conn.method in @write_methods and tenant.status == :migrating ->

@@ -31,6 +31,7 @@ defmodule Letflow.ServiceCatalogDeletePinnedInstancesTest do
   import Plug.Conn
   import Plug.Test
 
+  alias Letflow.Support.PlatformTenantFixture
   alias Ecto.Adapters.SQL.Sandbox
   alias Letflow.Definitions
   alias Letflow.Definitions.InstanceDefinitionSnapshot
@@ -706,11 +707,14 @@ defmodule Letflow.ServiceCatalogDeletePinnedInstancesTest do
 
   defp http_delete(service_id, roles) do
     conn(:delete, "/#{service_id}")
-    |> assign(:auth_context, %{
-      user_id: Ecto.UUID.generate(),
-      tenant_id: Ecto.UUID.generate(),
-      roles: roles
-    })
+    |> assign(
+      :auth_context,
+      PlatformTenantFixture.operator_auth_context(
+        Ecto.UUID.generate(),
+        Ecto.UUID.generate(),
+        roles
+      )
+    )
     |> assign(:trace_id, "fixed-test-trace-id")
     |> then(&Letflow.Routers.AdminServices.call(&1, @opts))
   end

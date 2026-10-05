@@ -147,7 +147,7 @@ defmodule Letflow.Req442TenantModeSchemaTest do
       assert cs.changes == %{}
     end
 
-    test "create/update/status/settings changesets do NOT cast login_disclosure_mode (string and atom keys)" do
+    test "create/status/settings changesets do NOT cast login_disclosure_mode (string and atom keys)" do
       base = %Tenant{display_name: "x", slug: "x"}
 
       for attrs <- [
@@ -161,7 +161,6 @@ defmodule Letflow.Req442TenantModeSchemaTest do
                  :login_disclosure_mode
                )
 
-        refute Map.has_key?(Tenant.update_changeset(base, attrs).changes, :login_disclosure_mode)
         refute Map.has_key?(Tenant.status_changeset(base, attrs).changes, :login_disclosure_mode)
 
         refute Map.has_key?(

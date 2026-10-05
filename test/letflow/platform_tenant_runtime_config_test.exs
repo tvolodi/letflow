@@ -40,7 +40,7 @@ defmodule Letflow.PlatformTenantRuntimeConfigTest do
   @previous_id "LETFLOW_LOGIN_DIRECTORY_PEPPER_PREVIOUS_ID"
   @master_key String.duplicate("3f1c9a2e7b4d6081", 4)
 
-  @warning "LETFLOW_PLATFORM_TENANT_ID is unset: platform scope is not enforced yet (shadow mode)."
+  @warning "LETFLOW_PLATFORM_TENANT_ID is unset: platform-scope operations are denied for every caller."
 
   @probe ~S|IO.puts("RESULT " <> inspect(Application.get_env(:letflow, Letflow.PlatformTenant)))|
 

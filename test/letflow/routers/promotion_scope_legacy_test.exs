@@ -1,6 +1,6 @@
 defmodule Letflow.Routers.PromotionScopeLegacyTest do
   @moduledoc """
-  ISS-0993 / ISS-0994 design section 12 items 7 and 8, A1 variants (spec
+  ISS-0993 / ISS-0994 design section 12 items 7 and 8, A2 enforcing variants (converted in place) (spec
   `test/specs/ISS-0993-A1.md`): the twelve routes that used to be declared without a policy key
   (rows 23-34 of design 7.2) now carry explicit TENANT-scope keys; in A1 no handler checks a
   caller-supplied tenant id yet, so the LEGACY behaviour is asserted.
@@ -113,10 +113,10 @@ defmodule Letflow.Routers.PromotionScopeLegacyTest do
       end
     end
 
-    test "legacy: a plan or submit naming another existing tenant as source is not rejected for ownership",
+    test "A2: a plan or submit naming another existing tenant as source is the byte-identical 404 of a nonexistent one",
          ctx do
       for path <- ["/plan", "/"] do
-        resp =
+        foreign =
           dispatch(
             Letflow.Routers.Promotions,
             Fixture.router_conn(
@@ -128,12 +128,25 @@ defmodule Letflow.Routers.PromotionScopeLegacyTest do
             )
           )
 
-        assert resp.status == 422
-        assert Jason.decode!(resp.resp_body)["title"] == "Empty Promotion Plan"
+        nonexistent =
+          dispatch(
+            Letflow.Routers.Promotions,
+            Fixture.router_conn(
+              :post,
+              path,
+              ctx.a,
+              ["PLATFORM_ADMIN"],
+              plan_body(Ecto.UUID.generate(), ctx.a.tenant_id)
+            )
+          )
+
+        assert foreign.status == 404
+        assert nonexistent.status == 404
+        assert foreign.resp_body == nonexistent.resp_body
       end
     end
 
-    test "legacy: the promote route with another existing tenant as source reaches the domain logic (404, source definition missing)",
+    test "A2: the promote route with another existing tenant as source is 404 before any source read",
          ctx do
       resp =
         dispatch(

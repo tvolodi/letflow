@@ -57,6 +57,7 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.PromotionReviewStore
   alias Letflow.SandboxPool.FixtureLoader.FixtureRow
+  alias Letflow.Support.PlatformTenantFixture
   alias Letflow.TenantFixture
 
   @promotions_opts Letflow.Routers.Promotions.init([])
@@ -81,6 +82,13 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
       end
 
     tenant_id = if tenant_fixture, do: tenant_fixture.tenant_id, else: Ecto.UUID.generate()
+
+    # ISS-0993 (A2): the promotions here name a source tenant other than the
+    # caller's, which only a platform-tenant PLATFORM_ADMIN may do. A request
+    # built with PLATFORM_ADMIN is therefore the platform operator's: pin the
+    # caller's own tenant as the platform tenant (restored by the fixture's
+    # on_exit). The tenant-admin denial is covered by the platform-scope files.
+    if "PLATFORM_ADMIN" in roles, do: PlatformTenantFixture.pin!(tenant_id)
 
     conn
     |> assign(:auth_context, %{user_id: user_id, tenant_id: tenant_id, roles: roles})
@@ -1189,9 +1197,10 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
       end
     end
 
-    test "PLATFORM_ADMIN is allowed on :Unknown" do
+    # ISS-0993 A2 (rule 1): :Unknown is denied for EVERY role, PLATFORM_ADMIN included.
+    test "PLATFORM_ADMIN is DENIED on :Unknown (A2)" do
       ctx = %AccessContext{user_id: Ecto.UUID.generate(), roles: [:PLATFORM_ADMIN]}
-      assert Authorization.evaluate_access(ctx, :Unknown).kind == :Allow
+      assert Authorization.evaluate_access(ctx, :Unknown).kind == :Deny403
     end
 
     test "end-to-end: a PROCESS_DESIGNER caller is denied 403 on POST /promotions/plan, no plan data leaks" do

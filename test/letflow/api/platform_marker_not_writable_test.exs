@@ -182,18 +182,14 @@ defmodule Letflow.Api.PlatformMarkerNotWritableTest do
       refute PlatformTenant.platform_tenant?(ctx.a.tenant_id)
       assert PlatformTenant.configured_id() == String.downcase(ctx.p.tenant_id)
 
-      # a follow-up call as A's administrator is, in A1, answered with the legacy result but is
-      # the one the shadow evaluation flags: A is not the platform tenant.
-      {followup, log} =
-        ExUnit.CaptureLog.with_log([level: :warning], fn ->
-          Letflow.Routers.Tenants.call(
-            Fixture.router_conn(:get, "/", ctx.a, ["PLATFORM_ADMIN"], nil),
-            Letflow.Routers.Tenants.init([])
-          )
-        end)
+      # a follow-up call as A's administrator is denied 403 (A2): A is not the platform tenant.
+      followup =
+        Letflow.Routers.Tenants.call(
+          Fixture.router_conn(:get, "/", ctx.a, ["PLATFORM_ADMIN"], nil),
+          Letflow.Routers.Tenants.init([])
+        )
 
-      assert followup.status == 200
-      assert [_one] = Fixture.shadow_lines(log)
+      assert followup.status == 403
     end
   end
 

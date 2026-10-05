@@ -28,6 +28,7 @@ defmodule Letflow.Routers.TenantsTest do
 
   alias Letflow.Admission
   alias Letflow.Identity.Tenant
+  alias Letflow.Support.PlatformTenantFixture
   alias Letflow.Test.SandboxAutoMode
   alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
@@ -54,6 +55,13 @@ defmodule Letflow.Routers.TenantsTest do
       end
 
     tenant_id = if tenant_fixture, do: tenant_fixture.tenant_id, else: Ecto.UUID.generate()
+
+    # ISS-0993 (A2): the registry routes are PLATFORM scope, honoured only for a
+    # PLATFORM_ADMIN of the configured platform tenant. A request built here with
+    # PLATFORM_ADMIN is therefore the platform operator's: pin the caller's own
+    # tenant as the platform tenant (restored by the fixture's on_exit). The
+    # tenant-admin denial is covered by the platform-scope test files.
+    if "PLATFORM_ADMIN" in roles, do: PlatformTenantFixture.pin!(tenant_id)
 
     conn
     |> assign(:auth_context, %{user_id: Ecto.UUID.generate(), tenant_id: tenant_id, roles: roles})
@@ -284,9 +292,12 @@ defmodule Letflow.Routers.TenantsTest do
   describe "deactivate/reactivate as PLATFORM_ADMIN" do
     test "deactivate sets status to :inactive, reactivate sets it back to :active" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-lifecycle")
+      operator = TenantFixture.provisioned_tenant!(slug_prefix: "req075-lifecycle-op")
 
       deactivate_resp =
-        build_conn(:post, "/#{tenant.tenant.slug}/deactivate", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{tenant.tenant.slug}/deactivate", operator,
+          roles: ["PLATFORM_ADMIN"]
+        )
         |> dispatch()
 
       assert deactivate_resp.status == 200
@@ -294,7 +305,9 @@ defmodule Letflow.Routers.TenantsTest do
       assert Repo.get!(Tenant, tenant.tenant_id).status == :inactive
 
       reactivate_resp =
-        build_conn(:post, "/#{tenant.tenant.slug}/reactivate", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{tenant.tenant.slug}/reactivate", operator,
+          roles: ["PLATFORM_ADMIN"]
+        )
         |> dispatch()
 
       assert reactivate_resp.status == 200
@@ -306,10 +319,13 @@ defmodule Letflow.Routers.TenantsTest do
     # :invalid_transition.
     test "re-deactivating an already-:inactive tenant is an idempotent no-op success" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-idempotent")
+      operator = TenantFixture.provisioned_tenant!(slug_prefix: "req075-idempotent-op")
       tenant.tenant |> Tenant.status_changeset(%{status: :inactive}) |> Repo.update!()
 
       resp =
-        build_conn(:post, "/#{tenant.tenant.slug}/deactivate", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{tenant.tenant.slug}/deactivate", operator,
+          roles: ["PLATFORM_ADMIN"]
+        )
         |> dispatch()
 
       assert resp.status == 200
@@ -339,6 +355,7 @@ defmodule Letflow.Routers.TenantsTest do
     # so it cannot corrupt another test's counters.
     test "deactivate evicts the tenant's Admission entry (forget_tenant/1 is invoked)" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-admission-evict")
+      operator = TenantFixture.provisioned_tenant!(slug_prefix: "req075-admission-evict-op")
       {:ok, schema} = TenantProvisioning.schema_name_for_tenant(tenant.tenant_id)
 
       # establish tracking on the real singleton for this schema
@@ -346,7 +363,9 @@ defmodule Letflow.Routers.TenantsTest do
       assert Map.has_key?(:sys.get_state(Admission).tenants, schema)
 
       resp =
-        build_conn(:post, "/#{tenant.tenant.slug}/deactivate", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{tenant.tenant.slug}/deactivate", operator,
+          roles: ["PLATFORM_ADMIN"]
+        )
         |> dispatch()
 
       assert resp.status == 200

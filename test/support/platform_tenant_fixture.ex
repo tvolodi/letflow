@@ -102,6 +102,18 @@ defmodule Letflow.Support.PlatformTenantFixture do
   end
 
   @doc """
+  ISS-0993 (A2) helper for the EXISTING platform-route suites that hand-assign an `auth_context`:
+  when `roles` include `"PLATFORM_ADMIN"` the caller is the platform operator, so `tenant_id` is
+  pinned as THE platform tenant (restored by the fixture's `on_exit`); any other role set is left
+  unpinned and is denied by the platform gate. Returns the `auth_context` map.
+  """
+  @spec operator_auth_context(String.t(), String.t(), [String.t()]) :: map()
+  def operator_auth_context(user_id, tenant_id, roles) do
+    if "PLATFORM_ADMIN" in roles, do: pin!(tenant_id)
+    %{user_id: user_id, tenant_id: tenant_id, roles: roles}
+  end
+
+  @doc """
   A `Plug.Test` connection for direct dispatch into one router's `call/2`
   (path relative to that router's mount), carrying a hand-assigned `auth_context`.
   """

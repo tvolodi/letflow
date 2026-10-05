@@ -22,4 +22,9 @@ affected_files:
   - lib/letflow/design/req190-secrets-core.md
 queue_ref: Q-954  # queue issue_ref ISS-0954 collides with an existing local file; local filename ISS-0987
 github_ref: GH-2209
-status: open
+status: resolved
+resolved_in_run: WF03-Q954-20261005
+resolved_at: "2026-10-05T00:00:00Z"
+resolution: >
+  config/runtime.exs now compares the key to :binary.copy(<<0xFF>>, 32); design doc req190-secrets-core.md corrected.
+  Regression tests: test/letflow/secrets_runtime_config_test.exs (all-zeros refused, all-0xFF refused, valid key boots).

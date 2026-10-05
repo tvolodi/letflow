@@ -7,8 +7,8 @@ defmodule Letflow.LoginDiscoveryTest do
   `LoginDiscovery.mode/0` delegating), the config surface evaluated from
   `config/config.exs` (shipped defaults, notifier adapter key, `:prod` mount
   default) and the source guards of design s15.3 (no closure-less MFA task start,
-  no `lookup_by_email` call in the router, no Repo outside the lookup, `mix.exs`
-  untouched).
+  no `lookup_by_email` call in the router, no Repo outside the lookup, and -- since
+  REQ-441 -- `mix.exs` adding only `:gen_smtp`).
 
   `async: false`: tests that swap application env restore it in `on_exit/1`.
   """
@@ -426,11 +426,44 @@ defmodule Letflow.LoginDiscoveryTest do
       end
     end
 
-    test "mix.exs is untouched" do
-      assert {_out, 0} =
-               System.cmd("git", ["diff", "--quiet", "HEAD", "--", "mix.exs"],
-                 stderr_to_stdout: true
-               )
+    # REQ-441 (decision 0045; REVIEWER step 02d finding 6): replaces the REQ-437
+    # "mix.exs is untouched" check, which was a git working-tree-state check whose premise
+    # (this requirement family never touches mix.exs) is false since REQ-441. The intent --
+    # no unreviewed dependency creeps in -- is kept as a CONTENT assertion that does not
+    # depend on git state. The fuller footprint checks live in req441_source_guards_test.exs.
+    test "mix.exs adds only gen_smtp (REQ-441, decision 0045)" do
+      {:ok, ast} = "mix.exs" |> File.read!() |> Code.string_to_quoted()
+
+      {_ast, entries} =
+        Macro.prewalk(ast, [], fn
+          {:defp, _meta, [{:deps, _, _}, [do: deps]]} = node, acc when is_list(deps) ->
+            {node, acc ++ deps}
+
+          node, acc ->
+            {node, acc}
+        end)
+
+      deps =
+        for entry <- entries do
+          case entry do
+            {name, _requirement} when is_atom(name) -> name
+            {:{}, _meta, [name | _rest]} when is_atom(name) -> name
+          end
+        end
+
+      assert length(deps) > 10, "the deps list was not parsed: #{inspect(deps)}"
+      assert :gen_smtp in deps
+
+      for banned <- [:swoosh, :bamboo, :mua, :mail, :finch, :req, :hackney] do
+        refute banned in deps, "mix.exs declares #{banned}; decision 0045 chose gen_smtp alone"
+      end
+
+      lock = Mix.Dep.Lock.read()
+      assert Map.has_key?(lock, :gen_smtp)
+
+      for banned <- [:swoosh, :mua, :mail, :idna] do
+        refute Map.has_key?(lock, banned), "mix.lock has a #{banned} entry"
+      end
     end
 
     defp code(path) do

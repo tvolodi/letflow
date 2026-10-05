@@ -21,6 +21,8 @@ defmodule Letflow.Test.SmtpSink do
       upgrade) with a certificate for `localhost`; `ca_der` in the returned map is the
       CA the client must trust: the issuing root for `:trusted`, an unrelated root for
       `:untrusted`
+    * `{:implicit_tls, :trusted | :untrusted}` -- TLS from the first byte (no STARTTLS
+      step), same certificate rules as `{:starttls, _}`
     * `:no_starttls_offered` -- like `:accept`, STARTTLS never advertised
     * `:hang` -- accept and never reply
     * `:slow_drip` -- every reply one byte at a time with a delay
@@ -36,6 +38,7 @@ defmodule Letflow.Test.SmtpSink do
           | :refuse_connection
           | :drop_after_greeting
           | {:starttls, :trusted | :untrusted}
+          | {:implicit_tls, :trusted | :untrusted}
           | :no_starttls_offered
           | :hang
           | :slow_drip
@@ -89,6 +92,29 @@ defmodule Letflow.Test.SmtpSink do
     Agent.get(store, fn conns -> Enum.count(conns, fn {_id, c} -> c.open? end) end)
   end
 
+  @doc """
+  The highest number of connections that were open at the same moment (computed from
+  the recorded open/close instants; a still-open connection counts as open until now).
+  """
+  @spec peak_open_connections(map()) :: non_neg_integer()
+  def peak_open_connections(%{pid: store}) do
+    now = System.monotonic_time(:millisecond)
+
+    events =
+      store
+      |> Agent.get(& &1)
+      |> Enum.flat_map(fn {_id, c} -> [{c.opened_at, 1}, {c.closed_at || now + 1, -1}] end)
+      # at the same instant a close sorts before an open, so back-to-back is not overlap
+      |> Enum.sort_by(fn {at, delta} -> {at, delta} end)
+
+    events
+    |> Enum.reduce({0, 0}, fn {_at, delta}, {current, peak} ->
+      current = current + delta
+      {current, max(peak, current)}
+    end)
+    |> elem(1)
+  end
+
   @spec stop(map()) :: :ok
   def stop(%{pid: store, acceptor: acceptor, lsock: lsock}) do
     if lsock, do: :gen_tcp.close(lsock)
@@ -131,7 +157,10 @@ defmodule Letflow.Test.SmtpSink do
       auth: [],
       mail_from: nil,
       rcpts: [],
-      data: nil
+      data: nil,
+      sni: nil,
+      opened_at: System.monotonic_time(:millisecond),
+      closed_at: nil
     }
   end
 
@@ -150,14 +179,51 @@ defmodule Letflow.Test.SmtpSink do
           reply(t, script, "220 sink ESMTP\r\n")
 
         _other ->
+          t = implicit_tls(t, script, tls, store, id)
           reply(t, script, "220 sink ESMTP\r\n")
-          session(%{t: t, script: script, tls: tls, store: store, id: id, tls?: false})
+
+          session(%{
+            t: t,
+            script: script,
+            tls: tls,
+            store: store,
+            id: id,
+            tls?: match?({:ssl, _}, t)
+          })
       end
     catch
       _kind, _reason -> :ok
     after
       close(t)
       update(store, id, &%{&1 | open?: false})
+    end
+  end
+
+  # `{:implicit_tls, kind}`: TLS from the first byte (before the greeting). A failed
+  # handshake (a verifying client aborting) ends the handler through the `catch` above.
+  defp implicit_tls({:gen_tcp, sock}, {:implicit_tls, _kind}, tls, store, id) do
+    :ok = :inet.setopts(sock, packet: :raw)
+    opts = [sni_fun: sni_recorder(store, id)] ++ tls.server_opts
+
+    case :ssl.handshake(sock, opts, 5_000) do
+      {:ok, ssl} ->
+        :ok = :ssl.setopts(ssl, packet: :line)
+        update(store, id, &%{&1 | tls?: true})
+        {:ssl, ssl}
+
+      {:error, _verify_or_closed} ->
+        throw(:tls_handshake_failed)
+    end
+  end
+
+  defp implicit_tls(t, _script, _tls, _store, _id), do: t
+
+  # Records the TLS server name the client sent (SNI); `:undefined` keeps the default
+  # certificate for every name.
+  defp sni_recorder(store, id) do
+    fn host ->
+      update(store, id, &%{&1 | sni: List.to_string(host)})
+      :undefined
     end
   end
 
@@ -194,7 +260,11 @@ defmodule Letflow.Test.SmtpSink do
     {:gen_tcp, sock} = ctx.t
     :ok = :inet.setopts(sock, packet: :raw)
 
-    case :ssl.handshake(sock, tls.server_opts, 5_000) do
+    case :ssl.handshake(
+           sock,
+           [sni_fun: sni_recorder(ctx.store, ctx.id)] ++ tls.server_opts,
+           5_000
+         ) do
       {:ok, ssl} ->
         :ok = :ssl.setopts(ssl, packet: :line)
         update(ctx.store, ctx.id, &%{&1 | tls?: true})
@@ -300,7 +370,7 @@ defmodule Letflow.Test.SmtpSink do
 
   # -- TLS material -----------------------------------------------------------
 
-  defp tls_material({:starttls, kind}) do
+  defp tls_material({mode, kind}) when mode in [:starttls, :implicit_tls] do
     served = chain()
     other = chain()
 

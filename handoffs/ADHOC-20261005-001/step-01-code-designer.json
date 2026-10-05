@@ -8,8 +8,8 @@
   "file": "handoffs/ADHOC-20261005-001/step-01-code-designer.json",
   "created_at": "2026-10-05T03:13:00Z",
   "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-05T03:20:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -77,5 +77,18 @@
       "Facts about the repo carry file:line citations verified by reading the file"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Drafted docs/migration/decisions/0044-hybrid-identity-model.md, Status PROPOSED. Compares O1 (realm-per-tenant + directory), O2 (central realm + organisations), O3 (two-tier hybrid, directory reused as router) on all requested axes; per-REQ stay/modify/obsolete table for REQ-434..444; decision matrix; recommendation (O3 as direction, Phase 1 = O1 as planned, shared tier gated on spikes and on user answer to Q1); 12 risks; 6-phase plan; PR #2201 disposition per option (O3: hold until ratified, then merge with 0043 D-C delta, scope unchanged); 16 Keycloak spike questions all marked UNVERIFIED (no Keycloak capability asserted; version 26.2 cited from docker-compose.yml:26 and landscape docs); consistency section against 0002, 0006, 0035, 0038, 0042, 0043 and INV-1..INV-9 with quoted passages and line cites; 14 user questions with defaults; requirement-impact table and hold note; Sign-off with all gates pending. No implementation code; docs/requirements.yaml not edited; nothing committed.",
+    "artifacts_out": [
+      "docs/migration/decisions/0044-hybrid-identity-model.md"
+    ],
+    "issues": [
+      "No web lookup of Keycloak documentation was done, so no doc URLs are cited and no capability is doc-claimed.",
+      "The Keycloak memory limit / JVM settings on QA are not recorded in this repo or the landscape docs read; recorded as unknown (spike S-12).",
+      "Step-count estimates (O2 about 25-35, O3 later phases about 18) are rough and cannot be tightened before the spikes.",
+      "Line citations to bpm-default.json (11-17, 32-60, 77-100) and ai-dala-infra files were taken from grep/sed output ranges, not exhaustively re-read; other cites were read directly.",
+      "The hold note lists REQ-437,438,440-444 as the held set (REQ-439 is done); ORCH decides the exact marker and whether REQ-435 is also marked."
+    ]
+  }
 }

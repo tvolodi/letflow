@@ -32848,6 +32848,7 @@ requirements:
     title: "Public email-first lookup endpoint: credential-free POST mount behind an enabled switch, mode-parametrised response (Mode B default), single-round-trip resolution, outcome counters and a notifier port"
     owner: ELIXIR-DEV
     status: pending
+    hold: "ON HOLD pending ratification of decision 0044 (hybrid identity model, PROPOSED); do not claim - see docs/migration/decisions/0044-hybrid-identity-model.md. Temporary marker: remove when 0044 is ratified or superseded."
     stage: S4
     impl_order: 946  # letflow-queue task id, GH#2194. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
     description: >
@@ -33008,6 +33009,7 @@ requirements:
     title: "SPA email-first login screen: credential-free discovery page, ProtectedRoute wiring, login_hint hand-off to Keycloak, and ?realm=/stored-slug overrides preserved"
     owner: FRONTEND-DEV
     status: pending
+    hold: "ON HOLD pending ratification of decision 0044 (hybrid identity model, PROPOSED); do not claim - see docs/migration/decisions/0044-hybrid-identity-model.md. Temporary marker: remove when 0044 is ratified or superseded."
     stage: S8
     impl_order: 947  # letflow-queue task id, GH#2195. Registered 2026-10-04 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS.
     description: >
@@ -33210,6 +33212,7 @@ requirements:
     title: "Directory write path (the 'b' half of the REQ-435/REQ-440 split, BA decision D-F): population hooks inside the Identity transactions, the JIT transaction, the explicit tenant_id opt with its fail-closed guard, and the removal rule"
     owner: ELIXIR-DEV
     status: pending
+    hold: "ON HOLD pending ratification of decision 0044 (hybrid identity model, PROPOSED); do not claim - see docs/migration/decisions/0044-hybrid-identity-model.md. Temporary marker: remove when 0044 is ratified or superseded."
     stage: S4
     impl_order: 949  # letflow-queue task id, GH#2203. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
     description: >
@@ -33299,6 +33302,7 @@ requirements:
     title: "Provider-agnostic mail notifier adapter for the login-discovery tenant-list email: SMTP adapter first, capturing test adapter, secrets by environment reference, uniform response whatever the delivery result (BA decision D-B)"
     owner: ELIXIR-DEV
     status: pending
+    hold: "ON HOLD pending ratification of decision 0044 (hybrid identity model, PROPOSED); do not claim - see docs/migration/decisions/0044-hybrid-identity-model.md. Temporary marker: remove when 0044 is ratified or superseded."
     stage: S4
     impl_order: 952  # letflow-queue task id, GH#2206. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
     description: >
@@ -33396,6 +33400,7 @@ requirements:
     title: "Per-tenant login disclosure mode (BA decision D-A): a platform-admin-only tenant setting that selects uniform or single-match disclosure for the email-first lookup, with the deployment-wide mode as fallback and ceiling, resolved inside the single lookup query"
     owner: ELIXIR-DEV
     status: pending
+    hold: "ON HOLD pending ratification of decision 0044 (hybrid identity model, PROPOSED); do not claim - see docs/migration/decisions/0044-hybrid-identity-model.md. Temporary marker: remove when 0044 is ratified or superseded."
     stage: S4
     impl_order: 950  # letflow-queue task id, GH#2204. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
     description: >
@@ -33474,6 +33479,7 @@ requirements:
     title: "Login-directory pepper rotation tooling (split from REQ-435, BA decision D-C): retire_key and key_status mix tasks and the rotation runbook"
     owner: ELIXIR-DEV
     status: pending
+    hold: "ON HOLD pending ratification of decision 0044 (hybrid identity model, PROPOSED); do not claim - see docs/migration/decisions/0044-hybrid-identity-model.md. Temporary marker: remove when 0044 is ratified or superseded."
     stage: S4
     impl_order: 951  # letflow-queue task id, GH#2205. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
     description: >
@@ -33523,6 +33529,7 @@ requirements:
     title: "Email-first enablement gate (split from REQ-437, BA decision D-D): shipped defaults off outside dev, and a boot-time refusal without a legal-confirmation marker, a real mail adapter and the rotation tooling"
     owner: ELIXIR-DEV
     status: pending
+    hold: "ON HOLD pending ratification of decision 0044 (hybrid identity model, PROPOSED); do not claim - see docs/migration/decisions/0044-hybrid-identity-model.md. Temporary marker: remove when 0044 is ratified or superseded."
     stage: S4
     impl_order: 953  # letflow-queue task id, GH#2207. Registered 2026-10-05 by ORCH (WF-01 Step 3) after REQ-VALIDATOR PASS (BA decisions D-A..D-H, decision 0043).
     description: >

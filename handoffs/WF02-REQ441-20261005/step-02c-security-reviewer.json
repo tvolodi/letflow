@@ -1,0 +1,144 @@
+{
+  "handoff_id": "015d2677-361d-43c8-a7de-c178d35c8fa4",
+  "run_id": "WF02-REQ441-20261005",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ441-20261005/step-02c-security-reviewer.json",
+  "created_at": "2026-10-05T17:04:34Z",
+  "started_at": "2026-10-05T17:04:34Z",
+  "completed_at": "2026-10-05T17:06:59Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [
+      "REQ-441"
+    ],
+    "requirement_text": {
+      "REQ-441": "Implements the real mail adapter behind the notifier PORT that REQ-437\nspecifies (Letflow.LoginDiscovery.Notifier, @callback\ndeliver_tenant_list/2, design s13) and replaces its non-delivering\ndefault for deployments that enable the feature. REQUIRED before the\nemail-first feature flag can be enabled outside dev (REQ-444's boot\nrefusal treats the non-delivering Noop adapter as not real, and REQ-444\ndepends_on this entry). Provider-agnostic: the port is the abstraction;\nSMTP is the first adapter. SECURITY-REVIEWER is a named hard gate (new\nexternal egress, INV-4 credentials, INV-8, INV-9, INV-5 uniformity).\n\nFIRST STEP, before any implementation (WF-02): a CODE-DESIGNER pass\nthat chooses the mail library, records the choice as a decision record\nunder docs/migration/decisions/ and designs the adapter, its\nconfiguration and its failure handling. This entry adds a runtime\ndependency, so the library choice is a decision, not an implementation\ndetail; ELIXIR-DEV does not start until that design has passed\nCODE-DESIGN-VALIDATOR.\n\nNOTE ONLY, out of scope: the same adapter is expected to serve\ninvitations and password recovery later. Nothing here builds those, and\nthe port is not widened for them; a later requirement may add\ncallbacks.\n\nBUILDS:\n1. An SMTP adapter module implementing the REQ-437 notifier behaviour\n(for example Letflow.LoginDiscovery.Notifier.Smtp), plus whatever\nmailer module the chosen library needs. Library choice (proposal:\nSwoosh with its SMTP adapter over gen_smtp; alternatives Bamboo or a\nbare gen_smtp) is made by CODE-DESIGNER and recorded as a decision\nrecord; mix.exs gains only that dependency. The hex dependency needs\nnetwork for mix deps.get; if this environment cannot fetch it, say so\nexplicitly rather than guessing.\n2. Configuration by environment reference only (INV-4, no secret in the\nrepository): LETFLOW_MAIL_ADAPTER (the adapter selector; unset or\nunknown keeps the Noop default, unknown value raises at boot),\nLETFLOW_SMTP_HOST, LETFLOW_SMTP_PORT, LETFLOW_SMTP_USERNAME,\nLETFLOW_SMTP_PASSWORD, LETFLOW_SMTP_TLS (verified TLS by default;\nplaintext only when explicitly set and never in :prod), LETFLOW_MAIL_FROM\nand the deployment base URL for any link (INV-9). Read once at boot in\nconfig/runtime.exs; with the adapter selected, a missing host,\ncredentials or sender raises at boot with a message that echoes no\nvalue; .env.example (and deploy/.env.example) document the names with no\nworking value. The password is never logged, never in a struct field\nthat is inspected or serialised, and never in a crash report.\n3. UNIFORM RESPONSE WHATEVER THE DELIVERY RESULT: delivery runs in the\nnotifier task off the request path (REQ-437 item 5). A successful send,\nan SMTP rejection, a timeout, a connection or TLS failure and a raise\nall leave the HTTP status, headers and body byte-identical and add no\nper-request signal. Failure handling: no automatic retry in this\nrequirement (a retry loop is an email-bombing amplifier; the per-address\n:send bucket of REQ-436 is consumed once per attempt, success or\nfailure); the failure is recorded only as a non-identifying counter\nevent [:letflow, :login_discovery, :notifier] with a single metadata\nkey outcome in {:delivered, :failed, :skipped}, and a fixed log line\ncarrying no address, tenant, slug, SMTP reply text or exception text.\n4. A fixed message template (design s13 'message contract'): the only\nrequest-derived text is the recipient address; tenant slugs and display\nnames appear as plain text; any link is built from the deployment base\nURL and the slug URL-encoded, never from tenant-controlled URL text; no\nHTML from tenant text (plain-text body, or HTML with all interpolated\nvalues escaped); subject and body fixed strings.\n5. A capturing test adapter under test/support/ that records\n(recipient, tenants) calls and can be set to return {:error, _}, raise,\nexit or sleep. If REQ-437's test double already provides this, reuse it\nand add nothing; do not duplicate it.\n6. ADAPTER SELECTION KEY: config/runtime.exs maps LETFLOW_MAIL_ADAPTER\nonto the application-env key `config :letflow,\nLetflow.LoginDiscovery.Notifier, adapter: <module>` (design s13; REQ-437\ndefines the key with the Noop default). A selected Smtp adapter with\nincomplete configuration refuses to boot (item 2). The enablement gate\nthat treats Smtp as a real adapter is REQ-444, not built here.\n\nOPEN QUESTIONS: [\"OPEN, decision needed (CODE-DESIGNER, recorded in docs/migration/decisions/): the mail library and, if an external transactional provider is preferred later, the second adapter. SMTP is first by BA decision D-B.\", \"EXTERNAL dependency, not in this repository: the ai-dala-infra secrets inventory needs entries for the SMTP credentials (LETFLOW_SMTP_USERNAME / LETFLOW_SMTP_PASSWORD) and the chosen SMTP relay per environment (0042 OQ-4 asked who owns the credentials: the platform operator). Recorded, not edited from here.\", \"OPEN, only remaining user/legal decision of the series (0042 OQ-3, decision 0043 D-D): the feature stays off outside dev until a named person confirms the lawful basis and controller; this entry makes the mail adapter real but does not lift that gate. Sender domain SPF/DKIM/DMARC alignment is an infrastructure action outside this repository.\", \"SMTP replies can reveal whether a mailbox exists (a synchronous rejection). This is safe only because the delivery result never reaches the HTTP response; the counters carry no address. Confirm with SECURITY-REVIEWER that the :failed counter's rate is not itself an oracle an operator-visible dashboard could expose per address (it carries no per-address dimension).\", \"Keycloak Organizations: DEFERRED (BA decision D-G); not relevant to this entry.\"]"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req441-mail-notifier-adapter.md",
+      "docs/migration/decisions/0045-mail-library-choice.md",
+      "lib/letflow/login_discovery/notifier/smtp.ex",
+      "lib/letflow/login_discovery/notifier/smtp/config.ex",
+      "lib/letflow/login_discovery/notifier/smtp/message.ex",
+      "lib/letflow/login_discovery/notifier/smtp/transport.ex",
+      "lib/letflow/login_discovery/dispatch.ex",
+      "config/runtime.exs",
+      "config/test.exs",
+      "handoffs/WF02-REQ441-20261005/step-02a-elixir-dev.json",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req441-mail-notifier-adapter.md",
+      "docs/migration/decisions/0045-mail-library-choice.md"
+    ],
+    "branch_name": "feature/WF02-REQ441-20261005"
+  },
+  "task": {
+    "description": "WF-02 step 02c (SECURITY-REVIEWER), IMPLEMENTATION-phase hard gate for REQ-441 (commit 052741fd on this branch; diff: git diff origin/main..HEAD -- lib config deploy .env.example mix.exs mix.lock test docs/migration docs/requirements.yaml). Gate against INV-1..INV-9; REQUIRED explicit verdicts on: INV-4 (secrets: the supervisor's blessing of 'SMTP username/password read from the OS env at call time, not once at boot' is CONDITIONAL on you ratifying exactly this: the credentials never in app env (check Application.get_all_env(:letflow) after boot config, config/runtime.exs, every struct field, logs incl. gen_smtp's own error_logger/mimemail debug logging, telemetry metadata, crash reports/proc_lib, exception messages, Transport args); decide whether the call-time read is ACCEPTED or REJECTED and say why), INV-5 (uniform response whatever the delivery result; notifier counter inert; no per-address signal), INV-8 (hard timeout; note the finding that gen_smtp's read timeout is a fixed 1200000 ms and STARTTLS handshake 5000 ms so only Dispatch's brutal_kill bounds a slow relay: is that acceptable? socket cleanup after kill), INV-9 (operator-config host; recipient/header/link injection), new egress (TLS verification, STARTTLS downgrade, tls=none restriction, test-only CA override compile gate in config/test.exs: confirm it cannot exist in a prod build), and the new dependency (gen_smtp 1.3.0 + ranch 2.3.0: verify mix.lock diff is exactly 2 added lines, the source evidence quoted in decision 0045 section 9 against deps/gen_smtp, mix hex.audit). Also verify design-phase conditions M1-M3, F4-F10 (handoffs step-01c-security-reviewer-design.json) are honoured in code. Also sign (or refuse) decision 0045 from a security standpoint (it is PROPOSED; do not edit its status yourself, state your verdict in the handoff). You may run scoped read-only commands and scoped tests with a unique MIX_TEST_PARTITION (441c); do not edit lib/ code (report required fixes instead). Write verdict to this handoff file's result (status PASS/FAIL, numbered findings with severity, next_action REVIEWER or ELIXIR-DEV), started_at <= completed_at.\n",
+    "acceptance_criteria": [
+      "the Smtp adapter implements Letflow.LoginDiscovery.Notifier (a Mox-style or behaviour-conformance test shows the callbacks and return shapes match REQ-437's port exactly); the port itself is not changed",
+      "delivery against a local SMTP sink started by the test (an in-process listener, no network egress): a multi-tenant address's notifier task sends exactly one message whose recipient is the typed address and whose body lists the active tenants' slugs and display names as plain text with a link built from the configured base URL; the sink receives no other recipient",
+      "uniform response: through the real Letflow.Routers.LoginDiscovery chain, the response bytes for the same multi-tenant POST are byte-identical when the adapter succeeds, returns {:error, _}, raises, exits, times out, and when the SMTP sink refuses the recipient, refuses the connection, or fails TLS; the request process stays alive; status, headers and body compared directly",
+      "failure handling: after a failed attempt the per-address :send bucket is consumed (a second attempt inside the interval is skipped, not retried); no retry process is started (a grep guard shows no retry loop or Process.send_after on the delivery path); the [:letflow, :login_discovery, :notifier] event is emitted once per attempt with metadata exactly %{outcome: _}",
+      "no leak: the full capture_log(level: :debug) output across the success and every failure case above contains no email address, no tenant slug or display name, no SMTP reply text, no password and no exception message text; the typed email is placed in the exception message of the raising double to prove it (design s13 C-4 form); a grep guard shows no start_child/Task.start/spawn with an MFA or argument-list form under lib/letflow/login_discovery/",
+      "no secret in the repository: a grep guard over the tracked tree finds no value assigned to LETFLOW_SMTP_PASSWORD or LETFLOW_SMTP_USERNAME outside the variable names in .env.example/docs, and .env.example names the variables with no working value; quoted",
+      "boot configuration tested (config/runtime.exs evaluated with a controlled environment): LETFLOW_MAIL_ADAPTER unset keeps Noop; unknown value raises; smtp selected with a missing host, port, sender or credentials raises with a message containing none of the values; a complete configuration boots; plaintext TLS mode raises in :prod",
+      "adapter selection: LETFLOW_MAIL_ADAPTER=smtp sets the application-env key `config :letflow, Letflow.LoginDiscovery.Notifier, adapter:` to the Smtp module (and unset leaves Noop), asserted from the evaluated runtime config; this is the same key the enablement gate of REQ-444 reads (the gate itself, and its test with the Smtp module, belong to REQ-444, which depends_on this entry)",
+      "message template: subject and body are fixed strings; a tenant display name containing markup, a newline or a URL is rendered as inert text and produces no extra header and no link other than the configured-base-URL link (header-injection and link-injection test)",
+      "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-4, INV-5, INV-8 and INV-9"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. SECURITY-REVIEWER implementation gate for REQ-441 (commit 052741fd). INV-4 PASS (call-time credential read ACCEPTED/RATIFIED), INV-5 PASS, INV-8 PASS (brutal_kill bound on gen_smtp's fixed 1200000 ms read timeout ACCEPTABLE), INV-9 PASS (operator-config host; recipient/header/link injection closed), new egress/TLS PASS, dependency PASS (mix.lock exactly +2 lines, hex.audit clean), INV-1/2/3/6/7 not applicable. Decision 0045 signed from a security standpoint (status not edited). No BLOCKER or MAJOR findings; two MINOR notes (gen_smtp upgrade-crash log text; guard tests owed by TEST-DESIGNER).",
+    "findings": [
+      {
+        "n": 1,
+        "invariant": "INV-4",
+        "severity": "INFO",
+        "title": "Call-time credential read RATIFIED (ACCEPTED)",
+        "detail": "Smtp.credentials/0 calls System.get_env at the point of use (smtp.ex:59-68); the pair exists only as a with-binding and a function argument of one Transport call. Checked: config/runtime.exs passes only boolean presence markers (mail_secret_present?) into Config.parse/2 and writes only notifier adapter/timeout and non-secret smtp keys (host, port, tls, from, base_url, socket_timeout_ms) to app env, so Application.get_all_env(:letflow) holds no credential; Config.runtime/0 returns no credential; Message and Transport types carry none; Dispatch metadata is exactly %{outcome: _} and the fixed warning line carries nothing. Smtp.deliver_tenant_list and Transport.send_message rescue/catch to {:error,:failed} without inspecting any term, so no exception message is built from args. gen_smtp: the password lives only in the Options proplist; gen_smtp_client.erl has no LOG macro; trace/3 is a no-op without trace_fun (never set; lines 1003-1007); the only error_logger calls (822/826/830) print the ssl-upgrade crash Reason or fixed text, not credentials or recipient; send_blocking/2 (200-211) spawns nothing (spawn_link only in send/3 line 170), so no worker crash report or proc_lib dump can carry Options. mimemail (which logs the full To header at debug, mimemail.erl:409) is correctly never called. A brutal_kill gives exit reason :killed with no report. It is a better reading of INV-4 than boot-time app env (no long-lived copy visible to Application.get_all_env/observer). Residual (accepted): value is in the OS env and on the task heap during one call. Grep guard: no value assigned to the SMTP vars anywhere tracked; .env.example and deploy/.env.example show LETFLOW_SMTP_USERNAME= and LETFLOW_SMTP_PASSWORD= with nothing after. The supervisor's condition is satisfied: RATIFIED."
+      },
+      {
+        "n": 2,
+        "invariant": "INV-5",
+        "severity": "INFO",
+        "title": "PASS",
+        "detail": "Delivery is in Task.Supervisor.start_child off the request path (dispatch.ex submit/3); the response cannot depend on the result. Notifier event is emitted only in Dispatch (never an adapter), measurement %{count: 1}, metadata exactly %{outcome: outcome} guarded by an outcome-in-[...] clause; no :telemetry.attach in lib/ names a login_discovery event (only Metrics.Registry attach_many, which has none). Adapter returns a closed non-classifying reason set; transport outcomes collapse to :failed, so rejection vs timeout vs TLS is not distinguishable in-process. Open-question answer: the :failed counter has no per-address dimension and no subscriber; it is not an address oracle unless a future handler adds labels or per-event timestamps; any exposure needs its own sign-off (moduledoc says so)."
+      },
+      {
+        "n": 3,
+        "invariant": "INV-8",
+        "severity": "INFO",
+        "title": "PASS; fixed 1200000 ms read timeout bounded only by Dispatch brutal_kill: ACCEPTABLE",
+        "detail": "Verified in source: reads use fixed ?TIMEOUT 1200000, STARTTLS upgrade fixed 5000; only the connect phase honours the timeout option. The bound is Dispatch Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill), timeout config-clamped 2000..30000 ms (default 15000), so a slow relay holds one inner slot at most 30 s; max_concurrent caps exposure and .env.example documents it. Socket cleanup after kill: gen_tcp sockets are owned by the calling process and ssl connection processes terminate on owner death; single-process contract means nothing else outlives the task; the sink test (brutal-kill case) asserts open_connections reaches 0. Adapter and Dispatch paths catch raise/exit/throw to typed results; no unguarded {:ok,_}= match on external I/O in the new modules. Inner-start refusal is now :failed (F5)."
+      },
+      {
+        "n": 4,
+        "invariant": "INV-9 / injection",
+        "severity": "INFO",
+        "title": "PASS (no tenant-controlled outbound URL)",
+        "detail": "Relay host/port come only from operator env (validated hostname or IP literal, port 1..65535, parsed at boot); no tenant input reaches the connection target, so UrlValidator is not applicable; no per-tenant SMTP config exists. Recipient is an allow-list address (valid_address?); same function validates LETFLOW_MAIL_FROM. Transport also refuses CR/LF/NUL in from/to/subject; headers are fixed ASCII; message is hand-built so tenant text is body-only; sanitize_text strips controls/bidi/zero-width, collapses whitespace, defangs ://, www., @, quotes, truncates to 80/64 codepoints; every body line begins with a fixed label so tenant text cannot start a line (gen_smtp also dot-escapes, gen_smtp_client.erl:497); link is base_url + /?realm= + URI.encode_www_form(slug) with base_url validated (https-only in prod, no userinfo/query/fragment, printable ASCII). Non-ASCII body goes base64."
+      },
+      {
+        "n": 5,
+        "invariant": "New egress / TLS",
+        "severity": "INFO",
+        "title": "PASS",
+        "detail": "STARTTLS uses tls: :always (client lines 780-802: missing STARTTLS throws missing_requirement, failed upgrade throws tls_failed, no plaintext fallback; AUTH only after upgrade, lines 389-391); implicit TLS uses ssl:true + tls:never; verify_peer, OS cacerts, SNI, https hostname match fun, TLS 1.3/1.2 only, retries:0 + no_mx_lookups, auth: :always. tls=none accepted only for a loopback host and never :prod (config.ex:166); IP-literal hosts rejected for TLS modes. Test CA override: @allow_test_cacerts = Application.compile_env(..., :allow_test_cacerts, false); the key is set only at config/test.exs:299 (grep over config lib test mix.exs found no other setter); in any non-test build cacerts/0 is the single clause returning the OS store and tls_cacerts is ignored, so it cannot exist in a prod build; override is a DER CA list only (no verify/verify_fun/SNI from app env). M3 honoured."
+      },
+      {
+        "n": 6,
+        "invariant": "Dependency",
+        "severity": "INFO",
+        "title": "PASS",
+        "detail": "mix.lock diff is exactly 2 added lines, 0 removed (gen_smtp 1.3.0 [:rebar3] -> ranch >= 1.8.0; ranch 2.3.0), hash-pinned, hashes match those quoted in decision 0045 s9. mix.exs adds only {:gen_smtp, ~> 1.3}. mix hex.audit: No retired or security advisory packages found. gen_smtp.app.src has no mod key. Decision 0045 s9 source quotes (STARTTLS 780-802, retries 354-381, send_blocking 200-211, error_logger 822-830, trace 1003, dot-escape 497) re-checked against deps/gen_smtp and accurate. Scoped run MIX_TEST_PARTITION=441c mix test test/letflow/login_discovery/notifier: Result: 15 passed."
+      },
+      {
+        "n": 7,
+        "invariant": "INV-1,2,3,6,7",
+        "severity": "INFO",
+        "title": "NOT-APPLICABLE",
+        "detail": "No tenant-scoped table, schema, migration, Ecto query, Repo.query, API route/response shape or Lua/WASM host function is added or changed. Scope test hit only via secrets (INV-4), response uniformity (INV-5), INV-8, INV-9."
+      },
+      {
+        "n": 8,
+        "invariant": "Design conditions",
+        "severity": "INFO",
+        "title": "M1-M3, F4-F10 honoured in code",
+        "detail": "M1: parse/2 receives markers only. M2: single-process blocking send, no trap_exit/worker. M3: compile-time gate (finding 5). F4: no handler attached (grep); the guard TEST is not yet written (finding 10). F5: inner start refusal -> :failed. F6: 80-codepoint truncation, quoted label, ignore-line kept. F7: allow-list. F8: loopback-only none, IP literal rejected for TLS, EHLO/Message-ID domain from sender. F9: ceiling 30000, capacity note in .env.example; capacity tests not yet present (finding 10). F10: lock-pinned, hex.audit run, no listener (smtp_application_test), STARTTLS fail-closed (smoke test)."
+      },
+      {
+        "n": 9,
+        "invariant": "INV-4 (hygiene)",
+        "severity": "MINOR (non-blocking)",
+        "title": "gen_smtp error_logger prints the ssl-upgrade crash Reason",
+        "detail": "gen_smtp_client.erl:822 logs the EXIT reason of ssl:connect/3 on a crash (not on verification failure). It may include the ssl option list (SNI host, cacerts), never credentials or recipient (they are not passed to ssl). Operator-visible only. No change required; a future change moving credentials into tls_options must be rejected."
+      },
+      {
+        "n": 10,
+        "invariant": "INV-5/INV-8 (test coverage)",
+        "severity": "MINOR (carry to TEST-DESIGNER)",
+        "title": "Guard tests still to exist",
+        "detail": "Not yet in the tree (design AC rows, TEST-DESIGNER scope): no_smtp_secret_guard_test (AC6), the F4 guard (no :telemetry.attach on [:letflow,:login_discovery,...]), a guard that the allow_test_cacerts flag is set only in config/test.exs, and the F9 capacity tests. The conclusions above rest on my own greps, not on those tests. TEST-DESIGN-VALIDATOR should block if they are absent."
+      },
+      {
+        "n": 11,
+        "invariant": "Decision 0045",
+        "severity": "INFO",
+        "title": "SIGNED from a security standpoint",
+        "detail": "I sign decision 0045 (gen_smtp alone) from a security standpoint: its s9 claims are source-accurate, the choice minimises footprint (2 lock entries), avoids the Swoosh Mailer telemetry span, and Transport confinement keeps it reversible. Status not edited by me. Conditions to keep: mimemail never called (logs To at debug); trace_fun never set; credentials never placed in options that tls paths may log; re-verify s9 if gen_smtp moves past ~> 1.3. REVIEWER still signs idiom/decision-consistency."
+      }
+    ],
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "REVIEWER"
+  }
+}

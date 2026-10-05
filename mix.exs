@@ -100,7 +100,11 @@ defmodule Letflow.MixProject do
       # full `earmark` renderer (retired on hex.pm, carries a security advisory,
       # and this requirement never needs rendered HTML) per the design's own
       # §5.4.1. REVIEWER sign-off recorded in decision 0036 before this merges.
-      {:earmark_parser, "~> 1.4"}
+      {:earmark_parser, "~> 1.4"},
+      # REQ-441 (decision docs/migration/decisions/0045-mail-library-choice.md): gen_smtp
+      # ALONE (adds gen_smtp + ranch only; not Swoosh, not Mua) -- the SMTP client behind
+      # Letflow.LoginDiscovery.Notifier.Smtp.Transport, the only module that names it.
+      {:gen_smtp, "~> 1.3"}
     ]
   end
 

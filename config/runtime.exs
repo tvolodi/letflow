@@ -295,6 +295,57 @@ case Letflow.LoginDirectory.parse_deployment_mode(System.get_env("LETFLOW_LOGIN_
             "uniform_plus_email or redirect_single. The value is not echoed."
 end
 
+# REQ-441 (design lib/letflow/design/req441-mail-notifier-adapter.md s3; decision 0045):
+# the notifier mail adapter. ALL variables are OPTIONAL: LETFLOW_MAIL_ADAPTER unset or
+# blank writes nothing (the config/config.exs Noop default, or the config/test.exs double,
+# stands); `noop` keeps Noop; `smtp` selects Letflow.LoginDiscovery.Notifier.Smtp and then
+# requires LETFLOW_SMTP_HOST/PORT/USERNAME/PASSWORD, LETFLOW_MAIL_FROM and
+# LETFLOW_PUBLIC_BASE_URL (optional: LETFLOW_SMTP_TLS, LETFLOW_MAIL_TIMEOUT_MS). INV-4: the
+# username and password are passed to the parser ONLY as presence markers and are never
+# written to app env (the adapter reads them from the OS env at call time); every raise
+# names the variable, never a value. The adapter key written is the one REQ-444 reads.
+mail_secret_present? = fn name ->
+  case System.get_env(name) do
+    value when is_binary(value) ->
+      String.trim(value) != "" and not String.contains?(value, [<<0>>, "\r", "\n"])
+
+    _unset ->
+      false
+  end
+end
+
+mail_env =
+  ~w(LETFLOW_MAIL_ADAPTER LETFLOW_SMTP_HOST LETFLOW_SMTP_PORT LETFLOW_SMTP_TLS
+     LETFLOW_MAIL_FROM LETFLOW_PUBLIC_BASE_URL LETFLOW_MAIL_TIMEOUT_MS)
+  |> Map.new(fn name -> {name, System.get_env(name)} end)
+  |> Map.put("LETFLOW_SMTP_USERNAME", mail_secret_present?.("LETFLOW_SMTP_USERNAME"))
+  |> Map.put("LETFLOW_SMTP_PASSWORD", mail_secret_present?.("LETFLOW_SMTP_PASSWORD"))
+
+# `mail_adapter` is the adapter module THIS block wrote into config (nil when
+# LETFLOW_MAIL_ADAPTER was unset/blank and nothing was written, in which case the
+# config/config.exs default stands). Code placed after this block (REQ-444's boot gate)
+# reads this variable so it sees exactly the value the block resolved.
+mail_adapter =
+  case Letflow.LoginDiscovery.Notifier.Smtp.Config.parse(mail_env, config_env()) do
+    {:ok, :unset} ->
+      nil
+
+    {:ok, {:noop, mail_parsed}} ->
+      config :letflow, Letflow.LoginDiscovery.Notifier, mail_parsed.notifier
+      Keyword.fetch!(mail_parsed.notifier, :adapter)
+
+    {:ok, {:smtp, mail_parsed}} ->
+      config :letflow, Letflow.LoginDiscovery.Notifier, mail_parsed.notifier
+      config :letflow, Letflow.LoginDiscovery.Notifier.Smtp, mail_parsed.smtp
+      Keyword.fetch!(mail_parsed.notifier, :adapter)
+
+    {:error, {_kind, mail_var}} ->
+      raise "environment variable #{mail_var} is missing or invalid for the selected mail " <>
+              "adapter; the value is not echoed. LETFLOW_MAIL_ADAPTER accepts unset/blank, " <>
+              "noop or smtp; LETFLOW_SMTP_TLS accepts unset/blank, starttls, tls or none " <>
+              "(none only for a loopback host and never in :prod)."
+  end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

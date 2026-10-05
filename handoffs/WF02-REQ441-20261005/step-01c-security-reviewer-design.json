@@ -1,0 +1,121 @@
+{
+  "handoff_id": "7d0c2f1e-5b7a-4c1e-9a52-0441c0de5102",
+  "run_id": "WF02-REQ441-20261005",
+  "workflow_id": "WF-02",
+  "step": "01c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ441-20261005/step-01c-security-reviewer-design.json",
+  "created_at": "2026-10-05T16:29:33Z",
+  "started_at": "2026-10-05T16:29:33Z",
+  "completed_at": "2026-10-05T16:32:55Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-441"],
+    "phase": "DESIGN-PHASE review only (not the implementation-phase gate)",
+    "artifacts_in": [
+      "lib/letflow/design/req441-mail-notifier-adapter.md",
+      "docs/migration/decisions/0045-mail-library-choice.md"
+    ],
+    "branch_name": "feature/WF02-REQ441-20261005",
+    "head": "adb8403d"
+  },
+  "task": {
+    "description": "Design-phase review of REQ-441 against INV-4, INV-5, INV-8, INV-9 and the new SMTP egress. Read-only; no code exists."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "DESIGN-PHASE verdict: PASS, CONDITIONAL on 3 binding amendments (M1-M3) before ELIXIR-DEV starts, plus non-blocking obligations F4-F10 carried to the implementation gate. This is not the implementation gate: INV-1..INV-9 are re-run against the real diff later. Claims confirmed against code: dispatch.ex (adapter in inner async_nolink task, Task.yield || Task.shutdown(:brutal_kill), fixed warning at line 113, no notifier event today, run/5 function-level catch); config/runtime.exs (pure-parser pattern, fixed non-echoing raises, no SMTP vars yet); metrics/registry.ex (attaches exactly 4 events, none on login_discovery or swoosh); login_discovery_rate_limit.ex (consume_email_silent emits nothing; send_capacity 1, send_refill 1/900 per address; global 60 @10/s; per-IP 10 @0.5/s); router (recipient = TenantMembership.normalize_subject_key(email) = trim+downcase, matched via lower(btrim(u.email)), so the recipient is always an address that exists as an active user, never an arbitrary string). INV-4: PASS-with-M1/M2/M3 (credentials by reference at call time is the right reading of the invariant and is ACCEPTED over app env, answering OQ-3; gen_smtp-alone avoids the Swoosh Mailer telemetry span). INV-5: PASS (response independent of delivery; notifier event metadata exactly %{outcome: _}; no per-address dimension; no subscriber). INV-8: PASS-with-M2/F5. INV-9: the 'no INV-9 check' stance is SOUND (SMTP host, port and base URL are operator env config; no tenant input reaches the connection target), with a recorded guard against future per-tenant SMTP config. New egress: design is correct in shape (fail-closed STARTTLS, verify_peer + OS cacerts + SNI + hostname match, plaintext refused in prod, zero retries); see F8. Method limits: nothing about gen_smtp runtime behaviour could be verified (no dep present); each such item is correctly deferred to deps/ source reading and the design is held to that.",
+    "findings": [
+      {
+        "n": 1, "id": "M1", "invariant": "INV-4", "severity": "MAJOR (binding amendment)",
+        "title": "Smtp.Config.parse/2 receives the raw env map containing the password",
+        "detail": "Section 2.2 types parse(env, config_env) over an env map that includes LETFLOW_SMTP_PASSWORD/USERNAME. A FunctionClauseError or any bug inside parse/2 prints its arguments (function_clause errors and boot stack traces include the argument map), putting the password in boot output and CI logs. The fixed-text raise discipline covers only deliberate raises.",
+        "required_design_change": "parse/2 must never receive a secret value. runtime.exs builds the input map with the two secrets replaced by presence markers computed by the caller (boolean, non-empty and no-NUL check), and the 2.2 type says so. Add an AC7 case: force a parse failure with a marker password set and assert the marker is absent from child-VM stdout/stderr."
+      },
+      {
+        "n": 2, "id": "M2", "invariant": "INV-4 + INV-8", "severity": "MAJOR (binding amendment)",
+        "title": "Transport process model must be single-process and non-linking; crash-report vector missing from the AC5 test list",
+        "detail": "Section 8 item 2 and 1.3 item 6 name this the highest unknown but leave it as verify-later, and the AC5 row (6.2) has no forced-crash case. If the library spawns a LINKED worker that crashes, the exit signal kills the inner Dispatch task (try/catch cannot catch a link exit signal) and Logger prints a Task termination report with the exit reason, which for library workers commonly embeds option terms (the password). If the worker is UNLINKED, brutal_kill of the inner task leaves the socket and worker alive (leaked egress connection holding a relay slot).",
+        "required_design_change": "Make binding in 2.1 (Transport contract): the send runs in the calling inner-task process through the library's blocking API, with no process that can outlive or link-kill it; if the library cannot do that, ELIXIR-DEV stops and the decision reopens (0045 fallback trigger), it is not worked around with trap_exit. Add to AC5: (a) a forced error inside the Transport/library path (test seam or malformed option) under capture_log(level: :debug) plus an attached :logger handler for all levels, asserting no password/username marker, recipient, slug, display name or sink reply marker; (b) after the brutal_kill paths (:hang, :slow_drip) no process spawned by the call is alive (Process.list before/after) and open_connections is 0."
+      },
+      {
+        "n": 3, "id": "M3", "invariant": "INV-4 / egress", "severity": "MAJOR (binding amendment)",
+        "title": "Test-only CA override (OQ-4) must be physically absent from production code paths",
+        "detail": "Reading :tls_cacerts from runtime app env is acceptable only because it can narrow trust to a supplied CA list; it must never be able to express verify_none or widen trust in a release. As designed it is a runtime branch present in prod.",
+        "required_design_change": "Decide OQ-4 as a compile-time gate: the override branch is compiled only when a compile_env flag set in config/test.exs only is true; in other envs Transport ignores the key. The override is a list of DER cacerts only, replacing the OS store for that call; no verify, verify_fun or server_name_indication option may be accepted from app env. Add a test or grep guard that the flag is set only in config/test.exs."
+      },
+      {
+        "n": 4, "id": "F4", "invariant": "INV-5", "severity": "MINOR (obligation)",
+        "title": "Keep the notifier counter inert until separately signed off",
+        "detail": "Confirmed: metadata exactly %{outcome: _}, no per-address dimension, so :failed is not a per-address oracle. Aggregate residual (attempt count == number of requests whose address matched, visible in rate and time to anyone who can scrape a metric) is acceptable only while no handler exists. The :skipped-for-Noop and no-event-when-nothing-to-deliver choices are ACCEPTED (emitting for every request would be strictly worse). The fixed warning log is emitted only on matched failed attempts; log access is operator-only.",
+        "required_design_change": "Add a guard test that registry.ex and any other :telemetry.attach in lib/ attach nothing on [:letflow, :login_discovery, ...]. Record that any future metric or log-derived exposure needs its own SECURITY-REVIEWER sign-off and must never add address, tenant or reason labels; the log line must stay fixed."
+      },
+      {
+        "n": 5, "id": "F5", "invariant": "INV-8", "severity": "MINOR",
+        "title": "Inner-task start refusal consumes the :send bucket and emits nothing; saturation is invisible",
+        "detail": "Outer start_child refusal happens before the bucket is consumed (fine). But the inner Task.Supervisor.async_nolink can be refused when the shared supervisor is at 2*max_concurrent; that exit is swallowed by run/5's catch AFTER consume_email_silent(:send) spent the token, so the address silently loses its 15-minute window with no mail and no event. Section 4.1 covers outer refusal only. At 15 s timeout capacity is about 6.7 deliveries/s against the global limiter's 10/s, so sustained load or a relay outage reaches this state and legitimate deliveries drop silently.",
+        "required_design_change": "The Dispatch edit (4.2) must wrap the inner start so a refusal or exit is a :failed notifier event (it is a deliver intent) with the fixed log line. Optionally add a match-independent saturation event at submit/3 on start_child refusal (fires for matched and unmatched alike, so no match signal), as a separate event name."
+      },
+      {
+        "n": 6, "id": "F6", "invariant": "INV-9 / header and content injection", "severity": "MINOR",
+        "title": "Tenant-admin-controlled display name becomes text in a platform-sent mail (phishing/spam vector)",
+        "detail": "A tenant admin can create a user with a victim's email in their tenant; the lookup then mails the victim, from the platform sender and domain, a body containing an attacker-chosen display name (up to 256 bytes) and slug. Header injection is correctly closed (no tenant text in any header; recipient is the DB-normalised value; sender fixed; CR/LF/NUL/bidi/zero-width stripped; links built only from the operator base URL with the slug form-encoded). Residual is social-engineering text, bounded to one mail per address per 15 min.",
+        "required_design_change": "Tighten rule 2.3(4): cap the printed display name at 80 characters (truncate at a codepoint boundary) instead of rejecting the whole message at 256 bytes (reject-all lets one over-long name suppress delivery for every user of that tenant); print it as a quoted labelled value; keep the 'If you did not ask for this' line. Record the residual; OQ-9 stays open (printing only the slug would remove it)."
+      },
+      {
+        "n": 7, "id": "F7", "invariant": "INV-9 / recipient validation", "severity": "MINOR",
+        "title": "valid_address? is a deny-list; use an allow-list",
+        "detail": "The 2.3 rule 2 deny-list omits '%' and '!' (legacy source routing), '|', backtick, '{', '}', '$', '*'. Exploitability is low (the recipient is a DB-stored address passed as an envelope argument) but a deny-list is the wrong shape for an injection boundary.",
+        "required_design_change": "Specify an allow-list: local part [A-Za-z0-9._+-], domain labels [A-Za-z0-9-] separated by single dots with no leading/trailing dot or hyphen, exactly one '@', total <= 254, local <= 64. Keep the hostile matrix and add '%', '!', '|' cases. Use the same function for LETFLOW_MAIL_FROM."
+      },
+      {
+        "n": 8, "id": "F8", "invariant": "INV-4 / egress", "severity": "MINOR",
+        "title": "Cleartext AUTH in non-prod, IP-literal hosts with SNI, EHLO/Message-ID identity",
+        "detail": "(a) LETFLOW_SMTP_TLS=none is refused only when config_env()==:prod; a staging deployment built with another MIX_ENV would send AUTH in cleartext to a network host. (b) The host validator allows IP literals but TLS design sets server_name_indication to the host; OTP rejects an IP as SNI and verification then needs an IP SAN. (c) gen_smtp's default EHLO hostname and Message-ID domain can leak the node's internal FQDN.",
+        "required_design_change": "(a) Allow tls=none only when the host is loopback (127.0.0.0/8, ::1, localhost) in addition to the non-prod rule. (b) For IP-literal hosts omit SNI and verify against the IP SAN, or require a DNS name when tls != none; add a test. (c) Pass an explicit EHLO hostname and Message-ID domain derived from the LETFLOW_MAIL_FROM domain; assert the EHLO argument in the sink transcript."
+      },
+      {
+        "n": 9, "id": "F9", "invariant": "INV-8 / capacity", "severity": "INFO (obligation)",
+        "title": "State and test the capacity / email-bombing bound",
+        "detail": "Confirmed bound: one mail per normalised registered address per 900 s (send_capacity 1, refill 1/900), recipient must already be an active user's address, zero retries, no Cc/Bcc, bucket consumed before the adapter runs. Platform ceiling is the global limiter (10 req/s, burst 60; per-IP 0.5/s burst 10): at most about 10 outbound mails/s and about 4 mails/hour to any one victim, so not an amplifier. Consequences: up to 100 concurrent relay connections at default max_concurrent (providers often cap per account); a relay outage with 15 s holds starves legitimate deliveries (F5); the 2000..60000 ms range allows 60 s holds.",
+        "required_design_change": "Lower the LETFLOW_MAIL_TIMEOUT_MS ceiling to 30000. Document (design and .env.example) that the effective outbound ceiling is the global refill rate and that the relay connection limit should be >= max_concurrent or max_concurrent lowered for smtp. Add tests: N distinct addresses at the limiter burst yield at most burst sink messages; with 2*max_concurrent+1 simultaneous submits no more than max_concurrent connections reach the sink."
+      },
+      {
+        "n": 10, "id": "F10", "invariant": "INV-4 / supply chain", "severity": "INFO (obligation)",
+        "title": "Conditions on the dependency approval (H1 remains the owner's hard stop)",
+        "detail": "Security view of 0045: O3 gen_smtp alone is the best fit for the invariants (no Mailer span, smallest tree). gen_smtp also ships server-side code and ranch, needed only for that.",
+        "required_design_change": "Approval conditions: pin by lock hash and run mix hex.audit; ELIXIR-DEV confirms starting the :gen_smtp application opens no listening socket (test) or avoids starting it; deps/ source read and quoted for every 1.3 item; fail-closed STARTTLS proven (no_starttls_offered: zero AUTH, zero MAIL FROM, no password bytes on the wire). If Swoosh+gen_smtp or Swoosh+Mua is chosen: no 'use Swoosh.Mailer' (grep guard), no handler on [:swoosh, ...], config :swoosh, :api_client, false, retries 0, adapter config containing the password built only inside the inner task."
+      }
+    ],
+    "invariant_assessment": {
+      "INV-1": "NOT-APPLICABLE: no tenant-scoped table, schema, migration or prefix query; the lookup consumed is the existing public-schema REQ-435 path, untouched.",
+      "INV-2": "NOT-APPLICABLE: no HTTP response shape changes (delivery is off the response path); mail body content rules are covered under F6.",
+      "INV-3": "NOT-APPLICABLE: no Lua/WASM.",
+      "INV-4": "APPLIES: design PASS subject to M1, M2, M3, F8. Credentials stay out of app env, structs, returns and telemetry; fixed non-echoing raises; AC6 grep guard; get_all_env test.",
+      "INV-5": "APPLIES: PASS (F4 obligation). Response independent of delivery; no early return; bucket refusal silent; event metadata exactly outcome.",
+      "INV-6": "This note is the design-phase scoping statement; the implementation-phase SECURITY-REVIEWER gate is still required.",
+      "INV-7": "NOT-APPLICABLE: no SQL.",
+      "INV-8": "APPLIES: PASS subject to M2, F5, F9. Typed results, closed reason set, inner-task isolation, hard timeout with brutal_kill, caps.",
+      "INV-9": "Stance 'no INV-9 check for SMTP host and base URL' is SOUND: both are operator env config and no tenant text reaches the connection target; private or loopback relays are legitimate. Binding record: if a per-tenant SMTP host, per-tenant base URL or tenant-supplied target is ever added, INV-9 applies in full. Header and link injection and recipient validation reviewed: F6, F7."
+    },
+    "answers_to_design_open_questions": {
+      "OQ-3": "ACCEPTED: resolve username/password at call time; do not store in app env.",
+      "OQ-4": "Accepted only with the compile-time gate in M3.",
+      "OQ-5": "ACCEPTED with the F4 guard test.",
+      "OQ-8": "Accepted: no SMTPUTF8 for now.",
+      "OQ-9": "Open; F6 narrows it.",
+      "OQ-11": "Accepted: dev uses throwaway credentials.",
+      "OQ-12": "Accepted: reuse timeout_ms, subject to the F9 range cap."
+    },
+    "artifacts_out": [],
+    "issues": [
+      "M1, M2, M3 must be applied to the design (or acknowledged by CODE-DESIGNER with a reason) before ELIXIR-DEV is dispatched.",
+      "F4-F10 are carried as obligations for the implementation-phase gate; that SECURITY-REVIEWER run still occurs and re-reads deps/ source for each 1.3 item."
+    ],
+    "next_action": "CODE-DESIGNER to amend the design for M1-M3 (fold F4-F10 where cheap), then CODE-DESIGN-VALIDATOR; dependency approval (H1) remains a supervisor/owner hard stop."
+  },
+  "rework_count": 0
+}

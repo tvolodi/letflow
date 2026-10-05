@@ -80,4 +80,9 @@ config :letflow, Letflow.LoginDiscovery.Notifier,
   timeout_ms: 5_000,
   max_concurrent: 100
 
+# REQ-441: LETFLOW_MAIL_ADAPTER=smtp (config/runtime.exs) switches `adapter:` to
+# Letflow.LoginDiscovery.Notifier.Smtp, sets `timeout_ms:` from LETFLOW_MAIL_TIMEOUT_MS
+# (default 15000) and writes the non-secret settings under
+# `config :letflow, Letflow.LoginDiscovery.Notifier.Smtp`. Defaults here are unchanged.
+
 import_config "#{config_env()}.exs"

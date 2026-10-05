@@ -12,6 +12,7 @@ defmodule Letflow.Router do
   | GET    | /api/mobile/tenant-config | `Letflow.Routers.MobileTenantConfig` | **none** | global `tenants` |
   | GET    | /metrics            | `Letflow.Routers.MetricsExposition`| **none**  | none (ETS only)  |
   | GET    | /api/public/:kind/:handle | `Letflow.Routers.PublicRead` | **none**  | global `public_read_handles` + tenant-scoped resource |
+  | POST   | /api/login-discovery | `Letflow.Routers.LoginDiscovery`  | **none**  | global `tenant_login_directory` + `tenants` |
   | *      | /api/v1/…           | `Letflow.Plugs.ApiPipeline`        | delegated | delegated |
   | *      | _                   | `Letflow.Api.Response.not_found/1` | none      | none      |
 
@@ -131,6 +132,13 @@ defmodule Letflow.Router do
   # reasoning and docs/migration/decisions/0028-unauthenticated-read-boundary.md
   # for the full decision record.
   forward("/api/public", to: Letflow.Routers.PublicRead)
+
+  # Public by design (REQ-437, decision 0042) -- the credential-free email-first
+  # login-discovery lookup. A sibling forward declared BEFORE /api/v1 so it never
+  # enters Letflow.Plugs.AuthPipeline (not modified); NOT mounted under /api/public
+  # (decision 0028). Off by default in :prod via its own enabled_gate/2. See
+  # Letflow.Routers.LoginDiscovery's moduledoc.
+  forward("/api/login-discovery", to: Letflow.Routers.LoginDiscovery)
 
   forward("/api/v1", to: Letflow.Plugs.ApiPipeline)
 

@@ -1,0 +1,22 @@
+id: ISS-0991
+title: "REQ-437 real-host client-IP UAT not run: needs the REQ-439 nginx realip action on QA and the login-discovery mount enabled (blocked until the enablement gate)"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ437-20261005 (Q-946)
+severity: MINOR
+owner: "UAT-RUNNER (after infra applies the REQ-439 nginx realip action and the mount is enabled on QA)"
+description: >
+  REQ-437's client-IP acceptance criterion has two legs: an integration test through the real
+  Letflow.Routers.LoginDiscovery chain (done, in the test suite) and a real-host UAT showing two real
+  source addresses falling into two different per-IP buckets with the observed container-side peer
+  address quoted, OR an explicitly named blocker issue. This is that blocker. The real-host leg cannot
+  run because (1) the REQ-439 nginx realip action (handoffs/WF02-REQ439-20261004/step-02e-infra-action.json)
+  must be applied on QA's vhost and LETFLOW_TRUSTED_PROXIES set to the Docker bridge gateway, and
+  (2) the mount is off in :prod by design (LETFLOW_LOGIN_DISCOVERY_ENABLED unset => false) and must stay
+  off until the enablement gate (REQ-444: legal confirmation marker per 0042 OQ-3, a delivering mail adapter
+  per REQ-441, the rotation runbook) is satisfied. Unverified externals recorded by design Q-list: the
+  Cloudflare header/ranges and the container-side peer address.
+affected_files:
+  - test/uat-reports/
+queue_ref: Q-946
+github_ref: GH-2194
+status: open

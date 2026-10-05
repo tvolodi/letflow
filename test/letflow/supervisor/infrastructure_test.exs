@@ -32,6 +32,10 @@ defmodule Letflow.Supervisor.InfrastructureTest do
   "last child" invariant (test below) is unaffected: `Obs.Alerts.TaskSupervisor`
   remains the last child either way.
 
+  REQ-437 (design `req434-email-first-login-directory.md` s13, s15.3) added
+  `Letflow.LoginDiscovery.TaskSupervisor` directly before
+  `Letflow.Obs.Alerts.TaskSupervisor`, bringing the live list from 21 to 22.
+
   Read-only against the already-running, application-supervised singletons
   -- no restart, no config mutation, safe to run `async: true`.
 
@@ -67,7 +71,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
     refute Letflow.Scheduler.Poller in ids
   end
 
-  test "Letflow.Supervisor.Infrastructure owns the 21 expected children, in order" do
+  test "Letflow.Supervisor.Infrastructure owns the 22 expected children, in order" do
     children = Supervisor.which_children(Letflow.Supervisor.Infrastructure)
 
     ids =
@@ -113,10 +117,13 @@ defmodule Letflow.Supervisor.InfrastructureTest do
              # No ordering dependency -- placed directly before
              # Obs.Alerts.TaskSupervisor per infrastructure.ex's own child list.
              Letflow.EventStore.RetirementTaskSupervisor,
+             # REQ-437: dedicated Task.Supervisor for login-discovery notifier tasks,
+             # placed before Obs.Alerts.TaskSupervisor, which stays last.
+             Letflow.LoginDiscovery.TaskSupervisor,
              Letflow.Obs.Alerts.TaskSupervisor
            ]
 
-    assert length(ids) == 21
+    assert length(ids) == 22
   end
 
   test "ISS-0224: SandboxPool.TaskSupervisor precedes SandboxPool" do

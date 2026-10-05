@@ -631,3 +631,26 @@ history:
       docs/issues; REQ-437 must call lookup_by_keys/1 only and keep its
       deployment-mode reader in agreement with LoginDirectory.deployment_mode/0.
       Branch feature/WF02-REQ442-20261005.
+
+  - req: REQ-443
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T15:03:06Z"
+    note: >
+      Login-directory pepper rotation tooling and runbook delivered via
+      PR #2222, merge commit cd439152 (Q-951). SECURITY-REVIEWER PASS,
+      REVIEWER PASS. Tests in test/specs/REQ-443.md.
+
+  - req: REQ-437
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T15:03:06Z"
+    note: >
+      Public email-first lookup endpoint (Q-946) implemented in PR #2224:
+      Letflow.Routers.LoginDiscovery mount behind the enabled switch,
+      mode-parametrised response, single-query resolution, outcome counters
+      and notifier port. SECURITY-REVIEWER PASS, REVIEWER PASS (AC corrections
+      C1-C9 of design s15.3.1 accepted and applied to the requirement).
+      RELEASE-VALIDATOR report test/reports/report-2026-10-05-WF02-REQ437.yaml.
+      The real-host client-IP UAT leg is covered by the named blocker issue
+      ISS-0991 (docs/issues/ISS-0991.yaml). Gate record in test/specs/REQ-437.md.

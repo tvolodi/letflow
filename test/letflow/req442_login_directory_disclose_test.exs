@@ -4,7 +4,7 @@ defmodule Letflow.Req442LoginDirectoryDiscloseTest do
   AC5 (the match type) and AC6 (no `:prefix`, `log: false`) for
   `Letflow.LoginDirectory.lookup_by_keys/2`. See `test/specs/REQ-442.md`.
 
-  `async: false`: one test swaps the global `Letflow.Routers.LoginDiscovery`
+  `async: false`: one test swaps the global `Letflow.LoginDiscovery`
   application env (restored in `on_exit/1`) and tenants are provisioned for real.
   All tenants of a test are provisioned BEFORE any write (fixture rule), and the
   mode column is set through the same Repo the lookup reads.
@@ -128,27 +128,27 @@ defmodule Letflow.Req442LoginDirectoryDiscloseTest do
 
     test "lookup_by_keys/1 and lookup_by_email/1 read the deployment mode from config: unset -> true, :uniform_plus_email -> false, junk -> false" do
       {_tenant, email, keys, slug} = tenant_with_entry!(nil)
-      original = Application.fetch_env(:letflow, Letflow.Routers.LoginDiscovery)
+      original = Application.fetch_env(:letflow, Letflow.LoginDiscovery)
 
       on_exit(fn ->
         case original do
-          {:ok, value} -> Application.put_env(:letflow, Letflow.Routers.LoginDiscovery, value)
-          :error -> Application.delete_env(:letflow, Letflow.Routers.LoginDiscovery)
+          {:ok, value} -> Application.put_env(:letflow, Letflow.LoginDiscovery, value)
+          :error -> Application.delete_env(:letflow, Letflow.LoginDiscovery)
         end
       end)
 
-      Application.delete_env(:letflow, Letflow.Routers.LoginDiscovery)
+      Application.delete_env(:letflow, Letflow.LoginDiscovery)
       assert {:ok, [%{slug: ^slug, disclose: true}]} = LoginDirectory.lookup_by_keys(keys)
       assert {:ok, [%{slug: ^slug, disclose: true}]} = LoginDirectory.lookup_by_email(email)
 
-      Application.put_env(:letflow, Letflow.Routers.LoginDiscovery, mode: :redirect_single)
+      Application.put_env(:letflow, Letflow.LoginDiscovery, mode: :redirect_single)
       assert {:ok, [%{disclose: true}]} = LoginDirectory.lookup_by_email(email)
 
-      Application.put_env(:letflow, Letflow.Routers.LoginDiscovery, mode: :uniform_plus_email)
+      Application.put_env(:letflow, Letflow.LoginDiscovery, mode: :uniform_plus_email)
       assert {:ok, [%{slug: ^slug, disclose: false}]} = LoginDirectory.lookup_by_keys(keys)
       assert {:ok, [%{slug: ^slug, disclose: false}]} = LoginDirectory.lookup_by_email(email)
 
-      Application.put_env(:letflow, Letflow.Routers.LoginDiscovery, mode: :bogus)
+      Application.put_env(:letflow, Letflow.LoginDiscovery, mode: :bogus)
       assert {:ok, [%{disclose: false}]} = LoginDirectory.lookup_by_email(email)
     end
   end

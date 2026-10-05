@@ -67,4 +67,17 @@ config :letflow, :modules, [Letflow.Modules.Exam]
 config :letflow, Letflow.Plugs.ClientIp, trusted_proxies: []
 config :letflow, Letflow.Routers.LoginDiscovery, enabled: config_env() != :prod
 
+# REQ-437 (design lib/letflow/design/req434-email-first-login-directory.md s7, s13,
+# D21): login-discovery disclosure mode and body bound live under a key DISTINCT from
+# the mount switch above (REQ-439's runtime-config test asserts the whole
+# Letflow.Routers.LoginDiscovery env is exactly [enabled: boolean]). The optional env
+# LETFLOW_LOGIN_DISCOVERY_MODE overrides `mode` in config/runtime.exs. The notifier
+# adapter key is the one REQ-441 (mail adapter) and REQ-444 (enablement gate) read.
+config :letflow, Letflow.LoginDiscovery, mode: :redirect_single, max_body_bytes: 2048
+
+config :letflow, Letflow.LoginDiscovery.Notifier,
+  adapter: Letflow.LoginDiscovery.Notifier.Noop,
+  timeout_ms: 5_000,
+  max_concurrent: 100
+
 import_config "#{config_env()}.exs"

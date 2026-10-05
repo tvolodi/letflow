@@ -1,0 +1,48 @@
+# Release validation report -- WF-02 Step 5 (RELEASE-VALIDATOR)
+
+req_id: REQ-437
+queue_task: Q-946
+workflow: WF-02
+step: 5
+agent: RELEASE-VALIDATOR
+date_utc: 2026-10-05
+branch: feat/REQ-437-login-discovery-endpoint
+state: uncommitted implementation + tests (not committed by this agent)
+governing_text: docs/requirements.yaml REQ-437 as corrected by design s15.3.1 C1-C9
+
+verdict: FAIL_PENDING_ONE_GAP   # code/tests VERIFIED; one procedural AC (real-host UAT or named blocker issue) unmet
+
+independent_runs:
+  compile_warnings_as_errors_force: "PASS (Generated letflow app, exit 0)"
+  format_check: PASS
+  check_boundaries: "OK -- 909 edges checked, 0 violations"
+  mix_test_touched_areas: "Result: 243 passed (router, mount, timing, pure, dispatch, runtime-config, infrastructure, req442, rate-limit file) --include slow"
+  rate_limit_dir: "test/letflow/plugs/login_discovery_rate_limit/: 14 passed"
+  req439_client_ip_runtime_config: "23 passed with --include slow --include prod_build; git diff empty (unmodified)"
+  new_files_unused_default_warning_grep: "0 occurrences of 'default values for the optional arguments' across the six new test files (194 passed)"
+  letflow_check_test: "NOT RUN -- it shells scripts/test_parallel.sh (full suite), which ORCH forbade; substituted the targeted grep above. CI must run it."
+  timing: "200 alternating pairs, bound 25 ms: mode B uniform-tenant single vs unknown median 0.0 ms; mode B multi vs unknown 0.102 ms; mode A known vs unknown 0.102 ms; none one-sided"
+
+grep_checks:
+  mix_exs_mix_lock: untouched
+  auth_pipeline_ex: untouched
+  client_ip_runtime_config_test: untouched
+  lookup_by_email_in_router: "none (doc mention only)"
+  login_directory_skip_in_lib: "none in lib/*.ex (design doc text only)"
+  repo_calls_on_directory_tables: "all log: false (lookup, insert_all, delete_all, exists?, advisory-lock query)"
+  start_child: "closure form only (dispatch.ex:46); guarded by a source-guard test"
+
+gaps:
+  - id: G1
+    criterion: "client IP real-host UAT"
+    detail: >
+      AC requires a UAT-RUNNER result under test/uat-reports/ OR an explicitly
+      named blocker issue id. Neither exists (no REQ-437 file in test/uat-reports;
+      test/specs/REQ-437.md only says the scenario is UAT-RUNNER's). File an issue
+      or run the scenario before marking done.
+  - id: G2
+    criterion: "letflow.check.test"
+    detail: "Not run per instruction; CI must."
+  - id: G3
+    criterion: "records not checkable from code"
+    detail: "SECURITY-REVIEWER verdict (INV-1,2,4,5,6,8,9) and the OpenAPI no-op (D7) must be in the handoff; C1-C9 wording is not yet copied into docs/requirements.yaml (entry still status: pending, by design ORCH/REQ-ANALYST)."

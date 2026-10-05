@@ -695,3 +695,14 @@ history:
       credentials, H3 infra secrets inventory plus SPF/DKIM/DMARC alignment,
       H4 lawful basis and controller (0042 OQ-3, 0043 D-D). This requirement
       does not lift that gate. Branch feature/WF02-REQ441-20261005.
+
+  - req: REQ-452
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T22:16:40Z"
+    note: >
+      UAT actor roster with declared built-in roles and a refusal-step construct,
+      enforced by mix letflow.check_uat_scenario_schema (queue task 969, GH#2241,
+      branch feature/WF02-REQ452-20261006). Validated by REVIEWER PASS,
+      TEST-DESIGN-VALIDATOR PASS, RELEASE-VALIDATOR PASS; SECURITY-REVIEWER N/A
+      (dev tooling, no tenant-data path).

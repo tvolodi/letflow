@@ -41,6 +41,18 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
       lists.
     * **SCHEMA-6** -- at most one `branches:` entry has `when: else`, and if
       present it is the last entry in the list.
+    * **SCHEMA-7** (REQ-452 rule a) -- every login actor id a scenario references has an
+      entry in `test/fixtures/uat/actors.yaml` under `actors:` or `unresolved:`.
+    * **SCHEMA-8** (rule b) -- every roster `builtin_roles` value is in
+      `Letflow.Api.Authorization.roles/0` as loaded at check time.
+    * **SCHEMA-9** (rule c) -- a roster actor whose tenant is not `platform` must not hold
+      `PLATFORM_ADMIN`, unless listed under `legacy_platform_admin`.
+    * **SCHEMA-10** (rule d) -- a platform-tenant actor appears only in scenarios whose
+      resolved scope is `platform`, or whose id is in `platform_actor_allowed` with a reason.
+    * **SCHEMA-11** (rule e) -- every resolved scope with at least one scenario has a step
+      with `expect_refusal: true`, unless the scope is in `refusal_coverage_exempt`.
+    * **SCHEMA-12** -- structural integrity of the new inputs: the roster file's shape, and
+      `expect_refusal` being a boolean when present on a step.
 
   ## What this task never does
 
@@ -56,8 +68,9 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
       mix letflow.check_uat_scenario_schema
 
   Wired into the `letflow.check` alias immediately after
-  `letflow.check_issue_refs`, grouped with the other fast, non-compiling,
-  structural scans -- see `mix.exs`.
+  `letflow.check_issue_refs`, grouped with the other fast structural scans -- see
+  `mix.exs`. SCHEMA-8 needs `Letflow.Api.Authorization` loaded, so `run/1` runs the
+  `compile` task first (REQ-452 design D1).
 
   Exits `0` iff every scenario file is violation-free; `Mix.raise/1`
   otherwise, naming every violation by rule id, file, and message.
@@ -79,11 +92,43 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
           violations: [violation()]
         }
 
-  @type report :: %{
-          files: [file_result()],
-          file_count: non_neg_integer(),
-          violations: [violation()]
+  @type role_name :: String.t()
+
+  @type actor_entry :: %{
+          tenant: String.t(),
+          builtin_roles: [role_name()],
+          routing_roles: [String.t()],
+          note: String.t() | nil
         }
+
+  @type roster :: %{
+          actors: %{String.t() => actor_entry()},
+          unresolved: %{String.t() => [String.t()]},
+          platform_actor_allowed: %{String.t() => String.t()},
+          refusal_coverage_exempt: [String.t()],
+          legacy_platform_admin: %{
+            String.t() => %{since: Date.t(), reason: String.t(), removed_by: String.t()}
+          }
+        }
+
+  @type scenario :: {Path.t(), map()}
+
+  @type actor_stats :: %{
+          login_actors: non_neg_integer(),
+          in_roster: non_neg_integer(),
+          unresolved: non_neg_integer(),
+          missing: non_neg_integer()
+        }
+
+  @type report :: %{
+          required(:files) => [file_result()],
+          required(:file_count) => non_neg_integer(),
+          required(:violations) => [violation()],
+          optional(:actor_stats) => actor_stats() | :not_loaded,
+          optional(:roster_path) => Path.t()
+        }
+
+  @roster_path "test/fixtures/uat/actors.yaml"
 
   @rule String.duplicate("=", 72)
   @thin_rule String.duplicate("-", 72)
@@ -93,32 +138,11 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
   @impl Mix.Task
   @spec run([String.t()]) :: :ok
   def run(_args) do
+    # SCHEMA-8 reads Authorization.roles/0 at check time (REQ-452 design D1).
+    Mix.Task.run("compile")
+
     paths = @scenario_glob |> Path.wildcard() |> Enum.sort()
-
-    files = Enum.map(paths, &check_file/1)
-
-    file_violations = Enum.flat_map(files, & &1.violations)
-
-    corpus_violations =
-      if paths == [] do
-        [
-          %{
-            file: @scenario_glob,
-            rule: "SCHEMA-0",
-            message:
-              "scenario glob matched zero files -- an empty UAT scenario corpus is never " <>
-                "a silent green pass"
-          }
-        ]
-      else
-        []
-      end
-
-    report = %{
-      files: files,
-      file_count: length(files),
-      violations: corpus_violations ++ file_violations
-    }
+    report = check_paths(paths, @roster_path, known_role_names())
 
     report |> render() |> IO.write()
 
@@ -175,7 +199,8 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
   def check_scenario(path, scenario_data) when is_map(scenario_data) do
     required_string_violations(path, scenario_data) ++
       scope_violations(path, scenario_data) ++
-      steps_vs_branches_violations(path, scenario_data)
+      steps_vs_branches_violations(path, scenario_data) ++
+      expect_refusal_violations(path, scenario_data)
   end
 
   # -- SCHEMA-2: pre-existing required top-level fields ------------------------
@@ -204,17 +229,8 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
 
   @spec scope_violations(Path.t(), map()) :: [violation()]
   defp scope_violations(path, data) do
-    scope = Map.get(data, "scope")
-    company_id = Map.get(data, "company_id")
-
-    cond do
-      is_binary(scope) and scope != "" ->
-        []
-
-      is_binary(company_id) and company_id != "" ->
-        []
-
-      true ->
+    case resolve_scope(data) do
+      nil ->
         [
           violation(
             path,
@@ -223,6 +239,9 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
               "information cannot be classified"
           )
         ]
+
+      _scope ->
+        []
     end
   end
 
@@ -459,6 +478,458 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
 
   defp branch_label(_branch, index), do: "at index #{index}"
 
+  # -- SCHEMA-12 (file-local): `expect_refusal` step key ------------------------
+
+  @spec expect_refusal_violations(Path.t(), map()) :: [violation()]
+  defp expect_refusal_violations(path, data) do
+    data
+    |> step_lists()
+    |> Enum.flat_map(fn steps ->
+      steps
+      |> Enum.with_index(1)
+      |> Enum.flat_map(fn
+        {%{"expect_refusal" => v}, n} when not is_boolean(v) ->
+          [violation(path, "SCHEMA-12", "step #{n}: expect_refusal must be a boolean")]
+
+        _ ->
+          []
+      end)
+    end)
+  end
+
+  # -- scenario-data helpers ----------------------------------------------------
+
+  # Every list of steps in a scenario: the flat `steps:` list and each branch's `steps:`.
+  # Tolerates any malformed shape (returns fewer lists, never raises).
+  @spec step_lists(term()) :: [[term()]]
+  defp step_lists(data) when is_map(data) do
+    flat = if is_list(data["steps"]), do: [data["steps"]], else: []
+
+    branch_steps =
+      case data["branches"] do
+        branches when is_list(branches) ->
+          for %{"steps" => steps} <- branches, is_list(steps), do: steps
+
+        _ ->
+          []
+      end
+
+    flat ++ branch_steps
+  end
+
+  defp step_lists(_data), do: []
+
+  @doc "Role names from `Letflow.Api.Authorization.roles/0`, as strings, read at call time."
+  @spec known_role_names() :: [role_name()]
+  def known_role_names, do: Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+
+  @doc "True iff `id` is a login actor id (not `actor-system-*`, not `actor-any`)."
+  @spec login_actor?(term()) :: boolean()
+  def login_actor?("actor-any"), do: false
+  def login_actor?("actor-system-" <> _), do: false
+  def login_actor?("actor-" <> _), do: true
+  def login_actor?(_other), do: false
+
+  @doc "Sorted unique login actor ids: top-level `actors:` values plus every step `actor:`."
+  @spec login_actor_ids(map()) :: [String.t()]
+  def login_actor_ids(data) when is_map(data) do
+    declared =
+      case data["actors"] do
+        m when is_map(m) -> Map.values(m)
+        _ -> []
+      end
+
+    from_steps =
+      data
+      |> step_lists()
+      |> List.flatten()
+      |> Enum.flat_map(fn
+        %{"actor" => actor} -> [actor]
+        _ -> []
+      end)
+
+    (declared ++ from_steps) |> Enum.filter(&login_actor?/1) |> Enum.uniq() |> Enum.sort()
+  end
+
+  @doc "Resolved scope: `scope:` if a non-empty string, else `company_id:`, else `nil` (SCHEMA-3's precedence)."
+  @spec resolve_scope(map()) :: String.t() | nil
+  def resolve_scope(data) when is_map(data) do
+    case {data["scope"], data["company_id"]} do
+      {s, _} when is_binary(s) and s != "" -> s
+      {_, c} when is_binary(c) and c != "" -> c
+      _ -> nil
+    end
+  end
+
+  @doc "True iff any step (flat or in a branch) has `expect_refusal: true`."
+  @spec has_refusal_step?(map()) :: boolean()
+  def has_refusal_step?(data) do
+    data
+    |> step_lists()
+    |> List.flatten()
+    |> Enum.any?(&match?(%{"expect_refusal" => true}, &1))
+  end
+
+  # -- roster: read + shape validation (SCHEMA-12) -------------------------------
+
+  @doc """
+  Reads and shape-validates the actor roster. Never raises on content: a missing,
+  unreadable, unparseable or malformed roster becomes SCHEMA-12 violations whose
+  `file` is the roster path.
+  """
+  @spec read_roster(Path.t()) :: {:ok, roster()} | {:error, [violation()]}
+  def read_roster(path) do
+    with {:ok, raw} <- File.read(path),
+         {:ok, data} <- YamlElixir.read_from_string(raw) do
+      if is_map(data) do
+        validate_roster(path, data)
+      else
+        {:error, [roster_violation(path, "roster is not a YAML mapping")]}
+      end
+    else
+      {:error, reason} when is_atom(reason) ->
+        {:error, [roster_violation(path, "roster unreadable: #{:file.format_error(reason)}")]}
+
+      {:error, reason} ->
+        {:error,
+         [roster_violation(path, "roster YAML parse error: #{format_yaml_error(reason)}")]}
+    end
+  end
+
+  @spec roster_violation(Path.t(), String.t()) :: violation()
+  defp roster_violation(path, message), do: violation(path, "SCHEMA-12", message)
+
+  @spec validate_roster(Path.t(), map()) :: {:ok, roster()} | {:error, [violation()]}
+  defp validate_roster(path, data) do
+    {actors, actor_errors} = validate_actors(data["actors"])
+    {unresolved, unresolved_errors} = validate_unresolved(data["unresolved"], actors)
+    {allowed, allowed_errors} = validate_allowed(data["platform_actor_allowed"])
+    {exempt, exempt_errors} = validate_exempt(data["refusal_coverage_exempt"])
+    {legacy, legacy_errors} = validate_legacy(data["legacy_platform_admin"], actors)
+
+    errors =
+      actor_errors ++ unresolved_errors ++ allowed_errors ++ exempt_errors ++ legacy_errors
+
+    if errors == [] do
+      {:ok,
+       %{
+         actors: actors,
+         unresolved: unresolved,
+         platform_actor_allowed: allowed,
+         refusal_coverage_exempt: exempt,
+         legacy_platform_admin: legacy
+       }}
+    else
+      {:error, errors |> Enum.map(&roster_violation(path, &1)) |> sort_violations()}
+    end
+  end
+
+  defp validate_actors(actors) when is_map(actors) and map_size(actors) > 0 do
+    Enum.reduce(actors, {%{}, []}, fn {id, entry}, {ok, errs} ->
+      case validate_actor_entry(id, entry) do
+        {:ok, e} -> {Map.put(ok, id, e), errs}
+        {:error, es} -> {ok, errs ++ es}
+      end
+    end)
+  end
+
+  defp validate_actors(_other), do: {%{}, ["`actors:` is missing, not a mapping, or empty"]}
+
+  defp validate_actor_entry(id, entry) when is_map(entry) do
+    tenant = entry["tenant"]
+    builtin = entry["builtin_roles"]
+    routing = Map.get(entry, "routing_roles", [])
+    note = entry["note"]
+
+    errs =
+      [
+        {non_empty_string?(tenant), "actor \"#{id}\": `tenant` must be a non-empty string"},
+        {string_list?(builtin) and builtin != [],
+         "actor \"#{id}\": `builtin_roles` must be a non-empty list of non-empty strings"},
+        {string_list?(routing),
+         "actor \"#{id}\": `routing_roles` must be a list of non-empty strings"},
+        {is_nil(note) or is_binary(note), "actor \"#{id}\": `note` must be a string"}
+      ]
+      |> Enum.reject(fn {ok?, _} -> ok? end)
+      |> Enum.map(&elem(&1, 1))
+
+    if errs == [] do
+      {:ok, %{tenant: tenant, builtin_roles: builtin, routing_roles: routing, note: note}}
+    else
+      {:error, errs}
+    end
+  end
+
+  defp validate_actor_entry(id, _entry), do: {:error, ["actor \"#{id}\": entry is not a mapping"]}
+
+  defp validate_unresolved(nil, _actors), do: {%{}, []}
+
+  defp validate_unresolved(unresolved, actors) when is_map(unresolved) do
+    Enum.reduce(unresolved, {%{}, []}, fn {id, entry}, {ok, errs} ->
+      searched = if is_map(entry), do: entry["searched"], else: nil
+
+      dup =
+        if Map.has_key?(actors, id),
+          do: ["actor \"#{id}\" is under both actors and unresolved"],
+          else: []
+
+      bad =
+        if string_list?(searched) and searched != [],
+          do: [],
+          else: ["unresolved actor \"#{id}\": `searched` must be a non-empty list of strings"]
+
+      case dup ++ bad do
+        [] -> {Map.put(ok, id, searched), errs}
+        es -> {ok, errs ++ es}
+      end
+    end)
+  end
+
+  defp validate_unresolved(_other, _actors), do: {%{}, ["`unresolved:` must be a mapping"]}
+
+  defp validate_allowed(nil), do: {%{}, []}
+
+  defp validate_allowed(allowed) when is_map(allowed) do
+    errs =
+      for {id, reason} <- allowed,
+          not (is_binary(reason) and String.trim(reason) != ""),
+          do: "platform_actor_allowed \"#{id}\": reason must be a non-empty string"
+
+    {allowed, errs}
+  end
+
+  defp validate_allowed(_other), do: {%{}, ["`platform_actor_allowed:` must be a mapping"]}
+
+  defp validate_exempt(nil), do: {[], []}
+
+  defp validate_exempt(list) do
+    if string_list?(list),
+      do: {list, []},
+      else: {[], ["`refusal_coverage_exempt:` must be a list of non-empty strings"]}
+  end
+
+  defp validate_legacy(nil, _actors), do: {%{}, []}
+
+  defp validate_legacy(legacy, actors) when is_map(legacy) do
+    Enum.reduce(legacy, {%{}, []}, fn {id, entry}, {ok, errs} ->
+      entry = if is_map(entry), do: entry, else: %{}
+      since = parse_date(entry["since"])
+      reason = entry["reason"]
+      removed_by = entry["removed_by"]
+      actor = Map.get(actors, id)
+
+      es =
+        [
+          {since != nil, "legacy_platform_admin \"#{id}\": `since` must be an ISO date"},
+          {non_empty_string?(reason), "legacy_platform_admin \"#{id}\": `reason` is empty"},
+          {non_empty_string?(removed_by),
+           "legacy_platform_admin \"#{id}\": `removed_by` is missing"},
+          {actor != nil, "legacy_platform_admin \"#{id}\": actor is not in `actors`"},
+          {actor == nil or "PLATFORM_ADMIN" in actor.builtin_roles,
+           "legacy_platform_admin \"#{id}\": actor does not hold PLATFORM_ADMIN (stale exemption)"},
+          {actor == nil or actor.tenant != "platform",
+           "legacy_platform_admin \"#{id}\": actor has tenant platform (pointless exemption)"}
+        ]
+        |> Enum.reject(fn {ok?, _} -> ok? end)
+        |> Enum.map(&elem(&1, 1))
+
+      case es do
+        [] -> {Map.put(ok, id, %{since: since, reason: reason, removed_by: removed_by}), errs}
+        _ -> {ok, errs ++ es}
+      end
+    end)
+  end
+
+  defp validate_legacy(_other, _actors), do: {%{}, ["`legacy_platform_admin:` must be a mapping"]}
+
+  defp parse_date(s) when is_binary(s) do
+    case Date.from_iso8601(s) do
+      {:ok, d} -> d
+      _ -> nil
+    end
+  end
+
+  defp parse_date(_other), do: nil
+
+  defp non_empty_string?(v), do: is_binary(v) and String.trim(v) != ""
+  defp string_list?(v), do: is_list(v) and Enum.all?(v, &non_empty_string?/1)
+
+  # -- roster-only rules: SCHEMA-8, SCHEMA-9 ------------------------------------
+
+  @doc "Roster-only rules SCHEMA-8 (unknown built-in role) and SCHEMA-9 (tenant actor holds PLATFORM_ADMIN)."
+  @spec check_roster(Path.t(), roster(), [role_name()]) :: [violation()]
+  def check_roster(roster_path, roster, known_roles) do
+    known = Enum.join(known_roles, ", ")
+
+    unknown_role =
+      for {id, entry} <- roster.actors,
+          role <- Enum.uniq(entry.builtin_roles),
+          role not in known_roles do
+        violation(
+          roster_path,
+          "SCHEMA-8",
+          "actor \"#{id}\" lists builtin_roles value \"#{role}\" which is not in " <>
+            "Authorization.roles/0 (#{known})"
+        )
+      end
+
+    tenant_admin =
+      for {id, entry} <- roster.actors,
+          entry.tenant != "platform",
+          "PLATFORM_ADMIN" in entry.builtin_roles,
+          not Map.has_key?(roster.legacy_platform_admin, id) do
+        violation(
+          roster_path,
+          "SCHEMA-9",
+          "actor \"#{id}\" has tenant \"#{entry.tenant}\" (not platform) but holds " <>
+            "PLATFORM_ADMIN and is not listed under legacy_platform_admin"
+        )
+      end
+
+    sort_violations(unknown_role ++ tenant_admin)
+  end
+
+  # -- corpus rules: SCHEMA-7, SCHEMA-10, SCHEMA-11 -----------------------------
+
+  @doc "Cross-file rules SCHEMA-7, SCHEMA-10, SCHEMA-11, plus the actor counts for the printout."
+  @spec check_corpus([scenario()], Path.t(), roster(), [role_name()]) ::
+          {[violation()], actor_stats()}
+  def check_corpus(scenarios, roster_path, roster, _known_roles) do
+    per_scenario =
+      for {path, data} <- scenarios, is_map(data), do: {path, data, login_actor_ids(data)}
+
+    covered = fn id -> Map.has_key?(roster.actors, id) or Map.has_key?(roster.unresolved, id) end
+
+    missing_v =
+      for {path, _data, ids} <- per_scenario, id <- ids, not covered.(id) do
+        violation(
+          path,
+          "SCHEMA-7",
+          "login actor \"#{id}\" has no entry in #{roster_path} under actors: or unresolved:"
+        )
+      end
+
+    platform_v =
+      for {path, data, ids} <- per_scenario,
+          scope = resolve_scope(data),
+          scope != nil and scope != "platform",
+          not allowed_platform_scenario?(roster, data),
+          id <- ids,
+          match?(%{tenant: "platform"}, Map.get(roster.actors, id)) do
+        violation(
+          path,
+          "SCHEMA-10",
+          "platform actor \"#{id}\" appears in scenario \"#{data["id"]}\" whose resolved " <>
+            "scope is \"#{scope}\"; allowed only in scope platform or when the scenario id " <>
+            "is listed in platform_actor_allowed with a non-empty reason"
+        )
+      end
+
+    refusal_v =
+      per_scenario
+      |> Enum.filter(fn {_p, data, _ids} -> resolve_scope(data) != nil end)
+      |> Enum.group_by(fn {_p, data, _ids} -> resolve_scope(data) end)
+      |> Enum.flat_map(fn {scope, group} ->
+        covered? =
+          Enum.any?(group, fn {_p, data, _ids} -> has_refusal_step?(data) end) or
+            scope in roster.refusal_coverage_exempt
+
+        if covered? do
+          []
+        else
+          first = group |> Enum.map(&elem(&1, 0)) |> Enum.min()
+
+          [
+            violation(
+              first,
+              "SCHEMA-11",
+              "resolved scope \"#{scope}\" has #{length(group)} scenario(s) and none has a " <>
+                "step with expect_refusal: true; add one or list \"#{scope}\" under " <>
+                "refusal_coverage_exempt"
+            )
+          ]
+        end
+      end)
+
+    all_ids = per_scenario |> Enum.flat_map(&elem(&1, 2)) |> Enum.uniq()
+    in_roster = Enum.count(all_ids, &Map.has_key?(roster.actors, &1))
+    unresolved = Enum.count(all_ids, &Map.has_key?(roster.unresolved, &1))
+
+    stats = %{
+      login_actors: length(all_ids),
+      in_roster: in_roster,
+      unresolved: unresolved,
+      missing: length(all_ids) - in_roster - unresolved
+    }
+
+    {sort_violations(missing_v ++ platform_v ++ refusal_v), stats}
+  end
+
+  defp allowed_platform_scenario?(roster, data) do
+    case Map.get(roster.platform_actor_allowed, data["id"]) do
+      reason when is_binary(reason) -> String.trim(reason) != ""
+      _ -> false
+    end
+  end
+
+  @spec sort_violations([violation()]) :: [violation()]
+  defp sort_violations(violations) do
+    violations |> Enum.uniq() |> Enum.sort_by(&{&1.rule, &1.file, &1.message})
+  end
+
+  # -- orchestration -------------------------------------------------------------
+
+  @doc """
+  Pure of `Mix`: runs the per-file checks, loads the roster, and (only when the roster
+  loaded) the roster and cross-file rules. `run/1` and the live-corpus test both call it.
+  """
+  @spec check_paths([Path.t()], Path.t(), [role_name()]) :: report()
+  def check_paths(paths, roster_path, known_roles) do
+    files = Enum.map(paths, &check_file/1)
+    file_violations = Enum.flat_map(files, & &1.violations)
+
+    empty_v =
+      if paths == [] do
+        [
+          %{
+            file: @scenario_glob,
+            rule: "SCHEMA-0",
+            message:
+              "scenario glob matched zero files -- an empty UAT scenario corpus is never " <>
+                "a silent green pass"
+          }
+        ]
+      else
+        []
+      end
+
+    {roster_v, actor_stats} =
+      case read_roster(roster_path) do
+        {:ok, roster} ->
+          scenarios =
+            Enum.flat_map(paths, fn path ->
+              case YamlElixir.read_from_file(path) do
+                {:ok, data} when is_map(data) -> [{path, data}]
+                _ -> []
+              end
+            end)
+
+          {corpus_v, stats} = check_corpus(scenarios, roster_path, roster, known_roles)
+          {check_roster(roster_path, roster, known_roles) ++ corpus_v, stats}
+
+        {:error, violations} ->
+          {violations, :not_loaded}
+      end
+
+    %{
+      files: files,
+      file_count: length(files),
+      violations: empty_v ++ file_violations ++ roster_v,
+      actor_stats: actor_stats,
+      roster_path: roster_path
+    }
+  end
+
   # -- rendering ----------------------------------------------------------------
 
   @doc """
@@ -477,6 +948,7 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
       @rule,
       "\n",
       render_files(report),
+      render_actor_stats(report),
       @thin_rule,
       "\n",
       summary_line(report),
@@ -493,6 +965,25 @@ defmodule Mix.Tasks.Letflow.CheckUatScenarioSchema do
       status = if ok?, do: "OK", else: "FAIL"
       [status, "  ", file, "\n"]
     end)
+  end
+
+  @spec render_actor_stats(report()) :: iodata()
+  defp render_actor_stats(report) do
+    path = Map.get(report, :roster_path, @roster_path)
+
+    case Map.get(report, :actor_stats) do
+      nil ->
+        []
+
+      :not_loaded ->
+        ["Actor roster: ", path, " -- not loaded (see SCHEMA-12)\n"]
+
+      %{login_actors: l, in_roster: r, unresolved: u, missing: m} ->
+        [
+          "Actor roster: #{path} -- #{l} login actor(s) in corpus: #{r} in roster, " <>
+            "#{u} unresolved, #{m} missing\n"
+        ]
+    end
   end
 
   @spec summary_line(report()) :: String.t()

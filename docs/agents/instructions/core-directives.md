@@ -725,8 +725,8 @@ account, not an organization.)*
 2. **A second failure of the same file or class is a defect, not a flake.** Do not rerun a
    second time; diagnose it (ISS-0977 / RT-6 recurred exactly this way).
 3. **CI-shaped local run before every push.** Stage the files first (the handoff and
-   requirement-status checks read the git index), export `MIX_TEST_PARTITION=3` for
-   subprocess/config tests, and run the checks the gate runs: `mix compile --warnings-as-errors`,
+   requirement-status checks read the git index), export `MIX_TEST_PARTITION` as `scripts/test_parallel.sh` does (e.g. 3) for
+   subprocess/config tests (the workflows do not set it themselves), and run the checks the gate runs: `mix compile --warnings-as-errors`,
    `mix format --check-formatted`, `mix letflow.lint_handoffs`, `mix letflow.check_issue_refs`,
    `mix letflow.check_boundaries`, and, if any status volume or the index changed,
    `test/docs/requirement_status_invariants_test.exs` (A9: the index `entries:` count must equal

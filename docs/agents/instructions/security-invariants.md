@@ -398,8 +398,10 @@ exempts a caller from the deactivated-tenant gate except a platform-tenant
 `PLATFORM_ADMIN`.
 
 **Reference.** Enforced from the merge of Q-960's PR A (until then the code violates it:
-a `PLATFORM_ADMIN` of any tenant can reach platform endpoints — ISS-0993/ISS-0994). PR A
-and decision 0046 cite this invariant; neither adds its own. Substance ratified by the
+a `PLATFORM_ADMIN` of any tenant can reach platform endpoints — ISS-0993/ISS-0994).
+Until then, SECURITY-REVIEWER applies INV-10 to every change that adds or touches a route or
+a permission; a change that does not touch them is not blocked by the known ISS-0993
+violation. PR A and decision 0046 cite this invariant; neither adds its own. Substance ratified by the
 user (REQ-445 D1-D4).
 
 **How to verify.** A cross-tenant negative test per platform-scope route group, with an

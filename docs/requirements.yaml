@@ -33583,3 +33583,416 @@ requirements:
       - "the rotation runbook docs/runbooks/login-directory-pepper-rotation.md exists (repository test), and REQ-443 is in this entry's depends_on"
       - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-4 and INV-6"
     depends_on: [REQ-437, REQ-441, REQ-443]
+
+  - id: REQ-445
+    title: "Decision record 0046 and role charter: platform scope vs tenant scope, role set grows to eight (TENANT_ADMIN, TENANT_AUDITOR), PLATFORM_ADMIN valid only in the platform tenant"
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S4
+    impl_order: 962  # letflow-queue task id, GH#2233. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user).
+    description: >
+      Documentation only. Writes down, as a decision record and a one-page
+      charter, the role model the user (repo owner) RATIFIED on 2026-10-05
+      after the role-system audit (run AUDIT-ROLES-20261005, ISS-0994). The
+      decisions below are settled; this entry records them, it does not
+      re-decide them. No file under lib/, web/, priv/ or test/ changes.
+
+      BACKGROUND (verified in the audit). There are six built-in roles
+      (Letflow.Api.Authorization.roles/0). PLATFORM_ADMIN is seeded in every
+      tenant and allowed everything (authorization.ex:1130), so a customer's
+      admin holds platform-operator powers (ISS-0994, proven). No tenant-admin
+      role exists, yet docs and UAT scenarios speak of one. Decision 0013
+      settles which role names exist, not what each role is responsible for.
+      Decision 0044 already uses the words platform operator and tenant admin
+      consistently with this model.
+
+      BUILDS:
+      1. docs/migration/decisions/0046-admin-scopes-and-role-charter.md
+      (use the next free number if 0046 is taken on origin/main or in an open
+      PR). It supersedes the role COUNT of 0013 and its CANDIDATE addendum
+      (six becomes eight) and nothing else in 0013; it never edits 0013
+      itself. Decisions to record, by name:
+      D1 Two scopes. PLATFORM scope = the organisation operating Letflow; it
+      acts on the tenant registry and on things shared by all tenants. TENANT
+      scope = one customer organisation; it acts only inside its own tenant.
+      D2 The PLATFORM TENANT is the operator's own tenant, exactly one,
+      identified as ISS-0994's fix defines. A platform-scope permission is
+      honoured only for a caller of the platform tenant.
+      D3 Every core permission has exactly one scope. The record contains the
+      full table (every atom of Authorization.core_permissions/0, plus the
+      permissions REQ-446 names). Platform scope: :TenantsManage and whatever
+      REQ-446 classifies as platform. Everything else, and every module
+      (Catalog) permission, is tenant scope.
+      D4 PLATFORM_ADMIN keeps its name and its allow-everything rule but
+      exists only in the platform tenant: it is not seeded, not issuable and
+      not honoured in any other tenant. It has no power inside a customer
+      tenant and no access to a customer's business data.
+      D5 TENANT_ADMIN (new): every tenant-scope permission, core and module,
+      in its own tenant; never a platform-scope permission; no exemption from
+      the deactivated-tenant gate. It is the tenant's owner role: users,
+      groups, role bindings, API tokens, settings and branding, module and
+      solution install, audit log.
+      D6 TENANT_AUDITOR (new): read-only inside its own tenant; the exact
+      permission list is REQ-448's and is copied into the table.
+      D7 PROCESS_DESIGNER, PROCESS_OPERATOR, TASK_WORKER, CANDIDATE and
+      AGENT_RUNNER are unchanged.
+      D8 Existing non-platform-tenant PLATFORM_ADMIN members and API tokens
+      are migrated to TENANT_ADMIN (REQ-447).
+      D9 Deferred until a customer asks, NOT built: a read-only platform
+      support role and a delegated user-manager role.
+      D10 The role set stays closed (0013, 0039 D4): a module cannot create a
+      role.
+      2. docs/roles.md, the role charter, at most two screens long, plain
+      language, readable by a non-technical person and by a weak model. One
+      section per role with exactly these headings: Scope, Who holds it,
+      Does, Must not. Then one role-by-permission matrix table in a fenced
+      block that a test can parse (REQ-448 adds the parity test; state the
+      format precisely: first column the permission atom without the colon,
+      one column per role in Authorization.roles/0 order, cells yes or no,
+      and a final column scope with platform or tenant). The matrix is the
+      TARGET state after REQ-446..448.
+      3. A Consistency section in the record quoting the passages of 0013,
+      0029, 0038, 0039 and 0044 it touches and stating for each: consistent,
+      or superseded and by which decision above.
+    open_questions:
+      - "Last-admin protection (removing the last TENANT_ADMIN member, or deactivating that user, locks a tenant out). Not ratified. Default: record it as an open risk in the record; nothing is built by this series."
+      - "Whether a platform operator ever needs supervised access into a customer tenant (break-glass). Not ratified. Default: no such access exists; record it as deferred with D9."
+      - "Realm role names in existing tenant realms: a tenant realm that still issues the claim PLATFORM_ADMIN to its admins will resolve to no role after REQ-447. Default: no alias; the tenant realm must issue TENANT_ADMIN. The record states this and REQ-447 handles the data."
+    acceptance_criteria:
+      - "the decision record exists under docs/migration/decisions/ with the next free number, states Status: RATIFIED by the user 2026-10-05, and contains decisions D1 to D10 by those labels"
+      - "the record's permission table lists every atom returned by Letflow.Api.Authorization.core_permissions/0 on the branch (the validator re-derives the list by running the function, not by reading the doc) with exactly one scope each"
+      - "docs/roles.md exists, has one section per each of the eight roles with the four headings Scope, Who holds it, Does, Must not, and one fenced matrix block in the stated format with eight role columns and a scope column"
+      - "0013 and every other existing decision record are byte-identical to origin/main (git diff shows only new files under docs/)"
+      - "REVIEWER and SECURITY-REVIEWER sign-off sections are present in the record with a PASS verdict each"
+    depends_on: []
+
+  - id: REQ-446
+    title: "Named, scoped permissions for the 13 routes that are admin-only by :Unknown fall-through (promotions, definition rollback, cross-tenant promote)"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 963  # letflow-queue task id, GH#2234. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user). Queue depends_on: Q-962, Q-961.
+    description: >
+      Thirteen authenticated routes declare no policy key, so
+      Letflow.Plugs.Authorize resolves them to :Unknown and
+      Authorization.evaluate_access/2 allows them for PLATFORM_ADMIN only
+      (authorization.ex:934-939). They are invisible in the permission matrix
+      and cannot be granted to any other role, which blocks REQ-447
+      (TENANT_ADMIN must be able to run its own tenant's promotions and
+      rollbacks without holding PLATFORM_ADMIN). This entry gives each of them
+      a named permission and a scope. It adds no role. Also depends on
+      ISS-0994 (queue Q-961), which introduces permission scope and the
+      platform tenant.
+
+      THE ROUTES (verify the list on the branch with a grep for plain
+      get/post/put/patch/delete macros in lib/letflow/routers/, excluding the
+      routers mounted outside Letflow.Plugs.ApiPipeline):
+      lib/letflow/routers/promotions.ex lines 207-251: POST /, POST /plan,
+      GET /platform-events, GET /:id, GET /:id/context, POST /:id/approve,
+      POST /:id/reject, POST /:id/apply, POST /:review_id/run-assertions,
+      GET /; lib/letflow/routers/definitions.ex:333 POST
+      /:process_key/rollback; lib/letflow/routers/tenants.ex:203 POST
+      /:test_tenant_id/promote/:process_key.
+
+      BUILDS:
+      1. New core permissions, proposed names (CODE-DESIGNER may adjust and
+      must keep the read/write split): :PromotionsRead (the GET routes),
+      :PromotionsManage (create, plan, approve, reject, apply,
+      run-assertions, and the promote route), :DefinitionsRollback. Each gets
+      endpoint_policy_key/2 and required_permission/1 clauses and the routes
+      move to the authz_* macros of Letflow.Api.AuthorizedRouter.
+      2. Scope. All three are TENANT scope, on one condition that must be
+      verified, not assumed: tenants.ex:196-198 states that :test_tenant_id
+      is caller-supplied and IS a cross-tenant read. Read
+      Letflow.Definitions.Promotion and PromotionPlan and establish whether
+      the handler proves the source test tenant belongs to the caller's own
+      tenant (the test/production pairing). If it does, cite the line in the
+      design. If it does not, that is a cross-tenant read by any admin: add
+      the ownership check (unrelated source tenant gets the same 404 as a
+      nonexistent one, INV-5) and say so in the design. GET
+      /promotions/platform-events: establish whether it returns rows of other
+      tenants; if it does, it is PLATFORM scope under its own permission.
+      3. Grants: PLATFORM_ADMIN through its catch-all. No other existing role
+      gains any of the new permissions in this entry (REQ-447 grants them to
+      TENANT_ADMIN).
+      4. After this entry no route mounted under Letflow.Plugs.ApiPipeline
+      resolves to :Unknown except a router's own match _ catch-all. Add a
+      test that enumerates the routers' compiled routes and fails on a new
+      route without a policy key.
+      5. Update the moduledocs that describe the :Unknown decision
+      (routers/promotions.ex, routers/tenants.ex REQ-077 section,
+      routers/definitions.ex) and the core permission count asserted in
+      test/letflow/api/authorization_test.exs.
+    open_questions:
+      - "Whether :Unknown should stop allowing PLATFORM_ADMIN at all once no real route uses it. Default: leave evaluate_access/2's :Unknown branch unchanged in this entry."
+    acceptance_criteria:
+      - "each of the 13 routes resolves to a named permission: a table-driven test asserts endpoint_policy_key/2 for every (method, path) pair and none returns :Unknown"
+      - "a PLATFORM_ADMIN of the platform tenant gets the same status codes as before on all 13 routes (existing router tests pass with no assertion weakened or deleted)"
+      - "PROCESS_DESIGNER, PROCESS_OPERATOR, TASK_WORKER, CANDIDATE and AGENT_RUNNER receive 403 on all 13 routes, as before"
+      - "the design states, with a file and line citation, whether POST /tenants/:test_tenant_id/promote/:process_key proves the source tenant belongs to the caller; if a check was added, a two-tenant test shows an unrelated source tenant yields 404 with a body byte-identical to a nonexistent id"
+      - "a test fails when a route under Letflow.Plugs.ApiPipeline is declared without a policy key (demonstrated once by a temporary route in the test itself or by a fixture router)"
+      - "every new permission has a scope in the scope table ISS-0994 introduced, and the scope-completeness test passes"
+      - "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted; SECURITY-REVIEWER verdict recorded"
+    depends_on: [REQ-445]
+
+  - id: REQ-447
+    title: "Add the TENANT_ADMIN role, stop seeding and honouring PLATFORM_ADMIN outside the platform tenant, and migrate existing tenant admins and API tokens"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 964  # letflow-queue task id, GH#2235. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user). Queue depends_on: Q-962, Q-963, Q-961.
+    description: >
+      Implements decisions D4, D5 and D8 of the role-charter decision record
+      (REQ-445). Read that record and docs/roles.md first. Requires ISS-0994
+      (queue Q-961: permission scope, platform tenant) and REQ-446 (named
+      permissions) to be merged.
+
+      BUILDS:
+      1. Letflow.Api.Authorization: add :TENANT_ADMIN to @roles and the role
+      type, a role_from_string clause, and the grant rule: TENANT_ADMIN is
+      allowed a permission if and only if that permission is tenant scope,
+      core or module (every Letflow.Modules.Catalog permission is tenant
+      scope). Never a platform-scope permission. It is NOT allowed the
+      :Unknown endpoint. No other role's grants change.
+      2. PLATFORM_ADMIN outside the platform tenant: not seeded
+      (RoleRegistry.seed_default_platform_role_groups/1 needs to know whether
+      the tenant is the platform tenant), not accepted by
+      RoleRegistry.upsert_role/4 as a :platform_role binding, not issuable by
+      Identity.create_token/3 (returns {:error, :invalid_role_set}), and
+      dropped when resolving a caller's roles so that a stale row or a token
+      claim cannot grant it. Inside the platform tenant nothing changes.
+      3. Seeding: every tenant, including the platform tenant, gets a
+      TENANT_ADMIN group and binding from provision_and_migrate/1.
+      4. Data migration, idempotent, following the existing pattern of
+      Letflow.Identity.RoleBackfill and mix letflow.backfill_platform_roles:
+      for every non-platform tenant, (a) ensure the TENANT_ADMIN group and
+      binding exist, (b) copy every member of the PLATFORM_ADMIN group into
+      it, (c) delete the PLATFORM_ADMIN tenant_role binding, (d) in every API
+      token whose roles contain PLATFORM_ADMIN replace it with TENANT_ADMIN.
+      A tenant that fails is reported and the sweep continues. The design
+      states how the migration is run on an existing deployment (QA) and the
+      run is recorded in the run report.
+      5. Letflow.Plugs.TenantStatus: TENANT_ADMIN has no exemption from the
+      deactivated-tenant gate.
+      6. priv/keycloak/realms/bpm-default.json: add the TENANT_ADMIN realm
+      role and a seeded tenant-admin-user;
+      test/letflow/api/authorization_role_realm_test.exs passes unmodified.
+      7. Update every moduledoc and test that states six roles or enumerates
+      them (authorization.ex, role_registry.ex, tenant_role.ex,
+      tenant_onboarding.ex, authorization_test.exs grids).
+      8. INVESTIGATE AND REPORT, do not build: how the administrator named in
+      the onboarding wizard (see
+      test/fixtures/uat/scenarios/swiftroute/tenant-onboarding-happy.yaml)
+      becomes an admin of the new tenant. The audit found no code in
+      lib/letflow/routers/onboarding.ex that binds that person to a role.
+      State in the run report what actually happens on that user's first
+      login. If nothing grants them TENANT_ADMIN, report it to ORCH as an
+      issue per docs/agents/protocols/ISSUE_QUEUE.md.
+    open_questions:
+      - "A tenant realm that still issues the claim PLATFORM_ADMIN resolves to no role after this entry, so a NEW admin of such a tenant gets nothing until the realm issues TENANT_ADMIN. Default: no alias in code; list affected tenants in the migration output and note the realm change in the run report."
+      - "Whether the platform tenant's PLATFORM_ADMIN members are also added to its TENANT_ADMIN group. Default: no; PLATFORM_ADMIN already allows everything there."
+    acceptance_criteria:
+      - "Authorization.roles/0 returns seven atoms including :TENANT_ADMIN; for every permission in Authorization.permissions/0 a test asserts role_allows?(:TENANT_ADMIN, p) is true exactly when p is tenant scope; evaluate_access for :Unknown denies TENANT_ADMIN"
+      - "a TENANT_ADMIN of a non-platform tenant gets 2xx on users, groups, roles, tokens, audit, PATCH /tenant/settings, POST /tenant/modules, POST /tenant/solutions, promotions and definition rollback, and 403 on every route of /tenants, /onboarding, /platform-migrations and /event-retention (router tests, real Postgres)"
+      - "a newly provisioned non-platform tenant has a TENANT_ADMIN binding and no PLATFORM_ADMIN binding; the platform tenant has both"
+      - "in a non-platform tenant: upsert_role with PLATFORM_ADMIN is rejected, POST /tokens with PLATFORM_ADMIN returns the invalid-role-set error, and a caller whose stored or claimed roles contain PLATFORM_ADMIN is treated as not holding it (403 on a platform route AND no catch-all on tenant routes)"
+      - "migration test: a non-platform tenant with two PLATFORM_ADMIN members and one PLATFORM_ADMIN API token ends with both users in TENANT_ADMIN, no PLATFORM_ADMIN binding and the token carrying TENANT_ADMIN; a second run changes nothing; the platform tenant is untouched"
+      - "with a tenant inactive, its TENANT_ADMIN is halted by Letflow.Plugs.TenantStatus with 403 tenant_inactive"
+      - "the realm file contains the TENANT_ADMIN role and authorization_role_realm_test.exs passes without edits"
+      - "the run report states, with evidence, what role the onboarding wizard's named administrator holds on first login"
+      - "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted; SECURITY-REVIEWER verdict recorded"
+    depends_on: [REQ-445, REQ-446]
+
+  - id: REQ-448
+    title: "Add the read-only TENANT_AUDITOR role and a parity test between docs/roles.md and the authorization matrix"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 965  # letflow-queue task id, GH#2236. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user). Queue depends_on: Q-964.
+    description: >
+      Implements decision D6 of the role-charter decision record (REQ-445):
+      a built-in role that can read its own tenant and change nothing, for
+      compliance officers, auditors and managers. Then locks the charter to
+      the code with a test.
+
+      BUILDS:
+      1. Letflow.Api.Authorization: add :TENANT_AUDITOR (role atom, type,
+      role_from_string clause). Its grants are exactly: :DefinitionsRead,
+      :InstancesRead, :TasksRead, :AuditRead, :MetricsRead, :AttachmentsRead,
+      :EntitiesDefinitionsRead, :EntitiesQuery, :EntitiesAggregate,
+      :EntitiesAttachmentsRead, :HelpRead, :MembershipsRead, :MyModulesRead
+      (already granted to every role), and the read permission(s) REQ-446
+      introduced for promotions. Nothing else: no write, manage, export,
+      import, token, user, role, module or settings permission, and no
+      module (Catalog) permission unless a module's own manifest grants it.
+      GET /tasks returns all tasks of the tenant for this role
+      (task_scope :all), because is_task_worker_only?/1 is false for it.
+      Field-level entity restrictions apply to it like to any other role.
+      2. Seeding: every tenant gets a TENANT_AUDITOR group and binding;
+      existing tenants get it through the same backfill mechanism REQ-447
+      used.
+      3. priv/keycloak/realms/bpm-default.json: add the TENANT_AUDITOR realm
+      role and a seeded auditor-user.
+      4. Parity test: parse the fenced matrix block of docs/roles.md
+      (format fixed by REQ-445) and assert, for every role in
+      Authorization.roles/0 and every permission in
+      Authorization.core_permissions/0, that the cell equals
+      Authorization.role_allows?/2 (for PLATFORM_ADMIN: as evaluated in the
+      platform tenant) and that the scope column equals the code's scope
+      table. A missing or extra row fails. If the charter and the code
+      disagree, fix whichever is wrong against the decision record; do not
+      edit the test to pass.
+      5. Update the role counts and enumerations touched by REQ-447 from
+      seven to eight.
+    open_questions:
+      - "Bulk export (:EntitiesRecordsExport, redacted) for auditors. Default: not granted; an auditor reads through the query routes."
+    acceptance_criteria:
+      - "Authorization.roles/0 returns eight atoms; a test iterating Authorization.permissions/0 asserts TENANT_AUDITOR is allowed exactly the listed permissions and nothing else"
+      - "router tests with a TENANT_AUDITOR caller: 200 on GET definitions, instances, tasks (unfiltered), audit and POST /entities/query; 403 on one representative write route of each router mounted in Letflow.Plugs.ApiPipeline (the test names the route per router)"
+      - "a newly provisioned tenant has a TENANT_AUDITOR binding; the backfill adds it to an existing tenant and is idempotent"
+      - "the realm file contains TENANT_AUDITOR and authorization_role_realm_test.exs passes without edits"
+      - "the docs/roles.md parity test passes, and fails when one cell of the matrix is flipped (shown once in the test run report, then reverted)"
+      - "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted; SECURITY-REVIEWER verdict recorded"
+    depends_on: [REQ-447]
+
+  - id: REQ-449
+    title: "GET /api/v1/me/access: the caller's effective roles, permissions and platform-tenant flag, as the single source for client-side gating"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 966  # letflow-queue task id, GH#2237. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user). Queue depends_on: Q-964.
+    description: >
+      The web app decides what to show from the roles in the token payload
+      (web/src/pages/OidcCallbackPage.tsx:97, web/src/auth/AuthProvider.tsx:51)
+      while the server decides from the tenant's local groups
+      (Identity.list_effective_role_names/2). The two already disagree in
+      principle and will disagree in practice after REQ-447 (a token may
+      still claim PLATFORM_ADMIN for a user the server treats as
+      TENANT_ADMIN). This entry gives clients one server answer. REQ-450
+      (web) consumes it; the mobile tier may later.
+
+      BUILDS:
+      1. Route GET /me/access on Letflow.Routers.Me (next to /me/memberships
+      and /me/modules), gated by a new tenant-scope permission
+      :MyAccessRead granted to every role exactly the way :MyModulesRead is
+      (authorization.ex:1121).
+      2. Response, a hand-built map (INV-2, never a struct encoding):
+      roles = the caller's effective role names as the server resolved them
+      for this request (after REQ-447's dropping of PLATFORM_ADMIN outside
+      the platform tenant), sorted; permissions = every permission atom name
+      in Authorization.permissions/0 that Authorization.has_permission?/2
+      allows for those roles in this tenant (platform-scope ones only when
+      the tenant is the platform tenant), sorted; platform_tenant = boolean.
+      Nothing else: no user id beyond what the caller already knows, no
+      other tenant's data.
+      3. No caching: computed from conn.assigns.auth_context per request.
+    acceptance_criteria:
+      - "GET /me/access returns 200 for a caller of each of the eight roles and for a caller with an empty role list (permissions then contains only the role-agnostic ones)"
+      - "for each role the permissions array equals the set computed in the test from Authorization.permissions/0 and has_permission?/2; a TENANT_ADMIN of a non-platform tenant has no platform-scope permission and platform_tenant false; a platform-tenant PLATFORM_ADMIN has every permission and platform_tenant true"
+      - "the response body has exactly the three keys roles, permissions, platform_tenant (full-body assertion)"
+      - "a role removed from the caller's group between two requests is absent from the second response (no cache)"
+      - "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted; SECURITY-REVIEWER verdict recorded"
+    depends_on: [REQ-447]
+
+  - id: REQ-450
+    title: "Web: gate navigation and pages on server-reported permissions, split the platform console from tenant administration, remove hand-copied role lists"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 967  # letflow-queue task id, GH#2238. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user). Queue depends_on: Q-965, Q-966.
+    description: >
+      Read docs/roles.md first. Today every tenant's admin sees the platform
+      console (web/src/components/layout/AppShell.tsx:43-60: Register Tenant,
+      Tenants, Platform Migrations, Event Retention) and is redirected to
+      /platform-dashboard after login (OidcCallbackPage.tsx:107). Role names
+      are hand-copied into about 25 files (grep PLATFORM_ADMIN under
+      web/src), one of them checks a role that does not exist
+      (PROCESS_ADMIN, web/src/pages/instances/InstanceDetailPage.tsx:31), and
+      the roles come from the token payload instead of the server.
+
+      BUILDS:
+      1. One access module (for example web/src/auth/access.ts plus a
+      useAccess hook): after login and on tenant switch it calls GET
+      /api/v1/me/access (REQ-449) and exposes can(permission) and
+      isPlatformTenant. The session's roles come from that response, not
+      from the token payload. While the call is pending, gated UI is not
+      rendered; on failure the user sees the existing error state, never an
+      ungated UI.
+      2. Replace every role-array check in web/src (nav items, page guards,
+      button visibility) with can(<permission>), using the permission the
+      server enforces for the call that element triggers (the mapping is
+      Authorization.endpoint_policy_key/2 and required_permission/1; list
+      the mapping in the PR description). Module nav items
+      (web/src/modules/*/index.ts) move to permissions too.
+      3. Navigation in three groups: Work (instances, tasks, definitions,
+      entities, module items), Tenant administration (users, groups, tokens,
+      audit, appearance, modules and solutions, promotion reviews), Platform
+      (register tenant, tenants, platform migrations, event retention,
+      services, health, metrics). The Platform group and its pages exist
+      only when isPlatformTenant is true AND the permission is held; a
+      direct URL to a platform page otherwise shows PermissionDenied.
+      4. Login redirect: /platform-dashboard only when isPlatformTenant and
+      the caller can manage tenants; otherwise the normal landing page.
+      5. A TENANT_AUDITOR sees the read pages and no create, edit, delete,
+      start, cancel, complete or assign control.
+      6. Remove PROCESS_ADMIN. Add a repository test that fails when a
+      built-in role name string literal appears in web/src outside the
+      access module, its tests and type declarations.
+      7. Update unit and e2e fixtures (AuthProvider e2e session, Playwright
+      helpers) so sessions are built from a mocked /me/access.
+    open_questions:
+      - "Where the server grants more than the old nav showed (for example PROCESS_OPERATOR holds :AuditRead but the Audit entry was PLATFORM_ADMIN-only), the permission wins and the entry appears. List every such visible change in the PR description."
+    acceptance_criteria:
+      - "unit tests render the shell for each of the eight roles from a mocked /me/access: a non-platform TENANT_ADMIN sees Tenant administration and no Platform entry; a platform-tenant PLATFORM_ADMIN sees all three groups; a TENANT_AUDITOR sees read pages only; a TASK_WORKER sees neither admin group"
+      - "navigating directly to /admin/tenants, /admin/onboarding/new, /admin/platform-migrations and /admin/event-retention as a non-platform TENANT_ADMIN renders PermissionDenied and issues no API request to those resources"
+      - "after OIDC callback a non-platform TENANT_ADMIN lands on the normal landing page and a platform-tenant PLATFORM_ADMIN on /platform-dashboard"
+      - "a session whose token payload claims PLATFORM_ADMIN while /me/access reports only TENANT_ADMIN is gated as TENANT_ADMIN"
+      - "the repository test finds no built-in role name literal in web/src outside the access module, and the string PROCESS_ADMIN does not occur in web/"
+      - "npm run check passes, real output quoted; the PR description lists the element-to-permission mapping and every visible navigation change"
+    depends_on: [REQ-448, REQ-449]
+
+  - id: REQ-451
+    title: "Make the role charter binding for agents and UAT: mandatory reading, real role names in the UAT schema and actor mapping, anti-pattern entry"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S7
+    impl_order: 968  # letflow-queue task id, GH#2239. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user). Queue depends_on: Q-962, Q-964.
+    description: >
+      The role-system audit (AUDIT-ROLES-20261005) found that agents had no
+      single statement of what a platform admin and a tenant admin may do, and
+      filled the gap by giving tenant users PLATFORM_ADMIN. After REQ-445
+      (charter) and REQ-447 (TENANT_ADMIN) this entry points every agent and
+      the UAT material at the charter. Documentation and fixtures metadata
+      only; no application code.
+
+      BUILDS:
+      1. CLAUDE.md: add docs/roles.md to Mandatory reading at session start
+      and one Core rule line: never grant PLATFORM_ADMIN to a tenant user;
+      platform-scope actions belong to the platform tenant only.
+      2. docs/agents/AGENT_SYSTEM.md and the instruction files of the agents
+      that create users, roles or scenarios (.claude/agents/req-analyst.md,
+      code-designer.md, security-reviewer.md, uat-runner.md,
+      product-owner.md, and the BA analyst agent file): one pointer line to
+      docs/roles.md each, in the section where that agent's inputs are
+      listed.
+      3. docs/agents/uat-scenario-schema.md:152 uses role names that do not
+      exist (TENANT_ADMIN is now real, TENANT_USER is not): replace the
+      example with real built-in roles.
+      4. UAT actors: find where a scenario actor (for example tenant_admin:
+      actor-swiftroute-alice, platform_admin: actor-platform-admin) is mapped
+      to a login and roles (search test/fixtures/uat, web/tests/e2e and the
+      QA seed scripts) and set tenant_admin actors to TENANT_ADMIN and
+      platform_admin actors to a platform-tenant PLATFORM_ADMIN. Scenario
+      files marked as ported verbatim are NOT edited; only the mapping is.
+      If no such mapping exists, state that in the run report with the
+      searches performed.
+      5. docs/anti-patterns.md: one entry, granting PLATFORM_ADMIN to make a
+      tenant-side test pass, with the audit as the example and the charter as
+      the rule.
+    acceptance_criteria:
+      - "CLAUDE.md lists docs/roles.md under Mandatory reading and carries the core rule line"
+      - "each named agent file and AGENT_SYSTEM.md contains a link to docs/roles.md (a grep per file is quoted in the run report)"
+      - "docs/agents/uat-scenario-schema.md contains no role name outside Letflow.Api.Authorization.roles/0 (the validator compares against the function's output)"
+      - "the run report either shows the actor-to-role mapping diff or states, with the searches performed, that no mapping exists; no scenario file marked ported-verbatim is modified (git diff)"
+      - "docs/anti-patterns.md has the new entry; mix letflow.check passes, real output quoted"
+    depends_on: [REQ-445, REQ-447]

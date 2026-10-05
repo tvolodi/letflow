@@ -69,7 +69,7 @@ one agent turn, in the sense of `docs/requirements.yaml`'s sizing rule.
   realm needs a silent-login that the code itself says only works "if tenant realms share SSO
   via a federated upstream IdP" (`web/src/auth/tenantOidcRegistry.ts:34-36`); otherwise the
   user is asked to sign in again.
-- **The current plan is the email-first directory (O1).** Decision 0042 (ratified) and 0043
+- **The current plan is the email-first directory (O1).** Decision 0042 (ratified) and 0043 (BA-decided by delegation; REVIEWER and SECURITY-REVIEWER gates still owed)
   (BA decisions D-A..D-H), requirements REQ-434..REQ-444. State in `docs/requirements.yaml`
   today: REQ-434, REQ-436, REQ-439 `done`; REQ-435, 437, 438, 440, 441, 442, 443, 444
   `pending`. In the tree: `lib/letflow/plugs/client_ip.ex` and
@@ -332,8 +332,9 @@ directory is the router.
 
 What survives unchanged: the table and its data (email_key, tenant_id, key_id), the pepper,
 dual-read rotation, the population hooks (a `shared` tenant still has a per-tenant `users`
-row, created by invitation acceptance rather than JIT, but through the same Identity
-functions, so the same transactions write the directory), the lookup query and its closed
+row, created by invitation acceptance rather than JIT; the same hook and removal rule
+apply to that new invitation writer, added by a new requirement, since REQ-440's four
+function hooks do not cover it), the lookup query and its closed
 response, the disclosure modes and per-tenant flag, the limiter, `ClientIp`, the notifier
 port and SMTP adapter, the enablement gate and the SPA discovery page.
 
@@ -394,8 +395,10 @@ scope, 0042 Decision 7 and 0042 design item (k)).
 
 - **0006 D1 (per-tenant users): kept.** A shared tenant still has its own `users` row per
   member in its own schema; the central realm identity is authentication only. This is the
-  shape 0038 already allowed ("every tenant reachable ... has its own per-tenant row",
-  `0038...md:65-75`).
+  shape 0038 describes ("every tenant reachable ... has its own per-tenant row",
+  `0038...md:65-75`). 0038 condition 3 speaks of rows created via each tenant's own realm
+  and JIT, whereas shared rows are created by invitation in a common realm: 0038 forbids
+  nothing here but did not allow it either.
 - **0006 R5 (realm<->tenant bijection): kept for dedicated tenants, narrowed for shared ones.**
   Shared tenants carry `idp_realm_id` NULL, so `tenants_idp_realm_id_partial_index` and
   `Tenant.update_changeset/2` are untouched. What changes is R5's parenthetical "nullable only
@@ -510,7 +513,9 @@ Summary of the rule O3 would adopt (also the O2 rule):
    would be the access-token lifetime (value also UNVERIFIED, recorded by the Phase 0 spike). Central account deletion leaves
    local rows keyed to a dead `sub`; Phase 3 therefore requires an **offboarding
    procedure** that fans central disable/deletion out to the local `users` rows (set
-   inactive, then purge per policy) and records it in the per-tenant audit trail.
+   inactive, then purge per policy) and records it in the per-tenant audit trail. Any purge
+   that deletes `users` rows is bound by 0042 Standing prohibition 14: it calls
+   `remove_entry_if_unreferenced/3` in the same transaction, with a test.
 
 #### 2.3.6 REQ-434..REQ-444 under O3 (stay / modify / obsolete)
 
@@ -522,7 +527,7 @@ Summary of the rule O3 would adopt (also the O2 rule):
 | REQ-437 | pending | stay for Phase 1; modify later | Endpoint contract unchanged in Phase 1; a domain-fallback branch is added by a new requirement in Phase 4, not by editing this one. |
 | REQ-438 | pending | stay for Phase 1; modify later | The page is unchanged for dedicated tenants; Phase 3 adds shared-tenant handling (tenant-config answer + selector) as a new requirement. |
 | REQ-439 | done | stay | `ClientIp` is mount-agnostic and serves every new public mount. |
-| REQ-440 | pending (in PR #2201) | stay | Shared tenants still write per-tenant `users` rows through the same Identity transactions; hooks keep the directory right. |
+| REQ-440 | pending (in PR #2201) | stay | Same hook/removal rule, applied to the new invitation writer by a new requirement; REQ-440's own four hooks stay as specified. |
 | REQ-441 | pending | stay, more valuable | The mail adapter is the delivery channel for invitations and tenant lists. |
 | REQ-442 | pending | stay | Per-tenant uniform disclosure is exactly what candidate-facing shared tenants want. |
 | REQ-443 | pending | stay | Pepper rotation tooling is tier-independent. |
@@ -669,7 +674,7 @@ measured.
 | Blast radius of one IdP mistake | + | -- | + | One shared realm affects every shared tenant at once. |
 | Migration risk from today | ++ (none) | -- (user `sub` changes, re-link) | + (none until a tenant opts in) | O3 never migrates existing tenants unless the user chooses. |
 | Reversibility | ++ | - | + | O3 phases 0-2 are reversible; moving a tenant to shared is not. |
-| Fit with ratified decisions | ++ | -- (supersedes 0006 7.3, R5, 0002 addendum) | 0 (same, but only for the shared tier, later) | O1 is already ratified; O2/O3 reopen identity decisions. |
+| Fit with ratified decisions | ++ | -- (supersedes 0006 7.3, R5, 0002 addendum) | 0 (same, but only for the shared tier, later) | O1 follows 0042 (ratified) and 0043 (BA-decided, gates owed); O2/O3 reopen identity decisions. |
 | Mobile impact | ++ | - | 0 | O2 breaks MOB-5's "audience scoped to the tenant realm" (`requirements.md:208-211`) for everyone; O3 only for shared tenants. |
 | Dependence on unverified Keycloak features | ++ (none new) | -- (central) | 0 (only for the shared/SSO phases) | Every O2/O3 organisation claim is a spike question. |
 
@@ -677,9 +682,11 @@ measured.
 
 ## 4. Recommendation
 
-**Adopt O3 as the architectural direction, executed as: Phase 1 = O1 exactly as ratified and
-planned; Phases 2 and later (the shared tier) are gated on spike results and on the user's
-answer to question 1 (whether many small or self-service tenants are really expected).**
+**Proceed with Phase 1, which is identical under O1 and O3 (the email-first work as planned
+in 0042/0043); nothing beyond it is committed. O3 is the recommended direction for
+anything further: Phase 0 (the spike) and Phases 2 and later (the shared tier) start only
+on a question 1 answer that wants the shared tier (Phase 4 also needs question 9), and then
+on spike results.**
 
 Rationale.
 1. O1 is not wasted under any outcome. The directory, limiter, client-IP resolution, mail
@@ -744,9 +751,9 @@ before provisioning would break boot in any environment that has the mount enabl
 
 | Option | Disposition | Why |
 |---|---|---|
-| O1 | MERGE after the 0043 D-C delta (key id + dual-read) and pepper provisioning; close REQ-440 by RELEASE-VALIDATOR verification of the merged code. | It is the planned implementation; D-C is already ratified. |
+| O1 | MERGE after the 0043 D-C delta (key id + dual-read in REQ-435, rotation tooling in REQ-443, per 0043 flagged conflict 3) and pepper provisioning; close REQ-440 by RELEASE-VALIDATOR verification of the merged code. | It is the planned implementation; D-C is BA-decided with REVIEWER/SECURITY-REVIEWER gates still owed (0043 conflicts 1-3). |
 | O2 | CLOSE (keep the branch for reference). | The directory has no reader in a design with no pre-login discovery for shared users; merging it would add a PII-bearing table with no use. |
-| O3 (recommended) | HOLD until ratification, then MERGE with the D-C delta, scope UNCHANGED (do not widen it with tier concepts). | The directory is the router; the table, hooks and key id are tier-agnostic, so waiting costs only time and widening the PR would couple Phase 1 to unverified Phase 2 assumptions. Narrowing (dropping the hooks) is rejected because 0042 Standing prohibition 13 ("directory lands with its writers") and 0043 D-F already accept the split only if REQ-435 and REQ-440 land back to back. |
+| O3 (recommended) | No new hold added by 0044; the existing pepper-provisioning hold governs. Recommendation: do not merge before ratification, then MERGE with the D-C delta (key id + dual-read, rotation tooling in REQ-443), scope UNCHANGED (do not widen it with tier concepts). | The directory is the router; the table, hooks and key id are tier-agnostic, so waiting costs only time and widening the PR would couple Phase 1 to unverified Phase 2 assumptions. Narrowing (dropping the hooks) is rejected because 0042 Standing prohibition 13 ("directory lands with its writers") and 0043 D-F already accept the split only if REQ-435 and REQ-440 land back to back. |
 
 ---
 
@@ -853,7 +860,7 @@ Each is UNVERIFIED. They are phrased to be answerable on a throwaway 26.2 contai
 
 ---
 
-## 6. Consistency with ratified records
+## 6. Consistency with existing decision records (0042 ratified; 0043 BA-decided, gates owed)
 
 Legend: CONSISTENT = the recommendation neither changes nor contradicts it; AMENDS = a quoted
 passage changes in a stated phase; SUPERSEDES = a decision is replaced. "Today" means Phase 1
@@ -909,12 +916,32 @@ passage changes in a stated phase; SUPERSEDES = a decision is replaced. "Today" 
   is unchanged. Which tenant a given request is authenticated against still resolves
   exclusively via AuthPipeline's realm->tenant chain." For the shared realm the tenant is
   resolved by selector + local membership.
-- "What remains foreclosed" (`0038...md:91-103`): still honoured for `tenant_memberships`;
-  the unauthenticated-lookup bullet is already amended by 0042.
+- **AMENDS (Phase 2).** "What remains foreclosed" bullet 2, quoted `0038...md:95-97`: "Any
+  mechanism letting a single `users` row serve more than one tenant schema, or letting
+  `AuthPipeline`'s realm->tenant resolution consult anything other than
+  `tenants.idp_realm_id`." The second half is contradicted for the shared realm; the first
+  half ("a single `users` row serving more than one tenant") stays true because shared
+  tenants keep per-tenant rows.
+- "What remains foreclosed" (`0038...md:91-103`), other bullets: still honoured for
+  `tenant_memberships`; the unauthenticated-lookup bullet is already amended by 0042.
+- 0012 note: see 6.8.
 
 ### 6.5 Decision 0042 (email-first directory)
 
-- Decisions 1-6 and Standing prohibitions 1-5, 8-10, 12-14: CONSISTENT in Phases 1-3. The
+- **AMENDS (Phase 2, shared realm).** 0042's reaffirmation (`0042...md:193-196`) that 0038's
+  second foreclosed bullet remains foreclosed verbatim: "any mechanism letting a single
+  `users` row serve more than one tenant schema, or letting `AuthPipeline`'s realm->tenant
+  resolution consult anything other than `tenants.idp_realm_id`". The shared-realm branch
+  consults `shared_identity_realms` plus selector plus membership, so the second half is
+  amended for the shared realm (see 6.4); the first half ("single `users` row serving more
+  than one tenant") stays true.
+- **AMENDS (Phase 3).** Standing prohibition 12 (fixed template with no request-derived text
+  other than the recipient, no URL from tenant text): an invitation mail needs a new template
+  and a link, so Phase 3 amends it, with a SECURITY-REVIEWER gate; not claimed consistent.
+  Prohibition 14 (any path deleting/purging `users` rows calls
+  `remove_entry_if_unreferenced/3` in the same transaction) binds the offboarding purge of
+  2.3.5 item 6.
+- Decisions 1-6 and Standing prohibitions 1-5, 8-10, 13, 14: CONSISTENT in Phases 1-3. The
   tier reaches the browser through tenant-config, not through the discovery response, so
   prohibitions 4 and 11 (closed allowlist; no new field without SECURITY-REVIEWER) are not
   touched by the router reuse in those phases.
@@ -938,7 +965,16 @@ passage changes in a stated phase; SUPERSEDES = a decision is replaced. "Today" 
 
 ### 6.6 Decision 0043 (BA decisions)
 
-- D-A..D-F, D-H: CONSISTENT (stay). D-C key id and dual-read is what PR #2201 must absorb.
+- 0043 status: BA-decided by delegation (`0043...md:3-5`); D-D is PROPOSED and the
+  REVIEWER/SECURITY-REVIEWER gates are still owed. Only 0042 is gate-ratified. 0043's ten
+  "Conflicts flagged for REVIEWER" (`0043...md:286-343`) remain OPEN and are NOT settled by
+  0044; Phase 1 (= O1) inherits them.
+- D-A..D-F, D-H: not contradicted by 0044 (stay). D-C key id and dual-read (REQ-435) and the
+  rotation tooling (REQ-443) are what PR #2201 must absorb (0043 flagged conflict 3).
+- **AMENDS (Phase 3), D-B.** Quoted `0043...md:112-114`: "Nothing here builds those and the
+  port is not widened for them" (invitations). Phase 3 uses the mail adapter for invitations,
+  which needs its own template and link; see 6.5 (prohibition 12) and the SECURITY-REVIEWER
+  gate.
 - D-G, quoted `0043...md:229-233`: "DEFERRED; decide via an ADR when the tenant count grows. The
   directory is the abstraction that survives a later move". CONSISTENT: this record is that
   ADR and recommends deferring the build decision to the Phase 0 spike.
@@ -959,6 +995,14 @@ passage changes in a stated phase; SUPERSEDES = a decision is replaced. "Today" 
 | INV-7 no SQL interpolation (`:231-250`) | Backfill uses prefix derivation. | Unchanged discipline. |
 | INV-8 no crash on realistic failure (`:254-290`) | Notifier/DB failure -> neutral 202. | Unknown selector, missing org claim, Keycloak outage must return typed errors, not raise. |
 | INV-9 outbound URLs (`:332-382`) | No tenant-controlled outbound URL. | Letflow-originated IdP URL forwarding (future Admin client) needs validation (R-6). |
+
+### 6.8 Decision 0012 (mobile tier stack)
+
+CONSISTENT. The stack (`flutter_appauth`, OIDC Auth-Code + PKCE through Custom Tabs /
+`SFSafariViewController`, `0012-mobile-tier-stack.md:23,63`) is unchanged in Phases 0-2 and
+for dedicated tenants. For shared tenants (Phase 3+) the tenant-realm audience wording of
+MOB-5 in `docs/mobile/requirements.md:208-211` is revised first (R-11, question 10); that is
+a change to the mobile spec, not to 0012.
 
 ---
 
@@ -1001,8 +1045,8 @@ Each question carries the default this record would adopt if unanswered, and why
     realm audience wording is revised first (`requirements.md:208-211`). Why: mobile is
     unaffected in Phases 0-1.
 11. **Do you ratify releasing the Phase 1 work now?** Default: yes. After ratification the hold
-    on REQ-437..444 is lifted and PR #2201 proceeds as in 4.3. Why: Phase 1 is the ratified
-    plan and is identical under O1 and O3.
+    on REQ-437..444 is lifted and PR #2201 proceeds as in 4.3. Why: Phase 1 is the planned
+    work of 0042 (ratified) and 0043 (BA-decided, gates owed) and is identical under O1 and O3.
 12. **Per-tenant "Login with email" (0042 OQ-8).** Default: UAT verifies every dedicated realm
     (and later the shared realm) before the SPA flag is enabled anywhere. Why: `login_hint`
     pre-fills the username field only.
@@ -1020,12 +1064,12 @@ Each question carries the default this record would adopt if unanswered, and why
 | REQ | Status today | Verdict (recommended, O3) | Reason |
 |---|---|---|---|
 | REQ-434 | done | stay | Design and 0042 are the router's basis; no edit. |
-| REQ-435 | pending (PR #2201 open, merge held) | stay (hold until ratified) | Tier-agnostic data layer; needs the D-C delta; do not widen. |
+| REQ-435 | pending (PR #2201 open, merge held) | stay (no new hold from 0044; the existing pepper hold governs; do not merge before ratification) | Tier-agnostic data layer; needs the D-C delta (key id + dual-read here, rotation tooling in REQ-443); do not widen. |
 | REQ-436 | done | stay | Limiter reused for every public mount. |
 | REQ-437 | pending | stay (hold until ratified) | Contract unchanged in Phase 1; domain fallback is a later new requirement. |
 | REQ-438 | pending | stay (hold until ratified) | Page unchanged for dedicated; shared handling is a later new requirement. |
 | REQ-439 | done | stay | `ClientIp` mount-agnostic. |
-| REQ-440 | pending (covered by PR #2201) | stay (hold until ratified) | Per-tenant `users` rows remain the write signal in both tiers. |
+| REQ-440 | pending (covered by PR #2201) | stay (hold until ratified) | Same hook/removal rule, applied to the new invitation writer by a new requirement. |
 | REQ-441 | pending | stay (hold until ratified) | Delivery channel for lists and invitations. |
 | REQ-442 | pending | stay (hold until ratified) | Per-tenant uniform disclosure suits candidate-facing shared tenants. |
 | REQ-443 | pending | stay (hold until ratified) | Rotation tooling independent of tier. |
@@ -1044,7 +1088,10 @@ invalidate while the decision is open. It is not a statement that the work is wr
 recommendation every one of those requirements is `stay`, so ratification releases the hold
 unchanged and the only cost of the hold is elapsed time. REQ-435 carries NO hold marker in
 `docs/requirements.yaml`; it is held only by the pre-existing pepper-provisioning hold on PR
-#2201 / queue task Q-944 (see 4.3), which is independent of this record. The marker is removed by `ORCH` on
+#2201 / queue task Q-944 (see 4.3), which is independent of this record; 0044 adds no new
+hold on it. `hold:` is an advisory text key in `docs/requirements.yaml` that tooling ignores;
+letflow-queue task state is not changed by this record, so a worker that claims a held id is
+expected to read the marker and release the claim. `ORCH` removes the markers on
 ratification (or when the user rejects O3 in favour of O1, in which case the same).
 
 ---
@@ -1066,7 +1113,7 @@ Filled in by the gate agents only. This record's author does not claim any verdi
   hardening scope (2.3.9).
 - **REVIEWER:** pending. Specific asks: (a) the supersession scope for 0006 section 7.3 and
   0042's "what remains unchanged" paragraph; (b) the amendment of 0002's "sole source" sentence
-  and 0038 point 4; (c) whether the Phase 1 = O1 framing leaves every ratified record intact
+  and 0038 point 4; (c) whether the Phase 1 = O1 framing leaves 0042 intact and does not pretend to settle 0043's open conflicts 1-10
   (it should); (d) the O3 treatment of PR #2201 and the hold note.
 - **User ratification:** pending. Not a gate agent; the user alone converts Status from
   PROPOSED to decided.

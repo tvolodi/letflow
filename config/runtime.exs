@@ -369,6 +369,25 @@ case Letflow.PlatformTenant.parse_env(System.get_env("LETFLOW_PLATFORM_TENANT_ID
             "The value is not echoed."
 end
 
+# REQ-444 (decision 0043 D-D, 0042 OQ-3): the email-first ENABLEMENT GATE. Placed after
+# REQ-439's trusted-proxy check and REQ-441's mail block so it sees the resolved
+# `login_discovery_enabled` and `mail_adapter` (nil when LETFLOW_MAIL_ADAPTER is unset).
+# Outside :dev/:test, an enabled mount refuses to boot without a legal-confirmation marker
+# and a delivering adapter. The marker is ADVISORY: it cannot prove a confirmation
+# happened, it only makes enabling without one a deliberate, auditable act. The raised
+# text is fixed and never contains the marker or adapter value (INV-4).
+login_directory_legal_marker = ld_get.("LETFLOW_LOGIN_DIRECTORY_LEGAL_CONFIRMATION")
+
+case Letflow.LoginDiscovery.BootCheck.check(
+       config_env(),
+       login_discovery_enabled,
+       login_directory_legal_marker,
+       mail_adapter
+     ) do
+  :ok -> :ok
+  {:error, reason} -> raise Letflow.LoginDiscovery.BootCheck.message(reason)
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

@@ -23,7 +23,7 @@ defmodule Letflow.LoginDiscovery.BootCheck do
   boot checks enforce it.
   """
 
-  # Bare atom on purpose: the Smtp adapter module is created by REQ-441.
+  # Literal module name; the explicit allowlist, not a call.
   @delivering [Letflow.LoginDiscovery.Notifier.Smtp]
   @min_marker_length 8
 
@@ -31,7 +31,7 @@ defmodule Letflow.LoginDiscovery.BootCheck do
   @spec delivering_adapters() :: [module()]
   def delivering_adapters, do: @delivering
 
-  @doc "Minimum trimmed byte size of the legal-confirmation marker."
+  @doc "Minimum trimmed character count of the legal-confirmation marker."
   @spec min_marker_length() :: pos_integer()
   def min_marker_length, do: @min_marker_length
 
@@ -76,7 +76,7 @@ defmodule Letflow.LoginDiscovery.BootCheck do
   end
 
   defp valid_marker?(marker) when is_binary(marker),
-    do: byte_size(String.trim(marker)) >= @min_marker_length
+    do: String.length(String.trim(marker)) >= @min_marker_length
 
   defp valid_marker?(_), do: false
 end

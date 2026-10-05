@@ -5,7 +5,6 @@ defmodule Letflow.LoginDiscovery.BootCheckTest do
 
   alias Letflow.LoginDiscovery.BootCheck
 
-  # Bare atom: the Smtp module is created by REQ-441 and must NOT be required here.
   @smtp Letflow.LoginDiscovery.Notifier.Smtp
   @noop Letflow.LoginDiscovery.Notifier.Noop
   @double Letflow.LoginDiscoveryNotifierDouble
@@ -13,13 +12,13 @@ defmodule Letflow.LoginDiscovery.BootCheckTest do
   @exempt_envs [:dev, :test]
   @gated_envs [:prod, :staging, :qa_ish, :"prod-eu", :anything_else]
 
-  # The rule is the TRIMMED BYTE size (byte_size(String.trim(marker)) >= 8), not
-  # the character count. "ééééé" is 5 characters but 10 bytes, so it is valid.
+  # The rule is the TRIMMED CHARACTER count (String.length(String.trim(marker)) >= 8),
+  # not the byte size. "ééééé" is 5 characters (10 bytes), so it is invalid.
   @valid_markers [
     {"exactly 8 chars", "abcdefgh"},
     {"long", "legal-confirmed-by-counsel-2026"},
     {"8 chars with surrounding whitespace", "  abcdefgh \n"},
-    {"5 characters, 10 bytes (byte size rule)", "ééééé"}
+    {"8 multi-byte characters", "éééééééé"}
   ]
 
   @invalid_markers [
@@ -31,7 +30,7 @@ defmodule Letflow.LoginDiscovery.BootCheckTest do
     {"integer", 123},
     {"atom", :atom},
     {"list", ["abcdefgh"]},
-    {"3 characters, 6 bytes", "ééé"}
+    {"5 characters, 10 bytes", "ééééé"}
   ]
 
   @non_delivering [

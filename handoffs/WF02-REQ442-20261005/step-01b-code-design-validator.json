@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ442-20261005/step-01b-code-design-validator.json",
   "created_at": "2026-10-05T11:57:49Z",
   "started_at": "2026-10-05T11:57:49Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-10-05T11:58:56Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S4",
@@ -39,11 +39,17 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
+    "status": "FAIL",
+    "summary": "FAIL. Design is thorough and its factual claims P1-P5, P7-P12 verified by grep (route/changeset names, patch_tenant genuinely unaudited today, shapers all explicit-key allowlists, ceiling SQL rule matches requirement text, no implementation bodies, all 7 ACs mapped). But it ships an unresolved deferral on audit (Q1 'needs a decision before build'), and the audit failure path rests on a false premise (schema_name_for_tenant/tenant_id_for_schema_name are pure; an unprovisioned tenant raises in Audit.insert_entry rather than returning an error). Audit judgment: auditing only mode changes in the target tenant chain with a value-free payload satisfies AC2 and INV-2 and should be adopted as the final decision (GET /audit exposes before/after_state verbatim and PROCESS_OPERATOR+ hold :AuditRead), with the action-string naming and failure mechanism pinned down.",
     "artifacts_out": [],
-    "issues": [],
-    "next_action": null
+    "issues": [
+      "REQ-442 AC2 / design s3 + s10 Q1 (BLOCKING, unresolved deferral): the audit design is left as an open question 'Needs a decision before build' and s3 says 'verify at build: GET /api/v1/audit permission'. A design may not defer. VALIDATOR RULING (verified): (a) P6 is correct, patch_tenant/2 and routers/tenants.ex write no audit today, so the requirement's 'audited as other platform-admin tenant updates are' premise is false and no platform audit sink exists. (b) AC2 is satisfied by auditing a mode change in the TARGET tenant chain in the same Multi as the update, and the value-free payload is the right INV-2 choice, because GET /audit returns before_state/after_state verbatim (routers/audit.ex:334-335) and :AuditRead is held by PROCESS_OPERATOR and wider. The design must state this as the FINAL decision (remove Q1 and the 'verify at build' wording), and must either make the action string neutral (e.g. 'tenant.platform_setting.updated') or explicitly accept that the action name 'tenant.login_disclosure_mode.set' reveals the existence of the attribute to tenant-side audit readers; pick one. Also state the audit rows are not retro-fitted to display_name patches (already stated) and that REQ-442 records the premise discrepancy for ORCH/DOC-UPDATER.",
+      "design s3 last paragraph (BLOCKING, factually wrong premise): it says 'If the tenant has no provisioned schema, schema_name_for_tenant/1 or tenant_id_for_schema_name/1 yields an error ... returns {:error, :audit_failed}'. Verified in lib/letflow/tenant_provisioning.ex:214-256 both functions are PURE (they only validate UUID/name shape and explicitly do not check provisioning). For a tenant row without a provisioned schema (half-provisioned, tenants.ex OQ-5) Audit.insert_entry/3 -> lock_chain_tail!/3 would raise Postgrex undefined_table inside the transaction, not return an error tuple, so :audit_failed is never produced and the router would crash to a generic 500 uncontrolled. Design must specify the real mechanism: either (i) an explicit pre-check (e.g. TenantProvisioning registration lookup, naming the exact function) returning {:error, :audit_failed} (or a distinct :tenant_not_provisioned) BEFORE the update, or (ii) a rescue around the Repo.transaction that maps to {:error, :audit_failed} without leaking the exception (INV-4). It must also state the HTTP status and body for that tag, not 'ELIXIR-DEV locates it' (s3 says the Response helper is for ELIXIR-DEV to find; name it or state status 500 + fixed body).",
+      "design s2: 'Add the field to the @type t if the module declares one' is conditional/ambiguous. Verified lib/letflow/identity/tenant.ex declares no @type t (grep returns none) although specs elsewhere use Tenant.t(); state definitively what to do (e.g. no @type change, field only) so ELIXIR-DEV does not guess.",
+      "design s3 patch_tenant/3: the error set is incompletely specified. State the full @spec as written text (the added opts argument is given only in prose) including return tags {:ok, Tenant.t()} | {:error, :not_found} | {:error, Ecto.Changeset.t()} | {:error, :audit_failed}, and the router case clause for each tag, plus where actor_id comes from in the conn (name the assign/function the other routers use for the calling user id) rather than 'the calling PLATFORM_ADMIN user id'. Also state the behaviour when the actor id is not a valid UUID/nil (Audit entry_attrs allows nil actor_id; say whether nil is permitted here).",
+      "design s5 query shape: the SQL snippet shows a $deployment_allows::boolean parameter but does not specify the Ecto expression form for a bound boolean in select with COALESCE (fragment vs dynamic), so the 'bound parameter, never string-built' (INV-7) requirement is stated but the construct is not pinned. Name it at signature level (e.g. fragment with ^deployment_allows? and the literal comparison inside the fragment, or a select_merge), and confirm the requirement's literal wording 'the deployment mode is bound as a parameter' is met by binding the derived boolean (state the equivalence explicitly, since the requirement text says the MODE is bound)."
+    ],
+    "next_action": "Rework CODE-DESIGNER: resolve issues 1-5 in lib/letflow/design/req442-per-tenant-login-disclosure-mode.md (adopt the audit ruling as final, fix the unprovisioned-schema failure mechanism, remove all conditional/'verify at build' wording), then re-submit to CODE-DESIGN-VALIDATOR."
   },
   "rework_count": 0
 }

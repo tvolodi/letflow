@@ -1,0 +1,40 @@
+id: ISS-1000
+title: "Vortex Production Order Release: a capacity-rejected order ends as released (e2 -> notify-planner -> e10 -> end-released)"
+discovered_by: PROCESS-AUDITOR (WF05-BASELINE2-20261006)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T05:00:00Z"
+severity: BLOCKER
+failure_class: defect
+occurrence: 1
+owner: ELIXIR-DEV (fixtures, seed-script comment and tests only; no lib/ change)
+description: >
+  Audit finding PA-VORTEX-001 (checklist A1): in
+  test/fixtures/qa/vortex_production_order_release_process_definition.json the capacity-review reject
+  edge e2 went to notify-planner, which is shared with the approve path (assign-line -> e9 ->
+  notify-planner) and exits via e10 to end-released, so a declined production order was closed as
+  released. The simulation copy test/fixtures/simulation/vortex/process_quality_check.yaml had the same
+  branch. PA-VORTEX-009 F1 (a declined matter must end rejected/declined, as in swiftroute and meridian)
+  is merged here as acceptance criterion 4.
+
+  Fix (fixture v1.3): new SERVICE_TASK notify-planner-rejected (same webhook notify endpoint as
+  notify-planner); e2 now targets it (id and condition kept); new edge e12 notify-planner-rejected ->
+  end-rejected. The approve path is untouched. Same change in the simulation copy. Seed script header
+  comment bumped to v1.3. New test
+  test/letflow/definitions/vortex_production_order_release_fixture_test.exs walks the graph from the
+  reject edges of capacity-review and budget-approval and asserts only 'rejected' END nodes are reached.
+affected_files:
+  - test/fixtures/qa/vortex_production_order_release_process_definition.json
+  - test/fixtures/simulation/vortex/process_quality_check.yaml
+  - scripts/seed_vortex_definition.sh
+  - test/letflow/definitions/vortex_production_order_release_fixture_test.exs
+regression_test: test/letflow/definitions/vortex_production_order_release_fixture_test.exs
+follow_ups:
+  - >
+    QA needs a re-seed of Production Order Release v1.3 (scripts/seed_vortex_definition.sh).
+# The queue's own issue number may differ from this local number; the queue ref is Q-982.
+queue_ref: Q-982
+github_ref: GH-2269
+status: resolved
+resolved_in_run: WF03-ISS1000-Q982-20261006
+resolved_at: "2026-10-06T05:30:00Z"
+resolution: "Fixture v1.3: reject path has its own notify-planner-rejected node ending at end-rejected; simulation copy mirrored; graph-walk fixture test added."

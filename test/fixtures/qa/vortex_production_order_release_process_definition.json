@@ -1,6 +1,6 @@
 {
   "name": "Production Order Release",
-  "version": "1.2",
+  "version": "1.3",
   "description": "Multi-level release gate for a new production order. Planner creates the order; Production Manager reviews; if value > 10000 Financial Controller signs off. Timer escalation to CEO. Exercises: sequential chain, timer escalation, conditional branch.",
   "graph": {
     "nodes": [
@@ -61,6 +61,15 @@
         }
       },
       {
+        "id": "notify-planner-rejected",
+        "node_type": "SERVICE_TASK",
+        "attributes": {
+          "endpoint": "https://httpbin.org/anything/webhooks/notify",
+          "method": "POST",
+          "timeout_ms": 300000
+        }
+      },
+      {
         "id": "end-released",
         "node_type": "END"
       },
@@ -72,7 +81,7 @@
     "edges": [
       { "id": "e0",                       "source": "start",             "target": "capacity-review" },
       { "id": "e1",                       "source": "capacity-review",   "target": "budget-gate",       "condition": "variables.capacity_decision == 'approve'" },
-      { "id": "e2",                       "source": "capacity-review",   "target": "notify-planner",    "condition": "variables.capacity_decision == 'reject'" },
+      { "id": "e2",                       "source": "capacity-review",   "target": "notify-planner-rejected", "condition": "variables.capacity_decision == 'reject'" },
       { "id": "timeout-capacity-review",  "source": "capacity-review",   "target": "escalate-to-ceo" },
       { "id": "e3",                       "source": "escalate-to-ceo",   "target": "budget-gate",       "condition": "variables.capacity_decision == 'approve'" },
       { "id": "e4",                       "source": "escalate-to-ceo",   "target": "auto-reject-order", "condition": "variables.capacity_decision == 'reject'" },
@@ -85,7 +94,8 @@
       { "id": "timeout-budget-approval",  "source": "budget-approval",   "target": "auto-reject-order" },
       { "id": "e9",                       "source": "assign-line",       "target": "notify-planner" },
       { "id": "e10",                      "source": "notify-planner",    "target": "end-released" },
-      { "id": "e11",                      "source": "auto-reject-order", "target": "end-rejected" }
+      { "id": "e11",                      "source": "auto-reject-order", "target": "end-rejected" },
+      { "id": "e12",                      "source": "notify-planner-rejected", "target": "end-rejected" }
     ]
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "Shipment Approval",
-  "version": "1.2",
+  "version": "1.3",
   "description": "Sequential approval chain for high-value or non-standard shipments. Dispatcher raises the request; Operations Manager reviews; if value exceeds 500 the CEO must co-sign. Exercises: sequential chain + CEL conditional branch.",
   "graph": {
     "nodes": [
@@ -79,5 +79,10 @@
       { "id": "e8",                   "source": "auto-reject",       "target": "end-rejected" },
       { "id": "e9",                   "source": "notify-requester",  "target": "end-rejected" }
     ]
-  }
+  },
+  "variable_schemas": [
+    {"variable_key": "ops_decision", "json_schema": {"type": "string", "enum": ["approve", "reject"]}},
+    {"variable_key": "declared_value", "json_schema": {"type": "number"}},
+    {"variable_key": "ceo_decision", "json_schema": {"type": "string", "enum": ["approve", "reject"]}}
+  ]
 }

@@ -184,7 +184,7 @@ defmodule Letflow.Scripts.Vortex8dSubprocessFixtureTest do
 
     test "F7 parent fixture version is bumped to 1.4 (> 1.1; 1.4 = ISS-1003 explicit default-to-critical)" do
       parent = json!(@parent_path)
-      assert parent["version"] == "1.4"
+      assert parent["version"] == "1.5"
       assert check_f7(parent) == []
     end
   end

@@ -58,8 +58,8 @@ defmodule Letflow.Definitions.VortexProductionOrderReleaseFixtureTest do
     Enum.filter(ids, &(by_id[&1]["node_type"] == "END"))
   end
 
-  test "fixture version is 1.3 (forces QA re-seed)" do
-    assert qa_doc()["version"] == "1.3"
+  test "fixture version is 1.4 (ISS-1027 variable_schemas; forces QA re-seed)" do
+    assert qa_doc()["version"] == "1.4"
   end
 
   for {label, key} <- [{"qa fixture", :qa}, {"simulation copy", :sim}] do

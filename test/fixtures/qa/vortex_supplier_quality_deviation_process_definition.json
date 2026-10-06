@@ -1,6 +1,6 @@
 {
   "name": "Supplier Quality Deviation",
-  "version": "1.4",
+  "version": "1.5",
   "description": "Raised when incoming goods fail inspection. Quality Manager classifies severity. For CRITICAL a sub-process is spawned. Exercises: sub-process spawn, severity-driven branching, compensation. If the Quality Manager does not classify the severity in time, the default-to-critical step sets severity to critical explicitly: an unclassified deviation is handled as critical (8D corrective action) until a human classifies it.",
   "graph": {
     "nodes": [
@@ -112,5 +112,9 @@
       { "id": "e12",                            "source": "release-quarantine",           "target": "end-false-positive" },
       { "id": "e13",                            "source": "close-deviation",              "target": "end-closed" }
     ]
-  }
+  },
+  "variable_schemas": [
+    {"variable_key": "false_positive", "json_schema": {"type": "boolean"}},
+    {"variable_key": "severity", "json_schema": {"type": "string", "enum": ["critical", "major", "minor"]}}
+  ]
 }

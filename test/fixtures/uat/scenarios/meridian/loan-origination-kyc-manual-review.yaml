@@ -1,0 +1,146 @@
+# Authored by BA-MERIDIAN (ISS-1016 / Q-998, process-audit PA-MERIDIAN-004, checklist D2).
+# Written against test/fixtures/qa/meridian_loan_origination_process_definition.json on main.
+# Covers the human task kyc-manual-review (role-compliance-officer): kyc-aml-check -> kyc-routing
+# (kyc_status 'hit') -> kyc-manual-review -> assessment-join.
+# DEPENDENCY: the deployed kyc-aml-check stub always answers kyc_status=clear (Q-980), so a KYC hit
+# cannot happen on its own; the run needs the screening result forced to 'hit' (a stub or test hook).
+# Until that exists this scenario is BLOCKED at the precondition, not passed. The l1-approval actor
+# follows the independent-approver rule of ISS-1014 (see loan-origination-below-threshold.yaml).
+---
+id: meridian-loan-origination-kyc-manual-review
+company_id: meridian
+process_id: proc-meridian-loan-origination
+title: A KYC screening hit is held for manual review by the compliance officer before the loan can proceed
+version: "1.0"
+tags: [kyc, compliance]
+
+description: >
+  A EUR 50,000 loan application is submitted and the automatic KYC/AML screening
+  of the applicant returns a hit. The application must not move on to eligibility
+  and approval until the compliance officer has reviewed the hit by hand. This
+  scenario checks that the manual review task reaches the compliance officer, that
+  the loan waits for it, and that the loan then completes normally.
+
+actors:
+  analyst: actor-meridian-sophie
+  credit_manager: actor-meridian-ben
+  risk_manager: actor-meridian-miriam
+  compliance_officer: actor-meridian-claudia
+  l1_approver: actor-meridian-lars
+  credit_director: actor-meridian-julia
+  loan_ops: actor-meridian-marcus
+
+preconditions:
+  - description: Loan origination process definition is active
+    check: process_definition_active
+  - description: No pending loan origination instances for Meridian
+    check: no_pending_instances
+  - description: The KYC/AML screening is set up to return a hit for the test applicant
+    check: custom
+    detail: >
+      The deployed screening stub returns clear for everyone; a hit must be forced
+      for borrower-kyc-hit-001 or the scenario cannot start (BLOCKED).
+
+steps:
+  - step: 1
+    actor: analyst
+    action: >
+      Submits a loan application for EUR 50,000 for a small business borrower
+      whose name matches an entry on the screening list
+    via: api
+    input:
+      application_id: sim-meridian-loan-kyc-001
+      applicant_id: borrower-kyc-hit-001
+      requested_amount_eur: 50000
+      product_type: term_loan
+      tenor_months: 24
+      analyst_actor_id: actor-meridian-sophie
+    produces:
+      instance_id: "the process instance ID for this loan application"
+
+  - step: 2
+    actor: compliance_officer
+    action: >
+      Opens the manual KYC review task created by the screening hit, checks the
+      match against the applicant's documents and clears the applicant as a false
+      match
+    via: gui
+    input:
+      kyc_review_notes: "Name match only; date of birth and registered address differ. Cleared."
+    sla_context:
+      expected_within_hours: 24
+
+  - step: 3
+    actor: credit_manager
+    action: Reviews the credit memo and passes it with a recommended rate of 350 basis points
+    via: api
+    input:
+      credit_decision: pass
+      recommended_rate_bps: 350
+
+  - step: 4
+    actor: risk_manager
+    action: Completes the risk assessment, rating the borrower as low risk
+    via: api
+    input:
+      risk_rating: low
+      pd_percent: 2.5
+
+  - step: 5
+    actor: l1_approver
+    action: As first-level approver, a credit colleague who did not review the memo, approves the application
+    via: api
+    input:
+      l1_decision: approve
+
+  - step: 6
+    actor: credit_director
+    action: As second-level approver, approves the application
+    via: api
+    input:
+      l2_decision: approve
+      approved_amount_eur: 50000
+      approved_rate_bps: 350
+
+  - step: 7
+    actor: loan_ops
+    action: Disburses the approved loan
+    via: api
+    input:
+      disbursement_date: "2026-06-12"
+      disbursement_ref: "DISB-MER-2026-KYC-001"
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      A screening hit creates a manual review task for the compliance officer and the
+      application does not go on to the eligibility check until that review is done
+    verification:
+      method: task_assigned
+      detail: >
+        task 'kyc-manual-review' assigned to role-compliance-officer; while it is open,
+        no 'l1-approval' task exists for the instance
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A loan to an applicant matching the sanctions or money-laundering screening
+        can be approved without anyone having looked at the match. This is a
+        regulatory breach.
+      suggested_action: route_to_wf03
+
+  - id: EO-002
+    description: >
+      Once the compliance officer has cleared the applicant, and the credit and risk
+      checks pass, the loan is approved at both levels, disbursed, and ends disbursed
+    verification:
+      method: instance_state
+      detail: instance status == COMPLETED and end node is 'end-disbursed'
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        An applicant cleared by compliance stays stuck, so a legitimate customer waits.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel instance sim-meridian-loan-kyc-001 if not already completed

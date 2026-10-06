@@ -7,6 +7,17 @@
 # synthetic fixtures under test/fixtures/simulation/<company>/scenarios/ instead. Do
 # not edit the ported content below except to keep it byte-identical to a re-pull of
 # the same commit.
+#
+# EXCEPTION (ISS-1014 / Q-996, BA-MERIDIAN, process-audit PA-MERIDIAN-002, checklist B2): step 4
+# (l1-approval) is now performed by a SECOND credit-department person (actor-meridian-lars), not by
+# the credit manager who reviewed the credit memo at step 2 (actor-meridian-ben), so first-level
+# approval is an independent check of the memo. Added actor l1_approver and EO-004. No longer
+# byte-identical to the ported source for those points only.
+# DEPENDENCY (definition, not changed here): test/fixtures/qa/meridian_loan_origination_process_definition.json
+# still routes BOTH credit-memo-review and l1-approval to role-credit-manager, and the roster gives that
+# role only to Ben. Until l1-approval is re-routed to a different role, or a second person holds
+# role-credit-manager (definition / seed work, not UAT files), Lars cannot act at l1-approval and step 4
+# is BLOCKED rather than silently passing with Ben. The scenario states the intended rule.
 ---
 id: meridian-loan-origination-below-threshold
 company_id: meridian
@@ -29,6 +40,7 @@ description: >
 actors:
   analyst: actor-meridian-sophie
   credit_manager: actor-meridian-ben
+  l1_approver: actor-meridian-lars
   risk_manager: actor-meridian-miriam
   credit_director: actor-meridian-julia
   loan_ops: actor-meridian-marcus
@@ -84,10 +96,11 @@ steps:
       expected_within_hours: 24
 
   - step: 4
-    actor: credit_manager
+    actor: l1_approver
     action: >
-      As L1 credit manager, reviews and approves the loan application
-      at the first level of credit authority
+      As L1 approver, a credit-department colleague who did NOT review the
+      credit memo, reviews and approves the loan application at the first
+      level of credit authority
     via: api
     input:
       l1_decision: approve
@@ -161,6 +174,24 @@ expected_outcomes:
         Approved small loans are not being disbursed. Small business
         customers who need quick access to credit are left waiting.
       suggested_action: route_to_backend_dev
+
+  - id: EO-004
+    description: >
+      The first-level (L1) approval is given by a different person than the
+      one who reviewed the credit memo, so the L1 approval is an independent
+      check of that memo
+    verification:
+      method: audit_event
+      detail: >
+        The user who completed 'l1-approval' differs from the user who
+        completed 'credit-memo-review' on the same instance
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        One person can review the credit memo and then approve their own
+        review, so the first approval level checks nothing and a bad loan
+        can pass with a single pair of eyes.
+      suggested_action: route_to_wf03
 
 cleanup:
   cancel_open_instances: true

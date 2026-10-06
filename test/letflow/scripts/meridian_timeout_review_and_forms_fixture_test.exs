@@ -130,8 +130,8 @@ defmodule Letflow.Scripts.MeridianTimeoutReviewAndFormsFixtureTest do
       assert loan()["version"] == "1.10"
       assert reg()["version"] == "1.8"
       script = File.read!(Path.expand("../../../scripts/seed_meridian_definition.sh", __DIR__))
-      assert script =~ ~s("Loan Origination" v1.9 )
-      assert script =~ ~s("Regulatory Compliance Review" v1.7 )
+      assert script =~ ~s("Loan Origination" v1.10 )
+      assert script =~ ~s("Regulatory Compliance Review" v1.8 )
     end
   end
 

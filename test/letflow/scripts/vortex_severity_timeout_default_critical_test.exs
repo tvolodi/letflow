@@ -88,7 +88,7 @@ defmodule Letflow.Scripts.VortexSeverityTimeoutDefaultCriticalTest do
   end
 
   test "fixture version is 1.4 (1.4 forced the QA re-seed of the explicit default-to-critical step)" do
-    assert doc()["version"] == "1.4"
+    assert doc()["version"] == "1.5"
   end
 
   test "the timeout step is named default-to-critical and its stub sets severity = 'critical' explicitly" do

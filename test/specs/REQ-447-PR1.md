@@ -169,3 +169,68 @@ All mutants reverted; checksum prefixes verified identical after each (`tenant_a
   sweep. The tests are isolated from it (see above) but a human may want to clean it; it also means `mix letflow.migrate_tenant_admins` itself would exit 1 on that
   database.
 * The pair takes about 100 s because the child processes boot the application five times.
+
+# REQ-447 PR 1, PART C: H2 built-in role-name guard and the 3.6b platform-escalation guards (design sections 3.6, 3.6b, 11)
+
+Scope: the guards in `lib/letflow/routers/identity.ex`. Caller under test for 3.6b: a `TENANT_ADMIN` of the PLATFORM tenant (pin on P), who holds
+`:TokensManage`, `:GroupsManage`, `:UsersManage` but has no platform scope. Positive control for every refusal: the operator (`PLATFORM_ADMIN` of P).
+
+New files (`async: false`, real Postgres, direct dispatch into `Letflow.Routers.Identity`):
+
+* `test/letflow/api/platform_escalation_guard_test.exs` (30 tests)
+* `test/letflow/routers/identity_roles_guard_test.exs` (8 tests; the design's "H2" cases, in a new file rather than `identity_test.exs`)
+
+Existing tests: NO expectation had to change. `platform_admin_role_binding_test.exs` (12), `routers/identity_test.exs` (69; its POST /tokens cases issue
+`TASK_WORKER` tokens, only the CALLER holds PLATFORM_ADMIN), `api_token_auth_pipeline_test`, `plugs/iss0736_oidc_live_revocation_test`,
+`routers/onboarding_scope_extension_test`, `scripts/persona_actor_seed_missing_account_test` were run unmodified against the lib commits and pass.
+
+## Criterion to test mapping
+
+| Design item | Test(s) | Why it exists |
+|---|---|---|
+| F1 (i) mint PLATFORM_ADMIN token | "POST /tokens": exact, lower, mixed case, padded, among other roles (9 role lists) all fixed 403 and no token row; 403 wins over a 422 bad `expires_at` (with a control that a non-PLATFORM_ADMIN role gets the 422); byte-identical refusal body; control: operator 201; control: TENANT_ADMIN still mints TENANT_ADMIN / ordinary tokens; `Identity.create_token/3` direct call unchanged | Guard order and body, not over-broad |
+| D10 legacy PLATFORM_ADMIN of an ordinary tenant | "D10: legacy tenant PLATFORM_ADMIN": 403 for a PLATFORM_ADMIN token, 201 for a TENANT_ADMIN token | Intended behaviour change, with the tenant-scope control |
+| F1 (ii) group members and group | "the PLATFORM_ADMIN-bound group": add self/other (also `user_ids` form), remove an operator, delete the group (with members and empty) all 403, memberships/binding unchanged; guard found by BINDING not name (a group merely named PLATFORM_ADMIN is not protected); controls: operator add/remove, TENANT_ADMIN on an ordinary group | By-binding protected set |
+| RAW-BYTE negative tests (SECURITY BLOCKER) | "RAW-BYTE: group id spellings" (add member, remove member, delete group; 6 spellings each: canonical, upper-case, mixed-case, raw 16 bytes `%XX` and `%xx`, canonical text fully percent-encoded), "RAW-BYTE: user id spellings" (PATCH, status), "RAW-BYTE: token id spellings" (DELETE); plus a non-cast spelling test | The guard compares after `Ecto.UUID.cast/1`; a string compare passes the raw/upper-case spellings |
+| Non-vacuity of the raw-byte denials | each spelling is also sent by the operator: the test requires that canonical, upper-case, mixed-case and percent-encoded-text spellings REALLY reach the real row (state change asserted) | A denial is only meaningful if the same request would otherwise work |
+| F1 users | "PATCH /users/:id and POST /users/:id/status": operator target 403 (state unchanged), control 200; ordinary member 2xx; guard follows the binding (moves away when the binding moves) | |
+| M1 revoke token | "DELETE /tokens/:id": PLATFORM_ADMIN token 403 and unrevoked, operator 200; ordinary token 2xx, unknown id 404 | |
+| H1 on POST /roles | "POST /roles for the PLATFORM_ADMIN name": both kinds, name variants as platform-tenant TENANT_ADMIN: 403, rows unchanged; operator rebinds | |
+| `:none` reliance | "reliance": no binding in A (all group/user routes open to a TENANT_ADMIN), P with pin and no binding (open, H1 still blocks minting), pin unset (even the would-be operator refused: fails closed) | Documents the stated reliance |
+| H2 PROCESS_DESIGNER | `identity_roles_guard_test`: all seven built-in names x both kinds x 4 spellings x tenants A and P: 403, rows unchanged (with pre-existing bindings so an overwrite would show), no role named in the body; the TENANT_ADMIN name with `process_routing_role` kind refused before `upsert_role` (platform_role binding keeps kind and group); control proves the kind overwrite is real for a holder of the permission; ordinary routing roles (incl. `TENANT_ADMINS`, `TASK_WORKER_2`) still 2xx | |
+| H2 who may | TENANT_ADMIN of A and P: six names 2xx, PLATFORM_ADMIN (4 spellings, 2 kinds) 403; legacy tenant PLATFORM_ADMIN same; operator binds both; TASK_WORKER refused by the permission gate | |
+
+## Facts measured while writing (Ecto 3.14.1)
+
+* `Ecto.UUID.cast/1` accepts the raw 16-byte binary, but `Repo.get/3` and `where: id == ^raw16` raise `Ecto.Query.CastError`. So the raw-byte spelling never
+  resolves a real group/user/token downstream (a request past a broken guard would raise, not write). The tests therefore assert (a) the TENANT_ADMIN always gets the
+  fixed 403 for every spelling (a string-compare guard would let the raw spellings through to the handler, which raises: the mutant is killed), and (b) the operator
+  control for the text spellings reaches the real row.
+* `DELETE /groups/:id` of a group bound to a role is refused by Postgres (`tenant_role_group_id_fkey`), even for the operator: a pre-existing unhandled 500 (see defects).
+  The control asserts that foreign-key error, which proves the real row was addressed.
+* User routes call `Identity.get_user/2` BEFORE the guard, so a raw-byte user id raises `CastError` instead of 403 (nothing is written).
+
+## Mutation checks (one `lib/letflow/routers/identity.ex` line each; SHA-256 recorded and re-verified after every `finally` restore, `git status lib` clean; partition 3)
+
+Run set per mutant: both new files + `platform_admin_role_binding_test` (50 tests, 50 passed unmutated).
+
+| Mutant | Result (failed / 50) | Killed by |
+|---|---|---|
+| M1 `requested == bound` back to string compare `group_id == bound_id` | 3 | RAW-BYTE add member, remove member, delete group |
+| M2 POST /tokens guard removed | 6 | POST /tokens (variants, 403-wins-over-422, byte-identical body), D10, two `:none`/pin-unset tests |
+| M3 DELETE /tokens/:id guard removed | 2 | token spellings, DELETE /tokens/:id |
+| M4 POST /users/:id/status guard removed | 2 | users test, RAW-BYTE user ids |
+| M5 H2 removed | 2 | PROCESS_DESIGNER all-names, kind-overwrite |
+| M6 H2 only for `platform_role` kind | 2 | same two (the `process_routing_role` half) |
+| M7 PATCH /users/:id guard removed | 3 | users test, RAW-BYTE user ids, binding-follows test |
+| M8 add-member guard removed | 4 | add-self, binding-by-name, RAW-BYTE add, pin-unset |
+| M9 remove-member guard removed | 2 | remove operator, RAW-BYTE remove |
+| M10 delete-group guard removed | 2 | delete group, RAW-BYTE delete |
+| M11 group guard loses the platform-scope exemption (operator refused too) | 4 | operator controls and RAW-BYTE tests |
+
+All 11 killed. Not measured: mutating `Identity.platform_admin_member?/2`, `Identity.token_carries_platform_admin?/2` and `RoleRegistry.platform_admin_group_id/1` internals (only router-level lines were mutated).
+
+## Counts and residuals
+
+Partition 3, sequential: `platform_escalation_guard_test` 30 passed, `identity_roles_guard_test` 8 passed (38 with `--force`, 0 occurrences of "default values for the optional arguments",
+0 warnings), `platform_admin_role_binding_test` 12, `identity_test` 69. `mix format --check-formatted` clean. `mix letflow.check.test` (full suite) NOT run: low memory host, touched files only; the forced recompile of both new files is the ISS-0069 check.

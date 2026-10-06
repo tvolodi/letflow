@@ -451,3 +451,20 @@ Remaining residuals (accepted, named here for REVIEWER and SECURITY-REVIEWER):
 Tracked, not closed here: R10. `handle_approve` (`promotions.ex:572`) and `handle_reject` (`promotions.ex:609`) are not gated by the stored tenant ids; only `apply` (`promotions.ex:645`) and `run-assertions` (`promotions.ex:779`) call `stored_tenants_authorized?/3` (defined at 669). A non-operator `:PromotionsManage` holder can therefore approve or reject a foreign-named review in its own schema and learns only the status; the change touches the caller's own schema only and `apply` stays blocked. Tracked as Q-1008 / GH #2305 / ISS-1026.
 
 INFO (optional hardening, not done): `own_tenant_value?/2` (`promotions.ex:1140`) returns true for an empty own id with an empty value; this is unreachable through the route because the authorization layer rejects a tenant id that cannot be resolved, so the gate cannot be satisfied by an empty id in practice.
+
+## Closure of the approve/reject stored-id residual (ISS-1026 / Q-1008), 2026-10-06
+
+Residual R10 is closed. Approve and reject on a review whose stored plan names
+foreign tenants did not re-check the stored source/target tenant ids, unlike apply
+and run-assertions. `handle_approve` and `handle_reject` in
+`lib/letflow/routers/promotions.ex` now call `stored_tenants_authorized?/3` after
+body validation and before the action (approx. lines 586 and 627), and a caller who
+does not own both stored tenants gets the same zero-detail 404 as for a nonexistent
+review. The operator path is unchanged.
+
+The 0046 D3 binding condition for granting `:PromotionsManage` below
+`PLATFORM_ADMIN` (REQ-447) is thereby met for approve and reject.
+
+Remaining tracked item (read side, LOW): `GET /promotions/:id/context`,
+`GET /promotions/:id` and `GET /promotions` still lack the stored-tenant check;
+tracked as Q-1011 / GH #2311 / ISS-1029.

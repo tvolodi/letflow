@@ -1,0 +1,70 @@
+run_id: WF03-ISS1026-Q1008-20261006
+step: release-validation
+agent: RELEASE-VALIDATOR
+generated_at: "2026-10-06T15:55:00Z"
+branch: fix/ISS-1026-approve-reject-stored-ids
+scope: scoped (host low on memory; one sequential mix invocation; full suite and mix letflow.check.test left to CI by instruction); working tree UNCOMMITTED
+verdict: NOT VERIFIED (one blocking finding: mix format --check-formatted fails on the new test file; behaviour and all criteria otherwise verified)
+command: >
+  MIX_ENV=test MIX_TEST_PARTITION=3 mix test --timeout 300000 (14 files: routers/promotion_approve_reject_stored_ids_test,
+  promotion_scope_test, req077_promotion_pipeline_test, req446_cross_tenant_denial_test, promotion_context_{shaping,allowlist,entries_scope}_test,
+  promotion_platform_events_shaping_test, promotions_test; test/docs; no_smtp_secret_guard_test; login_directory/no_secret_in_repo_test;
+  plus extra consumers api/platform_scope_authorization_test, api/platform_scope_inventory_test, definitions/promotion_review_store_test)
+result:
+  passed: 250
+  failed: 0
+  output: "Finished in 240.8 seconds (8.0s async, 232.8s sync); Result: 250 passed"
+other_checks:
+  compile_warnings_as_errors: "MIX_ENV=test mix compile --warnings-as-errors --force: Compiling 350 files (.ex), Generated letflow app, no warnings. PASS"
+  format_check: >
+    FAIL (exit 1): test/letflow/routers/promotion_approve_reject_stored_ids_test.exs line 162 is not formatted
+    (the `assert {1, _} = Repo.update_all(query, [set: [status: :rejected]], prefix: ctx.a.schema_name)` line must be wrapped
+    onto three lines with a blank line before). No lib/ file is flagged. CI's format step would fail. Fix: run `mix format` on that file.
+  check_boundaries: "mix letflow.check_boundaries: OK -- 1051 edges checked, 0 violations"
+  check_issue_refs: "mix letflow.check_issue_refs: OK -- every cross-reference is prefixed and well-formed (619 files under docs/issues/)"
+  not_run_by_instruction: ["scripts/test_parallel.sh full suite", "mix letflow.check.test"]
+other_consumers:
+  searched: "grep promotions/.*(approve|reject) over test/letflow, web/src, web/tests, apps, scripts, test/fixtures"
+  tests: >
+    Beyond the named files, api/platform_scope_authorization_test, api/platform_scope_inventory_test and
+    definitions/promotion_review_store_test were added and passed. No match under apps/ or scripts/.
+  web: >
+    web/src/api/promotions.ts, web/src/hooks/usePromotions.ts and one Playwright e2e
+    (platform-definition-promotion-conflict-rejected.pipeline.e2e.spec.ts) call approve/reject on own-tenant reviews; not run
+    (need a live instance); response shape for own-tenant reviews is unchanged.
+diff_checks:
+  lib_scope: "git diff lib/: only lib/letflow/routers/promotions.ex (17+/8-... diffstat 25 lines): two moduledoc/comment rewordings (R5-R8) and the stored_tenants_authorized?/3 guard in handle_approve and handle_reject, else Response.not_found. PASS"
+  decision_record_0046: "git diff: 17 insertions, 0 deletions (grep of '-' lines = 0); additions only. PASS"
+  requirements_and_status_untouched: "git status docs/requirements.yaml docs/status: empty. PASS"
+  test_diff_weakening: "No existing test file is modified (git status shows only the new test file and spec untracked). PASS"
+criteria:
+  - n: 1
+    text: "approve and reject re-check stored source/target tenant ids for non-operators; foreign-named review returns same not-found as apply/run-assertions"
+    status: VERIFIED
+    evidence: "diff shows the same stored_tenants_authorized?/3 helper used by apply/run-assertions now guarding approve and reject, returning Response.not_found; new test file passes in the 250"
+  - n: 2
+    text: "operator can still approve and reject any review"
+    status: VERIFIED
+    evidence: "operator branch of the helper unchanged; operator tests in the new file and req077_promotion_pipeline_test pass"
+  - n: 3
+    text: "two-tenant test: non-operator PromotionsManage holder cannot approve/reject a foreign-named review and cannot learn its status"
+    status: VERIFIED
+    evidence: "promotion_approve_reject_stored_ids_test.exs (8 tests) passes; includes an already-decided foreign review answering the same 404 and the row unchanged. Caveat: file fails mix format (see other_checks)"
+  - n: 4
+    text: "existing promotion route tests pass or are updated; SECURITY-REVIEWER verdict recorded"
+    status: VERIFIED
+    evidence: "all existing promotion route tests pass unmodified (250 passed); verdict recorded in gates block (from handoff, not re-derived)"
+gates:
+  security_reviewer:
+    verdict: PASS
+    scope: "the code"
+    residual_tracked: "read-side residual tracked as Q-1011 / GH #2311 / ISS-1029"
+    source: "as reported in the handoff; not re-verified here"
+  reviewer:
+    verdict: PASS
+    source: "as reported in the handoff"
+  test_design_validator:
+    verdict: PASS
+    note: "mutant on handle_reject killed: 5 of 8 tests failed"
+    source: "as reported in the handoff"
+  full_suite: "left to CI"

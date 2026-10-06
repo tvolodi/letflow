@@ -1,0 +1,54 @@
+id: ISS-1026
+title: "Promotion review approve/reject of a foreign-named review in a tenant's own schema did not re-check the stored source/target tenant ids (apply and run-assertions do)"
+discovered_by: SECURITY-REVIEWER (ISS-1023, Q-1005)
+discovered_in_run: WF03-ISS1023-Q1005-20261006
+discovered_at: "2026-10-06T18:00:00Z"
+severity: MINOR
+failure_class: defect
+occurrence: 1
+owner: ELIXIR-DEV
+description: >
+  In lib/letflow/routers/promotions.ex the apply and run-assertions handlers re-check that the
+  review's STORED source/target tenant ids belong to the caller (stored_tenants_authorized?/3,
+  which goes through Letflow.Api.TenantTarget.authorize_target_tenant/2); handle_approve and
+  handle_reject did not. A non-operator holding :PromotionsManage could therefore approve or
+  reject a review whose stored plan names foreign tenants (an operator-created review stored in
+  the tenant's own schema, or a legacy row) and learn its status; no cross-tenant plan content
+  was returned. INV-10 family (Q-981 / Q-1003 / Q-1005).
+
+  Fix (lib/letflow/routers/promotions.ex): handle_approve and handle_reject call
+  stored_tenants_authorized?/3 after the id cast and the body validation and before the store
+  call; a foreign-named, malformed or legacy stored plan answers Response.not_found/1, the same
+  bytes as a nonexistent review. A review that does not exist is left to the store's
+  :review_not_found -> 404. Operators are unchanged. Because the check runs first, neither the
+  self-approval gate nor the digest comparison nor the state transition runs for such a review.
+
+  Tests: test/letflow/routers/promotion_approve_reject_stored_ids_test.exs (8 tests); spec and
+  mutation table in test/specs/ISS-1026.md. REVIEWER and SECURITY-REVIEWER PASSED the change.
+affected_files:
+  - lib/letflow/routers/promotions.ex
+  - test/letflow/routers/promotion_approve_reject_stored_ids_test.exs
+  - test/specs/ISS-1026.md
+  - docs/issues/ISS-1026.yaml
+regression_test: test/letflow/routers/promotion_approve_reject_stored_ids_test.exs
+# The queue's own issue_ref for Q-1008 came back ISS-1008, which clashes with the local numbering
+# (a different, unrelated local issue number). ISS-1026 is the local id: ISS-1023's follow_ups
+# already cite it as the tracking id for this fix.
+queue_ref: Q-1008
+github_ref: GH-2305
+status: resolved
+resolved_in_run: WF03-ISS1026-Q1008-20261006
+resolved_at: "2026-10-06T20:30:00Z"
+resolution: >
+  approve and reject on POST /promotions/:id/{approve,reject} now re-check the review's stored
+  source and target tenant ids for a non-operator and answer the nonexistent-review 404 for a
+  foreign-named, malformed or legacy plan, before any gate or state change. Operator unchanged.
+  Closes ISS-1023 residual R10.
+follow_ups:
+  - >
+    Q-1011 / GH #2311 / ISS-1029 (TRACKED, LOW, depends on this issue): the READ side still
+    discloses status on a foreign-named review held in a tenant's own schema. GET /promotions/:id/context
+    (status, requested_by, def_type, def_id, created_at, row_version), GET /promotions/:id (assertion
+    run counts and failing assertion ids) and GET /promotions (list) have no stored-tenant check. No
+    cross-tenant plan content is returned (the /context plan is already allowlisted, ISS-1021 / ISS-1023).
+    Its issue file ships with that fix PR.

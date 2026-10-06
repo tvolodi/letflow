@@ -94,7 +94,7 @@ defmodule Letflow.Routers.Promotions do
   customer cannot promote from its test tenant to its production tenant by
   itself until a tenant-pairing model is specified. That check is
   `Letflow.Api.TenantTarget.authorize_target_tenant/2` (source and target ids
-  of R1/R2, stored ids of R7/R8), called by these handlers (A2).
+  of R1/R2, stored ids of R5-R8), called by these handlers (A2).
 
   ## INV-5 — a cross-tenant review id is the SAME response as a nonexistent one (design §5)
 
@@ -166,7 +166,7 @@ defmodule Letflow.Routers.Promotions do
   platform scope (recomputed, never the stored flag). The old allow-all
   default checker was deleted from `PromotionPlan` (A2). In addition,
   every tenant id the REQUEST names (R1/R2 body ids) or a stored review names
-  (R7/R8 re-check) goes through `Letflow.Api.TenantTarget.authorize_target_tenant/2`
+  (R5/R6/R7/R8 re-check) goes through `Letflow.Api.TenantTarget.authorize_target_tenant/2`
   BEFORE any lookup: a foreign id is the same 404 as a nonexistent one.
 
   ## The allowlist statement (design §7, AC6)
@@ -583,10 +583,14 @@ defmodule Letflow.Routers.Promotions do
             Response.send_problem(conn, Validation.problem(field_errors))
 
           {:ok, attrs} ->
-            render_approve(
-              conn,
-              PromotionReviewStore.approve_review(id, actor_id, attrs["plan_digest"], opts)
-            )
+            if stored_tenants_authorized?(conn, id, opts) do
+              render_approve(
+                conn,
+                PromotionReviewStore.approve_review(id, actor_id, attrs["plan_digest"], opts)
+              )
+            else
+              Response.not_found(conn)
+            end
         end
     end
   end
@@ -620,7 +624,11 @@ defmodule Letflow.Routers.Promotions do
             Response.send_problem(conn, Validation.problem(field_errors))
 
           {:ok, _attrs} ->
-            render_reject(conn, PromotionReviewStore.reject_review(id, actor_id, opts))
+            if stored_tenants_authorized?(conn, id, opts) do
+              render_reject(conn, PromotionReviewStore.reject_review(id, actor_id, opts))
+            else
+              Response.not_found(conn)
+            end
         end
     end
   end
@@ -661,7 +669,8 @@ defmodule Letflow.Routers.Promotions do
     end
   end
 
-  # R7/R8 (design 7.2 rows 30/31): a review row written before this fix must
+  # R5-R8 (approve, reject, apply, run-assertions; design 7.2 rows 30/31,
+  # ISS-1026): a review row written before this fix must
   # not be able to read or write another tenant. The stored source/target ids
   # are re-checked with the same helper before any promotion work. A review
   # that does not exist (or is not a UUID) is left to the downstream

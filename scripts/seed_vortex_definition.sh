@@ -5,7 +5,7 @@
 #   1. "Production Order Release" v1.3  (proc-vortex-production-order-release)
 #   2. "8D Corrective Action" v1.0 (proc-vortex-8d-corrective-action; child of
 #       Supplier Quality Deviation, late-bound by name at SUB_PROCESS spawn, ISS-0929)
-#   3. "Supplier Quality Deviation" v1.3 (proc-vortex-supplier-quality-deviation,
+#   3. "Supplier Quality Deviation" v1.4 (proc-vortex-supplier-quality-deviation,
 #       proc-vortex-quality-deviation -- both aliases resolve to this same
 #       definition; see decision C in
 #       lib/letflow/design/iss0897-meridian-vortex-definition-seeding.md)

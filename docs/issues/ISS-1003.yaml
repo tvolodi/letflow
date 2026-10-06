@@ -24,9 +24,13 @@ description: >
 
   Audit artefact: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml; finding PA-VORTEX-003; checklist item C1; scope vortex; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ELIXIR-DEV / CODE-DESIGNER (definition); BA-VORTEX decides the severity default.
 acceptance_criteria:
-  - "After the severity-classification timeout, severity equals 'major' when severity-routing evaluates it"
-  - "The timeout path ends in the major-severity handling, not the critical 8D sub-process"
-  - "A definition-level or engine test covers the timeout path and fails against the old fixture"
+  # AMENDED by the BA ruling (option B, letflow-2, 2026-10-06; GH #2272 comment). The original 'major' AC is
+  # SUPERSEDED: defaulting an unclassified deviation to major would DOWNGRADE today's accidental critical 8D
+  # handling, against the principle that defaults route toward more scrutiny (decision 0047 / Q-972).
+  - "After the severity-classification timeout, severity equals 'critical', set EXPLICITLY, when severity-routing evaluates it (never unset, never 'major')"
+  - "The default step is named default-to-critical and the definition description notes that an unclassified deviation is handled as critical until a human classifies it"
+  - "The timeout path ends in the critical 8D handling (corrective-action-subprocess) exactly as before; the critical path itself is unchanged"
+  - "A definition-level test (real Letflow.Engine.Transition gateway dispatch) covers the timeout path and fails against the v1.3 fixture"
   - "The process validator reports status OK"
 affected_files:
   - test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
@@ -35,4 +39,23 @@ affected_files:
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-985
 github_ref: GH-2272
-status: open
+status: resolved
+regression_test: test/letflow/scripts/vortex_severity_timeout_default_critical_test.exs
+resolved_in_run: WF03-ISS1003-Q985-20261006
+resolved_at: "2026-10-06T14:20:00Z"
+resolution: >
+  BA ruling option B: the severity-classification timeout default is CRITICAL, set explicitly.
+  Fixture v1.4: node default-to-major renamed default-to-critical; its QA stub endpoint is now
+  httpbin /response-headers?severity=critical (httpbin echoes the query as JSON keys, which the
+  engine merges into the variables -- the same pattern as the Meridian kyc-timeout and
+  kyc-aml-check stubs; an https:// endpoint outside the httpbin.org/anything base is left
+  untouched by the seed rewrite, so no SSRF/INV-9 change). The definition description now says an
+  unclassified deviation is handled as critical (8D corrective action) until a human classifies
+  it. severity-routing and the critical path are unchanged. Simulation copy process_work_order.yaml
+  renamed to match. New test file drives the real Transition gateway dispatch from the timeout
+  step's echoed variables: severity == 'critical', only e6 fires, ends in
+  corrective-action-subprocess, and the description/name/no-'major' guards; fail-first on the v1.3
+  fixture (6 of 8 fail).
+follow_ups:
+  - "QA needs a re-seed of Vortex Supplier Quality Deviation v1.4 (scripts/seed_vortex_definition.sh creates and activates it; the platform deprecates v1.3)."
+  - "The major and minor severity branches (supplier-warning, supplier-notification) are still reachable only by a human classification; nothing automatic sends a deviation there. Unchanged by this fix."

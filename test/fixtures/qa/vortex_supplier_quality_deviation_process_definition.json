@@ -1,7 +1,7 @@
 {
   "name": "Supplier Quality Deviation",
-  "version": "1.3",
-  "description": "Raised when incoming goods fail inspection. Quality Manager classifies severity. For CRITICAL a sub-process is spawned. Exercises: sub-process spawn, severity-driven branching, compensation.",
+  "version": "1.4",
+  "description": "Raised when incoming goods fail inspection. Quality Manager classifies severity. For CRITICAL a sub-process is spawned. Exercises: sub-process spawn, severity-driven branching, compensation. If the Quality Manager does not classify the severity in time, the default-to-critical step sets severity to critical explicitly: an unclassified deviation is handled as critical (8D corrective action) until a human classifies it.",
   "graph": {
     "nodes": [
       {
@@ -49,10 +49,10 @@
         }
       },
       {
-        "id": "default-to-major",
+        "id": "default-to-critical",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "https://httpbin.org/anything/internal/deviations/{{variables.deviation_id}}/default-severity",
+          "endpoint": "https://httpbin.org/response-headers?severity=critical",
           "method": "POST",
           "timeout_ms": 300000
         }
@@ -97,11 +97,11 @@
       { "id": "e0",                             "source": "start",                        "target": "quarantine-batch" },
       { "id": "e1",                             "source": "quarantine-batch",             "target": "severity-classification" },
       { "id": "e2",                             "source": "severity-classification",      "target": "false-positive-check" },
-      { "id": "timeout-severity-classification", "source": "severity-classification",     "target": "default-to-major" },
+      { "id": "timeout-severity-classification", "source": "severity-classification",     "target": "default-to-critical" },
       { "id": "e3",                             "source": "false-positive-check",         "target": "release-quarantine",           "condition": "variables.false_positive == true" },
       { "id": "e4",                             "source": "false-positive-check",         "target": "severity-routing",             "condition": "variables.false_positive == false" },
       { "id": "false-positive-check-default", "source": "false-positive-check", "target": "severity-routing", "is_default": true },
-      { "id": "e5",                             "source": "default-to-major",             "target": "severity-routing" },
+      { "id": "e5",                             "source": "default-to-critical",             "target": "severity-routing" },
       { "id": "e6",                             "source": "severity-routing",             "target": "corrective-action-subprocess", "condition": "variables.severity == 'critical'" },
       { "id": "e7",                             "source": "severity-routing",             "target": "supplier-warning",             "condition": "variables.severity == 'major'" },
       { "id": "e8",                             "source": "severity-routing",             "target": "supplier-notification",        "condition": "variables.severity == 'minor'" },

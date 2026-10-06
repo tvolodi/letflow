@@ -52,8 +52,8 @@ actors:
   actor-meridian-lars:
     tenant: meridian
     builtin_roles: [TASK_WORKER]
-    routing_roles: []
-    note: "seed_meridian_persona_actors.sh PERSONAS line (no routing role); TASK_WORKER implicit per script header"
+    routing_roles: [role-credit-approver-l1]
+    note: "seed_meridian_persona_actors.sh PERSONAS line (role-credit-approver-l1 since ISS-1028: independent L1 approver, distinct from memo reviewer Ben); TASK_WORKER implicit per script header"
   actor-meridian-sophie:
     tenant: meridian
     builtin_roles: [TASK_WORKER]

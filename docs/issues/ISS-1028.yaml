@@ -1,0 +1,53 @@
+id: ISS-1028
+title: "Meridian Loan Origination: credit-memo-review and l1-approval still route to the same role (role-credit-manager), only one actor holds it: B2 separation of duties not enforceable, below-threshold scenario step 4 BLOCKED"
+discovered_by: BA-MERIDIAN (letflow-2), process-audit PA-MERIDIAN-002 follow-up to ISS-1014 / Q-996
+discovered_in_run: WF03-ISS1014-Q996
+discovered_at: "2026-10-06T00:00:00Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "letflow-3 (fixture + persona-seed lane); no lib/ change"
+scope: meridian
+description: >
+  In the QA fixture Loan Origination v1.10, both credit-memo-review and l1-approval carry
+  attributes.role = role-credit-manager and the roster/persona seed gives that role to a single
+  actor (actor-meridian-ben). The same person could therefore review the credit memo and then
+  give first-level approval of their own review (checklist B2, separation of duties), and the
+  below-threshold UAT scenario, whose step 4 is now performed by actor-meridian-lars, could not
+  run (BLOCKED).
+design_note: >
+  BA design (GH #2283): re-route l1-approval to a DISTINCT role and seed Lars into it. A second
+  holder of role-credit-manager would only add a candidate; nothing would stop one person doing
+  both. New role role-credit-approver-l1 (the BA's example name; it follows the role-<function>
+  idiom of role-credit-manager / role-credit-director). Lars holds it; Ben keeps
+  role-credit-manager only. l1-approval's outgoing edges are untouched (the D-ESC l1 -> l2
+  timeout timers are the separate Q-995 work). Version-aware seeding means loan v1.10 -> v1.11 is
+  required for QA to pick the change up. The persona seed adds the role to ROLES (7 -> 8) and
+  Lars's PERSONAS line; the drift test count follows.
+acceptance_criteria:
+  - "credit-memo-review and l1-approval route to different roles in the QA fixture and in the simulation copy"
+  - "Every human-task role in the loan definition is held by some actor in test/fixtures/uat/actors.yaml and no actor holds both the memo-review role and the l1 role"
+  - "Persona seed ROLES equals the roles referenced by the Meridian QA definitions (drift test, count 8); Lars holds role-credit-approver-l1, Ben role-credit-manager only"
+  - "Fixture version bumped 1.10 -> 1.11 with the seed header and version-pin tests"
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/simulation/meridian/process_claim_intake.yaml
+  - test/fixtures/uat/actors.yaml
+  - scripts/seed_meridian_definition.sh
+  - scripts/seed_meridian_persona_actors.sh
+  - test/scripts/persona_actor_seed_drift_test.exs
+queue_ref: Q-1010  # queue allocated issue_ref ISS-1010, which collides with an existing local file; local filename ISS-1028 (next free on origin/main) and the GH issue retitled to match
+github_ref: GH-2308
+status: resolved
+resolved_in_run: WF03-ISS1028-Q1010-20261007
+resolved_at: "2026-10-07T00:00:00Z"
+resolution: >
+  Fixture v1.11 routes l1-approval to role-credit-approver-l1 (simulation copy likewise). Lars is
+  seeded into it (persona seed ROLES 7 -> 8) and recorded in actors.yaml routing_roles. No lib/
+  change. New test: meridian_l1_distinct_from_memo_review_fixture_test.exs. Role-level separation
+  only: it does not stop a person who holds both roles in a real tenant, and an engine-level
+  "one person may not complete two tasks of one instance" rule is a separate follow-up.
+follow_ups:
+  - "QA re-seed needed after merge: scripts/seed_meridian_definition.sh (loan v1.11) then scripts/seed_meridian_persona_actors.sh (creates role-credit-approver-l1 and adds actor-meridian-lars)."
+  - "BA (letflow-2): the below-threshold scenario's DEPENDENCY header comment and its step-4 expected text still say role-credit-manager; update to role-credit-approver-l1 now that the definition landed."
+regression_test: test/letflow/scripts/meridian_l1_distinct_from_memo_review_fixture_test.exs

@@ -30,6 +30,7 @@ defmodule Letflow.Plugs.TenantStatusTest do
 
   alias Letflow.Identity.Tenant
   alias Letflow.Plugs.TenantStatus
+  alias Letflow.Support.PlatformTenantFixture
 
   import Plug.Test
   import Plug.Conn
@@ -275,6 +276,9 @@ defmodule Letflow.Plugs.TenantStatusTest do
   describe "REQ-075 AC5 — a PLATFORM_ADMIN caller whose home tenant is :inactive is exempt" do
     test "GET against an :inactive tenant passes through unchanged for PLATFORM_ADMIN" do
       tenant = insert_tenant!(:inactive)
+      # ISS-0993 (A2): only a PLATFORM_ADMIN of the PLATFORM tenant is exempt, so the inactive
+      # tenant here is the pinned platform tenant (restored by the fixture's on_exit).
+      PlatformTenantFixture.pin!(tenant.id)
 
       conn = call_plug(:get, tenant.id, ["PLATFORM_ADMIN"])
 
@@ -284,6 +288,9 @@ defmodule Letflow.Plugs.TenantStatusTest do
 
     test "POST against an :inactive tenant passes through unchanged for PLATFORM_ADMIN" do
       tenant = insert_tenant!(:inactive)
+      # ISS-0993 (A2): only a PLATFORM_ADMIN of the PLATFORM tenant is exempt, so the inactive
+      # tenant here is the pinned platform tenant (restored by the fixture's on_exit).
+      PlatformTenantFixture.pin!(tenant.id)
 
       conn = call_plug(:post, tenant.id, ["PLATFORM_ADMIN"])
 
@@ -322,6 +329,8 @@ defmodule Letflow.Plugs.TenantStatusTest do
 
     test "a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization" do
       tenant = insert_tenant!(:inactive)
+      # ISS-0993 (A2): the exemption is for the platform tenant's PLATFORM_ADMIN only.
+      PlatformTenantFixture.pin!(tenant.id)
 
       # auth_context.roles carries the raw string "PLATFORM_ADMIN" (as JWT delivers it).
       # roles_from_strings/1 converts it to [:PLATFORM_ADMIN]; the atom must match

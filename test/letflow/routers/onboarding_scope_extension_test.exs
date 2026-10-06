@@ -34,6 +34,7 @@ defmodule Letflow.Routers.OnboardingScopeExtensionTest do
   import Plug.Test
   import Plug.Conn
 
+  alias Letflow.Support.PlatformTenantFixture
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
@@ -62,6 +63,10 @@ defmodule Letflow.Routers.OnboardingScopeExtensionTest do
     fixture = TenantFixture.provisioned_tenant!(slug_prefix: "req076-ac10")
     tenant = fixture.tenant
     user = insert_user!(fixture)
+
+    # ISS-0993 (A2): onboarding is PLATFORM scope; this PLATFORM_ADMIN caller is the platform
+    # operator, so its tenant is pinned as THE platform tenant (restored on exit).
+    PlatformTenantFixture.pin!(fixture.tenant_id)
 
     {:ok, %{plaintext: plaintext}} =
       Identity.create_token(user.id, %{roles: ["PLATFORM_ADMIN"], expires_at: nil},

@@ -1,0 +1,21 @@
+id: ISS-0995
+title: "Platform-scope deny attribution: authorization denials carry no route, no caller or tenant correlation, so UAT and incident review cannot attribute a deny"
+discovered_by: UAT-RUNNER (letflow-2) / ORCH
+discovered_in_run: WF03-ISS0993-A2 (Q-960)
+severity: MINOR
+owner: "ELIXIR-DEV (design by CODE-DESIGNER; SECURITY-REVIEWER gate: INV-4)"
+description: >
+  The A1 shadow log line `platform_scope_shadow_deny` carried only the policy key and one boolean, so
+  during the A2 entry-gate verification on QA a deny could only be attributed to a request by call
+  timing. A2 deletes that line (the enforcement 403 replaces it) and adds no new logging, to keep A2
+  inside its design scope. Proposed follow-up: one structured log line on every authorization denial
+  (platform and tenant scope) with the HTTP method, the route PATTERN (not the raw path), the policy key,
+  the platform-scope boolean, and a keyed hash of the caller id and of the tenant id so denials can be
+  correlated without a raw identifier (INV-4: no token, no email, no raw tenant id, no secret in logs;
+  the hash key must be a config secret, not a literal). Needs a design (what is hashed, with which key,
+  sampling/rate on repeated denials) and a SECURITY-REVIEWER pass.
+affected_files:
+  - lib/letflow/plugs/authorize.ex
+queue_ref: null  # not yet registered: letflow-2 (queue admin) registers it after PR A2 merges
+github_ref: null  # GH issue is filed together with the queue registration after PR A2 merges
+status: open

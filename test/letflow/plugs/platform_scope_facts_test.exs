@@ -11,7 +11,7 @@ defmodule Letflow.Plugs.PlatformScopeFactsTest do
       `platform_tenant?` true, `platform_scope?` false; ordinary tenant -> both false; pin unset ->
       both false for everyone;
     * a forged or stale stored flag changes nothing: with a hand-assigned `auth_context` (stored
-      flags forged true, or absent) the A1 shadow evaluation still sees the REAL platform fact.
+      flags forged true, or absent) the A2 enforcement still sees the REAL platform fact.
 
   INV-10 check, enforced from the merge of Q-960 PR A. `async: false` (VM-global pin and OIDC
   config, `bpm-default` realm displacement).
@@ -170,7 +170,7 @@ defmodule Letflow.Plugs.PlatformScopeFactsTest do
   end
 
   describe "Authorize recomputes platform_tenant? (the stored flag is never read)" do
-    defp shadow_for(fixture, auth_context_overrides) do
+    defp enforce_for(fixture, auth_context_overrides) do
       conn =
         Fixture.router_conn(:get, "/", fixture, ["PLATFORM_ADMIN"], nil)
         |> update_in(
@@ -178,38 +178,30 @@ defmodule Letflow.Plugs.PlatformScopeFactsTest do
           &Map.merge(&1, auth_context_overrides)
         )
 
-      {resp, log} =
-        ExUnit.CaptureLog.with_log([level: :warning], fn ->
-          Letflow.Routers.Tenants.call(conn, Letflow.Routers.Tenants.init([]))
-        end)
-
-      {resp, Fixture.shadow_lines(log)}
+      Letflow.Routers.Tenants.call(conn, Letflow.Routers.Tenants.init([]))
     end
 
-    test "an ordinary tenant's context with forged stored flags (true) is still flagged by the shadow evaluation",
+    test "an ordinary tenant's context with forged stored flags (true) is still denied 403 (A2)",
          ctx do
-      {resp, lines} = shadow_for(ctx.a, %{platform_tenant?: true, platform_scope?: true})
+      resp = enforce_for(ctx.a, %{platform_tenant?: true, platform_scope?: true})
 
-      assert resp.status == 200
-      assert [_one] = lines
+      assert resp.status == 403
     end
 
-    test "the platform tenant's context with stale stored flags (false) is not flagged", ctx do
-      {resp, lines} = shadow_for(ctx.p, %{platform_tenant?: false, platform_scope?: false})
+    test "the platform tenant's context with stale stored flags (false) is still allowed (A2)",
+         ctx do
+      resp = enforce_for(ctx.p, %{platform_tenant?: false, platform_scope?: false})
 
       assert resp.status == 200
-      assert lines == []
     end
 
     test "a hand-assigned context without the stored flag keys does not raise and is evaluated on the real fact",
          ctx do
-      {resp_a, lines_a} = shadow_for(ctx.a, %{})
-      {resp_p, lines_p} = shadow_for(ctx.p, %{})
+      resp_a = enforce_for(ctx.a, %{})
+      resp_p = enforce_for(ctx.p, %{})
 
-      assert resp_a.status == 200
-      assert [_one] = lines_a
+      assert resp_a.status == 403
       assert resp_p.status == 200
-      assert lines_p == []
     end
   end
 end

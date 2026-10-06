@@ -353,11 +353,11 @@ mail_adapter =
 # echoing the value. Parsed by the single parser Letflow.PlatformTenant.parse_env/1.
 case Letflow.PlatformTenant.parse_env(System.get_env("LETFLOW_PLATFORM_TENANT_ID")) do
   {:ok, nil} ->
-    # A1 text only (A2 replaces it). Silent under :test, where the pin is always unset.
+    # A2 text (design section 3). Silent under :test, where the pin is always unset.
     if config_env() != :test do
       IO.puts(
         :stderr,
-        "[warning] LETFLOW_PLATFORM_TENANT_ID is unset: platform scope is not enforced yet (shadow mode)."
+        "[warning] LETFLOW_PLATFORM_TENANT_ID is unset: platform-scope operations are denied for every caller."
       )
     end
 

@@ -281,16 +281,10 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
       end
     end
 
-    test "A1 variant: :Unknown keeps the legacy branch (PLATFORM_ADMIN allowed, every other role denied)" do
-      # A2 (design section 6 rule 1) denies :Unknown for every role including PLATFORM_ADMIN:
-      # the first assertion below flips to :Deny403 there.
-      for flag <- [true, false] do
-        assert Authorization.evaluate_access(ctx([:PLATFORM_ADMIN], flag), :Unknown).kind ==
-                 :Allow
-
-        for role <- Authorization.roles() -- [:PLATFORM_ADMIN] do
-          assert Authorization.evaluate_access(ctx([role], flag), :Unknown).kind == :Deny403
-        end
+    test "A2: :Unknown is denied for every role, PLATFORM_ADMIN included" do
+      # Design section 6 rule 1.
+      for flag <- [true, false], role <- Authorization.roles() do
+        assert Authorization.evaluate_access(ctx([role], flag), :Unknown).kind == :Deny403
       end
     end
   end

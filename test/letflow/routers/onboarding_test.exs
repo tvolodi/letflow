@@ -30,6 +30,7 @@ defmodule Letflow.Routers.OnboardingTest do
 
   import Ecto.Query, only: [from: 2]
 
+  alias Letflow.Support.PlatformTenantFixture
   alias Letflow.Identity
   alias Letflow.Identity.OnboardingRecord
   alias Letflow.Identity.Tenant
@@ -59,6 +60,10 @@ defmodule Letflow.Routers.OnboardingTest do
   defp mint_caller!(slug_prefix, roles) do
     tenant = TenantFixture.provisioned_tenant!(slug_prefix: slug_prefix)
     user = insert_user!(tenant)
+
+    # ISS-0993 (A2): onboarding is PLATFORM scope. A caller minted here with PLATFORM_ADMIN is
+    # the platform operator, so its tenant is pinned as THE platform tenant (restored on exit).
+    if "PLATFORM_ADMIN" in roles, do: PlatformTenantFixture.pin!(tenant.tenant_id)
 
     {:ok, %{plaintext: plaintext}} =
       Identity.create_token(user.id, %{roles: roles, expires_at: nil}, prefix: tenant.schema_name)

@@ -76,6 +76,11 @@ defmodule Letflow.Routers.Identity do
   before any `Repo` call. See
   `lib/letflow/design/iss-0774-role-domain-authorization.md` §2.3/§2.5.
 
+  ISS-0993 hardening H1: a submitted `name` for which
+  `Authorization.platform_admin_name?/1` is true (the `PLATFORM_ADMIN` role
+  name, any `kind`) is refused with 403 unless the caller holds platform scope
+  (`Letflow.PlatformTenant.scope_facts_for/1`, recomputed); the body names no role.
+
   ## Group member listing: one served endpoint, not two (REQ-074 AC6)
 
   PROVENANCE (historical, not current decision authority):
@@ -146,12 +151,14 @@ defmodule Letflow.Routers.Identity do
 
   use Letflow.Api.AuthorizedRouter
 
+  alias Letflow.Api.Authorization
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.Identity
   alias Letflow.Identity.RoleRegistry
+  alias Letflow.PlatformTenant
 
   @users_cursor_prefix "U:"
 
@@ -714,34 +721,46 @@ defmodule Letflow.Routers.Identity do
         Response.send_problem(conn, Validation.problem(field_errors))
 
       {:ok, %{"name" => name, "kind" => kind_string, "group_id" => group_id}} ->
-        # kind_string is gated by @upsert_role_schema's allowed_values above
-        # BEFORE reaching String.to_existing_atom/1 -- mirrors
-        # handle_status_update/3's identical closed-set-then-convert shape,
-        # so the atom can never be minted from untrusted input and the
-        # conversion can never raise (both `:platform_role`/
-        # `:process_routing_role` are already loaded via
-        # Letflow.Identity.TenantRole's own Ecto.Enum field).
-        kind = String.to_existing_atom(kind_string)
-
-        case RoleRegistry.upsert_role(name, kind, group_id, opts) do
-          {:ok, role} ->
-            Response.ok(conn, role_map(role))
-
-          {:error, :invalid_role_name} ->
-            Response.unprocessable(conn, "invalid_role_name")
-
-          {:error, :invalid_group_id} ->
-            Response.unprocessable(conn, "invalid_group_id")
-
-          {:error, :group_not_found} ->
-            Response.not_found(conn)
-
-          {:error, :name_not_a_recognized_platform_role} ->
-            Response.unprocessable(conn, "name_not_a_recognized_platform_role")
-
-          {:error, %Ecto.Changeset{}} ->
-            Response.unprocessable(conn, "validation failed")
+        if Authorization.platform_admin_name?(name) and
+             not PlatformTenant.scope_facts_for(conn.assigns.auth_context).platform_scope? do
+          # ISS-0993 hardening H1 (design section 10): binding the PLATFORM_ADMIN
+          # name is a platform-scope action. One shared predicate, any `kind`,
+          # decided BEFORE upsert_role/4; fixed body that names no role.
+          Response.forbidden(conn, "insufficient permissions")
+        else
+          upsert_role(conn, name, kind_string, group_id, opts)
         end
+    end
+  end
+
+  defp upsert_role(conn, name, kind_string, group_id, opts) do
+    # kind_string is gated by @upsert_role_schema's allowed_values above
+    # BEFORE reaching String.to_existing_atom/1 -- mirrors
+    # handle_status_update/3's identical closed-set-then-convert shape,
+    # so the atom can never be minted from untrusted input and the
+    # conversion can never raise (both `:platform_role`/
+    # `:process_routing_role` are already loaded via
+    # Letflow.Identity.TenantRole's own Ecto.Enum field).
+    kind = String.to_existing_atom(kind_string)
+
+    case RoleRegistry.upsert_role(name, kind, group_id, opts) do
+      {:ok, role} ->
+        Response.ok(conn, role_map(role))
+
+      {:error, :invalid_role_name} ->
+        Response.unprocessable(conn, "invalid_role_name")
+
+      {:error, :invalid_group_id} ->
+        Response.unprocessable(conn, "invalid_group_id")
+
+      {:error, :group_not_found} ->
+        Response.not_found(conn)
+
+      {:error, :name_not_a_recognized_platform_role} ->
+        Response.unprocessable(conn, "name_not_a_recognized_platform_role")
+
+      {:error, %Ecto.Changeset{}} ->
+        Response.unprocessable(conn, "validation failed")
     end
   end
 

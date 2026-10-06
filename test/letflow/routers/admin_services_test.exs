@@ -45,6 +45,7 @@ defmodule Letflow.Routers.AdminServicesTest do
   import Plug.Conn
   import Ecto.Query
 
+  alias Letflow.Support.PlatformTenantFixture
   alias Ecto.Adapters.SQL.Sandbox
   alias Letflow.Identity.Tenant
   alias Letflow.ServiceCatalog
@@ -63,11 +64,10 @@ defmodule Letflow.Routers.AdminServicesTest do
     roles = Keyword.get(fields, :roles, [])
 
     conn(method, path)
-    |> assign(:auth_context, %{
-      user_id: Ecto.UUID.generate(),
-      tenant_id: tenant_id,
-      roles: roles
-    })
+    |> assign(
+      :auth_context,
+      PlatformTenantFixture.operator_auth_context(Ecto.UUID.generate(), tenant_id, roles)
+    )
     |> assign(:trace_id, "fixed-test-trace-id")
   end
 
@@ -279,11 +279,12 @@ defmodule Letflow.Routers.AdminServicesTest do
     conn(:post, "/")
     |> Map.put(:body_params, body)
     |> put_req_header("content-type", "application/json")
-    |> assign(:auth_context, %{
-      user_id: Ecto.UUID.generate(),
-      tenant_id: Ecto.UUID.generate(),
-      roles: ["PLATFORM_ADMIN"]
-    })
+    |> assign(
+      :auth_context,
+      PlatformTenantFixture.operator_auth_context(Ecto.UUID.generate(), Ecto.UUID.generate(), [
+        "PLATFORM_ADMIN"
+      ])
+    )
     |> assign(:trace_id, "fixed-test-trace-id")
     |> dispatch()
   end

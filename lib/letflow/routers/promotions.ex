@@ -76,8 +76,7 @@ defmodule Letflow.Routers.Promotions do
   customer cannot promote from its test tenant to its production tenant by
   itself until a tenant-pairing model is specified. That check is
   `Letflow.Api.TenantTarget.authorize_target_tenant/2` (source and target ids
-  of R1/R2, stored ids of R7/R8), shipped but NOT yet called by these
-  handlers (wired in A2).
+  of R1/R2, stored ids of R7/R8), called by these handlers (A2).
 
   ## INV-5 — a cross-tenant review id is the SAME response as a nonexistent one (design §5)
 
@@ -143,14 +142,14 @@ defmodule Letflow.Routers.Promotions do
   ## The `permission_checker` (design §7.9; ISS-0993 section 9)
 
   `PromotionPlan.compute_promotion_plan/5` and `Promotion.promote_definition/3`
-  require a `permission_checker`. Today every call site below still passes
-  `&PromotionPlan.default_permission_checker/2`, which always returns `true`
-  (so `grep -rn "default_permission_checker" lib/` finds every place). The
-  replacement, `Letflow.Definitions.PromotionAccess.checker_for/1` (true iff the
-  source tenant equals the caller's own tenant or the caller holds platform
-  scope), ships in this change but is NOT wired yet; A2 swaps every call site
-  and deletes the allow-all default. Until then the exposure is bounded only by
-  the legacy enforcement (`PLATFORM_ADMIN`-only through the permission matrix).
+  require a `permission_checker`. Every call site below passes
+  `Letflow.Definitions.PromotionAccess.checker_for(conn.assigns.auth_context)`:
+  true iff the source tenant equals the caller's own tenant or the caller holds
+  platform scope (recomputed, never the stored flag). The old allow-all
+  default checker was deleted from `PromotionPlan` (A2). In addition,
+  every tenant id the REQUEST names (R1/R2 body ids) or a stored review names
+  (R7/R8 re-check) goes through `Letflow.Api.TenantTarget.authorize_target_tenant/2`
+  BEFORE any lookup: a foreign id is the same 404 as a nonexistent one.
 
   ## The allowlist statement (design §7, AC6)
 
@@ -172,6 +171,7 @@ defmodule Letflow.Routers.Promotions do
   alias Letflow.Definitions
   alias Letflow.Definitions.Promotion
   alias Letflow.Definitions.PromotionArtifact
+  alias Letflow.Definitions.PromotionAccess
   alias Letflow.Definitions.PromotionConflict
   alias Letflow.Definitions.PromotionDigest
   alias Letflow.Definitions.PromotionPlan
@@ -179,6 +179,7 @@ defmodule Letflow.Routers.Promotions do
   alias Letflow.Definitions.PromotionReviewStore
   alias Letflow.Api.Error
   alias Letflow.Api.Response
+  alias Letflow.Api.TenantTarget
   alias Letflow.Api.Validation
   alias Letflow.Api.Pagination
   alias Letflow.Api.Validation.FieldConstraint
@@ -281,18 +282,29 @@ defmodule Letflow.Routers.Promotions do
         Response.send_problem(conn, Validation.problem(field_errors))
 
       {:ok, attrs} ->
-        render_submit(conn, do_submit(actor_id, attrs, opts))
+        if tenants_authorized?(conn, [attrs["source_tenant_id"], attrs["target_tenant_id"]]) do
+          render_submit(conn, do_submit(conn, actor_id, attrs, opts))
+        else
+          Response.not_found(conn)
+        end
     end
   end
 
-  defp do_submit(actor_id, attrs, opts) do
+  # ISS-0993 section 8/9: every tenant id the request (or a stored review)
+  # names must be the caller's own or the caller must hold platform scope,
+  # decided BEFORE any lookup; a denial is the zero-detail 404.
+  defp tenants_authorized?(conn, tenant_ids) do
+    Enum.all?(tenant_ids, &(TenantTarget.authorize_target_tenant(conn, &1) == :ok))
+  end
+
+  defp do_submit(conn, actor_id, attrs, opts) do
     with {:ok, plan} <-
            PromotionPlan.compute_promotion_plan(
              actor_id,
              attrs["source_tenant_id"],
              attrs["target_tenant_id"],
              attrs["process_key"],
-             permission_checker: &PromotionPlan.default_permission_checker/2
+             permission_checker: PromotionAccess.checker_for(conn.assigns.auth_context)
            ),
          :ok <-
            PromotionConflict.reject_if_conflicts(
@@ -391,16 +403,20 @@ defmodule Letflow.Routers.Promotions do
         Response.send_problem(conn, Validation.problem(field_errors))
 
       {:ok, attrs} ->
-        result =
-          PromotionPlan.compute_promotion_plan(
-            actor_id,
-            attrs["source_tenant_id"],
-            attrs["target_tenant_id"],
-            attrs["process_key"],
-            permission_checker: &PromotionPlan.default_permission_checker/2
-          )
+        if tenants_authorized?(conn, [attrs["source_tenant_id"], attrs["target_tenant_id"]]) do
+          result =
+            PromotionPlan.compute_promotion_plan(
+              actor_id,
+              attrs["source_tenant_id"],
+              attrs["target_tenant_id"],
+              attrs["process_key"],
+              permission_checker: PromotionAccess.checker_for(conn.assigns.auth_context)
+            )
 
-        render_plan(conn, result, opts)
+          render_plan(conn, result, opts)
+        else
+          Response.not_found(conn)
+        end
     end
   end
 
@@ -607,18 +623,43 @@ defmodule Letflow.Routers.Promotions do
         Response.send_problem(conn, Validation.problem(field_errors))
 
       {:ok, attrs} ->
-        result =
-          Promotion.apply_review(
-            raw_id,
-            actor_id,
-            attrs["plan_digest"],
-            Keyword.merge(opts,
-              permission_checker: &PromotionPlan.default_permission_checker/2,
-              event_appender: &PlatformEvents.append_definition_promoted/2
+        if stored_tenants_authorized?(conn, raw_id, opts) do
+          result =
+            Promotion.apply_review(
+              raw_id,
+              actor_id,
+              attrs["plan_digest"],
+              Keyword.merge(opts,
+                permission_checker: PromotionAccess.checker_for(conn.assigns.auth_context),
+                event_appender: &PlatformEvents.append_definition_promoted/2
+              )
             )
-          )
 
-        render_apply(conn, result)
+          render_apply(conn, result)
+        else
+          Response.not_found(conn)
+        end
+    end
+  end
+
+  # R7/R8 (design 7.2 rows 30/31): a review row written before this fix must
+  # not be able to read or write another tenant. The stored source/target ids
+  # are re-checked with the same helper before any promotion work. A review
+  # that does not exist (or is not a UUID) is left to the downstream
+  # `:review_not_found` -> 404 path, so the bytes are identical.
+  defp stored_tenants_authorized?(conn, raw_review_id, opts) do
+    case PromotionReviewStore.get_review(raw_review_id, opts) do
+      {:ok, %PromotionReview{serialised_plan: serialised}} ->
+        plan =
+          case Jason.decode(serialised) do
+            {:ok, %{} = decoded} -> decoded
+            _malformed -> %{}
+          end
+
+        tenants_authorized?(conn, [plan["source_tenant_id"], plan["target_tenant_id"]])
+
+      {:error, :review_not_found} ->
+        true
     end
   end
 
@@ -716,7 +757,11 @@ defmodule Letflow.Routers.Promotions do
             Response.send_problem(conn, Validation.problem(field_errors))
 
           {:ok, attrs} ->
-            run_assertions(conn, review_id, attrs, opts)
+            if stored_tenants_authorized?(conn, review_id, opts) do
+              run_assertions(conn, review_id, attrs, opts)
+            else
+              Response.not_found(conn)
+            end
         end
     end
   end

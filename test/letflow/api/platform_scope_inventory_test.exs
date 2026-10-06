@@ -1,7 +1,7 @@
 defmodule Letflow.Api.PlatformScopeInventoryTest do
   @moduledoc """
-  ISS-0993 / ISS-0994 design section 11 (guards G0..G3) and section 12 items 13 and 18
-  (spec `test/specs/ISS-0993-A1.md`): the route-inventory guard for platform scope separation.
+  ISS-0993 / ISS-0994 design section 11 (guards G0..G4) and section 12 items 13 and 18
+  (specs `test/specs/ISS-0993-A1.md`, `ISS-0993-A2.md`): the route-inventory guard for platform scope separation.
 
   INV-10 check ("platform authority bound to the platform tenant"), enforced from the merge of
   Q-960 PR A. Named checks carried here: the scope-table completeness guard (G2), the platform
@@ -23,10 +23,17 @@ defmodule Letflow.Api.PlatformScopeInventoryTest do
     * **G3** -- platform pinning. The set of routes whose permission is platform scope equals a
       literal snapshot of the 21 rows of design 7.1, and the pure `evaluate_access/2` grid for the
       platform keys is as designed.
-    * **G4** (tenant-identifier scan) is intentionally NOT included in A1: it is a scan for
-      request-supplied tenant ids that must reach `TenantTarget.authorize_target_tenant/2`, and
-      A1 wires no handler to the helper. It belongs to A2, together with the wiring (design 11
-      allows dropping it without weakening G0-G3 and the handler-level tests).
+    * **G4** -- tenant-identifier scan (design 11, A2). Router files that read a tenant identifier
+      from the request (a field constraint naming a tenant or slug, a `params["..."]` read of one,
+      a `:slug` / `:..._tenant_id` path parameter, a tenant key copied from the body) must be on
+      `@tenant_param_allowlist` (promotions, tenants, admin_services, onboarding), and each of those
+      must call `TenantTarget.authorize_target_tenant/2` or be a platform-only router (every route
+      platform scope). One public router (`mobile_tenant_config`) is exempt by name. The scanner
+      takes source text, so a literal bad snippet demonstrates it. Design 11 allows dropping G4 if
+      it proves brittle; it is kept because its patterns match the current sources exactly, and an
+      unlisted reader or a stale entry fails with `file:line`. If a pattern ever becomes a
+      maintenance burden, drop the describe and record the reason here (G0-G3 and the
+      handler-level tests of items 5, 7, 11 and 20 do not depend on it).
 
   No database. `async: true` is safe: nothing here mutates global state.
   """
@@ -555,6 +562,157 @@ defmodule Letflow.Api.PlatformScopeInventoryTest do
       # fail closed on a non-boolean platform flag
       refute Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], :TenantsManage, nil)
       refute Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], :TenantsManage, "true")
+    end
+  end
+
+  # --------------------------------------------------------------------------
+  # G4 -- tenant-identifier scan
+  # --------------------------------------------------------------------------
+
+  describe "G4: a router that reads a tenant identifier from the request is on the allowlist and applies the scope rule" do
+    # Router files that may read a tenant identifier (a tenant id, or a tenant slug) from the
+    # request: promotions and tenants name tenants through the helper; admin_services and
+    # onboarding are platform-only routers (every route is platform scope), so only the operator
+    # reaches their handlers.
+    @tenant_param_allowlist [
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/routers/onboarding.ex",
+      "lib/letflow/routers/promotions.ex",
+      "lib/letflow/routers/tenants.ex"
+    ]
+
+    # GLOBAL-PUBLIC router (design 7.4, never under ApiPipeline): reads the public tenant slug to
+    # answer the unauthenticated mobile bootstrap; it returns only public configuration.
+    @tenant_param_public ["lib/letflow/routers/mobile_tenant_config.ex"]
+
+    @tenant_param_patterns [
+      # a request field constraint naming a tenant (or a tenant slug)
+      {:field, ~r/name:\s*"([^"]*tenant[^"]*|slug)"/},
+      # a request parameter read: conn.params["slug"], Map.get(conn.query_params, "tenant_id")
+      {:param, ~r/params(?:\[|,)\s*"([^"]*(?:tenant|slug)[^"]*)"/},
+      # a path parameter in a route pattern: "/:slug", "/:test_tenant_id/promote"
+      {:path,
+       ~r/^(?:authz_\w+|get|post|put|patch|delete|match)\s*\(?\s*"[^"]*:([a-z_]*(?:tenant|slug)[a-z_]*)/},
+      # a body value copied through to a write: maybe_put(body, "owner_tenant_id", ...)
+      {:body, ~r/maybe_put\(\s*\w+,\s*"([^"]*tenant[^"]*)"/}
+    ]
+
+    # [{line_number, kind, token}] for the code lines of `source` (doc heredocs and comments skipped)
+    def tenant_param_hits(source) do
+      source
+      |> String.split("\n")
+      |> Enum.with_index(1)
+      |> Enum.reduce({false, []}, fn {line, number}, {in_doc?, found} ->
+        quotes = length(String.split(line, ~s(""")) |> tl())
+        toggled? = rem(quotes, 2) == 1
+
+        cond do
+          in_doc? -> {not toggled?, found}
+          toggled? -> {true, found}
+          String.starts_with?(String.trim_leading(line), "#") -> {false, found}
+          true -> {false, found ++ line_hits(line, number)}
+        end
+      end)
+      |> elem(1)
+    end
+
+    defp line_hits(line, number) do
+      trimmed = String.trim_leading(line)
+
+      for {kind, regex} <- @tenant_param_patterns,
+          [_all, token] <- Regex.scan(regex, trimmed),
+          do: {number, kind, token}
+    end
+
+    defp code_references_helper?(source) do
+      source
+      |> String.split("\n")
+      |> Enum.any?(fn line ->
+        not String.starts_with?(String.trim_leading(line), "#") and
+          line =~ "TenantTarget.authorize_target_tenant("
+      end)
+    end
+
+    defp router_module(file) do
+      Module.concat(Letflow.Routers, file |> Path.basename(".ex") |> Macro.camelize())
+    end
+
+    defp platform_only?(router) do
+      Code.ensure_loaded!(router)
+
+      routes = router.__authz_routes__()
+
+      routes != [] and
+        Enum.all?(routes, fn {_method, _path, key} ->
+          Authorization.permission_scope(Authorization.required_permission(key)) == :platform
+        end)
+    end
+
+    test "the scanner flags a literal bad snippet and ignores docs and comments" do
+      bad = ~s'''
+      defmodule Bad do
+        use Letflow.Api.AuthorizedRouter
+
+        @moduledoc """
+        name: "tenant_id" in a doc is ignored
+        """
+        # conn.params["tenant_id"] in a comment is ignored
+
+        authz_get "/:tenant_id/things", :HelpRead do
+          lookup(conn.params["tenant_id"])
+        end
+
+        @schema [%FieldConstraint{name: "target_tenant_id", type: :string}]
+        defp copy(body), do: maybe_put(body, "owner_tenant_id", :owner)
+      end
+      '''
+
+      hits = tenant_param_hits(bad)
+
+      assert {9, :path, "tenant_id"} in hits
+      assert {10, :param, "tenant_id"} in hits
+      assert {13, :field, "target_tenant_id"} in hits
+      assert {14, :body, "owner_tenant_id"} in hits
+      assert hits |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> Enum.sort() == [9, 10, 13, 14]
+    end
+
+    test "every router that reads a tenant identifier is on the allowlist (or is the public router)" do
+      offenders =
+        for file <- scanned_files(),
+            file not in @tenant_param_allowlist,
+            file not in @tenant_param_public,
+            {line, kind, token} <- tenant_param_hits(File.read!(file)),
+            do: "#{file}:#{line}  #{kind} #{inspect(token)}"
+
+      assert offenders == [],
+             "router(s) read a tenant identifier from the request but are not on " <>
+               "@tenant_param_allowlist (add the Letflow.Api.TenantTarget call, then the file):\n" <>
+               Enum.join(offenders, "\n")
+    end
+
+    test "the allowlist and the public exemption are not stale: every entry still reads a tenant identifier" do
+      for file <- @tenant_param_allowlist ++ @tenant_param_public do
+        assert tenant_param_hits(File.read!(file)) != [],
+               "#{file} no longer reads a tenant identifier; remove it from the allowlist"
+      end
+    end
+
+    test "every allowlisted router applies TenantTarget.authorize_target_tenant/2 or is platform-only" do
+      for file <- @tenant_param_allowlist do
+        assert code_references_helper?(File.read!(file)) or platform_only?(router_module(file)),
+               "#{file} reads a tenant identifier but neither calls " <>
+                 "TenantTarget.authorize_target_tenant/2 nor is a platform-only router"
+      end
+
+      # the two that name tenants through the helper really call it
+      for file <- ["lib/letflow/routers/promotions.ex", "lib/letflow/routers/tenants.ex"] do
+        assert code_references_helper?(File.read!(file)), file
+      end
+
+      # the platform-only ones really are (every route platform scope)
+      for file <- ["lib/letflow/routers/admin_services.ex", "lib/letflow/routers/onboarding.ex"] do
+        assert platform_only?(router_module(file)), file
+      end
     end
   end
 end

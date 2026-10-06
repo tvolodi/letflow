@@ -112,7 +112,7 @@ defmodule Letflow.Plugs.AuthorizeTest do
   # clause, a static/structural property), this exercises the actual
   # fail-closed behaviour a route WITHOUT any key gets at request time.
 
-  describe "AC4/AC5: a route with no policy key (:Unknown) is fail-closed-EXCEPT-PLATFORM_ADMIN" do
+  describe "AC4/AC5: a route with no policy key (:Unknown) is denied for EVERY role (ISS-0993 A2)" do
     test "no :policy_key private key, non-admin role -> 403" do
       conn = build_conn(ctx(["TASK_WORKER"])) |> Authorize.call(@opts)
 
@@ -127,14 +127,13 @@ defmodule Letflow.Plugs.AuthorizeTest do
       assert conn.halted
     end
 
-    test "no :policy_key private key, PLATFORM_ADMIN -> allowed through, not halted, scoped_opts assigned" do
+    test "no :policy_key private key, PLATFORM_ADMIN -> 403 too (A2: :Unknown is denied for every role)" do
       tenant_id = Ecto.UUID.generate()
       conn = build_conn(ctx(["PLATFORM_ADMIN"], %{tenant_id: tenant_id})) |> Authorize.call(@opts)
 
-      refute conn.halted
-      assert conn.status == nil
-      assert conn.assigns.scoped_opts == [prefix: "tenant_" <> String.replace(tenant_id, "-", "")]
-      assert conn.assigns.access_decision.kind == :Allow
+      assert conn.halted
+      assert conn.status == 403
+      refute Map.has_key?(conn.assigns, :scoped_opts)
     end
   end
 

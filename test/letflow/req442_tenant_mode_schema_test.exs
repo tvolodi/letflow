@@ -8,6 +8,10 @@ defmodule Letflow.Req442TenantModeSchemaTest do
   would drop the column under every concurrent session of the shared test DB); the
   real command output is quoted in the TEST-DESIGNER handoff and these tests pin
   the static properties (up/down are explicit, the manifest is untouched).
+
+  ISS-0993 (A2): `Tenant.update_changeset/2` no longer exists (its deletion is asserted in
+  `test/letflow/identity/tenant_update_changeset_removed_test.exs`), so the changesets that must
+  not cast the mode are `create_changeset/3`, `status_changeset/2` and `settings_changeset/2`.
   """
 
   use Letflow.DataCase, async: true
@@ -147,7 +151,7 @@ defmodule Letflow.Req442TenantModeSchemaTest do
       assert cs.changes == %{}
     end
 
-    test "create/update/status/settings changesets do NOT cast login_disclosure_mode (string and atom keys)" do
+    test "create/status/settings changesets do NOT cast login_disclosure_mode (string and atom keys)" do
       base = %Tenant{display_name: "x", slug: "x"}
 
       for attrs <- [
@@ -161,7 +165,6 @@ defmodule Letflow.Req442TenantModeSchemaTest do
                  :login_disclosure_mode
                )
 
-        refute Map.has_key?(Tenant.update_changeset(base, attrs).changes, :login_disclosure_mode)
         refute Map.has_key?(Tenant.status_changeset(base, attrs).changes, :login_disclosure_mode)
 
         refute Map.has_key?(

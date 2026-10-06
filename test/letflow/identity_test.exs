@@ -3,7 +3,7 @@ defmodule Letflow.IdentityTest do
   Tests for `Letflow.Identity.provision_oidc_user/4` (REQ-018, arity bumped to /4 by
   REQ-063 — see below) and `Letflow.Identity.resolve_tenant_by_realm/1`,
   `resolve_realm_by_tenant/1`, `verify_realm_ownership/2`, plus
-  `Letflow.Identity.Tenant.create_changeset/3`/`update_changeset/2` (REQ-019). See
+  `Letflow.Identity.Tenant.create_changeset/3`/`admin_patch_changeset/2` (REQ-019). See
   `test/specs/REQ-018.md` and `test/specs/REQ-019.md` for the full test-case
   rationale, including which criteria are covered by inspection rather than a runtime
   assertion (REQ-018 AC4's moduledoc citation, and the `:external_identity_collision`
@@ -604,8 +604,8 @@ defmodule Letflow.IdentityTest do
     end
   end
 
-  describe "Tenant.update_changeset/2 — idp_realm_id immutability (REQ-019 acceptance criterion 3)" do
-    test "update_changeset/2 does not cast idp_realm_id even when present in attrs" do
+  describe "Tenant.admin_patch_changeset/2 — idp_realm_id immutability (REQ-019 acceptance criterion 3)" do
+    test "admin_patch_changeset/2 does not cast idp_realm_id even when present in attrs" do
       tenant =
         insert_tenant!(%{
           slug: unique_slug(),
@@ -614,7 +614,7 @@ defmodule Letflow.IdentityTest do
         })
 
       changeset =
-        Tenant.update_changeset(tenant, %{
+        Tenant.admin_patch_changeset(tenant, %{
           idp_realm_id: "attempted-new-realm",
           display_name: "New Name"
         })
@@ -624,7 +624,7 @@ defmodule Letflow.IdentityTest do
       assert changeset.valid?
     end
 
-    test "persisting update_changeset/2 with an attempted idp_realm_id change leaves the original idp_realm_id unchanged in the database" do
+    test "persisting admin_patch_changeset/2 with an attempted idp_realm_id change leaves the original idp_realm_id unchanged in the database" do
       original_realm = unique_realm("original")
 
       tenant =
@@ -635,7 +635,7 @@ defmodule Letflow.IdentityTest do
         })
 
       changeset =
-        Tenant.update_changeset(tenant, %{
+        Tenant.admin_patch_changeset(tenant, %{
           idp_realm_id: "attempted-new-realm",
           display_name: "New Name"
         })

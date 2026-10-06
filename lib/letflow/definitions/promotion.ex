@@ -15,9 +15,10 @@ defmodule Letflow.Definitions.Promotion do
   `promote_opts()`'s `permission_checker`/`tenant_classifier` are the exact
   same shape as `Letflow.Definitions.PromotionPlan.promotion_opts()`'s —
   same arities, same semantics. `permission_checker` has **no built-in
-  default** (`Keyword.fetch!/2`, raises `KeyError` if omitted — there is no
-  data path from `actor_id` to a real permission today, so silently
-  defaulting to "allowed" would be worse than crashing). `tenant_classifier`
+  default** (`Keyword.fetch!/2`, raises `KeyError` if omitted; silently
+  defaulting to "allowed" would be worse than crashing). The HTTP call sites
+  pass `Letflow.Definitions.PromotionAccess.checker_for/1` (ISS-0993; the old
+  allow-all default was deleted). `tenant_classifier`
   defaults by **delegating** to
   `Letflow.Definitions.PromotionPlan.default_tenant_classifier/1` — not a
   duplicated copy of the same one-line function, so the two modules can never

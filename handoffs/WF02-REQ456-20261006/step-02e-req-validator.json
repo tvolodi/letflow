@@ -7,9 +7,9 @@
   "to_agent": "REQ-VALIDATOR",
   "file": "handoffs/WF02-REQ456-20261006/step-02e-req-validator.json",
   "created_at": "2026-10-06T04:26:24Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-10-06T04:30:00Z",
+  "completed_at": "2026-10-06T04:45:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -36,6 +36,14 @@
       "mix letflow.check passes, real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "summary": "AC4 grep pass: every file path, field, endpoint, violation code, script function and command named in the new text exists on the branch or is created by this entry. MISSING count 0. Minor note (non-blocking): process-auditor.md names 'n/a' and 'sys-' process_id conventions, which are in the corpus but not documented in uat-scenario-schema.md.",
+    "table": "name | evidence file:line | status\ndocs/agents/uat-scenario-schema.md, core-directives.md, docs/roles.md, .claude/agents/ba-analyst.md, docs/agents/protocols/ISSUE_QUEUE.md, scripts/uat_preflight.sh, docs/agents/ba-personas/ | ls on branch | EXISTS\ntest/fixtures/uat/actors.yaml keys actors/tenant/builtin_roles/routing_roles/unresolved/refusal_coverage_exempt | actors.yaml:10,12,13,14,111,128 | EXISTS\ntest/fixtures/uat/scenarios/<scope>/ (platform, meridian, swiftroute, vortex, bilimbaga; _throwaway excluded by _ rule) | ls | EXISTS\nprocess-definition-aliases/*.yaml keys company_id, definition_name, fixture, seed_script | proc-meridian-loan-origination.yaml:2-5 | EXISTS\ntest/fixtures/simulation/S/process_*.yaml, org_structure.yaml | simulation/meridian,swiftroute,vortex listing | EXISTS\nscripts/seed_S_*.sh | scripts/seed_meridian_definition.sh etc. (7 files) | EXISTS\npriv/solutions/S.json, priv/modules/<id>/pack.json, key module_id | priv/solutions/bilimbaga.json 'module_id: exam'; priv/modules/exam/pack.json | EXISTS\nviolation codes unreachable_node, no_path_to_end, no_default_route, variable_never_collected | lib/letflow/definitions/graph.ex:257-260 | EXISTS\nwarning prefix unbound_task_role: | lib/letflow/definitions/role_binding.ex:58 | EXISTS\nnode attrs escalation_timer_duration, escalation_role, role, form_schema; kinds HUMAN_TASK, EXCLUSIVE_GATEWAY | test/fixtures/qa/swiftroute_process_definition.json:15-17; graph.ex:166; form_schema_expressions.ex:34 | EXISTS\nscenario field expect_refusal | lib/mix/tasks/letflow.check_uat_scenario_schema.ex:53-55 | EXISTS\nscenario process_id values n/a, sys-*, proc-* | grep of scenarios/*: 'process_id: n/a' (2), 'sys-definition-promotion' (4), proc-* sidecars | EXISTS\nbuilt-in roles PLATFORM_ADMIN, TENANT_ADMIN, TASK_WORKER (eight roles) | docs/roles.md:12,30,48 (8 headings 12-54) | EXISTS\nGET /api/v1/definitions/active/<name>; top-level id | lib/letflow/routers/definitions.ex:284; body id at :1119 | EXISTS\nPOST /api/v1/definitions/<id>/validate; 200 warnings, 422 errors[].code | definitions.ex:180-181,360,1247 | EXISTS\nscripts/uat_preflight.sh fetch_credential ~311, parse_token_line ~297, protocol qa-uat-env, 'Token: <jwt>' | uat_preflight.sh:311, :297, :11, :305 | EXISTS\nORCHESTRATOR.md section 5 (rework/escalation); AGENT_SYSTEM.md section 6 (artifact locations) | ORCHESTRATOR.md:247; AGENT_SYSTEM.md:132 | EXISTS\nWF-05 Step 0, Step 1, Step 4; Step 0b | WF-05:56,176,225; Step 0b created at :110 | EXISTS/CREATED\nproduct-owner.md terms blocker_overrides, release_recommendation, suggested_action none/route_to_security_review, issues | product-owner.md:96,147-150,259 | EXISTS\nreport path test/uat-reports/process-audit-<scope>-<run_id>.yaml; context keys scope, run_id, commit_sha, input_digests, validator_output, cross_scope_inputs, audit_artefacts, audit_blocked_scopes; ids PA-<SLUG>-nnn; role PROCESS-AUDITOR; verdict/severity values | defined by this entry (process-auditor.md:164-216; WF-05 Step 0b; product-owner.md 3b) | CREATED\nshell commands sha256sum, curl | coreutils/curl invocations only; not repo files | N/A (tools)\nmix letflow.check | mix.exs:17,149 | EXISTS (not run: read-only pass)",
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": "ORCH proceeds"
+  },
   "rework_count": 0
 }

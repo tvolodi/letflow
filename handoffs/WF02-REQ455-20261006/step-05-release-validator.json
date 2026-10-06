@@ -1,0 +1,46 @@
+{
+  "handoff_id": "4a3e7649-d379-4213-8b78-c710e6ab0a3d",
+  "run_id": "WF02-REQ455-20261006",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ455-20261006/step-05-release-validator.json",
+  "created_at": "2026-10-06T02:15:30Z",
+  "started_at": "2026-10-06T02:15:30Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-455"
+    ],
+    "requirement_text": {
+      "REQ-455": "Approved by the user on 2026-10-06. Process design gaps are found late,\nin UAT: 35 files under docs/issues/ mention a dead end, an unreachable\nstep or a missing default route (recent: ISS-0928 no_matching_edge on a\nservice task in kyc-routing, ISS-0929). Letflow.Definitions.Graph\nalready checks a good deal (violation codes at\nlib/letflow/definitions/graph.ex:207-234: missing start or end node,\ndangling edge, isolated node, cycle without gateway, missing role,\nmissing edge condition, multiple default edges,\nhuman_task_no_fallback_edge and more). This entry adds only what is\nmissing, as deterministic checks that run wherever the existing ones\nrun, so they do not depend on any model.\n\nFIRST STEP (CODE-DESIGNER): for each candidate check below, establish\nby reading graph.ex, semantic_validation.ex and their tests whether it\nalready exists, exists partly, or is missing, and record the finding\nwith file and line. Build only the missing part.\n\nCANDIDATE CHECKS:\n1. Reachability: every node is reachable from the start node, and from\nevery node at least one end node is reachable. (check_isolated_nodes\nlooks at a node's own edges; establish whether a connected island or a\ntrap with no way out is caught.)\n2. Decision without a default route: an exclusive gateway, and any\nother node kind whose outgoing edges all carry conditions (ISS-0928\nwas a service task), has no is_default edge, so an instance can stop\nwith no matching route. Establish which node kinds can have\nconditional outgoing edges and cover all of them.\n3. Data used before it is collected: an edge condition or form\nexpression reads a variable that no form, service output or\nsub-process output on ANY path from the start to that point can have\nset. Reuse the declared-fields machinery of SemanticValidation; report\nonly the case where no path sets it (certain), not the case where some\npath does not (that is a judgment for PROCESS-AUDITOR, REQ-456).\n4. Unbound task roles at install: when a definition or solution pack is\ninstalled or activated in a tenant, every role a human task routes to\nthat has no tenant_role binding in that tenant is listed. Decision\n0029 section 2 keeps required roles advisory and role seeding out of\npacks; do not change that. This is a reported warning in the\nvalidation result and the install response, never a silent pass and\nnever an automatic binding.\nNew findings in 1 to 3 are violations (activation is refused, same as\nthe existing codes). State in the design whether any definition\nshipped in priv/ or seeded by scripts/ fails a new check; if one does,\nreport it to ORCH as an issue with the definition and node named, and\ndo not weaken the check.\nOPEN QUESTIONS: - \"A definition already active in a tenant that fails a new check keeps running. Default: new checks apply at validate, activate and import time only; nothing is deactivated.\""
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/reports/report-2026-10-06-WF02-REQ455.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/",
+      "lib/letflow/design/",
+      "test/letflow/definitions/"
+    ],
+    "branch_name": "feature/WF02-REQ455-20261006"
+  },
+  "task": {
+    "description": "WF-02 step 05 (RELEASE-VALIDATOR): independently verify every acceptance criterion of REQ-455 against code/tests (not TEST-RUNNER's report). Re-run yourself, sequentially, single BEAM, MIX_TEST_PARTITION=59 (RAM tight; no test_parallel.sh): test/letflow/definitions, test/letflow/engine/service_task_wiring_test.exs, test/letflow/engine_execution_error_test.exs, test/letflow/simulation, test/letflow/scripts, test/docs; plus mix compile --warnings-as-errors, mix format --check-formatted, mix letflow.check_boundaries. Re-derive F2 (test/scripts/uat_preflight_local_deps_test.exs T1,T2,T7 pre-existing) structurally per core-directives (diff does not touch; merge-base repro is claimed -- check the claim is plausible by reading the test + diff list; reproduce yourself only if cheap). F1 (EngineConcurrencyTest AC4 flake, file not in diff) likewise. Verify the shipped-definition and check-4 AC explicitly, that design deviation (authority-routing default target) is documented, that docs/requirements.yaml and status are NOT yet flipped (DOC-UPDATER does next), and that the design doc line ~338 still names committee-vote-fork (to be corrected by DOC-UPDATER). No commit, no git checkout/stash/reset.",
+    "acceptance_criteria": [
+      "the design lists each candidate check as exists, partly exists or missing, with file and line evidence, and CODE-DESIGN-VALIDATOR re-verifies each classification",
+      "for each check that was built: one test with a minimal definition that violates only that check and asserts the new violation code and the offending node or edge id, and one test showing a valid neighbour case passes",
+      "the ISS-0928 shape (a service task with only conditional outgoing edges and no default) is rejected at validation, with a test",
+      "check 4: installing a definition whose human task routes to an unbound role returns the role names in the warning list and binds nothing (tenant_role row count unchanged)",
+      "every process definition shipped in the repository or seeded by scripts/ is run through the validator in a test; each failure is either fixed in the same change or filed as an issue and named in the run report",
+      "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted"
+    ]
+  },
+  "result": null,
+  "rework_count": 0
+}

@@ -88,6 +88,28 @@ defmodule Letflow.Support.BpmDefaultRealmDisplacement do
   # pick its own distinct key to avoid an unrelated collision).
   @lock_key 847_331_009
 
+  # 2026-10-06 (second occurrence of the same CI flake: main CI 206338d3
+  # `bpm_default_realm_displacement_test.exs:141`, PR #2313 run 37490851195
+  # `req077_promotion_pipeline_test.exs:1279` -- both `DBConnection.ConnectionError:
+  # connection not available and request was dropped from queue after 4000ms` out of
+  # `acquire_dedicated_lock!/0`). Root cause: the dedicated Postgrex connection is a
+  # brand-new DBConnection pool of ONE whose physical connect is ASYNCHRONOUS, so the
+  # first `Postgrex.query!/3` queues while it connects. With no explicit queue options
+  # it inherits DBConnection's overload-SHEDDING defaults (`:queue_target` 50 ms,
+  # `:queue_interval` 2000 ms): if the queue wait exceeds `:queue_target` for a whole
+  # `:queue_interval`, queued requests are dropped. That is meant for a shared,
+  # saturated pool and is wrong for a private pool of one -- on a CPU-starved CI runner
+  # (several `mix test` partitions) a connect slower than ~2 s is shed with exactly the
+  # message above. Secondary latent flake: `pg_advisory_lock` legitimately BLOCKS while
+  # another process on the same database holds the lock, and Postgrex's default query
+  # timeout is 15 s. Hence: push the queue options far out (never shed), give the
+  # connect/handshake a generous bound, and pass one explicit `:timeout` to every
+  # query issued on the dedicated connection. The regression test is
+  # test/support/bpm_default_realm_displacement_connect_test.exs.
+  @queue_window_ms 30_000
+  @connect_timeout_ms 30_000
+  @query_timeout_ms 120_000
+
   @doc """
   Removes whatever tenant currently holds the `"bpm-default"` `idp_realm_id` binding
   (a no-op if none does), and schedules its restoration via `ExUnit.Callbacks.on_exit/1`
@@ -170,20 +192,37 @@ defmodule Letflow.Support.BpmDefaultRealmDisplacement do
       VALUES (gen_random_uuid(), 'bpm-default', 'Default Tenant', 'active', 'bpm-default', NOW(), NOW())
       ON CONFLICT (slug) DO NOTHING
       """,
-      []
+      [],
+      timeout: @query_timeout_ms
     )
 
     :ok
   end
 
+  @doc false
+  # Exposed (not part of the public API) so the regression test exercises the REAL
+  # production options rather than a copy. See the 2026-10-06 note at `@lock_key`.
+  #
+  # Repo.config/0 includes :pool (config/test.exs's Ecto.Adapters.SQL.Sandbox, this
+  # repo's own sandbox pool adapter) and :pool_size -- neither is a valid Postgrex
+  # pool option (Postgrex.start_link/1 raises UndefinedFunctionError against
+  # Ecto.Adapters.SQL.Sandbox.child_spec/1 if passed through unchanged, confirmed
+  # empirically). Dropped here so this dedicated connection is a genuinely separate,
+  # unpooled Postgrex connection outside Ecto's own pool machinery entirely.
+  @spec dedicated_connection_opts() :: keyword()
+  def dedicated_connection_opts do
+    Repo.config()
+    |> Keyword.drop([:pool, :pool_size])
+    |> Keyword.merge(
+      queue_target: @queue_window_ms,
+      queue_interval: @queue_window_ms,
+      connect_timeout: @connect_timeout_ms,
+      timeout: @query_timeout_ms
+    )
+  end
+
   defp acquire_dedicated_lock! do
-    # Repo.config/0 includes :pool (config/test.exs's Ecto.Adapters.SQL.Sandbox, this
-    # repo's own sandbox pool adapter) and :pool_size -- neither is a valid Postgrex
-    # pool option (Postgrex.start_link/1 raises UndefinedFunctionError against
-    # Ecto.Adapters.SQL.Sandbox.child_spec/1 if passed through unchanged, confirmed
-    # empirically). Dropped here so this dedicated connection is a genuinely separate,
-    # unpooled Postgrex connection outside Ecto's own pool machinery entirely.
-    opts = Repo.config() |> Keyword.drop([:pool, :pool_size])
+    opts = dedicated_connection_opts()
     {:ok, lock_conn} = Postgrex.start_link(opts)
     # Postgrex.start_link/1 is a plain GenServer.start_link/3, linked to the calling
     # process by default. displace!/0's release runs inside an ExUnit.Callbacks.on_exit/1
@@ -198,12 +237,19 @@ defmodule Letflow.Support.BpmDefaultRealmDisplacement do
     # which is required for a connection meant to outlive the current process until an
     # on_exit callback releases it.
     Process.unlink(lock_conn)
-    Postgrex.query!(lock_conn, "SELECT pg_advisory_lock($1)", [@lock_key])
+
+    Postgrex.query!(lock_conn, "SELECT pg_advisory_lock($1)", [@lock_key],
+      timeout: @query_timeout_ms
+    )
+
     lock_conn
   end
 
   defp release_dedicated_lock!(lock_conn) do
-    Postgrex.query!(lock_conn, "SELECT pg_advisory_unlock($1)", [@lock_key])
+    Postgrex.query!(lock_conn, "SELECT pg_advisory_unlock($1)", [@lock_key],
+      timeout: @query_timeout_ms
+    )
+
     GenServer.stop(lock_conn)
   end
 end

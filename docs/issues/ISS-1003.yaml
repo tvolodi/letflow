@@ -1,0 +1,38 @@
+id: ISS-1003
+title: "Vortex Supplier Quality Deviation: severity-classification timeout (default-to-major) never sets severity, so routing falls to the critical 8D path"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:32:46Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "ELIXIR-DEV / CODE-DESIGNER (definition); BA-VORTEX decides the severity default"
+process_audit_report: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-VORTEX-003
+checklist_item: C1
+scope: vortex
+description: >
+  Scope vortex. Checklist C1 (every variable a gateway reads is collected on every path). Audit: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml finding PA-VORTEX-003.
+
+  In test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json, the timeout edge of severity-classification goes through the node default-to-major to severity-routing, which reads the severity variable. Nothing on that path sets severity, so severity-routing takes its default edge, which leads to the critical-severity 8D sub-process.
+
+  Business consequence: a deviation that was not classified in time is meant to be treated as major but is handled as critical, tying up procurement and the supplier.
+
+  Fix direction: make default-to-major actually set severity to 'major' (a set-variable/assignment step or equivalent supported by the engine), or route default-to-major directly to the major handling.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml; finding PA-VORTEX-003; checklist item C1; scope vortex; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ELIXIR-DEV / CODE-DESIGNER (definition); BA-VORTEX decides the severity default.
+acceptance_criteria:
+  - "After the severity-classification timeout, severity equals 'major' when severity-routing evaluates it"
+  - "The timeout path ends in the major-severity handling, not the critical 8D sub-process"
+  - "A definition-level or engine test covers the timeout path and fails against the old fixture"
+  - "The process validator reports status OK"
+affected_files:
+  - test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+# Ref clash: the queue's issue_ref for Q-985 came back ISS-0985, which is not the local number
+# (docs/issues/ISS-0985.yaml is a different issue); ISS-1003 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-985
+github_ref: GH-2272
+status: open

@@ -1,0 +1,324 @@
+report_id: process-audit-vortex-WF05-BASELINE3-20261006
+run_id: WF05-BASELINE3-20261006
+generated_at: "2026-10-06T00:00:00Z"
+commit_sha: 1177a3152bd26c3b78b82227357f3fc1c9031b9d
+scope: vortex
+digest_algorithm: sha256-hex-of-file-bytes
+audited_inputs:
+  - path: docs/roles.md
+    digest: 014866546eb7b96aa057319515f0d928ba9f02144408ec12c4c14c6e0835218f
+  - path: scripts/seed_vortex_definition.sh
+    digest: 53dd99462e005dfc24c5cce5cfe0fb9b3405f8423aafed6515178757c8254d65
+  - path: scripts/seed_vortex_entities.sh
+    digest: 025c7b4a4e38cafd957830362f04881e95dc08877a2fc9a4da52e81bb51dba71
+  - path: scripts/seed_vortex_persona_actors.sh
+    digest: ccb56aa749e83149a000bd74cfba613c474787a2e9cb525f16bdc828fa497d85
+  - path: test/fixtures/qa/vortex_8d_corrective_action_definition.json
+    digest: 2cbdd28a24d71bc4ccf9814521b46895b3dfc69676ba002de7d6a7bb00afa521
+  - path: test/fixtures/qa/vortex_production_order_release_process_definition.json
+    digest: 27ac143f35da437f6653a2888be628f2f5892469d42a43c94e4b6a2762a8ea90
+  - path: test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+    digest: fcc42402a33ad88aab9660bd3f23d4d8a9baf1bc1ed8d74bf83e6ea2c6446bde
+  - path: test/fixtures/simulation/vortex/org_structure.yaml
+    digest: db4702e9feb06b8d52e3922019fb418da6d773519ce5f870498447aedb9d7e51
+  - path: test/fixtures/simulation/vortex/process_quality_check.yaml
+    digest: 43fea6c0d86630c47c081641cd764674f19d75559c45e1af180565da1bed1d65
+  - path: test/fixtures/simulation/vortex/process_work_order.yaml
+    digest: 2ddbbb734f8f58072a83a5a3d4c262b5218858a707ee8c45e5a13eb5b66d430f
+  - path: test/fixtures/uat/actors.yaml
+    digest: 5503823b3b44213dd7ba6e85c3d950baf57edac0136b9ad8a3d69c4b1118f699
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-8d-corrective-action.yaml
+    digest: 579bec82d421b02ec88909ecd7df1f30d29c227b022f8c302caeac95321ad026
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-production-order-release.yaml
+    digest: 8f59e4af6594ad8716e62703aeebd2c1ffd994445fd89f60e82c29a5d71edad3
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-quality-deviation.yaml
+    digest: 08e8a761b7884bb0a16a860547ba3c210c9362b79c07b9c6fa55f4a52635aab2
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-supplier-quality-deviation.yaml
+    digest: ba7a52bc4e6b3e1bd45356259c405e94ab97168168cfd4370a6da9942ecc6175
+  - path: test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml
+    digest: 868e49515de31fa213bd66b9e16f212969a242235ae3ed0a174b76d8356dcf35
+  - path: test/fixtures/uat/scenarios/vortex/production-order-above-threshold.yaml
+    digest: 2038711c52de497b1c20028d9ea3e84c727d8ec4271d9f9da4db7904d1f90f27
+  - path: test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-critical.yaml
+    digest: 74c783c8dacd2e683dfe0da1466ecb611a2b6d26f91122d169af86d02f83ccc3
+  - path: test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-false-positive.yaml
+    digest: 37e8b176c84679b0bf6a7bd0095db7c2572c6ee06a9b38b56034d7584fd9a322
+cross_scope_reads:
+  - path: scripts/seed_meridian_definition.sh
+    digest: 03d80a7d02b0bb9fff2f80a4973e2eb5f303609526eb1b46c403459b4e9616bd
+  - path: scripts/seed_swiftroute_definition.sh
+    digest: db9932ce1da26a851045c7629e21e8dda6ece1b5eb8e547fe919bb8cb378036e
+  - path: test/fixtures/qa/meridian_loan_origination_process_definition.json
+    digest: f60ba08e7d2db8dd8386260e4dffaad5c70fce4fc74dec96554bd76cc1c0dd72
+  - path: test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+    digest: 4e7271abe2f048488f838c7c56714a3cbcd676e2a4dfcd112f0131360095a45c
+  - path: test/fixtures/qa/swiftroute_process_definition.json
+    digest: 7a3504af7b2b3ac0ea01b170bd70752c9960d0ddbb76630d7e19412630984dac
+  - path: test/fixtures/simulation/meridian/org_structure.yaml
+    digest: ce1cde5a911787d08d9877bc60b36402a6cfe964dbb85056abaf62dd9b5560cd
+  - path: test/fixtures/simulation/meridian/process_claim_intake.yaml
+    digest: 70c28b9b463f00bc364b363466ee5ab8d55f3e3976cadcadde54b5d08e625311
+  - path: test/fixtures/simulation/meridian/process_policy_binding.yaml
+    digest: 9fda8f2dfdcd0d3da4fd528bc17c035482e6783715e8fe8528f57773d2099ced
+  - path: test/fixtures/simulation/swiftroute/org_structure.yaml
+    digest: 4de99410dd76b1cc0e8d676c0ea567e4a9c51944c420f891eac19e49612a00ed
+  - path: test/fixtures/simulation/swiftroute/process_route_approval.yaml
+    digest: 3ae8caec9b3fd316dcb7331f5f6f8c6db684f66458861b027f65928edea71268
+  - path: test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml
+    digest: 0a3585864b5cf9740033ec84126675a5a475fa98e4c77ee393d3b87656f76ba2
+  - path: test/fixtures/uat/process-definition-aliases/proc-meridian-loan-origination.yaml
+    digest: 9feb9a617122461a3aade2f27ad0a78ecfc743e7f44ce495ebded1bdf950c513
+  - path: test/fixtures/uat/process-definition-aliases/proc-meridian-regulatory-compliance-review.yaml
+    digest: c4e1599a80c7779607347981230dce96774c523232b8ce5ff9d5a804812e0146
+  - path: test/fixtures/uat/process-definition-aliases/proc-swiftroute-shipment-approval.yaml
+    digest: 65f00eb8a62fa8a5f28ee5369065ea5b004def8fe229c746ebd995c09ecbc641
+validator_outputs:
+  - definition_name: Production Order Release
+    definition_file: test/fixtures/qa/vortex_production_order_release_process_definition.json
+    status: OK
+    violation_codes: []
+    warnings: []
+  - definition_name: Supplier Quality Deviation
+    definition_file: test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+    status: OK
+    violation_codes: []
+    warnings: []
+  - definition_name: 8D Corrective Action
+    definition_file: test/fixtures/qa/vortex_8d_corrective_action_definition.json
+    status: OK
+    violation_codes: []
+    warnings: []
+
+checklist:
+  - item: A1
+    answer: YES
+    evidence: >
+      In the production order definition, the capacity-review, escalate-to-ceo and budget-approval tasks each have a
+      reject branch that ends at end-rejected; in the deviation definition the false-positive-check decision has a
+      branch that ends at end-false-positive. The budget-gate and severity-routing gateways only route and decide
+      nothing for approval, so no rejection outcome is missing.
+  - item: A2
+    answer: NOT_APPLICABLE
+    evidence: >
+      No scenario step or description and no node name in the three definitions says a requester can correct and
+      resubmit or that something is returned for correction; the 8D corrective-action process is a remedy demanded of
+      the supplier, not a return of the requester's submission.
+  - item: A3
+    answer: YES
+    evidence: >
+      The checker output for all three definitions lists no unreachable node, no missing path to an end and no
+      missing default route, and every reject branch (notify-planner-rejected, auto-reject-order) reaches end-rejected.
+  - item: A4
+    answer: NO
+    evidence: >
+      None of the five human tasks (capacity-review, escalate-to-ceo, budget-approval, severity-classification,
+      corrective-action-8d) sets an escalation wait time together with an escalation target, none has a timer node,
+      and corrective-action-8d has no timeout route at all. The other four have timeout routes but no stated wait.
+  - item: B1
+    answer: YES
+    evidence: >
+      The planner (actor-vortex-anna) and the quality engineer (actor-vortex-nina) who start matters hold no routing
+      job, while capacity-review, budget-approval and severity-classification route to the production manager, the
+      financial controller and the quality manager, held by other roster actors.
+  - item: B2
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no separate data-entry task paired with a check task; the human tasks are approvals and one
+      classification, so there is no verification step to separate.
+  - item: C1
+    answer: NO
+    evidence: >
+      The checker output lists no variable that is never collected, but reading the Supplier Quality Deviation
+      definition shows the timeout path from severity-classification through default-to-major reaches the
+      severity-routing decision without anything on that path recording a severity.
+  - item: D1
+    answer: NO
+    evidence: >
+      Scenario steps for the production order and both deviation scenarios match start and human-task nodes, and all
+      process_id values resolve through sidecars. The entity-list-filter-and-page scenario points at the deviation
+      process but its six steps are list-screen actions that match no step of that process.
+  - item: D2
+    answer: NO
+    evidence: >
+      capacity-review, budget-approval, severity-classification and corrective-action-8d each appear as a scenario
+      step; escalate-to-ceo in the production order definition is not a step in any vortex scenario.
+  - item: D3
+    answer: NO
+    evidence: >
+      Routing jobs production manager, financial controller, quality manager and procurement manager each have a
+      roster actor (sabine, stefan, karl, felix), but the chief executive job that escalate-to-ceo routes to has no
+      vortex roster actor. All six scenario actors exist in the roster.
+  - item: D4
+    answer: NO
+    evidence: >
+      The roster gives planner actor-vortex-anna and quality engineer actor-vortex-nina only the ordinary worker
+      access, yet their step 1 starts a process instance, which that access does not allow. The persona setup script
+      also provisions three people (dirk, max, claudia) that the roster does not list.
+  - item: E1
+    answer: NO
+    evidence: >
+      The scope has approving (budget-approval, capacity-review), releasing a production order and seeing commercially
+      sensitive cost figures (entity-list-filter-and-page), yet no vortex scenario contains any step marked as a
+      refusal; the scope sits in the exemption list, which does not change the answer.
+  - item: E2
+    answer: NOT_APPLICABLE
+    evidence: >
+      No vortex actor in the roster (sabine, stefan, karl, anna, nina, felix) holds an administrator role, so the
+      scope has no administrator actor.
+  - item: E3
+    answer: YES
+    evidence: >
+      Every vortex scenario step is an ordinary business step (create order, approve, classify, list batches) and none
+      needs a platform-level permission. The setup scripts ask for a platform-operator token inside the customer
+      tenant, but that concerns the setup operator, not a scenario actor.
+  - item: F1
+    answer: NO
+    evidence: >
+      Compared with the shipment approval definition (ops-review sets a wait of two hours and names who is escalated
+      to), the vortex approvals rely on bare timeout routes with no wait time or escalation target, and the vortex
+      definitions' descriptions do not explain the difference. Threshold gateways with a default route and reject
+      handling match the other scopes.
+
+findings:
+  - id: PA-VORTEX-001
+    severity: MAJOR
+    checklist_item: A4
+    business_description: >
+      Once a critical supplier problem reaches the corrective-action step, the procurement manager has no deadline and
+      nothing happens if that person never acts. The problem stays open indefinitely and the deviation can never be
+      closed, with nobody warned.
+    affected:
+      - path: test/fixtures/qa/vortex_8d_corrective_action_definition.json
+        where: the corrective-action-8d task has no escalation setting, no timeout route and no timer
+    suggested_owner: BA-VORTEX
+
+  - id: PA-VORTEX-002
+    severity: MAJOR
+    checklist_item: A4
+    business_description: >
+      The capacity review, the chief executive escalation, the budget sign-off and the severity classification each
+      have a route that is meant to apply when nobody acts, but no waiting time or escalation person is set. A person
+      who ignores a task may never trigger the intended fallback, so production orders and quality deviations can
+      stall without limit.
+    affected:
+      - path: test/fixtures/qa/vortex_production_order_release_process_definition.json
+        where: the capacity-review, escalate-to-ceo and budget-approval tasks and their timeout routes
+      - path: test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+        where: the severity-classification task and its timeout route
+    suggested_owner: BA-VORTEX
+
+  - id: PA-VORTEX-003
+    severity: MAJOR
+    checklist_item: C1
+    business_description: >
+      If the quality manager does not classify a supplier problem in time, the process is meant to treat it as major,
+      but nothing on that path records a severity. The routing step that follows then has no value to read and falls to
+      its default, which sends the problem down the most severe corrective-action route instead of the major one.
+    affected:
+      - path: test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+        where: the route from severity-classification through default-to-major into the severity-routing decision
+    suggested_owner: BA-VORTEX
+
+  - id: PA-VORTEX-004
+    severity: MAJOR
+    checklist_item: D1
+    business_description: >
+      The batch-list filtering scenario is labelled as belonging to the supplier quality deviation process, but none of
+      its steps is a step of that process. The scenario cannot show that the process works, and anyone reading the
+      coverage would wrongly believe it does.
+    affected:
+      - path: test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml
+        where: the process label of the scenario and steps 1 to 6
+      - path: test/fixtures/uat/process-definition-aliases/proc-vortex-quality-deviation.yaml
+        where: the alias that maps this label to the deviation process
+    suggested_owner: BA-VORTEX
+
+  - id: PA-VORTEX-005
+    severity: MAJOR
+    checklist_item: D2
+    business_description: >
+      When the production manager does not act, the order goes to the chief executive for a decision. No scenario ever
+      has the chief executive act, so the escalation path that approves or auto-rejects stalled orders is never tested.
+    affected:
+      - path: test/fixtures/qa/vortex_production_order_release_process_definition.json
+        where: the escalate-to-ceo task
+      - path: test/fixtures/uat/scenarios/vortex/production-order-above-threshold.yaml
+        where: steps 1 to 3 (none covers the chief executive)
+    suggested_owner: BA-VORTEX
+
+  - id: PA-VORTEX-006
+    severity: MAJOR
+    checklist_item: D3
+    business_description: >
+      Production orders that escalate are assigned to the chief executive, but no chief executive is on the list of
+      people the acceptance checks can act as. The escalation task would have nobody to act in a test, and in practice
+      the escalated order would go unanswered.
+    affected:
+      - path: test/fixtures/uat/actors.yaml
+        where: the vortex actors list, which has no chief executive entry
+      - path: test/fixtures/qa/vortex_production_order_release_process_definition.json
+        where: the escalate-to-ceo task
+    suggested_owner: ORCH
+
+  - id: PA-VORTEX-007
+    severity: MAJOR
+    checklist_item: D4
+    business_description: >
+      The production planner and the quality engineer must start a production order and a quality deviation, but the
+      access recorded for them is the ordinary-worker level, which does not allow starting a matter. Their first step
+      would be refused, or the access list does not reflect what these people really need.
+    affected:
+      - path: test/fixtures/uat/actors.yaml
+        where: actors actor-vortex-anna and actor-vortex-nina
+      - path: test/fixtures/uat/scenarios/vortex/production-order-above-threshold.yaml
+        where: step 1 (planner starts the order)
+      - path: test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-critical.yaml
+        where: step 1 (quality engineer logs the deviation)
+    suggested_owner: ORCH
+
+  - id: PA-VORTEX-008
+    severity: MAJOR
+    checklist_item: D4
+    business_description: >
+      The setup script creates access for three people (the chief executive, a production operator and a second
+      production staff member) who are not on the approved list of acceptance-check actors. Access exists in the
+      customer's system that the approved list does not account for.
+    affected:
+      - path: scripts/seed_vortex_persona_actors.sh
+        where: the persona table entries for dirk (chief executive routing), max and claudia
+      - path: test/fixtures/uat/actors.yaml
+        where: no entries for actor-vortex-dirk, actor-vortex-max and actor-vortex-claudia
+    suggested_owner: ORCH
+
+  - id: PA-VORTEX-009
+    severity: MAJOR
+    checklist_item: E1
+    business_description: >
+      Nothing in the vortex scenarios checks that someone who may not approve a budget, release a production order or
+      see supplier cost figures is actually turned away. If those protections were missing, nobody would notice before
+      go-live.
+    affected:
+      - path: test/fixtures/uat/scenarios/vortex/production-order-above-threshold.yaml
+        where: no refusal step for approving or releasing an order
+      - path: test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml
+        where: no refusal step for seeing cost figures
+    suggested_owner: BA-VORTEX
+
+  - id: PA-VORTEX-010
+    severity: MAJOR
+    checklist_item: F1
+    business_description: >
+      The shipment approval process states how long to wait before escalating and who the matter goes to, but the
+      vortex approvals do not, and nothing explains the difference. The same business idea (escalate an unanswered
+      approval) behaves differently from one customer to the next, which makes outcomes hard to predict.
+    affected:
+      - path: test/fixtures/qa/vortex_production_order_release_process_definition.json
+        where: the capacity-review and budget-approval tasks compared with the shipment approval ops-review task
+      - path: test/fixtures/qa/swiftroute_process_definition.json
+        where: ops-review task (reference for comparison)
+    suggested_owner: BA-VORTEX
+
+verdict: PASS_WITH_FINDINGS
+verdict_note: >
+  The vortex process design has complete approval and rejection outcomes but has gaps in waiting and escalation, the
+  list of acting people, and access-refusal checks that should be closed before it is relied on.

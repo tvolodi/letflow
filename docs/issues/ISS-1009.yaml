@@ -1,0 +1,39 @@
+id: ISS-1009
+title: "SwiftRoute scenarios disagree with the definition: timeout scenario (4h, ceo_decision) vs definition (2h, capacity_decision); tenant-onboarding-happy has two conflicting copies"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:18Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "BA-SWIFTROUTE / UAT (scenario)"
+process_audit_report: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-SWIFTROUTE-003
+checklist_item: D1
+scope: swiftroute
+description: >
+  Scope swiftroute. Checklist D1. Audit: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml finding PA-SWIFTROUTE-003.
+
+  (a) test/fixtures/uat/scenarios/swiftroute/shipment-ops-timeout-escalation.yaml describes a 4-hour timer and a ceo_decision field; the definition test/fixtures/qa/swiftroute_process_definition.json uses 2 hours and a different decision field (see the finding for the exact names; verify against the definition before editing). The scenario can pass or fail for reasons unrelated to the rule it tests.
+
+  (b) test/fixtures/uat/scenarios/swiftroute/tenant-onboarding-happy.yaml contains two sets of steps and outcomes (lines ~11-14 and ~222-223) that conflict.
+
+  Fix direction: align the scenario with the definition (or the other way round, BA decides); delete the stale copy in tenant-onboarding-happy.yaml.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml; finding PA-SWIFTROUTE-003; checklist item D1; scope swiftroute; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: BA-SWIFTROUTE / UAT (scenario).
+acceptance_criteria:
+  - "The timeout scenario's duration and decision field names equal the definition's"
+  - "tenant-onboarding-happy.yaml has exactly one steps/outcomes block"
+  - "The scenario loader/preflight accepts both files; the audit D1 check for swiftroute answers YES"
+affected_files:
+  - test/fixtures/uat/scenarios/swiftroute/shipment-ops-timeout-escalation.yaml
+  - test/fixtures/uat/scenarios/swiftroute/tenant-onboarding-happy.yaml
+  - test/fixtures/qa/swiftroute_process_definition.json
+# Ref clash: the queue's issue_ref for Q-991 came back ISS-0991, which is not the local number
+# (docs/issues/ISS-0991.yaml is a different issue); ISS-1009 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-991
+github_ref: GH-2278
+status: open

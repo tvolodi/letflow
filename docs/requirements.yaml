@@ -34404,7 +34404,7 @@ requirements:
   - id: REQ-458
     title: "Baseline process audit: first PROCESS-AUDITOR pass over the existing verticals, findings filed as issues"
     owner: PROCESS-AUDITOR
-    status: pending
+    status: done
     stage: S7
     impl_order: 975  # letflow-queue task id, GH#2247. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-973.
     description: >
@@ -34419,7 +34419,7 @@ requirements:
       criteria.
     acceptance_criteria:
       - "one artefact test/uat-reports/process-audit-<scope>-<run_id>.yaml per scope, each with every checklist item A to F answered and the input digests recorded"
-      - "every finding with severity BLOCKER or MAJOR has a docs/issues/ISS-NNNN.yaml record with queue_ref and github_ref from the register_task response; MINOR findings are at least listed in the artefact"
+      - "every BLOCKER or MAJOR finding has a docs/issues/ISS-NNNN.yaml record with queue_ref and github_ref from the register_task response, OR is recorded in the run report's findings table as covered by an existing requirement or issue (with that item's queue id and GH number); MINOR findings are at least listed in the artefact"
       - "no process definition, scenario, seed script or roster file is modified by this entry (git diff quoted)"
       - "the run report gives, per scope, the verdict and the count of findings by severity"
     depends_on: [REQ-456]

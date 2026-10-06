@@ -1,0 +1,273 @@
+report_id: process-audit-platform-WF05-BASELINE2-20261006
+run_id: WF05-BASELINE2-20261006
+generated_at: 2026-10-06T00:00:00Z
+commit_sha: edea1d5b94939292c9aa32856b93079a5f55ef76
+scope: platform
+digest_algorithm: sha256-hex-of-file-bytes
+audited_inputs:
+  - path: test/fixtures/uat/scenarios/platform/agent-artifact-resubmit-idempotent.yaml
+    digest: 78412700334c6f9a8dd1d20f7a07578377378db51e03f4d372db41d8b559dad8
+  - path: test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
+    digest: 7bb4df16a3b6721a4b105bd5261d86263cdcd0f9ab20bea7103d30df97041743
+  - path: test/fixtures/uat/scenarios/platform/definition-promotion-approved.yaml
+    digest: 194753973094d6624b0b3f077c1f4253a17abe294c7dfe614fe8257222367800
+  - path: test/fixtures/uat/scenarios/platform/definition-promotion-conflict-rejected.yaml
+    digest: ff8de26411cc21526ed144225b7ffac338d6880b6db1daea06089b11368f1295
+  - path: test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml
+    digest: 5721c78bf6daa1715e3a69406b34abac6d0e82aa180ced028568f0be5751a6c0
+  - path: test/fixtures/uat/scenarios/platform/definition-type-error-blocked.yaml
+    digest: 6c0e4ea72a3d24b5f24d4ca49dfada866536ee2d824dc8b9aa0f770ef3e86302
+  - path: test/fixtures/uat/scenarios/platform/frontend-guard-selfcheck.yaml
+    digest: e892205b50a8d19730808f1fc32e7268fd117e562a87fa5bd4a124417be93eb1
+  - path: test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml
+    digest: 9fadc1265dd11c5d572bb64cba827cf88ecfbdbadfe925eac0b138aadae72c95
+  - path: test/fixtures/uat/scenarios/platform/migration-partial-failure-resume.yaml
+    digest: 5a255f0a938963bb12c065e86080f7db47cbab315cfb4735024228c0d7e91cf8
+  - path: test/fixtures/uat/scenarios/platform/out-of-order-effect-completion.yaml
+    digest: 922aace6aebec812d04a1e77bfc4c19bb94794c683115f53b3241e826a85f135
+  - path: test/fixtures/uat/scenarios/platform/outbox-cap-backpressure.yaml
+    digest: 9b8201bf0265912c2a5edcc49460e71aa0f7bc5c397678d389167aa66b86159b
+  - path: test/fixtures/uat/scenarios/platform/partition-retention-drop.yaml
+    digest: 1246f0c3a371492abfc6754bab1c3da9091c78dc10648386f21ff7260834e76c
+  - path: test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+    digest: ce7ba04d21a000785979f55c08d42fd24a894da311a90598a4c923e15e7ef03b
+  - path: test/fixtures/uat/scenarios/platform/renderer-permission-denied-surface.yaml
+    digest: 5def63dab030a6ce7bc16f3bc357c42287c88ec49d7e65362e74096c40c49b27
+  - path: test/fixtures/uat/scenarios/platform/sandbox-cross-tenant-probe.yaml
+    digest: 5e273b597a30b46c8b66631ef182d59bbbf7316639ef27b320a67a48a1f7358c
+  - path: test/fixtures/uat/scenarios/platform/template-update-conflict-resolution.yaml
+    digest: 454ff50ee6a171264326c3a93da777347658200f44b0b9bd1fca05802b98724d
+  - path: test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml
+    digest: cf4627e472f21eccb0199ed185e654a1c73f7512de97566d4bc8cb8e6c6693aa
+  - path: test/fixtures/uat/scenarios/platform/tenant-switch-cache-isolation.yaml
+    digest: 9bd5acb792f9b4c8f61c1a81d79a868b84ee9ba52d5a55861e1480e74460e619
+  - path: test/fixtures/uat/scenarios/platform/unsafe-migration-rejected.yaml
+    digest: 932fee0671403cc918d2adf1e5c1b0232f85264f6693898c06fdafc981c071d4
+  - path: test/fixtures/uat/actors.yaml
+    digest: 5503823b3b44213dd7ba6e85c3d950baf57edac0136b9ad8a3d69c4b1118f699
+  - path: docs/roles.md
+    digest: 803c6f0401be945340fde67fb702dcb04e4f0ec4b52db32cf8574fe9e89e6fa8
+cross_scope_reads:
+  - path: scripts/seed_meridian_definition.sh
+    digest: 1a3f13ce0e2f0f81dc6878214b3a71b12d49a069031fa7ae5e7bb6ed698f3036
+  - path: test/fixtures/qa/meridian_loan_origination_process_definition.json
+    digest: a3748d70ad1650c4fb2943ecbb4cb2b4cd10a3b294125628a5ffd1060cc17237
+  - path: test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+    digest: 45b9de79f0557d831abb17dfd71b23be8b9cfc93ccc1d407836b7694444cf98d
+  - path: test/fixtures/simulation/meridian/org_structure.yaml
+    digest: ce1cde5a911787d08d9877bc60b36402a6cfe964dbb85056abaf62dd9b5560cd
+  - path: test/fixtures/simulation/meridian/process_claim_intake.yaml
+    digest: 20d023a34779024ed671c6ac9898401b3a6d300e9ba7fed531a607f0c83ef14c
+  - path: test/fixtures/simulation/meridian/process_policy_binding.yaml
+    digest: e5e3738919957a26006040faa59a765bda177a29b22775f714dda6c961e14f42
+  - path: test/fixtures/uat/process-definition-aliases/proc-meridian-loan-origination.yaml
+    digest: 9feb9a617122461a3aade2f27ad0a78ecfc743e7f44ce495ebded1bdf950c513
+  - path: test/fixtures/uat/process-definition-aliases/proc-meridian-regulatory-compliance-review.yaml
+    digest: c4e1599a80c7779607347981230dce96774c523232b8ce5ff9d5a804812e0146
+  - path: scripts/seed_swiftroute_definition.sh
+    digest: db9932ce1da26a851045c7629e21e8dda6ece1b5eb8e547fe919bb8cb378036e
+  - path: test/fixtures/qa/swiftroute_process_definition.json
+    digest: 7a3504af7b2b3ac0ea01b170bd70752c9960d0ddbb76630d7e19412630984dac
+  - path: test/fixtures/simulation/swiftroute/org_structure.yaml
+    digest: 4de99410dd76b1cc0e8d676c0ea567e4a9c51944c420f891eac19e49612a00ed
+  - path: test/fixtures/simulation/swiftroute/process_route_approval.yaml
+    digest: 3ae8caec9b3fd316dcb7331f5f6f8c6db684f66458861b027f65928edea71268
+  - path: test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml
+    digest: 0a3585864b5cf9740033ec84126675a5a475fa98e4c77ee393d3b87656f76ba2
+  - path: test/fixtures/uat/process-definition-aliases/proc-swiftroute-shipment-approval.yaml
+    digest: 65f00eb8a62fa8a5f28ee5369065ea5b004def8fe229c746ebd995c09ecbc641
+  - path: scripts/seed_vortex_definition.sh
+    digest: 8f14c9c6dfcf243c4d6a0a5153863dc37e1369a62ccc2d57a9f7b63d7d72376e
+  - path: test/fixtures/qa/vortex_8d_corrective_action_definition.json
+    digest: 2cbdd28a24d71bc4ccf9814521b46895b3dfc69676ba002de7d6a7bb00afa521
+  - path: test/fixtures/qa/vortex_production_order_release_process_definition.json
+    digest: 9b0547048c421c8e10f6adbbf8a08e7253eb4d57490bb2f5a7b2467c48b9a20d
+  - path: test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+    digest: fcc42402a33ad88aab9660bd3f23d4d8a9baf1bc1ed8d74bf83e6ea2c6446bde
+  - path: test/fixtures/simulation/vortex/org_structure.yaml
+    digest: db4702e9feb06b8d52e3922019fb418da6d773519ce5f870498447aedb9d7e51
+  - path: test/fixtures/simulation/vortex/process_quality_check.yaml
+    digest: 58c5168942225aa685c6334172490883c81691df85cec83f2aefaf7393490150
+  - path: test/fixtures/simulation/vortex/process_work_order.yaml
+    digest: 2ddbbb734f8f58072a83a5a3d4c262b5218858a707ee8c45e5a13eb5b66d430f
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-8d-corrective-action.yaml
+    digest: 579bec82d421b02ec88909ecd7df1f30d29c227b022f8c302caeac95321ad026
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-production-order-release.yaml
+    digest: 8f59e4af6594ad8716e62703aeebd2c1ffd994445fd89f60e82c29a5d71edad3
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-quality-deviation.yaml
+    digest: 08e8a761b7884bb0a16a860547ba3c210c9362b79c07b9c6fa55f4a52635aab2
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-supplier-quality-deviation.yaml
+    digest: ba7a52bc4e6b3e1bd45356259c405e94ab97168168cfd4370a6da9942ecc6175
+validator_outputs: []
+
+checklist:
+  - item: A1
+    answer: NOT_APPLICABLE
+    evidence: >
+      The platform scope has no process definition: no sidecar in the process-definition-aliases folder
+      names the platform company, there is no platform folder under the simulation fixtures, and the
+      handoff lists no definition for it. Every scenario process id is either n/a or a sys- label.
+  - item: A2
+    answer: YES
+    evidence: >
+      Scenario text does mention correction and resubmission (definition-promotion-conflict-rejected step 3
+      rebuilds and resubmits, definition-type-error-blocked steps 3 and 4 correct and save again,
+      unsafe-migration-rejected step 5 submits a corrected set), and each of these scenarios contains
+      the correction step itself; the scope has no process definition that could lack a loop.
+  - item: A3
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no process definition and the handoff validator output is empty, so there is no
+      outcome path to check.
+  - item: A4
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no human task node because it has no process definition; the human steps exist only
+      as scenario steps.
+  - item: B1
+    answer: YES
+    evidence: >
+      In definition-promotion-approved the proposer is the automated authoring agent (step 1) and the
+      approver is the platform administrator (step 3), so the same person cannot request and approve;
+      definition-promotion-conflict-rejected uses the same split.
+  - item: B2
+    answer: NOT_APPLICABLE
+    evidence: >
+      No scenario or definition in the platform scope has a data-entry task paired with a separate
+      check task by different people, so the scope has no verification step of that kind.
+  - item: C1
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no process definition and the validator output is empty, so there are no decisions
+      to read. The branching in platform-login-routing-by-role is a scenario construct, not a decision
+      in a process.
+  - item: D1
+    answer: NOT_APPLICABLE
+    evidence: >
+      Every scenario of the scope has a process id of n/a (platform-login-routing-by-role) or a sys-
+      label (the other eighteen), and none has the proc- form.
+  - item: D2
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no process definition, so there is no human task whose appearance in a scenario
+      could be checked.
+  - item: D3
+    answer: YES
+    evidence: >
+      The scenarios use actor-platform-admin, actor-swiftroute-alice, actor-swiftroute-marco,
+      actor-swiftroute-lena and actor-vortex-karl, all listed under actors in the roster; actor-system-*
+      and actor-any are not logins and are excluded by the schema. No human task routes to a role, and
+      none of the used actors is listed under unresolved.
+  - item: D4
+    answer: NO
+    evidence: >
+      In attachment-cross-tenant-probe step 1 the SwiftRoute dispatcher (actor-swiftroute-lena, ordinary
+      worker only) attaches a document and in tenant-branding-applied step 6 the operations manager
+      (actor-swiftroute-marco, ordinary worker only) cancels a shipment request, both of which the
+      charter does not allow an ordinary worker to do. Separately, actor-swiftroute-alice (the company
+      administrator) is rostered with the platform administrator role and actor-platform-admin is used
+      as the company administrator in template-update-conflict-resolution.
+  - item: E1
+    answer: NO
+    evidence: >
+      The scope has the sensitive actions approving (definition-promotion-approved step 3), releasing
+      (step 5 of that scenario), seeing another company's data (attachment-cross-tenant-probe,
+      tenant-switch-cache-isolation) and changing users (renderer-permission-denied-surface step 2), yet
+      no scenario file in the scope contains any step marked as an expected refusal; the exemption
+      listing of the scope in the roster does not change this answer.
+  - item: E2
+    answer: NO
+    evidence: >
+      In tenant-switch-cache-isolation steps 1, 2, 4 and 5 the platform administrator (actor-platform-admin)
+      works inside SwiftRoute and Vortex, opening their running process lists and a task form, and in
+      template-update-conflict-resolution steps 2 to 5 it acts as a company administrator. Also,
+      actor-swiftroute-alice, a person at SwiftRoute, holds the platform administrator role, listed in
+      the roster as a legacy case.
+  - item: E3
+    answer: YES
+    evidence: >
+      The steps of the SwiftRoute and Vortex actors (alice removing access in
+      renderer-permission-denied-surface step 2 and changing colours in tenant-branding-applied step 1;
+      marco, lena, karl reading or working on tasks) use only company-level permissions, none of the
+      platform-only permissions such as managing companies.
+  - item: F1
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no process definition, so there is no platform concept to compare with the
+      definitions in the other scopes.
+
+findings:
+  - id: PA-PLATFORM-001
+    severity: MAJOR
+    checklist_item: D4
+    business_description: >
+      Two SwiftRoute scenarios have an ordinary worker doing something the role charter does not let an
+      ordinary worker do. The dispatcher is asked to attach the signed delivery note to a task, and the
+      operations manager is asked to cancel a shipment request. As rostered, both would be turned away,
+      so these steps could not pass, or the people would have to be given more access than their job
+      description allows.
+    affected:
+      - path: test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
+        where: step 1, the SwiftRoute dispatcher (actor-swiftroute-lena) attaches the delivery note
+      - path: test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml
+        where: step 6, the operations manager (actor-swiftroute-marco) cancels a shipment request
+      - path: test/fixtures/uat/actors.yaml
+        where: entries for actor-swiftroute-lena and actor-swiftroute-marco
+    suggested_owner: REQ-ANALYST
+  - id: PA-PLATFORM-002
+    severity: MAJOR
+    checklist_item: D4
+    business_description: >
+      Where a company administrator is needed, the scenarios use either the platform operator's own
+      login or a SwiftRoute person who is rostered with the all-powerful platform administrator role.
+      The company-level steps (applying a supplied process pack update, removing someone's access,
+      changing company colours) need only a company administrator, so these people hold more power
+      than the steps need.
+    affected:
+      - path: test/fixtures/uat/scenarios/platform/template-update-conflict-resolution.yaml
+        where: actor tenant_admin is the platform administrator login (actor-platform-admin), steps 2 to 5
+      - path: test/fixtures/uat/scenarios/platform/renderer-permission-denied-surface.yaml
+        where: actor tenant_admin is actor-swiftroute-alice, step 2
+      - path: test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml
+        where: actor tenant_admin is actor-swiftroute-alice, steps 1, 4 and 5
+      - path: test/fixtures/uat/actors.yaml
+        where: entry for actor-swiftroute-alice (platform administrator role plus legacy list)
+    suggested_owner: REQ-ANALYST
+  - id: PA-PLATFORM-003
+    severity: MAJOR
+    checklist_item: E1
+    business_description: >
+      The platform scenarios cover approving a change, releasing a change to the live workspace, one
+      company trying to see another company's data, and changing who has access, but none of them has a
+      step where a person who is not allowed to do these things tries and is refused. We would not
+      know from a run that the wrong person is actually stopped.
+    affected:
+      - path: test/fixtures/uat/scenarios/platform/definition-promotion-approved.yaml
+        where: steps 3 (approve) and 5 (release) have no refused counterpart
+      - path: test/fixtures/uat/scenarios/platform/renderer-permission-denied-surface.yaml
+        where: step 2 changes someone's access; the refused view in step 3 is not marked as an expected refusal
+      - path: test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
+        where: step 2, the other company's user is refused, not marked as an expected refusal
+    suggested_owner: REQ-ANALYST
+  - id: PA-PLATFORM-004
+    severity: MAJOR
+    checklist_item: E2
+    business_description: >
+      The platform operator's login is used to work inside customer companies: it switches between
+      SwiftRoute and Vortex and reads their running processes and a task form, and it acts as a company
+      administrator on a supplied process pack. The charter says platform staff must not act inside a
+      customer company or read its business data. Also, a SwiftRoute person (the company administrator)
+      is rostered with the platform administrator role, which the roster records as a temporary legacy
+      arrangement.
+    affected:
+      - path: test/fixtures/uat/scenarios/platform/tenant-switch-cache-isolation.yaml
+        where: actor dual_company_user (actor-platform-admin), steps 1, 2, 4 and 5
+      - path: test/fixtures/uat/scenarios/platform/template-update-conflict-resolution.yaml
+        where: actor tenant_admin (actor-platform-admin), steps 2 to 5
+      - path: test/fixtures/uat/actors.yaml
+        where: actor-swiftroute-alice and the legacy platform administrator list
+    suggested_owner: REQ-ANALYST
+
+verdict: PASS_WITH_FINDINGS
+verdict_note: >
+  The platform scope has no process definition to run, but its scenarios give ordinary workers jobs they may not do, use all-powerful logins for company-level work, and never test that an unauthorised person is refused, so the design should be corrected before it is relied on.

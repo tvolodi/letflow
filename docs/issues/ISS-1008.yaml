@@ -1,0 +1,38 @@
+id: ISS-1008
+title: "SwiftRoute shipment approval: no form requires the decision fields or the declared value the gateways read"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:13Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "ELIXIR-DEV / CODE-DESIGNER (definition); BA-SWIFTROUTE"
+process_audit_report: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-SWIFTROUTE-002
+checklist_item: C1
+scope: swiftroute
+description: >
+  Scope swiftroute. Checklist C1. Audit: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml finding PA-SWIFTROUTE-002.
+
+  In test/fixtures/qa/swiftroute_process_definition.json, routing depends on the manager decision, the CEO decision and the declared value, but tasks ops-review and ceo-approval have no form and the value gateway reads a declared value supplied only at submission. A task completed without a decision silently goes to the CEO (after the manager) or to automatic rejection (after the CEO).
+
+  Business consequence: a request can be released or rejected without anyone having decided it.
+
+  Fix direction: add a form (required decision field with enumerated approve/reject) to ops-review and ceo-approval, and a required declared-value field on the start form; confirm gateways read exactly those field names.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml; finding PA-SWIFTROUTE-002; checklist item C1; scope swiftroute; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ELIXIR-DEV / CODE-DESIGNER (definition); BA-SWIFTROUTE.
+acceptance_criteria:
+  - "ops-review and ceo-approval each have a form with a required decision field matching the variable the outgoing edges test"
+  - "The declared value is a required start field"
+  - "Completing either task without a decision is rejected (test)"
+  - "The process validator reports status OK"
+affected_files:
+  - test/fixtures/qa/swiftroute_process_definition.json
+# Ref clash: the queue's issue_ref for Q-990 came back ISS-0990, which is not the local number
+# (docs/issues/ISS-0990.yaml is a different issue); ISS-1008 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-990
+github_ref: GH-2277
+status: open

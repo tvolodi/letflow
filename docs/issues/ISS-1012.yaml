@@ -1,0 +1,37 @@
+id: ISS-1012
+title: "Cross-company inconsistency: SwiftRoute escalates an unanswered review to the CEO after a timer; Meridian/Vortex only name a timeout path"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:35Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "REQ-ANALYST / BA (decision first), then ELIXIR-DEV"
+process_audit_report: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-SWIFTROUTE-011
+checklist_item: F1
+scope: swiftroute
+description: >
+  Scope swiftroute (compared with meridian and vortex). Checklist F1. Audit: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml finding PA-SWIFTROUTE-011.
+
+  ops-review in test/fixtures/qa/swiftroute_process_definition.json hands an unanswered review to the CEO after a set time; the comparable approvals in test/fixtures/qa/vortex_production_order_release_process_definition.json and test/fixtures/qa/meridian_loan_origination_process_definition.json only name a timeout path without a duration or receiving role. The same business idea is handled differently and nothing explains why.
+
+  Fix direction: BA records a decision (one shared escalation pattern, or a documented per-company difference) in the process descriptions; the vortex and meridian timer work is tracked by the A4 issues of those scopes.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml; finding PA-SWIFTROUTE-011; checklist item F1; scope swiftroute; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: REQ-ANALYST / BA (decision first), then ELIXIR-DEV.
+acceptance_criteria:
+  - "A written decision exists (definition descriptions or a docs note) stating the escalation pattern for unanswered approvals"
+  - "Each of the three definitions either follows it or documents its deviation"
+  - "The audit F1 check for swiftroute answers YES"
+affected_files:
+  - test/fixtures/qa/swiftroute_process_definition.json
+  - test/fixtures/qa/vortex_production_order_release_process_definition.json
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+# Ref clash: the queue's issue_ref for Q-994 came back ISS-0994, which is not the local number
+# (docs/issues/ISS-0994.yaml is a different issue); ISS-1012 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-994
+github_ref: GH-2281
+status: open

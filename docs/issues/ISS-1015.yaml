@@ -1,0 +1,37 @@
+id: ISS-1015
+title: "Meridian loan origination: a timeout at credit-memo-review/risk-assessment leaves eligibility-gate variables unset, so the loan is silently declined; no task forms defined"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:50Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "ELIXIR-DEV / CODE-DESIGNER (definition); BA-MERIDIAN"
+process_audit_report: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-MERIDIAN-003
+checklist_item: C1
+scope: meridian
+description: >
+  Scope meridian. Checklist C1. Audit: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml finding PA-MERIDIAN-003.
+
+  Gateway eligibility-gate in test/fixtures/qa/meridian_loan_origination_process_definition.json reads the credit decision and risk rating; after credit-memo-timeout or risk-assessment-timeout those values are never collected, the gateway falls to its default (edges e5, e7) and the loan is declined without anyone judging it. Also no task in either meridian definition (test/fixtures/qa/meridian_loan_origination_process_definition.json, test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json) has a form stating what must be recorded.
+
+  Fix direction: send timeouts to a manual-review or escalation node rather than letting an unset value reach the gateway (more scrutiny, not silent decline), and add forms with required decision fields to the tasks.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml; finding PA-MERIDIAN-003; checklist item C1; scope meridian; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ELIXIR-DEV / CODE-DESIGNER (definition); BA-MERIDIAN.
+acceptance_criteria:
+  - "A timeout before eligibility-gate does not reach the gateway with unset variables; it goes to a review/escalation node or sets the variables explicitly with a documented meaning"
+  - "Human tasks in both definitions have forms with required decision fields"
+  - "A test covers the timeout path"
+  - "The process validator reports status OK"
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+# Ref clash: the queue's issue_ref for Q-997 came back ISS-0997, which is not the local number
+# (docs/issues/ISS-0997.yaml is a different issue); ISS-1015 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-997
+github_ref: GH-2284
+status: open

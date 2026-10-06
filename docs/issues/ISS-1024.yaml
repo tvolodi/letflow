@@ -1,0 +1,63 @@
+id: ISS-1024
+title: "Meridian Loan Origination: the three committee votes route to one shared role (role-committee-member), so nothing requires three different people to cast them"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE3-20261006 (finding PA-MERIDIAN-004, checklist B2); filed by BA (letflow-2)
+discovered_in_run: WF05-BASELINE3-20261006
+discovered_at: "2026-10-06T12:00:00Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "letflow-3 (fixture lane); SECURITY-REVIEWER sign-off (separation of duties)"
+process_audit_report: test/uat-reports/process-audit-meridian-WF05-BASELINE3-20261006.yaml
+checklist_item: B2
+audit_finding: PA-MERIDIAN-004
+scope: meridian
+description: >
+  Business consequence: a large Meridian loan needs a 2-of-3 committee decision (CRO, director, CEO
+  votes). All three vote tasks go to the same pool of committee members and nothing says three
+  DIFFERENT people must cast them, so one committee member can cast two or all three votes and
+  single-handedly make the quorum. The control exists on paper only.
+
+  Where: test/fixtures/qa/meridian_loan_origination_process_definition.json (v1.7), nodes
+  committee-vote-cro, committee-vote-director and committee-vote-ceo (HUMAN_TASK, parallel branches off
+  committee-vote-fork, merged by committee-vote-join -> committee-tally) all carry
+  attributes.role = "role-committee-member". The scenario
+  test/fixtures/uat/scenarios/meridian/loan-origination-above-threshold.yaml steps 4-6 use three
+  different actors (thomas, julia, eva) only by convention; the definition does not enforce it.
+
+  What already exists (checked 2026-10-06 on origin/main 1177a315): NO engine- or definition-level
+  "distinct approver / different person" rule. grep of lib/ finds a self-approval gate only in
+  Letflow.Definitions.PromotionReviewStore (requested_by == actor_id), which is unrelated to HUMAN_TASK
+  routing. The roster test/fixtures/uat/actors.yaml already gives the three committee members distinct
+  routing roles on top of role-committee-member: thomas = role-cro, julia = role-credit-director,
+  eva = role-ceo. So the cheap, available fix is per-vote distinct roles.
+
+  Fix direction (weak-model recipe): change the role attribute of the three vote tasks in the
+  fixture to the three distinct roles that already exist in the roster: committee-vote-cro ->
+  role-cro, committee-vote-director -> role-credit-director, committee-vote-ceo -> role-ceo (check
+  the exact role strings in actors.yaml and docs/roles.md; for how routing role names are handled by
+  authorization see ISS-0772's resolution). Also make sure no one actor holds two of the three roles
+  in actors.yaml. Bump the fixture version, update the seed script comment and the fixture test. An
+  engine-level "same person may not complete two tasks of one gateway fan-out" rule would be the
+  stronger fix but is a new engine feature (CODE-DESIGNER + ELIXIR-DEV, own requirement); do NOT
+  build it under this issue, only note it as a follow-up if the BA wants it.
+
+  Overlap check (Filing step 0, 2026-10-06): queue GET /tasks (1005 tasks, none about distinct
+  committee voters); gh issue list search "committee vote" / "distinct" in tvolodi/letflow: none open
+  (GH #2283 / ISS-1014 is the credit-manager four-eyes issue, a different pair of tasks, finding
+  PA-MERIDIAN-003); open PRs touch none of the meridian fixtures; origin/main docs/issues and the
+  sibling trees letflow-3 / letflow-4 have no matching issue (ISS-0939 / REQ-433 built the quorum, not
+  distinct voters).
+acceptance_criteria:
+  - "In meridian_loan_origination_process_definition.json the three committee vote tasks each route to a DIFFERENT role (role-cro, role-credit-director, role-ceo or the roster's equivalents); no two vote tasks share a role"
+  - "A fixture test asserts the three vote tasks have pairwise distinct role attributes and that every one of those roles is declared in test/fixtures/uat/actors.yaml; the test fails on the v1.7 fixture"
+  - "No actor in actors.yaml holds the routing roles of two different vote tasks"
+  - "The above-threshold scenario still runs: steps 4-6 are performed by thomas, julia and eva respectively and the fixture version is bumped"
+  - "Process-audit re-run no longer reports PA-MERIDIAN-004 (checklist B2)"
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/uat/actors.yaml
+  - test/fixtures/uat/scenarios/meridian/loan-origination-above-threshold.yaml
+  - scripts/seed_meridian_definition.sh
+queue_ref: Q-1006  # queue allocated issue_ref ISS-1006, which collides with an existing local file; local filename kept as ISS-1024 (next free on origin/main) and the GH issue retitled to match
+github_ref: GH-2299
+status: open

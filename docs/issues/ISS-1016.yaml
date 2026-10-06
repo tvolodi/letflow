@@ -1,0 +1,36 @@
+id: ISS-1016
+title: "Meridian: no scenario completes kyc-manual-review, risk-evaluation (normal), findings-sign-off or ceo-override"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:56Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "BA-MERIDIAN / UAT (scenario)"
+process_audit_report: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-MERIDIAN-004
+checklist_item: D2
+scope: meridian
+description: >
+  Scope meridian. Checklist D2. Audit: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml finding PA-MERIDIAN-004.
+
+  Human tasks kyc-manual-review (test/fixtures/qa/meridian_loan_origination_process_definition.json), and risk-evaluation (normal completion), findings-sign-off and ceo-override (test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json) appear in no scenario. Routing or wording mistakes there would not be found before a run.
+
+  Fix direction: add scenarios (KYC hit -> manual review; compliance review through CRO sign-off; CEO override).
+
+
+
+  Audit artefact: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml; finding PA-MERIDIAN-004; checklist item D2; scope meridian; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: BA-MERIDIAN / UAT (scenario).
+acceptance_criteria:
+  - "Scenarios exist that perform each of the four tasks with expected outcomes"
+  - "The audit D2 check for meridian answers YES"
+affected_files:
+  - test/fixtures/uat/scenarios/meridian/
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+# Ref clash: the queue's issue_ref for Q-998 came back ISS-0998, which is not the local number
+# (docs/issues/ISS-0998.yaml is a different issue); ISS-1016 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-998
+github_ref: GH-2285
+status: open

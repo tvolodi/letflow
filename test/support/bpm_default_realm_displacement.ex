@@ -99,8 +99,9 @@ defmodule Letflow.Support.BpmDefaultRealmDisplacement do
   # `:queue_interval` 2000 ms): if the queue wait exceeds `:queue_target` for a whole
   # `:queue_interval`, queued requests are dropped. That is meant for a shared,
   # saturated pool and is wrong for a private pool of one -- on a CPU-starved CI runner
-  # (several `mix test` partitions) a connect slower than ~2 s is shed with exactly the
-  # message above. Secondary latent flake: `pg_advisory_lock` legitimately BLOCKS while
+  # (several `mix test` partitions) a connect slower than ~4 s (DBConnection sheds on the
+  # second `:queue_interval` poll that still sees the same queued request) is shed with
+  # exactly the message above. Secondary latent flake: `pg_advisory_lock` legitimately BLOCKS while
   # another process on the same database holds the lock, and Postgrex's default query
   # timeout is 15 s. Hence: push the queue options far out (never shed), give the
   # connect/handshake a generous bound, and pass one explicit `:timeout` to every

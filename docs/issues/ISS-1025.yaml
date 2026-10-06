@@ -67,7 +67,7 @@ queue_ref: Q-1007  # queue allocated issue_ref ISS-1007, which collides with an 
 github_ref: GH-2300
 status: resolved
 resolved_in_run: WF03-ISS1025-Q1007-20261006
-resolved_at: "2026-10-06T13:00:00Z"
+resolved_at: "2026-10-06T11:44:20Z"
 resolution: >
   Option (b). Fixture v1.6. remediation-subprocess (node id kept stable so edges e6, e8 and
   severity-routing-default are untouched; it is no longer a sub-process) is a HUMAN_TASK for
@@ -85,7 +85,8 @@ resolution: >
   single person's answer. The simulation copy process_policy_binding.yaml mirrors the change.
   New test file test/letflow/scripts/meridian_regulatory_remediation_fixture_test.exs (fail-first on
   v1.5); the ISS-0932 T1 (version) and T8b (inbound edge set) guards were updated. The BaFin
-  scenario depends only on the 21-day timer path and is unchanged. This does not verify WHO
+  scenario (listed in affected_files as a check, not edited) depends only on the 21-day timer path
+  and is unchanged. This does not verify WHO
   actually completes the task or that the value is honest; it removes the structural
   unreachability and the silent default.
 follow_ups:

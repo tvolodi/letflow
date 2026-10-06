@@ -1,0 +1,14 @@
+process_id: proc-swiftroute-driver-incident
+definition_name: "Driver Incident Report"
+company_id: swiftroute
+fixture: test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml
+issue_ref: ISS-1010
+recorded_by: BA-SWIFTROUTE
+recorded_at: "2026-10-06"
+reason: >
+  Names the Driver Incident Report definition (the simulation fixture
+  process_shipment_dispatch.yaml; the filename is historical) for the new
+  swiftroute/driver-incident-assess-and-estimate.yaml scenario (ISS-1010 / Q-992).
+  NO QA seed script deploys this definition yet, so uat_preflight's definitions
+  check will report a GAP for it until one is added (a code change, not a UAT-file
+  change; the other swiftroute definition seed is scripts/seed_swiftroute_definition.sh).

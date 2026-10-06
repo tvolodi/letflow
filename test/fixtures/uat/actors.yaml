@@ -131,6 +131,11 @@ actors:
 
 # Actors whose built-in role could not be established. A recorded gap, not a pass for SCHEMA-8..10.
 unresolved:
+  actor-swiftroute-hans:
+    searched:
+      - "scripts/seed_swiftroute_persona_actors.sh: persona list is lena, marco, alice only; hans absent, and no role-accountant group is seeded"
+      - "test/fixtures/simulation/swiftroute/org_structure.yaml: actor-swiftroute-hans (Hans Richter) is in dept-finance, the person the finance-estimate task (role-accountant) is meant for"
+      - "used only in swiftroute/driver-incident-assess-and-estimate.yaml; resolving it is ISS-1011 / Q-993 (swiftroute D3)"
   actor-swiftroute-tobias:
     searched:
       - "scripts/seed_swiftroute_persona_actors.sh: persona list is lena, marco, alice only; tobias absent"

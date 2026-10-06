@@ -1,0 +1,131 @@
+# Authored by BA-SWIFTROUTE (ISS-1010 / Q-992, process-audit PA-SWIFTROUTE-004, checklist D2).
+# Walks both human tasks of the Driver Incident Report definition
+# (test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml): ops-assessment
+# (role-ops-manager) and finance-estimate (role-accountant), which run in parallel after the
+# injury check and join before the case summary.
+#
+# DEPENDENCIES (not resolved by this scenario):
+#  - No QA seed script deploys the Driver Incident Report definition yet; preflight reports a GAP
+#    on the definitions check until one exists (see the alias sidecar).
+#  - finance-estimate routes to role-accountant and no actor in the roster holds it (ISS-1011 / Q-993).
+#    The accountant below, actor-swiftroute-hans (Hans Richter, Finance, per the swiftroute org structure),
+#    is recorded under `unresolved:` in actors.yaml, so a run is BLOCKED at step 3 until Q-993 seeds him.
+---
+id: swiftroute-driver-incident-assess-and-estimate
+company_id: swiftroute
+process_id: proc-swiftroute-driver-incident
+title: A driver's cargo-damage incident is assessed by Operations and costed by Finance, then the case is closed
+version: "1.0"
+tags: [happy_path]
+
+description: >
+  A driver reports cargo damage with no injury. Dispatch records the incident. The Operations
+  Manager assesses what happened and the Accountant estimates the financial cost; the two
+  checks happen side by side and the case is only summarised and closed once both are done.
+  This scenario checks that an incident can really be assessed and costed by the people
+  responsible, and that neither check is skipped when the case is closed.
+
+actors:
+  dispatcher: actor-swiftroute-lena
+  ops_manager: actor-swiftroute-marco
+  accountant: actor-swiftroute-hans
+
+preconditions:
+  - description: Driver incident report process definition is active
+    check: process_definition_active
+  - description: No open incident instances for SwiftRoute
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: dispatcher
+    action: >
+      Records an incident reported by a driver: cargo damaged in transit, no injury to
+      anyone, with a short description of what happened.
+    via: api
+    input:
+      incident_id: sim-incident-001
+      incident_type: cargo damage
+      injury_involved: false
+      description: "Two pallets damaged when the load shifted on the way to Hamburg."
+    produces:
+      instance_id: "the process instance ID for this incident"
+    sla_context:
+      expected_within_hours: 1
+
+  - step: 2
+    actor: ops_manager
+    action: >
+      Opens the operations assessment for the incident, reviews what happened and records
+      his assessment of the cause and of what must be done.
+    via: gui
+    input:
+      assessment_notes: "Load not secured to standard; driver briefing and a loading check are needed."
+    sla_context:
+      expected_within_hours: 24
+
+  - step: 3
+    actor: accountant
+    action: >
+      Opens the finance estimate for the same incident (it was created at the same time as
+      the operations assessment) and records the estimated cost of the damage.
+    via: gui
+    input:
+      estimated_cost_eur: 2400
+      finance_notes: "Two pallets of goods plus claim handling."
+    sla_context:
+      expected_within_hours: 24
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      Both the operations assessment and the finance estimate are created for the incident
+      straight after the injury check, one for the Operations Manager and one for the
+      Accountant, so neither waits for the other.
+    verification:
+      method: task_assigned
+      detail: >
+        After step 1: an ops-assessment task is assigned to role-ops-manager and a
+        finance-estimate task is assigned to role-accountant, both open at the same time;
+        no safety notification was sent (no injury).
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        The incident is either not assessed or not costed, so SwiftRoute cannot decide what
+        to do about the damage or what to claim.
+      suggested_action: route_to_wf03
+
+  - id: EO-002
+    description: >
+      The case is summarised and closed only after BOTH tasks are done: completing the
+      operations assessment alone does not close the incident.
+    verification:
+      method: instance_state
+      detail: >
+        After step 2 and before step 3: instance status is not COMPLETED and finance-estimate
+        is still open. After step 3: instance status == COMPLETED, case-summary executed,
+        end node reached.
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        Incidents are closed without a cost estimate, so costs are never recorded and claims
+        are never raised.
+      suggested_action: route_to_wf03
+
+  - id: EO-003
+    description: >
+      The recorded assessment and cost estimate are kept on the incident record.
+    verification:
+      method: audit_event
+      detail: >
+        Instance history shows the ops-assessment and finance-estimate completions with the
+        values entered at steps 2 and 3.
+    on_fail:
+      severity: MINOR
+      business_impact: >
+        The incident file does not show who assessed it or what cost was estimated.
+      suggested_action: route_to_backend_dev
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel the sim-incident-001 instance if not already completed

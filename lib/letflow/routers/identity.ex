@@ -860,6 +860,11 @@ defmodule Letflow.Routers.Identity do
       {:error, :name_not_a_recognized_platform_role} ->
         Response.unprocessable(conn, "name_not_a_recognized_platform_role")
 
+      # REQ-447 PR 2 (design 3.4): defence in depth behind H1 (which already
+      # answers 403 first); the wire contract gains no new public code.
+      {:error, :platform_admin_outside_platform_tenant} ->
+        Response.unprocessable(conn, "name_not_a_recognized_platform_role")
+
       {:error, %Ecto.Changeset{}} ->
         Response.unprocessable(conn, "validation failed")
     end

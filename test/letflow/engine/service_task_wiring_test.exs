@@ -83,6 +83,29 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
     activated
   end
 
+  # REQ-455: `Definitions.create/2` now rejects an EXCLUSIVE_GATEWAY with no
+  # default edge (CHK-24), but a definition stored and activated before that
+  # check existed keeps running (REQ-455 OQ-1) and can still reach the engine's
+  # `no_matching_edge` path that ISS-0928 covers. Simulate such a legacy row:
+  # activate a trivially valid definition, then overwrite its stored graph.
+  defp legacy_active_definition!(schema_name, graph) do
+    trivial = %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [%{"id" => "e1", "source" => "start", "target" => "end"}]
+    }
+
+    activated = active_definition!(schema_name, trivial)
+
+    {1, _} =
+      from(d in Definitions.ProcessDefinition, where: d.id == ^activated.id)
+      |> Letflow.Repo.update_all([set: [graph: graph]], prefix: schema_name)
+
+    %{activated | graph: graph}
+  end
+
   defp base_attrs(definition, overrides \\ %{}) do
     Map.merge(
       %{
@@ -1607,7 +1630,7 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
   # server and calls the re-entry function the way the poller does. Returns
   # `{instance_id, dispatch_id, advance_result}`.
   defp create_dispatch_and_advance(schema_name, graph, body_json) do
-    definition = active_definition!(schema_name, graph)
+    definition = legacy_active_definition!(schema_name, graph)
     assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
     instance_id = result.instance_id
 
@@ -1686,7 +1709,10 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       definition =
-        active_definition!(schema_name, graph_fork_human_and_svc_xg_join(server_url, false))
+        legacy_active_definition!(
+          schema_name,
+          graph_fork_human_and_svc_xg_join(server_url, false)
+        )
 
       assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
       instance_id = result.instance_id
@@ -1791,7 +1817,10 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       definition =
-        active_definition!(schema_name, graph_fork_human_and_svc_xg_join(server_url, false))
+        legacy_active_definition!(
+          schema_name,
+          graph_fork_human_and_svc_xg_join(server_url, false)
+        )
 
       assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
       instance_id = result.instance_id

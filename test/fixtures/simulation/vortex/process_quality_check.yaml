@@ -80,6 +80,10 @@ graph:
       source: budget-gate
       target: assign-line
       condition: "variables.order_value_eur <= 10000"
+    - id: budget-gate-default
+      source: budget-gate
+      target: budget-approval
+      is_default: true
     - id: e7
       source: budget-approval
       target: assign-line

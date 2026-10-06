@@ -90,7 +90,23 @@ defmodule Letflow.Definitions.SemanticValidation do
   records numeric/money vs. text/string as non-comparable, satisfying this
   requirement's own explicit floor.
 
-  ## HUMAN_TASK routing/assignment-by-field: OUT OF SCOPE (explicit, not a silent omission)
+  ## Data-flow class (REQ-455, `:variable_never_collected`)
+
+  A third violation class, computed in the same pass (and silenced by the same
+  empty-`declared_fields` exemption). For a HUMAN_TASK-sourced edge with a
+  non-blank condition, a variable root that is not a declared field is reported
+  only when it is *certain* no path can set it: no node in the ancestor-or-self
+  set of the edge's source may write it. SERVICE_TASK always may write (opaque
+  response); a HUMAN_TASK may write iff its `form_schema` has no `properties`
+  map or lists the root; a SUB_PROCESS may write iff it has no parseable
+  `interface` or its `interface.outputs` names the root. Declared fields are
+  treated as possible start inputs. Where some path may set it, the judgment is
+  PROCESS-AUDITOR's (REQ-456), not this pass's.
+
+  ## HUMAN_TASK routing/assignment-by-field: OUT OF SCOPE for the first two classes (explicit, not a silent omission)
+
+  The field-existence and type-compatibility classes only cover HUMAN_TASK edge
+  conditions via the data-flow class above.
 
   This module's checks walk **only** `EXCLUSIVE_GATEWAY` edge conditions.
   No HUMAN_TASK attribute is walked, and no HUMAN_TASK-routing-by-field (or
@@ -184,8 +200,122 @@ defmodule Letflow.Definitions.SemanticValidation do
       |> Enum.filter(&qualifying_edge?(nodes, node_index, &1))
       |> Enum.flat_map(&edge_violations(&1, declared_fields))
 
+    violations =
+      violations ++ data_flow_violations(nodes, edges, node_index, declared_fields)
+
     %{valid: violations == [], violations: violations}
   end
+
+  # ---------------------------------------------------------------------------------
+  # Data-flow class (REQ-455, `:variable_never_collected`)
+  # ---------------------------------------------------------------------------------
+
+  @spec data_flow_violations(
+          [Graph.Node.t()],
+          [Graph.Edge.t()],
+          %{String.t() => non_neg_integer()},
+          declared_fields()
+        ) :: [Violation.t()]
+  defp data_flow_violations(nodes, edges, node_index, declared_fields) do
+    edges
+    |> Enum.flat_map(fn %Graph.Edge{} = edge ->
+      with {:ok, index} <- Map.fetch(node_index, edge.source),
+           %Graph.Node{node_type: :HUMAN_TASK} <- Enum.at(nodes, index),
+           false <- blank_condition?(edge.condition),
+           {:ok, ast} <- parse_condition(edge.condition) do
+        roots =
+          ast
+          |> collect_var_paths()
+          |> Enum.map(&hd/1)
+          |> Enum.reject(&Map.has_key?(declared_fields, &1))
+
+        if roots == [] do
+          []
+        else
+          upstream = ancestors_or_self(edge.source, nodes, edges, node_index)
+
+          roots
+          |> Enum.reject(fn root -> Enum.any?(upstream, &may_write?(&1, root)) end)
+          |> Enum.map(&never_collected_violation(edge, &1))
+        end
+      else
+        _ -> []
+      end
+    end)
+  end
+
+  @spec never_collected_violation(Graph.Edge.t(), String.t()) :: Violation.t()
+  defp never_collected_violation(%Graph.Edge{} = edge, root) do
+    %Violation{
+      code: :variable_never_collected,
+      message:
+        "Edge '#{edge.id}' (from HUMAN_TASK node '#{edge.source}') condition reads variable " <>
+          "'#{root}' that no declared field, form, service step or sub-process output on any " <>
+          "path from START can set; rule as authored: \"#{edge.condition}\""
+    }
+  end
+
+  # Every node from which `source_id` is reachable by following edges forward,
+  # plus the source itself (i.e. every node on any path START -> source).
+  @spec ancestors_or_self(
+          String.t(),
+          [Graph.Node.t()],
+          [Graph.Edge.t()],
+          %{String.t() => non_neg_integer()}
+        ) :: [Graph.Node.t()]
+  defp ancestors_or_self(source_id, nodes, edges, node_index) do
+    predecessors =
+      Enum.reduce(edges, %{}, fn edge, acc ->
+        if Map.has_key?(node_index, edge.source) and Map.has_key?(node_index, edge.target) do
+          Map.update(acc, edge.target, [edge.source], &[edge.source | &1])
+        else
+          acc
+        end
+      end)
+
+    source_id
+    |> collect_ancestors([source_id], predecessors, MapSet.new())
+    |> Enum.map(&Enum.at(nodes, Map.fetch!(node_index, &1)))
+  end
+
+  defp collect_ancestors(_id, [], _predecessors, seen), do: MapSet.to_list(seen)
+
+  defp collect_ancestors(id, [current | rest], predecessors, seen) do
+    if MapSet.member?(seen, current) do
+      collect_ancestors(id, rest, predecessors, seen)
+    else
+      collect_ancestors(
+        id,
+        Map.get(predecessors, current, []) ++ rest,
+        predecessors,
+        MapSet.put(seen, current)
+      )
+    end
+  end
+
+  # Whether `node` may set variable `root` (design section 4). Opaque or
+  # undeclared writers are treated as able to set anything, so only a certain
+  # "no path sets it" is reported.
+  @spec may_write?(Graph.Node.t(), String.t()) :: boolean()
+  defp may_write?(%Graph.Node{node_type: :SERVICE_TASK}, _root), do: true
+
+  defp may_write?(%Graph.Node{node_type: :HUMAN_TASK, attributes: attributes}, root) do
+    case is_map(attributes) && Map.get(attributes, "form_schema") do
+      %{"properties" => properties} when is_map(properties) -> Map.has_key?(properties, root)
+      _open -> true
+    end
+  end
+
+  defp may_write?(%Graph.Node{node_type: :SUB_PROCESS, id: id, attributes: attributes}, root) do
+    interface = if is_map(attributes), do: Map.get(attributes, "interface"), else: nil
+
+    case Letflow.Definitions.SubProcessInterface.parse_interface(id, interface) do
+      {%{outputs: outputs}, []} -> Enum.any?(outputs, &(&1.name == root))
+      _open -> true
+    end
+  end
+
+  defp may_write?(%Graph.Node{}, _root), do: false
 
   @doc """
   Classic Wagner-Fischer dynamic-programming edit distance, over

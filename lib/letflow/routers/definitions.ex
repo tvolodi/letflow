@@ -177,7 +177,7 @@ defmodule Letflow.Routers.Definitions do
 
   | Outcome | Status | Where violations live |
   |---|---|---|
-  | valid   | 200 | `"findings"` — always `[]` |
+  | valid   | 200 | `"findings"` — always `[]`; `"warnings"` — advisory unbound-task-role lines (REQ-455) |
   | invalid | 422 | `"errors"`, the RFC 9457 extension member |
 
   A success body is not a problem document and must not carry
@@ -353,10 +353,11 @@ defmodule Letflow.Routers.Definitions do
     end
   end
 
-  defp render_validation(conn, {:ok, %{valid: true, definition_id: definition_id}}) do
+  defp render_validation(conn, {:ok, %{valid: true, definition_id: definition_id} = result}) do
     Response.ok(conn, %{
       "status" => "valid",
       "findings" => [],
+      "warnings" => Map.get(result, :warnings, []),
       "definition_id" => definition_id,
       "validated_at" => DateTime.to_iso8601(DateTime.utc_now())
     })

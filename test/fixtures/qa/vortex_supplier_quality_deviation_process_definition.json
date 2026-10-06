@@ -1,6 +1,6 @@
 {
   "name": "Supplier Quality Deviation",
-  "version": "1.2",
+  "version": "1.3",
   "description": "Raised when incoming goods fail inspection. Quality Manager classifies severity. For CRITICAL a sub-process is spawned. Exercises: sub-process spawn, severity-driven branching, compensation.",
   "graph": {
     "nodes": [
@@ -100,10 +100,12 @@
       { "id": "timeout-severity-classification", "source": "severity-classification",     "target": "default-to-major" },
       { "id": "e3",                             "source": "false-positive-check",         "target": "release-quarantine",           "condition": "variables.false_positive == true" },
       { "id": "e4",                             "source": "false-positive-check",         "target": "severity-routing",             "condition": "variables.false_positive == false" },
+      { "id": "false-positive-check-default", "source": "false-positive-check", "target": "severity-routing", "is_default": true },
       { "id": "e5",                             "source": "default-to-major",             "target": "severity-routing" },
       { "id": "e6",                             "source": "severity-routing",             "target": "corrective-action-subprocess", "condition": "variables.severity == 'critical'" },
       { "id": "e7",                             "source": "severity-routing",             "target": "supplier-warning",             "condition": "variables.severity == 'major'" },
       { "id": "e8",                             "source": "severity-routing",             "target": "supplier-notification",        "condition": "variables.severity == 'minor'" },
+      { "id": "severity-routing-default", "source": "severity-routing", "target": "corrective-action-subprocess", "is_default": true },
       { "id": "e9",                             "source": "corrective-action-subprocess", "target": "close-deviation" },
       { "id": "e10",                            "source": "supplier-warning",             "target": "close-deviation" },
       { "id": "e11",                            "source": "supplier-notification",        "target": "close-deviation" },

@@ -78,6 +78,10 @@ graph:
       source: false-positive-check
       target: severity-routing
       condition: "variables.false_positive == false"
+    - id: false-positive-check-default
+      source: false-positive-check
+      target: severity-routing
+      is_default: true
     - id: e5
       source: default-to-major
       target: severity-routing
@@ -93,6 +97,10 @@ graph:
       source: severity-routing
       target: supplier-notification
       condition: "variables.severity == 'minor'"
+    - id: severity-routing-default
+      source: severity-routing
+      target: corrective-action-subprocess
+      is_default: true
     - id: e9
       source: corrective-action-subprocess
       target: close-deviation

@@ -120,7 +120,7 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
   # regulatory-auto-escalation, new node remediation-unresolved-escalation
   # split out from e10's own inbound meaning -- see that fix's own design
   # doc §4.5).
-  defp check_t1(doc), do: ok_if(doc["version"] == "1.3", {:version, doc["version"]})
+  defp check_t1(doc), do: ok_if(doc["version"] == "1.4", {:version, doc["version"]})
 
   defp check_t2(doc),
     do:
@@ -196,6 +196,8 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
     )
   end
 
+  # REQ-455: post-remediation-check gained an is_default edge (CHK-24) to this node,
+  # so its inbound set is e10 plus that default; both mean "remediation unresolved".
   defp check_t8b(doc) do
     inbound =
       doc
@@ -212,7 +214,7 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
     body_template = (n["attributes"] || %{})["body_template"]
 
     ok_if(
-      inbound == ["e10"] and outbound == [{"e18", "end-closed"}] and
+      inbound == ["e10", "post-remediation-check-default"] and outbound == [{"e18", "end-closed"}] and
         is_binary(body_template) and String.contains?(body_template, "remediation_unresolved"),
       {inbound, outbound, n["attributes"]}
     )

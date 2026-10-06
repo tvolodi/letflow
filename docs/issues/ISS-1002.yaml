@@ -62,4 +62,5 @@ follow_ups:
   - "BA (letflow-2): confirm the proposed durations the ruling did not fix literally: escalate-to-ceo PT4H (it had none), severity-classification PT4H and its CEO level PT4H, capacity-review PT4H (E7 operational default), budget-approval P2D (E7 financial)."
   - "BA (letflow-2): corrective-action-8d is waived, not timed. The P14D reminder cannot be modelled as notify-and-keep-open: an escalation timer cancels the task and the child ends, which closes the deviation without corrective action. Options: accept the waiver, or a new engine feature (a non-cancelling reminder timer), or a CEO escalation task that takes over the 8D at P14D."
   - "Notification is the inbox task plus the audit history only (E5); e-mail out of scope until REQ-441."
+  - "ISS-1035 (Q-1017 / GH #2325): engine gap, a HUMAN_TASK escalation timer always cancels the task and there is no non-cancelling reminder; BA accepted the corrective-action-8d waiver until it is closed. BA also accepted the durations as drafted and the nominal escalation_role on stalled levels (noted in each such node description)."
 regression_test: test/letflow/scripts/vortex_d_esc_escalation_fixture_test.exs

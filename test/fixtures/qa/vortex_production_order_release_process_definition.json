@@ -22,6 +22,7 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-ceo",
+          "description": "top of chain: escalation_role is nominal; stalled = fail closed",
           "escalation_timer_duration": "PT4H",
           "escalation_role": "role-ceo"
         }
@@ -44,6 +45,7 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-ceo",
+          "description": "top of chain: escalation_role is nominal; stalled = fail closed",
           "escalation_timer_duration": "P2D",
           "escalation_role": "role-ceo"
         }

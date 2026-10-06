@@ -13,7 +13,7 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-procurement-manager",
-          "description": "Waiver: long-running remediation work (BA ruling GH #2281, E6). The 8D corrective action is open-ended work; an escalation timer would cancel the task and close the deviation with no corrective action, so it stays open until the procurement manager completes it."
+          "description": "Waiver: long-running remediation work (engine gap: a HUMAN_TASK escalation timer always cancels; no non-cancelling reminder — Q-1017 / GH #2325 / ISS-1035). BA ruling GH #2281, E6. The 8D corrective action is open-ended work; an escalation timer would cancel the task and close the deviation with no corrective action, so it stays open until the procurement manager completes it."
         }
       },
       {

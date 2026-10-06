@@ -128,10 +128,13 @@ defmodule Letflow.TenantOnboarding do
        transient one being recovered from) surfaces through; this function
        does not swallow a real migration failure into a false success.
     3. `Letflow.Identity.RoleRegistry.seed_default_platform_role_groups/1`
-       (ISS-0778) — seeds the group/role bindings for all six platform roles
-       (`Letflow.Api.Authorization.roles/0`), scoped to this tenant's own
+       (ISS-0778) — seeds the group/role bindings for the platform roles that
+       tenant is entitled to (REQ-447: all seven roles of
+       `Letflow.Api.Authorization.roles/0` in the platform tenant, every role
+       except `PLATFORM_ADMIN` in any other tenant, so every tenant gets a
+       `TENANT_ADMIN` binding), scoped to this tenant's own
        schema (`prefix: registration.schema_name`). Idempotent (design §2.4)
-       — a second call converges on the same six bindings. Unlike
+       — a second call converges on the same bindings. Unlike
        `activate_tenant/1`'s own status-flip below, a failure here **is**
        treated as a hard provisioning failure: it propagates as `{:error,
        {:role_seeding_failed, reason}}` and the tenant is **not** activated,
@@ -144,7 +147,7 @@ defmodule Letflow.TenantOnboarding do
        failure recovers the same way any other partial-provisioning failure
        already does — `recover_provisioning/1` re-invokes this same `with`
        chain, and the seeding step's idempotency converges correctly on
-       retry even if a prior attempt partially wrote some of the six
+       retry even if a prior attempt partially wrote some of the
        bindings before failing.
     4. On success: flip the tenant's status to `:active` if it is not already,
        via `Letflow.Identity.Tenant.status_changeset/2` + `Repo.update/2`,

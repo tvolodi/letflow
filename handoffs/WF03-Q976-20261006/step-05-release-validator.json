@@ -1,0 +1,70 @@
+{
+  "handoff_id": "5b0e7a41-93c2-4d68-a1f5-2c7d0e9b6a13",
+  "run_id": "WF03-Q976-20261006",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF03-Q976-20261006/step-05-release-validator.json",
+  "created_at": "2026-10-06T07:05:00Z",
+  "started_at": "2026-10-06T07:05:00Z",
+  "completed_at": "2026-10-06T07:12:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0995": "Q-976 / GH #2257: one structured attribution log line per authorization denial (method, route pattern, policy key, platform-scope boolean, keyed hashes of caller and tenant id); INV-4; sampled."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0995.yaml",
+      "lib/letflow/api/authz_deny_log.ex",
+      "lib/letflow/plugs/authorize.ex",
+      "test/letflow/api/authz_deny_log_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-q976",
+    "branch_name": "fix/ISS-0995-deny-attribution-Q976"
+  },
+  "task": {
+    "description": "WF-03 Step 5: independently re-verify ISS-0995 acceptance criteria before issue close.",
+    "acceptance_criteria": [
+      "One structured line per denial with method, route pattern, policy key, platform-scope flag",
+      "Caller/tenant only as keyed hashes; key derived from config secret; no literal, no new env var, no config diff",
+      "No raw identifiers, proven by test",
+      "Repeated denials sampled",
+      "SECURITY-REVIEWER PASS present",
+      "Independent scoped test re-run",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. (1) lib/letflow/plugs/authorize.ex calls AuthzDenyLog.log_denial(conn, ctx, policy_key) as the first expression of the :Deny403 branch (single call site in lib/); lib/letflow/api/authz_deny_log.ex format_message/2 renders 'authz_deny method=.. route=.. policy=.. platform_scope=.. caller_platform_tenant=.. caller=.. tenant=..' plus identical logger metadata from one fields map. (2) caller/tenant are hash_id/3 = first 16 hex of HMAC-SHA256(subkey, 'user:'|'tenant:' <> id), subkey = HMAC-SHA256(Application.get_env(:letflow, :secrets_master_key), 'letflow/authz-deny-log/v1' <> <<1>>); no literal key, get_env not fetch_env! so no boot failure; `git diff origin/main --stat -- config lib/letflow/application.ex` is empty (no config/*.exs change, no new env var). (3) test/letflow/api/authz_deny_log_test.exs test (d) refutes raw user id, tenant id, slug, email, token, path/query/body values and key material in the line over four request shapes. (4) sampling by {policy, caller hash, tenant hash} slot in 4096-slot atomics, 60 s window with suppressed=n carry; tested in (h). (5) step-03c-security-reviewer.json result.status PASS (INV-1..10 addressed, issues empty); step-03d-reviewer PASS. Independent run (MIX_ENV=test MIX_TEST_PARTITION=47): test/letflow/api/authz_deny_log_test.exs test/letflow/plugs/authorize_test.exs test/letflow/login_discovery/notifier/smtp_test.exs test/letflow/login_discovery/notifier/smtp_smoke_test.exs test/letflow/api/platform_prefix_uniform_403_test.exs -> 'Result: 87 passed' (no failures); letflow_test47 dropped ('DROP DATABASE'). Handoff chain 01, 02, 02b, 03, 03c, 03d, 04, 04b all present, status COMPLETED/PASS; design validator round-1 FAIL handoff was overwritten in the working file by the round-2 PASS but is preserved in git (commit 454faf6b) and the round-2 summary discloses both BLOCKERs, so the chain is honest. Working tree clean before this handoff.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Not run by me: full suite, mix letflow.check.test, compile --warnings-as-errors --force, format check and lint_handoffs (scoped run only per orchestrator instruction); CI remains the gate for these. The scoped files include the two INV-4 source-scan guards (smtp_test, smtp_smoke_test) and they pass.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "git diff origin/main --stat is large (38 files, incl. deletions of process-auditor and REQ-456 files) because origin/main has moved since the branch point; this is base drift, not branch content (git log origin/main..HEAD lists only Q-976 commits). Rebase/merge on current main before the PR and re-check that diff is Q-976-only. step-03c handoff context.worktree names the shared checkout path rather than the Q976 worktree (cosmetic).",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "fix/ISS-0995-deny-attribution-Q976",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to WF-03 commit/PR for Q-976 after syncing with main; CI runs the full suite and mix letflow.check.test."
+  }
+}

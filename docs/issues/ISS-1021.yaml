@@ -1,0 +1,66 @@
+id: ISS-1021
+title: "GET /promotions/:id/context returns the serialised plan through a key-suffix deny walk: a foreign tenant id under any other key name, a non-map plan and foreign-side definition ids reach a non-operator (INV-10, INV-2)"
+discovered_by: SECURITY-REVIEWER (ISS-0999, Q-981)
+discovered_in_run: WF03-ISS0999-Q981-20261006
+discovered_at: "2026-10-06T08:00:00Z"
+severity: MEDIUM
+failure_class: defect
+occurrence: 1
+owner: ELIXIR-DEV
+description: >
+  After ISS-0999 closed the platform-events route, GET /promotions/:id/context still shaped the
+  decoded serialised_plan with the REQ-446 key-suffix DENY walk (drop keys ending in tenant_id whose
+  value is not the caller's own id). That is wrong by construction for INV-10: a foreign tenant id
+  under any other key name (tenantId, tenant_ids, source_tenant, x_tenant_id, a future producer's
+  key) passed. Two more gaps found while reading: a decoded plan that is not a map (JSON list,
+  string, number or null) passed through completely unshaped, and source_definition_id /
+  target_definition_id (row ids in the source / target tenant's schema) were returned even when
+  that side's tenant is not the caller's.
+
+  Fix (lib/letflow/routers/promotions.ex, design lib/letflow/design/iss1021-context-plan-allowlist.md):
+  for a non-operator the serialised_plan is a NEW map built from a top-level key ALLOWLIST
+  (@plan_allowlist / plan_allowlist/0): process_key and base_version (scalars only),
+  source_tenant_id / target_tenant_id only when equal (case-insensitively) to the caller's own id,
+  source_definition_id / target_definition_id only when scalar AND their side's tenant id is the
+  caller's own, and entries as stored (replaced by [] when absent or not a list). Every other
+  top-level key is omitted; a non-map plan becomes {"entries": []}. Operators see the decoded plan
+  unchanged; the nine-key envelope is unchanged. shape_tenant_ids/2 and tenant_id_key?/1 deleted.
+
+  Tests: T-8 (promotion_context_shaping_test.exs, updated expectations), T-11
+  (promotion_context_allowlist_test.exs, the regression test: odd key names, unknown key, own-id
+  case-insensitivity, definition ids by side, non-scalar under a plain key, non-map and legacy
+  plans, operator view, nine-key envelope, cleared pin, nil tenant context), T-12
+  (promotion_context_allowlist_drift_test.exs: literal table vs plan_allowlist/0 vs the keys
+  PromotionPlan.compute_promotion_plan/5 emits). Mutation results are in test/specs/ISS-1021.md.
+  SECURITY-REVIEWER and REVIEWER PASSED the design and the change.
+affected_files:
+  - lib/letflow/routers/promotions.ex
+  - lib/letflow/design/iss1021-context-plan-allowlist.md
+  - test/letflow/routers/promotion_context_shaping_test.exs
+  - test/letflow/routers/promotion_context_allowlist_test.exs
+  - test/letflow/routers/promotion_context_allowlist_drift_test.exs
+  - test/specs/ISS-1021.md
+regression_test: test/letflow/routers/promotion_context_allowlist_test.exs
+follow_ups:
+  - >
+    R1 (standing TRACKED exception, INV-10): the plan's entries graph JSON is returned as stored.
+    For an operator-created review naming foreign tenants B and C, held in the platform tenant's
+    schema, entries carries B's and C's definition content (build_entries fills it from both the
+    source and the target graphs), readable by a non-operator holding :PromotionsRead there and by
+    readers of legacy rows. No worse than before this change (the old walk did not descend into
+    entries either). Tracked as Q-1005 / GH #2297 / ISS-1023 (its issue file ships with that fix PR).
+# The queue's own issue_ref for Q-1003 came back ISS-1003, which clashes with the local numbering
+# (no docs/issues/ISS-1003.yaml exists; the queue number was read as a local issue number by
+# mistake). ISS-1021 is the local id, chosen because ISS-0999's follow_ups and
+# test/specs/ISS-0999.md already cite it as the tracking id.
+queue_ref: Q-1003
+github_ref: GH-2291
+status: resolved
+resolved_in_run: WF03-ISS1021-Q1003-20261006
+resolved_at: "2026-10-06T16:00:00Z"
+resolution: >
+  Top-level key ALLOWLIST on GET /promotions/:id/context (non-operator view): process_key and
+  base_version (scalars), own tenant ids, own-side definition ids, entries as stored; every other
+  key and every non-map plan omitted or replaced by {"entries": []}. Operators see everything
+  unchanged. REVIEWER and SECURITY-REVIEWER PASSED the design and change. Residual R1 (entries
+  content for a review naming foreign tenants) tracked as Q-1005 / GH #2297 / ISS-1023.

@@ -79,9 +79,12 @@ defmodule Letflow.Routers.Promotions do
   tenant-id keys only when they are the caller's own, `source_definition_id`,
   `review_id`, teardown `error` and every unknown key are omitted, an unknown
   event type gets payload `{}` (event kept), and the item has no `actor_id`.
-  The R4 `serialised_plan` is still shaped by the key-suffix rule: it omits
-  every key ending in `tenant_id` whose value is not the caller's own tenant id,
-  at any depth (R4 does not descend into `entries`). Operators see both
+  The R4 `serialised_plan` is likewise a top-level key ALLOWLIST (ISS-1021,
+  `@plan_allowlist`): `process_key` and `base_version` (scalars), the source and
+  target tenant ids only when they are the caller's own, the source and target
+  definition ids only when their own side's tenant id is the caller's, and
+  `entries` as stored (`[]` when absent or not a list). Every other key is
+  omitted and a non-map plan becomes `{"entries": []}`. Operators see both
   unchanged.
 
   The rule for naming ANOTHER tenant (`Letflow.PlatformTenant.cross_tenant_promotion_operator_only?/0`): only a
@@ -1040,48 +1043,82 @@ defmodule Letflow.Routers.Promotions do
     end
   end
 
-  # INV-10: payloads and plans name tenants by id (a promotion event holds the
-  # source and target tenant ids). A non-operator must never receive another
-  # tenant's id, so every key ending in `tenant_id` is KEPT only when its
-  # value is a binary equal (case-insensitively) to the caller's own tenant
-  # id; otherwise the entry is OMITTED (non-binary values included, fail
-  # closed). Recurses through every map and list element at any depth;
-  # anything else passes through. Hand-built maps (INV-2), no ids logged.
-  @spec shape_tenant_ids(term(), tenant_view()) :: term()
-  defp shape_tenant_ids(value, :operator), do: value
+  # -- Response allowlist (INV-2) --
+  # Top-level key allowlist for the `serialised_plan` a NON-operator reads on
+  # GET /promotions/:id/context (lib/letflow/design/iss1021-context-plan-allowlist.md,
+  # INV-10). `plain` keys are kept when scalar; `own_tenant` keys only when the
+  # value is the caller's own tenant id; `own_side` definition ids (key =>
+  # gating tenant-id key) only when scalar AND the gating tenant id is the
+  # caller's own; `entries` is kept as stored when a list. Every other
+  # top-level key is omitted.
+  @plan_allowlist %{
+    plain: ["process_key", "base_version"],
+    own_tenant: ["source_tenant_id", "target_tenant_id"],
+    own_side: %{
+      "source_definition_id" => "source_tenant_id",
+      "target_definition_id" => "target_tenant_id"
+    },
+    entries: "entries"
+  }
 
-  defp shape_tenant_ids(value, {:tenant, own} = view)
-       when is_map(value) and not is_struct(value) do
-    Enum.reduce(value, %{}, fn {key, val}, acc ->
-      if tenant_id_key?(key) and not own_tenant_value?(val, own) do
-        acc
-      else
-        Map.put(acc, key, shape_tenant_ids(val, view))
-      end
-    end)
-  end
+  # Test seam for the allowlist drift test only (ISS-1021 T-12).
+  @doc false
+  @spec plan_allowlist() :: %{
+          plain: [String.t()],
+          own_tenant: [String.t()],
+          own_side: %{String.t() => String.t()},
+          entries: String.t()
+        }
+  def plan_allowlist, do: @plan_allowlist
 
-  defp shape_tenant_ids(value, view) when is_list(value),
-    do: Enum.map(value, &shape_tenant_ids(&1, view))
-
-  defp shape_tenant_ids(value, _view), do: value
-
-  # /context: the same walk over the decoded plan, except the top-level
-  # `entries` (definition before/after content) is left as stored.
+  # Operator: the decoded plan, unchanged (any shape). Non-operator: always a
+  # NEW hand-built map from the allowlist, never the input value; a non-map
+  # plan yields %{"entries" => []}; `entries` is always present as a list.
   @spec shape_plan(term(), tenant_view()) :: term()
   defp shape_plan(plan, :operator), do: plan
 
-  defp shape_plan(plan, view) when is_map(plan) and not is_struct(plan) do
-    {entries, rest} = Map.split(plan, ["entries"])
-    Map.merge(shape_tenant_ids(rest, view), entries)
+  defp shape_plan(plan, {:tenant, own}) when is_map(plan) and not is_struct(plan) do
+    %{plain: plain, own_tenant: own_keys, own_side: own_side, entries: entries_key} =
+      @plan_allowlist
+
+    base =
+      Enum.reduce(plain, %{}, fn key, acc ->
+        case Map.fetch(plan, key) do
+          {:ok, val} -> if scalar?(val), do: Map.put(acc, key, val), else: acc
+          :error -> acc
+        end
+      end)
+
+    base =
+      Enum.reduce(own_keys, base, fn key, acc ->
+        case Map.fetch(plan, key) do
+          {:ok, val} -> if own_tenant_value?(val, own), do: Map.put(acc, key, val), else: acc
+          :error -> acc
+        end
+      end)
+
+    base =
+      Enum.reduce(own_side, base, fn {def_key, tenant_key}, acc ->
+        with {:ok, def_val} <- Map.fetch(plan, def_key),
+             true <- scalar?(def_val),
+             {:ok, tenant_val} <- Map.fetch(plan, tenant_key),
+             true <- own_tenant_value?(tenant_val, own) do
+          Map.put(acc, def_key, def_val)
+        else
+          _ -> acc
+        end
+      end)
+
+    entries =
+      case Map.get(plan, entries_key) do
+        list when is_list(list) -> list
+        _other -> []
+      end
+
+    Map.put(base, entries_key, entries)
   end
 
-  defp shape_plan(plan, _view), do: plan
-
-  defp tenant_id_key?(key) when is_binary(key),
-    do: String.ends_with?(String.downcase(key), "tenant_id")
-
-  defp tenant_id_key?(_key), do: false
+  defp shape_plan(_plan, {:tenant, _own}), do: %{"entries" => []}
 
   defp own_tenant_value?(value, own) when is_binary(value) and is_binary(own),
     do: String.downcase(value) == String.downcase(own)

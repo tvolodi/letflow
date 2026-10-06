@@ -402,3 +402,22 @@ What a caller that is not a platform-tenant operator now sees:
 - A platform-tenant operator sees the payload and `actor_id` unchanged.
 
 Remaining tracked item: `GET /promotions/:id/context` keeps the key-suffix rule of the REQ-446 design (section 4b). Its allowlist follow-up is tracked as Q-1003 / GH #2291 / ISS-1021.
+
+## Closure of the /context payload residual (ISS-1021 / Q-1003), 2026-10-06
+
+This section is appended; no earlier text in this record was changed and no decision text changed. It records that the tracked item left open by the ISS-0999 closure section above (`GET /promotions/:id/context` keeping the key-suffix `tenant_id` rule of the REQ-446 design, section 4b) is closed by a top-level key allowlist on `serialised_plan` for every caller that is not a platform-tenant operator. Route scope and permission are unchanged (tenant scope, `:PromotionsRead`; `authz_get "/:id/context"`, `lib/letflow/routers/promotions.ex:232`).
+
+Design: `lib/letflow/design/iss1021-context-plan-allowlist.md`. For this route it supersedes section 4b of the REQ-446 design (key-suffix matching).
+
+What a non-operator now sees in `serialised_plan` (`shape_plan/2`, `lib/letflow/routers/promotions.ex:1080-1119`; allowlist `@plan_allowlist`, line 1054; applied in `review_context_map/2`, line 548):
+
+- `process_key` and `base_version`, when scalar.
+- `source_tenant_id` and `target_tenant_id`, only when the value is the caller's own tenant id.
+- `source_definition_id` and `target_definition_id`, only when scalar and the same side's tenant id (`source_tenant_id` / `target_tenant_id`) is the caller's own tenant id.
+- `entries`, as stored, forced to a list (`[]` when absent or not a list).
+- Every other top-level key (unknown and legacy keys, including odd tenant-id spellings and a nested `meta`) is dropped.
+- A plan that is not a map becomes `{"entries": []}` (`lib/letflow/routers/promotions.ex:1121`).
+
+A platform-tenant operator sees the plan unchanged (`shape_plan(plan, :operator)`, line 1078). The other keys of the context envelope are unchanged, including `requested_by` (accepted, residual R5).
+
+Remaining STANDING TRACKED exception R1 (INV-10), not closed here: `entries` is returned as stored. Plan `entries` carry both the source and the target graph content (`lib/letflow/definitions/promotion_plan.ex:199-243`), and an operator-created review that names foreign tenants lives in the platform tenant's schema. A non-operator reader of that schema, and legacy rows, can therefore read other tenants' graph content through `entries`. Tracked as Q-1005 / GH #2297 / ISS-1023.

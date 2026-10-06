@@ -58,6 +58,30 @@ affected_files:
   - test/fixtures/uat/actors.yaml
   - test/fixtures/uat/scenarios/meridian/loan-origination-above-threshold.yaml
   - scripts/seed_meridian_definition.sh
+  - test/fixtures/simulation/meridian/process_claim_intake.yaml
+  - scripts/seed_meridian_persona_actors.sh
+  - test/scripts/persona_actor_seed_drift_test.exs
+  - test/letflow/scripts/meridian_committee_distinct_voters_fixture_test.exs
+  - test/letflow/scripts/meridian_loan_origination_fixture_test.exs
+  - test/letflow/scripts/meridian_loan_kyc_fail_closed_fixture_test.exs
 queue_ref: Q-1006  # queue allocated issue_ref ISS-1006, which collides with an existing local file; local filename kept as ISS-1024 (next free on origin/main) and the GH issue retitled to match
 github_ref: GH-2299
-status: open
+status: resolved
+resolved_in_run: WF03-ISS1024-Q1006-20261006
+resolved_at: "2026-10-06T12:40:00Z"
+resolution: >
+  Fixture v1.8. committee-vote-cro routes to role-cro, committee-vote-director to
+  role-credit-director, committee-vote-ceo to role-ceo (three pairwise distinct roles, all already
+  in test/fixtures/uat/actors.yaml and in the seed_meridian_persona_actors.sh role groups). Each
+  role is held by exactly one committee actor (thomas = role-cro, julia = role-credit-director,
+  eva = role-ceo), so no actor in actors.yaml holds the routing roles of two vote tasks and
+  actors.yaml was NOT violated, but role-committee-member is now referenced by no QA definition, so the persona seed drift test (seeded ROLES == roles referenced by the fixtures) forced it out of scripts/seed_meridian_persona_actors.sh (ROLES 8 -> 7, persona lines) and out of the three personas' routing_roles in actors.yaml; the above-threshold scenario's steps 4-6 (thomas, julia, eva) are
+  unchanged, only its EO-002 verification text now names the three roles. The simulation copy
+  process_claim_intake.yaml gets the same routing. New test file
+  test/letflow/scripts/meridian_committee_distinct_voters_fixture_test.exs; fail-first on the v1.7
+  fixture. This is role-level separation, not a person-level guarantee: a person who holds two of
+  the roles in a real tenant could still cast two votes.
+follow_ups:
+  - "QA needs a re-seed of Meridian Loan Origination v1.8 (scripts/seed_meridian_definition.sh creates and activates it; the platform deprecates v1.7). The persona seed (scripts/seed_meridian_persona_actors.sh) also changed: re-run it so thomas/julia/eva hold role-cro/role-credit-director/role-ceo (they already did); the stale role-committee-member group in QA is harmless and may be deleted."
+  - "Optional stronger control, own requirement (CODE-DESIGNER + ELIXIR-DEV), NOT built here: an engine-level rule that one person may not complete two tasks of one gateway fan-out."
+regression_test: test/letflow/scripts/meridian_committee_distinct_voters_fixture_test.exs

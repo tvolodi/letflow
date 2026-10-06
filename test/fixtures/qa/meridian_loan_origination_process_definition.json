@@ -1,7 +1,7 @@
 {
   "name": "Loan Origination",
-  "version": "1.7",
-  "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking. KYC/AML fails closed (v1.7): the eligibility gate lets an application on to approval only when the screening answered kyc_status 'clear' or the compliance officer's manual review recorded kyc_outcome 'cleared' (the kyc-manual-review task is completed with output variable kyc_outcome = cleared | rejected); a rejected, missing or timed-out review (kyc-timeout records kyc_outcome 'unresolved') declines the application.",
+  "version": "1.8",
+  "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking. KYC/AML fails closed (v1.7): the eligibility gate lets an application on to approval only when the screening answered kyc_status 'clear' or the compliance officer's manual review recorded kyc_outcome 'cleared' (the kyc-manual-review task is completed with output variable kyc_outcome = cleared | rejected); a rejected, missing or timed-out review (kyc-timeout records kyc_outcome 'unresolved') declines the application. Committee votes are person-distinct by role (v1.8): committee-vote-cro routes to role-cro, committee-vote-director to role-credit-director and committee-vote-ceo to role-ceo, three different roles held by three different people, so one committee member cannot cast two or three of the votes.",
   "graph": {
     "nodes": [
       {
@@ -107,21 +107,21 @@
         "id": "committee-vote-cro",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-committee-member"
+          "role": "role-cro"
         }
       },
       {
         "id": "committee-vote-director",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-committee-member"
+          "role": "role-credit-director"
         }
       },
       {
         "id": "committee-vote-ceo",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-committee-member"
+          "role": "role-ceo"
         }
       },
       {

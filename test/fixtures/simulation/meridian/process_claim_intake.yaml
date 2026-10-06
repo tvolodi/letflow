@@ -67,15 +67,15 @@ graph:
     - id: committee-vote-cro
       node_type: HUMAN_TASK
       attributes:
-        role: role-committee-member
+        role: role-cro
     - id: committee-vote-director
       node_type: HUMAN_TASK
       attributes:
-        role: role-committee-member
+        role: role-credit-director
     - id: committee-vote-ceo
       node_type: HUMAN_TASK
       attributes:
-        role: role-committee-member
+        role: role-ceo
     - id: committee-vote-cro-timeout
       node_type: SERVICE_TASK
       attributes:

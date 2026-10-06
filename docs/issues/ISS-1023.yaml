@@ -1,0 +1,84 @@
+id: ISS-1023
+title: "GET /promotions/:id/context returns the plan's entries (definition diff of BOTH sides' graphs) as stored to a non-operator even when the plan names a foreign tenant (INV-10)"
+discovered_by: SECURITY-REVIEWER (ISS-1021, Q-1003)
+discovered_in_run: WF03-ISS1021-Q1003-20261006
+discovered_at: "2026-10-06T16:00:00Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: ELIXIR-DEV
+description: >
+  After ISS-1021 the /context serialised_plan of a non-operator is a top-level key allowlist, but
+  `entries` was still copied as stored whenever it is a list. `entries` is the plan's definition
+  diff: build_entries fills it from BOTH the source graph and the target graph (nodes, edges,
+  variable schemas, SERVICE_TASK service_id bindings, SUB_PROCESS module_ref). An operator-created
+  review naming foreign tenants B and C is stored in the platform tenant P's schema, so `entries`
+  there holds B's and C's definition content, and the route reads only the caller's own schema:
+  any non-operator holding :PromotionsRead in P (or in the schema of a legacy row naming foreign
+  tenants) received it. This was the standing TRACKED residual R1 of ISS-1021.
+
+  Fix (lib/letflow/routers/promotions.ex, design lib/letflow/design/iss1023-context-entries-own-sides.md):
+  a new `entries_gate` list in @plan_allowlist (source_tenant_id, target_tenant_id) and a private
+  predicate entries_visible?/2. For a non-operator `entries` is returned as stored only when it is
+  a list AND both stored tenant ids pass own_tenant_value?/2 (own id, case-insensitive); in every
+  other case (foreign id on either side, missing, null, non-binary, empty or padded id) it is [].
+  All-or-nothing, no per-entry shaping. Operators see the plan unchanged; no other key, status or
+  envelope key changes.
+
+  AC5 (established from code, pinned by a test): today only PLATFORM_ADMIN holds :PromotionsRead;
+  TENANT_ADMIN / TENANT_AUDITOR exist only as planned columns (REQ-447, pending). The exposure is
+  latent for a correctly pinned platform tenant but reachable with the pin unset, through legacy
+  rows, and once REQ-447 grants the permission; this fix is a prerequisite of that grant.
+
+  Tests: T-13 (promotion_context_entries_scope_test.exs, the regression test), T-8 and T-11
+  updated, T-12 pins entries_gate. Mutation results are in test/specs/ISS-1023.md.
+  SECURITY-REVIEWER and REVIEWER PASSED the design and the change.
+affected_files:
+  - lib/letflow/routers/promotions.ex
+  - lib/letflow/design/iss1023-context-entries-own-sides.md
+  - test/letflow/routers/promotion_context_shaping_test.exs
+  - test/letflow/routers/promotion_context_allowlist_test.exs
+  - test/letflow/routers/promotion_context_allowlist_drift_test.exs
+  - test/letflow/routers/promotion_context_entries_scope_test.exs
+  - test/specs/ISS-1023.md
+  - docs/issues/ISS-1023.yaml
+regression_test: test/letflow/routers/promotion_context_entries_scope_test.exs
+follow_ups:
+  - >
+    R1b (accepted): when BOTH stored tenant ids are the caller's own, `entries` is returned exactly
+    as stored and not scanned; any id a tenant author typed into the caller's OWN graphs goes back
+    to that same tenant. Not a cross-tenant disclosure.
+  - >
+    R3 (unchanged, other routes): teardown_error text on the review routes.
+  - >
+    R4/R8 (accepted): process_key, base_version and the envelope's def_id are still returned for a
+    review naming foreign tenants (tenant-authored names, not graph content).
+  - >
+    R5 (accepted): requested_by stays in the envelope. R6 (accepted): plan_digest covers the
+    unshaped plan. R9 (intended): entries == [] tells a non-operator the review names another tenant.
+  - >
+    R10 (TRACKED): approve/reject do not gate on the stored tenant ids. Tracked as
+    Q-1008 / GH #2305 / ISS-1026 (MINOR, depends on this issue; its issue file ships with that fix PR).
+  - >
+    NOT tracked: the optional approve/reject stored-id hardening beyond R10 named in the design
+    (section 3.2) is not filed here.
+  - >
+    REQ-447 ordering note: this fix should land before TENANT_ADMIN / TENANT_AUDITOR receive
+    :PromotionsRead. The AC5 tripwire test (non_admin_core_roles_in_the_platform_tenant_are_denied_promotions_read)
+    fails when that matrix changes. The note in docs/requirements.yaml is added in a separate docs change.
+# The queue's own issue_ref for Q-1005 came back ISS-1005, which clashes with the local numbering:
+# docs/issues/ISS-1005.yaml already exists and is an unrelated Vortex scenario issue
+# (PROCESS-AUDITOR finding PA-VORTEX-005). The queue number was read as a local issue number by
+# mistake. ISS-1023 is the local id, chosen because ISS-1021's follow_ups,
+# test/specs/ISS-1021.md R1 and decision 0046 already cite it as the tracking id.
+queue_ref: Q-1005
+github_ref: GH-2297
+status: resolved
+resolved_in_run: WF03-ISS1023-Q1005-20261006
+resolved_at: "2026-10-06T18:00:00Z"
+resolution: >
+  `entries` on GET /promotions/:id/context is returned to a non-operator only when both stored
+  tenant ids are the caller's own (case-insensitive); otherwise []. Operators unchanged. Closes
+  ISS-1021 residual R1 for plans naming a foreign tenant. REVIEWER and SECURITY-REVIEWER PASSED
+  the design and change. Residuals R1b, R3, R4/R8, R5, R6, R9 accepted and not tracked; R10
+  tracked as Q-1008 / GH #2305 / ISS-1026.

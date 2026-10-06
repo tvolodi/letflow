@@ -83,7 +83,8 @@ defmodule Letflow.Routers.Promotions do
   `@plan_allowlist`): `process_key` and `base_version` (scalars), the source and
   target tenant ids only when they are the caller's own, the source and target
   definition ids only when their own side's tenant id is the caller's, and
-  `entries` as stored (`[]` when absent or not a list). Every other key is
+  `entries` as stored only when both stored tenant ids are the caller's own, `[]`
+  otherwise (ISS-1023). Every other key is
   omitted and a non-map plan becomes `{"entries": []}`. Operators see both
   unchanged.
 
@@ -1049,8 +1050,9 @@ defmodule Letflow.Routers.Promotions do
   # INV-10). `plain` keys are kept when scalar; `own_tenant` keys only when the
   # value is the caller's own tenant id; `own_side` definition ids (key =>
   # gating tenant-id key) only when scalar AND the gating tenant id is the
-  # caller's own; `entries` is kept as stored when a list. Every other
-  # top-level key is omitted.
+  # caller's own; `entries` is kept only when it is a list AND every
+  # `entries_gate` tenant id is the caller's own (ISS-1023, INV-10), else `[]`.
+  # Every other top-level key is omitted.
   @plan_allowlist %{
     plain: ["process_key", "base_version"],
     own_tenant: ["source_tenant_id", "target_tenant_id"],
@@ -1058,7 +1060,8 @@ defmodule Letflow.Routers.Promotions do
       "source_definition_id" => "source_tenant_id",
       "target_definition_id" => "target_tenant_id"
     },
-    entries: "entries"
+    entries: "entries",
+    entries_gate: ["source_tenant_id", "target_tenant_id"]
   }
 
   # Test seam for the allowlist drift test only (ISS-1021 T-12).
@@ -1067,7 +1070,8 @@ defmodule Letflow.Routers.Promotions do
           plain: [String.t()],
           own_tenant: [String.t()],
           own_side: %{String.t() => String.t()},
-          entries: String.t()
+          entries: String.t(),
+          entries_gate: [String.t()]
         }
   def plan_allowlist, do: @plan_allowlist
 
@@ -1111,7 +1115,7 @@ defmodule Letflow.Routers.Promotions do
 
     entries =
       case Map.get(plan, entries_key) do
-        list when is_list(list) -> list
+        list when is_list(list) -> if entries_visible?(plan, own), do: list, else: []
         _other -> []
       end
 
@@ -1119,6 +1123,19 @@ defmodule Letflow.Routers.Promotions do
   end
 
   defp shape_plan(_plan, {:tenant, _own}), do: %{"entries" => []}
+
+  # ISS-1023 (INV-10): `entries` mixes both sides' graph content, so it is
+  # shown only when EVERY gate key's stored value is the caller's own tenant id
+  # (all-or-nothing; a missing or non-binary value fails closed).
+  @spec entries_visible?(map(), String.t() | nil) :: boolean()
+  defp entries_visible?(plan, own) do
+    Enum.all?(@plan_allowlist.entries_gate, fn key ->
+      case Map.fetch(plan, key) do
+        {:ok, val} -> own_tenant_value?(val, own)
+        :error -> false
+      end
+    end)
+  end
 
   defp own_tenant_value?(value, own) when is_binary(value) and is_binary(own),
     do: String.downcase(value) == String.downcase(own)

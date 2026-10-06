@@ -3,7 +3,7 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
   ISS-1021 T-11 (`lib/letflow/design/iss1021-context-plan-allowlist.md` sections 3, 5, 6):
   `GET /promotions/:id/context` builds the non-operator `serialised_plan` from a top-level key
   ALLOWLIST (`process_key`, `base_version`, own tenant ids, own-side definition ids, `entries`
-  as stored). Every other key, any non-scalar under a plain key and every non-map plan never
+  as stored only when both plan tenant ids are own (ISS-1023)). Every other key, any non-scalar under a plain key and every non-map plan never
   reaches a non-operator. An operator sees the decoded plan unchanged. See
   `test/specs/ISS-1021.md`.
 
@@ -114,7 +114,7 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
 
       {_raw, plan} = read_plan!(ctx.a, review.id)
 
-      # known, accepted, tracked residual R1: nothing inside `entries` is shaped
+      # both sides own: kept exactly as stored (residual R1b); a foreign side is T-13
       assert plan["entries"] == stored.entries |> Jason.encode!() |> Jason.decode!()
       [entry] = plan["entries"]
       assert entry["tenant_id"] == b
@@ -185,6 +185,9 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
         {raw, plan} = read_plan!(ctx.a, review.id)
 
         refute raw =~ b
+
+        # ISS-1023: the stored default entry is one element, shown only for A/A
+        assert plan["entries"] != [] == (source == a and target == a)
 
         for key <- ~w(source_tenant_id target_tenant_id source_definition_id target_definition_id) do
           assert Map.has_key?(plan, key) == Map.has_key?(kept, key),
@@ -338,6 +341,8 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
       assert Map.keys(plan) -- @allowlisted == []
       refute Map.has_key?(plan, "source_tenant_id")
       assert plan["target_tenant_id"] == ctx.p.tenant_id
+      # ISS-1023: source is B (foreign), so entries are withheld
+      assert plan["entries"] == []
     end
   end
 end

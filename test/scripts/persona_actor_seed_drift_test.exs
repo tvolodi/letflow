@@ -19,7 +19,7 @@ defmodule Letflow.Scripts.PersonaActorSeedDriftTest do
         "test/fixtures/qa/meridian_loan_origination_process_definition.json",
         "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json"
       ],
-      count: 7
+      count: 8
     },
     "vortex" => %{
       script: "scripts/seed_vortex_persona_actors.sh",

@@ -1,0 +1,24 @@
+run_id: WF02-REQ444-20261006
+step: "WF-02 Step 5"
+agent: RELEASE-VALIDATOR
+branch: feat/REQ-444-enablement-gate
+requirement: REQ-444 (Q-958)
+verdict: FAIL_PENDING_ONE_GAP
+criteria:
+  defaults_and_scoped_grep: VERIFIED
+  boot_refusal_pure_and_subprocess: VERIFIED
+  req439_unchanged: VERIFIED
+  rotation_runbook_and_depends_on: VERIFIED
+  compile_format_boundaries_targeted_tests: VERIFIED
+  security_reviewer_verdict_INV4_INV6_recorded: NOT_CHECKED_HERE
+real_output:
+  compile_warnings_as_errors_force: "Generated letflow app, exit 0"
+  format_check: "exit 0"
+  check_boundaries: "OK -- 918 edges checked, 0 violations"
+  targeted_mix_test: "MIX_TEST_PARTITION=3, --include slow --include prod_build: Result: 439 passed, exit 0; no 'default values for the optional arguments' in output"
+gap:
+  mix_letflow_check_test: >
+    Ran it once; it delegates to scripts/test_parallel.sh (full suite, 2 partitions), which
+    exited 1 ('real test failure/error'); partition logs were already cleaned so the failing
+    test is unidentified. Not re-run (full suite forbidden for this task). Must be re-run by
+    TEST-RUNNER/ORCH on a quiet host; targeted run is green.

@@ -53,16 +53,20 @@ defmodule Letflow.ClientIpRuntimeConfigTest do
   @zero_warning "LETFLOW_TRUSTED_PROXIES contains a /0 CIDR"
 
   # mix_env: "test" | "dev" | "prod"; proxies/enabled: a string or nil (unset).
-  defp boot(mix_env, proxies, enabled) do
-    env = [
-      {"MIX_ENV", mix_env},
-      {"MIX_TEST_PARTITION", nil},
-      {"MIX_BUILD_PATH", nil},
-      {"LETFLOW_SECRETS_MASTER_KEY", @master_key},
-      {"LETFLOW_TRUSTED_PROXIES", proxies},
-      {"LETFLOW_LOGIN_DISCOVERY_ENABLED", enabled},
-      {"DATABASE_URL", "ecto://dummy:dummy@localhost/dummy"}
-    ]
+  defp boot(mix_env, proxies, enabled), do: boot(mix_env, proxies, enabled, [])
+
+  defp boot(mix_env, proxies, enabled, extra_env) do
+    env =
+      extra_env ++
+        [
+          {"MIX_ENV", mix_env},
+          {"MIX_TEST_PARTITION", nil},
+          {"MIX_BUILD_PATH", nil},
+          {"LETFLOW_SECRETS_MASTER_KEY", @master_key},
+          {"LETFLOW_TRUSTED_PROXIES", proxies},
+          {"LETFLOW_LOGIN_DISCOVERY_ENABLED", enabled},
+          {"DATABASE_URL", "ecto://dummy:dummy@localhost/dummy"}
+        ]
 
     System.cmd("mix", ["run", "--no-start", "-e", @probe],
       env: env,
@@ -224,7 +228,26 @@ defmodule Letflow.ClientIpRuntimeConfigTest do
     end
 
     test "enabled with a non-empty list boots" do
-      {output, status} = boot("prod", "172.18.0.1", "true")
+      # REQ-444: prod + mount enabled now also needs the legal-confirmation marker and a delivering mail adapter (config/runtime.exs enablement gate)
+      # names assembled at runtime: the AC6 guard (no_smtp_secret_guard_test) forbids a tracked
+      # file assigning a literal value to the SMTP credential variables
+      smtp_var = fn suffix -> "LETFLOW_SMTP_" <> suffix end
+
+      gate_env = [
+        {"LETFLOW_LOGIN_DIRECTORY_LEGAL_CONFIRMATION", "placeholder-legal-ref"},
+        {"LETFLOW_LOGIN_DIRECTORY_PEPPER",
+         Base.encode16(:crypto.strong_rand_bytes(32), case: :lower)},
+        {"LETFLOW_LOGIN_DIRECTORY_PEPPER_ID", "cur-1"},
+        {"LETFLOW_MAIL_ADAPTER", "smtp"},
+        {"LETFLOW_SMTP_HOST", "smtp.example.com"},
+        {"LETFLOW_SMTP_PORT", "587"},
+        {smtp_var.("USERNAME"), "placeholder-user"},
+        {smtp_var.("PASSWORD"), "placeholder-pass"},
+        {"LETFLOW_MAIL_FROM", "login@example.com"},
+        {"LETFLOW_PUBLIC_BASE_URL", "https://app.example.com"}
+      ]
+
+      {output, status} = boot("prod", "172.18.0.1", "true", gate_env)
       assert_boots(output, status)
       assert output =~ "RESULT {[trusted_proxies: [{{172, 18, 0, 1}, 32}]], [enabled: true]}"
       refute output =~ @trust_warning

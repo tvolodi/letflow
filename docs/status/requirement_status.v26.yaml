@@ -706,3 +706,20 @@ history:
       branch feature/WF02-REQ452-20261006). Validated by REVIEWER PASS,
       TEST-DESIGN-VALIDATOR PASS, RELEASE-VALIDATOR PASS; SECURITY-REVIEWER N/A
       (dev tooling, no tenant-data path).
+
+  - req: REQ-444
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T21:24:12Z"
+    note: >
+      Backend enablement gate implemented in the Q-958 PR (queue task 958,
+      GH#2218). SECURITY-REVIEWER PASS (INV-4 PASS, INV-6 not applicable),
+      REVIEWER PASS (AC corrections and the REQ-439 test narrowing accepted),
+      RELEASE-VALIDATOR: all six corrected criteria VERIFIED in code and
+      targeted tests (report test/reports/report-2026-10-06-WF02-REQ444.yaml).
+      Full-suite run deferred to CI: a local full run failed for an
+      unidentified, likely environmental reason on a loaded host. Enabling the
+      email-first feature outside dev/test still requires runbook
+      docs/runbooks/login-directory-enablement.md section B: legal
+      confirmation by a named person, QA nginx real_ip (T-0155), ISS-0991 and
+      ISS-0992 trackers, SMTP credentials and DNS.

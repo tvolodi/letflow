@@ -33,6 +33,8 @@ defmodule Letflow.Engine.ShippedDefinitionVariableSchemasEngineTest do
   @qa Path.expand("../../fixtures/qa", __DIR__)
   @loan "meridian_loan_origination_process_definition.json"
   @regulatory "meridian_regulatory_compliance_review_process_definition.json"
+  @swiftroute "swiftroute_process_definition.json"
+  @vortex_order "vortex_production_order_release_process_definition.json"
 
   setup do
     Sandbox.mode(Letflow.Repo, :auto)
@@ -332,6 +334,68 @@ defmodule Letflow.Engine.ShippedDefinitionVariableSchemasEngineTest do
       })
 
       assert projection(schema, good).current_nodes == ["findings-sign-off"]
+    end
+  end
+
+  # --- SwiftRoute / Vortex (one case each: same contract as the Meridian cases) -------------
+
+  describe "SwiftRoute Shipment Approval" do
+    test "ops-review: ops_decision 'maybe' is rejected; 'approve' and 'reject' are accepted and routed" do
+      schema = tenant_schema!()
+      vars = %{"shipment_id" => "shp-1027", "declared_value" => 100}
+
+      bad = start!(schema, @swiftroute, vars)
+
+      assert_rejected!(
+        schema,
+        bad,
+        task!(schema, bad, "ops-review"),
+        %{"ops_decision" => "maybe"},
+        "ops_decision"
+      )
+
+      approved = start!(schema, @swiftroute, vars)
+      complete!(schema, task!(schema, approved, "ops-review"), %{"ops_decision" => "approve"})
+      # value 100 <= 500: straight to release-shipment, no CEO co-sign
+      assert projection(schema, approved).current_nodes == ["release-shipment"]
+
+      rejected = start!(schema, @swiftroute, vars)
+      complete!(schema, task!(schema, rejected, "ops-review"), %{"ops_decision" => "reject"})
+      assert projection(schema, rejected).current_nodes == ["notify-requester"]
+    end
+  end
+
+  describe "Vortex Production Order Release" do
+    test "capacity-review: capacity_decision 'maybe' is rejected; 'approve' and 'reject' are accepted and routed" do
+      schema = tenant_schema!()
+      vars = %{"order_id" => "ord-1027", "order_value_eur" => 5_000}
+
+      bad = start!(schema, @vortex_order, vars)
+
+      assert_rejected!(
+        schema,
+        bad,
+        task!(schema, bad, "capacity-review"),
+        %{"capacity_decision" => "maybe"},
+        "capacity_decision"
+      )
+
+      approved = start!(schema, @vortex_order, vars)
+
+      complete!(schema, task!(schema, approved, "capacity-review"), %{
+        "capacity_decision" => "approve"
+      })
+
+      # 5000 <= 10000: no budget approval, straight to assign-line
+      assert projection(schema, approved).current_nodes == ["assign-line"]
+
+      rejected = start!(schema, @vortex_order, vars)
+
+      complete!(schema, task!(schema, rejected, "capacity-review"), %{
+        "capacity_decision" => "reject"
+      })
+
+      assert projection(schema, rejected).current_nodes == ["notify-planner-rejected"]
     end
   end
 end

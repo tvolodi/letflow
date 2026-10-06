@@ -82,4 +82,7 @@ follow_ups:
   - "QA needs a re-seed of all five definitions (scripts/seed_meridian_definition.sh, seed_vortex_definition.sh, seed_swiftroute_definition.sh create and activate the new versions; the platform deprecates the old ones)."
   - "Rebase note: Q-997 (loan 1.9 / regulatory 1.7) and Q-985 (SQD 1.4) must renumber on rebase."
   - "Out-of-enum completion puts the instance in ERROR (REQ-061 behaviour), not a retryable task rejection: a typo by a human operator needs the ERROR-recovery path. Not changed here."
+  - "BA/supervisor rulings (defaults applied): 'acceptable' stays in the risk_rating enum; l2_decision has no 'escalate' (no L2 edge); the UAT committee scenarios' 'vote:' input key not matching committee_vote_cro/director/ceo is the BA's to fix; an out-of-enum completion putting the instance in ERROR is accepted as REQ-061 behaviour. Engine-level enforcement is now also tested for SwiftRoute (ops_decision) and Vortex Production Order Release (capacity_decision)."
+  - "An out-of-enum completion errors the WHOLE INSTANCE (REQ-061, unchanged): a harsh mode for API clients; UI enumerated selects avoid it; follow-up candidate 'reject with 422 and keep the task open' is NOT filed now (BA decision, letflow-2)."
+  - "The BA (letflow-2) fixes her committee scenarios to submit committee_vote_cro/director/ceo instead of 'vote:' after her PR #2306 merges."
 regression_test: test/letflow/scripts/shipped_definitions_variable_schemas_test.exs

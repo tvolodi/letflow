@@ -348,7 +348,7 @@ defmodule Letflow.Simulation.Req207VortexTest do
   # ordering claim needs real, timestamped task.create/task.complete evidence).
   # severity-classification/false-positive-check/severity-routing/
   # corrective-action-subprocess kept real. release-quarantine/supplier-warning/
-  # supplier-notification/close-deviation/default-to-major elided, folded into
+  # supplier-notification/close-deviation/default-to-critical elided, folded into
   # neighboring edges.
   @simple_supplier_deviation_graph %{
     "nodes" => [

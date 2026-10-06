@@ -32,10 +32,10 @@ graph:
       node_type: SUB_PROCESS
       attributes:
         definition_name: 8D Corrective Action
-    - id: default-to-major
+    - id: default-to-critical
       node_type: SERVICE_TASK
       attributes:
-        endpoint: POST /internal/deviations/{deviation_id}/default-severity
+        endpoint: POST /response-headers?severity=critical
         timeout_ms: 300000
     - id: supplier-warning
       node_type: SERVICE_TASK
@@ -66,10 +66,10 @@ graph:
     - id: e2
       source: severity-classification
       target: false-positive-check
-    # on_timeout: default-to-major (also serves as fallback since e2 has no condition)
+    # on_timeout: default-to-critical (also serves as fallback since e2 has no condition)
     - id: timeout-severity-classification
       source: severity-classification
-      target: default-to-major
+      target: default-to-critical
     - id: e3
       source: false-positive-check
       target: release-quarantine
@@ -83,7 +83,7 @@ graph:
       target: severity-routing
       is_default: true
     - id: e5
-      source: default-to-major
+      source: default-to-critical
       target: severity-routing
     - id: e6
       source: severity-routing

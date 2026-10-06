@@ -1,0 +1,69 @@
+{
+  "handoff_id": "5d1c7e0a-93b4-4f2e-8a61-0c4b7d2e9f13",
+  "run_id": "WF03-Q976-20261006",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-Q976-20261006/step-02-code-designer.json",
+  "created_at": "2026-10-06T05:32:00Z",
+  "started_at": "2026-10-06T05:32:55Z",
+  "completed_at": "2026-10-06T05:39:14Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0995": "queue Q-976 / GH #2257: one structured log line on every authorization denial (method, route PATTERN, policy key, platform-scope boolean, keyed HMAC of caller id and tenant id); INV-4; hash key a config secret; sampling; SECURITY-REVIEWER gate."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-Q976-20261006/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0995.yaml",
+      "lib/letflow/plugs/authorize.ex",
+      "lib/letflow/plugs/http_metrics.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/obs/logger.ex",
+      "config/runtime.exs",
+      "lib/letflow/secrets.ex"
+    ],
+    "owned_modules": [
+      "Letflow.Plugs.Authorize",
+      "Letflow.Api.AuthzDenyLog"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0995-deny-attribution-Q976"
+  },
+  "task": {
+    "description": "WF-03 Step 2 fix design for ISS-0995/Q-976. Design doc only at lib/letflow/design/iss0995-authz-deny-attribution-log.md.",
+    "acceptance_criteria": [
+      "One log line on every :Deny403 with method, route pattern, policy key, platform-scope boolean, keyed hash of caller and tenant",
+      "INV-4 audit and log-injection analysis; no new env var, boot failure, or supervision change",
+      "Sampling design; response bytes unchanged (INV-5); INV-10 evidence listed",
+      "Concrete test plan with fail-first and mutants; no implementation code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss0995-authz-deny-attribution-log.md. New Letflow.Api.AuthzDenyLog.log_denial/3 called once from the :Deny403 branch of Authorize before Response.forbidden; key = HMAC(master, label<>1) sub-key, per-call; ids hashed HMAC-SHA256 domain-separated, truncated to 16 hex; method allow-list; route from plug_route with printable-regexp gate; atomics-pair sampler (4096 slots, 60 s, CAS, fail-open) in persistent_term; wrapper never raises and failure line carries no variable text. Two evidence-driven refinements: (R1) Plug.Router.match_path in a forwarded router contains /*glob per forward (verified by running a two-level router: /api/v1/*glob/instances/:id), so route_pattern strips /*glob and keeps trailing /*_path; (R2) sampler timestamps use system_time seconds (monotonic can be negative, colliding with the 0 sentinel) with backwards-clock treated as expired. Explicit marker mapping for platform_scope because required_permission falls through to the marker and permission_scope would call both markers platform. No new env var, boot failure, supervision change, migration, or telemetry. REWORK 1 (validator FAIL step-02b): added metadata/2 spec; rewrote test (h) with step-by-step suppressed= values (5 at 1060, 1 at 1120, absent at 1180, 49 after race); LOG_LEVEL; test (b) route /api/v1/definitions/; (i)(4) determinism stated; persistent_term race wording; capture_log audit as build step 12a. Not self-reviewed.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0995-authz-deny-attribution-log.md"
+    ],
+    "owned_modules": [
+      "Letflow.Plugs.Authorize",
+      "Letflow.Api.AuthzDenyLog"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/ISS-0995-deny-attribution-Q976",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR; on PASS route to TEST-DESIGNER (fail-first tests) then ELIXIR-DEV. SECURITY-REVIEWER applies (INV-4)."
+  }
+}

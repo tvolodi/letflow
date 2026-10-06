@@ -1,0 +1,72 @@
+{
+  "handoff_id": "q976-step03d-reviewer-0001",
+  "run_id": "WF03-Q976-20261006",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-Q976-20261006/step-03d-reviewer.json",
+  "created_at": "2026-10-06T05:42:33Z",
+  "started_at": "2026-10-06T05:42:33Z",
+  "completed_at": "2026-10-06T05:42:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0995": "queue Q-976 / GH #2257: one structured attribution log line per authorization denial (method, route pattern, policy key, platform-scope boolean, keyed hashes of caller and tenant id), INV-4 safe, sampled."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0995-authz-deny-attribution-log.md",
+      "handoffs/WF03-Q976-20261006/step-03-elixir-dev.json"
+    ],
+    "owned_modules": ["Letflow.Api.AuthzDenyLog", "Letflow.Plugs.Authorize"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0995-deny-attribution-Q976"
+  },
+  "task": {
+    "description": "WF-03 Step 3d idiom/scope gate: review commit 1d9f1428 (lib/ diff vs origin/main) against the validated iss0995 design.",
+    "acceptance_criteria": [
+      "No scope creep (only authz_deny_log.ex + one call + moduledoc in authorize.ex)",
+      "No process/supervision change; :atomics/:persistent_term used idiomatically",
+      "Decision records and INV-10/INV-5 decision logic untouched",
+      "Deviations from design listed and judged",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. lib/ diff is exactly lib/letflow/api/authz_deny_log.ex (new), lib/letflow/plugs/authorize.ex (alias, one log_denial call as first expression of the :Deny403 branch, moduledoc sentence replaced; 'Nothing is logged here' has zero hits in lib/ outside the design doc) and the design doc. No config/, application.ex, Authorization, Response, HttpMetrics or Obs.Logger change; INV-5 (403 bytes) and INV-10 (decision logic) code untouched. OTP idiom: no process, no ETS, no supervision change (InstanceSupervisor untouched); the sampler is a lazily created ownerless :atomics pair (2 x 4096 signed) in :persistent_term, the first put of a key does not trigger global GC, only the rare first-use race replaces it. CAS logic is correct: exactly one winner per observed last value, losers add to the suppressed counter, winner exchange(...,0) carries the count; now<last (clock backwards) and window 0 handled; sampler failure is fail-open (emit). Logger.warning/2 with message plus metadata generated from the same fields map (no drift). Rescue scope: log_denial/3 rescue+catch is intentional and matches design section 8 (the whole point is never turning a 403 into a 500); it does not log message/reason/stacktrace/args, only constant text, class and exception module, once per boot per {class,module}, and note_failure itself is wrapped. Inner rescues (route_pattern, platform_scope?, sample) degrade to constants/fail-closed/fail-open exactly as designed and swallow only internal derivation, not Authorization decisions. platform_scope? fails closed (true) like permission_scope/1. Consistency with HttpMetrics: same Map.has_key?(conn.private, :plug_route) guard before Plug.Router.match_path/1; deliberate, documented differences (strips the forward /*glob, keeps /*_path catch-all) per design R1. No dead code found: every public helper is in the design contract (build_fields/3, format_message/2, metadata/2, hash_id/3 exposed for tests; reset/0 @doc false test-only). Docs and @specs are present and accurate on all public functions. Deviations from design, all acceptable: (1) tenant_id/1 uses Map.get on auth_context (works for map or struct; absence of auth_context key still raises into the outer rescue as designed); (2) the sampler is computed after hashing both ids (as design section 7 says, needed for the slot key); (3) reset/0 clears failure flags by scanning :persistent_term.get/0 (test-only, O(all terms), fine); (4) the test-only :authz_deny_log_clock hook is read from Application env in production code on every sampled call: a cost of one Application.get_env per denial, accepted by design section 7; (5) module attribute @fallback_noted_key etc. naming differs trivially. No unrecorded behavioural deviation. Verification by diff and design inspection only; mix compile already verified by ELIXIR-DEV; no tests run (none exist yet; owed by TEST-DESIGNER, design section 13).",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "String.replace(pattern, \"/*glob\", \"\") also strips a hypothetical future route segment that merely starts with '*glob' (e.g. '/*globby'); no such route exists today and the design says no Letflow route declares its own *glob. Optional hardening for a later touch, not blocking.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Informational only (design OQ-2): HttpMetrics route_template label still carries the forward /*glob segments; a follow-up could reuse AuthzDenyLog.route_pattern/1. Not part of this change. Also OQ-1 (Entities.check_unredacted_permission second evaluate_access caller) deliberately unlogged.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Tests (design section 13 a-j, fail-first, mutants M1-M12) not yet written; expected from TEST-DESIGNER. Concurrency CAS behaviour is only proven by the 50-task test in 13(h).",
+        "affected_requirement": null
+      }
+    ],
+    "type_safety_gaps": "none found; no issue filed. hash_id/3 guards kind in [:user,:tenant] and non-binary ids map to 'none' rather than being coerced.",
+    "git_evidence": {
+      "branch_name": "fix/ISS-0995-deny-attribution-Q976",
+      "commit_sha_list": ["1d9f1428"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to TEST-DESIGNER (design section 13)."
+  }
+}

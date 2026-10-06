@@ -1,0 +1,53 @@
+{
+  "handoff_id": "q976-step03-elixir-dev-0001",
+  "run_id": "WF03-Q976-20261006",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-Q976-20261006/step-03-elixir-dev.json",
+  "created_at": "2026-10-06T05:41:44Z",
+  "started_at": "2026-10-06T05:41:44Z",
+  "completed_at": "2026-10-06T05:41:44Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0995": "queue Q-976 / GH #2257: one structured attribution log line per authorization denial (method, route pattern, policy key, platform-scope boolean, keyed hashes of caller and tenant id), INV-4 safe, sampled."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": ["lib/letflow/design/iss0995-authz-deny-attribution-log.md"],
+    "owned_modules": ["Letflow.Api.AuthzDenyLog", "Letflow.Plugs.Authorize"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0995-deny-attribution-Q976"
+  },
+  "task": {
+    "description": "Implement the validated design: new Letflow.Api.AuthzDenyLog and one call plus moduledoc update in Letflow.Plugs.Authorize. No tests written (TEST-DESIGNER).",
+    "acceptance_criteria": [
+      "Implementation matches design sections 2-8 and 12a",
+      "mix compile --warnings-as-errors and mix format --check-formatted clean",
+      "No config/runtime.exs, env var or supervision change",
+      "Existing tests asserting empty logs around a denial audited (12a.3)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Created lib/letflow/api/authz_deny_log.ex (log_denial/3, build_fields/3, format_message/2, metadata/2, hash_id/3, subkey/0, route_pattern/1, method_token/1, policy_token/1, platform_scope?/1, reset/0; HKDF-style subkey from :secrets_master_key, 16-hex HMAC pseudonyms, 4096-slot atomics sampler in persistent_term with CAS and fail-open, never-raise wrapper with constant once-per-boot failure line). authorize.ex: alias, one AuthzDenyLog.log_denial(conn, ctx, policy_key) call as first expression of the :Deny403 branch, 'Nothing is logged here' moduledoc sentence replaced. Verification: mix compile --warnings-as-errors exit 0; mix format --check-formatted exit 0; mix test test/letflow/plugs/authorize_test.exs test/letflow/api/authorization_test.exs: 127 passed (MIX_TEST_PARTITION=41, DB letflow_test41 dropped afterwards). grep 'Nothing is logged here' lib/ --include=*.ex: zero hits. Smoke via mix run --no-start: message/metadata render, non-conn arg returns :ok and logs only 'authz_deny_log_failed class=error exception=Elixir.UndefinedFunctionError'. 12a.3 audit: 56 files use capture_log; those near denials (auth_pipeline_configurable_verifier_test, definitions_write_test, identity_test, login_discovery_test, req442_tenants_mode_test, tenant_settings_test, notifier_no_leak_test, tenant_fixture_test) and empty-log assertions (login_discovery_test:193, host_api_test:568, req317 grep test) read; none asserts an empty or exact log across an authorization denial, so no test changed. Full suite not run (RAM).",
+    "artifacts_out": [
+      "lib/letflow/api/authz_deny_log.ex",
+      "lib/letflow/plugs/authorize.ex"
+    ],
+    "git_evidence": {
+      "branch_name": "fix/ISS-0995-deny-attribution-Q976",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "SECURITY-REVIEWER (INV-4/5/10) and REVIEWER, then TEST-DESIGNER writes test/letflow/api/authz_deny_log_test.exs per design section 13."
+  }
+}

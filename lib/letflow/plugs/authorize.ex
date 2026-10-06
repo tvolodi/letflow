@@ -61,8 +61,12 @@ defmodule Letflow.Plugs.Authorize do
   `auth_context.tenant_id` (`Letflow.PlatformTenant.platform_tenant?/1`; the flag
   stored by the pipeline is never read). A platform-scope permission is honoured
   only for a `PLATFORM_ADMIN` of the platform tenant; with no pin configured it is
-  denied to everyone (fail closed). Nothing is logged here: the denial response
-  carries no tenant id, role or token.
+  denied to everyone (fail closed). Every `:Deny403` emits one attribution log
+  line through `Letflow.Api.AuthzDenyLog` (ISS-0995): HTTP method, route
+  pattern, policy key, platform-scope boolean, and keyed hashes of the caller
+  and tenant ids, sampled for repeated denials. Nothing identifying (token,
+  email, raw ids, path values) reaches the line (INV-4), and the denial
+  response is identical: it still carries no tenant id, role or token.
 
   ## What reaches the handler on `:Allow`/`:AllowWithRowFilter` (design §6)
 
@@ -91,6 +95,7 @@ defmodule Letflow.Plugs.Authorize do
   import Plug.Conn
 
   alias Letflow.Api.Authorization
+  alias Letflow.Api.AuthzDenyLog
   alias Letflow.Api.Context
   alias Letflow.Api.Response
   alias Letflow.PlatformTenant
@@ -123,6 +128,7 @@ defmodule Letflow.Plugs.Authorize do
 
         case decision.kind do
           :Deny403 ->
+            AuthzDenyLog.log_denial(conn, ctx, policy_key)
             conn |> Response.forbidden("insufficient permissions") |> halt()
 
           _allow_or_allow_with_row_filter ->

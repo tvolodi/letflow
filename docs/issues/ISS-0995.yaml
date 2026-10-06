@@ -16,6 +16,16 @@ description: >
   sampling/rate on repeated denials) and a SECURITY-REVIEWER pass.
 affected_files:
   - lib/letflow/plugs/authorize.ex
-queue_ref: null  # not yet registered: letflow-2 (queue admin) registers it after PR A2 merges
-github_ref: null  # GH issue is filed together with the queue registration after PR A2 merges
-status: open
+queue_ref: Q-976  # NOTE: the queue/GH title of this task reads ISS-0976 in some listings, but the local number is ISS-0995 (existing local file, deliberately not renamed)
+github_ref: GH-2257  # GH #2257; identify the work by queue id Q-976 + GH number, not by the ISS number
+status: resolved
+resolved_in_run: WF03-Q976-20261006
+resolved_at: "2026-10-06T06:48:00Z"
+resolution: >
+  Letflow.Api.AuthzDenyLog.log_denial/3 is called from the :Deny403 branch of Letflow.Plugs.Authorize and emits one
+  sampled (60 s window per policy/caller/tenant) structured warning with method, route pattern, policy key,
+  platform_scope, caller_platform_tenant and 16-hex HMAC-SHA256 pseudonyms of caller and tenant, keyed by a sub-key
+  derived from the existing secrets master key (no new env var, no boot failure). Design:
+  lib/letflow/design/iss0995-authz-deny-attribution-log.md. Regression tests: test/letflow/api/authz_deny_log_test.exs
+  (36 tests; spec test/specs/ISS-0995.md).
+

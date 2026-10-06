@@ -1,0 +1,64 @@
+{
+  "handoff_id": "7b2e9d41-5c08-4a63-9f17-3d6a0e8c2b54",
+  "run_id": "WF03-Q976-20261006",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q976-20261006/step-02b-code-design-validator.json",
+  "created_at": "2026-10-06T05:36:00Z",
+  "started_at": "2026-10-06T05:36:10Z",
+  "completed_at": "2026-10-06T05:39:44Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0995": "queue Q-976 / GH #2257: one structured log line on every authorization denial (method, route PATTERN, policy key, platform-scope boolean, keyed hash of caller id and tenant id); INV-4; hash key a config secret; sampling; SECURITY-REVIEWER gate."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0995-authz-deny-attribution-log.md",
+      "docs/issues/ISS-0995.yaml",
+      "handoffs/WF03-Q976-20261006/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-Q976-20261006/step-02-code-designer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0995-deny-attribution-Q976"
+  },
+  "task": {
+    "description": "WF-03 Step 2b hard gate on CODE-DESIGNER's design for ISS-0995/Q-976.",
+    "acceptance_criteria": [
+      "Every issue requirement maps to a design element",
+      "Factual claims verified against real code (forward glob, authorization totality, key source, atomics sampling, Obs.Logger/redaction)",
+      "No TBD, no implementation bodies",
+      "Signatures fully specified; test plan concrete, unambiguous, fail-first and mutants",
+      "Explicit PASS/FAIL with issues list"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ROUND 2: PASS. Round 1 was FAIL (2 BLOCKERs: metadata/2 had no spec; test (h) contradicted the sampler on the 1_120 expectation; plus 4 MINORs: LETFLOW_LOG_LEVEL name, trailing-slash route in test (b), (i)(4) determinism, persistent_term race/capture_log audit deferral). Re-validated commit f0548788. All fixed: metadata/2 now has @spec and a contract (fixed key order, authz_suppressed only when n>0, log_denial emits Logger.warning(format_message, metadata) from the same fields); LOG_LEVEL (runtime.exs:198) corrected; test (b) route is /api/v1/definitions/ matching definitions.ex:248; section 8 states conn.method/conn.private/auth_context reads have no local fallback so a non-conn reaches the single outer rescue; the persistent_term race now admits the loser's put is a replacement; capture_log audit is explicit build step 12a.3. Test (h) recomputed independently against section 7: 1000 K#1 emit, K#2-5 withheld (counter 4), other caller and other policy emit (3 lines); 1059 withheld (5); 1060 emit suppressed=5 then K#8 withheld (1); 1120 (60>=60) emit suppressed=1; 1180 emit no suppressed; clock 500 (now<last) emit; window 0 -> 5 lines; invalid windows (-1, x, 1.5) -> 60; 50-task race -> one line then suppressed=49 at 1060. All consistent with the algorithm (CAS single winner, exchange to 0). No new defects found; no TBD; no implementation bodies. Round-1 verification of forward-glob, authorization totality, key source, atomics and Obs.Logger/redaction claims stands. No mix commands run.",
+    "artifacts_out": [],
+    "owned_modules": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Test (i)(4) hedges the exception module ('whatever the implementation raises, asserted against the same regexp'); acceptable, but TEST-DESIGNER should assert the regexp class=error exception=Elixir\\.\\w+ rather than FunctionClauseError literally (a non-conn atom field access raises a different error).",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "fix/ISS-0995-deny-attribution-Q976",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: proceed to ELIXIR-DEV with the design (build steps 12a); SECURITY-REVIEWER gate applies (INV-4 primary)."
+  }
+}

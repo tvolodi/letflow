@@ -1,0 +1,89 @@
+{
+  "handoff_id": "7b2e9d41-5c08-4a63-9f17-3d6a0e8c2b54",
+  "run_id": "WF03-Q976-20261006",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q976-20261006/step-02b-code-design-validator.json",
+  "created_at": "2026-10-06T05:36:00Z",
+  "started_at": "2026-10-06T05:36:10Z",
+  "completed_at": "2026-10-06T05:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0995": "queue Q-976 / GH #2257: one structured log line on every authorization denial (method, route PATTERN, policy key, platform-scope boolean, keyed hash of caller id and tenant id); INV-4; hash key a config secret; sampling; SECURITY-REVIEWER gate."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0995-authz-deny-attribution-log.md",
+      "docs/issues/ISS-0995.yaml",
+      "handoffs/WF03-Q976-20261006/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-Q976-20261006/step-02-code-designer.json"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0995-deny-attribution-Q976"
+  },
+  "task": {
+    "description": "WF-03 Step 2b hard gate on CODE-DESIGNER's design for ISS-0995/Q-976.",
+    "acceptance_criteria": [
+      "Every issue requirement maps to a design element",
+      "Factual claims verified against real code (forward glob, authorization totality, key source, atomics sampling, Obs.Logger/redaction)",
+      "No TBD, no implementation bodies",
+      "Signatures fully specified; test plan concrete, unambiguous, fail-first and mutants",
+      "Explicit PASS/FAIL with issues list"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL (strict gate, two blocking defects, both small and local to the design doc). The substance is sound and the factual claims verified, but the doc has (1) an unspecified function the test plan depends on and (2) a self-contradictory sampling test expectation. VERIFIED TRUE: (1) deps/plug/lib/plug/router.ex:494 forward compiles `match path <> \"/*glob\"` and :523-529 append_match_path concatenates, so a composed template is /api/v1/*glob/tenants/*glob/:slug; Letflow.Router forwards /api/v1 to ApiPipeline which forwards /tenants etc to sub-routers using AuthorizedRouter (plug :match, Authorize, :dispatch, so plug_route is already set at Authorize time); extract_path maps `_` to /*_path (router.ex:663-ish); match_path does Map.fetch! so the has_key? guard is required; no Letflow route literal contains /*name (grep of routers, modules routers, router.ex, plugs found none), so stripping /*glob is safe and the catch-all /*_path is kept. (2) required_permission/1 ends in an identity fallback and :Unknown -> :MetricsRead (authorization.ex:1208); permission_scope/1 is total (:502-512, any other term -> :platform), so both markers would fall through to :platform, confirming the explicit :UnmatchedRoute=false / :UnmatchedPlatformPath=true / :Unknown=false clauses; evaluate_access/2 (:1055-1099) confirms the :Deny403 sites (Unknown, both markers, permission-scope). (3) config/runtime.exs:30-72 reads LETFLOW_SECRETS_MASTER_KEY in every env, hex-decodes to exactly 32 raw bytes, rejects absent/malformed/all-zero/all-0xFF (:63 already fixed), sets config :letflow, :secrets_master_key; Letflow.Secrets reads it with Application.fetch_env!(secrets.ex:447); config/test.exs:18 injects it; so no new env var or boot failure. Sub-key HMAC(master, label<>0x01) is exactly HKDF-Expand T(1), L=32. (4) :atomics.compare_exchange returns :ok or the current value (ran a small elixir -e check: {:ok,5,5}); CAS-guarded single-winner per distinct `last`, exchange(suppressed,0) after win carries late increments to the next line; system_time(:second) positive so 0 sentinel is safe; backwards clock handled. (5) Letflow.Obs.Logger reserved fields are timestamp/level/trace_id/component/message only; Redaction exact keys and suffixes (_token _secret _password _credential) do not match any authz_* name; the primary redaction filter (application.ex:19) only redacts metadata keys; Authorize unit tests have no :plug_route. (6) Referenced fixture helpers exist (platform_tenant_fixture.ex: pin!, unpin!, three_tenants!, mint_token!, api_conn, dispatch_api), logger_collector.ex exists, all INV-10 evidence test files exist, test env log level is debug so capture_log works. No TBD and no implementation bodies; only type shapes, formats and prose algorithms. BLOCKING DEFECTS: see issues 1 and 2. Not run: no mix commands (design only, tests do not exist yet).",
+    "artifacts_out": [],
+    "owned_modules": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "Section 6 and test (a) rely on a `metadata/2` builder (\"a `metadata/2` builder\", \"call format_message/2 + a metadata builder directly\") that has no @spec and no arguments/return shape in the section 2 public surface, so the signature set is not fully specified and test (a)'s message-vs-metadata equivalence assertion cannot be written unambiguously. Fix: add `@spec metadata(fields(), non_neg_integer()) :: keyword()` (state the arity/args, that `authz_suppressed` is present only when n > 0, key order) to section 2, or drop the builder from section 6 and test (a).",
+        "affected_requirement": null
+      },
+      {
+        "severity": "BLOCKER",
+        "description": "Test (h) is self-contradictory. It says at clock 1_060 the next denial emits `suppressed=4`, then 'the one after that (same second) emits nothing' (a suppressed denial, counter becomes 1), then 'Advance to 1_120 with no denials in between, next denial -> suppressed absent (counter was reset by the winner; 0)'. By the design's own algorithm (section 7 step 4) the same-second denial incremented the counter, so the 1_120 line must carry `suppressed=1`, not absent. A test written to the stated expectation would fail against a correct implementation (or push ELIXIR-DEV to break the algorithm). Fix: expect `suppressed=1` at 1_120, or reorder so a window with truly zero suppressed events is exercised separately.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Section 6 names the log-level env var `LETFLOW_LOG_LEVEL`; the real variable in config/runtime.exs:198 is `LOG_LEVEL`. Doc-only, correct it.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Test (b) expects route `/api/v1/definitions` for POST /api/v1/definitions, but that route is declared `authz_post \"/\"` (definitions.ex:248) so the normalised pattern is `/api/v1/definitions/` (trailing slash survives the /*glob strip). The text defers to 'exact value taken from the route table', but give the correct literal to avoid a wrong test. Same applies to any other `\"/\"` route.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Test (i)(4) (log_denial(:not_a_conn, ...) must yield only the authz_deny_log_failed line) is only deterministic if `conn.method` / the tenant read are NOT covered by a per-field fallback; section 8 lists local fallbacks only for route_pattern, platform_scope? and hash_id, and says nothing for method_token or the auth_context read. State explicitly that method/tenant reads have no local fallback (so a non-conn reaches the outer handler), or the test may see a degraded authz_deny line instead.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Lazy persistent_term creation: when two requests race on first use, the loser's put is a REPLACEMENT and does trigger the global GC scan the section 7 text says is avoided. Rare, one time, harmless; reword the claim. Also section 11 leaves the audit of existing capture_log tests to ELIXIR-DEV ('not exhaustively audited'); acceptable as an instruction but it is an explicit deferral, so make it a numbered build step.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "fix/ISS-0995-deny-attribution-Q976",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: route back to CODE-DESIGNER to fix the two BLOCKERs (metadata/2 spec; test (h) 1_120 expectation) and the MINORs, then re-run CODE-DESIGN-VALIDATOR. No re-design of the approach is needed; all decisions, R1 and R2 verified."
+  }
+}

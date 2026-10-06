@@ -108,8 +108,9 @@ defmodule Letflow.Test.SmtpSink do
       for {id, %{open?: true, handler: handler}} when is_pid(handler) <- Agent.get(store, & &1),
           do: {id, handler, Process.monitor(handler)}
 
-    # A connection accepted but whose handler pid is not yet recorded cannot exist once a
-    # delivery has returned (the client has had the greeting from the handler).
+    # Every record is inserted together with its handler pid (see `accept_loop/5`), so an
+    # `open?: true` record always has a pid handler here. A connection the acceptor has
+    # accepted but not yet recorded at all is not visible to `open_connections/1` either.
     Enum.each(pending, fn {_id, handler, ref} ->
       remaining = max(deadline - System.monotonic_time(:millisecond), 0)
 
@@ -176,8 +177,6 @@ defmodule Letflow.Test.SmtpSink do
   defp accept_loop(lsock, script, tls, store, id) do
     case :gen_tcp.accept(lsock) do
       {:ok, sock} ->
-        Agent.update(store, &Map.put(&1, id, new_conn()))
-
         handler =
           spawn(fn ->
             receive do
@@ -185,7 +184,11 @@ defmodule Letflow.Test.SmtpSink do
             end
           end)
 
-        update(store, id, &%{&1 | handler: handler})
+        # Atomic registration (ISS-1019): the record is inserted already carrying the
+        # handler pid, in ONE Agent call, so no reader can ever observe an open record
+        # whose handler is `nil`. The handler is parked on `:go` until then, so its
+        # `after` write (`open?: false`) always finds the record.
+        Agent.update(store, &Map.put(&1, id, %{new_conn() | handler: handler}))
         :gen_tcp.controlling_process(sock, handler)
         send(handler, :go)
         accept_loop(lsock, script, tls, store, id + 1)

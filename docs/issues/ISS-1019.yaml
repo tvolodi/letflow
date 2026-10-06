@@ -1,0 +1,38 @@
+id: ISS-1019
+title: "SmtpSink: handler pid is registered after the connection record is created (await_closed/2 precondition race; third ordering race in the sink)"
+discovered_by: ORCH (PR #2268 CI)
+discovered_in_run: WF03-ISS1019-SMTPSINK-20261006
+discovered_at: "2026-10-06T06:00:00Z"
+severity: MINOR
+failure_class: defect
+occurrence: 3
+owner: ELIXIR-DEV (test support only; no lib/ change)
+description: >
+  test/support/smtp_sink.ex created each connection record with handler: nil and stored the handler
+  pid in a second Agent call. SmtpSink.open_connections/1 counts records with open?: true, so under
+  load it could be 1 while the handler pid was not yet recorded; SmtpSink.await_closed/2 monitors
+  only pid handlers, found nothing to wait for and returned :ok instead of waiting/raising.
+  Failure: PR #2268 CI run 37421837572, partition 4,
+  test/letflow/login_discovery/notifier/smtp_sink_await_closed_test.exs:41
+  "await_closed/2 raises a clear error when a connection never closes..." (assert_raise, nothing
+  raised). Third ordering race in the same sink (earlier: ISS-0996, smtp_test.exs:165 and
+  smtp_encoder_test.exs:163), so a defect, not a flake.
+
+  Fix (root, sink only): accept_loop spawns the handler first (parked on :go) and inserts the record
+  already carrying the handler pid in ONE Agent.update, then hands over the socket and sends :go.
+  No reader can observe an open record with handler: nil, and the handler's closing write always
+  finds its record. The test-side wait was deliberately not applied.
+
+  Regression: test/letflow/login_discovery/notifier/smtp_sink_registration_test.exs (a watcher
+  spins on SmtpSink.transcripts/1 while 300 connections open under scheduler pressure; no sleeps).
+  Fail-first on the old sink: 124, 125 and 285 reads saw an open record with handler: nil (3 of 3
+  runs failed); after the fix 5 of 5 runs pass, 0 violations.
+affected_files:
+  - test/support/smtp_sink.ex
+  - test/letflow/login_discovery/notifier/smtp_sink_registration_test.exs
+# Renumbered: the queue's issue_ref for Q-1001 came back ISS-1001, which clashes with the meridian
+# BLOCKER ISS-1001 (docs/issues/ISS-1001.yaml, on the unmerged Q-983 branch); ISS-1019 was free (origin/main 2890276f,
+# every open PR and the parked Q-983 branch checked).
+queue_ref: Q-1001
+github_ref: GH-2288
+status: resolved

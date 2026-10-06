@@ -162,9 +162,9 @@ defmodule Letflow.Support.BpmDefaultRealmDisplacementConnectTest do
 
     refute Keyword.has_key?(opts, :pool)
     refute Keyword.has_key?(opts, :pool_size)
-    assert opts[:queue_target] >= 30_000
-    assert opts[:queue_interval] >= 30_000
-    assert opts[:connect_timeout] >= 30_000
-    assert opts[:timeout] >= 120_000
+    assert is_integer(opts[:queue_target]) and opts[:queue_target] >= 30_000
+    assert is_integer(opts[:queue_interval]) and opts[:queue_interval] >= 30_000
+    assert is_integer(opts[:connect_timeout]) and opts[:connect_timeout] >= 30_000
+    assert is_integer(opts[:timeout]) and opts[:timeout] >= 120_000
   end
 end

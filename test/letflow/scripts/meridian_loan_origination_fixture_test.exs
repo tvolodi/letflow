@@ -3,7 +3,7 @@ defmodule Letflow.Scripts.MeridianLoanOriginationFixtureTest do
   ISS-0928 / Q-928 T8 -- the QA Meridian "Loan Origination" fixture must give the
   `kyc-routing` EXCLUSIVE_GATEWAY an unconditioned default edge, so a KYC stub
   response with no `kyc_status` key does not stall (ISS-0998: it now goes to `kyc-manual-review`, not `assessment-join`) instead of
-  erroring (or, pre-fix, stalling) the instance. The version was bumped to 1.2 (ISS-0928; now 1.6: ISS-0998 changed the kyc default edge target to kyc-manual-review; ISS-1001 the l2-approval fallback to decline-application) so
+  erroring (or, pre-fix, stalling) the instance. The version was bumped to 1.2 (ISS-0928; now 1.7: ISS-0998 changed the kyc default edge target to kyc-manual-review; ISS-1001 the l2-approval fallback to decline-application; ISS-1020 the KYC outcome gate, see meridian_loan_kyc_fail_closed_fixture_test.exs) so
   `scripts/seed_meridian_definition.sh` re-seeds QA (409 means bump, never delete).
 
   Pure: no DB, no HTTP. See `test/specs/ISS-0928.md`.
@@ -30,8 +30,8 @@ defmodule Letflow.Scripts.MeridianLoanOriginationFixtureTest do
     graph
   end
 
-  test "fixture version is 1.6 (ISS-1001: forces QA re-seed of the l2-approval fallback; 1.5 was ISS-0998)" do
-    assert doc()["version"] == "1.6"
+  test "fixture version is 1.7 (ISS-1020: forces QA re-seed of the KYC fail-closed gate; 1.6 was ISS-1001, 1.5 ISS-0998)" do
+    assert doc()["version"] == "1.7"
   end
 
   # --- ISS-1001 / Q-983: l2-approval fails toward scrutiny, never to create-facility ---

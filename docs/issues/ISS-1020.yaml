@@ -1,0 +1,69 @@
+id: ISS-1020
+title: "[BLOCKER] Meridian Loan Origination: a KYC/AML manual review that times out (or ends without a clear outcome) proceeds toward approval; eligibility-gate never checks the KYC outcome"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline); REVIEWER finding (1) on the Q-983/Q-1000 draft; filed by ORCH
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T07:30:00Z"
+severity: BLOCKER
+failure_class: defect
+occurrence: 1
+owner: "letflow-3 (author of the fixtures, Q-928/Q-980); ELIXIR-DEV or CODE-DESIGNER for the definition change"
+process_audit_report: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml
+checklist_item: F1
+scope: meridian
+description: >
+  Severity BLOCKER (BA-confirmed; a screening control must fail closed; same class as ISS-1001).
+  In test/fixtures/qa/meridian_loan_origination_process_definition.json (v1.6) kyc-routing sends
+  kyc_status hit / inconclusive / unknown to kyc-manual-review; kyc-manual-review has e12 ->
+  assessment-join with no condition (the review's outcome was never recorded or checked) and
+  timeout-kyc-manual-review -> kyc-timeout -> e13 -> assessment-join; assessment-join -> e14 ->
+  eligibility-gate. eligibility-gate e15 sent 'credit_decision == pass && risk_rating !=
+  unacceptable' to authority-routing (the approval path) and never read any KYC value. So a
+  KYC/AML hit whose manual review timed out (or ended negative) still reached authority-routing
+  and, with human approvals, the facility.
+
+  Second acceptance criterion (REVIEWER finding (2), was unconfirmed): what an UNSET risk_rating
+  does against e15. Engine-level evidence (real Letflow.Engine.Transition gateway dispatch +
+  Letflow.Engine.Expr): an unset key was already FAIL-CLOSED (a missing variable is an eval
+  error, the whole condition evaluates false, the default edge declines); an explicit null or
+  empty-string risk_rating PASSED the v1.6 gate (null != 'unacceptable' is true).
+
+  Not covered (known, documented blind spot of the drift test): indirect default/timeout paths
+  such as default -> X -> create-facility are not detected by the drift test; this issue is
+  guarded by a dedicated fixture test (definition-level reachability + graph walk + real engine).
+acceptance_criteria:
+  - "After kyc-manual-review times out or completes without a clear outcome, the process cannot reach authority-routing, create-facility or any approval path; it ends in decline-application"
+  - "The KYC outcome is recorded explicitly (kyc_outcome = cleared | rejected | unresolved) and eligibility-gate checks it; a definition-level test fails if a path from kyc-manual-review/kyc-timeout reaches authority-routing without a clear KYC outcome"
+  - "An engine-level test proves what an unset risk_rating does against the eligibility gate; if a missing value can pass, the fixture is fixed so it cannot"
+  - "The fixture version is bumped; the QA definition is re-seeded when Meridian scenarios next run (noted, not part of this change)"
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/simulation/meridian/process_claim_intake.yaml
+  - scripts/seed_meridian_definition.sh
+  - test/letflow/scripts/meridian_loan_kyc_fail_closed_fixture_test.exs
+  - test/letflow/scripts/meridian_loan_origination_fixture_test.exs
+regression_test: test/letflow/scripts/meridian_loan_kyc_fail_closed_fixture_test.exs
+# Ref clash: the queue's issue_ref for Q-1002 came back ISS-1002, which is not the local number;
+# ISS-1020 is the number in the GitHub issue title (GH #2289) and was free on origin/main and in every
+# open PR when this fix was written.
+queue_ref: Q-1002
+github_ref: GH-2289
+status: resolved
+resolved_in_run: WF03-ISS1020-Q1002-20261006
+resolved_at: "2026-10-06T07:10:00Z"
+resolution: >
+  Fixture v1.7. kyc-manual-review is completed with output variable kyc_outcome = cleared |
+  rejected; the kyc-timeout service task now records kyc_outcome = unresolved (its QA stub is
+  httpbin /response-headers?kyc_outcome=unresolved, like kyc-aml-check's kyc_status stub).
+  eligibility-gate approves only via e15 (kyc_status == 'clear', the UAT fast path) or the new
+  e15-kyc-cleared (kyc_outcome == 'cleared'); a rejected / unresolved / missing outcome falls to
+  eligibility-gate-default -> decline-application. Two edges rather than one OR condition: a
+  missing variable makes the evaluator return false for the whole condition (no short-circuit),
+  which would have declined the fast path. Both approval edges also require a present, non-empty
+  risk_rating that is not 'unacceptable' (null and '' used to pass). Simulation copy
+  process_claim_intake.yaml gets the same gate edges. New test file: definition-level reachability
+  (removing every KYC-clear edge makes authority-routing/create-facility/disburse-loan unreachable
+  from kyc-manual-review and kyc-timeout), real-evaluator graph walk, and real
+  Letflow.Engine.Transition gateway dispatch; fail-first on the v1.6 fixture (9 of 16 fail).
+follow_ups:
+  - "QA needs a re-seed of Meridian Loan Origination v1.7 (scripts/seed_meridian_definition.sh creates and activates it; the platform deprecates v1.6)."
+  - "Operators completing kyc-manual-review must supply output variable kyc_outcome (cleared | rejected); there is no form definition for this task, so the contract lives in the definition description and this issue."

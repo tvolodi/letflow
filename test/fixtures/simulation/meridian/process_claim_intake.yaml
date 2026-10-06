@@ -178,10 +178,17 @@ graph:
     - id: e14
       source: assessment-join
       target: eligibility-gate
+    # ISS-1020: KYC/AML fails closed -- approval path only on a clear screening or a
+    # compliance review that recorded kyc_outcome 'cleared'; rejected / missing / timed-out
+    # review falls to eligibility-gate-default (decline). Missing or null risk_rating also declines.
     - id: e15
       source: eligibility-gate
       target: authority-routing
-      condition: "variables.credit_decision == 'pass' && variables.risk_rating != 'unacceptable'"
+      condition: "variables.credit_decision == 'pass' && variables.risk_rating != null && variables.risk_rating != '' && variables.risk_rating != 'unacceptable' && variables.kyc_status == 'clear'"
+    - id: e15-kyc-cleared
+      source: eligibility-gate
+      target: authority-routing
+      condition: "variables.credit_decision == 'pass' && variables.risk_rating != null && variables.risk_rating != '' && variables.risk_rating != 'unacceptable' && variables.kyc_outcome == 'cleared'"
     - id: e16
       source: eligibility-gate
       target: decline-application

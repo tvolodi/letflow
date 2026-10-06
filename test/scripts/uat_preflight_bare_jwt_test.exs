@@ -206,7 +206,8 @@ defmodule Letflow.Scripts.UatPreflightBareJwtTest do
   test "T7: a bare JWT is verified end to end against a stub API (OK)", %{tmp_dir: tmp} do
     base = start_stub()
     {out, _} = run_preflight(tmp, lines: [@jwt], base_url: base, crlf: false)
-    assert out =~ "credential validity   : #{@actor}@swiftroute=OK"
+    # ISS-0997: the admin-user login now also appears in this list, so match the actor entry only.
+    assert out =~ "#{@actor}@swiftroute=OK"
     refute out =~ "login failed"
     refute out =~ "NO_PASSWORD"
     refute out =~ "BAD_CRED"

@@ -290,6 +290,11 @@ else:  # qa-uat-env -- see header comment; no stable no-arg listing exists for t
         cred_listing = sorted({aid for sc in scenarios for aid in sc["actor_ids"]
                                 if not aid.startswith("actor-system-") and aid != "actor-any"})
         if not cred_listing: raise RuntimeError("no login actors declared by the scenario corpus")
+        # ISS-0997: actor-platform-admin has no per-actor account under this protocol; the
+        # PLATFORM_ADMIN account is the literal "admin-user" (`token admin-user` works), which
+        # the admin-token lookup and the actor-platform-admin mapping below both search for.
+        # Added only AFTER the empty check so "no login actors declared" semantics are kept.
+        cred_listing = sorted(set(cred_listing) | {"admin-user"})
     except Exception as e:
         cred_err = str(e)
 
@@ -307,6 +312,9 @@ def parse_token_line(line):
         return v or None
     if len(s) >= 40 and _JWT_RE.fullmatch(s): return s
     return None
+
+# defined before first use: the admin-token login (ISS-0997) calls try_login -> auth()
+def auth(tok): return {"Authorization": "Bearer " + tok, "Accept": "application/json"}
 
 def fetch_credential(user):
     """Returns (kind, value) -- kind is "password" (qa-login protocol: a plaintext
@@ -413,8 +421,6 @@ admin_tok = None
 if admin_user:
     s_, realm_ = try_login("actor-platform-admin", admin_user, ["bpm-default"])
     if s_ == "OK": admin_tok = tokens[("actor-platform-admin", realm_)]
-
-def auth(tok): return {"Authorization": "Bearer " + tok, "Accept": "application/json"}
 
 # deployed SHA
 sha_state = ("UNKNOWN", "no version endpoint exposes a build SHA (tried /health, /api/v1/version)", "ai-dala-infra (expose build SHA)")
@@ -602,7 +608,7 @@ for s in scenarios:
                     m = re.match(r"actor-([a-z0-9]+)-([a-z0-9]+)$", aid)
                     if not m: unknown.append(aid); continue
                     nm = m.group(2)
-                    users = [u for u in cred_listing if u == nm or u.startswith(nm + "-")]
+                    users = [u for u in cred_listing if u != "admin-user" and (u == nm or u.startswith(nm + "-"))]
             if not users: missing.append(aid); continue
             state, realm_used = try_login(aid, users[0], realms_for(aid, t))
             if state != "OK": bad.append("%s(%s)" % (aid, state))

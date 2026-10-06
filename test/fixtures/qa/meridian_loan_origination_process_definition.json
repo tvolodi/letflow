@@ -1,7 +1,7 @@
 {
   "name": "Loan Origination",
-  "version": "1.6",
-  "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking.",
+  "version": "1.7",
+  "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking. KYC/AML fails closed (v1.7): the eligibility gate lets an application on to approval only when the screening answered kyc_status 'clear' or the compliance officer's manual review recorded kyc_outcome 'cleared' (the kyc-manual-review task is completed with output variable kyc_outcome = cleared | rejected); a rejected, missing or timed-out review (kyc-timeout records kyc_outcome 'unresolved') declines the application.",
   "graph": {
     "nodes": [
       {
@@ -64,7 +64,7 @@
         "id": "kyc-timeout",
         "node_type": "SERVICE_TASK",
         "attributes": {
-          "endpoint": "https://httpbin.org/anything/internal/applications/{{variables.application_id}}/flag",
+          "endpoint": "https://httpbin.org/response-headers?kyc_outcome=unresolved",
           "method": "POST",
           "timeout_ms": 300000
         }
@@ -213,7 +213,8 @@
       { "id": "timeout-kyc-manual-review",   "source": "kyc-manual-review",      "target": "kyc-timeout" },
       { "id": "e13",                         "source": "kyc-timeout",            "target": "assessment-join" },
       { "id": "e14",                         "source": "assessment-join",        "target": "eligibility-gate" },
-      { "id": "e15",                         "source": "eligibility-gate",       "target": "authority-routing",    "condition": "variables.credit_decision == 'pass' && variables.risk_rating != 'unacceptable'" },
+      { "id": "e15",                         "source": "eligibility-gate",       "target": "authority-routing",    "condition": "variables.credit_decision == 'pass' && variables.risk_rating != null && variables.risk_rating != '' && variables.risk_rating != 'unacceptable' && variables.kyc_status == 'clear'" },
+      { "id": "e15-kyc-cleared",            "source": "eligibility-gate",       "target": "authority-routing",    "condition": "variables.credit_decision == 'pass' && variables.risk_rating != null && variables.risk_rating != '' && variables.risk_rating != 'unacceptable' && variables.kyc_outcome == 'cleared'" },
       { "id": "e16",                         "source": "eligibility-gate",       "target": "decline-application",  "condition": "variables.credit_decision == 'fail' || variables.risk_rating == 'unacceptable'" },
       { "id": "eligibility-gate-default", "source": "eligibility-gate", "target": "decline-application", "is_default": true },
       { "id": "e17",                         "source": "authority-routing",      "target": "l1-approval",          "condition": "variables.requested_amount_eur <= 500000" },

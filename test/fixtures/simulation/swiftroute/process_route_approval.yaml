@@ -8,6 +8,10 @@ description: >
   Dispatcher raises the request; Operations Manager reviews; if value
   exceeds 500 the CEO must co-sign. Exercises: sequential chain + CEL
   conditional branch.
+  Escalation follows D-ESC: timer -> higher role -> fail closed (ISS-1007 / Q-989):
+  ops-review (PT2H) -> ceo-approval (PT4H) -> stalled: auto-reject, never release-shipment.
+  ceo-approval is the top of the chain (E4): its escalation_role repeats its own role
+  (nominal CHK-21 co-required attribute only) and its timeout edge fails closed.
 graph:
   nodes:
     - id: start
@@ -24,6 +28,9 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-ceo
+        description: "top of chain: escalation_role is nominal; stalled = fail closed"
+        escalation_timer_duration: "PT4H"
+        escalation_role: role-ceo
     - id: release-shipment
       node_type: SERVICE_TASK
       attributes:

@@ -34,12 +34,34 @@
 # (in_degree 2, out_degree 1, no condition needed on its own single outgoing
 # edge) inserted between the injury-check branches and `parallel-fork`, so
 # `parallel-fork` itself is now a pure split (in_degree 1, out_degree 3).
+#
+# ISS-1007 / Q-989 (2026-10-07; BA ruling D-ESC, GH #2281): ops-assessment and finance-estimate now
+# carry the escalation_timer_duration + escalation_role pair. The engine follows a timed-out
+# HUMAN_TASK's FIRST unconditioned edge, so the normal-completion edges e6 / e8 became
+# `condition: "true"` (otherwise they would be the "timeout" edge and a stalled task would skip
+# straight to parallel-join) and the `timeout-*` edges now lead to a new role-ceo escalation task
+# whose own timer fails closed to the existing *-auto-close notice service task. Because each
+# human task now arms its own timer, `POST /instances/:id/advance-timer` is ambiguous for this
+# definition without a `timer_id`; the simulation Runner resolves `timer_node_id` to it
+# (scenarios/shipment-ops-timeout-escalation.yaml). No QA fixture / seed for this definition exists
+# yet (ISS-1004 / Q-1004); this file is its only copy.
 name: Driver Incident Report
 version: "1.0"
 description: >
   Driver submits a field incident (accident, cargo damage, theft).
   Ops assessment and finance estimate run in parallel. Exercises:
   parallel fork/join, timer escalation.
+  Escalation follows D-ESC: timer -> higher role -> fail closed (ISS-1007 / Q-989):
+  ops-assessment (role-ops-manager, P1D) -> escalate-ops-assessment-to-ceo (role-ceo, P1D) ->
+  stalled: ops-auto-close (the notice: the incident closes unresolved for that branch, it is never
+  marked assessed); finance-estimate (role-accountant, P1D) -> escalate-finance-estimate-to-ceo
+  (role-ceo, P1D) -> stalled: finance-auto-close. Deviations (documented, no waivers): P1D rather
+  than the operational PT4H default because the incident scenario's own SLA for both tasks is 24
+  hours and the pre-existing ops-escalation-timer is P1D. The CEO levels are the top of the chain
+  (E4): their escalation_role repeats their own role (nominal CHK-21 co-required attribute only)
+  and their timeout edge goes straight to the fail-closed notice. The branch is joined by
+  parallel-join (AND), so the stalled branch rejoins the flow through its notice node instead of
+  ending the whole instance.
 graph:
   nodes:
     - id: start
@@ -59,6 +81,15 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-ops-manager
+        escalation_timer_duration: "P1D"
+        escalation_role: role-ceo
+    - id: escalate-ops-assessment-to-ceo
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-ceo
+        description: "top of chain: escalation_role is nominal; stalled = fail closed"
+        escalation_timer_duration: "P1D"
+        escalation_role: role-ceo
     - id: ops-escalation-timer
       node_type: TIMER
       attributes:
@@ -67,6 +98,15 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-accountant
+        escalation_timer_duration: "P1D"
+        escalation_role: role-ceo
+    - id: escalate-finance-estimate-to-ceo
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-ceo
+        description: "top of chain: escalation_role is nominal; stalled = fail closed"
+        escalation_timer_duration: "P1D"
+        escalation_role: role-ceo
     - id: ops-auto-close
       node_type: SERVICE_TASK
       attributes:
@@ -127,9 +167,18 @@ graph:
     - id: e6
       source: ops-assessment
       target: parallel-join
-    # on_timeout: ops-auto-close
+      condition: "true"
+    # on_timeout (D-ESC): escalate to the CEO (the node's only unconditioned edge)
     - id: timeout-ops-assessment
       source: ops-assessment
+      target: escalate-ops-assessment-to-ceo
+    - id: e6-escalated
+      source: escalate-ops-assessment-to-ceo
+      target: parallel-join
+      condition: "true"
+    # stalled escalation fails closed: the notice, then the join
+    - id: timeout-escalate-ops-assessment-to-ceo
+      source: escalate-ops-assessment-to-ceo
       target: ops-auto-close
     - id: e7
       source: ops-auto-close
@@ -137,9 +186,18 @@ graph:
     - id: e8
       source: finance-estimate
       target: parallel-join
-    # on_timeout: finance-auto-close
+      condition: "true"
+    # on_timeout (D-ESC): escalate to the CEO (the node's only unconditioned edge)
     - id: timeout-finance-estimate
       source: finance-estimate
+      target: escalate-finance-estimate-to-ceo
+    - id: e8-escalated
+      source: escalate-finance-estimate-to-ceo
+      target: parallel-join
+      condition: "true"
+    # stalled escalation fails closed: the notice, then the join
+    - id: timeout-escalate-finance-estimate-to-ceo
+      source: escalate-finance-estimate-to-ceo
       target: finance-auto-close
     - id: e9
       source: finance-auto-close

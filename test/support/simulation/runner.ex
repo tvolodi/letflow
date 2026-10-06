@@ -380,8 +380,9 @@ defmodule Letflow.Simulation.Runner do
   defp run_api_step(step, scenario, produces) do
     with {:ok, resolved_action} <- substitute_templates(step.action, produces),
          {:ok, resolved_params} <- substitute_templates(Map.get(step, :params, %{}), produces),
-         {:ok, actor} <- resolve_actor(step, scenario) do
-      dispatch_api_step(%{step | action: resolved_action}, resolved_params, actor, produces)
+         {:ok, actor} <- resolve_actor(step, scenario),
+         {:ok, final_params} <- resolve_timer_node(resolved_action, resolved_params, scenario) do
+      dispatch_api_step(%{step | action: resolved_action}, final_params, actor, produces)
     else
       {:error, reason} ->
         {%{
@@ -394,6 +395,28 @@ defmodule Letflow.Simulation.Runner do
          }, produces}
     end
   end
+
+  # ISS-1007 / Q-989: a definition whose human tasks each arm a D-ESC escalation timer has several
+  # pending timers at once, so `POST /instances/:id/advance-timer` needs a `timer_id` (the route
+  # answers 400 "specify timer_id" otherwise). A scenario step may instead name the node
+  # (`params: {timer_node_id: <node>}`, the same input name the narrative UAT scenarios use); the
+  # Runner turns it into the pending timer's id. Any other step is untouched.
+  defp resolve_timer_node(action, %{"timer_node_id" => node_id}, scenario)
+       when is_binary(node_id) do
+    with [_all, instance_id] <- Regex.run(~r{/instances/([^/]+)/advance-timer$}, action),
+         %Letflow.Scheduler.Timer{id: timer_id} <-
+           Letflow.Repo.get_by(
+             Letflow.Scheduler.Timer,
+             [instance_id: instance_id, node_id: node_id, status: "pending"],
+             prefix: tenant_prefix!(scenario)
+           ) do
+      {:ok, %{"timer_id" => timer_id}}
+    else
+      _ -> {:error, {:no_pending_timer_for_node, node_id}}
+    end
+  end
+
+  defp resolve_timer_node(_action, params, _scenario), do: {:ok, params}
 
   defp resolve_actor(%{actor: actor_key}, scenario) when is_binary(actor_key) do
     case Map.fetch(scenario.actors, actor_key) do

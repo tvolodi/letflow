@@ -122,7 +122,8 @@ is included and follows the same rule. This keeps the gate off the per-run path 
 1. List the scopes of this run: the scope of every scenario in the corpus under test (a directory under
    test/fixtures/uat/scenarios/ whose name does not start with `_`), `platform` included.
 2. For each scope, build its file list with the closed rule in `.claude/agents/process-auditor.md`
-   ("Audited inputs of a scope", groups S1-S5). The list is built by the rule, not by judgment.
+   ("Audited inputs of a scope", groups S1-S5). The list is built by the rule, not by judgment. REQ-454 and REQ-457 each edit the roster and so
+   each re-audits all five scopes; roster edits should be batched into as few merges as possible.
 3. Compute the digest of each file with the command (Git Bash, run from the repo root):
      sha256sum <path>
    The digest is the first field of the output: 64 lowercase hex characters, the SHA-256 of the file
@@ -163,7 +164,9 @@ is included and follows the same rule. This keeps the gate off the per-run path 
      blocked on every later run until an audited file changes (its digests then differ and step 4 no
      longer matches); ORCH never overrides a FAIL.
    - no artefact (step 7 failed twice): treat as `MISSING`; the scope is blocked as for `FAIL`.
-9. File every finding of a NEW artefact per docs/agents/protocols/ISSUE_QUEUE.md (one issue per finding
+   If the owner of a BLOCKER finding disputes it, the owner records the dispute with evidence in the filed issue; ORCH dispatches PROCESS-AUDITOR once more for that scope as a fresh agent that is not given the first report; the later artefact governs (step 4 already takes the latest generated_at). If the second audit repeats the finding, it stands; a further dispute goes to the user. ORCH itself still never overrides a verdict.
+9. File every BLOCKER and MAJOR finding of a NEW artefact per docs/agents/protocols/ISSUE_QUEUE.md
+   (MINOR findings are not filed; they stay listed in the artefact only, as in REQ-458) (one issue per finding
    id; one issue for a cross-scope pair reported by two scopes). A finding's `suggested_owner` tells
    where it goes (BA-<VERTICAL> or REQ-ANALYST for business decisions, ELIXIR-DEV through WF-03 for a
    definition defect, ORCH for roster or seed scripts, SECURITY-REVIEWER for an access concern). Do not

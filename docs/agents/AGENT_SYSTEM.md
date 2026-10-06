@@ -81,7 +81,7 @@ the full history of this deferral and its closure.
 | `UAT-RUNNER` | ✓ | uat-reports | ✓ (HTTP calls against a running instance) | ✗ |
 | `BA-<VERTICAL>` | ✓ | ✓ (scenario files, ba-signoff files, persona-data files) | ✗ | ✗ |
 | `PRODUCT-OWNER` | ✓ | ✓ (`po-signoff-` files) | ✗ | ✗ |
-| `PROCESS-AUDITOR` | ✓ | `test/uat-reports/process-audit-*` only (no merge) | ✗ (read-only search only) | ✗ |
+| `PROCESS-AUDITOR` | ✓ | handoffs, test/uat-reports/process-audit-* only | ✗ (read-only search only) | ✗ |
 
 **`handoffs` in the Writes column means the agent's own handoff file only** (updated
 2026-08-17, ISS-0021/GH#78 — this table previously left `handoffs/registry.json`

@@ -116,7 +116,7 @@ INPUT: trigger
 │           R-Co's own WF-05 sequencing precedent ("it never runs in parallel
 │           with a BO agent"; runs after all BA-equivalent sign-offs))
 │
-├─ A WF-05 run is being prepared (Step 0 done, Step 1 not yet)?  └─► Gate: WF-05 Step 0b -- per scope, ORCH computes the file digests and dispatches PROCESS-AUDITOR unless an audit artefact with matching digests exists (an unchanged scope is not re-audited); a FAIL verdict blocks UAT-RUNNER and the BA sign-off for that scope only, never ORCH-overridable; file every finding per docs/agents/protocols/ISSUE_QUEUE.md; PRODUCT-OWNER does not APPROVE a scope without a PASS or PASS_WITH_FINDINGS audit.
+├─ A WF-05 run is being prepared (Step 0 done, Step 1 not yet)?  └─► Gate: WF-05 Step 0b -- per scope, ORCH computes the file digests and dispatches PROCESS-AUDITOR unless an audit artefact with matching digests exists (an unchanged scope is not re-audited); a FAIL verdict blocks UAT-RUNNER and the BA sign-off for that scope only, never ORCH-overridable; file every BLOCKER and MAJOR finding per docs/agents/protocols/ISSUE_QUEUE.md; PRODUCT-OWNER does not APPROVE a scope without a PASS or PASS_WITH_FINDINGS audit.
 ├─ A BA sign-off or PRODUCT-OWNER issue has suggested_action route_to_security_review?  └─► Gate: WF-05 Step 4 (not APPROVED while any access_verdict is FAIL, or NOT_COVERED outside refusal_coverage_exempt); route: file per ISSUE_QUEUE.md as BLOCKER and dispatch SECURITY-REVIEWER with the entry text, never WF-03 directly.
 └─ Does not match any standard workflow?
       └─► Build an ad-hoc workflow (§6). Never skip a standard workflow that DOES

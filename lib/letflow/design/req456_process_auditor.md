@@ -56,8 +56,9 @@ a `docs/agents/ba-personas/platform.yaml`, `seed_bilimbaga_*.sh`, `seed_platform
   deferral staleness, `lint_handoffs`, async-sandbox, `check_issue_refs`, `check_uat_scenario_schema`,
   format, compile, boundaries, check.test. None parses `.claude/agents/*.md`, WF-05, ORCHESTRATOR.md,
   AGENT_SYSTEM.md, CLAUDE.md or `process-audit-*.yaml`. `check_issue_refs` is about `docs/issues/` ids:
-  the new text contains NO issue or queue id (no `ISS-`, `Q-`, `GH-` followed by digits) and no
-  requirement id; it says "the definition validator" instead of a requirement id.
+  the new text contains NO issue or queue id (no `ISS-`, `Q-`, `GH-` followed by digits). The shipped
+  WF-05 Step 0b names three requirement ids (REQ-454, REQ-457, REQ-458: step 2 roster note and step 9
+  MINOR wording); the original design text named none, and requirement ids are not checked by any gate.
 - `test/letflow/scripts/seed_swiftroute_persona_actors_test.exs` TC-0761-05 asserts
   `.claude/agents/uat-runner.md` contains `seed_swiftroute_persona_actors`. `uat-runner.md` is NOT edited
   here.
@@ -460,7 +461,8 @@ the neighbouring headings; keep the words `Step 0b`). Exact text:
 > 1. List the scopes of this run: the scope of every scenario in the corpus under test (a directory under
 >    test/fixtures/uat/scenarios/ whose name does not start with `_`), `platform` included.
 > 2. For each scope, build its file list with the closed rule in `.claude/agents/process-auditor.md`
->    ("Audited inputs of a scope", groups S1-S5). The list is built by the rule, not by judgment.
+>    ("Audited inputs of a scope", groups S1-S5). The list is built by the rule, not by judgment. REQ-454 and REQ-457 each edit the roster and so
+>    each re-audits all five scopes; roster edits should be batched into as few merges as possible.
 > 3. Compute the digest of each file with the command (Git Bash, run from the repo root):
 >      sha256sum <path>
 >    The digest is the first field of the output: 64 lowercase hex characters, the SHA-256 of the file
@@ -501,7 +503,9 @@ the neighbouring headings; keep the words `Step 0b`). Exact text:
 >      blocked on every later run until an audited file changes (its digests then differ and step 4 no
 >      longer matches); ORCH never overrides a FAIL.
 >    - no artefact (step 7 failed twice): treat as `MISSING`; the scope is blocked as for `FAIL`.
-> 9. File every finding of a NEW artefact per docs/agents/protocols/ISSUE_QUEUE.md (one issue per finding
+>    If the owner of a BLOCKER finding disputes it, the owner records the dispute with evidence in the filed issue; ORCH dispatches PROCESS-AUDITOR once more for that scope as a fresh agent that is not given the first report; the later artefact governs (step 4 already takes the latest generated_at). If the second audit repeats the finding, it stands; a further dispute goes to the user. ORCH itself still never overrides a verdict.
+> 9. File every BLOCKER and MAJOR finding of a NEW artefact per docs/agents/protocols/ISSUE_QUEUE.md
+>    (MINOR findings are not filed; they stay listed in the artefact only, as in REQ-458) (one issue per finding
 >    id; one issue for a cross-scope pair reported by two scopes). A finding's `suggested_owner` tells
 >    where it goes (BA-<VERTICAL> or REQ-ANALYST for business decisions, ELIXIR-DEV through WF-03 for a
 >    definition defect, ORCH for roster or seed scripts, SECURITY-REVIEWER for an access concern). Do not
@@ -670,7 +674,7 @@ Definition of done additions (decided here; the builder runs them and quotes the
 2. `grep -n "not APPROVED" .claude/agents/product-owner.md` shows the sentence "a scope without a PASS or
    PASS_WITH_FINDINGS audit is not APPROVED" (case as written).
 3. `grep -n "process-audit-" docs/agents/AGENT_SYSTEM.md` shows three hits (roster, capability, artifact rows)
-   and the capability row contains no `handoffs` and no other path.
+   and the capability row reads exactly `handoffs, test/uat-reports/process-audit-* only`.
 4. `grep -n "DIGEST-RULE\|not re-audited" docs/agents/workflows/WF-05_uat_run.md` shows the rule.
 5. `grep -rn "mix letflow" .claude/agents/process-auditor.md docs/agents/workflows/WF-05_uat_run.md` shows no
    hit introduced by this entry (no invented task).
@@ -721,10 +725,10 @@ Definition of done additions (decided here; the builder runs them and quotes the
   leaves `refusal_coverage_exempt`.
 - **OQ-3. The auditor's own handoff write vs the capability row (decision D14).** The requirement says the
   capability row grants no write outside `test/uat-reports/process-audit-*`; every role also completes its own
-  handoff file. Default built: the capability row says exactly `test/uat-reports/process-audit-* only (no
-  merge)` and the role file states that the auditor completes its own handoff (rule: it is the one write
-  besides the report). Alternative: add `, own handoff` to the capability row (the roster row already says
-  `handoffs/`).
+  handoff file. Default built (as shipped): the capability row says exactly `handoffs, test/uat-reports/process-audit-* only`
+  and the role file states that the auditor writes only its report and its own handoff. Alternative: the
+  earlier `test/uat-reports/process-audit-* only (no merge)` text, rejected because it contradicted the
+  handoff protocol.
 
 Settled by the requirement's own defaults, not open: model (no override), SECURITY-REVIEWER scope (D13).
 Settled by the BA decisions adopted unchanged: `Step 0b` naming, `audit_verdicts` field name, ORCH runs the

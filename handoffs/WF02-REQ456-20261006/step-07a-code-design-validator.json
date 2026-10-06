@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ456-20261006/step-07a-code-design-validator.json",
   "created_at": "2026-10-06T05:16:40Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-10-06T05:17:33Z",
+  "completed_at": "2026-10-06T05:17:33Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -36,6 +36,17 @@
       "mix letflow.check passes, real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "FAIL",
+    "summary": "Shipped text verified OK: b1 (actors.yaml+roles.md in S2 with REQ-454/457 note), b2 (exact sentence in role-file note 1, referenced from E2 and E3 BLOCKER cells; rule 6/Forbidden consistent; E1 MAJOR with PO gate note), b3 (cell exact; defensible via 'handoffs = own handoff only' note), dispute paragraph verbatim in WF-05 under step 8, step 4 latest generated_at, step 9 BLOCKER/MAJOR only, legacy_platform_admin exists in actors.yaml (line 133), REQ-454/457/458 exist. FAIL on design-doc contradictions left by the amendment: (1) section 9 DoD item 3 still says capability row contains no `handoffs`, contradicting amended cell and section 14.3; (2) section 12 OQ-3 default still says '(no merge)' and AC2 mapping row; (3) section 5.2 exact WF-05 text not updated (step 2 note, dispute paragraph, step 9 BLOCKER/MAJOR wording) so the 'exact text' differs from shipped WF-05; (4) section 1 still says new text contains no requirement id, but amended text names REQ-454/457/458. Route to CODE-DESIGNER: edit design only.",
+    "issues": [
+      "F1 design sec 9 item 3 contradicts cell",
+      "F2 sec 12 OQ-3 stale",
+      "F3 sec 5.2 not updated to shipped WF-05 text",
+      "F4 sec 1 no-requirement-id constraint stale"
+    ],
+    "next_action": "ORCH routes to CODE-DESIGNER to reconcile the design doc with shipped text; then re-validate"
+  },
   "rework_count": 0
 }

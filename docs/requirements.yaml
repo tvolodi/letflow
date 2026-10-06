@@ -33688,7 +33688,7 @@ requirements:
   - id: REQ-446
     title: "Named, scoped permissions for the 13 routes that are admin-only by :Unknown fall-through (promotions, definition rollback, cross-tenant promote)"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 963  # letflow-queue task id, GH#2234. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user). Queue depends_on: Q-962, Q-961.
     description: >

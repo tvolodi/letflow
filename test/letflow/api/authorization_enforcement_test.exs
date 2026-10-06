@@ -25,11 +25,13 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
   A route added to any router under `lib/letflow/routers/` with NO policy
   key at all (declared via the plain `get`/`post`/`put`/`patch`/`delete`
   macros instead of `authz_get`/`authz_post`/`authz_put`/`authz_patch`/
-  `authz_delete`) is not accumulated into `__authz_routes__/0` at all, so
-  this test cannot see it directly — but `Letflow.Plugs.Authorize` still
-  runs for it at request time and evaluates it as `:Unknown`
-  (fail-closed-EXCEPT-`PLATFORM_ADMIN`), covered instead by
-  `test/letflow/api/authorize_plug_test.exs`'s unmatched-route case (AC5).
+  `authz_delete`) no longer compiles (ISS-0993 G0, `authorized_router.ex`;
+  demonstrated in `platform_scope_inventory_test.exs`), and a route whose key
+  is missing at request time evaluates `:Unknown`, which is denied for EVERY
+  role (`authorization.ex`, rule 1; `test/letflow/plugs/authorize_test.exs`).
+  The complete walk over every mounted router's `__authz_routes__/0` is G2 in
+  `test/letflow/api/platform_scope_inventory_test.exs`; the hand list
+  `@routers` below is narrower and is deliberately not extended here.
   This file's job is narrower and stricter: catch a route that WAS given a
   policy key but whose key drifted from (or was never backed by) the
   matrix, and force it into one of the two states above rather than leaving
@@ -83,7 +85,7 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     # added to @allowlist.
     Letflow.Routers.Me,
     # REQ-382 -- Letflow.Routers.TenantSettings' single route declares
-    # :TenantsManage, backed by a real endpoint_policy_key/2 clause
+    # :TenantSettingsManage (tenant scope), backed by a real endpoint_policy_key/2 clause
     # (PATCH /tenant/settings), so it resolves through the normal path above
     # and is not (and may not be) added to @allowlist. Flagged during
     # SECURITY-REVIEWER's Step 2c review that the design doc's claim of

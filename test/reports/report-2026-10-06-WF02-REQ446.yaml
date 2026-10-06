@@ -1,0 +1,67 @@
+run_id: WF02-REQ446-20261006
+step: "WF-02 Step 5"
+agent: RELEASE-VALIDATOR
+branch: feat/REQ-446-named-permissions
+requirement: REQ-446 (Q-963 / GH #2234)
+verdict: VERIFIED_PENDING_CI_AND_SECURITY_VERDICT_RECORDING
+criteria:
+  ac1_all_routes_named_no_unknown_table_driven: VERIFIED   # platform_scope_authorization_test.exs:292-317 (13 pairs) + G2 route walk; in the 863-test run
+  ac2_platform_admin_same_status_no_assertion_weakened: VERIFIED   # git diff of test/ reviewed; comment/moduledoc edits, one loop refactored to a helper with the same predicate, no assertion removed
+  ac3_other_five_roles_403: VERIFIED   # promotion_scope_test.exs grid extended with CANDIDATE and AGENT_RUNNER (addition only)
+  ac4_design_states_ownership_proof_and_404_byte_identical: VERIFIED   # design s1 row 2b and s4 cite tenants.ex:450/451 -> tenant_target.ex:31-39; req446_cross_tenant_denial_test.exs passes
+  ac5_missing_policy_key_test_fails: VERIFIED   # platform_scope_inventory_test.exs: plain-macro route fails CompileError; fixture router with explicit :Unknown caught by G2 (a) predicate
+  ac6_scope_table_completeness: VERIFIED   # platform_scope_inventory_test.exs scope-completeness/G3 pass in the run
+  ac7_compile_format_boundaries_tests_security: PARTIAL
+  ac8_cross_tenant_denial_table: VERIFIED   # req446_cross_tenant_denial_test.exs, one table-driven test naming each re-keyed route
+  ac9_list_routes: VERIFIED   # GET /promotions own schema; platform-events own schema + id shaping (promotion_platform_events_shaping_test.exs)
+  ac10_scope_rule_per_permission_justified: VERIFIED   # design s4: file:line own-tenant proof per tenant-scope permission
+  full_suite_mix_test: NOT_VERIFIED   # forbidden here; to be done by CI
+  mix_letflow_check_test: NOT_RUN   # not requested (host loaded)
+  security_reviewer_verdict_recorded: NOT_VERIFIED   # not in this repo state; see notes
+real_output:
+  compile_warnings_as_errors_force: "MIX_ENV=test, --force: Compiling 349 files (.ex), Generated letflow app, exit 0"
+  format_check: "mix format --check-formatted: exit 0"
+  check_boundaries: "mix letflow.check_boundaries: OK -- 1049 edges checked, 0 violations"
+  check_issue_refs: "OK -- every cross-reference is prefixed and well-formed. (591 file(s) under docs/issues/)"
+  targeted_mix_test: >
+    MIX_TEST_PARTITION=3, --timeout 300000, files: req446_cross_tenant_denial_test, promotion_platform_events_shaping_test,
+    promotion_context_shaping_test, promotion_scope_test, req077_promotion_pipeline_test, test/letflow/api, test/letflow/plugs,
+    test/docs, no_smtp_secret_guard_test, login_directory/no_secret_in_repo_test:
+    "Finished in 399.6 seconds (9.0s async, 390.6s sync)  Result: 863 passed", exit 0;
+    grep for "default values for the optional arguments" in the output: 0 matches.
+diff_checks:
+  decision_records: "git diff docs/migration/decisions/: only 0046 changed, +14 lines, 0 deletions (appended 'Correction of the D3 scope table (REQ-446)' section); no other record touched"
+  existing_tests_not_weakened: >
+    Reviewed git diff test/: authorization_enforcement_test, authorization_test, platform_scope_authorization_test,
+    admission_pipeline_test, api_pipeline_integration_test are comment-only; promotion_scope_test adds two roles to the
+    deny grid; platform_scope_inventory_test replaces a for/refute loop with an equivalent offending_routes/1 predicate
+    plus assert offenders == [] and adds two tests. No assertion deleted or loosened.
+  requirements_yaml: "git status shows docs/requirements.yaml and docs/status/ unmodified"
+  lib_changes: "Only lib/letflow/routers/promotions.ex shaping (shape_tenant_ids/shape_plan, tenant_view recomputed from auth_context via PlatformTenant.scope_facts_for/1) plus moduledoc edits in promotions.ex, tenants.ex, definitions.ex"
+  citations_checked: "0046 note cites promotions.ex:859,865; event_store.ex:1111,1123; authorize.ex:103,132; tenants.ex:451; tenant_target.ex:31-39 -- all match the working tree"
+notes:
+  - "Minor: the design doc cites tenants.ex:450 for the authorize_target_tenant call; after this change's moduledoc edit the line is 451 (0046 note and roles.md use 451). Cosmetic."
+  - "The design records that the requirement's 'thirteen' is 12 formerly-:Unknown routes plus PATCH /tenant/settings; tests use 13 pairs."
+  - "SECURITY-REVIEWER verdict: PASS conditional on named exceptions -- accepted residuals (plan entries graph JSON, teardown error text) and tracked exception Q-981 / GH #2266 / ISS-0999 (source_definition_id, review_id, actor_id in event payloads). Reported by the caller; not independently recorded in a repo artifact I could verify, so NOT_VERIFIED here."
+  - "Not committed, no status flipped, no source edits made."
+gap:
+  full_suite_and_ci: "Full suite not run (instructed). Must be confirmed green in CI before merge."
+  security_verdict_recording: "ORCH/DOC-UPDATER to record the conditional SECURITY-REVIEWER PASS with the exceptions above."
+gates:
+  security_reviewer:
+    verdict: PASS_CONDITIONAL_ON_NAMED_EXCEPTIONS
+    recorded_by: DOC-UPDATER
+    recorded_at: "2026-10-06"
+    note: "Recorded from the verdict reported by the caller; RELEASE-VALIDATOR verdicts above are unaltered."
+    accepted_residuals:
+      - "tenant-authored graph JSON in serialised_plan.entries left unscanned (own-tenant data)"
+      - "teardown error free-text unshaped (own-schema)"
+    tracked_exception:
+      ref: "Q-981 / GH #2266 / ISS-0999"
+      scope: "source_definition_id, review_id, actor_id in platform-events payloads for non-operators; suffix-only key matching; allowlist per event type"
+      severity: MAJOR
+      depends_on: REQ-446
+  reviewer: PASS
+  test_design_validator: PASS
+  code_design_validator: "PASS (round 4)"
+  full_suite: "deferred to CI"

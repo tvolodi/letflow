@@ -799,3 +799,30 @@ history:
       REQ-VALIDATOR AC4 grep PASS, RELEASE-VALIDATOR PASS; SECURITY-REVIEWER
       n/a (no tenant-data path); TEST-DESIGNER n/a (no executable surface).
       Scoped letflow checks OK; the full-suite alias is left to CI.
+
+  - req: REQ-446
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-06T05:55:52Z"
+    note: >
+      Named, scoped permissions for the 13 routes that were admin-only by the
+      :Unknown fall-through (queue task 963, GH#2234, branch
+      feat/REQ-446-named-permissions, uncommitted at this entry): every
+      formerly-:Unknown promotion, definition-rollback and cross-tenant promote
+      route now carries a named policy key and a justified scope rule;
+      PLATFORM_ADMIN keeps the same status codes, the other five roles stay 403
+      on the platform-scope grid, the promote route proves source-tenant
+      ownership with a byte-identical 404, and the GET /promotions and
+      platform-events list routes are shaped to the caller's own schema. Design
+      lib/letflow/design/req446-named-scoped-permissions.md; decision 0046
+      amended (D3 scope-table correction). Gates: CODE-DESIGN-VALIDATOR PASS
+      (round 4), TEST-DESIGN-VALIDATOR PASS, REVIEWER PASS, SECURITY-REVIEWER
+      PASS conditional on named exceptions, RELEASE-VALIDATOR VERIFIED (report
+      test/reports/report-2026-10-06-WF02-REQ446.yaml; 863 scoped tests passed,
+      compile, format and boundaries clean). ACCEPTED residuals: tenant-authored
+      graph JSON in serialised_plan.entries left unscanned (own-tenant data) and
+      teardown error free-text unshaped (own-schema). TRACKED exception: Q-981 /
+      GH #2266 / ISS-0999 (source_definition_id, review_id and actor_id in
+      platform-events payloads for non-operators; suffix-only key matching;
+      allowlist per event type, MAJOR, depends on this requirement). Full suite
+      deferred to CI.

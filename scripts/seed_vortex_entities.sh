@@ -232,11 +232,11 @@ restrictions_payload=$(jq -n --arg anna "${ANNA_ID}" '{
   type_grants: []
 }')
 
-restrictions_response=$(curl -sf \
+restrictions_response=$(printf '%s' "${restrictions_payload}" | curl -sf \
   -X POST \
   -H "${AUTH_HEADER}" \
   -H "Content-Type: application/json" \
-  -d "${restrictions_payload}" \
+  --data-binary @- \
   "${API}/entities/restrictions/import") || {
   echo "ERROR: POST /api/v1/entities/restrictions/import failed." >&2
   echo "       Confirm QA_AUTH_TOKEN's user holds EntitiesRestrictionsManage." >&2
@@ -271,11 +271,11 @@ existing_keys_for() {
     fi
 
     local resp
-    resp=$(curl -sf \
+    resp=$(printf '%s' "${query_body}" | curl -sf \
       -X POST \
       -H "${AUTH_HEADER}" \
       -H "Content-Type: application/json" \
-      -d "${query_body}" \
+      --data-binary @- \
       "${API}/entities/query") || {
       echo "ERROR: POST /api/v1/entities/query failed while checking existing ${entity_type} records." >&2
       exit 1
@@ -334,11 +334,11 @@ import_records_if_missing() {
     chunk_payload=$(echo "${remaining_payload}" | jq --argjson start "${start}" --argjson size "${chunk_size}" \
       '.records |= .[$start:($start + $size)]')
 
-    curl -sf \
+    printf '%s' "${chunk_payload}" | curl -sf \
       -X POST \
       -H "${AUTH_HEADER}" \
       -H "Content-Type: application/json" \
-      -d "${chunk_payload}" \
+      --data-binary @- \
       "${API}/entities/records/${entity_type}/import" > /dev/null || {
       echo "ERROR: POST /api/v1/entities/records/${entity_type}/import failed (chunk $((chunk_index + 1))/${chunk_count})." >&2
       exit 1

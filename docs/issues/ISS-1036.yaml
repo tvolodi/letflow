@@ -1,0 +1,52 @@
+id: ISS-1036
+title: "Seed scripts pass the definition/entity payload to curl as a -d argv argument; the 29 KB Meridian Loan Origination payload exceeds the Windows git-bash argument limit"
+discovered_by: letflow-2 (UAT seeding on Windows git-bash)
+discovered_in_run: WF03-ISS1036-Q1018
+discovered_at: "2026-10-07T00:00:00Z"
+severity: MEDIUM
+failure_class: defect
+occurrence: 1
+owner: "ELIXIR-DEV (scripts lane); no lib/ change"
+scope: seeding
+description: >
+  scripts/seed_meridian_definition.sh posts the definition with `curl -d "${payload}"`. The 29 KB
+  Loan Origination payload exceeds the Windows git-bash argument-list limit, so the shell fails with
+  "Argument list too long" and no request is sent. The same pattern exists in
+  scripts/seed_swiftroute_definition.sh (-d "${PAYLOAD}"), scripts/seed_vortex_definition.sh
+  (-d "${payload}") and scripts/seed_vortex_entities.sh (-d "${restrictions_payload}",
+  -d "${query_body}", -d "${chunk_payload}"), so any of them fails the same way once its payload
+  grows.
+design_note: >
+  Send the body through stdin (`--data-binary @-` fed by printf) so no payload ever travels in argv;
+  headers, response handling, exit codes and idempotency are unchanged. A lint test over every
+  scripts/seed_*.sh fails if a curl call passes a payload variable via -d / --data / --data-raw /
+  --data-urlencode / --data-ascii, so the pattern cannot return.
+acceptance_criteria:
+  - "No scripts/seed_*.sh passes a payload variable to curl via -d/--data/--data-raw/--data-urlencode (lint test)"
+  - "The Meridian seed posts the full ~29 KB payload intact (stub-curl end-to-end test, no network)"
+  - "Request headers, response handling and exit codes of the seed scripts are unchanged"
+affected_files:
+  - scripts/seed_meridian_definition.sh
+  - scripts/seed_swiftroute_definition.sh
+  - scripts/seed_vortex_definition.sh
+  - scripts/seed_vortex_entities.sh
+# Ref clash: the queue's issue_ref for Q-1018 was not the local number this issue carries, so the
+# local number was assigned by ORCH: ISS-1036, as directed by the
+# task handoff (origin/main's highest local number was ISS-1031; 1032-1035 are not on origin/main). Uniqueness of ISS-1036 was checked
+# against origin/main and the remote-tracking branches fetched on 2026-10-07; this file's github_ref
+# and queue_ref are the authoritative cross-references.
+queue_ref: Q-1018
+github_ref: GH-2328
+status: resolved
+resolved_in_run: WF03-ISS1036-Q1018
+resolved_at: "2026-10-07T00:00:00Z"
+resolution: >
+  All six `-d "${var}"` payload sites in seed_meridian_definition.sh, seed_swiftroute_definition.sh,
+  seed_vortex_definition.sh and seed_vortex_entities.sh (restrictions import, entities query, record
+  chunk import) now pipe the body into curl on stdin: `printf '%s' "${X}" | curl ... --data-binary @-`.
+  Headers, response handling and exit codes are unchanged. New test
+  test/letflow/scripts/seed_scripts_no_argv_payload_test.exs lints every scripts/seed_*.sh for
+  payload variables passed via -d/--data/--data-raw/--data-urlencode/--data-ascii and runs the
+  definition seed scripts against a stub curl on PATH, asserting the bodies arrive intact (Meridian
+  body over 29 KB) and nothing large appears in curl argv. No lib/ change.
+regression_test: test/letflow/scripts/seed_scripts_no_argv_payload_test.exs

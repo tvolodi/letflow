@@ -107,11 +107,11 @@ fi
 echo "--- Creating definition v${FIXTURE_VERSION} (DRAFT) ---"
 PAYLOAD=$(rewrite_service_task_base "$(cat "${FIXTURE_PATH}")")
 
-CREATE_RESPONSE=$(curl -sf \
+CREATE_RESPONSE=$(printf '%s' "${PAYLOAD}" | curl -sf \
   -X POST \
   -H "${AUTH_HEADER}" \
   -H "Content-Type: application/json" \
-  -d "${PAYLOAD}" \
+  --data-binary @- \
   "${API}/definitions") || {
   echo "ERROR: POST /api/v1/definitions failed." >&2
   echo "       A 409 means 'Shipment Approval' v${FIXTURE_VERSION} already exists as DRAFT, DEPRECATED or ARCHIVED; bump the fixture \"version\" (do not delete)." >&2

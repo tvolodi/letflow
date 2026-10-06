@@ -55,7 +55,8 @@ defmodule Letflow.Scripts.SeedVariableSchemasPayloadTest do
         assert src =~
                  ~r/rewrite_service_task_base "\$\(cat "[^"]*(?:fixture_path|FIXTURE_PATH)[^"]*"\)"/
 
-        assert src =~ ~r/-d "\$\{(?:payload|PAYLOAD)\}"/
+        # ISS-1036: the body travels on curl's stdin (printf | curl --data-binary @-), not in argv.
+        assert src =~ ~r/printf '%s' "\$\{(?:payload|PAYLOAD)\}" \| curl/
 
         # ...and nothing is piped onto the payload after the helper (a `| jq '. + {...}'` would
         # otherwise alter variable_schemas undetected).

@@ -1,0 +1,65 @@
+id: ISS-1025
+title: "Meridian Regulatory Compliance Review: the critical-finding remediation step names no follow-up process, so every critical finding falls to 'unresolved'"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE3-20261006 (finding PA-MERIDIAN-005, checklist C1); filed by BA (letflow-2)
+discovered_in_run: WF05-BASELINE3-20261006
+discovered_at: "2026-10-06T12:00:00Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "letflow-3 (fixture lane); ELIXIR-DEV only if the engine behaviour below needs a change"
+process_audit_report: test/uat-reports/process-audit-meridian-WF05-BASELINE3-20261006.yaml
+checklist_item: C1
+audit_finding: PA-MERIDIAN-005
+scope: meridian
+description: >
+  Business consequence: when a BaFin compliance review has a critical finding, the process hands it
+  to a remediation step and then asks "was the problem resolved?". The step names no follow-up
+  process, so nobody ever remediates anything and nothing ever reports back whether it was resolved;
+  as designed every critical finding ends at the "unresolved" outcome and a remediation_unresolved
+  notice goes to the regulator, whatever the real situation.
+
+  Where: test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json (v1.5):
+  node remediation-subprocess is {"node_type": "SUB_PROCESS"} with NO attributes (no
+  definition_name). Edges: e6 severity-routing -> remediation-subprocess (highest_severity ==
+  'critical'), plus severity-routing-default -> remediation-subprocess; e8 remediation-subprocess ->
+  post-remediation-check; e9 (remediation_status == 'resolved') -> findings-sign-off; e10 and
+  post-remediation-check-default (remediation_status == 'unresolved' / default) ->
+  remediation-unresolved-escalation -> end-closed. Nothing in the graph ever sets
+  remediation_status = resolved, so e9 is unreachable in practice.
+
+  What already exists: the sibling fixture
+  test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json names its child with
+  attributes {"definition_name": "8D Corrective Action"} and the child process exists as its own
+  QA fixture and seed script (Vortex 8D, v1.0) - copy that pattern. There is NO Meridian remediation
+  child definition yet. Note also the default edge severity-routing-default sends non-critical
+  findings into the same remediation step (check whether that is intended; if not, route non-critical
+  findings straight to findings-sign-off).
+
+  Fix direction (weak-model recipe), pick ONE and say which in the PR:
+  (a) Create a Meridian child process "Compliance Remediation" (HUMAN_TASK for the risk owner to
+  record remediation_status = resolved | unresolved, with a deadline/fallback per ISS-1013's pattern),
+  add its fixture + seed script, set remediation-subprocess attributes.definition_name to it, and make
+  sure the child's output variable remediation_status flows back to the parent (see the vortex 8D
+  child's output mapping and Letflow.Engine.SubProcess.build_parent_merge_variables/2); or
+  (b) if no child process is wanted, replace remediation-subprocess with a HUMAN_TASK assigned to the
+  compliance officer / CEO role that records remediation_status, so a person decides instead of the
+  process defaulting to 'unresolved'.
+
+  Overlap check (Filing step 0, 2026-10-06): queue GET /tasks (1005 tasks): no task about the
+  Meridian remediation sub-process (ISS-0945 / Q-935 was the engine dropping SERVICE_TASK dispatch
+  after a sub-process - resolved, different defect; ISS-0915 / ISS-0926 are the 21-day timer and
+  body_template, resolved); gh issue list search "meridian remediation": none; open PRs touch no
+  meridian fixture; origin/main docs/issues and letflow-3 / letflow-4 trees have no matching issue.
+acceptance_criteria:
+  - "remediation-subprocess in the Meridian Regulatory Compliance Review fixture either names an existing child definition (attributes.definition_name) whose fixture and seed script are in the repo, or is replaced by a HUMAN_TASK with a named role; it is no longer an attribute-less SUB_PROCESS"
+  - "A definition-level fixture test fails on v1.5 and passes after the fix: every SUB_PROCESS node in the regulatory fixture has a non-empty definition_name that resolves to a shipped QA fixture (or no SUB_PROCESS remains)"
+  - "A real-engine / graph-walk test shows the resolved branch is reachable: a remediation outcome of 'resolved' reaches findings-sign-off through e9, and 'unresolved' (or no answer within the deadline) reaches remediation-unresolved-escalation"
+  - "The fixture version is bumped; the seed script seeds the child before the parent; the regulatory scenario still passes"
+  - "Process-audit re-run no longer reports PA-MERIDIAN-005 (checklist C1)"
+affected_files:
+  - test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+  - scripts/seed_meridian_definition.sh
+  - test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml
+queue_ref: Q-1007  # queue allocated issue_ref ISS-1007, which collides with an existing local file; local filename kept as ISS-1025 (next free on origin/main) and the GH issue retitled to match
+github_ref: GH-2300
+status: open

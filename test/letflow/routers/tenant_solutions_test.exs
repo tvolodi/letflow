@@ -55,7 +55,9 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       %{tenant_id: tenant_id, schema_name: prefix} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-ac4-role")
 
-      for role <- Authorization.roles(), role != :PLATFORM_ADMIN do
+      # REQ-447: TENANT_ADMIN holds :ModulesManage (tenant scope) and installs into its OWN tenant;
+      # its 201 is asserted in the next test.
+      for role <- Authorization.roles(), role not in [:PLATFORM_ADMIN, :TENANT_ADMIN] do
         conn =
           install_solution(tenant_id, [Atom.to_string(role)], %{"solution_id" => "fixture-bundle"})
 
@@ -76,6 +78,17 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       module_ids = Enum.map(body["installed_modules"], & &1["module_id"])
       assert "fixture" in module_ids
       assert "fixture_dependent" in module_ids
+    end
+  end
+
+  describe "REQ-447 -- TENANT_ADMIN of the caller's own tenant" do
+    test "201 for TENANT_ADMIN installing a solution into its own tenant" do
+      %{tenant_id: tenant_id, schema_name: prefix} =
+        TenantFixture.provisioned_tenant!(slug_prefix: "req447-solutions")
+
+      conn = install_solution(tenant_id, ["TENANT_ADMIN"], %{"solution_id" => "fixture-bundle"})
+      assert conn.status == 201
+      assert length(Installs.list_installed(prefix: prefix)) == 2
     end
   end
 

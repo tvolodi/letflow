@@ -119,6 +119,17 @@ defmodule Letflow.Api.PlatformScopeNotConferredTest do
       assert {:ok, _roles} =
                RoleRegistry.seed_default_platform_role_groups(prefix: ctx.a.schema_name)
 
+      # REQ-447 PR 1: seeding no longer binds PLATFORM_ADMIN in an ordinary tenant. A LEGACY
+      # tenant (one onboarded before REQ-447 and not yet migrated) still has that binding, and
+      # that is the state this test proves confers no platform scope, so bind it explicitly.
+      {:ok, %Group{id: legacy_group_id}} =
+        RoleRegistry.get_or_create_group_by_name("PLATFORM_ADMIN", prefix: ctx.a.schema_name)
+
+      assert {:ok, _legacy_binding} =
+               RoleRegistry.upsert_role("PLATFORM_ADMIN", :platform_role, legacy_group_id,
+                 prefix: ctx.a.schema_name
+               )
+
       claimed = %IdentityContext{
         external_user_id: Ecto.UUID.generate(),
         tenant_id: nil,

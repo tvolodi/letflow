@@ -123,12 +123,20 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
     end
   end
 
-  describe "role holders of the new permissions (interim catch-all, REQ-447 later)" do
-    test "only PLATFORM_ADMIN holds each new permission through the role matrix" do
+  describe "role holders of the new permissions (REQ-447: PLATFORM_ADMIN and TENANT_ADMIN)" do
+    test "only PLATFORM_ADMIN and TENANT_ADMIN hold each new (tenant-scope) permission through the role matrix" do
       for permission <- @new_permissions do
         assert Authorization.role_allows?(:PLATFORM_ADMIN, permission)
 
-        for role <- Authorization.roles() -- [:PLATFORM_ADMIN] do
+        # :PlatformServicesManage is platform scope (literal, not derived): TENANT_ADMIN is denied it.
+        holders =
+          if permission == :PlatformServicesManage,
+            do: [:PLATFORM_ADMIN],
+            else: [:PLATFORM_ADMIN, :TENANT_ADMIN]
+
+        assert Authorization.role_allows?(:TENANT_ADMIN, permission) == :TENANT_ADMIN in holders
+
+        for role <- Authorization.roles() -- holders do
           refute Authorization.role_allows?(role, permission),
                  "#{role} must not hold #{permission}"
         end
@@ -236,12 +244,13 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
       end
     end
 
-    test "tenant keys of the new permissions: PLATFORM_ADMIN allowed in and out of the platform tenant, others denied" do
+    test "tenant keys of the new permissions: PLATFORM_ADMIN and TENANT_ADMIN allowed in and out of the platform tenant, others denied" do
       for key <- [:TenantSettingsManage, :PromotionsRead, :PromotionsManage, :DefinitionsRollback],
           flag <- [true, false] do
         assert Authorization.evaluate_access(ctx([:PLATFORM_ADMIN], flag), key).kind == :Allow
+        assert Authorization.evaluate_access(ctx([:TENANT_ADMIN], flag), key).kind == :Allow
 
-        for role <- Authorization.roles() -- [:PLATFORM_ADMIN] do
+        for role <- Authorization.roles() -- [:PLATFORM_ADMIN, :TENANT_ADMIN] do
           assert Authorization.evaluate_access(ctx([role], flag), key).kind == :Deny403,
                  "#{role} on #{key}"
         end

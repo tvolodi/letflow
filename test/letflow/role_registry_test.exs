@@ -643,9 +643,16 @@ defmodule Letflow.Identity.RoleRegistryTest do
     # idempotent under re-invocation (design §2.4 -- required for both the normal
     # onboarding-creation path and TenantOnboarding.recover_provisioning/1 to be safe
     # to call more than once against the same tenant).
-    test "seeds all six platform-role literals as group+tenant_role bindings, in Authorization.roles/0's own order, and a second call converges on the same bindings (no duplicates)",
+    test "seeds the six non-platform-tenant role literals (all but PLATFORM_ADMIN) in roles/0 order; a second call converges (no duplicates)",
          ctx do
-      expected_names = Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+      # REQ-447: this fixture tenant is not the pinned platform tenant, so PLATFORM_ADMIN is
+      # not seeded; TENANT_ADMIN is. Six rows, seven roles minus the operator role.
+      expected_names =
+        Letflow.Api.Authorization.roles()
+        |> Enum.map(&Atom.to_string/1)
+        |> Enum.reject(&(&1 == "PLATFORM_ADMIN"))
+
+      assert "TENANT_ADMIN" in expected_names
 
       assert {:ok, roles} =
                RoleRegistry.seed_default_platform_role_groups(prefix: ctx.schema_name)

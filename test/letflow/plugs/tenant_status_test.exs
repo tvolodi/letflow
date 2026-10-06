@@ -361,4 +361,56 @@ defmodule Letflow.Plugs.TenantStatusTest do
       assert conn.status == 403
     end
   end
+
+  # ── REQ-447 AC6 -- TENANT_ADMIN has no deactivated-tenant exemption (design F7 / 3.7a) ──
+
+  describe "REQ-447 AC6 -- a TENANT_ADMIN caller whose home tenant is :inactive" do
+    test "every method is halted 403 with the fixed tenant_inactive body" do
+      tenant = insert_tenant!(:inactive)
+
+      for method <- [:get, :head, :post, :put, :patch, :delete] do
+        conn = call_plug(method, tenant.id, ["TENANT_ADMIN"])
+
+        assert conn.halted, "#{method} must halt"
+        assert conn.status == 403, "#{method}: #{inspect(conn.status)}"
+
+        if method != :head do
+          assert Jason.decode!(conn.resp_body) == %{
+                   "error" => "tenant_inactive",
+                   "detail" => "tenant is deactivated"
+                 }
+        end
+      end
+    end
+
+    test "TENANT_ADMIN together with other non-PLATFORM_ADMIN roles is still halted" do
+      tenant = insert_tenant!(:inactive)
+
+      conn = call_plug(:get, tenant.id, ["TENANT_ADMIN", "TASK_WORKER", "PROCESS_DESIGNER"])
+      assert conn.halted
+      assert conn.status == 403
+    end
+
+    test "the platform tenant's own TENANT_ADMIN is not exempt either (only the platform tenant's PLATFORM_ADMIN is)" do
+      tenant = insert_tenant!(:inactive)
+      PlatformTenantFixture.pin!(tenant.id)
+
+      tenant_admin = call_plug(:get, tenant.id, ["TENANT_ADMIN"])
+      assert tenant_admin.halted
+      assert tenant_admin.status == 403
+
+      # Control on the same pinned, inactive tenant: its PLATFORM_ADMIN is exempt.
+      operator = call_plug(:get, tenant.id, ["PLATFORM_ADMIN"])
+      refute operator.halted
+      assert operator.status == nil
+    end
+
+    test "the same caller on an :active tenant passes through unchanged" do
+      tenant = insert_tenant!(:active)
+
+      conn = call_plug(:get, tenant.id, ["TENANT_ADMIN"])
+      refute conn.halted
+      assert conn.status == nil
+    end
+  end
 end

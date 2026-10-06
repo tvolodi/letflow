@@ -19,8 +19,7 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
   rows are written is byte-identical and names nothing of B, and the control shows B's own admin
   does see B's row.
 
-  `@callers` has one line today (A's `PLATFORM_ADMIN`); REQ-447 adds a `TENANT_ADMIN` of A as one
-  more line. `async: false` (VM-global platform pin and query telemetry).
+  `@callers` has two lines (A's `PLATFORM_ADMIN` and, from REQ-447 PR 1, a `TENANT_ADMIN` of A). `async: false` (VM-global platform pin and query telemetry).
   """
 
   use Letflow.DataCase, async: false
@@ -32,7 +31,8 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
   alias Letflow.Support.PromotionScopeFixture, as: Scope
 
   # Roles of the caller that is an admin of tenant A. The pin stays on the platform tenant.
-  @callers [["PLATFORM_ADMIN"]]
+  # REQ-447 PR 1: the second line is a TENANT_ADMIN of A (the role the REQ-446 moduledoc reserved).
+  @callers [["PLATFORM_ADMIN"], ["TENANT_ADMIN"]]
 
   setup do
     tenants = Fixture.three_tenants!()

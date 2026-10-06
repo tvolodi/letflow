@@ -16,6 +16,6 @@ description: >
   sampling/rate on repeated denials) and a SECURITY-REVIEWER pass.
 affected_files:
   - lib/letflow/plugs/authorize.ex
-queue_ref: ""
-github_ref: ""
+queue_ref: null  # not yet registered: letflow-2 (queue admin) registers it after PR A2 merges
+github_ref: null  # GH issue is filed together with the queue registration after PR A2 merges
 status: open

@@ -568,7 +568,7 @@ Insert as a new line immediately BEFORE the line that begins `├─ A BA sign-o
 suggested_action route_to_security_review?` (that line was added by the access-rules requirement), i.e.
 after the last `│` continuation line of the WF-05 branch. Exact characters of the single physical line:
 
-> ├─ A WF-05 run is being prepared (Step 0 done, Step 1 not yet)?  └─► Gate: WF-05 Step 0b -- per scope, ORCH computes the file digests and dispatches PROCESS-AUDITOR unless an audit artefact with matching digests exists (an unchanged scope is not re-audited); a FAIL verdict blocks UAT-RUNNER and the BA sign-off for that scope only, never ORCH-overridable; file every finding per docs/agents/protocols/ISSUE_QUEUE.md; PRODUCT-OWNER does not APPROVE a scope without a PASS or PASS_WITH_FINDINGS audit.
+> ├─ A WF-05 run is being prepared (Step 0 done, Step 1 not yet)?  └─► Gate: WF-05 Step 0b -- per scope, ORCH computes the file digests and dispatches PROCESS-AUDITOR unless an audit artefact with matching digests exists (an unchanged scope is not re-audited); a FAIL verdict blocks UAT-RUNNER and the BA sign-off for that scope only, never ORCH-overridable; file every BLOCKER and MAJOR finding per docs/agents/protocols/ISSUE_QUEUE.md; PRODUCT-OWNER does not APPROVE a scope without a PASS or PASS_WITH_FINDINGS audit.
 
 ### 7.2 Section 8 stage-gate list: one new line after item 4's paragraph
 

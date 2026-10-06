@@ -32,17 +32,17 @@ actors:
   actor-meridian-julia:
     tenant: meridian
     builtin_roles: [TASK_WORKER]
-    routing_roles: [role-credit-director, role-committee-member]
+    routing_roles: [role-credit-director]
     note: "seed_meridian_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
   actor-meridian-thomas:
     tenant: meridian
     builtin_roles: [TASK_WORKER]
-    routing_roles: [role-committee-member, role-cro]
+    routing_roles: [role-cro]
     note: "seed_meridian_persona_actors.sh PERSONAS line; role-cro inferred from org structure per script header; TASK_WORKER implicit"
   actor-meridian-eva:
     tenant: meridian
     builtin_roles: [TASK_WORKER]
-    routing_roles: [role-committee-member, role-ceo]
+    routing_roles: [role-ceo]
     note: "seed_meridian_persona_actors.sh PERSONAS line; role-ceo inferred from org structure per script header; TASK_WORKER implicit"
   actor-meridian-marcus:
     tenant: meridian

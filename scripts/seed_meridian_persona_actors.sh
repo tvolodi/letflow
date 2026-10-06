@@ -3,7 +3,7 @@
 #
 # Provisions the letflow-side (Part B) of the Meridian persona actors (ISS-0931):
 #   - Creates process-routing role groups + tenant_role bindings for every role
-#     referenced by the Meridian QA definitions (8 roles)
+#     referenced by the Meridian QA definitions (7 roles; role-committee-member dropped by ISS-1024, the three committee votes now route to role-cro / role-credit-director / role-ceo)
 #   - Adds each persona actor to TASK_WORKER (implicit) and to its role groups
 #
 # Prerequisites:
@@ -34,7 +34,6 @@ ROLES=(
   "role-risk-manager"
   "role-compliance-officer"
   "role-credit-director"
-  "role-committee-member"
   "role-loan-ops"
   "role-cro"
   "role-ceo"
@@ -43,9 +42,9 @@ PERSONAS=(
   "actor-meridian-ben|role-credit-manager"
   "actor-meridian-miriam|role-risk-manager"
   "actor-meridian-claudia|role-compliance-officer"
-  "actor-meridian-julia|role-credit-director,role-committee-member"
-  "actor-meridian-thomas|role-committee-member,role-cro"
-  "actor-meridian-eva|role-committee-member,role-ceo"
+  "actor-meridian-julia|role-credit-director"
+  "actor-meridian-thomas|role-cro"
+  "actor-meridian-eva|role-ceo"
   "actor-meridian-marcus|role-loan-ops"
   "actor-meridian-lars|"
   "actor-meridian-sophie|"

@@ -19,7 +19,7 @@ defmodule Letflow.Scripts.PersonaActorSeedDriftTest do
         "test/fixtures/qa/meridian_loan_origination_process_definition.json",
         "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json"
       ],
-      count: 8
+      count: 7
     },
     "vortex" => %{
       script: "scripts/seed_vortex_persona_actors.sh",
@@ -198,7 +198,7 @@ defmodule Letflow.Scripts.PersonaActorSeedDriftTest do
     end
 
     test "M5: dropping role-cro from every meridian persona is detected" do
-      s = String.replace(src("meridian"), ",role-cro", "")
+      s = String.replace(src("meridian"), "thomas|role-cro\"", "thomas|\"")
       assert "a ROLES entry is held by nobody" in personas_errors(s, "meridian")
     end
 

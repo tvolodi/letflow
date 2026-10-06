@@ -158,7 +158,8 @@ expected_outcomes:
       method: task_assigned
       detail: >
         task types 'committee-vote-cro', 'committee-vote-director',
-        'committee-vote-ceo' assigned to role-committee-member,
+        'committee-vote-ceo' assigned to role-cro, role-credit-director and
+        role-ceo respectively (three distinct roles, ISS-1024),
         no task type 'l1-approval' or 'l2-approval' assigned
     on_fail:
       severity: BLOCKER

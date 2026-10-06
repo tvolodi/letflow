@@ -1,0 +1,52 @@
+id: ISS-0998
+title: "Meridian loan fixture e9-default sends unknown kyc_status down the clear branch (skips kyc-manual-review)"
+discovered_by: BA decision (letflow-2), via ORCH
+discovered_in_run: WF03-ISS0998-Q980-20261006
+discovered_at: "2026-10-06T04:00:00Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: ELIXIR-DEV (fixtures, seed-script comment and tests only; no lib/ change)
+description: >
+  test/fixtures/qa/meridian_loan_origination_process_definition.json (v1.2 from Q-928 / PR #2135,
+  v1.4 at the time of this issue) had the default edge e9-default: kyc-routing -> assessment-join,
+  the same target as the kyc_status == 'clear' branch. An unknown or absent kyc_status was therefore
+  treated as clear and kyc-manual-review was skipped. It had been added so the UAT stub, which
+  returned no kyc_status, still reached committee/L1. A compliance default must fail toward MORE
+  scrutiny, not less (BA decision by letflow-2, 2026-10-06).
+
+  Fix (v1.5): (1) e9-default now targets kyc-manual-review; (2) the kyc-aml-check stub endpoint is
+  now https://httpbin.org/response-headers?kyc_status=clear (httpbin echoes the query parameters as
+  top-level JSON keys, which the engine merges into instance variables), so the stub explicitly
+  answers 'clear' and the loan-origination scenarios still reach committee/L1; (3) drift test
+  test/letflow/definitions/shipped_definitions_default_edge_scrutiny_test.exs: for every shipped
+  definition, an EXCLUSIVE_GATEWAY whose conditional edges include a manual-review HUMAN_TASK branch
+  and a 'clear'-style branch must not have a default edge to the clear-branch target. Fail-first: it
+  failed on the old fixture with {"kyc-routing", "e9-default", "assessment-join"} (4/5 passed, 1
+  failed) and passes after the fix; no other shipped definition violates it. Fixture-test
+  assertions in test/letflow/scripts/meridian_loan_origination_fixture_test.exs updated (version
+  1.5, default target, stub endpoint). scripts/seed_meridian_definition.sh header comment bumped to
+  v1.5 (comment-only; the seed is fixture-version driven).
+
+  Caveat: the stub URL is a sibling path of the default mock base, so SERVICE_TASK_MOCK_BASE_URL
+  (prefix rewrite of .../anything) does not rewrite kyc-aml-check; a self-hosted mock override must
+  serve /response-headers semantics or accept that kyc goes to manual review.
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - scripts/seed_meridian_definition.sh
+  - test/letflow/scripts/meridian_loan_origination_fixture_test.exs
+  - test/letflow/definitions/shipped_definitions_default_edge_scrutiny_test.exs
+regression_test: test/letflow/definitions/shipped_definitions_default_edge_scrutiny_test.exs
+follow_ups:
+  - >
+    QA needs a re-seed of Meridian Loan Origination v1.5 (scripts/seed_meridian_definition.sh creates
+    and activates it; the platform deprecates v1.4).
+# Ref clash: the queue's issue_ref for Q-980 came back ISS-0980, which is not the local number
+# (docs/issues/ISS-0980.yaml is a different issue); ISS-0998 was the next free local number
+# (origin/main 9edaa012, every open PR and remote branch checked).
+queue_ref: Q-980
+github_ref: GH-2263
+status: resolved
+resolved_in_run: WF03-ISS0998-Q980-20261006
+resolved_at: "2026-10-06T04:30:00Z"
+resolution: "Fixture v1.5 (default edge to kyc-manual-review, kyc-aml-check stub answers clear) + drift test; see description."

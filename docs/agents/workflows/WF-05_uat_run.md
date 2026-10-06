@@ -19,6 +19,11 @@ to validate against. In practice this does not become live until S7
            │                 run is ENV_NOT_READY, never PASS/FAIL. Skipped → same.
            ▼
 ┌───────────────────────┐
+│  STEP 0b: PROCESS     │ ← ORCH digests each scope's files; PROCESS-AUDITOR reviews the
+│  AUDIT (per scope)    │   scope's process design unless an unchanged audit exists. A FAIL
+└──────────┬─────────────┘   blocks that scope's UAT only, never the other scopes.
+           ▼
+┌───────────────────────┐
 │  STEP 1: READINESS    │ ← ORCH verifies the instance is actually reachable
 │  CHECK                │   (health endpoint, or equivalent) before dispatching
 └──────────┬─────────────┘   UAT-RUNNER — do not dispatch first and discover it's
@@ -102,6 +107,72 @@ realms/actors, deployed definitions, and specs needing local Postgres). Prepare 
 6. Dispatch UAT-RUNNER only with the preflight report path in the handoff `context`.
 ```
 
+## Step 0b — Process audit (gate per scope)
+
+**Agent:** `ORCH` dispatches `PROCESS-AUDITOR` once per scope. Runs after Step 0 (the environment is
+prepared, so the deployed definitions can be reached) and before Step 1. Role and checklist:
+`.claude/agents/process-auditor.md`.
+
+**DIGEST-RULE.** ORCH dispatches PROCESS-AUDITOR for a scope unless an audit artefact exists whose
+input digests match the current files. An unchanged scope is not re-audited: ORCH cites the existing
+artefact by path instead. A `FAIL` verdict blocks UAT-RUNNER for that scope only. The `platform` scope
+is included and follows the same rule. This keeps the gate off the per-run path when nothing changed.
+
+```
+1. List the scopes of this run: the scope of every scenario in the corpus under test (a directory under
+   test/fixtures/uat/scenarios/ whose name does not start with `_`), `platform` included.
+2. For each scope, build its file list with the closed rule in `.claude/agents/process-auditor.md`
+   ("Audited inputs of a scope", groups S1-S5). The list is built by the rule, not by judgment.
+3. Compute the digest of each file with the command (Git Bash, run from the repo root):
+     sha256sum <path>
+   The digest is the first field of the output: 64 lowercase hex characters, the SHA-256 of the file
+   bytes as checked out. Keep the path and the digest together. (A checkout whose line endings differ
+   produces a different digest: the only effect is one extra audit, which is the safe direction.)
+4. Look for an existing artefact: every file test/uat-reports/process-audit-<scope>-*.yaml. It MATCHES
+   when its `audited_inputs` have exactly the same set of paths as step 2 and every digest is equal to
+   the one from step 3. If one or more match, take the one with the latest `generated_at`: do NOT
+   dispatch PROCESS-AUDITOR for this scope; go to step 8 with that artefact's path and verdict. (The
+   validator output and the other scopes' files are not part of the match.)
+5. Otherwise produce the definition validator output for each deployed process definition of the scope.
+   For each `test/fixtures/uat/process-definition-aliases/*.yaml` whose `company_id` is the scope, take
+   its `definition_name` (once per name). Get a bearer token for any roster actor of this scope from
+   the credential source with the `qa-uat-env` token protocol of `scripts/uat_preflight.sh`
+   (`fetch_credential`, line ~311: it runs `<credential_source> token <actor_id>` and takes the first
+   stdout line that `parse_token_line`, line ~297, accepts: `Token: <jwt>` or a bare JWT; any built-in
+   role in `docs/roles.md` that can read definitions suffices). Then run, literally:
+     curl -s -H "Authorization: Bearer <token>" <base_url>/api/v1/definitions/active/<url-encoded name>
+     curl -s -X POST -H "Authorization: Bearer <token>" <base_url>/api/v1/definitions/<id>/validate
+   `<id>` is the top-level `id` field of the JSON body of the first call. From the second answer keep:
+   for a 200 body its `warnings` list and `violation_codes: []`; for a 422 body the `code` of every
+   entry of `errors` as `violation_codes` (a 422 body has no `warnings`). If a call cannot be made
+   (definition not deployed, no token), record `status: NOT_AVAILABLE` for that definition; never
+   invent output. Never write the token into any file or handoff. A scope with no process definition
+   has an empty `validator_output`.
+6. Also compute the digests of the process definition files of every OTHER scope (the S3 group of each
+   other scope): this is `cross_scope_inputs`, used only by checklist item F1.
+7. Dispatch PROCESS-AUDITOR with `context`: `scope`, `run_id`, `commit_sha` (current `HEAD`),
+   `input_digests`, `validator_output`, `cross_scope_inputs`. Commit its report
+   (`test/uat-reports/process-audit-<scope>-<run_id>.yaml`) with the handoff. If the report breaks the
+   schema rules in the role file, re-dispatch once; a second failure leaves the scope with no audit
+   (verdict MISSING in step 8).
+8. Act on the verdict of the matched or new artefact:
+   - `PASS` or `PASS_WITH_FINDINGS`: the scope proceeds to Step 1.
+   - `FAIL`: the scope is BLOCKED for this run. Do not dispatch UAT-RUNNER for its scenarios and do not
+     dispatch its BA-<VERTICAL> sign-off. Other scopes proceed. The scope's scenarios are not counted in
+     the run's `ENV_NOT_READY` determination (that status stays environment-only). The scope stays
+     blocked on every later run until an audited file changes (its digests then differ and step 4 no
+     longer matches); ORCH never overrides a FAIL.
+   - no artefact (step 7 failed twice): treat as `MISSING`; the scope is blocked as for `FAIL`.
+9. File every finding of a NEW artefact per docs/agents/protocols/ISSUE_QUEUE.md (one issue per finding
+   id; one issue for a cross-scope pair reported by two scopes). A finding's `suggested_owner` tells
+   where it goes (BA-<VERTICAL> or REQ-ANALYST for business decisions, ELIXIR-DEV through WF-03 for a
+   definition defect, ORCH for roster or seed scripts, SECURITY-REVIEWER for an access concern). Do not
+   file a cited (matched) artefact's findings again.
+10. Record in the handoff to UAT-RUNNER and PRODUCT-OWNER `context.audit_artefacts`: a map scope -> path
+   of the artefact used (new or cited) for EVERY scope of step 1, blocked ones included; and in the
+   PRODUCT-OWNER handoff `context.audit_blocked_scopes`: the list of scopes blocked in step 8.
+```
+
 ## Step 1 — Readiness check
 
 **Agent:** `ORCH`
@@ -117,6 +188,9 @@ realms/actors, deployed definitions, and specs needing local Postgres). Prepare 
    `base_url` and `credential_source` (see `.claude/agents/uat-runner.md`'s "Environment
    target" section). Do not dispatch with an implicit/default target.
 4. Confirm Step 0 completed and its preflight report path is available for the handoff.
+4a. Confirm Step 0b completed for every scope of this run: each scope has an audit artefact path and a
+    verdict. Remove every scope whose verdict is FAIL or MISSING from this dispatch. If no scope is
+    left, do not dispatch UAT-RUNNER; log BLOCKED, name the blocked scopes.
 5. If any check fails: do not dispatch UAT-RUNNER. Log BLOCKED, name what's missing.
 ```
 
@@ -162,7 +236,7 @@ section for why these are separate, non-substitutable gates.
 
 ```
 1. Read every test/uat-reports/ba-signoff-*-<run_id>.yaml for this run_id, and
-   test/uat-reports/uat-<date>-<run_id>.yaml.
+   test/uat-reports/uat-<date>-<run_id>.yaml. Also read the audit artefact of every scope named in your handoff `context.audit_artefacts`.
 2. Cross-check MUST-severity acceptance criteria for the requirement/stage batch
    under test against passing-scenario coverage.
 3. Apply the single-BLOCKER-blocks-release rule.
@@ -172,6 +246,10 @@ section for why these are separate, non-substitutable gates.
     in `test/fixtures/uat/actors.yaml`. A missing `access_verdict` counts as `NOT_COVERED`.
     For platform-scope scenarios read the UAT report directly: any `expect_refusal` step recorded FAIL
     makes `release_recommendation` BLOCKED, with the same no-override rule.
+3b. Apply the audit gate: read the audit verdict of every scope in `context.audit_artefacts`. The
+    recommendation is NOT `APPROVED` if any scope has no PASS or PASS_WITH_FINDINGS audit (its verdict is
+    FAIL, or the artefact is missing). A scope without a PASS or PASS_WITH_FINDINGS audit is not
+    APPROVED. This applies to `platform` and to a scope blocked at Step 0b, which has no UAT result.
 4. Arbitrate any cross-vertical disagreement found; route to REQ-ANALYST if the
    underlying requirement is ambiguous.
 5. Write test/uat-reports/po-signoff-<run_id>.yaml.
@@ -187,3 +265,4 @@ FAIL (BLOCKED) → route per each issue's `suggested_action` (`route_to_wf03` /
 with `route_to_security_review` is dispatched by ORCH to SECURITY-REVIEWER, never to WF-03
 directly; then re-run this step once
 resolved, per `.claude/agents/product-owner.md`'s rework policy (`max_rework: 1`).
+A scope blocked by its process audit is routed by the findings ORCH already filed at Step 0b (not by a new issue from PRODUCT-OWNER's side); once the audited files change, the next run re-audits the scope at Step 0b.

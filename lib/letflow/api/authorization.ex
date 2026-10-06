@@ -1114,15 +1114,21 @@ defmodule Letflow.Api.Authorization do
         %AccessDecision{kind: :Allow, task_scope: :all}
 
       true ->
-        required = required_permission(endpoint)
+        # REQ-447 PR 2: the same non-platform PLATFORM_ADMIN drop as effective_roles/2,
+        # applied to the atom roles before BOTH the grant and the task scope.
+        roles =
+          if ctx.platform_tenant? == true,
+            do: ctx.roles,
+            else: List.delete(ctx.roles, :PLATFORM_ADMIN)
 
+        required = required_permission(endpoint)
         # ISS-0993 rule 3: a platform-scope permission is denied unless the
         # caller is a PLATFORM_ADMIN of the platform tenant; evaluated before
         # the role matrix so the PLATFORM_ADMIN catch-all cannot bypass it.
-        if not has_permission_in_scope?(ctx.roles, required, ctx.platform_tenant?) do
+        if not has_permission_in_scope?(roles, required, ctx.platform_tenant?) do
           %AccessDecision{kind: :Deny403, task_scope: nil}
         else
-          if endpoint == :TasksList and is_task_worker_only?(ctx.roles) do
+          if endpoint == :TasksList and is_task_worker_only?(roles) do
             %AccessDecision{
               kind: :AllowWithRowFilter,
               task_scope: {:own_user_and_groups, ctx.user_id}

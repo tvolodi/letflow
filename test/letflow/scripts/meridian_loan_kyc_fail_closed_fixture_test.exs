@@ -1,6 +1,6 @@
 defmodule Letflow.Scripts.MeridianLoanKycFailClosedFixtureTest do
   @moduledoc """
-  ISS-1020 / Q-1002 (GH #2289) -- the QA Meridian "Loan Origination" fixture (v1.7, now v1.8) must
+  ISS-1020 / Q-1002 (GH #2289) -- the QA Meridian "Loan Origination" fixture (v1.7, now v1.9) must
   fail CLOSED on the KYC/AML control: a KYC hit / inconclusive / unknown screening whose
   manual review times out, is rejected, or never records an outcome must NOT reach
   `authority-routing` (the approval path), `create-facility` or `disburse-loan`.
@@ -98,7 +98,7 @@ defmodule Letflow.Scripts.MeridianLoanKycFailClosedFixtureTest do
   defp vars(extra), do: Map.merge(@pass, extra)
 
   test "fixture version is 1.9 (1.7 forced the QA re-seed of the KYC fail-closed gate; ISS-1024 bumped to 1.8; ISS-1015 to 1.9)" do
-    assert doc()["version"] == "1.9"
+    assert doc()["version"] == "1.10"
   end
 
   describe "eligibility-gate through the real engine" do

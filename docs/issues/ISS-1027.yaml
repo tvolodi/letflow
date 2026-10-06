@@ -1,0 +1,88 @@
+id: ISS-1027
+title: "Shipped definition seed payloads (meridian, vortex, swiftroute) send no variable_schemas: the engine enforces no output-variable enums server-side; form_schema is rendering only"
+discovered_by: Q-997 investigation (ISS-1015); filed by letflow-3 ORCH
+discovered_in_run: WF03-ISS1015-Q997-20261006
+discovered_at: "2026-10-06T12:00:00Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "letflow-3 (fixture lane); no lib/ change"
+scope: meridian, vortex, swiftroute
+description: >
+  variable_schemas (REQ-109) are written via Definitions.register_variable_schemas/3, reached by
+  POST/PUT /definitions (variable_schemas array of {variable_key, json_schema}), import and
+  solution-pack install. The seed scripts post the fixture file as the request body, and no shipped
+  QA fixture carried the key, so the engine enforced no constraint on the decision/outcome variables
+  human tasks set: form_schema is rendering only (REQ-273). A task could complete with a typo or
+  unexpected value (kyc_outcome, l1_decision, ceo_decision, remediation_status, committee votes,
+  severity ...) and the process took a default edge silently instead of the completion being
+  rejected. A MISSING key is still only covered by the fail-closed gateway defaults.
+design_note: >
+  (a) WHICH variables. Every variable read by a gateway edge condition, because declaring ANY schema
+  switches REQ-372's SemanticValidation on at activation (field-existence + type-compatibility for
+  every gateway condition): string decision variables get a string enum equal to the union of every
+  literal the conditions compare them to, the values the fixture's own human tasks/stubs/timeouts can
+  set, and the values the shipped UAT scenarios submit; numeric (requested_amount_eur, declared_value,
+  order_value_eur) and boolean (false_positive) gateway inputs are declared with their type.
+  Enums (superset rule): kyc_status [clear, hit, inconclusive]; kyc_outcome [cleared, rejected,
+  unresolved] ('unresolved' is what the kyc-timeout stub echoes); credit_decision [pass, fail];
+  risk_rating [low, medium, high, acceptable, unacceptable] (the open rating scale, incl. 'acceptable'
+  which the req208 simulation submits; only 'unacceptable' is special to the gateway);
+  l1_decision [approve, escalate, reject]; l2_decision [approve, reject] (no escalate edge at L2);
+  committee_vote_cro/director/ceo [approve, reject]; highest_severity [none, low, medium, high,
+  critical]; remediation_status [resolved, unresolved]; cro_decision/ceo_decision (regulatory)
+  [sign_off, reject_and_reopen]; ops_decision/ceo_decision (swiftroute), capacity_decision,
+  budget_decision [approve, reject]; severity [critical, major, minor]. Vortex 8D has no conditioned
+  edge and no decision variable: no schemas (asserted by the test, not silently omitted).
+  Engine facts read, not assumed: human-task completion validates every incoming key against the
+  schemas (Engine.merge_output_variables -> VariableSchema.variable_validations); SERVICE_TASK result
+  merges pass nil validations (Engine.advance_service_task_dispatch), so stub/timeout echoes are never
+  rejected at runtime; a rejected completion puts the INSTANCE in ERROR (REQ-061), it is not a
+  retryable 4xx on the task.
+  (b) HOW. The seed scripts POST the fixture file (through rewrite_service_task_base, a jq helper that
+  rewrites only SERVICE_TASK endpoints and keeps every other key), so the fixture IS the payload: a
+  top-level variable_schemas key is appended AFTER the graph (end of file, rebase-friendly). No
+  script logic change.
+  (c) IDEMPOTENCY. The version-aware seed skips an ACTIVE fixture version, so a fixture whose
+  content changed without a version bump would never reach an already-seeded QA. Versions bumped +1
+  from origin/main: loan 1.8->1.9, regulatory 1.6->1.7, swiftroute 1.2->1.3, vortex production order
+  1.3->1.4, vortex supplier quality deviation 1.3->1.4. Collision plan: the in-flight Q-997 branch
+  also claims loan 1.9 / regulatory 1.7 and the Q-985 branch SQD 1.4; whichever merges later must
+  renumber (+1) on rebase. Vortex 8D stays 1.0 (unchanged).
+acceptance_criteria:
+  - "The seed payloads of every shipped QA definition (meridian loan, regulatory, vortex x3, swiftroute) include variable_schemas with enums for each decision/outcome variable read by an edge condition (vortex 8D has none and is asserted to have no conditioned edge)"
+  - "A definition-level test fails if an edge condition reads a decision variable that has no variable_schema enum covering every compared literal"
+  - "An engine-level test proves a task completion with an out-of-enum value is rejected (not silently routed to a default edge) and a valid value routes correctly"
+  - "The seed scripts post the schemas idempotently; the QA definitions are re-seeded when the next definition versions are seeded (noted)"
+  - "Fixture versions bumped; validator output stays valid (REQ-372 semantic check clean at activation); SECURITY-REVIEWER n/a (definitions/seed, no new data path)"
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+  - test/fixtures/qa/swiftroute_process_definition.json
+  - test/fixtures/qa/vortex_production_order_release_process_definition.json
+  - test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+  - scripts/seed_meridian_definition.sh
+  - scripts/seed_vortex_definition.sh
+  - scripts/seed_swiftroute_definition.sh
+queue_ref: Q-1009  # queue allocated issue_ref ISS-1009, which collides with an existing local file; local filename kept as ISS-1027 (next free on origin/main) and the GH issue retitled to match
+github_ref: GH-2307
+status: resolved
+resolved_in_run: WF03-ISS1027-Q1009-20261006
+resolved_at: "2026-10-06T14:20:49Z"
+resolution: >
+  Fixtures v1.9/1.7/1.3/1.4/1.4 carry a top-level variable_schemas array (see design_note for the
+  variable-to-enum table). No lib/ change. New tests: shipped_definitions_variable_schemas_test.exs
+  (table-driven over every QA process fixture: enum coverage, REQ-372 clean, well-formed, stub/form
+  and UAT-scenario supersets), shipped_definition_variable_schemas_engine_test.exs (real fixtures
+  through create_with_variable_schemas + activate + complete_task: out-of-enum rejected, valid routed)
+  and seed_variable_schemas_payload_test.exs (seed scripts deliver the fixture unmodified; the
+  rewrite helper preserves variable_schemas). Version pins in the existing fixture tests updated.
+  This constrains VALUES a task may set; it does not verify who completes the task.
+follow_ups:
+  - "QA needs a re-seed of all five definitions (scripts/seed_meridian_definition.sh, seed_vortex_definition.sh, seed_swiftroute_definition.sh create and activate the new versions; the platform deprecates the old ones)."
+  - "Rebase note: Q-997 (loan 1.9 / regulatory 1.7) and Q-985 (SQD 1.4) must renumber on rebase."
+  - "Out-of-enum completion puts the instance in ERROR (REQ-061 behaviour), not a retryable task rejection: a typo by a human operator needs the ERROR-recovery path. Not changed here."
+  - "BA/supervisor rulings (defaults applied): 'acceptable' stays in the risk_rating enum; l2_decision has no 'escalate' (no L2 edge); the UAT committee scenarios' 'vote:' input key not matching committee_vote_cro/director/ceo is the BA's to fix; an out-of-enum completion putting the instance in ERROR is accepted as REQ-061 behaviour. Engine-level enforcement is now also tested for SwiftRoute (ops_decision) and Vortex Production Order Release (capacity_decision)."
+  - "An out-of-enum completion errors the WHOLE INSTANCE (REQ-061, unchanged): a harsh mode for API clients; UI enumerated selects avoid it; follow-up candidate 'reject with 422 and keep the task open' is NOT filed now (BA decision, letflow-2)."
+  - "The BA (letflow-2) fixes her committee scenarios to submit committee_vote_cro/director/ceo instead of 'vote:' after her PR #2306 merges."
+regression_test: test/letflow/scripts/shipped_definitions_variable_schemas_test.exs

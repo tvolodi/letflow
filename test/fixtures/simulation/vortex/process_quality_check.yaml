@@ -40,6 +40,11 @@ graph:
       attributes:
         endpoint: POST /webhooks/notify
         timeout_ms: 300000
+    - id: notify-planner-rejected
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /webhooks/notify
+        timeout_ms: 300000
     - id: end-released
       node_type: END
     - id: end-rejected
@@ -54,7 +59,7 @@ graph:
       condition: "variables.capacity_decision == 'approve'"
     - id: e2
       source: capacity-review
-      target: notify-planner
+      target: notify-planner-rejected
       condition: "variables.capacity_decision == 'reject'"
     # on_timeout for capacity-review (also fallback)
     - id: timeout-capacity-review
@@ -104,4 +109,7 @@ graph:
       target: end-released
     - id: e11
       source: auto-reject-order
+      target: end-rejected
+    - id: e12
+      source: notify-planner-rejected
       target: end-rejected

@@ -1,0 +1,33 @@
+run_id: WF03-ISS1000-Q982-20261006
+step: release-validation
+agent: RELEASE-VALIDATOR
+generated_at: "2026-10-06T07:15:00Z"
+branch: fix/ISS-1000-vortex-release-rejected
+scope: scoped (MIX_TEST_PARTITION=3; full suite left to CI; security review n/a - test fixtures, no tenant-data path)
+commands:
+  - "MIX_ENV=test mix compile --warnings-as-errors -> exit 0"
+  - "MIX_ENV=test mix format --check-formatted -> exit 0"
+  - "mix letflow.check_issue_refs -> OK (593 files)"
+  - "mix letflow.check_uat_scenario_schema -> 32 files, 0 violations"
+  - "bash -n scripts/seed_vortex_definition.sh -> exit 0"
+  - "mix test test/letflow/definitions test/letflow/simulation/req207_vortex_test.exs test/scripts test/docs -> Result: 619/622 passed"
+result:
+  passed: 619
+  total: 622
+  failed: 3
+failures:
+  - file: test/scripts/uat_preflight_local_deps_test.exs (T1, T2, T7)
+    error: "preflight script did not reach its report (Windows git-bash launcher; 'no scenario files under ...tmp/...')"
+    classification: pre-existing / environmental (Windows path handling); fails identically with the two fixtures stashed; unrelated to ISS-1000
+fail_first:
+  method: "git stash push of only the two fixture files; ran vortex fixture test file; git stash pop; git diff --stat identical before/after"
+  result: "vortex test file: 5 of its tests failed on the old fixture (reject reachability x2 [qa, sim], same-branch, version 1.3, criterion-4 cross-company); validator test and approve-path tests passed"
+stale_pins: "no 1.2 pin for Production Order Release outside historical uat-reports narratives; seed header, fixture and test all 1.3"
+criteria:
+  1: VERIFIED
+  2: VERIFIED
+  3: VERIFIED
+  4: VERIFIED
+  5: VERIFIED
+  6: VERIFIED
+verdict: VERIFIED (with 3 pre-existing environmental failures noted)

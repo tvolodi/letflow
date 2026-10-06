@@ -1,7 +1,7 @@
 {
   "name": "Shipment Approval",
-  "version": "1.3",
-  "description": "Sequential approval chain for high-value or non-standard shipments. Dispatcher raises the request; Operations Manager reviews; if value exceeds 500 the CEO must co-sign. Exercises: sequential chain + CEL conditional branch.",
+  "version": "1.4",
+  "description": "Sequential approval chain for high-value or non-standard shipments. Dispatcher raises the request; Operations Manager reviews; if value exceeds 500 the CEO must co-sign. Exercises: sequential chain + CEL conditional branch. Escalation follows D-ESC: timer -> higher role -> fail closed (v1.4, ISS-1007 / Q-989; BA ruling GH #2281). Every human task carries the escalation_timer_duration + escalation_role pair; when the timer fires the engine cancels the task and follows the node's single unconditioned (timeout) edge. Chain: ops-review (role-ops-manager, PT2H, the existing E7 exception) -> ceo-approval (role-ceo, PT4H) -> stalled: auto-reject, never release-shipment. Deviations (documented, no waivers): ceo-approval takes PT4H rather than the financial P2D because a shipment awaiting co-signature is time-sensitive operational work, consistent with ops-review's PT2H. ceo-approval is the top of the chain (E4): its escalation_role repeats its own role as a nominal CHK-21 co-required attribute and its timeout edge goes straight to the fail-closed auto-reject.",
   "graph": {
     "nodes": [
       {
@@ -25,7 +25,10 @@
         "id": "ceo-approval",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-ceo"
+          "role": "role-ceo",
+          "description": "top of chain: escalation_role is nominal; stalled = fail closed",
+          "escalation_timer_duration": "PT4H",
+          "escalation_role": "role-ceo"
         }
       },
       {

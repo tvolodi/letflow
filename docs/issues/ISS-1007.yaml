@@ -33,4 +33,33 @@ affected_files:
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-989
 github_ref: GH-2276
-status: open
+status: resolved
+resolved_in_run: WF03-ISS1007-Q989-20261007
+resolved_at: "2026-10-06T21:54:00Z"
+resolution: >
+  BA ruling D-ESC (GH #2281) applied to the SwiftRoute definitions: Shipment Approval QA fixture
+  v1.3 -> v1.4 (simulation YAML copy mirrored; the simulation copies keep their own "1.0" version
+  like the other verticals). ops-review (role-ops-manager, PT2H, the existing E7 exception) ->
+  ceo-approval (role-ceo, now PT4H, top of chain E4) -> stalled: auto-reject (never
+  release-shipment). Driver Incident Report (simulation YAML only; no QA fixture or seed exists for
+  it, ISS-1004 / Q-1004): ops-assessment (role-ops-manager, P1D) -> new
+  escalate-ops-assessment-to-ceo (role-ceo, P1D) -> stalled: ops-auto-close; finance-estimate
+  (role-accountant, P1D) -> new escalate-finance-estimate-to-ceo (role-ceo, P1D) -> stalled:
+  finance-auto-close (the existing timeout notice service tasks; the stalled branch then rejoins
+  the AND-join, it does not end the instance). No waivers needed. Because the engine follows the
+  FIRST unconditioned edge on a timer fire, the incident tasks' normal-completion edges e6 / e8 now
+  carry the constant condition "true" (their pre-existing unconditioned timeout-* edges were
+  previously inert or, behind e6/e8, would never have been the first unconditioned edge). Because
+  each incident human task now arms its own timer, advance-timer on an incident instance is
+  ambiguous without a timer_id; the simulation Runner (test support) resolves a scenario step's
+  params.timer_node_id to the pending timer, and the simulation scenario
+  shipment-ops-timeout-escalation names ops-escalation-timer. No lib/ change. New tests:
+  swiftroute_d_esc_escalation_fixture_test.exs (definition level, JSON + YAML),
+  swiftroute_escalation_timer_test.exs (engine level, real fixtures, real timer fire).
+follow_ups:
+  - "QA re-seed needed after merge: scripts/seed_swiftroute_definition.sh (Shipment Approval v1.4). No persona re-seed: no new role is introduced (role-ceo, role-ops-manager, role-accountant already named). The Driver Incident Report has no QA seed yet (ISS-1004 / Q-1004); when it gets one it must carry this graph (escalation tasks + true conditions)."
+  - "BA (letflow-2): confirm the proposed durations the ruling did not fix literally: ceo-approval PT4H (not the financial P2D: a shipment awaiting co-signature is time-sensitive and ops-review is PT2H); incident ops-assessment / finance-estimate and their CEO levels P1D (not the operational PT4H: the incident scenario's own SLA for both is 24 hours and the pre-existing ops-escalation-timer is P1D)."
+  - "BA (letflow-2): the incident has no END dedicated to 'closed unresolved': the stalled branch passes through the existing ops-auto-close / finance-auto-close notice and rejoins parallel-join, so the incident still closes via case-summary once the other branches are done. A dedicated close-unresolved terminal inside a parallel branch is not safe with an AND-join; decide whether the case-summary should say which branch stalled."
+  - "BA (letflow-2): role-accountant is still held by no seeded actor (ISS-1011 / Q-993); an unassigned finance-estimate can only escalate to the CEO once that is fixed."
+  - "Notification is the inbox task plus the audit history only (E5); e-mail out of scope until REQ-441."
+regression_test: test/letflow/scripts/swiftroute_d_esc_escalation_fixture_test.exs

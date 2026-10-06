@@ -40,11 +40,14 @@ steps:
     produces: instance
     actor: actor-swiftroute-lena
 
-  # Step 2 — real api: force-fire the instance's one pending timer
-  # (ops-escalation-timer, ISS-0389). No params key -> body_params: %{}, the
-  # literal empty-JSON-object shape the route's design requires.
+  # Step 2 — real api: force-fire the pending ops-escalation-timer (ISS-0389). Since ISS-1007
+  # (D-ESC) ops-assessment and finance-estimate each arm their own escalation timer too, so the
+  # instance has three pending timers and the route needs a timer_id; the Runner resolves
+  # `timer_node_id` to it.
   - via: api
     action: "POST /api/v1/instances/{{produces.instance.instance_id}}/advance-timer"
+    params:
+      timer_node_id: ops-escalation-timer
     produces: advance_timer_result
     actor: actor-swiftroute-marco
 

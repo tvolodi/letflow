@@ -1,0 +1,33 @@
+id: ISS-0997
+title: "uat_preflight.sh under qa-uat-env never finds admin-user (false 'no valid PLATFORM_ADMIN token' UNKNOWN and 'no seeded user: actor-platform-admin' GAP)"
+discovered_by: UAT-RUNNER (letflow-2)
+discovered_in_run: letflow-2 UAT preflight (infra diagnosis T-0167)
+discovered_at: "2026-10-06T03:00:00Z"
+severity: MINOR
+failure_class: defect
+occurrence: 1
+owner: ELIXIR-DEV (scripts/ only; no lib/ change)
+description: >
+  In the qa-uat-env credential protocol the seeded-username roster (cred_listing) is built only
+  from the scenario corpus's actor ids (scripts/uat_preflight.sh, qa-uat-env branch). It contains
+  actor-platform-admin but never the literal admin-user, while both admin lookups filter the
+  roster for admin-user: the admin-token lookup (admin_user = ... "admin-user") gave
+  "no valid PLATFORM_ADMIN token" (UNKNOWN) and the per-scenario actors check
+  (users = [u for u in cred_listing if u == "admin-user"]) gave
+  "no seeded user: actor-platform-admin" (GAP). Infra (T-0167) confirmed
+  `qa-uat-env.sh token admin-user` works (roles [PLATFORM_ADMIN]), so no alias is needed.
+
+  Fix: after the "no login actors declared" emptiness check (semantics kept), add admin-user to
+  the qa-uat-env roster. qa-login (roster from the source's own listing) is unchanged.
+  Regression: test/scripts/uat_preflight_platform_admin_test.exs (fail-first verified against the
+  unfixed script).
+affected_files:
+  - scripts/uat_preflight.sh
+  - test/scripts/uat_preflight_platform_admin_test.exs
+  - test/specs/ISS-0997.md
+queue_ref: Q-979  # queue's own ref came back ISS-0979; local ISS number is ISS-0997
+github_ref: GH-2261
+status: resolved
+resolution: >
+  admin-user added to the qa-uat-env roster in scripts/uat_preflight.sh; both the admin token
+  lookup and the actor-platform-admin mapping now resolve it.

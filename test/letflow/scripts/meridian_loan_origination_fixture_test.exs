@@ -2,8 +2,8 @@ defmodule Letflow.Scripts.MeridianLoanOriginationFixtureTest do
   @moduledoc """
   ISS-0928 / Q-928 T8 -- the QA Meridian "Loan Origination" fixture must give the
   `kyc-routing` EXCLUSIVE_GATEWAY an unconditioned default edge, so a KYC stub
-  response with no `kyc_status` key proceeds to `assessment-join` instead of
-  erroring (or, pre-fix, stalling) the instance. The version is bumped to 1.2 so
+  response with no `kyc_status` key does not stall (ISS-0998: it now goes to `kyc-manual-review`, not `assessment-join`) instead of
+  erroring (or, pre-fix, stalling) the instance. The version was bumped to 1.2 (ISS-0928; now 1.5, ISS-0998 changed the default edge target to kyc-manual-review) so
   `scripts/seed_meridian_definition.sh` re-seeds QA (409 means bump, never delete).
 
   Pure: no DB, no HTTP. See `test/specs/ISS-0928.md`.
@@ -30,15 +30,24 @@ defmodule Letflow.Scripts.MeridianLoanOriginationFixtureTest do
     graph
   end
 
-  test "fixture version is 1.4 (forces QA re-seed of REQ-433's committee quorum subgraph)" do
-    assert doc()["version"] == "1.4"
+  test "fixture version is 1.5 (ISS-0998: forces QA re-seed of the kyc-routing default edge + KYC stub)" do
+    assert doc()["version"] == "1.5"
   end
 
-  test "kyc-routing has exactly one default edge, to assessment-join, carrying no condition" do
+  test "ISS-0998: kyc-routing has exactly one default edge, to kyc-manual-review (fail toward scrutiny), carrying no condition" do
     defaults = Enum.filter(kyc_routing_edges(doc()), &(&1["is_default"] == true))
 
-    assert [%{"id" => "e9-default", "target" => "assessment-join"} = default_edge] = defaults
+    assert [%{"id" => "e9-default", "target" => "kyc-manual-review"} = default_edge] = defaults
     refute Map.has_key?(default_edge, "condition")
+  end
+
+  test "ISS-0998: the kyc-aml-check stub endpoint answers kyc_status=clear (httpbin /response-headers echoes the query as JSON keys)" do
+    node = Enum.find(doc()["graph"]["nodes"], &(&1["id"] == "kyc-aml-check"))
+    uri = URI.parse(node["attributes"]["endpoint"])
+
+    assert uri.host == "httpbin.org"
+    assert uri.path == "/response-headers"
+    assert URI.decode_query(uri.query) == %{"kyc_status" => "clear"}
   end
 
   test "the explicit kyc_status routes are unchanged (clear -> join; hit/inconclusive -> manual review)" do

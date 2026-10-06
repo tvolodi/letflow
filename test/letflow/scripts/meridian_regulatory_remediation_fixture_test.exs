@@ -118,7 +118,7 @@ defmodule Letflow.Scripts.MeridianRegulatoryRemediationFixtureTest do
     )
   end
 
-  defp check_version(d), do: ok_if(d["version"] == "1.6", {:version, d["version"]})
+  defp check_version(d), do: ok_if(d["version"] == "1.7", {:version, d["version"]})
 
   defp edge_shape(d) do
     d
@@ -145,7 +145,7 @@ defmodule Letflow.Scripts.MeridianRegulatoryRemediationFixtureTest do
   # ---------------------------------------------------------------------------------
 
   describe "fixture shape (AC1, AC2, AC4)" do
-    test "version is 1.6 (forces the QA re-seed of the remediation human task)" do
+    test "version is 1.7 (1.6 forced the QA re-seed of the remediation human task; ISS-1015 added the forms)" do
       assert check_version(doc()) == :ok
     end
 
@@ -453,7 +453,7 @@ defmodule Letflow.Scripts.MeridianRegulatoryRemediationFixtureTest do
     end
 
     test "M7 version not bumped -> red" do
-      assert {:error, _} = check_version(Map.put(doc(), "version", "1.5"))
+      assert {:error, _} = check_version(Map.put(doc(), "version", "1.6"))
     end
   end
 end

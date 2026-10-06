@@ -1,7 +1,7 @@
 {
   "name": "Regulatory Compliance Review",
-  "version": "1.6",
-  "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates within 21 days. If risk-evaluation is still open when its P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice and closes. Critical findings go to a remediation step. Exercises: HUMAN_TASK escalation timer, DLQ path. Edge e3 carries the constant condition 'true' on purpose: it always wins on normal task completion but is skipped by the escalation-timer path, which follows the single non-conditioned edge timeout-risk-evaluation. The 21-day SLA-breach path and the remediation-unresolved path file distinct BaFin regulatory-notice reasons (sla_breach_30_days on regulatory-auto-escalation via timeout-risk-evaluation; remediation_unresolved on the new node remediation-unresolved-escalation via e10) -- the two inbound meanings of the former shared node are now split into two nodes because edges carry no variable-assignment mechanism. Remediation is a person, not a sub-process (v1.6, ISS-1025 / Q-1007): the node remediation-subprocess (id kept stable; it is a HUMAN_TASK, not a SUB_PROCESS) is assigned to role-compliance-officer, who completes it with output variable remediation_status = resolved | unresolved. Only 'resolved' reaches findings-sign-off (edge e9); 'unresolved', a missing or unrecognised value, or no answer within the P30D deadline (timeout-remediation-subprocess) all end at remediation-unresolved-escalation, never at findings-sign-off. Edge e8 carries the constant condition 'true' for the same reason as e3.",
+  "version": "1.7",
+  "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates within 21 days. If risk-evaluation is still open when its P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice and closes. Critical findings go to a remediation step. Exercises: HUMAN_TASK escalation timer, DLQ path. Edge e3 carries the constant condition 'true' on purpose: it always wins on normal task completion but is skipped by the escalation-timer path, which follows the single non-conditioned edge timeout-risk-evaluation. The 21-day SLA-breach path and the remediation-unresolved path file distinct BaFin regulatory-notice reasons (sla_breach_30_days on regulatory-auto-escalation via timeout-risk-evaluation; remediation_unresolved on the new node remediation-unresolved-escalation via e10) -- the two inbound meanings of the former shared node are now split into two nodes because edges carry no variable-assignment mechanism. Remediation is a person, not a sub-process (v1.6, ISS-1025 / Q-1007): the node remediation-subprocess (id kept stable; it is a HUMAN_TASK, not a SUB_PROCESS) is assigned to role-compliance-officer, who completes it with output variable remediation_status = resolved | unresolved. Only 'resolved' reaches findings-sign-off (edge e9); 'unresolved', a missing or unrecognised value, or no answer within the P30D deadline (timeout-remediation-subprocess) all end at remediation-unresolved-escalation, never at findings-sign-off. Edge e8 carries the constant condition 'true' for the same reason as e3. Every human task carries a form_schema naming the decision field(s) it must record (v1.7, ISS-1015 / Q-997): evidence_summary, highest_severity, remediation_status, cro_decision, ceo_decision; form_schema is a UI rendering payload only, the fail-closed gateway defaults are the enforcement.",
   "graph": {
     "nodes": [
       {
@@ -12,7 +12,21 @@
         "id": "evidence-collection",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-compliance-officer"
+          "role": "role-compliance-officer",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "evidence_summary": {
+                "type": "string",
+                "title": "Evidence summary",
+                "description": "Summary of the evidence collected for this review (what was gathered and where it is filed). Recorded for audit; no gateway reads it.",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "evidence_summary"
+            ]
+          }
         }
       },
       {
@@ -30,7 +44,27 @@
         "attributes": {
           "role": "role-risk-manager",
           "escalation_timer_duration": "P21D",
-          "escalation_role": "role-ceo"
+          "escalation_role": "role-ceo",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "highest_severity": {
+                "type": "string",
+                "title": "Highest finding severity",
+                "description": "Highest severity among the findings. 'critical' (or no answer) goes to remediation; the others go straight to CRO sign-off.",
+                "enum": [
+                  "none",
+                  "low",
+                  "medium",
+                  "high",
+                  "critical"
+                ]
+              }
+            },
+            "required": [
+              "highest_severity"
+            ]
+          }
         }
       },
       {
@@ -63,7 +97,24 @@
         "attributes": {
           "role": "role-compliance-officer",
           "escalation_timer_duration": "P30D",
-          "escalation_role": "role-ceo"
+          "escalation_role": "role-ceo",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "remediation_status": {
+                "type": "string",
+                "title": "Remediation status",
+                "description": "Whether the critical findings were remediated. Only 'resolved' reaches CRO sign-off; 'unresolved' (or no answer) files a BaFin regulatory notice.",
+                "enum": [
+                  "resolved",
+                  "unresolved"
+                ]
+              }
+            },
+            "required": [
+              "remediation_status"
+            ]
+          }
         }
       },
       {
@@ -74,7 +125,24 @@
         "id": "findings-sign-off",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-cro"
+          "role": "role-cro",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "cro_decision": {
+                "type": "string",
+                "title": "CRO decision",
+                "description": "CRO decision on the findings: 'sign_off' archives the review, 'reject_and_reopen' reopens it.",
+                "enum": [
+                  "sign_off",
+                  "reject_and_reopen"
+                ]
+              }
+            },
+            "required": [
+              "cro_decision"
+            ]
+          }
         }
       },
       {
@@ -90,7 +158,24 @@
         "id": "ceo-override",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-ceo"
+          "role": "role-ceo",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "ceo_decision": {
+                "type": "string",
+                "title": "CEO decision",
+                "description": "CEO decision after the CRO did not respond: 'sign_off' archives the review; 'reject_and_reopen' (or no answer) reopens it.",
+                "enum": [
+                  "sign_off",
+                  "reject_and_reopen"
+                ]
+              }
+            },
+            "required": [
+              "ceo_decision"
+            ]
+          }
         }
       },
       {

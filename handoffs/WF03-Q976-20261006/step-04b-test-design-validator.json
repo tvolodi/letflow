@@ -1,0 +1,47 @@
+{
+  "handoff_id": "7c1d5e82-3a94-4f06-b2d7-9e0a4c6f1b38",
+  "run_id": "WF03-Q976-20261006",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-Q976-20261006/step-04b-test-design-validator.json",
+  "created_at": "2026-10-06T06:45:00Z",
+  "started_at": "2026-10-06T06:45:00Z",
+  "completed_at": "2026-10-06T07:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0995": "Q-976: one structured attribution log line per authorization denial (method, route pattern, policy key, platform-scope boolean, keyed hashes of caller and tenant id); INV-4."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/api/authz_deny_log_test.exs",
+      "test/specs/ISS-0995.md",
+      "docs/issues/ISS-0995.yaml",
+      "lib/letflow/design/iss0995-authz-deny-attribution-log.md"
+    ],
+    "owned_modules": [],
+    "worktree": "throwaway git worktree of fix/ISS-0995-deny-attribution-Q976 @ 84a4646b (removed)",
+    "branch_name": "fix/ISS-0995-deny-attribution-Q976"
+  },
+  "task": {
+    "description": "WF-03 Step 4b hard gate on TEST-DESIGNER: criterion coverage, discriminating assertions, isolated fixtures, no-raw-identifier coverage, independent hash pin; independently apply >= 3 mutants in a throwaway worktree with own measured counts.",
+    "acceptance_criteria": [
+      "Every design section-13 test (a)-(j) and issue requirement has a runnable discriminating test",
+      "No skipped or TODO tests; fixtures isolated, env and state restored",
+      "Mutants independently applied with own counts, reverted and verified",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Baseline in a throwaway worktree (MIX_ENV=test MIX_TEST_PARTITION=46): 'Result: 36 passed' for test/letflow/api/authz_deny_log_test.exs. Coverage: design tests (a)-(j) each have a describe with runnable tests (a: 6, b: 1, c: 5, d: 1 over four request shapes, e: 3, f: 3, g: 3, h: 4, i: 5, j: 2, plus 3 pure route/policy helper tests = 36); no @tag :skip, no TODO. No-leak (d) refutes, against the authz_deny line text only, the raw user id, tenant id, schema name, slug, email, bearer token, unique path/query/body values, master key raw/hex/HEX, sub-key raw/hex, and raw-dump markers, for four request shapes (platform, tenant, two catch-all) - covers user id, tenant id, email, token and raw path. Hash pinned by an independent :crypto.mac recomputation (label, <<1>> expand byte, 'user:'/'tenant:' domain tags, 16-hex truncation) in (a), (e) and (h). Fixtures: setup saves and restores :secrets_master_key, window and clock env and calls AuthzDenyLog.reset in on_exit; async: false; sampling uses injected atomics clock, no sleeps; the CAS race test uses a deterministic arrival barrier with a monotonic deadline. Independent mutants (my own runs, one at a time, in a throwaway worktree, scoped to the new file, reverted with git checkout -- lib after each and 'git status --porcelain lib test' empty each time): M1 raw id instead of HMAC -> 27/36 passed (9 failed: a direct, a router, d, e x2, g CRLF, h table, i master-key, i non-binary id); M2 plain SHA-256 no key -> 30/36 (6 failed); M3 raw request_path instead of route pattern -> 28/36 (8 failed: a router, a cross-tenant, b, c x2, d, route helpers x2); M4 sampling removed -> 33/36 (3 failed: h table, h invalid window, h 50-task race); M5 sampler key ignores caller -> 34/36 (2 failed: h table, h invalid window); M7 domain tag dropped (tenant uses 'user:') -> 31/36 (5 failed); M11 failure path adds Exception.message -> 35/36 (1 failed: i outer failure path); M12 compare_exchange replaced by unconditional put -> 35/36 (1 failed: h 50-task race, deterministically). All 8 mutants killed; each killed by the test the design table names. After the last revert, the unmutated tree re-ran green: authz_deny_log_test.exs plus smtp_test.exs and smtp_smoke_test.exs (the two INV-4 source-scan guards) -> 'Result: 73 passed'. Worktree removed with git worktree remove --force, letflow_test46 dropped (it did not exist as a separate leftover; DROP DATABASE IF EXISTS ran clean). Caveats: step-04-test-designer.json was not present on the branch or in the main worktree when I ran, so I could not compare TEST-DESIGNER's reported counts; the 36-test count matched the task statement and all mutant counts above are my own. Test (i)(1) was not mutation-probed by me beyond the M1/M2 failures it shows; M6 (log on allow branch), M8 (response changed), M9, M10 not re-run by me (not required, three-plus mandated). Main worktree: no checkout/stash/lib edit by me; git status --porcelain shows only the untracked letflow-3.code-workspace (the main worktree is now on a sibling session's branch).",
+    "issues": [],
+    "route_back": null
+  }
+}

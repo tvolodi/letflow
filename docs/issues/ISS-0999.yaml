@@ -1,0 +1,58 @@
+id: ISS-0999
+title: "GET /promotions/platform-events leaks other tenants' identifiers (source_definition_id, review_id, operator actor_id) to a tenant admin: REQ-446 key-suffix deny walk is wrong by construction (INV-10)"
+discovered_by: SECURITY-REVIEWER (REQ-446, Q-963)
+discovered_in_run: WF03-ISS0999-Q981-20261006
+discovered_at: "2026-10-06T07:00:00Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: ELIXIR-DEV
+description: >
+  A DEFINITION_PROMOTED event written at target tenant T by an operator promotion carries foreign
+  data in T's schema: payload source_definition_id (a row id in the SOURCE tenant's schema),
+  payload review_id (the operator's review id in the platform tenant's schema) and the envelope
+  actor_id (the operator's user id). REQ-446's shaping of GET /promotions/platform-events was a
+  DENY-by-pattern walk (drop string keys ending in tenant_id unless the value is the caller's own
+  id), which is wrong by construction for INV-10: any other key name (tenant_ids, tenantId,
+  source_tenant, a future producer's key) and every non-tenant-id identifier passed through.
+
+  Fix (lib/letflow/routers/promotions.ex, design lib/letflow/design/iss0999-platform-events-allowlist.md):
+  for a non-operator the payload is hand-built from a per-event-type ALLOWLIST
+  (@platform_event_allowlist: DEFINITION_PROMOTED, DEFINITION_VERSION_ROLLED_BACK,
+  PROMOTION_ASSERTION_TEARDOWN_FAILED). Plain keys are kept when the value is a scalar; the tenant-id
+  keys only when the value is the caller's own tenant id; source_definition_id, review_id, teardown
+  error and every unknown key are omitted; a map or list under an allowlisted key is omitted (no
+  recursion); an unknown event type keeps the event with payload {}; the item has no actor_id key.
+  Operators see everything unchanged. GET /promotions/:id/context keeps the key-suffix shaping.
+
+  Tests: T-7 (promotion_platform_events_shaping_test.exs, updated expectations and new allowlist
+  cases), T-10 (promotion_platform_events_two_tenant_test.exs, the regression test: operator promotes
+  B into A through Promotion.promote_definition/3, A's reader finds no identifier of B or of the
+  operator in the raw body), T-9 (promotion_platform_events_allowlist_drift_test.exs: allowlist
+  versus registry schemas). Mutation results are in test/specs/ISS-0999.md.
+affected_files:
+  - lib/letflow/routers/promotions.ex
+  - lib/letflow/design/iss0999-platform-events-allowlist.md
+  - test/letflow/routers/promotion_platform_events_shaping_test.exs
+  - test/letflow/routers/promotion_platform_events_two_tenant_test.exs
+  - test/letflow/routers/promotion_platform_events_allowlist_drift_test.exs
+  - test/specs/ISS-0999.md
+regression_test: test/letflow/routers/promotion_platform_events_two_tenant_test.exs
+follow_ups:
+  - >
+    /context (GET /promotions/:id/context) still uses the key-suffix shaping: tenantId, tenant_ids and
+    source_tenant pass there, plan entries graph JSON is not shaped. Tracked as Q-1003 / GH #2291 /
+    ISS-1021.
+# The queue's own issue_ref for Q-981 came back ISS-0981, which is not the local number
+# (docs/issues/ISS-0981.yaml is a different local issue: promotion.ex write_target_definition audit
+# raise). ISS-0999 was chosen because REQ-446's test spec already cites it as the tracking id.
+queue_ref: Q-981
+github_ref: GH-2266
+status: resolved
+resolved_in_run: WF03-ISS0999-Q981-20261006
+resolved_at: "2026-10-06T08:00:00Z"
+resolution: >
+  Per-event-type payload allowlist on GET /promotions/platform-events (non-operator view); actor_id,
+  source_definition_id, review_id and teardown error omitted for non-operators, own tenant id
+  retained, unknown event type gets payload {}. REVIEWER and SECURITY-REVIEWER PASSED the design
+  and change. Follow-up (the /context key-suffix limitation) tracked as Q-1003 / GH #2291 / ISS-1021.

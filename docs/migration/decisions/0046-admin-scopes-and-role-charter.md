@@ -383,3 +383,22 @@ Evidence that the route reads only the caller's own schema: the handler takes `o
 Residual: the event payload can name other tenants' ids. Tenant-id keys (any key ending in `tenant_id`, at any depth) are omitted from the response for every caller that is not a platform-tenant operator (REQ-446 design, sections 4a and 4b). Not closed by that rule, and tracked as an exception: Q-981 / GH #2266 / ISS-0999 (`source_definition_id`, `review_id`, `actor_id`; to be handled with an allowlist per event type).
 
 The D3 binding condition for `:PromotionsRead`, `:PromotionsManage`, `:DefinitionsRollback` and the promote route is met by the source-tenant ownership check of REQ-446 design section 4, citing `lib/letflow/routers/tenants.ex:451` and `lib/letflow/api/tenant_target.ex:31-39`.
+
+## Closure of the platform-events payload residual (ISS-0999 / Q-981), 2026-10-06
+
+This section is appended; no earlier text in this record was changed and no decision text changed. It records that the residual stated in the REQ-446 correction above (the event payload can name other tenants' ids; `source_definition_id`, `review_id`, `actor_id` not closed by the key-suffix `tenant_id` rule; tracked as Q-981 / GH #2266 / ISS-0999) is closed for `GET /promotions/platform-events`.
+
+Design: `lib/letflow/design/iss0999-platform-events-allowlist.md`. For this route it supersedes section 4a of the REQ-446 design (key-suffix matching).
+
+Route scope is unchanged: tenant scope under `:PromotionsRead` (`lib/letflow/routers/promotions.ex:221`).
+
+What a caller that is not a platform-tenant operator now sees:
+
+- The payload is shaped by a per-event-type allowlist (`@platform_event_allowlist`, `lib/letflow/routers/promotions.ex:954`; applied in `shape_platform_event_payload/3`, line 999-1020). Only allowlisted scalar keys are kept (map or list values are omitted, fail closed).
+- Tenant-id keys on the allowlist are kept only when the value is the caller's own tenant id.
+- `source_definition_id`, `review_id` and the teardown `error` text are omitted.
+- The item has no `actor_id` key (`platform_event_map/2`, line 980; the actor may be a user of another tenant).
+- An event type with no allowlist entry returns payload `{}` (the event itself is kept).
+- A platform-tenant operator sees the payload and `actor_id` unchanged.
+
+Remaining tracked item: `GET /promotions/:id/context` keeps the key-suffix rule of the REQ-446 design (section 4b). Its allowlist follow-up is tracked as Q-1003 / GH #2291 / ISS-1021.

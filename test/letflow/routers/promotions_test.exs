@@ -180,7 +180,7 @@ defmodule Letflow.Routers.PromotionsTest do
   # ---------------------------------------------------------------------------
 
   describe "response shape (design §2.6)" do
-    test "envelope has exactly items/next_cursor; item has exactly the 6 named keys" do
+    test "envelope has exactly items/next_cursor; a non-operator item has exactly the 5 named keys (no actor_id, ISS-0999)" do
       tenant = provisioned_tenant("req11-shape")
       type_name = register_event_type!(tenant.tenant_id)
       actor_id = Ecto.UUID.generate()
@@ -199,7 +199,6 @@ defmodule Letflow.Routers.PromotionsTest do
                Enum.sort([
                  "event_id",
                  "event_type",
-                 "actor_id",
                  "timestamp",
                  "sequence_num",
                  "payload"
@@ -207,7 +206,8 @@ defmodule Letflow.Routers.PromotionsTest do
 
       assert item["event_id"] == event.event_id
       assert item["event_type"] == type_name
-      assert item["actor_id"] == actor_id
+      # ISS-0999: the promoting actor's id is never shown to a non-operator
+      refute Map.has_key?(item, "actor_id")
       assert item["sequence_num"] == 1
       assert item["payload"] == %{}
       assert is_binary(item["timestamp"])

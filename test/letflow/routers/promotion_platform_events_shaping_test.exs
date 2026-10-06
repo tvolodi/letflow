@@ -150,20 +150,19 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
     end
 
     [
-      expected.(e1, Map.delete(elem(e1, 2), "source_tenant_id")),
-      expected.(e2, Map.delete(elem(e2, 2), "tenant_id")),
-      expected.(e3, elem(e3, 2)),
-      expected.(e4, elem(e4, 2)),
-      expected.(e4b, elem(e4b, 2)),
+      expected.(
+        e1,
+        Map.drop(elem(e1, 2), ["source_tenant_id", "source_definition_id", "review_id"])
+      ),
+      expected.(e2, Map.drop(elem(e2, 2), ["tenant_id", "error"])),
+      expected.(e3, Map.drop(elem(e3, 2), ["source_definition_id", "review_id"])),
+      expected.(e4, Map.delete(elem(e4, 2), "error")),
+      expected.(e4b, Map.delete(elem(e4b, 2), "error")),
       expected.(e5, elem(e5, 2)),
-      expected.(e6, %{
-        "detail" => %{
-          "items" => [%{"n" => 1}, %{"tenant_id" => own, "n" => 2}]
-        },
-        "note" => "hello"
-      }),
-      expected.(e7, %{"keep" => "x"}),
-      expected.(e8, %{"x" => [[%{}, %{"tenant_id" => own, "k" => 1}]], "y" => 7})
+      # the fixture type is not allowlisted: unknown event type, payload is empty
+      expected.(e6, %{}),
+      expected.(e7, %{}),
+      expected.(e8, %{})
     ]
   end
 
@@ -188,11 +187,8 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
       assert items[e4.id]["payload"]["tenant_id"] == ctx.a.tenant_id
       assert items[e4b.id]["payload"]["tenant_id"] == String.upcase(ctx.a.tenant_id)
 
-      detail = items[e6.id]["payload"]["detail"]
-      assert Map.has_key?(detail, "origin_tenant_id") == false
-      assert detail["items"] == [%{"n" => 1}, %{"tenant_id" => ctx.a.tenant_id, "n" => 2}]
-
-      assert items[e7.id]["payload"] == %{"keep" => "x"}
+      assert items[e6.id]["payload"] == %{}
+      assert items[e7.id]["payload"] == %{}
     end
 
     test "own_tenant_id_is_retained", ctx do
@@ -208,13 +204,6 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
           assert payload[key] == value, "#{key} of #{id} was dropped"
         end
       end
-
-      # the id nested in a list element
-      e6 = Enum.at(seeded, 6)
-
-      assert get_in(items[e6.id], ["payload", "detail", "items"])
-             |> Enum.at(1)
-             |> Map.get("tenant_id") == own
     end
 
     test "other_payload_fields_and_envelope_unchanged", ctx do
@@ -233,10 +222,13 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
 
       for {s, r, e} <- Enum.zip([shaped, raw, seeded]) do
         # envelope equal to the unshaped read, key set unchanged
-        assert Map.delete(s, "payload") == Map.delete(r, "payload")
+        # (the non-operator item has no actor_id; the unshaped read still does)
+        assert Map.delete(s, "payload") == r |> Map.delete("payload") |> Map.delete("actor_id")
+        refute Map.has_key?(s, "actor_id")
+        assert Map.has_key?(r, "actor_id")
 
         assert s |> Map.keys() |> Enum.sort() ==
-                 ["actor_id", "event_id", "event_type", "payload", "sequence_num", "timestamp"]
+                 ["event_id", "event_type", "payload", "sequence_num", "timestamp"]
 
         assert s["event_type"] == e.type
         # the unshaped payload is exactly what was stored; the shaped one exactly the expectation
@@ -254,17 +246,19 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
 
       resp = get_events(ctx.p, ["PLATFORM_ADMIN"])
       refute resp.resp_body =~ ctx.b.tenant_id
+      refute resp.resp_body =~ "actor_id"
 
       items = resp |> decode_items() |> by_id()
       for e <- seeded, do: assert(items[e.id]["payload"] == e.shaped)
     end
 
-    test "list_inside_list_is_walked", ctx do
+    test "unknown_type_payload_is_empty_even_with_nested_own_tenant_id", ctx do
       [_, _, _, _, _, _, _, _, e8] = seed!(ctx.a, ctx.b)
       items = ctx.a |> get_events(["PLATFORM_ADMIN"]) |> decode_items() |> by_id()
 
-      assert items[e8.id]["payload"] ==
-               %{"x" => [[%{}, %{"tenant_id" => ctx.a.tenant_id, "k" => 1}]], "y" => 7}
+      assert items[e8.id]["event_type"] == e8.type
+      # e8 stores A's own id inside a nested list; the allowlist does not descend
+      assert items[e8.id]["payload"] == %{}
     end
 
     test "other_roles_still_forbidden_and_see_no_event_data", ctx do
@@ -290,6 +284,106 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
 
       items = resp |> decode_items() |> by_id()
       for e <- seeded, do: assert(items[e.id]["payload"] == e.stored)
+      for {_id, item} <- items, do: assert(is_binary(item["actor_id"]))
+    end
+  end
+
+  describe "allowlist" do
+    defp promoted_attrs(ctx, extra) do
+      Map.merge(
+        %{
+          event_type: "DEFINITION_PROMOTED",
+          actor_id: Ecto.UUID.generate(),
+          review_id: Ecto.UUID.generate(),
+          source_tenant_id: ctx.b.tenant_id,
+          target_tenant_id: ctx.a.tenant_id,
+          source_definition_id: Ecto.UUID.generate(),
+          target_definition_id: Ecto.UUID.generate(),
+          process_key: Scope.unique_key("pk")
+        },
+        extra
+      )
+    end
+
+    test "unlisted_tenant_keys_never_reach_a_non_operator", ctx do
+      b = ctx.b.tenant_id
+
+      attrs =
+        promoted_attrs(ctx, %{tenant_ids: [b], tenantId: b, source_tenant: b, x_tenant_id: b})
+
+      assert {:ok, %{event_id: id}} =
+               PlatformEvents.append_definition_promoted(attrs, ctx.a.schema_name)
+
+      resp = get_events(ctx.a, ["PLATFORM_ADMIN"])
+      item = resp |> decode_items() |> by_id() |> Map.fetch!(id)
+
+      assert item["payload"] |> Map.keys() |> Enum.sort() ==
+               ["process_key", "target_definition_id", "target_tenant_id"]
+
+      assert item["payload"]["target_tenant_id"] == ctx.a.tenant_id
+      refute resp.resp_body =~ b
+      refute resp.resp_body =~ String.upcase(b)
+    end
+
+    test "unknown_event_type_payload_is_empty_and_event_kept", ctx do
+      seeded = seed!(ctx.a, ctx.b)
+      e6 = Enum.at(seeded, 6)
+
+      shaped_all = ctx.a |> get_events(["PLATFORM_ADMIN"]) |> decode_items()
+      shaped_page = Jason.decode!(get_events(ctx.a, ["PLATFORM_ADMIN"], "page_size=2").resp_body)
+
+      item = shaped_all |> by_id() |> Map.fetch!(e6.id)
+      assert item["event_type"] == e6.type
+      assert item["payload"] == %{}
+
+      # the same schema read UNSHAPED (A pinned as the platform tenant), pin restored after
+      Fixture.pin!(ctx.a.tenant_id)
+      raw_all = ctx.a |> get_events(["PLATFORM_ADMIN"]) |> decode_items()
+      raw_page = Jason.decode!(get_events(ctx.a, ["PLATFORM_ADMIN"], "page_size=2").resp_body)
+      Fixture.pin!(ctx.p.tenant_id)
+
+      assert Enum.map(shaped_all, & &1["event_id"]) == Enum.map(raw_all, & &1["event_id"])
+      assert length(shaped_page["items"]) == length(raw_page["items"])
+      assert shaped_page["next_cursor"] == nil == (raw_page["next_cursor"] == nil)
+      assert shaped_page["next_cursor"] != nil
+    end
+
+    test "value_under_allowlisted_key_must_be_scalar", ctx do
+      b = ctx.b.tenant_id
+
+      # The shipped schema types process_key as a string, so the append would be rejected. A tenant
+      # may register its own (higher) schema version of the type (Registry.get_type/2 picks the
+      # highest), which models a producer writing a non-scalar value under an allowlisted key.
+      assert {:ok, _} =
+               Letflow.EventStore.Registry.register_type(
+                 %{
+                   "name" => "DEFINITION_PROMOTED",
+                   "schema_version" => 99,
+                   "json_schema" => %{"type" => "object"},
+                   "description" => "ISS-0999 non-scalar fixture"
+                 },
+                 ctx.a.tenant_id
+               )
+
+      attrs = promoted_attrs(ctx, %{process_key: %{"nested" => b}})
+
+      assert {:ok, %{event_id: id}} =
+               PlatformEvents.append_definition_promoted(attrs, ctx.a.schema_name)
+
+      resp = get_events(ctx.a, ["PLATFORM_ADMIN"])
+      item = resp |> decode_items() |> by_id() |> Map.fetch!(id)
+
+      refute Map.has_key?(item["payload"], "process_key")
+      assert Map.has_key?(item["payload"], "target_definition_id")
+      refute resp.resp_body =~ b
+    end
+
+    test "non_operator_item_has_no_actor_id", ctx do
+      seed!(ctx.a, ctx.b)
+      items = ctx.a |> get_events(["PLATFORM_ADMIN"]) |> decode_items()
+
+      assert length(items) == 9
+      for item <- items, do: assert(Map.has_key?(item, "actor_id") == false)
     end
   end
 

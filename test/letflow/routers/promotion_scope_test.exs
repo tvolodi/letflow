@@ -181,7 +181,15 @@ defmodule Letflow.Routers.PromotionScopeTest do
 
     test "every other role is denied 403 on every row", ctx do
       for row <- @rows,
-          roles <- [["PROCESS_DESIGNER"], ["PROCESS_OPERATOR"], ["TASK_WORKER"], []],
+          roles <- [
+            ["PROCESS_DESIGNER"],
+            ["PROCESS_OPERATOR"],
+            ["TASK_WORKER"],
+            # REQ-446 AC3: the two roles the original grid omitted
+            ["CANDIDATE"],
+            ["AGENT_RUNNER"],
+            []
+          ],
           fixture <- [ctx.a, ctx.p] do
         resp = request(row, fixture, roles, ctx.b.tenant_id)
         assert resp.status == 403, "#{inspect(roles)} #{elem(row, 1)} #{elem(row, 2)}"

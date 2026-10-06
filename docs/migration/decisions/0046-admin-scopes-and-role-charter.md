@@ -369,3 +369,17 @@ Note: D2's config-pinned/fail-closed refinement rests on the user's ratification
 
 SECURITY-REVIEWER (pass 3, 2026-10-06, REQ-445 / Q-962): PASS. INV-1/INV-5/INV-10 reasoning checked against D2 (points 1-5, 2a), the D3 binding condition, the D4 Transition and the D8 order. Tenant PLATFORM_ADMIN promotion/platform-events exposure closed.
 Conditions carried forward: REQ-446 must ship the tenant-PLATFORM_ADMIN denial test plus a cross-tenant negative test; REQ-448 promotion cells stay conditional on them; REQ-447 must not ship before ISS-0993; re-review required on the Q-960 code and on REQ-446 before any promotions permission goes to a non-platform role. Suggested (REQ-ANALYST): add those criteria to REQ-446.
+
+## Correction of the D3 scope table (REQ-446), dated 2026-10-06 (UTC)
+
+This is a CORRECTION of one row of the D3 permission scope table (the planned row "platform-events permission, to be named by REQ-446 | platform"), not an amendment of a decision. No decision text above is repeated or changed.
+
+Route: `GET /promotions/platform-events`.
+
+New classification: tenant scope, permission `:PromotionsRead`. No separate platform-events permission exists.
+
+Evidence that the route reads only the caller's own schema: the handler takes `opts = conn.assigns.scoped_opts` and passes `prefix: Keyword.fetch!(opts, :prefix)` to the store (`lib/letflow/routers/promotions.ex:859,865`); `EventStore.list_platform_events/1` reads the prefix from its params and runs `Repo.all(prefix: prefix)` (`lib/letflow/event_store.ex:1111,1123`); `scoped_opts` is built from `auth_context.tenant_id` by `Context.scoped_repo_opts/1` and assigned in `lib/letflow/plugs/authorize.ex:103,132`. No request value selects the schema.
+
+Residual: the event payload can name other tenants' ids. Tenant-id keys (any key ending in `tenant_id`, at any depth) are omitted from the response for every caller that is not a platform-tenant operator (REQ-446 design, sections 4a and 4b). Not closed by that rule, and tracked as an exception: Q-981 / GH #2266 / ISS-0999 (`source_definition_id`, `review_id`, `actor_id`; to be handled with an allowlist per event type).
+
+The D3 binding condition for `:PromotionsRead`, `:PromotionsManage`, `:DefinitionsRollback` and the promote route is met by the source-tenant ownership check of REQ-446 design section 4, citing `lib/letflow/routers/tenants.ex:451` and `lib/letflow/api/tenant_target.ex:31-39`.

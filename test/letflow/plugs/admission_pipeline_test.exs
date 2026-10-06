@@ -155,8 +155,8 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
         |> dispatch()
 
       # PLATFORM_ADMIN reaches Letflow.Routers.Identity's own catch-all (404),
-      # per Letflow.Api.Authorization's :Unknown-branch PLATFORM_ADMIN
-      # allowance -- any non-503 status here proves tenant B's own request
+      # per Letflow.Api.Authorization's :UnmatchedRoute marker allowance
+      # -- any non-503 status here proves tenant B's own request
       # passed BOTH admission gates.
       refute conn_b.status == 503
       assert conn_b.status == 404

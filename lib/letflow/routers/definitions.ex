@@ -20,7 +20,8 @@ defmodule Letflow.Routers.Definitions do
   `POST /:process_key/rollback` is declared with `authz_post` and the explicit
   key `:DefinitionsRollback` (ISS-0993, TENANT scope): it acts on the caller's
   OWN tenant schema only (`scoped_opts`), no tenant identifier is read from the
-  request, and it no longer resolves to `:Unknown`.
+  request (REQ-446: named permission, TENANT scope, own-schema key lookup;
+  a key absent from the caller's schema is the zero-detail 404).
 
   | Handler               | Method/path                       | Delegate                                              | Permission        | Response |
   |------------------------|-----------------------------------|--------------------------------------------------------|-------------------|----------|

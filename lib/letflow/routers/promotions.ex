@@ -69,8 +69,16 @@ defmodule Letflow.Routers.Promotions do
   resolves to `:Unknown` any more. R11 reads only the sentinel event stream
   inside the caller's own tenant schema.
 
-  The rule for naming ANOTHER tenant (decision point OQ-2,
-  `Letflow.PlatformTenant.cross_tenant_promotion_operator_only?/0`): only a
+  REQ-446 (named, scoped permissions): the three permissions are named,
+  not `:Unknown`, and all TENANT scope -- including R11, which returns only
+  rows of the caller's own schema, so no separate platform permission exists.
+  INV-10 response shaping: for a caller that is NOT a platform-tenant operator
+  (`Letflow.PlatformTenant.scope_facts_for/1` on `auth_context.tenant_id`, never a
+  request value), R11 event payloads and the R4 `serialised_plan` omit every
+  key ending in `tenant_id` whose value is not the caller's own tenant id, at
+  any depth (R4 does not descend into `entries`). Operators see them unchanged.
+
+  The rule for naming ANOTHER tenant (`Letflow.PlatformTenant.cross_tenant_promotion_operator_only?/0`): only a
   request that reads or writes a tenant OTHER than the caller's is
   operator-only (platform-tenant `PLATFORM_ADMIN`). Product limitation: a
   customer cannot promote from its test tenant to its production tenant by
@@ -185,6 +193,7 @@ defmodule Letflow.Routers.Promotions do
   alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.EventStore
   alias Letflow.EventStore.PlatformEvents
+  alias Letflow.PlatformTenant
 
   # Explicit policy keys (see moduledoc): :PromotionsRead / :PromotionsManage.
   # "/plan" is declared before the "/:id/..." two-segment patterns even
@@ -512,7 +521,7 @@ defmodule Letflow.Routers.Promotions do
   defp render_context(conn, {:error, :review_not_found}), do: Response.not_found(conn)
 
   defp render_context(conn, {:ok, %PromotionReview{} = review}),
-    do: Response.ok(conn, review_context_map(review))
+    do: Response.ok(conn, review_context_map(review, tenant_view(conn)))
 
   # PROVENANCE (historical, not current decision authority):
   # Exactly 9 keys (design §7.3), ported from promotion_review.zig:321-337.
@@ -522,12 +531,12 @@ defmodule Letflow.Routers.Promotions do
   # `needs_review_package` are domain logic computed inline by the handler
   # in R-Co and are not ported here (OQ-3, no context module produces either).
   @doc false
-  @spec review_context_map(PromotionReview.t()) :: map()
-  defp review_context_map(review) do
+  @spec review_context_map(PromotionReview.t(), tenant_view()) :: map()
+  defp review_context_map(review, view) do
     %{
       "review_id" => review.id,
       "plan_digest" => review.plan_digest,
-      "serialised_plan" => Jason.decode!(review.serialised_plan),
+      "serialised_plan" => shape_plan(Jason.decode!(review.serialised_plan), view),
       "status" => Atom.to_string(review.status),
       "requested_by" => review.requested_by,
       "def_type" => review.def_type,
@@ -859,7 +868,12 @@ defmodule Letflow.Routers.Promotions do
         event_type: non_empty_platform_event_type(Map.get(query, "event_type"))
       }
 
-      render_platform_events(conn, EventStore.list_platform_events(params))
+      # Shaping happens after the page is read; the cursor is independent of it.
+      render_platform_events(
+        conn,
+        EventStore.list_platform_events(params),
+        tenant_view(conn)
+      )
     else
       {:error, :invalid_page_size} ->
         Response.bad_request(conn, "invalid page_size")
@@ -872,9 +886,9 @@ defmodule Letflow.Routers.Promotions do
     end
   end
 
-  defp render_platform_events(conn, {:ok, %{items: items, next_cursor: next_cursor}}) do
+  defp render_platform_events(conn, {:ok, %{items: items, next_cursor: next_cursor}}, view) do
     Response.ok(conn, %{
-      "items" => Enum.map(items, &platform_event_map/1),
+      "items" => Enum.map(items, &platform_event_map(&1, view)),
       "next_cursor" => next_cursor
     })
   end
@@ -924,17 +938,85 @@ defmodule Letflow.Routers.Promotions do
 
   # Hand-built allowlist (design §2.6), same discipline as Routers.Audit's
   # audit_item/1 -- never a raw struct/Jason.Encoder derivation.
-  @spec platform_event_map(EventStore.platform_event_item()) :: map()
-  defp platform_event_map(item) do
+  @spec platform_event_map(EventStore.platform_event_item(), tenant_view()) :: map()
+  defp platform_event_map(item, view) do
     %{
       "event_id" => item.event_id,
       "event_type" => item.event_type,
       "actor_id" => item.actor_id,
       "timestamp" => iso8601(item.timestamp),
       "sequence_num" => item.sequence_num,
-      "payload" => item.payload
+      "payload" => shape_tenant_ids(item.payload, view)
     }
   end
+
+  # ── INV-10 response shaping (REQ-446) ────────────────────────────────────
+
+  # Who is reading, as far as tenant ids go: a platform-tenant operator sees
+  # everything; anyone else may see only its own tenant id (nil = none at all).
+  # Recomputed from `auth_context` via `PlatformTenant.scope_facts_for/1`
+  # (the stored flag is never read, nothing comes from the request).
+  @typep tenant_view :: :operator | {:tenant, String.t() | nil}
+
+  @spec tenant_view(Plug.Conn.t()) :: tenant_view()
+  defp tenant_view(conn) do
+    auth_context = Map.get(conn.assigns, :auth_context)
+
+    if PlatformTenant.scope_facts_for(auth_context).platform_scope? do
+      :operator
+    else
+      own = if is_map(auth_context), do: Map.get(auth_context, :tenant_id)
+      {:tenant, if(is_binary(own), do: own)}
+    end
+  end
+
+  # INV-10: payloads and plans name tenants by id (a promotion event holds the
+  # source and target tenant ids). A non-operator must never receive another
+  # tenant's id, so every key ending in `tenant_id` is KEPT only when its
+  # value is a binary equal (case-insensitively) to the caller's own tenant
+  # id; otherwise the entry is OMITTED (non-binary values included, fail
+  # closed). Recurses through every map and list element at any depth;
+  # anything else passes through. Hand-built maps (INV-2), no ids logged.
+  @spec shape_tenant_ids(term(), tenant_view()) :: term()
+  defp shape_tenant_ids(value, :operator), do: value
+
+  defp shape_tenant_ids(value, {:tenant, own} = view)
+       when is_map(value) and not is_struct(value) do
+    Enum.reduce(value, %{}, fn {key, val}, acc ->
+      if tenant_id_key?(key) and not own_tenant_value?(val, own) do
+        acc
+      else
+        Map.put(acc, key, shape_tenant_ids(val, view))
+      end
+    end)
+  end
+
+  defp shape_tenant_ids(value, view) when is_list(value),
+    do: Enum.map(value, &shape_tenant_ids(&1, view))
+
+  defp shape_tenant_ids(value, _view), do: value
+
+  # /context: the same walk over the decoded plan, except the top-level
+  # `entries` (definition before/after content) is left as stored.
+  @spec shape_plan(term(), tenant_view()) :: term()
+  defp shape_plan(plan, :operator), do: plan
+
+  defp shape_plan(plan, view) when is_map(plan) and not is_struct(plan) do
+    {entries, rest} = Map.split(plan, ["entries"])
+    Map.merge(shape_tenant_ids(rest, view), entries)
+  end
+
+  defp shape_plan(plan, _view), do: plan
+
+  defp tenant_id_key?(key) when is_binary(key),
+    do: String.ends_with?(String.downcase(key), "tenant_id")
+
+  defp tenant_id_key?(_key), do: false
+
+  defp own_tenant_value?(value, own) when is_binary(value) and is_binary(own),
+    do: String.downcase(value) == String.downcase(own)
+
+  defp own_tenant_value?(_value, _own), do: false
 
   # ── GET /promotions -- R12, review-queue list (design §4) ───────────────
 

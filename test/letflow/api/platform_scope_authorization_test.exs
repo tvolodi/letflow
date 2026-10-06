@@ -9,8 +9,8 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
     * `has_permission_in_scope?/3` and the C6 decision point;
     * `evaluate_access/2` grid roles x `platform_tenant?` x keys, including the two catch-all
       marker keys (rule 1a);
-    * the A1 behaviour of `:Unknown` (the legacy branch is KEPT in A1; rule 1, which denies it for
-      every role, ships in A2 -- the two A1-variant tests below flip there);
+    * `:Unknown` (A2 state): denied for every role, in and out of the platform tenant (see the
+      test of that name below);
     * key and permission resolution for the new keys, table-driven.
 
   INV-10 check, enforced from the merge of Q-960 PR A (the scope-table completeness check).

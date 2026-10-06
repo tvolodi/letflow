@@ -72,7 +72,8 @@ defmodule Letflow.Routers.Tenants do
   ONLY non-platform route under the `/tenants` mount. Its source,
   `:test_tenant_id`, is the one caller-supplied tenant: a non-operator may only
   name its OWN tenant there, a platform-tenant operator may name another
-  (decision point OQ-2, `Letflow.PlatformTenant.cross_tenant_promotion_operator_only?/0`).
+  (REQ-446: named `:PromotionsManage`, TENANT scope, because source ownership
+  is proven before any read; any other source id is the zero-detail 404).
   `Letflow.Api.TenantTarget.authorize_target_tenant/2` (404 byte-identical to a
   nonexistent source, called BEFORE any read of the source tenant, including
   for a never-provisioned id) implements it in `handle_promote/3`; the

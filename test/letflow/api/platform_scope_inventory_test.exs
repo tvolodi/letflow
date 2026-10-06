@@ -91,6 +91,14 @@ defmodule Letflow.Api.PlatformScopeInventoryTest do
     end
   end
 
+  # REQ-446 T-4: the G2 (a) predicate, as one helper over `{router, method, path, key}` tuples:
+  # the routes that declare `:Unknown` or a catch-all marker as their key.
+  defp offending_routes(routes) do
+    Enum.filter(routes, fn {_router, _method, _path, key} ->
+      key in [:Unknown, :UnmatchedPlatformPath, :UnmatchedRoute]
+    end)
+  end
+
   defp classified_core, do: Authorization.core_permissions()
   defp classified_catalog, do: Catalog.permissions()
 
@@ -352,12 +360,48 @@ defmodule Letflow.Api.PlatformScopeInventoryTest do
       routes = all_routes()
       assert length(routes) >= 130
 
-      for {router, method, path, key} <- routes do
-        refute key == :Unknown, "#{inspect(router)} #{method} #{path} declares :Unknown"
+      offenders = offending_routes(routes)
 
-        refute key in [:UnmatchedPlatformPath, :UnmatchedRoute],
-               "#{inspect(router)} #{method} #{path} declares a catch-all marker"
-      end
+      assert offenders == [],
+             "routes declaring :Unknown or a catch-all marker: #{inspect(offenders)}"
+    end
+
+    test "G2 (a) flags a fixture router that declares :Unknown as an explicit key (REQ-446 T-4)" do
+      name =
+        Module.concat(__MODULE__, "ExplicitUnknownProbe#{System.unique_integer([:positive])}")
+
+      capture_io(:stderr, fn ->
+        Code.compile_string("""
+        defmodule #{inspect(name)} do
+          use Letflow.Api.AuthorizedRouter
+
+          authz_get "/named", :HelpRead do
+            conn
+          end
+
+          authz_get "/explicit-unknown", :Unknown do
+            conn
+          end
+        end
+        """)
+      end)
+
+      # the explicit-key form COMPILES (the macro accepts any term) ...
+      routes = for {method, path, key} <- name.__authz_routes__(), do: {name, method, path, key}
+      assert length(routes) == 2
+
+      # ... and is caught by the very predicate G2 (a) applies to the real route table
+      assert offending_routes(routes) == [{name, "GET", "/explicit-unknown", :Unknown}]
+
+      # control: the same predicate accepts the named route on its own
+      assert offending_routes(Enum.reject(routes, &(elem(&1, 3) == :Unknown))) == []
+    end
+
+    test "a route declared with NO policy key does not compile (REQ-446 T-4)" do
+      assert {:error, %CompileError{}} =
+               compile_router(~s|  authz_get "/no-key" do
+    conn
+  end|)
     end
 
     test "(b)/(d) every route's permission is a core or a Catalog permission (never the identity fallback)" do

@@ -30,8 +30,9 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    # REQ-403 — the core, closed-set literal, now including :MyModulesRead as
-    # its 34th/last entry. This is what core_permissions/0 must return exactly.
+    # The core, closed-set literal of the 40 core permissions (REQ-403 added
+    # :MyModulesRead; REQ-446 / ISS-0993 added the promotion and rollback ones).
+    # This is what core_permissions/0 must return exactly.
     @core_permissions [
       :DefinitionsWrite,
       :DefinitionsRead,

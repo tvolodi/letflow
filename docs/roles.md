@@ -63,12 +63,12 @@ Format, parsed by the REQ-448 parity test: one row per permission; first column 
 without the colon; then one column per role in `roles/0` order (eight columns); cells `yes` or `no`;
 final column `scope` (`platform` or `tenant`); whitespace-separated, first line is the header.
 PLATFORM_ADMIN `yes` means as evaluated in the platform tenant. Rows after `EntitiesRestrictionsManage`
-are planned permissions (REQ-446 names, `TenantSettingsManage` split); a permission REQ-446 classifies
-as platform (promotion platform-events) is added by REQ-446 as `platform`, PLATFORM_ADMIN only.
+are planned permissions (REQ-446 names, `TenantSettingsManage` split). REQ-446 classified `GET /promotions/platform-events`
+as tenant scope under `PromotionsRead` (see the correction note appended to decision 0046); no platform promotion permission exists.
 Module (Catalog) permissions are all tenant scope and are not listed.
-Conditional cells: the TENANT_ADMIN and TENANT_AUDITOR `yes` cells for PromotionsRead and PromotionsManage
-hold only if REQ-446 proves or adds the source-tenant ownership check (0046 D3, binding condition);
-otherwise only PLATFORM_ADMIN holds them, or they become platform scope.
+Conditional cells: the 0046 D3 binding condition (source-tenant ownership proven) is met by REQ-446
+(`lib/letflow/routers/tenants.ex:451`, `lib/letflow/api/tenant_target.ex:31-39`); the TENANT_ADMIN and
+TENANT_AUDITOR `yes` cells for PromotionsRead and PromotionsManage stand.
 
 ```
 permission                      PLATFORM_ADMIN PROCESS_DESIGNER PROCESS_OPERATOR TASK_WORKER AGENT_RUNNER CANDIDATE TENANT_ADMIN TENANT_AUDITOR scope

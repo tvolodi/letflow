@@ -100,9 +100,9 @@ defmodule Letflow.Plugs.ApiPipelineIntegrationTest do
       # proves the request passed both AuthPipeline and TenantStatus and
       # reached Letflow.Routers.Identity's own :match/Authorize/:dispatch
       # chain -- a stronger signal than the pre-REQ-131 404 this test used to
-      # assert, since it additionally proves the mandatory plug ran. See
-      # test/letflow/api/authorization_enforcement_test.exs (AC5) for the
-      # PLATFORM_ADMIN-allowed half of the same :Unknown branch.
+      # assert, since it additionally proves the mandatory plug ran. `:Unknown`
+      # is denied for every role; the allowed 404 for a PLATFORM_ADMIN is the
+      # `:UnmatchedRoute` marker (authorization.ex), not an `:Unknown` allowance.
       assert conn.status == 403
       assert conn.assigns.auth_context.tenant_id == tenant.id
       assert conn.assigns.auth_context.roles == []

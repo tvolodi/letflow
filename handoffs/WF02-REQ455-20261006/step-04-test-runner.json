@@ -1,0 +1,52 @@
+{
+  "handoff_id": "10b9638b-5623-4f2b-8ac4-d196d6efcc27",
+  "run_id": "WF02-REQ455-20261006",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ455-20261006/step-04-test-runner.json",
+  "created_at": "2026-10-06T01:10:20Z",
+  "started_at": "2026-10-06T01:10:20Z",
+  "completed_at": "2026-10-06T02:17:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-455"
+    ],
+    "requirement_text": {
+      "REQ-455": "Approved by the user on 2026-10-06. Process design gaps are found late,\nin UAT: 35 files under docs/issues/ mention a dead end, an unreachable\nstep or a missing default route (recent: ISS-0928 no_matching_edge on a\nservice task in kyc-routing, ISS-0929). Letflow.Definitions.Graph\nalready checks a good deal (violation codes at\nlib/letflow/definitions/graph.ex:207-234: missing start or end node,\ndangling edge, isolated node, cycle without gateway, missing role,\nmissing edge condition, multiple default edges,\nhuman_task_no_fallback_edge and more). This entry adds only what is\nmissing, as deterministic checks that run wherever the existing ones\nrun, so they do not depend on any model.\n\nFIRST STEP (CODE-DESIGNER): for each candidate check below, establish\nby reading graph.ex, semantic_validation.ex and their tests whether it\nalready exists, exists partly, or is missing, and record the finding\nwith file and line. Build only the missing part.\n\nCANDIDATE CHECKS:\n1. Reachability: every node is reachable from the start node, and from\nevery node at least one end node is reachable. (check_isolated_nodes\nlooks at a node's own edges; establish whether a connected island or a\ntrap with no way out is caught.)\n2. Decision without a default route: an exclusive gateway, and any\nother node kind whose outgoing edges all carry conditions (ISS-0928\nwas a service task), has no is_default edge, so an instance can stop\nwith no matching route. Establish which node kinds can have\nconditional outgoing edges and cover all of them.\n3. Data used before it is collected: an edge condition or form\nexpression reads a variable that no form, service output or\nsub-process output on ANY path from the start to that point can have\nset. Reuse the declared-fields machinery of SemanticValidation; report\nonly the case where no path sets it (certain), not the case where some\npath does not (that is a judgment for PROCESS-AUDITOR, REQ-456).\n4. Unbound task roles at install: when a definition or solution pack is\ninstalled or activated in a tenant, every role a human task routes to\nthat has no tenant_role binding in that tenant is listed. Decision\n0029 section 2 keeps required roles advisory and role seeding out of\npacks; do not change that. This is a reported warning in the\nvalidation result and the install response, never a silent pass and\nnever an automatic binding.\nNew findings in 1 to 3 are violations (activation is refused, same as\nthe existing codes). State in the design whether any definition\nshipped in priv/ or seeded by scripts/ fails a new check; if one does,\nreport it to ORCH as an issue with the definition and node named, and\ndo not weaken the check.\nOPEN QUESTIONS: - \"A definition already active in a tenant that fails a new check keeps running. Default: new checks apply at validate, activate and import time only; nothing is deactivated.\""
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/specs/REQ-455.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/",
+      "lib/letflow/design/",
+      "test/letflow/definitions/"
+    ],
+    "branch_name": "feature/WF02-REQ455-20261006"
+  },
+  "task": {
+    "description": "WF-02 step 04 (TEST-RUNNER): RAM is tight and CI is saturated, so instead of scripts/test_parallel.sh run the suite SEQUENTIALLY in ONE BEAM, one test directory/top-level file group at a time (mix test test/<dir> ...), with MIX_TEST_PARTITION=57 (unique), never concurrent runs, never a second mix process in parallel. Goal: catch any other test whose gateway graph now fails the new CHK-24 default-route check or whose fixture version pin changed. Cover ALL of test/ (enumerate dirs with ls; the new REQ-455 tests included). Then CI-shaped checks: stage files first (git add -A except letflow-3.code-workspace -- staging only, no commit), then mix compile --warnings-as-errors, mix format --check-formatted, mix letflow.lint_handoffs, mix letflow.check_issue_refs, mix letflow.check_boundaries. Attribute any failure structurally per core-directives 'Failure Attribution Is Structural' (in-diff? reproduce at merge-base in a throwaway worktree from origin/main under scratchpad, dropping any DB partition you create). Write test/reports/report-2026-10-06-WF02-REQ455.yaml with real output (state that scripts/test_parallel.sh was replaced by a sequential per-directory run and why). Do not fix lib code yourself: report failures with the responsible agent. No commit, no push, no git checkout/stash/reset.",
+    "acceptance_criteria": [
+      "the design lists each candidate check as exists, partly exists or missing, with file and line evidence, and CODE-DESIGN-VALIDATOR re-verifies each classification",
+      "for each check that was built: one test with a minimal definition that violates only that check and asserts the new violation code and the offending node or edge id, and one test showing a valid neighbour case passes",
+      "the ISS-0928 shape (a service task with only conditional outgoing edges and no default) is rejected at validation, with a test",
+      "check 4: installing a definition whose human task routes to an unbound role returns the role names in the warning list and binds nothing (tenant_role row count unchanged)",
+      "every process definition shipped in the repository or seeded by scripts/ is run through the validator in a test; each failure is either fixed in the same change or filed as an issue and named in the run report",
+      "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted"
+    ]
+  },
+  "result": {
+    "verdict": "PARTIAL",
+    "summary": "Sequential per-directory run (6666 passed). No failure attributable to REQ-455 diff. F1 EngineConcurrencyTest AC4 pool queue_timeout flake under load, passes alone (3 passed). F2 test/scripts/uat_preflight_local_deps_test T1/T2/T7 fail identically at merge-base 3d269109 (pre-existing Windows bash launcher issue); not filed as issue, ORCH to decide. compile --warnings-as-errors, format, lint_handoffs, check_issue_refs, check_boundaries all exit 0.",
+    "artifacts_out": [
+      "test/reports/report-2026-10-06-WF02-REQ455.yaml"
+    ]
+  },
+  "rework_count": 0
+}

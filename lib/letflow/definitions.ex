@@ -136,6 +136,7 @@ defmodule Letflow.Definitions do
   alias Letflow.Definitions.PromotionAssertionRun
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.PromotionReviewStore
+  alias Letflow.Definitions.RoleBinding
   alias Letflow.Definitions.SemanticValidation
   alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Engine.VariableSchema
@@ -556,7 +557,8 @@ defmodule Letflow.Definitions do
          {:ok, graph} <- convert_graph(graph_map),
          :ok <- check_graph_result(Graph.validate_graph(graph)),
          :ok <- check_graph_result(Graph.validate_node_attributes(graph)),
-         :ok <- check_graph_result(Graph.validate_edge_conditions(graph)) do
+         :ok <- check_graph_result(Graph.validate_edge_conditions(graph)),
+         :ok <- check_graph_result(Graph.validate_flow(graph)) do
       insert_definition(attrs, prefix, tenant_id)
     end
   end
@@ -1207,7 +1209,8 @@ defmodule Letflow.Definitions do
   @type graph_validation_result :: %{
           definition_id: Ecto.UUID.t(),
           valid: boolean(),
-          violations: [Graph.Violation.t()]
+          violations: [Graph.Violation.t()],
+          warnings: [String.t()]
         }
 
   @doc """
@@ -1234,15 +1237,16 @@ defmodule Letflow.Definitions do
        on every call, no caching layer anywhere in this path (REQ-372 AC6).
        Its own `{:error, :missing_prefix}` / `{:error, :invalid_definition_id}`
        propagate through this function's `with` chain unchanged.
-    4. Exactly these four, in this order:
+    4. Exactly these five, in this order:
        `Graph.validate_graph/1` (REQ-028 structural),
        `Graph.validate_node_attributes/1` (REQ-029 node attributes),
        `Graph.validate_edge_conditions/1` (REQ-029 edge conditions),
+       `Graph.validate_flow/1` (REQ-455 reachability and default route),
        `Letflow.Definitions.SemanticValidation.validate/2` (REQ-372 semantic
        — field-existence and type-compatibility of `EXCLUSIVE_GATEWAY` edge
        conditions against the freshly-fetched declared fields).
-    5. The four `:violations` lists are concatenated in that order.
-       Duplicates are **not** deduplicated: the four validators produce
+    5. The five `:violations` lists are concatenated in that order.
+       Duplicates are **not** deduplicated: the five validators produce
        disjoint `Graph.Violation.code()` sets. `valid` is `violations == []`.
 
   **Adds no rule of its own, and calls no other validator.** In particular it
@@ -1253,7 +1257,9 @@ defmodule Letflow.Definitions do
   "REQ-028/029's validators directly". That exclusion is deliberate, and
   `activate/2` remains its owning path.
 
-  Issues exactly two queries (`get_by_id/2` and `VariableSchema.fetch_schemas/3`);
+  Issues exactly three queries (`get_by_id/2`, `VariableSchema.fetch_schemas/3` and
+  `RoleBinding.bound_role_names/1`, which feeds the advisory `:warnings` list of
+  human-task roles with no `tenant_role` binding, REQ-455 check 4);
   everything after that is pure.
   """
   @spec validate_definition_graph(id :: Ecto.UUID.t(), opts :: opts()) ::
@@ -1274,13 +1280,18 @@ defmodule Letflow.Definitions do
         Graph.validate_graph(graph).violations ++
           Graph.validate_node_attributes(graph).violations ++
           Graph.validate_edge_conditions(graph).violations ++
+          Graph.validate_flow(graph).violations ++
           SemanticValidation.validate(graph, declared_fields).violations
+
+      warnings =
+        RoleBinding.warnings_for_definitions([{definition.name, graph}], prefix: prefix)
 
       {:ok,
        %{
          definition_id: definition.id,
          valid: violations == [],
-         violations: violations
+         violations: violations,
+         warnings: warnings
        }}
     end
   end
@@ -1667,7 +1678,8 @@ defmodule Letflow.Definitions do
            {:ok, graph} <- convert_graph(graph_map),
            :ok <- check_graph_result(Graph.validate_graph(graph)),
            :ok <- check_graph_result(Graph.validate_node_attributes(graph)),
-           :ok <- check_graph_result(Graph.validate_edge_conditions(graph)) do
+           :ok <- check_graph_result(Graph.validate_edge_conditions(graph)),
+           :ok <- check_graph_result(Graph.validate_flow(graph)) do
         :ok
       end
     else
@@ -2348,9 +2360,9 @@ defmodule Letflow.Definitions do
   # locked FOR UPDATE by run_activate_transaction/4) -- there is no cache
   # anywhere in this path, so the only way the result can differ between two
   # calls is if the underlying variable_schemas rows or the graph itself
-  # actually changed. Only the semantic pass is added here; validate_graph/1,
+  # actually changed. REQ-455 adds Graph.validate_flow/1 here; validate_graph/1,
   # validate_node_attributes/1, validate_edge_conditions/1 are deliberately
-  # NOT newly wired into activate/2 by this requirement (design §3.2, §5 OQ-6).
+  # NOT newly wired into activate/2 (REQ-372 design §3.2, §5 OQ-6).
   @spec run_semantic_validation(ProcessDefinition.t(), prefix :: String.t()) ::
           :ok
           | {:error, :graph_structure_invalid}
@@ -2362,12 +2374,15 @@ defmodule Letflow.Definitions do
       {:ok, graph} ->
         case VariableSchema.fetch_schemas(Repo, definition.id, prefix: prefix) do
           {:ok, declared_fields} ->
-            case SemanticValidation.validate(graph, declared_fields) do
-              %{valid: true} ->
-                :ok
+            # REQ-455: the flow checks run here too, so a DRAFT stored before
+            # they existed cannot be activated with a dead end or missing default.
+            violations =
+              Graph.validate_flow(graph).violations ++
+                SemanticValidation.validate(graph, declared_fields).violations
 
-              %{valid: false, violations: violations} ->
-                {:error, {:semantic_validation_failed, violations}}
+            case violations do
+              [] -> :ok
+              violations -> {:error, {:semantic_validation_failed, violations}}
             end
 
           {:error, reason} ->

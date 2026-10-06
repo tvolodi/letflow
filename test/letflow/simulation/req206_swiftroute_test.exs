@@ -96,6 +96,12 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
       # on_timeout fallback for ops-review
       %{"id" => "fallback-ops-review", "source" => "ops-review", "target" => "end-rejected"},
       %{
+        "id" => "ceo-approval-gate-default",
+        "source" => "ceo-approval-gate",
+        "target" => "ceo-approval",
+        "is_default" => true
+      },
+      %{
         "id" => "e3",
         "source" => "ceo-approval-gate",
         "target" => "ceo-approval",

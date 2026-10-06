@@ -67,6 +67,10 @@ graph:
       source: ceo-approval-gate
       target: release-shipment
       condition: "variables.declared_value <= 500"
+    - id: ceo-approval-gate-default
+      source: ceo-approval-gate
+      target: ceo-approval
+      is_default: true
     - id: e5
       source: ceo-approval
       target: release-shipment

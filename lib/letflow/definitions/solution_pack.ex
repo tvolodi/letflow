@@ -174,9 +174,11 @@ defmodule Letflow.Definitions.SolutionPack do
   alias Letflow.Api.Authorization
   alias Letflow.Definitions
   alias Letflow.Definitions.ExportImport
+  alias Letflow.Definitions.Graph
   alias Letflow.Definitions.JsonSchemaShape
   alias Letflow.Definitions.PackUpdateResolution
   alias Letflow.Definitions.ProcessDefinition
+  alias Letflow.Definitions.RoleBinding
   alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Definitions.SolutionPackInstall
   alias Letflow.Engine.VariableSchema
@@ -461,7 +463,10 @@ defmodule Letflow.Definitions.SolutionPack do
        `definition_id` resolves through that mapping. An entry naming a
        definition the pack does not carry is skipped and reported in
        `warnings`, matching R-Co's `continue` at `store.zig:483`.
-    8. Build the advisory `role_mapping_checklist` and commit.
+    8. Build the advisory `role_mapping_checklist`, append one
+       `unbound_task_role: ...` line to `warnings` for every role a human task
+       routes to that has no `tenant_role` binding in this tenant (REQ-455,
+       `Letflow.Definitions.RoleBinding`; read-only, binds nothing), and commit.
 
   Any error in steps 5-7 rolls the whole transaction back, so a rejected
   variable schema also un-creates the definitions the same install made.
@@ -1381,12 +1386,28 @@ defmodule Letflow.Definitions.SolutionPack do
           installed_entity_definitions: installed_entity_definition_maps(installed_entities),
           variable_schemas_written: written,
           role_mapping_checklist: role_mapping_checklist(parsed.required_roles),
-          warnings: warnings
+          warnings: warnings ++ unbound_role_warnings(installed, opts)
         }
       else
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
+  end
+
+  # REQ-455 check 4: advisory warnings for human-task roles with no
+  # `tenant_role` binding in this tenant. Read-only (one `list_roles` query);
+  # binds nothing. A graph that fails `from_map/1` (cannot happen after a
+  # successful create) is skipped.
+  defp unbound_role_warnings(installed, opts) do
+    definitions =
+      Enum.flat_map(installed, fn {_packed, %ProcessDefinition{name: name, graph: graph}} ->
+        case Graph.from_map(graph) do
+          {:ok, parsed_graph} -> [{name, parsed_graph}]
+          :error -> []
+        end
+      end)
+
+    RoleBinding.warnings_for_definitions(definitions, opts)
   end
 
   defp insert_install_row(parsed, tenant_id, captured_at) do

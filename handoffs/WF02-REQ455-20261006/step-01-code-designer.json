@@ -1,0 +1,81 @@
+{
+  "handoff_id": "bce7a179-9c2d-4b5c-a62b-f3d60110df17",
+  "run_id": "WF02-REQ455-20261006",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ455-20261006/step-01-code-designer.json",
+  "created_at": "2026-10-05T23:26:51Z",
+  "started_at": "2026-10-05T23:26:51Z",
+  "completed_at": "2026-10-05T23:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-455"
+    ],
+    "requirement_text": {
+      "REQ-455": "Approved by the user on 2026-10-06. Process design gaps are found late,\nin UAT: 35 files under docs/issues/ mention a dead end, an unreachable\nstep or a missing default route (recent: ISS-0928 no_matching_edge on a\nservice task in kyc-routing, ISS-0929). Letflow.Definitions.Graph\nalready checks a good deal (violation codes at\nlib/letflow/definitions/graph.ex:207-234: missing start or end node,\ndangling edge, isolated node, cycle without gateway, missing role,\nmissing edge condition, multiple default edges,\nhuman_task_no_fallback_edge and more). This entry adds only what is\nmissing, as deterministic checks that run wherever the existing ones\nrun, so they do not depend on any model.\n\nFIRST STEP (CODE-DESIGNER): for each candidate check below, establish\nby reading graph.ex, semantic_validation.ex and their tests whether it\nalready exists, exists partly, or is missing, and record the finding\nwith file and line. Build only the missing part.\n\nCANDIDATE CHECKS:\n1. Reachability: every node is reachable from the start node, and from\nevery node at least one end node is reachable. (check_isolated_nodes\nlooks at a node's own edges; establish whether a connected island or a\ntrap with no way out is caught.)\n2. Decision without a default route: an exclusive gateway, and any\nother node kind whose outgoing edges all carry conditions (ISS-0928\nwas a service task), has no is_default edge, so an instance can stop\nwith no matching route. Establish which node kinds can have\nconditional outgoing edges and cover all of them.\n3. Data used before it is collected: an edge condition or form\nexpression reads a variable that no form, service output or\nsub-process output on ANY path from the start to that point can have\nset. Reuse the declared-fields machinery of SemanticValidation; report\nonly the case where no path sets it (certain), not the case where some\npath does not (that is a judgment for PROCESS-AUDITOR, REQ-456).\n4. Unbound task roles at install: when a definition or solution pack is\ninstalled or activated in a tenant, every role a human task routes to\nthat has no tenant_role binding in that tenant is listed. Decision\n0029 section 2 keeps required roles advisory and role seeding out of\npacks; do not change that. This is a reported warning in the\nvalidation result and the install response, never a silent pass and\nnever an automatic binding.\nNew findings in 1 to 3 are violations (activation is refused, same as\nthe existing codes). State in the design whether any definition\nshipped in priv/ or seeded by scripts/ fails a new check; if one does,\nreport it to ORCH as an issue with the definition and node named, and\ndo not weaken the check.\nOPEN QUESTIONS: - \"A definition already active in a tenant that fails a new check keeps running. Default: new checks apply at validate, activate and import time only; nothing is deactivated.\""
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/definitions/semantic_validation.ex",
+      "lib/letflow/definitions/solution_pack_install.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/",
+      "lib/letflow/design/",
+      "test/letflow/definitions/"
+    ],
+    "branch_name": "feature/WF02-REQ455-20261006"
+  },
+  "task": {
+    "description": "WF-02 step 01 (CODE-DESIGNER): produce lib/letflow/design/req455-definition-validator-gaps.md. Local-only run: do NOT push, commit nothing (ORCH commits). Read first: docs/agents/instructions/core-directives.md, docs/agents/instructions/security-invariants.md (INV-1..INV-10; state whether any route/permission/response shape is touched, esp. check 4's 'install response'), docs/anti-patterns.md (grep relevant entries; it is 330KB), docs/migration/decisions/0029 (section 2), lib/letflow/definitions/graph.ex (violation codes ~207-234), semantic_validation.ex, solution_pack_install.ex, export_import.ex, and their tests under test/. For EACH of the 4 candidate checks, classify exists / partly exists / missing with file:line evidence (FIRST STEP in requirement). Also: find where validation runs (validate, activate, import, install) and confirm the new checks plug in there; list which node kinds can carry conditional outgoing edges (check 2); decide the install-warning shape (warning list in validation result and install response; additive field only); enumerate every process definition shipped in repo (priv/, fixtures, packs, scripts/ seeds) and state how the all-shipped-definitions test finds them; run the existing validator on them (via mix run/test, scoped) and report which would fail new checks (do not weaken checks). Keep diff surgical: open PRs #2254 (REQ-444: login_discovery, config/runtime.exs, docs/requirements.yaml, status v26/index), #2228, #2249 (ci.yml); other worktrees touch login_directory/identity/routers. List every file to touch. No implementation code bodies. Do not edit docs/requirements.yaml. Use scoped mix runs with a unique MIX_TEST_PARTITION (e.g. 41); RAM is tight.",
+    "acceptance_criteria": [
+      "the design lists each candidate check as exists, partly exists or missing, with file and line evidence, and CODE-DESIGN-VALIDATOR re-verifies each classification",
+      "for each check that was built: one test with a minimal definition that violates only that check and asserts the new violation code and the offending node or edge id, and one test showing a valid neighbour case passes",
+      "the ISS-0928 shape (a service task with only conditional outgoing edges and no default) is rejected at validation, with a test",
+      "check 4: installing a definition whose human task routes to an unbound role returns the role names in the warning list and binds nothing (tenant_role row count unchanged)",
+      "every process definition shipped in the repository or seeded by scripts/ is run through the validator in a test; each failure is either fixed in the same change or filed as an issue and named in the run report",
+      "mix compile --warnings-as-errors, mix format --check-formatted, mix test and mix letflow.check_boundaries pass, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req455-definition-validator-gaps.md. Classification: check 1 (reachability from start / path to end) MISSING; check 2 (default route) PARTLY EXISTS (HUMAN_TASK = CHK-19; EXCLUSIVE_GATEWAY missing; conditional edges on service/timer/sub-process already refused by CHK-14); check 3 PARTLY EXISTS (REQ-372 undeclared-variable on gateway edges only; form expressions already same-form scoped); check 4 MISSING. Plan: new Graph.validate_flow/1 (CHK-22 :unreachable_node, CHK-23 :no_path_to_end, CHK-24 :no_default_route) wired into create/update/validate/activate; data-flow class inside SemanticValidation.validate/2 (:variable_never_collected); new Letflow.Definitions.RoleBinding with warnings appended to existing install warnings list and an additive warnings key on the validate 200 body. Probes (mix run --no-start, dev) confirmed classifications empirically. 12 shipped graphs pass existing validators; 11 of 12 would fail CHK-24 (gateways without default); design fixes them in-change following ISS-0928 precedent and asks ORCH to file one BA-owned issue for the proposed default targets.",
+    "artifacts_out": [
+      "lib/letflow/design/req455-definition-validator-gaps.md"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "11 of 12 shipped process definitions have EXCLUSIVE_GATEWAY nodes with no is_default edge and would fail new CHK-24: QA meridian_loan_origination v1.3 (eligibility-gate, authority-routing); meridian_regulatory_compliance_review v1.3 (severity-routing, post-remediation-check); swiftroute v1.1 (ceo-approval-gate); vortex_production_order_release v1.1 (budget-gate); vortex_supplier_quality_deviation v1.2 (false-positive-check, severity-routing); simulation yaml meridian/process_claim_intake (kyc-routing, eligibility-gate, authority-routing), meridian/process_policy_binding (severity-routing, post-remediation-check), swiftroute/process_route_approval (ceo-approval-gate), swiftroute/process_shipment_dispatch (injury-check), vortex/process_quality_check (budget-gate), vortex/process_work_order (false-positive-check, severity-routing). Design fixes them in the same change with proposed default targets; ORCH to file one BA-owned issue to confirm the business routing.",
+        "affected_requirement": "REQ-455"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Requirement text says ISS-0928 was a service task; ISS-0928.yaml records an EXCLUSIVE_GATEWAY (kyc-routing) with no default. The literal service-task-with-only-conditional-edges shape is already rejected by CHK-14 :unexpected_edge_condition. Design tests both shapes.",
+        "affected_requirement": "REQ-455"
+      },
+      {
+        "severity": "MINOR",
+        "description": "Modules.Installs.install/3 discards the pack install result, so check-4 warnings do not reach the module-install response; existing role_mapping_checklist.bound compares against static platform roles, not tenant_role rows. Both reported, not changed.",
+        "affected_requirement": "REQ-455"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ455-20261006",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Dispatch CODE-DESIGN-VALIDATOR step 01b; ORCH to decide OQ-2..OQ-9 defaults and file the BA fixture-default-routes issue."
+  },
+  "rework_count": 0
+}

@@ -98,6 +98,10 @@ graph:
       source: injury-check
       target: injury-check-merge
       condition: "variables.injury_involved == false"
+    - id: injury-check-default
+      source: injury-check
+      target: safety-notification
+      is_default: true
     - id: e3
       source: safety-notification
       target: injury-check-merge

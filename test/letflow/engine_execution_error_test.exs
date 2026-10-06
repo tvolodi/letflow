@@ -138,6 +138,29 @@ defmodule Letflow.EngineExecutionErrorTest do
     activated
   end
 
+  # REQ-455: `Definitions.create/2` now rejects an EXCLUSIVE_GATEWAY with no
+  # default edge (CHK-24), but a definition activated before that check existed
+  # keeps running (REQ-455 OQ-1) and can still hit the engine's no-match path.
+  # Simulate such a legacy row: activate a trivially valid definition, then
+  # overwrite its stored graph.
+  defp legacy_active_definition!(schema_name, graph) do
+    trivial = %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [%{"id" => "e1", "source" => "start", "target" => "end"}]
+    }
+
+    activated = active_definition!(schema_name, trivial)
+
+    {1, _} =
+      from(d in Definitions.ProcessDefinition, where: d.id == ^activated.id)
+      |> Repo.update_all([set: [graph: graph]], prefix: schema_name)
+
+    %{activated | graph: graph}
+  end
+
   defp start_attrs(definition, overrides \\ %{}) do
     Map.merge(
       %{
@@ -209,7 +232,7 @@ defmodule Letflow.EngineExecutionErrorTest do
   # edge's condition can ever be true (both reference an undefined variable,
   # treated as false per REQ-050 AC4), no default edge -- the REALISTIC shape
   # REQ-050's own requirement text describes (a gateway a completing task feeds
-  # into). This graph IS valid/activatable (CHK-19 only constrains a HUMAN_TASK's
+  # into). This graph was valid/activatable before REQ-455 CHK-24 (CHK-19 only constrains a HUMAN_TASK's
   # OWN edges, not a downstream EXCLUSIVE_GATEWAY's) -- the resulting no-match is
   # routed into ExecutionError.append_multi/3 via dispatch_task_completion_hop_chain/5's
   # advance_until_stable/4 clause (see AC4a below).
@@ -431,7 +454,9 @@ defmodule Letflow.EngineExecutionErrorTest do
   describe "AC4a -- REQ-050's realistic downstream-gateway no-match" do
     test "complete_task/3 routes it into ExecutionError.append_multi/3: EXECUTION_ERROR appended, status :error" do
       %{schema_name: schema_name} = provisioned_tenant()
-      instance_id = start_instance!(schema_name, graph_task_then_gateway_no_match())
+      definition = legacy_active_definition!(schema_name, graph_task_then_gateway_no_match())
+      assert {:ok, started} = Engine.create(start_attrs(definition), prefix: schema_name)
+      instance_id = started.instance_id
       task = find_task(schema_name, "task")
 
       events_before = event_count(schema_name)

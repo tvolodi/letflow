@@ -1,6 +1,6 @@
 {
   "name": "Production Order Release",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Multi-level release gate for a new production order. Planner creates the order; Production Manager reviews; if value > 10000 Financial Controller signs off. Timer escalation to CEO. Exercises: sequential chain, timer escalation, conditional branch.",
   "graph": {
     "nodes": [
@@ -79,6 +79,7 @@
       { "id": "timeout-escalate-to-ceo",  "source": "escalate-to-ceo",   "target": "auto-reject-order" },
       { "id": "e5",                       "source": "budget-gate",       "target": "budget-approval",   "condition": "variables.order_value_eur > 10000" },
       { "id": "e6",                       "source": "budget-gate",       "target": "assign-line",       "condition": "variables.order_value_eur <= 10000" },
+      { "id": "budget-gate-default", "source": "budget-gate", "target": "budget-approval", "is_default": true },
       { "id": "e7",                       "source": "budget-approval",   "target": "assign-line",       "condition": "variables.budget_decision == 'approve'" },
       { "id": "e8",                       "source": "budget-approval",   "target": "auto-reject-order", "condition": "variables.budget_decision == 'reject'" },
       { "id": "timeout-budget-approval",  "source": "budget-approval",   "target": "auto-reject-order" },

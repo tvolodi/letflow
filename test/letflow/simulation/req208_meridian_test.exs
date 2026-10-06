@@ -316,6 +316,12 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       %{"id" => "e6", "source" => "risk-assessment", "target" => "assessment-join"},
       %{"id" => "e14", "source" => "assessment-join", "target" => "eligibility-gate"},
       %{
+        "id" => "eligibility-gate-default",
+        "source" => "eligibility-gate",
+        "target" => "end-declined",
+        "is_default" => true
+      },
+      %{
         "id" => "e15",
         "source" => "eligibility-gate",
         "target" => "authority-routing",
@@ -328,6 +334,12 @@ defmodule Letflow.Simulation.Req208MeridianTest do
         "target" => "end-declined",
         "condition" =>
           "variables.credit_decision == 'fail' || variables.risk_rating == 'unacceptable'"
+      },
+      %{
+        "id" => "authority-routing-default",
+        "source" => "authority-routing",
+        "target" => "end-declined",
+        "is_default" => true
       },
       %{
         "id" => "e17",
@@ -499,6 +511,12 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       %{"id" => "e6", "source" => "risk-assessment", "target" => "assessment-join"},
       %{"id" => "e14", "source" => "assessment-join", "target" => "eligibility-gate"},
       %{
+        "id" => "eligibility-gate-default",
+        "source" => "eligibility-gate",
+        "target" => "end-declined",
+        "is_default" => true
+      },
+      %{
         "id" => "e15",
         "source" => "eligibility-gate",
         "target" => "authority-routing",
@@ -511,6 +529,12 @@ defmodule Letflow.Simulation.Req208MeridianTest do
         "target" => "end-declined",
         "condition" =>
           "variables.credit_decision == 'fail' || variables.risk_rating == 'unacceptable'"
+      },
+      %{
+        "id" => "authority-routing-default",
+        "source" => "authority-routing",
+        "target" => "credit-committee-vote",
+        "is_default" => true
       },
       %{
         "id" => "e17",
@@ -603,6 +627,12 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       %{"id" => "e0", "source" => "start", "target" => "evidence-collection"},
       %{"id" => "e1", "source" => "evidence-collection", "target" => "risk-evaluation"},
       %{"id" => "e3", "source" => "risk-evaluation", "target" => "severity-routing"},
+      %{
+        "id" => "severity-routing-default",
+        "source" => "severity-routing",
+        "target" => "findings-sign-off",
+        "is_default" => true
+      },
       %{
         "id" => "e7",
         "source" => "severity-routing",

@@ -161,6 +161,10 @@ graph:
       source: kyc-routing
       target: kyc-manual-review
       condition: "variables.kyc_status == 'inconclusive'"
+    - id: kyc-routing-default
+      source: kyc-routing
+      target: kyc-manual-review
+      is_default: true
     - id: e12
       source: kyc-manual-review
       target: assessment-join
@@ -182,6 +186,10 @@ graph:
       source: eligibility-gate
       target: decline-application
       condition: "variables.credit_decision == 'fail' || variables.risk_rating == 'unacceptable'"
+    - id: eligibility-gate-default
+      source: eligibility-gate
+      target: decline-application
+      is_default: true
     - id: e17
       source: authority-routing
       target: l1-approval
@@ -190,6 +198,10 @@ graph:
       source: authority-routing
       target: committee-vote-fork
       condition: "variables.requested_amount_eur > 500000"
+    - id: authority-routing-default
+      source: authority-routing
+      target: decline-application
+      is_default: true
     - id: e19
       source: l1-approval
       target: l2-approval

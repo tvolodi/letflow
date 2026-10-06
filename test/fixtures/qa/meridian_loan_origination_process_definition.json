@@ -1,6 +1,6 @@
 {
   "name": "Loan Origination",
-  "version": "1.3",
+  "version": "1.4",
   "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking.",
   "graph": {
     "nodes": [
@@ -215,8 +215,10 @@
       { "id": "e14",                         "source": "assessment-join",        "target": "eligibility-gate" },
       { "id": "e15",                         "source": "eligibility-gate",       "target": "authority-routing",    "condition": "variables.credit_decision == 'pass' && variables.risk_rating != 'unacceptable'" },
       { "id": "e16",                         "source": "eligibility-gate",       "target": "decline-application",  "condition": "variables.credit_decision == 'fail' || variables.risk_rating == 'unacceptable'" },
+      { "id": "eligibility-gate-default", "source": "eligibility-gate", "target": "decline-application", "is_default": true },
       { "id": "e17",                         "source": "authority-routing",      "target": "l1-approval",          "condition": "variables.requested_amount_eur <= 500000" },
       { "id": "e18",                         "source": "authority-routing",      "target": "committee-vote-fork",  "condition": "variables.requested_amount_eur > 500000" },
+      { "id": "authority-routing-default", "source": "authority-routing", "target": "decline-application", "is_default": true },
       { "id": "e19",                         "source": "l1-approval",            "target": "l2-approval",          "condition": "variables.l1_decision == 'approve' || variables.l1_decision == 'escalate'" },
       { "id": "e20",                         "source": "l1-approval",            "target": "decline-application",  "condition": "variables.l1_decision == 'reject'" },
       { "id": "fallback-l1-approval",        "source": "l1-approval",            "target": "l2-approval" },

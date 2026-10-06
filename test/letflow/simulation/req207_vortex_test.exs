@@ -304,6 +304,12 @@ defmodule Letflow.Simulation.Req207VortexTest do
         "target" => "end-rejected"
       },
       %{
+        "id" => "budget-gate-default",
+        "source" => "budget-gate",
+        "target" => "budget-approval",
+        "is_default" => true
+      },
+      %{
         "id" => "e5",
         "source" => "budget-gate",
         "target" => "budget-approval",
@@ -372,6 +378,12 @@ defmodule Letflow.Simulation.Req207VortexTest do
       %{"id" => "e1", "source" => "quarantine-batch", "target" => "severity-classification"},
       %{"id" => "e2", "source" => "severity-classification", "target" => "false-positive-check"},
       %{
+        "id" => "false-positive-check-default",
+        "source" => "false-positive-check",
+        "target" => "severity-routing",
+        "is_default" => true
+      },
+      %{
         "id" => "e3",
         "source" => "false-positive-check",
         "target" => "end-false-positive",
@@ -382,6 +394,12 @@ defmodule Letflow.Simulation.Req207VortexTest do
         "source" => "false-positive-check",
         "target" => "severity-routing",
         "condition" => "variables.false_positive == false"
+      },
+      %{
+        "id" => "severity-routing-default",
+        "source" => "severity-routing",
+        "target" => "corrective-action-subprocess",
+        "is_default" => true
       },
       %{
         "id" => "e5",

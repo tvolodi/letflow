@@ -34220,7 +34220,7 @@ requirements:
   - id: REQ-455
     title: "Process definition validator: close the mechanical gaps (reachability to and from an end, decision without a default route, later-needed data never collected, unbound task roles at install)"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 972  # letflow-queue task id, GH#2244. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user).
     description: >

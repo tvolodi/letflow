@@ -54,6 +54,21 @@ defmodule Letflow.Definitions.Graph do
   `validate_graph/1` succeeds" ordering is the caller's job (intended to be
   `Letflow.Definitions.create/1`, REQ-030, once it exists).
 
+  ## Flow checks (CHK-22..CHK-24, REQ-455)
+
+  `validate_flow/1` is a fourth top-level validator beside `validate_graph/1`,
+  `validate_node_attributes/1` and `validate_edge_conditions/1`. It adds
+  reachability (CHK-22 `:unreachable_node`: every node reachable from a START
+  node; CHK-23 `:no_path_to_end`: from every node some END node is reachable)
+  and the default-route rule (CHK-24 `:no_default_route`: an EXCLUSIVE_GATEWAY
+  with outgoing edges needs an `is_default` edge; any other non-HUMAN_TASK kind
+  must not have every outgoing edge really conditioned; HUMAN_TASK stays with
+  CHK-19). Same ordering contract as its siblings: the caller runs
+  `validate_graph/1` first; `validate_flow/1` neither calls it nor requires it,
+  and is total on dangling edges, duplicate ids and missing START/END.
+  `:variable_never_collected` is reported by
+  `Letflow.Definitions.SemanticValidation`, not by this module.
+
   ## SUB_PROCESS interface check (CHK-18, REQ-032)
 
   CHK-18 (`check_sub_process_interface/1`, REQ-032) delegates to
@@ -239,6 +254,10 @@ defmodule Letflow.Definitions.Graph do
             | :invalid_escalation_timer
             | :missing_escalation_role
             | :missing_escalation_timer_duration
+            | :unreachable_node
+            | :no_path_to_end
+            | :no_default_route
+            | :variable_never_collected
 
     @type t :: %__MODULE__{
             code: code(),
@@ -458,6 +477,26 @@ defmodule Letflow.Definitions.Graph do
   end
 
   @doc """
+  Runs the 3 flow checks (CHK-22..CHK-24, REQ-455) against `graph` and returns
+  every violation found -- never short-circuits, same unconditional
+  concatenation as `validate_graph/1`. Pure and total: never raises on a
+  dangling edge, a duplicate node id, or a graph with no START/END (those are
+  CHK-01..05's to report). See the moduledoc's "Flow checks" section.
+  """
+  @spec validate_flow(t()) :: result()
+  def validate_flow(%__MODULE__{} = graph) do
+    violations =
+      [
+        &check_reachable_from_start/1,
+        &check_reaches_end/1,
+        &check_default_route/1
+      ]
+      |> Enum.flat_map(& &1.(graph))
+
+    %{valid: violations == [], violations: violations}
+  end
+
+  @doc """
   Minimal *structural* CEL syntax check (design doc §6) — balanced brackets,
   balanced/terminated string literals, and no bare leading/trailing
   operator. Performs no evaluation: it never resolves variable names or
@@ -649,6 +688,121 @@ defmodule Letflow.Definitions.Graph do
         []
       end
     end)
+  end
+
+  # CHK-22: every node must be reachable from a START node (forward walk over
+  # resolved edges). One violation per unreached node id, node-list order,
+  # duplicate ids collapsed to the first occurrence. Zero START nodes: [] (CHK-01
+  # owns that report).
+  @spec check_reachable_from_start(t()) :: [Violation.t()]
+  defp check_reachable_from_start(%__MODULE__{nodes: nodes, edges: edges}) do
+    sources = for node <- nodes, node.node_type == :START, do: node.id
+
+    if sources == [] do
+      []
+    else
+      reached = walk(sources, flow_adjacency(nodes, edges, :forward))
+
+      nodes
+      |> unique_nodes()
+      |> Enum.reject(&MapSet.member?(reached, &1.id))
+      |> Enum.map(fn node ->
+        %Violation{
+          code: :unreachable_node,
+          message: "Node '#{node.id}' (#{node.node_type}) is not reachable from any START node"
+        }
+      end)
+    end
+  end
+
+  # CHK-23: from every node some END node must be reachable (reverse walk over
+  # resolved edges). Zero END nodes: [] (CHK-02 owns that report).
+  @spec check_reaches_end(t()) :: [Violation.t()]
+  defp check_reaches_end(%__MODULE__{nodes: nodes, edges: edges}) do
+    sources = for node <- nodes, node.node_type == :END, do: node.id
+
+    if sources == [] do
+      []
+    else
+      reaching = walk(sources, flow_adjacency(nodes, edges, :reverse))
+
+      nodes
+      |> unique_nodes()
+      |> Enum.reject(&MapSet.member?(reaching, &1.id))
+      |> Enum.map(fn node ->
+        %Violation{
+          code: :no_path_to_end,
+          message: "Node '#{node.id}' (#{node.node_type}) has no path to any END node"
+        }
+      end)
+    end
+  end
+
+  # CHK-24: default-route rule, one violation per offending node. An
+  # EXCLUSIVE_GATEWAY with outgoing edges needs an `is_default == true` edge
+  # (mirrors the engine's dispatch partition). HUMAN_TASK is CHK-19's. Any other
+  # kind is flagged iff every outgoing edge is really conditioned (compared
+  # without trim, as the engine and CHK-19 do).
+  @spec check_default_route(t()) :: [Violation.t()]
+  defp check_default_route(%__MODULE__{nodes: nodes, edges: edges}) do
+    nodes
+    |> unique_nodes()
+    |> Enum.filter(fn node ->
+      outgoing = Enum.filter(edges, &(&1.source == node.id))
+
+      cond do
+        outgoing == [] -> false
+        node.node_type == :HUMAN_TASK -> false
+        node.node_type == :EXCLUSIVE_GATEWAY -> not Enum.any?(outgoing, &(&1.is_default == true))
+        true -> Enum.all?(outgoing, &human_task_edge_really_conditioned?/1)
+      end
+    end)
+    |> Enum.map(fn node ->
+      %Violation{
+        code: :no_default_route,
+        message:
+          "Node '#{node.id}' (#{node.node_type}) has no default outgoing edge (is_default: true); " <>
+            "an instance whose conditions all evaluate false would stop with no matching route"
+      }
+    end)
+  end
+
+  # First occurrence of each node id, node-list order.
+  @spec unique_nodes([Node.t()]) :: [Node.t()]
+  defp unique_nodes(nodes), do: Enum.uniq_by(nodes, & &1.id)
+
+  # id -> [neighbour ids] over edges whose both endpoints resolve to a node id.
+  # :forward follows source -> target, :reverse follows target -> source.
+  @spec flow_adjacency([Node.t()], [Edge.t()], :forward | :reverse) :: %{
+          String.t() => [String.t()]
+        }
+  defp flow_adjacency(nodes, edges, direction) do
+    ids = MapSet.new(nodes, & &1.id)
+
+    edges
+    |> Enum.filter(&(MapSet.member?(ids, &1.source) and MapSet.member?(ids, &1.target)))
+    |> Enum.reduce(%{}, fn edge, acc ->
+      {from, to} =
+        if direction == :forward,
+          do: {edge.source, edge.target},
+          else: {edge.target, edge.source}
+
+      Map.update(acc, from, [to], &[to | &1])
+    end)
+  end
+
+  # Closure of `sources` (included) over `adjacency`.
+  @spec walk([String.t()], %{String.t() => [String.t()]}) :: MapSet.t(String.t())
+  defp walk(sources, adjacency), do: do_walk(sources, adjacency, MapSet.new())
+
+  defp do_walk([], _adjacency, seen), do: seen
+
+  defp do_walk([id | rest], adjacency, seen) do
+    if MapSet.member?(seen, id) do
+      do_walk(rest, adjacency, seen)
+    else
+      do_walk(Map.get(adjacency, id, []) ++ rest, adjacency, MapSet.put(seen, id))
+    end
   end
 
   # CHK-06: DFS-based cycle detection. A cycle is permitted iff at least one

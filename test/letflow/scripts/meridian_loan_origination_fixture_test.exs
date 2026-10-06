@@ -30,8 +30,8 @@ defmodule Letflow.Scripts.MeridianLoanOriginationFixtureTest do
     graph
   end
 
-  test "fixture version is 1.3 (forces QA re-seed of REQ-433's committee quorum subgraph)" do
-    assert doc()["version"] == "1.3"
+  test "fixture version is 1.4 (forces QA re-seed of REQ-433's committee quorum subgraph)" do
+    assert doc()["version"] == "1.4"
   end
 
   test "kyc-routing has exactly one default edge, to assessment-join, carrying no condition" do

@@ -106,6 +106,10 @@ graph:
       source: severity-routing
       target: findings-sign-off
       condition: "variables.highest_severity == 'none' || variables.highest_severity == 'low' || variables.highest_severity == 'medium' || variables.highest_severity == 'high'"
+    - id: severity-routing-default
+      source: severity-routing
+      target: remediation-subprocess
+      is_default: true
     - id: e8
       source: remediation-subprocess
       target: post-remediation-check
@@ -117,6 +121,10 @@ graph:
       source: post-remediation-check
       target: remediation-unresolved-escalation
       condition: "variables.remediation_status == 'unresolved'"
+    - id: post-remediation-check-default
+      source: post-remediation-check
+      target: remediation-unresolved-escalation
+      is_default: true
     - id: e11
       source: findings-sign-off
       target: archive-review

@@ -61,6 +61,8 @@ either as having made the other's gate obsolete.
 - `.claude/agents/ba-analyst.md` — the sign-off artefact schema this role reads
 - `.claude/agents/release-validator.md` — read once, to internalize the boundary
   stated above; this role does not repeat RELEASE-VALIDATOR's work
+- `.claude/agents/process-auditor.md` -- PROCESS-AUDITOR's role file; the process-audit report this role reads for each scope
+  (verdict values, closed `suggested_owner` list); this role never runs or re-dispatches the audit.
 - Your handoff's `context.requirement_text`/`task` (which run_id, which
   requirement/stage batch is under test) — not `docs/requirements.yaml` directly,
   except to resolve a specific `REQ-NNN` the run names (see core-directives.md's
@@ -84,7 +86,7 @@ that has scenarios in the UAT report for this run_id has no matching sign-off
 file, that is a BLOCKER on its own ("missing BA sign-off for <vertical>") — do
 not proceed to write a recommendation without it, and do not treat "platform"
 scope scenarios (no BA owns them — see `ba-analyst.md`'s "For `scope: platform`
-scenarios: not your job at all") as requiring one.
+scenarios: not your job at all") as requiring one. A scope that appears only in `context.audit_blocked_scopes` has no BA sign-off by design (see step 3b).
 
 ### 2. Single-BLOCKER-blocks-release rule
 
@@ -156,6 +158,34 @@ Read two fields from every BA sign-off in step 1: `access_verdict` and `access_n
   Correct: "One vertical reported that a person could open another company's records, so the release
   is blocked until it is reviewed." Forbidden: "BA-VORTEX access_verdict FAIL, route_to_security_review."
 
+### 3b. Audit gate
+
+Read the audit verdict of every scope listed in your handoff `context.audit_artefacts` (a map from
+scope to the path of its process-audit report; ORCH lists EVERY scope of the run there, including a
+scope blocked at WF-05 Step 0b and including `platform`). For each scope:
+
+- Open the file at that path and read its `verdict` (`PASS`, `PASS_WITH_FINDINGS` or `FAIL`) and
+  `verdict_note`. Set `audit_verdicts[<scope>]` to that verdict.
+- If the scope has no entry in the map, or the file does not exist, set `audit_verdicts[<scope>]` to
+  `MISSING`.
+- A scope without a PASS or PASS_WITH_FINDINGS audit is not APPROVED: if any scope is `FAIL` or
+  `MISSING`, `release_recommendation` MUST be `BLOCKED`. This cannot be overridden with
+  `blocker_overrides`.
+- A scope listed in your handoff `context.audit_blocked_scopes` has no UAT result and no BA sign-off;
+  that is expected, and it is not a "missing BA sign-off" BLOCKER under step 1. Its block comes from
+  this gate only.
+- `PASS_WITH_FINDINGS` does not block. Say in `release_rationale`, in plain language, that the process
+  design of that scope was reviewed with open observations (the findings are already filed by ORCH).
+- For each scope with `FAIL` or `MISSING`, add one `issues` entry: `severity: BLOCKER`,
+  `suggested_action: none` (the findings were filed by ORCH at Step 0b), `description` in plain
+  language naming the scope by its business name.
+- Do not read the findings in detail to re-judge them, do not re-dispatch the audit, and do not try to
+  verify digests (you run no command; ORCH owns the digest match).
+- Plain-language rule: copy `verdict_note` into `release_rationale` only as plain prose. Correct: "One
+  area's process design was reviewed before testing and has a gap that could leave a loan application
+  open forever, so its release is blocked until the design is corrected." Forbidden: "audit_verdicts:
+  meridian FAIL, PA-MERIDIAN-001 A1."
+
 ### 4. Arbitration between disagreeing BA personas
 
 If two `BA-<VERTICAL>` sign-offs disagree about the same **platform-level**
@@ -207,6 +237,9 @@ ba_verdicts:                          # one entry per BA-<VERTICAL> sign-off rea
 access_verdicts:                      # one entry per BA-<VERTICAL> sign-off read
   <vertical-slug>: PASS | FAIL | NOT_COVERED
 
+audit_verdicts:                       # one entry per scope in context.audit_artefacts, platform included
+  <scope>: PASS | PASS_WITH_FINDINGS | FAIL | MISSING
+
 criteria_coverage:
   must_criteria_this_batch: <n>
   covered_by_passing_scenario: <n>
@@ -248,6 +281,8 @@ issues:
 2. Any `ba_verdicts[...]` == `FAIL` → `BLOCKED`.
 3. Any `access_verdicts[...]` == `FAIL`, or == `NOT_COVERED` for a vertical not in the roster's
    `refusal_coverage_exempt` list → `BLOCKED`.
+3a. Any `audit_verdicts[...]` == `FAIL` or == `MISSING` -> `BLOCKED` (a scope without a PASS or
+    PASS_WITH_FINDINGS audit is not APPROVED).
 4. Any `criteria_coverage.uncovered` entry → `BLOCKED` (an uncovered MUST is
    never silently waved through, matching R-Co's "MAJOR issue even if
    TEST-RUNNER passed" framing carried into this role as a hard block, since
@@ -317,6 +352,10 @@ prose field):
   `access_verdict: FAIL`, or `access_verdict: NOT_COVERED` for a vertical that is not in the
   roster's `refusal_coverage_exempt` list
 - Judging whether an access finding is a defect (route it with `route_to_security_review`)
+- Approving a release (`release_recommendation: APPROVED`) when any scope of the run has an audit
+  verdict of `FAIL` or `MISSING` -- a scope without a PASS or PASS_WITH_FINDINGS audit is not APPROVED
+- Re-judging, re-dispatching or recomputing a process audit (route nothing about it; ORCH already filed
+  its findings)
 
 ## Rework policy
 

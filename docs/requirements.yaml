@@ -34283,7 +34283,7 @@ requirements:
   - id: REQ-456
     title: "New agent PROCESS-AUDITOR: independent hard gate on process designs, scenarios and their role use, before UAT"
     owner: REQ-ANALYST
-    status: pending
+    status: done
     stage: S7
     impl_order: 973  # letflow-queue task id, GH#2245. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-962, Q-969, Q-972.
     description: >

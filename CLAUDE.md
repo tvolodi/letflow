@@ -72,6 +72,7 @@ Routing logic, gates, rework/escalation rules, stage-gate enforcement:
 | `DOC-UPDATER` | Flips requirement status, appends status history, updates docs | [`.claude/agents/doc-updater.md`](.claude/agents/doc-updater.md) |
 | `UAT-RUNNER` | Scenario-based acceptance checks against a real running instance (load-bearing from S7 on) | [`.claude/agents/uat-runner.md`](.claude/agents/uat-runner.md) |
 | `PRODUCT-OWNER` | Reads every BA-<VERTICAL> sign-off for a UAT run and writes the platform's plain-language release recommendation ("should we ship?") — distinct from RELEASE-VALIDATOR's technical "is it safe to ship?" | [`.claude/agents/product-owner.md`](.claude/agents/product-owner.md) |
+| `PROCESS-AUDITOR` | Read-only independent review of one scope's process design (definitions, forms, scenarios, roster, seed scripts) before it is run; a FAIL verdict blocks UAT for that scope only — never edits what it audits, never signs off run results | [`.claude/agents/process-auditor.md`](.claude/agents/process-auditor.md) |
 
 **Default `AGENT_ID`:** if none is stated, default to `ORCH`. `ORCH`
 may act directly instead of routing through the full chain only when a

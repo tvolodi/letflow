@@ -48,6 +48,7 @@ producer/validator table — restated here as the roster's organizing shape.
 | `UAT-RUNNER` | UAT Runner | Executes scenario-based acceptance checks against a running Letflow instance once one exists to test against; role defined now, scenario corpus deferred to S7 (`docs/migration/stage-7-simulation-uat-parity.md`) | `test/uat-reports/`, `handoffs/` |
 | `BA-<VERTICAL>` | Business Analyst (per tenant-vertical/solution-pack) | Authors UAT scenarios in tenant-vertical domain language and signs off on UAT-RUNNER's execution results for its scope, per `.claude/agents/ba-analyst.md` — one canonical role file, parameterized by vertical via `docs/agents/ba-personas/<vertical>.yaml`, not a closed per-company roster | `test/fixtures/uat/scenarios/<vertical>/`, `test/uat-reports/` (`ba-signoff-` prefix), `docs/agents/ba-personas/` (new-persona/reuse bookkeeping), `handoffs/` |
 | `PRODUCT-OWNER` | Product Owner (platform-level business authority) | Reads every BA-<VERTICAL> sign-off for a UAT run, cross-checks MUST-severity acceptance-criteria coverage against `docs/requirements.yaml`, enforces the single-BLOCKER-blocks-release rule, arbitrates cross-vertical disagreements (routing to REQ-ANALYST if the underlying requirement is ambiguous), and writes the platform's plain-language release recommendation. Answers "should we ship?" — distinct from RELEASE-VALIDATOR's "is it safe to ship?" (`.claude/agents/product-owner.md`) | `test/uat-reports/` (`po-signoff-` prefix), `handoffs/` |
+| `PROCESS-AUDITOR` | Process Auditor (independent design reviewer, per scope) | Reads one scope's process definitions and forms, scenarios, roster (`test/fixtures/uat/actors.yaml`), seed scripts and `docs/roles.md`, plus the definition validator output ORCH hands it, answers a closed checklist A-F (missing business paths, separation of duties, data on some paths only, consistency inside the scope, access, consistency across scopes) and writes a process-audit report with verdict PASS, PASS_WITH_FINDINGS or FAIL. Authors and edits nothing it audits; never signs off run results (`.claude/agents/process-auditor.md`). A FAIL blocks UAT-RUNNER for that scope only (`docs/agents/workflows/WF-05_uat_run.md`, Step 0b) | `test/uat-reports/` (`process-audit-` prefix only), `handoffs/` |
 
 **Deliberately not reproduced from R-Co, historically — now fully actioned:**
 R-Co's `BO-SWIFTROUTE`/`BO-VORTEX`/`BO-MERIDIAN` business-owner-persona layer was
@@ -80,6 +81,7 @@ the full history of this deferral and its closure.
 | `UAT-RUNNER` | ✓ | uat-reports | ✓ (HTTP calls against a running instance) | ✗ |
 | `BA-<VERTICAL>` | ✓ | ✓ (scenario files, ba-signoff files, persona-data files) | ✗ | ✗ |
 | `PRODUCT-OWNER` | ✓ | ✓ (`po-signoff-` files) | ✗ | ✗ |
+| `PROCESS-AUDITOR` | ✓ | handoffs, test/uat-reports/process-audit-* only | ✗ (read-only search only) | ✗ |
 
 **`handoffs` in the Writes column means the agent's own handoff file only** (updated
 2026-08-17, ISS-0021/GH#78 — this table previously left `handoffs/registry.json`
@@ -145,6 +147,7 @@ requirement's file-level status stays exactly as terse as it's always been.
 | BA sign-off reports | `test/uat-reports/` (`ba-signoff-` prefix) | `BA-<VERTICAL>` | `.yaml` |
 | BA persona data | `docs/agents/ba-personas/` | `ORCH`/`REQ-ANALYST` (creation), `BA-<VERTICAL>` (own reads) | `.yaml` |
 | PO sign-off reports | `test/uat-reports/` (`po-signoff-` prefix) | `PRODUCT-OWNER` | `.yaml` |
+| Process audit reports | `test/uat-reports/` (`process-audit-` prefix) | `PROCESS-AUDITOR` | `.yaml` |
 | UAT visual-regression baselines | `test/fixtures/uat/visual-baselines/` | `UAT-RUNNER` (accept/re-baseline actions) | `.png` (+ one `.yaml` sidecar per baseline — see `lib/letflow/design/req362-visual-regression-testing.md` §2.3) |
 | Handoff files | `handoffs/` | all (via ORCH) | `.json` (exception) |
 | Requirement queue | `docs/requirements.yaml` | `ORCH`/`DOC-UPDATER` (status field) | `.yaml` (pre-existing schema, unchanged) |

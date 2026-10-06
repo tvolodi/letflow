@@ -116,6 +116,7 @@ INPUT: trigger
 │           R-Co's own WF-05 sequencing precedent ("it never runs in parallel
 │           with a BO agent"; runs after all BA-equivalent sign-offs))
 │
+├─ A WF-05 run is being prepared (Step 0 done, Step 1 not yet)?  └─► Gate: WF-05 Step 0b -- per scope, ORCH computes the file digests and dispatches PROCESS-AUDITOR unless an audit artefact with matching digests exists (an unchanged scope is not re-audited); a FAIL verdict blocks UAT-RUNNER and the BA sign-off for that scope only, never ORCH-overridable; file every BLOCKER and MAJOR finding per docs/agents/protocols/ISSUE_QUEUE.md; PRODUCT-OWNER does not APPROVE a scope without a PASS or PASS_WITH_FINDINGS audit.
 ├─ A BA sign-off or PRODUCT-OWNER issue has suggested_action route_to_security_review?  └─► Gate: WF-05 Step 4 (not APPROVED while any access_verdict is FAIL, or NOT_COVERED outside refusal_coverage_exempt); route: file per ISSUE_QUEUE.md as BLOCKER and dispatch SECURITY-REVIEWER with the entry text, never WF-03 directly.
 └─ Does not match any standard workflow?
       └─► Build an ad-hoc workflow (§6). Never skip a standard workflow that DOES
@@ -438,6 +439,9 @@ Before routing WF-02 implementation handoffs for Stage N+1, ORCH verifies:
    corpus yet). A WF-05 run reported `ENV_NOT_READY` (Step 0 skipped, or
    BLOCKED-by-environment scenarios remain) does not satisfy this check: it is not a
    UAT result, so ORCH prepares the environment and re-runs.
+4a. In the same WF-05 run, every scope has a PASS or PASS_WITH_FINDINGS audit (`PROCESS-AUDITOR`,
+    `docs/agents/workflows/WF-05_uat_run.md` Step 0b); a scope with a FAIL or missing audit is not
+    APPROVED, so the stage does not advance on it. Does not apply when no WF-05 run was in scope.
 5. `REVIEWER` has appended a dated sign-off section to `docs/migration/stage-N-*.md`
    (this predates the fuller pipeline — it's the existing per-stage convention, now
    also gated by RELEASE-VALIDATOR's own independent check rather than being the only

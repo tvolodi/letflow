@@ -1,0 +1,49 @@
+{
+  "handoff_id": "272cf7ca-bfd5-488e-b38d-709dac40942c",
+  "run_id": "WF02-REQ456-20261006",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ456-20261006/step-01b-code-design-validator.json",
+  "created_at": "2026-10-06T04:20:35Z",
+  "started_at": "2026-10-06T04:25:00Z",
+  "completed_at": "2026-10-06T04:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-456"
+    ],
+    "requirement_text": {
+      "REQ-456": "Approved by the user on 2026-10-06. No role in the roster reviews a process design before it is run: BA-<VERTICAL> authors scenarios and signs off its own vertical's results, and the only automated checks are structural. That breaks this project's rule that every producing step has a validating step. This entry defines the missing validator, following the precedent of REQ-359 (BA role) and REQ-361 (PRODUCT-OWNER): role file, roster entries, workflow step, artefact. Write the role file so a weak model can execute it: numbered procedure, closed checklists, closed verdict values, examples.\nBUILDS: 1. .claude/agents/process-auditor.md. AGENT_ID PROCESS-AUDITOR. Independence: it never authors or edits a definition, a scenario, a seed script or the roster, and never signs off run results. Inputs: the process definitions and forms of one scope (vertical or platform), its scenarios, test/fixtures/uat/actors.yaml, the seed scripts, docs/roles.md, and the validator output of REQ-455. It reads; it does not run a UAT. Checklist, each item answered YES, NO or NOT_APPLICABLE with evidence: A. Missing business paths: for every approval or decision, is there a rejection outcome, a rework or correction loop where the business needs one, and an end for each outcome; for every human task, what happens if nobody acts (timer, escalation or an explicit statement that waiting forever is intended). B. Separation of duties: can the same person both request and approve, or both enter and verify, given the roles the tasks route to and the roster. C. Data on some paths only: a decision reads a value that at least one path to it does not collect (the certain case is REQ-455's). D. Consistency inside the scope: every scenario step corresponds to a step the process has and the reverse for every human task; every role a task routes to has an actor in the roster; every actor has the least built-in role for its steps (docs/roles.md). E. Access: the scenarios contain a refusal step for each sensitive action (approve, pay, see personal data, change users); no admin actor performs ordinary business steps; no tenant actor depends on a platform permission. F. Consistency across scopes: the same business concept (for example an approval with a limit) is not modelled in two incompatible ways without a stated reason. Verdict PASS, PASS_WITH_FINDINGS or FAIL; any BLOCKER finding is FAIL. Findings state the business consequence in plain language and are handed to ORCH, which files them per docs/agents/protocols/ISSUE_QUEUE.md. 2. Artefact test/uat-reports/process-audit-<scope>-<run_id>.yaml with a schema in the role file: scope, audited inputs with a content digest of each file, the checklist answers, findings (id, severity, checklist item, business description, affected definition or scenario, suggested owner), verdict. 3. docs/agents/workflows/WF-05_uat_run.md: a new step between environment preparation and the run. ORCH dispatches PROCESS-AUDITOR for a scope when no audit artefact exists whose input digests match the current files; an unchanged scope is not re-audited. A FAIL verdict blocks UAT-RUNNER for that scope only. This keeps the gate off the per-run path when nothing changed. 4. docs/agents/AGENT_SYSTEM.md (roster row, capability row: read yes, write process-audit reports only, no shell beyond read-only search, no merge), docs/agents/ORCHESTRATOR.md (routing and the gate), CLAUDE.md roster table. 5. .claude/agents/product-owner.md: reads the audit verdicts of the run's scopes; a scope with no PASS or PASS_WITH_FINDINGS audit is not APPROVED.\nOPEN QUESTIONS: Model for this agent. Default: the same default as the other validating roles; no model override in the role file. | Whether SECURITY-REVIEWER also reviews seed scripts. Default: PROCESS-AUDITOR covers scenarios, roster and seed-script role use under checklist E; SECURITY-REVIEWER stays on code and is called only through a finding."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req456_process_auditor.md",
+      "lib/letflow/design/req455-definition-validator-gaps.md",
+      ".claude/agents/ba-analyst.md",
+      "docs/agents/uat-scenario-schema.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ456-20261006"
+  },
+  "task": {
+    "description": "WF-02 step 01b (CODE-DESIGN-VALIDATOR): hard gate on lib/letflow/design/req456_process_auditor.md. Work ONLY in worktree C:\\Users\\tvolo\\AppData\\Local\\Temp\\wt-q973; read-only except your own handoff result; do not commit/push. Independently verify: (a) every acceptance criterion of REQ-456 (in this handoff's context) is covered by exact text; (b) AC4 trap: EVERY file path, field name, endpoint, violation code, mix task and command named in the design's new text exists in the worktree or is created by this entry -- grep each against the worktree and quote the result (esp. REQ-455 names: POST /api/v1/definitions/:id/validate, GET /api/v1/definitions/active/:name, codes unreachable_node/no_path_to_end/no_default_route/variable_never_collected, 'unbound_task_role:' warning lines, sha256sum, test/fixtures/uat/process-definition-aliases sidecars, scripts/seed_<scope>_*.sh globs, ba-analyst.md closed sensitive-action list, uat-scenario-schema rules); check that route paths and the curl auth requirement are real; (c) anchors for the inserts in AGENT_SYSTEM.md, ORCHESTRATOR.md, CLAUDE.md, WF-05, product-owner.md exist exactly once and inserts are minimal (only added lines in the shared files); (d) first independence rule text, digest-rule sentence and the PO 'not APPROVED' sentence are present verbatim; (e) BA decisions adopted (Step 0b, audit_verdicts, ORCH runs commands, auditor read-only, grep of PROCESS-AUDITOR in six files); (f) closed lists/verdicts weak-model executable, no contradiction between files (e.g. capability row vs role file). Verdict PASS or FAIL with numbered findings; on FAIL list exact required fixes.\n",
+    "acceptance_criteria": [
+      ".claude/agents/process-auditor.md exists with the independence rules, the numbered procedure, checklist items A to F with the three answer values, the verdict values and the artefact schema",
+      "AGENT_SYSTEM.md roster and capability tables, ORCHESTRATOR.md and CLAUDE.md each list PROCESS-AUDITOR, and the capability row grants no write outside test/uat-reports/process-audit-*",
+      "WF-05 contains the audit step with the digest rule (unchanged scope is not re-audited) and the FAIL-blocks-that-scope rule; product-owner.md reads the audit verdict",
+      "every file path, field name and mix task named in the new text exists on the branch or is created by this entry (REQ-VALIDATOR greps each and quotes the result)",
+      "mix letflow.check passes, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Attempt 2: all 3 fixes verified in lib/letflow/design/req456_process_auditor.md. (1) A3 and C1 cells state BLOCKER except MAJOR when only cause is NOT_AVAILABLE; rule 6 states the same exception; no contradiction with the Using-the-validator-output section. (2) Rule 4 now says Read/Glob/Grep for reading, Write only for report and own handoff; step 2 reads ALL input_digests files incl. roles.md and roster. (3) WF-05 step 5 gives literal curl -s -H Authorization Bearer GET active/<name> and curl -s -X POST validate commands, id from top-level id; scripts/uat_preflight.sh has def fetch_credential (line 311, runs token <user>, first line accepted by parse_token_line) and def parse_token_line (line 297). Touched text consistent; all other items verified in attempt 1 unchanged. No implementation code.",
+    "issues": [],
+    "next_action": "ORCH proceeds to ELIXIR-DEV implementation (WF-02 step 02)."
+  },
+  "rework_count": 1
+}

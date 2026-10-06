@@ -1,0 +1,53 @@
+{
+  "handoff_id": "cbd2e87f-2cb7-446d-8ccf-fbe6970c4a95",
+  "run_id": "WF02-REQ456-20261006",
+  "workflow_id": "WF-02",
+  "step": "07c",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ456-20261006/step-07c-release-validator.json",
+  "created_at": "2026-10-06T05:16:42Z",
+  "started_at": null,
+  "completed_at": "2026-10-06T05:17:16Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-456"
+    ],
+    "requirement_text": {
+      "REQ-456": "Approved by the user on 2026-10-06. No role in the roster reviews a process design before it is run: BA-<VERTICAL> authors scenarios and signs off its own vertical's results, and the only automated checks are structural. That breaks this project's rule that every producing step has a validating step. This entry defines the missing validator, following the precedent of REQ-359 (BA role) and REQ-361 (PRODUCT-OWNER): role file, roster entries, workflow step, artefact. Write the role file so a weak model can execute it: numbered procedure, closed checklists, closed verdict values, examples.\nBUILDS: 1. .claude/agents/process-auditor.md. AGENT_ID PROCESS-AUDITOR. Independence: it never authors or edits a definition, a scenario, a seed script or the roster, and never signs off run results. Inputs: the process definitions and forms of one scope (vertical or platform), its scenarios, test/fixtures/uat/actors.yaml, the seed scripts, docs/roles.md, and the validator output of REQ-455. It reads; it does not run a UAT. Checklist, each item answered YES, NO or NOT_APPLICABLE with evidence: A. Missing business paths: for every approval or decision, is there a rejection outcome, a rework or correction loop where the business needs one, and an end for each outcome; for every human task, what happens if nobody acts (timer, escalation or an explicit statement that waiting forever is intended). B. Separation of duties: can the same person both request and approve, or both enter and verify, given the roles the tasks route to and the roster. C. Data on some paths only: a decision reads a value that at least one path to it does not collect (the certain case is REQ-455's). D. Consistency inside the scope: every scenario step corresponds to a step the process has and the reverse for every human task; every role a task routes to has an actor in the roster; every actor has the least built-in role for its steps (docs/roles.md). E. Access: the scenarios contain a refusal step for each sensitive action (approve, pay, see personal data, change users); no admin actor performs ordinary business steps; no tenant actor depends on a platform permission. F. Consistency across scopes: the same business concept (for example an approval with a limit) is not modelled in two incompatible ways without a stated reason. Verdict PASS, PASS_WITH_FINDINGS or FAIL; any BLOCKER finding is FAIL. Findings state the business consequence in plain language and are handed to ORCH, which files them per docs/agents/protocols/ISSUE_QUEUE.md. 2. Artefact test/uat-reports/process-audit-<scope>-<run_id>.yaml with a schema in the role file: scope, audited inputs with a content digest of each file, the checklist answers, findings (id, severity, checklist item, business description, affected definition or scenario, suggested owner), verdict. 3. docs/agents/workflows/WF-05_uat_run.md: a new step between environment preparation and the run. ORCH dispatches PROCESS-AUDITOR for a scope when no audit artefact exists whose input digests match the current files; an unchanged scope is not re-audited. A FAIL verdict blocks UAT-RUNNER for that scope only. This keeps the gate off the per-run path when nothing changed. 4. docs/agents/AGENT_SYSTEM.md (roster row, capability row: read yes, write process-audit reports only, no shell beyond read-only search, no merge), docs/agents/ORCHESTRATOR.md (routing and the gate), CLAUDE.md roster table. 5. .claude/agents/product-owner.md: reads the audit verdicts of the run's scopes; a scope with no PASS or PASS_WITH_FINDINGS audit is not APPROVED.\nOPEN QUESTIONS: Model for this agent. Default: the same default as the other validating roles; no model override in the role file. | Whether SECURITY-REVIEWER also reviews seed scripts. Default: PROCESS-AUDITOR covers scenarios, roster and seed-script role use under checklist E; SECURITY-REVIEWER stays on code and is called only through a finding."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req456_process_auditor.md"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF02-REQ456-20261006"
+  },
+  "task": {
+    "description": "Amendment release re-validation (RELEASE-VALIDATOR) in worktree C:\\Users\\tvolo\\AppData\\Local\\Temp\\wt-q973. Read-only except handoff result; no commit; no full-suite mix. Re-derive AC1-AC4 on the amended text (HEAD): quote role file sections, the capability row, ORCHESTRATOR/CLAUDE rows, WF-05 Step 0b digest rule + FAIL-blocks-scope-only + dispute paragraph, product-owner not-APPROVED sentence; grep -c PROCESS-AUDITOR on the six files; git diff --numstat origin/main on the three shared files (AGENT_SYSTEM: 3 insertions + exactly 1 replaced line allowed, others insert-only); AC4: grep every path/field/code/function named in changed lines (git diff HEAD~1) and quote; verify legacy_platform_admin exists in test/fixtures/uat/actors.yaml. Run scoped: MIX_ENV=test mix do letflow.check_requirements_registration + letflow.check_req_id_collision + letflow.lint_handoffs + letflow.check_uat_scenario_schema. PASS/FAIL.\n",
+    "acceptance_criteria": [
+      ".claude/agents/process-auditor.md exists with the independence rules, the numbered procedure, checklist items A to F with the three answer values, the verdict values and the artefact schema",
+      "AGENT_SYSTEM.md roster and capability tables, ORCHESTRATOR.md and CLAUDE.md each list PROCESS-AUDITOR, and the capability row grants no write outside test/uat-reports/process-audit-*",
+      "WF-05 contains the audit step with the digest rule (unchanged scope is not re-audited) and the FAIL-blocks-that-scope rule; product-owner.md reads the audit verdict",
+      "every file path, field name and mix task named in the new text exists on the branch or is created by this entry (REQ-VALIDATOR greps each and quotes the result)",
+      "mix letflow.check passes, real output quoted"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "evidence": {
+      "AC1": "process-auditor.md sections: Independence rules, Procedure, Checklist (table with E2/E3 + notes), Verdict, Report artefact/Schema, Forbidden; 291 lines",
+      "AC2": "AGENT_SYSTEM capability row quoted: '| `PROCESS-AUDITOR` | \u2713 | handoffs, test/uat-reports/process-audit-* only | \u2717 (read-only search only) | \u2717 |' (writes handoffs + process-audit-* only, no other write); ORCHESTRATOR and CLAUDE.md rows present",
+      "AC3": "WF-05 Step 0b line 117: 'An unchanged scope is not re-audited'; line 118 'A FAIL verdict blocks UAT-RUNNER for that scope only'; dispute paragraph line 167; product-owner.md line 254 'A scope without a PASS or PASS_WITH_FINDINGS audit is not APPROVED'",
+      "grep_c_PROCESS-AUDITOR": "process-auditor.md 3, AGENT_SYSTEM 3, ORCHESTRATOR 2, CLAUDE.md 1, WF-05 6, product-owner 1",
+      "numstat_origin_main": "AGENT_SYSTEM 3/0, ORCHESTRATOR 4/0, CLAUDE.md 1/0 (insert-only; the replaced capability line is within branch-added text)",
+      "AC4": "mix task files, ISSUE_QUEUE.md, docs/roles.md exist; legacy_platform_admin at test/fixtures/uat/actors.yaml:133 ('legacy_platform_admin: {}'); HEAD~1 diff is handoffs only, amendment commit a70c22f0 lines grepped",
+      "mix": "MIX_ENV=test mix do check_requirements_registration + check_req_id_collision + lint_handoffs + check_uat_scenario_schema -> EXIT=0; '32 file(s) checked, 0 violation(s)'; actor roster 19 in roster, 2 unresolved, 0 missing",
+      "note_minor": "ORCHESTRATOR.md gate line still says 'file every finding' whereas WF-05 step 9 and role file say BLOCKER and MAJOR only (MINOR not filed) - minor wording inconsistency, non-blocking"
+    }
+  },
+  "rework_count": 0
+}

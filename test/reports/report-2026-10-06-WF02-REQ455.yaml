@@ -1,0 +1,113 @@
+run_id: WF02-REQ455-20261006
+agent: TEST-RUNNER
+step: "04"
+branch: feature/WF02-REQ455-20261006
+date: 2026-10-06
+requirement: REQ-455
+verdict: PARTIAL
+verdict_reason: >
+  No test failure attributable to the REQ-455 diff. One load-induced flake (passed on rerun)
+  and three failures in test/scripts/uat_preflight_local_deps_test.exs that reproduce
+  identically at the merge-base (pre-existing, Windows launcher/path environment).
+
+method:
+  deviation: >
+    scripts/test_parallel.sh was NOT used. Per the ORCH task (RAM tight, CI saturated) the suite
+    was run SEQUENTIALLY, one test directory or top-level file group at a time, one mix process
+    at a time, with MIX_TEST_PARTITION=57 (unique DB letflow_test57 on the workspace Postgres at
+    port 5472 from the untracked .env). Driver: scratchpad run_all.sh. No concurrent mix processes.
+  caveat: >
+    The driver's per-group log name was basename-keyed, so test/letflow/scripts and
+    test/letflow/support logs were overwritten by test/scripts and test/support. Both letflow
+    groups exited 0 in the driver summary and were re-run individually for counts (below).
+
+per_group_results:
+  # group: result line quoted from mix test output ("Result:" / "Failed:")
+  "test/letflow/*_test.exs (top-level files, 65)": "Result: 1230/1231 passed (1/1 property, 1229/1230 tests); Failed: 1 test"
+  "test/letflow/api": "Result: 387 passed"
+  "test/letflow/definitions": "Result: 539 passed"
+  "test/docs": "Result: 25 passed"
+  "test/letflow/engine": "Result: 1066 passed (1 property, 1065 tests), 16 excluded"
+  "test/letflow/entities": "Result: 294 passed"
+  "test/letflow/event_store": "Result: 178 passed"
+  "test/fixtures": "Result: 10 passed"
+  "test/letflow/help": "Result: 31 passed"
+  "test/letflow/identity": "Result: 69 passed"
+  "test/letflow/integration": "Result: 0 tests, 11 excluded (tagged, excluded by default)"
+  "test/letflow/login_directory": "Result: 47 passed"
+  "test/letflow/login_discovery": "Result: 217 passed"
+  "test/letflow/metrics": "Result: 9 passed"
+  "test/letflow/migrations": "Result: 4 passed"
+  "test/mix": "Result: 426 passed"
+  "test/letflow/modules": "Result: 280 passed"
+  "test/letflow/obs": "Result: 35 passed"
+  "test/letflow/oidc": "Result: 44 passed (2 properties, 42 tests)"
+  "test/letflow/platform": "Result: 12 passed"
+  "test/letflow/plugs": "Result: 324 passed"
+  "test/letflow/repository": "Result: 122 passed"
+  "test/letflow/routers": "Result: 1013 passed"
+  "test/letflow/sandbox_pool": "Result: 6 passed"
+  "test/letflow/scheduler": "Result: 25 passed"
+  "test/letflow/scripts": "Result: 85 passed (re-run individually)"
+  "test/letflow/secrets": "Result: 14 passed"
+  "test/letflow/service_catalog": "Result: 20 passed"
+  "test/letflow/simulation": "Result: 28 passed"
+  "test/letflow/supervisor": "Result: 11 passed"
+  "test/letflow/support": "Result: 17 passed (re-run individually)"
+  "test/letflow/tenant_provisioning": "Result: 53 passed"
+  "test/letflow/webhooks": "Result: 30 passed"
+  "test/scripts": "Result: 32/35 passed; Failed: 3 tests"
+  "test/support": "Result: 66 passed (4 properties, 62 tests)"
+  "test/letflow/engine_concurrency_test.exs (re-run alone)": "Result: 3 passed"
+combined:
+  passed_first_pass: 6666
+  failed_first_pass: 4   # 1 flake + 3 pre-existing
+  failed_after_rerun_of_flake: 3   # all pre-existing, outside diff
+  new_REQ455_tests: >
+    All run and passed: test/letflow/definitions (539 passed) includes graph_flow_test,
+    flow_validation_wiring_test, role_binding_test, role_binding_install_test,
+    semantic_validation_data_flow_test, shipped_definitions_validation_test.
+  objective_check: >
+    No other test's gateway graph failed the new CHK-24 default-route check and no fixture
+    version-pin test failed: test/letflow/simulation, test/letflow/scripts, test/letflow/engine,
+    test/letflow/definitions, test/letflow/routers all green.
+
+failures:
+  - id: F1
+    test: "Letflow.EngineConcurrencyTest AC4 -- reconstruction matches projection (test/letflow/engine_concurrency_test.exs:422)"
+    output: >
+      assert {:ok, %{instance_status: :completed}} = result; right: {:error, {:transaction_failed,
+      %DBConnection.ConnectionError{... reason: :queue_timeout}}} (connection pool queue timeout 2166ms)
+    attribution: >
+      Not in diff (test/letflow/engine_concurrency_test.exs and lib/letflow/engine* untouched by
+      the REQ-455 diff except engine/service_task_wiring_test and engine_execution_error_test, neither
+      involved). Cause is DB pool starvation while the host was saturated (statement-timeout warnings
+      in the same log). Re-run alone with the same partition: "Result: 3 passed". Classified flake
+      (environmental load); not routed to ELIXIR-DEV.
+  - id: F2
+    tests: "Letflow.Scripts.UatPreflightLocalDepsTest T1, T2, T7 (test/scripts/uat_preflight_local_deps_test.exs:88,101,164)"
+    output: >
+      preflight script did not reach its report (launcher="c:/Program Files/Git/usr/bin/bash.exe").
+      First 500 chars of output: uat_preflight: no scenario files under c:/Users/tvolo/dev/ai-dala/letflow-3/tmp/...
+      Set UAT_PF_BASH to a real bash (git-bash on Windows).
+    attribution: >
+      Pre-existing, not in diff (git diff origin/main...HEAD touches no preflight/uat/test/scripts file).
+      Reproduced at merge-base 3d269109614e94a458d5788031e88974066cf8f0 in a throwaway worktree
+      (deps/_build copied, MIX_TEST_PARTITION=58): "Result: 4/7 passed; Failed: 3 tests" with the same
+      three tests. Worktree removed and DB letflow_test58 dropped. Windows launcher/path-mapping
+      issue in the harness; owner would be TEST-DESIGNER/ELIXIR-DEV of REQ-452-era preflight, to be
+      filed as an issue by ORCH (not filed by TEST-RUNNER; not blocking REQ-455).
+
+ci_shaped_checks:
+  staging: "git add -A -- . ':!letflow-3.code-workspace' (staged only, no commit)"
+  mix_compile_warnings_as_errors: "exit 0, no output"
+  mix_format_check_formatted: "exit 0, no output"
+  mix_letflow_lint_handoffs: "exit 0 -- letflow.lint_handoffs: OK -- 0 new violations across 3369 handoff files under \"handoffs\" (25 pre-existing grandfathered, traced to ISS-0190)."
+  mix_letflow_check_issue_refs: "exit 0 -- OK -- every cross-reference is prefixed and well-formed. (588 files)"
+  mix_letflow_check_boundaries: "exit 0 -- mix letflow.check_boundaries: OK -- 932 edges checked, 0 violations"
+
+cleanup:
+  worktree_base: removed and pruned
+  db_letflow_test58: dropped
+  db_letflow_test57: dropped
+  no_commit_no_push_no_checkout_stash_reset: true

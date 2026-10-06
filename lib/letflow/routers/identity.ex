@@ -537,11 +537,12 @@ defmodule Letflow.Routers.Identity do
   # (roles parsed from the DB-resolved auth_context; platform_tenant? recomputed).
   defp users_groups_roles_manage?(conn) do
     auth_context = conn.assigns.auth_context
+    platform_tenant? = PlatformTenant.platform_tenant?(Map.get(auth_context, :tenant_id))
 
     Authorization.has_permission_in_scope?(
-      Authorization.roles_from_strings(Map.get(auth_context, :roles, [])),
+      Authorization.effective_roles(Map.get(auth_context, :roles, []), platform_tenant?),
       :UsersGroupsRolesManage,
-      PlatformTenant.platform_tenant?(Map.get(auth_context, :tenant_id))
+      platform_tenant?
     )
   end
 

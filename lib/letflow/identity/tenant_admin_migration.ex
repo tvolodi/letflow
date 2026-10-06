@@ -4,6 +4,12 @@ defmodule Letflow.Identity.TenantAdminMigration do
   the idempotent, forward-only conversion of every NON-platform tenant from the
   legacy `PLATFORM_ADMIN` role to `TENANT_ADMIN`.
 
+  REQ-447 PR 2 is merged: a stored or claimed `PLATFORM_ADMIN` outside the platform
+  tenant is no longer honoured at all (dropped at role resolution, rejected on
+  write). This tool stays because every other environment that still holds legacy
+  `PLATFORM_ADMIN` members or tokens in non-platform tenants must be migrated to
+  `TENANT_ADMIN` or those holders silently lose their administration.
+
   For each tenant registered in `Letflow.TenantProvisioning.list_registrations/0`
   except the pinned platform tenant, in ONE `Letflow.Repo.transaction/1` per
   tenant (a failing tenant rolls back completely and the sweep continues):

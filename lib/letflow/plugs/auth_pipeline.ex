@@ -371,6 +371,11 @@ defmodule Letflow.Plugs.AuthPipeline do
     # ISS-0993 (design section 4): the two scope facts are stored as a
     # CACHE/assertion only. No authorization decision reads them; consumers
     # recompute via Letflow.PlatformTenant from tenant_id and roles.
+    #
+    # REQ-447 PR 2 (design 3.5): `PLATFORM_ADMIN` is dropped here for every
+    # non-platform tenant, so `auth_context.roles` (and everything reading it)
+    # never carries it; both the OIDC and the API-token branch converge here.
+    roles = Letflow.PlatformTenant.effective_role_strings(tenant_id, roles)
     facts = Letflow.PlatformTenant.scope_facts(tenant_id, roles)
 
     assign(conn, :auth_context, %{

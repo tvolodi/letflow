@@ -2233,9 +2233,15 @@ defmodule Letflow.Routers.Entities do
   # itself builds one, from the SAME `conn.assigns.auth_context` -- never a
   # second, divergent identity source.
   defp check_unredacted_permission(conn, true) do
+    # REQ-447 PR 2 (design 3.5, OQ-10): the recomputed platform flag is passed
+    # and PLATFORM_ADMIN is dropped outside the platform tenant.
+    platform_tenant? =
+      Letflow.PlatformTenant.platform_tenant?(Map.get(conn.assigns.auth_context, :tenant_id))
+
     ctx = %Authorization.AccessContext{
       user_id: conn.assigns.auth_context.user_id,
-      roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
+      roles: Authorization.effective_roles(conn.assigns.auth_context.roles, platform_tenant?),
+      platform_tenant?: platform_tenant?
     }
 
     case Authorization.evaluate_access(ctx, :EntitiesRecordsExportUnredacted) do

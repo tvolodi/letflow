@@ -525,17 +525,6 @@ defmodule Letflow.Api.Authorization do
   @spec platform_permissions() :: [permission()]
   def platform_permissions, do: @platform_permissions
 
-  @doc """
-  C6 decision point (interim, UNRATIFIED departure from REQ-445 D4 until
-  REQ-447): when `true`, a `PLATFORM_ADMIN` of any tenant keeps the
-  catch-all over TENANT-scope permissions in its OWN tenant (own-tenant powers
-  only; no platform-scope permission, no cross-tenant promotion). Set to
-  `false` to honour `PLATFORM_ADMIN` only in the platform tenant everywhere.
-  """
-  @spec tenant_platform_admin_own_tenant_powers?() :: boolean()
-  def tenant_platform_admin_own_tenant_powers?,
-    do: Application.get_env(:letflow, :tenant_platform_admin_own_tenant_powers, true) != false
-
   defmodule AccessContext do
     # PROVENANCE (historical, not current decision authority):
     @moduledoc """
@@ -585,6 +574,24 @@ defmodule Letflow.Api.Authorization do
     |> Enum.reverse()
     |> Enum.uniq()
   end
+
+  @doc """
+  REQ-447 PR 2 (design section 3.5): the ONE shared resolution of a caller's
+  roles. Parses `role_strings` with `roles_from_strings/1` and, unless
+  `platform_tenant?` is exactly `true`, removes `:PLATFORM_ADMIN`, so a stored
+  row, a token claim or a hand-built context confers nothing of `PLATFORM_ADMIN`
+  outside the platform tenant (0046 D2/D4). A non-list input is `[]`.
+  """
+  @spec effective_roles([String.t()] | term(), boolean() | term()) :: [role()]
+  def effective_roles(role_strings, platform_tenant?) when is_list(role_strings) do
+    roles = roles_from_strings(role_strings)
+
+    if platform_tenant? == true,
+      do: roles,
+      else: List.delete(roles, :PLATFORM_ADMIN)
+  end
+
+  def effective_roles(_other, _platform_tenant?), do: []
 
   @doc """
   ISS-0993 hardening H1 (design section 10): true iff `name` is, or could be
@@ -1261,9 +1268,11 @@ defmodule Letflow.Api.Authorization do
   @doc """
   ISS-0993 rule 3 plus `has_permission?/2`: a `:platform`-scope permission is
   honoured only when `platform_tenant?` is `true` AND `:PLATFORM_ADMIN` is among
-  `roles`. A tenant-scope permission follows the role matrix unchanged
-  (C6, see `tenant_platform_admin_own_tenant_powers?/0`). `role_allows?/2` is
-  unchanged. Fail closed on a non-`true` `platform_tenant?`.
+  `roles`. A tenant-scope permission follows the role matrix; REQ-447 PR 2
+  deleted the C6 own-tenant switch, so `:PLATFORM_ADMIN` counts only when
+  `platform_tenant?` is `true` (resolution through `effective_roles/2` already
+  drops it elsewhere; the delete here keeps a hand-built context fail closed).
+  `role_allows?/2` is unchanged. Fail closed on a non-`true` `platform_tenant?`.
   """
   @spec has_permission_in_scope?([role()], permission() | atom(), boolean()) :: boolean()
   def has_permission_in_scope?(roles, permission, platform_tenant?) do
@@ -1273,12 +1282,12 @@ defmodule Letflow.Api.Authorization do
           has_permission?(roles, permission)
 
       :tenant ->
-        effective_roles =
-          if platform_tenant? == true or tenant_platform_admin_own_tenant_powers?() == true,
+        scoped_roles =
+          if platform_tenant? == true,
             do: roles,
             else: List.delete(roles, :PLATFORM_ADMIN)
 
-        has_permission?(effective_roles, permission)
+        has_permission?(scoped_roles, permission)
     end
   end
 

@@ -6,6 +6,10 @@ defmodule Mix.Tasks.Letflow.MigrateTenantAdmins do
   deployed container, which has no Mix, call the same function through the release
   `rpc` instead (`lib/letflow/design/req447-infra-realm-mapping.md` section 8).
 
+  REQ-447 PR 2 is merged: a legacy `PLATFORM_ADMIN` outside the platform tenant
+  is no longer honoured, so this task is what converts its holders (members and
+  API tokens) in every environment that still has them.
+
   ## Usage
 
       mix letflow.migrate_tenant_admins --dry-run

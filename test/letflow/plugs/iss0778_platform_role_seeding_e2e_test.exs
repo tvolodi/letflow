@@ -125,6 +125,11 @@ defmodule Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest do
     |> put_req_header("authorization", "Bearer " <> bearer_token)
   end
 
+  defp schema_of!(tenant_id) do
+    {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant_id)
+    schema_name
+  end
+
   defp unique_hostname(prefix), do: "#{prefix}-#{Ecto.UUID.generate()}.example.com"
   defp unique_onboarding_slug(prefix), do: Letflow.TenantSlugFixture.unique_slug(prefix)
 
@@ -181,7 +186,7 @@ defmodule Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest do
   end
 
   describe "ISS-0778 T4 (design §5): freshly-onboarded tenant, PLATFORM_ADMIN OIDC token, zero manual bootstrap" do
-    test "POST /onboarding provisions a tenant; a PLATFORM_ADMIN-claiming OIDC token reaches a PLATFORM_ADMIN-gated route; a non-privileged token still 403s on the same tenant" do
+    test "onboarding seeds TENANT_ADMIN (REQ-447); its OIDC token reaches a gated route; others 403" do
       Letflow.Support.BpmDefaultRealmDisplacement.displace!()
 
       # ── Step 1 (design §5.1): real, PLATFORM_ADMIN-authenticated
@@ -218,34 +223,48 @@ defmodule Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest do
       # recognize -- see this file's own moduledoc "Fixture mechanics" section.
       bind_tenant_to_bpm_default_realm!(new_tenant_id)
 
-      # ISS-0993 (A2): GET /api/v1/tenants is PLATFORM scope. The freshly-onboarded tenant is the
-      # one whose PLATFORM_ADMIN-claiming OIDC token this step proves reaches a gated route, so
-      # it is pinned as THE platform tenant here (the proof is about the seeded role binding).
-      PlatformTenantFixture.pin!(new_tenant_id)
+      # REQ-447 PR 1: the freshly-onboarded tenant is an ORDINARY (non-platform) tenant -- the
+      # pin set by mint_caller!/2 names the minting caller's tenant, not this one. Its seeding
+      # therefore holds a TENANT_ADMIN binding and NO PLATFORM_ADMIN binding. (Before REQ-447
+      # this step pinned the new tenant as THE platform tenant and proved a PLATFORM_ADMIN
+      # claim reached GET /tenants; that proof now lives in the platform tenant's seeding test.)
+      new_schema = Letflow.Identity.TenantRole |> Repo.all(prefix: schema_of!(new_tenant_id))
+      seeded_names = new_schema |> Enum.map(& &1.name) |> Enum.sort()
+      assert "TENANT_ADMIN" in seeded_names
+      refute "PLATFORM_ADMIN" in seeded_names
 
-      # ── Step 2/3 (design §5.2/§5.3): a PLATFORM_ADMIN-claiming OIDC token
-      # reaches a PLATFORM_ADMIN-gated route (GET /api/v1/tenants, :TenantsManage
-      # per lib/letflow/api/authorization.ex's endpoint_policy_key/2) ───────────
+      # ── Step 2/3 (design §5.2/§5.3): a TENANT_ADMIN-claiming OIDC token reaches a
+      # TENANT_ADMIN-gated route (GET /api/v1/identity/users) ────
       original_oidc_config = use_platform_admin_token_verifier!()
 
       admin_conn =
-        oidc_request(:get, "/api/v1/tenants", "iss0778-platform-admin-token")
+        oidc_request(:get, "/api/v1/identity/users", "iss0778-tenant-admin-token")
         |> dispatch()
 
       assert admin_conn.status == 200
-      assert "PLATFORM_ADMIN" in admin_conn.assigns.auth_context.roles
+      assert "TENANT_ADMIN" in admin_conn.assigns.auth_context.roles
+      refute "PLATFORM_ADMIN" in admin_conn.assigns.auth_context.roles
       assert admin_conn.assigns.auth_context.tenant_id == new_tenant_id
+
+      # A PLATFORM_ADMIN claim in the same ordinary tenant has no binding to resolve through, so
+      # it grants nothing (the seeding no longer mints a platform role outside the platform tenant).
+      pa_conn =
+        oidc_request(:get, "/api/v1/identity/users", "iss0778-platform-admin-token")
+        |> dispatch()
+
+      assert pa_conn.status == 403
+      assert pa_conn.assigns.auth_context.roles == []
 
       # ── Step 4 (design §5.4): explicit negative control -- restore the default
       # double (claims ["VIEWER"], which is not one of
-      # Letflow.Api.Authorization.roles/0's six seeded literals) and hit the SAME
+      # Letflow.Api.Authorization.roles/0's seven seeded literals) and hit the SAME
       # gated route on the SAME tenant. Proves the step-3 pass is because the
       # claimed role genuinely resolved through the seeded binding, not because
       # this route is unguarded for this tenant. ────────────────────────────────
       Application.put_env(:letflow, :oidc, original_oidc_config)
 
       viewer_conn =
-        oidc_request(:get, "/api/v1/tenants", "valid-test-token")
+        oidc_request(:get, "/api/v1/identity/users", "valid-test-token")
         |> dispatch()
 
       assert viewer_conn.status == 403

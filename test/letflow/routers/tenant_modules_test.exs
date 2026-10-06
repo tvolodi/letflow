@@ -61,7 +61,8 @@ defmodule Letflow.Routers.TenantModulesTest do
       %{tenant_id: tenant_id, schema_name: prefix} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req403-ac1")
 
-      for role <- Authorization.roles(), role != :PLATFORM_ADMIN do
+      # REQ-447: TENANT_ADMIN holds :ModulesManage (tenant scope); its 201 is the next test.
+      for role <- Authorization.roles(), role not in [:PLATFORM_ADMIN, :TENANT_ADMIN] do
         conn = install(tenant_id, [Atom.to_string(role)], %{"module_id" => "fixture"})
 
         assert conn.status == 403,
@@ -78,6 +79,17 @@ defmodule Letflow.Routers.TenantModulesTest do
       assert body["version"] == "0.1.0"
       assert is_binary(body["installed_at"])
 
+      assert [%TenantModule{module_id: "fixture"}] = Installs.list_installed(prefix: prefix)
+    end
+  end
+
+  describe "REQ-447 -- TENANT_ADMIN of the caller's own tenant" do
+    test "201 for TENANT_ADMIN installing a module into its own tenant" do
+      %{tenant_id: tenant_id, schema_name: prefix} =
+        TenantFixture.provisioned_tenant!(slug_prefix: "req447-modules")
+
+      conn = install(tenant_id, ["TENANT_ADMIN"], %{"module_id" => "fixture"})
+      assert conn.status == 201
       assert [%TenantModule{module_id: "fixture"}] = Installs.list_installed(prefix: prefix)
     end
   end

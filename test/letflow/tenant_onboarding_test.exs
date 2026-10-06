@@ -255,16 +255,21 @@ defmodule Letflow.TenantOnboardingTest do
       Repo.query!("DROP FUNCTION IF EXISTS \"#{schema_name}\".iss0778_sabotage_group_insert()")
     end
 
-    test "a freshly-provisioned tenant has all six tenant_role rows present, with no extra manual step",
+    test "a freshly-provisioned ordinary tenant has its six tenant_role rows (TENANT_ADMIN, no PLATFORM_ADMIN; REQ-447)",
          %{tenant: tenant} do
       assert {:ok, %Registration{schema_name: schema_name}} =
                TenantOnboarding.provision_and_migrate(tenant.id)
 
       rows = tenant_role_rows(schema_name)
-      expected_names = Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+      # REQ-447: an ordinary tenant is seeded every role but PLATFORM_ADMIN.
+      expected_names =
+        Letflow.Api.Authorization.roles()
+        |> Enum.map(&Atom.to_string/1)
+        |> Enum.reject(&(&1 == "PLATFORM_ADMIN"))
 
       assert length(rows) == 6
       assert Enum.map(rows, & &1.name) |> Enum.sort() == Enum.sort(expected_names)
+      assert "TENANT_ADMIN" in Enum.map(rows, & &1.name)
       assert Enum.all?(rows, &(&1.kind == :platform_role))
 
       # AC10's status-flip step also ran -- the tenant genuinely reached :active,
@@ -286,7 +291,9 @@ defmodule Letflow.TenantOnboardingTest do
 
       assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
 
-      install_group_insert_sabotage!(schema_name, "PLATFORM_ADMIN")
+      # REQ-447: PLATFORM_ADMIN is not seeded in an ordinary tenant, so the first role the
+      # seeder reaches is PROCESS_DESIGNER (Authorization.roles/0's order without PLATFORM_ADMIN).
+      install_group_insert_sabotage!(schema_name, "PROCESS_DESIGNER")
 
       assert {:error, {:role_seeding_failed, :group_not_found}} =
                TenantOnboarding.provision_and_migrate(tenant.id)
@@ -298,8 +305,8 @@ defmodule Letflow.TenantOnboardingTest do
       assert %Tenant{status: :migrating} = Repo.get(Tenant, tenant.id)
 
       # No partial platform-role bindings survived either -- seeding halted on the
-      # FIRST role name in Authorization.roles/0's own declared order
-      # ("PLATFORM_ADMIN"), before any of the other five were even attempted.
+      # FIRST seeded role name in Authorization.roles/0's own declared order
+      # ("PROCESS_DESIGNER" here), before any of the others were even attempted.
       assert tenant_role_rows(schema_name) == []
 
       drop_group_insert_sabotage!(schema_name)
@@ -311,7 +318,11 @@ defmodule Letflow.TenantOnboardingTest do
                TenantOnboarding.recover_provisioning(tenant.id)
 
       rows = tenant_role_rows(schema_name)
-      expected_names = Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+
+      expected_names =
+        Letflow.Api.Authorization.roles()
+        |> Enum.map(&Atom.to_string/1)
+        |> Enum.reject(&(&1 == "PLATFORM_ADMIN"))
 
       assert length(rows) == 6
       assert Enum.map(rows, & &1.name) |> Enum.sort() == Enum.sort(expected_names)

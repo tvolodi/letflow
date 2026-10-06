@@ -43,6 +43,11 @@ defmodule Letflow.Oidc.Iss0778PlatformAdminTokenVerifierDouble do
       subject `"iss0778-platform-admin-subject"` (one subject only, matching both
       sibling doubles' own "not parameterized by token suffix" precedent), claiming
       exactly one role: `"PLATFORM_ADMIN"`.
+    * `"iss0778-tenant-admin-token"` → `{:ok, claims}`, same realm, fixed subject
+      `"iss0778-tenant-admin-subject"`, claiming exactly one role: `"TENANT_ADMIN"`
+      (REQ-447 PR 1: a freshly-onboarded NON-platform tenant is seeded `TENANT_ADMIN` and no
+      `PLATFORM_ADMIN` binding, so the e2e proof needs a token that claims the role the tenant
+      actually has).
     * any other value → `{:error, :invalid_test_token}`, matching every sibling
       double's behavior for the same case.
   """
@@ -60,7 +65,19 @@ defmodule Letflow.Oidc.Iss0778PlatformAdminTokenVerifierDouble do
     "realm_access" => %{"roles" => ["PLATFORM_ADMIN"]}
   }
 
+  @tenant_admin_token "iss0778-tenant-admin-token"
+
+  @tenant_admin_claims %{
+    "iss" => "https://placeholder-keycloak.invalid/realms/bpm-default",
+    "sub" => "iss0778-tenant-admin-subject",
+    "email" => "iss0778-tenant-admin-subject@example.com",
+    "preferred_username" => "iss0778-tenant-admin-subject",
+    "name" => "ISS-0778 Tenant Admin E2E Test User",
+    "realm_access" => %{"roles" => ["TENANT_ADMIN"]}
+  }
+
   @impl Letflow.Oidc.TokenVerifier
   def verify_bearer_token(@valid_token), do: {:ok, @valid_claims}
+  def verify_bearer_token(@tenant_admin_token), do: {:ok, @tenant_admin_claims}
   def verify_bearer_token(_other_token), do: {:error, :invalid_test_token}
 end

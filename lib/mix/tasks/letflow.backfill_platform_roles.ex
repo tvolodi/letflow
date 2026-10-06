@@ -1,9 +1,10 @@
 defmodule Mix.Tasks.Letflow.BackfillPlatformRoles do
-  @shortdoc "Backfills the six platform-role group/role bindings for tenants provisioned before ISS-0778 (ISS-0886)"
+  @shortdoc "Backfills the platform-role group/role bindings for tenants provisioned before ISS-0778 (ISS-0886)"
 
   @moduledoc """
   Backfills `Letflow.Identity.RoleRegistry.seed_default_platform_role_groups/1`
-  (the six `Letflow.Api.Authorization.roles/0` platform-role bindings) for
+  (the `Letflow.Api.Authorization.roles/0` platform-role bindings: seven roles in the platform
+  tenant, six elsewhere) for
   every tenant registered in `Letflow.TenantProvisioning.list_registrations/0`.
 
   ISS-0778 (2026-09-22) started seeding these bindings automatically at
@@ -24,7 +25,7 @@ defmodule Mix.Tasks.Letflow.BackfillPlatformRoles do
   has no such guard).
 
   Idempotent — safe to re-run against a database where some or all tenants
-  already have all six bindings; re-running converges rather than erroring
+  already have all of their bindings; re-running converges rather than erroring
   or duplicating rows (`Letflow.Identity.RoleBackfill`'s own moduledoc).
 
   Exits non-zero if any tenant fails to backfill.

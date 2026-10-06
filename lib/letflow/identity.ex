@@ -1354,8 +1354,7 @@ defmodule Letflow.Identity do
 
     1. `user_id` must reference an existing user in `opts[:prefix]`'s schema, or
        this returns `{:error, :user_not_found}`.
-    2. `attrs.roles` must be non-empty and every entry must be one of the five
-       literal role-name strings `Letflow.Api.Authorization.roles/0` returns as
+    2. `attrs.roles` must be non-empty and every entry must be one of the literal role-name strings `Letflow.Api.Authorization.roles/0` returns as
        strings — exact match, case-sensitive. **This function does NOT call
        `Authorization.roles_from_strings/1`** (that function's contract is
        "silently drop an unrecognized string," correct for untrusted bearer-token
@@ -1497,6 +1496,49 @@ defmodule Letflow.Identity do
     tokens = Repo.all(from(t in ApiToken, order_by: [desc: t.inserted_at]), prefix: prefix)
 
     {:ok, tokens}
+  end
+
+  @doc """
+  REQ-447 (design section 3.6b): true iff the user belongs to the group the
+  `PLATFORM_ADMIN` binding (`kind == :platform_role`) points to in
+  `opts[:prefix]`'s schema. `false` when there is no binding or `user_id` is not
+  a UUID.
+  """
+  @spec platform_admin_member?(user_id :: Ecto.UUID.t() | String.t(), opts :: opts()) ::
+          boolean()
+  def platform_admin_member?(user_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    case Ecto.UUID.cast(user_id) do
+      {:ok, uuid} ->
+        from(m in GroupMember,
+          join: t in TenantRole,
+          on: t.group_id == m.group_id,
+          where: m.user_id == ^uuid and t.name == "PLATFORM_ADMIN" and t.kind == :platform_role
+        )
+        |> Repo.exists?(prefix: prefix)
+
+      :error ->
+        false
+    end
+  end
+
+  @doc """
+  REQ-447 (design section 3.6b, M1): true iff the stored roles of the token
+  `token_id` contain `PLATFORM_ADMIN` (by `Authorization.platform_admin_name?/1`).
+  `false` for an unknown or non-UUID id (the revoke path then answers as before).
+  """
+  @spec token_carries_platform_admin?(token_id :: Ecto.UUID.t() | String.t(), opts :: opts()) ::
+          boolean()
+  def token_carries_platform_admin?(token_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, uuid} <- Ecto.UUID.cast(token_id),
+         %ApiToken{roles: roles} when is_list(roles) <- Repo.get(ApiToken, uuid, prefix: prefix) do
+      Enum.any?(roles, &Authorization.platform_admin_name?/1)
+    else
+      _other -> false
+    end
   end
 
   @doc """

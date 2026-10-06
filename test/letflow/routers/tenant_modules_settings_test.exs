@@ -145,7 +145,8 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
       actor_id = Ecto.UUID.generate()
       {:ok, _} = Installs.install("fixture", actor_id, prefix: prefix)
 
-      for role <- Authorization.roles(), role != :PLATFORM_ADMIN do
+      # REQ-447: TENANT_ADMIN holds :ModulesManage (tenant scope); its 200 is the next test.
+      for role <- Authorization.roles(), role not in [:PLATFORM_ADMIN, :TENANT_ADMIN] do
         conn =
           put_settings(tenant_id, [Atom.to_string(role)], "fixture", %{"greeting" => "hi"})
 
@@ -156,6 +157,16 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
       # Settings should be unchanged (still %{} from install)
       [installed] = Installs.list_installed(prefix: prefix)
       assert installed.settings == %{}
+    end
+
+    test "REQ-447: 200 for TENANT_ADMIN updating its own tenant's module settings" do
+      %{tenant_id: tenant_id, schema_name: prefix} =
+        TenantFixture.provisioned_tenant!(slug_prefix: "req447-settings")
+
+      {:ok, _} = Installs.install("fixture", Ecto.UUID.generate(), prefix: prefix)
+
+      conn = put_settings(tenant_id, ["TENANT_ADMIN"], "fixture", %{"greeting" => "hi"})
+      assert conn.status == 200
     end
 
     test "404 when the module is not installed in the caller's tenant" do

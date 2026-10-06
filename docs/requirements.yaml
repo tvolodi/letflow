@@ -33788,6 +33788,7 @@ requirements:
       (REQ-445). Read that record and docs/roles.md first. Requires the fix for ISS-0993 (PR A2, the enforcing merge, not only A1;
       ISS-0994 / queue Q-961 is its duplicate and is closed only when A2 merges)
       and REQ-446 to be merged.
+      ordering: requires Q-1005 / GH #2297 (ISS-1023) and Q-1008 / GH #2305 (ISS-1026) merged first: exposure is real once :PromotionsRead and :PromotionsManage are granted to TENANT_ADMIN/TENANT_AUDITOR
 
       BUILDS:
       1. Letflow.Api.Authorization: add :TENANT_ADMIN to @roles and the role

@@ -19,14 +19,15 @@ defmodule Letflow.Api.AuthorizationTest do
   alias Letflow.Api.Authorization.AccessContext
 
   describe "acceptance criterion 1 — exact Role and Permission enumeration" do
-    test "roles/0 returns exactly R-Co's five Role values plus ISS-0646's CANDIDATE" do
+    test "roles/0 returns exactly R-Co's five Role values plus ISS-0646's CANDIDATE plus REQ-447's TENANT_ADMIN" do
       assert Authorization.roles() == [
                :PLATFORM_ADMIN,
                :PROCESS_DESIGNER,
                :PROCESS_OPERATOR,
                :TASK_WORKER,
                :AGENT_RUNNER,
-               :CANDIDATE
+               :CANDIDATE,
+               :TENANT_ADMIN
              ]
     end
 
@@ -596,10 +597,17 @@ defmodule Letflow.Api.AuthorizationTest do
         EntitiesDefinitionsWrite: false,
         EntitiesRecordsWrite: false,
         EntitiesQuery: false
+      },
+      # REQ-447: TENANT_ADMIN holds every tenant-scope permission, so all four.
+      TENANT_ADMIN: %{
+        EntitiesDefinitionsRead: true,
+        EntitiesDefinitionsWrite: true,
+        EntitiesRecordsWrite: true,
+        EntitiesQuery: true
       }
     }
 
-    test "the grid covers every role x every new permission -- 24 pairs, none missing" do
+    test "the grid covers every role x every new permission -- 28 pairs, none missing" do
       assert Map.keys(@new_permission_grid) |> Enum.sort() ==
                Authorization.roles() |> Enum.sort()
 
@@ -608,7 +616,7 @@ defmodule Letflow.Api.AuthorizationTest do
             {permission, _} <- by_permission,
             do: permission
 
-      assert length(pairs) == 24
+      assert length(pairs) == 28
 
       for {role, by_permission} <- @new_permission_grid do
         assert Enum.sort(Map.keys(by_permission)) == Enum.sort(@req309_permissions),
@@ -616,7 +624,7 @@ defmodule Letflow.Api.AuthorizationTest do
       end
     end
 
-    test "role_allows?/2 matches the grid for all 24 role/permission pairs" do
+    test "role_allows?/2 matches the grid for all 28 role/permission pairs" do
       for {role, by_permission} <- @new_permission_grid,
           {permission, expected} <- by_permission do
         actual = Authorization.role_allows?(role, permission)
@@ -721,10 +729,13 @@ defmodule Letflow.Api.AuthorizationTest do
       # nineteen pre-existing permissions -- its only grant is REQ-335's five
       # ExamSession* permissions, same "holds nothing here" shape as
       # AGENT_RUNNER above.
-      CANDIDATE: []
+      CANDIDATE: [],
+      # REQ-447: TENANT_ADMIN holds exactly the tenant-scope permissions. Of the
+      # pre-existing permissions only :TenantsManage is platform scope.
+      TENANT_ADMIN: Enum.reject(@pre_req309_permissions, &(&1 == :TenantsManage))
     }
 
-    test "the regression grid is complete: 6 roles x 19 pre-existing permissions = 114 pairs" do
+    test "the regression grid is complete: 7 roles x 19 pre-existing permissions = 133 pairs" do
       assert length(@pre_req309_permissions) == 19
       assert Enum.sort(Map.keys(@pre_req309_allowed)) == Enum.sort(Authorization.roles())
 
@@ -749,7 +760,7 @@ defmodule Letflow.Api.AuthorizationTest do
       assert Enum.take(live, length(expected_prefix)) == expected_prefix
 
       pair_count = length(Authorization.roles()) * length(@pre_req309_permissions)
-      assert pair_count == 114
+      assert pair_count == 133
     end
 
     test "all 95 pre-existing role/permission pairs return exactly what they returned before REQ-309" do
@@ -758,7 +769,8 @@ defmodule Letflow.Api.AuthorizationTest do
             :PROCESS_DESIGNER,
             :PROCESS_OPERATOR,
             :TASK_WORKER,
-            :AGENT_RUNNER
+            :AGENT_RUNNER,
+            :TENANT_ADMIN
           ],
           permission <- @pre_req309_permissions do
         expected = permission in Map.fetch!(@pre_req309_allowed, role)
@@ -1098,10 +1110,13 @@ defmodule Letflow.Api.AuthorizationTest do
       # ISS-0646: CANDIDATE (added after REQ-315) holds none of these
       # twenty-three pre-existing permissions -- see the REQ-309 AC5 grid's
       # comment above for the same reasoning.
-      CANDIDATE: []
+      CANDIDATE: [],
+      # REQ-447: TENANT_ADMIN holds exactly the tenant-scope permissions. Of the
+      # pre-existing permissions only :TenantsManage is platform scope.
+      TENANT_ADMIN: Enum.reject(@pre_req315_permissions, &(&1 == :TenantsManage))
     }
 
-    test "the regression grid is complete: 6 roles x 23 pre-existing permissions = 138 pairs" do
+    test "the regression grid is complete: 7 roles x 23 pre-existing permissions = 161 pairs" do
       assert length(@pre_req315_permissions) == 23
       assert Enum.sort(Map.keys(@pre_req315_allowed)) == Enum.sort(Authorization.roles())
 
@@ -1123,7 +1138,7 @@ defmodule Letflow.Api.AuthorizationTest do
       assert Enum.take(live, length(expected_prefix)) == expected_prefix
 
       pair_count = length(Authorization.roles()) * length(@pre_req315_permissions)
-      assert pair_count == 138
+      assert pair_count == 161
     end
 
     test "all 115 pre-existing role/permission pairs return exactly what they returned before REQ-315" do
@@ -1132,7 +1147,8 @@ defmodule Letflow.Api.AuthorizationTest do
             :PROCESS_DESIGNER,
             :PROCESS_OPERATOR,
             :TASK_WORKER,
-            :AGENT_RUNNER
+            :AGENT_RUNNER,
+            :TENANT_ADMIN
           ],
           permission <- @pre_req315_permissions do
         expected = permission in Map.fetch!(@pre_req315_allowed, role)
@@ -1476,10 +1492,12 @@ defmodule Letflow.Api.AuthorizationTest do
       # ISS-0646: CANDIDATE (added after REQ-317) holds neither of these two
       # permissions -- its only grant is REQ-335's five ExamSession*
       # permissions, same "holds nothing here" shape as AGENT_RUNNER above.
-      CANDIDATE: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: false}
+      CANDIDATE: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: false},
+      # REQ-447: tenant-scope permissions are all granted to TENANT_ADMIN.
+      TENANT_ADMIN: %{EntitiesAttachmentsManage: true, EntitiesAttachmentsRead: true}
     }
 
-    test "the grid covers every role x both new permissions -- 12 pairs, none missing" do
+    test "the grid covers every role x both new permissions -- 14 pairs, none missing" do
       assert Map.keys(@req317_grid) |> Enum.sort() == Authorization.roles() |> Enum.sort()
 
       pairs =
@@ -1487,7 +1505,7 @@ defmodule Letflow.Api.AuthorizationTest do
             {permission, _} <- by_permission,
             do: permission
 
-      assert length(pairs) == 12
+      assert length(pairs) == 14
 
       for {role, by_permission} <- @req317_grid do
         assert Enum.sort(Map.keys(by_permission)) == Enum.sort(@req317_permissions),
@@ -1495,7 +1513,7 @@ defmodule Letflow.Api.AuthorizationTest do
       end
     end
 
-    test "role_allows?/2 matches the grid for all 10 role/permission pairs" do
+    test "role_allows?/2 matches the grid for all 14 role/permission pairs" do
       for {role, by_permission} <- @req317_grid,
           {permission, expected} <- by_permission do
         actual = Authorization.role_allows?(role, permission)
@@ -1599,7 +1617,10 @@ defmodule Letflow.Api.AuthorizationTest do
         :EntitiesQuery,
         :EntitiesAggregate
       ],
-      AGENT_RUNNER: []
+      AGENT_RUNNER: [],
+      # REQ-447: TENANT_ADMIN holds exactly the tenant-scope permissions. Of the
+      # pre-existing permissions only :TenantsManage is platform scope.
+      TENANT_ADMIN: Enum.reject(@pre_req318_permissions, &(&1 == :TenantsManage))
     }
 
     test "the live permissions/0 list's first twenty-seven entries are exactly the pre-existing twenty-four plus REQ-318's three, in that order" do
@@ -1619,7 +1640,8 @@ defmodule Letflow.Api.AuthorizationTest do
             :PROCESS_DESIGNER,
             :PROCESS_OPERATOR,
             :TASK_WORKER,
-            :AGENT_RUNNER
+            :AGENT_RUNNER,
+            :TENANT_ADMIN
           ],
           permission <- @pre_req318_permissions do
         expected = permission in Map.fetch!(@pre_req318_allowed, role)
@@ -1643,10 +1665,13 @@ defmodule Letflow.Api.AuthorizationTest do
       end
     end
 
-    test "PLATFORM_ADMIN's pre-existing catch-all is the only thing granting the three new atoms" do
+    test "only PLATFORM_ADMIN's catch-all and TENANT_ADMIN's tenant-scope rule grant them" do
       for permission <- @req318_permissions do
         assert Authorization.role_allows?(:PLATFORM_ADMIN, permission),
                "expected PLATFORM_ADMIN's catch-all to grant #{inspect(permission)}"
+
+        assert Authorization.role_allows?(:TENANT_ADMIN, permission),
+               "expected TENANT_ADMIN's tenant-scope rule to grant #{inspect(permission)}"
       end
 
       # AGENT_RUNNER's catch-all is `do: false` -- confirm it stays denied too,
@@ -1744,10 +1769,13 @@ defmodule Letflow.Api.AuthorizationTest do
       # ISS-0646: CANDIDATE (added after REQ-317) holds none of these
       # twenty-four pre-existing permissions -- see the REQ-309 AC5 grid's
       # comment above for the same reasoning.
-      CANDIDATE: []
+      CANDIDATE: [],
+      # REQ-447: TENANT_ADMIN holds exactly the tenant-scope permissions. Of the
+      # pre-existing permissions only :TenantsManage is platform scope.
+      TENANT_ADMIN: Enum.reject(@pre_req317_permissions, &(&1 == :TenantsManage))
     }
 
-    test "the regression grid is complete: 6 roles x 24 pre-existing permissions = 144 pairs" do
+    test "the regression grid is complete: 7 roles x 24 pre-existing permissions = 168 pairs" do
       assert length(@pre_req317_permissions) == 24
       assert Enum.sort(Map.keys(@pre_req317_allowed)) == Enum.sort(Authorization.roles())
 
@@ -1770,7 +1798,7 @@ defmodule Letflow.Api.AuthorizationTest do
       assert Enum.take(live, length(@pre_req317_permissions)) == @pre_req317_permissions
 
       pair_count = length(Authorization.roles()) * length(@pre_req317_permissions)
-      assert pair_count == 144
+      assert pair_count == 168
     end
 
     test "all 120 pre-existing role/permission pairs return exactly what they returned before REQ-317" do
@@ -1779,7 +1807,8 @@ defmodule Letflow.Api.AuthorizationTest do
             :PROCESS_DESIGNER,
             :PROCESS_OPERATOR,
             :TASK_WORKER,
-            :AGENT_RUNNER
+            :AGENT_RUNNER,
+            :TENANT_ADMIN
           ],
           permission <- @pre_req317_permissions do
         expected = permission in Map.fetch!(@pre_req317_allowed, role)
@@ -1829,7 +1858,7 @@ defmodule Letflow.Api.AuthorizationTest do
   # ==========================================================================
 
   describe "REQ-401 AC2 — fixture module permission grant" do
-    test "role_allows?/2 -- :FixtureRead granted to TASK_WORKER + PLATFORM_ADMIN only" do
+    test "role_allows?/2 -- :FixtureRead granted to TASK_WORKER + PLATFORM_ADMIN + TENANT_ADMIN only" do
       fixture_role_grants = Letflow.Modules.Fixture.manifest().role_grants
       # Source the granted role/permission pair from the fixture's own
       # manifest rather than hardcoding it a second time, so this test does
@@ -1839,19 +1868,24 @@ defmodule Letflow.Api.AuthorizationTest do
 
       assert Authorization.role_allows?(:TASK_WORKER, :FixtureRead)
       assert Authorization.role_allows?(:PLATFORM_ADMIN, :FixtureRead)
+      # REQ-447: a Catalog permission is tenant scope, so TENANT_ADMIN holds it through the
+      # tenant-scope grant rule (not through the manifest's role_grants).
+      assert Authorization.role_allows?(:TENANT_ADMIN, :FixtureRead)
 
-      for role <- Authorization.roles(), role not in [:TASK_WORKER, :PLATFORM_ADMIN] do
+      for role <- Authorization.roles(),
+          role not in [:TASK_WORKER, :PLATFORM_ADMIN, :TENANT_ADMIN] do
         refute Authorization.role_allows?(role, :FixtureRead),
-               "expected #{inspect(role)} to be denied :FixtureRead (only :TASK_WORKER and " <>
-                 ":PLATFORM_ADMIN should hold it)"
+               "expected #{inspect(role)} to be denied :FixtureRead (only :TASK_WORKER, " <>
+                 ":PLATFORM_ADMIN and :TENANT_ADMIN should hold it)"
       end
     end
   end
 
   describe "REQ-401 AC3 — :ModulesManage grant" do
-    test "role_allows?(role, :ModulesManage) == (role == :PLATFORM_ADMIN), for every role" do
+    test "role_allows?(role, :ModulesManage) == (role in [:PLATFORM_ADMIN, :TENANT_ADMIN]), for every role" do
       for role <- Authorization.roles() do
-        expected = role == :PLATFORM_ADMIN
+        # REQ-447: :ModulesManage is tenant scope, so TENANT_ADMIN holds it too.
+        expected = role in [:PLATFORM_ADMIN, :TENANT_ADMIN]
         actual = Authorization.role_allows?(role, :ModulesManage)
 
         assert actual == expected,
@@ -2128,10 +2162,13 @@ defmodule Letflow.Api.AuthorizationTest do
       # fallback in role_allows?/2), not by core_role_allows?/2. Since
       # none of the six exam atoms appear in @pre_req401_permissions, this
       # row is correctly empty here.
-      CANDIDATE: []
+      CANDIDATE: [],
+      # REQ-447: TENANT_ADMIN holds exactly the tenant-scope permissions. Of the
+      # pre-existing permissions only :TenantsManage is platform scope.
+      TENANT_ADMIN: Enum.reject(@pre_req401_permissions, &(&1 == :TenantsManage))
     }
 
-    test "the regression grid is complete: 6 roles x 32 pre-existing core permissions = 192 pairs" do
+    test "the regression grid is complete: 7 roles x 32 pre-existing core permissions = 224 pairs" do
       assert length(@pre_req401_permissions) == 32
       assert Enum.sort(Map.keys(@pre_req401_allowed)) == Enum.sort(Authorization.roles())
 
@@ -2150,7 +2187,7 @@ defmodule Letflow.Api.AuthorizationTest do
                  ]
 
       pair_count = length(Authorization.roles()) * length(@pre_req401_permissions)
-      assert pair_count == 192
+      assert pair_count == 224
     end
 
     test "all 228 pre-existing (role, permission) pairs return exactly what they returned before REQ-401" do

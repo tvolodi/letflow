@@ -6,6 +6,14 @@ defmodule Letflow.Api.Authorization do
   no I/O, never raises on any input. See
   `lib/letflow/design/req069-authorization.md` for the full design.
 
+  ## Seven roles (REQ-447)
+
+  `role/0` has seven members: `PLATFORM_ADMIN`, `PROCESS_DESIGNER`,
+  `PROCESS_OPERATOR`, `TASK_WORKER`, `AGENT_RUNNER`, `CANDIDATE`, and
+  `TENANT_ADMIN`. `TENANT_ADMIN` is allowed a permission iff
+  `permission_scope/1` of it is `:tenant`; never a platform-scope permission,
+  never `:Unknown` (see the `TENANT_ADMIN` clause of `core_role_allows?/2`).
+
   ## Untrusted input: roles are caller-influenced strings, not R-Co's enum
 
   `Letflow.Plugs.AuthPipeline` populates `conn.assigns[:auth_context][:roles]`
@@ -269,6 +277,7 @@ defmodule Letflow.Api.Authorization do
           | :TASK_WORKER
           | :AGENT_RUNNER
           | :CANDIDATE
+          | :TENANT_ADMIN
 
   @type permission ::
           :DefinitionsWrite
@@ -379,7 +388,8 @@ defmodule Letflow.Api.Authorization do
     :PROCESS_OPERATOR,
     :TASK_WORKER,
     :AGENT_RUNNER,
-    :CANDIDATE
+    :CANDIDATE,
+    :TENANT_ADMIN
   ]
 
   @permissions [
@@ -441,7 +451,7 @@ defmodule Letflow.Api.Authorization do
                       end
                     )
 
-  @doc "All six `Role` values, R-Co's exact names plus ISS-0646's `CANDIDATE`. See `roles_from_strings/1` for untrusted-input conversion."
+  @doc "All seven `Role` values, R-Co's exact names plus ISS-0646's `CANDIDATE` and REQ-447's `TENANT_ADMIN` (every tenant-scope permission, never a platform-scope one). See `roles_from_strings/1` for untrusted-input conversion."
   @spec roles() :: [role()]
   def roles, do: @roles
 
@@ -594,12 +604,30 @@ defmodule Letflow.Api.Authorization do
 
   def platform_admin_name?(_other), do: false
 
+  @doc """
+  REQ-447 H2 (design section 3.6): true iff `name` is the name of ANY role of
+  `roles/0` (so `TENANT_ADMIN`, `PLATFORM_ADMIN` and any later built-in), compared
+  after the same stricter trim + upcase fold as `platform_admin_name?/1`, or when
+  `platform_admin_name?/1` is true. A non-binary `name` is `false`. ONE predicate
+  for the `POST /roles` built-in-name guard.
+  """
+  @spec builtin_role_name?(term()) :: boolean()
+  def builtin_role_name?(name) when is_binary(name) do
+    folded = name |> String.trim() |> String.upcase()
+
+    platform_admin_name?(name) or
+      Enum.any?(@roles, &(Atom.to_string(&1) == folded))
+  end
+
+  def builtin_role_name?(_other), do: false
+
   defp role_from_string("PLATFORM_ADMIN"), do: :PLATFORM_ADMIN
   defp role_from_string("PROCESS_DESIGNER"), do: :PROCESS_DESIGNER
   defp role_from_string("PROCESS_OPERATOR"), do: :PROCESS_OPERATOR
   defp role_from_string("TASK_WORKER"), do: :TASK_WORKER
   defp role_from_string("AGENT_RUNNER"), do: :AGENT_RUNNER
   defp role_from_string("CANDIDATE"), do: :CANDIDATE
+  defp role_from_string("TENANT_ADMIN"), do: :TENANT_ADMIN
   defp role_from_string(_other), do: nil
 
   @doc """
@@ -1105,7 +1133,8 @@ defmodule Letflow.Api.Authorization do
     has_role?(roles, :TASK_WORKER) and
       not has_role?(roles, :PLATFORM_ADMIN) and
       not has_role?(roles, :PROCESS_DESIGNER) and
-      not has_role?(roles, :PROCESS_OPERATOR)
+      not has_role?(roles, :PROCESS_OPERATOR) and
+      not has_role?(roles, :TENANT_ADMIN)
   end
 
   @doc """
@@ -1299,6 +1328,14 @@ defmodule Letflow.Api.Authorization do
   defp core_role_allows?(role, permission)
 
   defp core_role_allows?(:PLATFORM_ADMIN, _permission), do: true
+
+  # REQ-447 (design req447-tenant-admin-role.md section 3.1): TENANT_ADMIN holds
+  # exactly the tenant-scope permissions. permission_scope/1 classifies every
+  # unclassified atom (including :Unknown and the Unmatched* markers) as
+  # :platform, so this clause fails closed and never grants a platform-scope
+  # permission. Catalog permissions are tenant scope and are covered here.
+  defp core_role_allows?(:TENANT_ADMIN, permission),
+    do: permission_scope(permission) == :tenant
 
   defp core_role_allows?(:PROCESS_DESIGNER, permission),
     do:

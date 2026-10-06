@@ -2395,4 +2395,46 @@ defmodule Letflow.Routers.TasksTest do
     |> Enum.map(fn line -> line |> String.split("#") |> hd() end)
     |> Enum.join("\n")
   end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-447 PR 1 -- TENANT_ADMIN is excluded from the task-worker-only row filter
+  # (design 3.1; is_task_worker_only?/1 governs both GET /tasks and GET /tasks/inbox).
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-447: a TENANT_ADMIN + TASK_WORKER caller sees the whole tenant queue" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req447-taskscope")}
+
+    test "GET /tasks and GET /tasks/inbox are unfiltered for TENANT_ADMIN + TASK_WORKER; TASK_WORKER alone stays filtered",
+         %{tenant: tenant} do
+      user_x = insert_user!(tenant, %{username: "req447-x"}).id
+      user_y = insert_user!(tenant, %{username: "req447-y"}).id
+
+      task_x = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: user_x})
+      task_y = insert_task!(tenant, %{assignee_type: "USER", assignee_ref: user_y})
+
+      for path <- ["/?page_size=50", "/inbox?page_size=50"] do
+        admin_conn =
+          build_conn(:get, path, tenant, roles: ["TENANT_ADMIN", "TASK_WORKER"], user_id: user_x)
+          |> dispatch()
+
+        assert admin_conn.status == 200, "#{path} for TENANT_ADMIN + TASK_WORKER"
+        admin_ids = admin_conn.resp_body |> Jason.decode!() |> item_ids()
+
+        assert task_x.id in admin_ids
+
+        assert task_y.id in admin_ids,
+               "#{path}: TENANT_ADMIN + TASK_WORKER must see another user's task"
+
+        # Control, same data and path: TASK_WORKER alone is row-filtered to its own tasks.
+        worker_conn =
+          build_conn(:get, path, tenant, roles: ["TASK_WORKER"], user_id: user_x) |> dispatch()
+
+        assert worker_conn.status == 200
+        worker_ids = worker_conn.resp_body |> Jason.decode!() |> item_ids()
+
+        assert task_x.id in worker_ids
+        refute task_y.id in worker_ids, "#{path}: TASK_WORKER alone must stay filtered"
+      end
+    end
+  end
 end

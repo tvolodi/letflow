@@ -57,6 +57,18 @@ defmodule Letflow.Identity.ApiToken do
     cast(token, attrs, [:revoked_at])
   end
 
+  @doc """
+  REQ-447: narrow changeset for `Letflow.Identity.TenantAdminMigration` that casts
+  ONLY `roles` -- the token hash, expiry, revocation and name stay untouched, so the
+  plaintext token keeps working after its stored role strings are rewritten.
+  """
+  @spec roles_rewrite_changeset(t(), [String.t()]) :: Ecto.Changeset.t()
+  def roles_rewrite_changeset(%__MODULE__{} = token, roles) when is_list(roles) do
+    token
+    |> cast(%{roles: roles}, [:roles])
+    |> validate_required([:roles])
+  end
+
   @doc "Best-effort `last_used_at` touch. See `Letflow.Identity.verify_api_token/2`."
   @spec touch_last_used_changeset(t(), map()) :: Ecto.Changeset.t()
   def touch_last_used_changeset(%__MODULE__{} = token, attrs) do

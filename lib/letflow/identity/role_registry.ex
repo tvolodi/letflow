@@ -23,6 +23,7 @@ defmodule Letflow.Identity.RoleRegistry do
   alias Letflow.Identity.Group
   alias Letflow.Identity.GroupMember
   alias Letflow.Identity.TenantRole
+  alias Letflow.PlatformTenant
   alias Letflow.Repo
 
   @type kind :: TenantRole.kind()
@@ -53,9 +54,30 @@ defmodule Letflow.Identity.RoleRegistry do
   end
 
   @doc """
+  REQ-447 (design section 3.6b): the id of the group the `PLATFORM_ADMIN`
+  binding (`kind == :platform_role`) points to in `opts[:prefix]`'s schema, or
+  `:none` when there is no such binding. Resolved by BINDING, never by group name.
+  """
+  @spec platform_admin_group_id(opts :: [prefix: String.t()]) :: {:ok, Ecto.UUID.t()} | :none
+  def platform_admin_group_id(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    query =
+      from(t in TenantRole,
+        where: t.name == "PLATFORM_ADMIN" and t.kind == :platform_role,
+        select: t.group_id
+      )
+
+    case Repo.one(query, prefix: prefix) do
+      nil -> :none
+      group_id -> {:ok, group_id}
+    end
+  end
+
+  @doc """
   Inserts or updates the `(name -> group_id)` binding for the given `kind` domain
   (ISS-0774): validates `name`'s format, `kind == :platform_role`'s membership in
-  `Letflow.Api.Authorization.roles/0`'s six literal strings, and `group_id`'s UUID
+  `Letflow.Api.Authorization.roles/0`'s seven literal strings, and `group_id`'s UUID
   syntax before any DB round-trip, then confirms `group_id` references an existing
   group and upserts on `name` conflict (updating `group_id` and `kind`) inside one
   transaction.
@@ -64,7 +86,7 @@ defmodule Letflow.Identity.RoleRegistry do
   over the prior `upsert_role/3`, so every caller states which domain it is writing
   rather than falling through a default that could silently mis-tag a row (design
   §2.3). `kind == :platform_role` additionally requires `name` to be one of
-  `Letflow.Api.Authorization.roles/0`'s six recognized literals — any other value
+  `Letflow.Api.Authorization.roles/0`'s seven recognized literals — any other value
   returns `{:error, :name_not_a_recognized_platform_role}` before any `Repo` call,
   loudly rejecting a typo'd platform-role grant instead of silently creating a dead
   role binding nothing ever resolves. `kind == :process_routing_role` gets no such
@@ -107,8 +129,11 @@ defmodule Letflow.Identity.RoleRegistry do
   defp platform_role_names, do: Enum.map(Authorization.roles(), &Atom.to_string/1)
 
   @doc """
-  ISS-0778: seeds the group/role bindings for all six platform roles
-  (`Letflow.Api.Authorization.roles/0`, via this module's own
+  ISS-0778 / REQ-447: seeds the group/role bindings for the platform roles the
+  tenant is entitled to, `seedable_role_names/1` (all seven roles of
+  `Letflow.Api.Authorization.roles/0` in the platform tenant, every role except
+  `PLATFORM_ADMIN` in any other tenant, so every tenant gets a `TENANT_ADMIN`
+  binding; names come from this module's own
   `platform_role_names/0` — no new literal list invented). For each name, in
   `Authorization.roles/0`'s own declared order: get-or-creates a `Group`
   named after that literal (`get_or_create_group_by_name/2`), then binds it
@@ -116,7 +141,7 @@ defmodule Letflow.Identity.RoleRegistry do
 
   Idempotent under re-invocation against a tenant whose `groups`/`tenant_role`
   rows may already exist (design §2.4) — a second call converges on the same
-  six bindings rather than erroring or duplicating rows. This is what makes
+  bindings rather than erroring or duplicating rows. This is what makes
   it safe to call both from the normal onboarding-creation path and from
   `Letflow.TenantOnboarding.recover_provisioning/1`.
 
@@ -125,11 +150,56 @@ defmodule Letflow.Identity.RoleRegistry do
   call are **not** rolled back (matches this module's and
   `Letflow.TenantOnboarding`'s existing no-compensating-rollback precedent);
   a retried call converges via idempotency instead.
+
+  Name-collision guard (REQ-447, design F12): `tenant_role.name` is unique across
+  kinds and `upsert_role/4` overwrites `kind` on conflict, so when a
+  `:process_routing_role` row already holds the name `TENANT_ADMIN` the seed
+  returns `{:error, {:role_name_taken_by_routing_role, "TENANT_ADMIN"}}` before
+  writing anything, never silently converting the row.
   """
   @spec seed_default_platform_role_groups(opts :: [prefix: String.t()]) ::
           {:ok, [TenantRole.t()]} | {:error, term()}
   def seed_default_platform_role_groups(opts) do
-    Enum.reduce_while(platform_role_names(), {:ok, []}, fn name, {:ok, acc} ->
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with :ok <- check_tenant_admin_name_free(prefix) do
+      seed_names(seedable_role_names(prefix), opts)
+    end
+  end
+
+  @doc """
+  REQ-447: the role names `seed_default_platform_role_groups/1` seeds for the
+  tenant schema `prefix`. Every name of `Letflow.Api.Authorization.roles/0`, in
+  its declared order, for the platform tenant's schema
+  (`Letflow.PlatformTenant.platform_prefix?/1`); every name EXCEPT
+  `"PLATFORM_ADMIN"` for any other schema, including a malformed or non-binary
+  one and the case where no platform tenant is pinned (fail closed). Pure.
+  """
+  @spec seedable_role_names(prefix :: term()) :: [String.t()]
+  def seedable_role_names(prefix) do
+    if PlatformTenant.platform_prefix?(prefix) do
+      platform_role_names()
+    else
+      Enum.reject(platform_role_names(), &(&1 == "PLATFORM_ADMIN"))
+    end
+  end
+
+  @spec check_tenant_admin_name_free(String.t()) ::
+          :ok | {:error, {:role_name_taken_by_routing_role, String.t()}}
+  defp check_tenant_admin_name_free(prefix) do
+    case Repo.one(
+           from(t in TenantRole, where: t.name == "TENANT_ADMIN", select: t.kind),
+           prefix: prefix
+         ) do
+      :process_routing_role -> {:error, {:role_name_taken_by_routing_role, "TENANT_ADMIN"}}
+      _none_or_platform_role -> :ok
+    end
+  end
+
+  @spec seed_names([String.t()], prefix: String.t()) ::
+          {:ok, [TenantRole.t()]} | {:error, term()}
+  defp seed_names(names, opts) do
+    Enum.reduce_while(names, {:ok, []}, fn name, {:ok, acc} ->
       with {:ok, %Group{id: group_id}} <- get_or_create_group_by_name(name, opts),
            {:ok, %TenantRole{} = role} <- upsert_role(name, :platform_role, group_id, opts) do
         {:cont, {:ok, [role | acc]}}

@@ -1482,7 +1482,7 @@ defmodule Letflow.IdentityTest do
   # "test " <> describe <> " " <> test_name atom is capped at 255 chars (BEAM
   # SystemLimitError). Full rationale in this describe block's own comment above.
   describe "ISS-0778 T2: sync_role_claims_from_token/3 after seeding" do
-    test "before seeding: PLATFORM_ADMIN claim resolves to zero grants; after seeding, the SAME claim/user resolves and syncs" do
+    test "before seeding: a TENANT_ADMIN claim resolves to zero grants; after seeding, the SAME claim/user resolves and syncs" do
       %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       ctx = identity_context()
       config = jit_config()
@@ -1490,10 +1490,12 @@ defmodule Letflow.IdentityTest do
       {:ok, %{user: user, created: true}} =
         Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
 
-      claimed_ctx = identity_context(%{roles: ["PLATFORM_ADMIN"]})
+      # REQ-447: an ordinary tenant is seeded TENANT_ADMIN, not PLATFORM_ADMIN, so the claim
+      # that proves the mechanism here is TENANT_ADMIN.
+      claimed_ctx = identity_context(%{roles: ["TENANT_ADMIN"]})
 
       # ── BEFORE seeding ────────────────────────────────────────────────────────
-      # No tenant_role row exists yet binding "PLATFORM_ADMIN" to any group on this
+      # No tenant_role row exists yet binding "TENANT_ADMIN" to any group on this
       # freshly-provisioned tenant -- resolve_group_ids_for_role_names/2 resolves to
       # [], so the sync writes nothing and (ISS-0773's self-healing marker
       # behavior) leaves role_claims_synced_at nil so a later retry can still
@@ -1517,11 +1519,11 @@ defmodule Letflow.IdentityTest do
       assert %DateTime{} = after_seed.role_claims_synced_at
 
       assert Identity.list_effective_role_names(user.id, prefix: schema_name) == [
-               "PLATFORM_ADMIN"
+               "TENANT_ADMIN"
              ]
     end
 
-    test "seeding closes the gap for all six platform-role literals (design §2.1)" do
+    test "REQ-447: after seeding an ORDINARY tenant a PLATFORM_ADMIN claim still resolves to nothing; in the pinned platform tenant it resolves" do
       %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
       config = jit_config()
 
@@ -1530,7 +1532,56 @@ defmodule Letflow.IdentityTest do
                  prefix: schema_name
                )
 
-      for role_name <- Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1) do
+      {:ok, %{user: user, created: true}} =
+        Identity.provision_oidc_user(identity_context(), tenant.id, config, prefix: schema_name)
+
+      synced =
+        Identity.sync_role_claims_from_token(
+          user,
+          identity_context(%{roles: ["PLATFORM_ADMIN"]}),
+          prefix: schema_name
+        )
+
+      assert synced.role_claims_synced_at == nil
+      assert Identity.list_effective_role_names(user.id, prefix: schema_name) == []
+
+      # The same tenant pinned as THE platform tenant: seeding (run again, idempotently)
+      # now also binds PLATFORM_ADMIN, and the claim resolves.
+      Letflow.Support.PlatformTenantFixture.pin!(tenant.id)
+
+      assert {:ok, _roles} =
+               Letflow.Identity.RoleRegistry.seed_default_platform_role_groups(
+                 prefix: schema_name
+               )
+
+      synced2 =
+        Identity.sync_role_claims_from_token(
+          user,
+          identity_context(%{roles: ["PLATFORM_ADMIN"]}),
+          prefix: schema_name
+        )
+
+      assert %DateTime{} = synced2.role_claims_synced_at
+
+      assert Identity.list_effective_role_names(user.id, prefix: schema_name) == [
+               "PLATFORM_ADMIN"
+             ]
+    end
+
+    test "seeding closes the gap for the six seedable platform-role literals of an ordinary tenant (design §2.1)" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      config = jit_config()
+
+      assert {:ok, _roles} =
+               Letflow.Identity.RoleRegistry.seed_default_platform_role_groups(
+                 prefix: schema_name
+               )
+
+      seedable = Letflow.Identity.RoleRegistry.seedable_role_names(schema_name)
+      assert length(seedable) == 6
+      refute "PLATFORM_ADMIN" in seedable
+
+      for role_name <- seedable do
         ctx = identity_context()
 
         {:ok, %{user: user, created: true}} =

@@ -421,3 +421,33 @@ What a non-operator now sees in `serialised_plan` (`shape_plan/2`, `lib/letflow/
 A platform-tenant operator sees the plan unchanged (`shape_plan(plan, :operator)`, line 1078). The other keys of the context envelope are unchanged, including `requested_by` (accepted, residual R5).
 
 Remaining STANDING TRACKED exception R1 (INV-10), not closed here: `entries` is returned as stored. Plan `entries` carry both the source and the target graph content (`lib/letflow/definitions/promotion_plan.ex:199-243`), and an operator-created review that names foreign tenants lives in the platform tenant's schema. A non-operator reader of that schema, and legacy rows, can therefore read other tenants' graph content through `entries`. Tracked as Q-1005 / GH #2297 / ISS-1023.
+
+## Closure of the plan entries residual (ISS-1023 / Q-1005), 2026-10-06
+
+Design: `lib/letflow/design/iss1023-context-entries-own-sides.md`. Spec: `test/specs/ISS-1023.md`. No earlier text and no decision text above is changed; this section is appended. Route scope and permission are unchanged (`GET /promotions/:id/context`, tenant scope, `:PromotionsRead`, `lib/letflow/routers/promotions.ex:233`).
+
+R1 of the ISS-1021 closure section above ("`entries` is returned as stored", tracked as Q-1005 / GH #2297 / ISS-1023) is closed for plans naming a foreign tenant. Plan `entries` carry both tenants' graph content (nodes, edges, variable schemas, service bindings, module refs), and an operator-created review naming foreign tenants B and C lives in the platform tenant P's schema, so a non-operator reader of P's schema could receive B's and C's content.
+
+The rule (a non-operator only): `entries` is the stored list, unchanged, only when BOTH stored `source_tenant_id` and `target_tenant_id` are the caller's own tenant id (case-insensitive, the same `own_tenant_value?/2` test as the shown tenant ids); in every other case, including a missing, null or non-binary id, it is `[]` (fail closed). It is all-or-nothing, not per entry or per side, because an entry diffs the target graph against the source graph and has no single owner. `[]` was chosen over a 404 so the response keeps the shape the SPA reads (`serialised_plan.entries` as a list) and a 404 still means "not in your schema". The operator view is unchanged.
+
+Evidence (`lib/letflow/routers/promotions.ex`, current line numbers):
+
+- `entries_gate: ["source_tenant_id", "target_tenant_id"]` in `@plan_allowlist`: line 1064 (map starts at 1056; the comment above it was rewritten).
+- `entries_visible?/2`: lines 1130-1138 (every gate key present and `own_tenant_value?/2` true; no database access, no logging).
+- `shape_plan/2` entries step: lines 1116-1121 (stored list only when `entries_visible?(plan, own)`, else `[]`); the non-operator map clause starts at 1084, `shape_plan(plan, :operator)` is unchanged at 1082, the non-map clause at 1125.
+- The route: `authz_get "/:id/context", :PromotionsRead` at line 233, unchanged.
+
+AC5 finding (who can read P's reviews, established from code, not from the issue's assumption). Only `PLATFORM_ADMIN` holds `:PromotionsRead` today, through the unconditional catch-all `core_role_allows?(:PLATFORM_ADMIN, _permission), do: true` (`lib/letflow/api/authorization.ex:1301`); no other core role grants it (explicit lists below that line) and the Catalog fallback registers no such grant. The role set is closed at six atoms (`@roles`, `authorization.ex:376`); `TENANT_ADMIN` and `TENANT_AUDITOR` exist only as planned roles (`docs/roles.md` matrix; `role_from_string/1`, `authorization.ex:597-602`, maps every other string to no role), pending REQ-447. With the platform pin set to P, P's `PLATFORM_ADMIN` is the operator and sees the plan unchanged, so with a correctly pinned platform no non-operator can read P's operator-created reviews today. The exposure is real in three cases: the pin unset or pointing elsewhere (P's `PLATFORM_ADMIN` is then a non-operator); legacy rows naming foreign tenants in an ordinary tenant's schema, read by that tenant's `PLATFORM_ADMIN`; and as soon as REQ-447 grants `:PromotionsRead` below `PLATFORM_ADMIN`. Ordering note: REQ-447 must be ordered after this fix, because any such grant makes P's operator-created reviews readable by non-operators. `docs/requirements.yaml` is not edited here; a test pins the denied roles and fails when the matrix changes.
+
+Remaining residuals (accepted, named here for REVIEWER and SECURITY-REVIEWER):
+
+- R1b: when both stored ids are the caller's own, `entries` is returned as stored and nothing inside is scanned; it is the caller's own content, not a cross-tenant disclosure (the plan builder reads only the two named tenants' graphs).
+- R3: `teardown_error` text on other review routes (unchanged from ISS-1021).
+- R4 / R8: `process_key`, `base_version` and the envelope's `def_id` are still returned for a review naming foreign tenants; they are the name and version of the definition being promoted, in the reader's own schema.
+- R5: `requested_by`, a user id of the review's own schema.
+- R6: `plan_digest` covers the unshaped plan and cannot be verified from the shaped plan (already so).
+- R9: a non-operator can infer from `entries == []` that the review names another tenant (a builder never stores an empty plan); already implied by the omitted tenant ids.
+
+Tracked, not closed here: R10. `handle_approve` (`promotions.ex:572`) and `handle_reject` (`promotions.ex:609`) are not gated by the stored tenant ids; only `apply` (`promotions.ex:645`) and `run-assertions` (`promotions.ex:779`) call `stored_tenants_authorized?/3` (defined at 669). A non-operator `:PromotionsManage` holder can therefore approve or reject a foreign-named review in its own schema and learns only the status; the change touches the caller's own schema only and `apply` stays blocked. Tracked as Q-1008 / GH #2305 / ISS-1026.
+
+INFO (optional hardening, not done): `own_tenant_value?/2` (`promotions.ex:1140`) returns true for an empty own id with an empty value; this is unreachable through the route because the authorization layer rejects a tenant id that cannot be resolved, so the gate cannot be satisfied by an empty id in practice.

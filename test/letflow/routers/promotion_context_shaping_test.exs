@@ -4,8 +4,9 @@ defmodule Letflow.Routers.PromotionContextShapingTest do
   INV-10 response shaping on `GET /promotions/:id/context`. ISS-1021 replaced the REQ-446
   key-suffix walk with a top-level key ALLOWLIST: for a caller that is not a platform-tenant
   operator the decoded `serialised_plan` holds only `process_key`, `base_version`, own tenant
-  ids, own-side definition ids and `entries` as stored (not descended: residual R1). An
-  operator sees the plan unchanged. See `test/specs/REQ-446.md` and `test/specs/ISS-1021.md`.
+  ids, own-side definition ids and `entries` only when both plan tenant ids are the caller's
+  own (ISS-1023), as stored and not descended; `[]` otherwise. An operator sees the plan
+  unchanged. See `test/specs/REQ-446.md`, `test/specs/ISS-1021.md` and `test/specs/ISS-1023.md`.
 
   The reviews are inserted straight into the schema under test through the real
   `PromotionReviewStore.insert_review/2` (a "legacy" row: the submit handler no longer lets an
@@ -69,7 +70,9 @@ defmodule Letflow.Routers.PromotionContextShapingTest do
       assert shaped["target_definition_id"] == plan.target_definition_id
       assert shaped["process_key"] == plan.process_key
       assert shaped["base_version"] == "1.0.0"
-      assert shaped["entries"] == plan.entries |> Jason.encode!() |> Jason.decode!()
+      # ISS-1023: the source side is foreign, so the whole diff is withheld
+      assert plan.entries != []
+      assert shaped["entries"] == []
       assert body["requested_by"] == review.requested_by
     end
 
@@ -90,7 +93,8 @@ defmodule Letflow.Routers.PromotionContextShapingTest do
       # outside the allowlist: an unknown top-level key is omitted whole (ISS-1021)
       assert Map.has_key?(plan, "meta") == false
 
-      # inside `entries`: left exactly as stored (known, accepted residual: not descended)
+      # inside `entries` (both sides own: kept as stored; residual R1b, the caller's own
+      # free-form content)
       [entry] = plan["entries"]
       assert entry["tenant_id"] == ctx.b.tenant_id
       assert entry["after"]["tenant_id"] == ctx.b.tenant_id

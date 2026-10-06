@@ -1,0 +1,89 @@
+run_id: WF03-ISS1023-Q1005-20261006
+step: release-validation
+agent: RELEASE-VALIDATOR
+generated_at: "2026-10-06T13:57:00Z"
+branch: fix/ISS-1023-context-entries
+scope: scoped (host low on memory; one sequential mix invocation; full suite and mix letflow.check.test left to CI by instruction); working tree UNCOMMITTED
+verdict: VERIFIED
+command: >
+  MIX_ENV=test MIX_TEST_PARTITION=3 mix test (22 files: routers/promotion_context_{shaping,allowlist,allowlist_drift,entries_scope}_test,
+  promotions_test, promotion_scope_test, req446_cross_tenant_denial_test, promotion_platform_events_shaping_test, identity_test,
+  req077_promotion_pipeline_test; api/platform_prefix_uniform_403_test, platform_scope_authorization_test, platform_scope_inventory_test;
+  definitions/promotion_{review_migration,review_store,review,}_test; event_store/platform_events_test; engine/lua/platform_test;
+  req064_tenant_id_removal_test; test/docs; no_smtp_secret_guard_test; login_directory/no_secret_in_repo_test) --timeout 300000
+result:
+  passed: 481
+  failed: 0
+  output: "Finished in 345.4 seconds (9.1s async, 336.2s sync); Result: 481 passed"
+other_checks:
+  compile_warnings_as_errors: "MIX_ENV=test mix compile --warnings-as-errors --force: Compiling 350 files (.ex), Generated letflow app, no warnings"
+  format_check: "mix format --check-formatted: exit 0"
+  check_boundaries: "mix letflow.check_boundaries: OK -- 1051 edges checked, 0 violations"
+  check_issue_refs: "mix letflow.check_issue_refs: OK -- every cross-reference is prefixed and well-formed."
+  not_run_by_instruction: ["scripts/test_parallel.sh full suite", "mix letflow.check.test"]
+other_consumers:
+  searched: "test/, web/src, web/tests, apps/, scripts/ for /context, serialised_plan, review_context"
+  tests: >
+    Beyond the four named context files and the listed router tests, these also reference the route or plan and were
+    added to the run (all passed): routers/identity_test, routers/req077_promotion_pipeline_test,
+    api/platform_scope_authorization_test, api/platform_scope_inventory_test, definitions/promotion_review_{migration,store}_test,
+    definitions/promotion_review_test, definitions/promotion_test, event_store/platform_events_test,
+    engine/lua/platform_test, req064_tenant_id_removal_test. No file under apps/ or scripts/ matched.
+  web: >
+    web/src/api/promotions.ts reads only serialised_plan.entries (line 161) as a list; the response keeps entries as a list
+    ([] when withheld), so the SPA shape is unchanged. web/ component tests and one Playwright e2e
+    (web/tests/e2e/pipelines/platform-definition-promotion-conflict-rejected.pipeline.e2e.spec.ts) match the grep; they need a
+    live instance or mocks and were not run; they are same-tenant (own-tenant plans still show entries). Not independently executed.
+diff_checks:
+  lib_scope: "git diff lib/: only lib/letflow/routers/promotions.ex (23+/6-): doc text, @plan_allowlist entries_gate + typespec, shape_plan entries step, entries_visible?/2. New file lib/letflow/design/iss1023-context-entries-own-sides.md is design only. PASS"
+  decision_record_0046: "git diff --numstat 30/0; no '-' lines in the diff (additions only, appended closure section). PASS"
+  requirements_and_status_untouched: "git status docs/requirements.yaml docs/status: empty. PASS"
+  test_diff_weakening: >
+    Modified tests: shaping_test (8+/4-): the T-8 entries assertion changed from stored to [] for a foreign source side, with
+    plan.entries != [] guarding against a vacuous pass; comments and moduledoc reworded. allowlist_test (7+/2-): T-11 entries
+    assertion now conditional on both sides own (assert plan["entries"] != [] == (source == a and target == a)) plus a foreign-source
+    [] assertion. drift_test (12+/1-): adds entries_gate pins. Only the T-8/T-11/T-12 changes in the design; nothing else loosened. PASS
+criteria:
+  - n: 1
+    text: "non-operator gets entries as stored only when BOTH source_tenant_id and target_tenant_id equal the caller's own; otherwise []"
+    status: VERIFIED
+    evidence: "entries_visible?/2 requires every entries_gate key present and own_tenant_value?/2 true (missing/non-binary fails closed); shape_plan non-operator clause returns [] otherwise. Tests foreign_reviews_entries_are_empty..., one_foreign_side_is_enough_to_withhold_entries, own_ids_case_insensitive_keep_entries, legacy_plans_with_missing_or_non_binary_tenant_ids_fail_closed pass in the 481"
+  - n: 2
+    text: "operator sees everything unchanged"
+    status: VERIFIED
+    evidence: "shape_plan(plan, :operator) untouched in diff; operator_reads_the_same_foreign_review_with_entries_unchanged passes"
+  - n: 3
+    text: "two-tenant test: operator-created B->C review in P, non-operator reader sees entries == [] and no B/C content in raw body; own-tenant reviews still show entries"
+    status: VERIFIED
+    evidence: "promotion_context_entries_scope_test.exs (foreign_reviews_entries_are_empty_for_a_non_operator_reader_in_p, own_tenant_reviews_still_show_entries, withheld_entries_leave_the_rest_of_the_response_unchanged) pass"
+  - n: 4
+    text: "T-8/T-11 tests of ISS-1021 updated"
+    status: VERIFIED
+    evidence: "see diff_checks.test_diff_weakening; shaping, allowlist, drift tests pass"
+  - n: 5
+    text: "check whether non-admin platform-tenant users hold PromotionsRead is recorded"
+    status: VERIFIED
+    evidence: "recorded in the appended 0046 section (AC5 finding: only PLATFORM_ADMIN via catch-all at authorization.ex:1301; REQ-447 ordering note) and docs/issues/ISS-1023.yaml; pinned by test non_admin_core_roles_in_the_platform_tenant_are_denied_promotions_read (passes). I did not re-read authorization.ex line numbers; the tripwire test passing is the independent evidence"
+  - n: 6
+    text: "SECURITY-REVIEWER verdict recorded"
+    status: VERIFIED
+    evidence: "gates block below, from the orchestrator's handoff; residuals recorded in 0046 closure section. Not re-derived by this role"
+gates:
+  code_design_validator:
+    verdict: PASS
+    source: "as reported in the handoff"
+  security_reviewer:
+    verdict: PASS
+    open_questions: "OQ-1, OQ-2, OQ-3 ratified"
+    residuals_accepted: ["R1b", "R3", "R4/R8", "R5", "R6", "R9"]
+    residual_tracked: "R10 tracked as Q-1008 / GH #2305 / ISS-1026"
+    source: "as reported in the handoff; not re-verified here"
+  reviewer:
+    verdict: PASS
+    source: "as reported in the handoff"
+  test_design_validator:
+    verdict: PASS
+    mutation_checks: "M2, M3, M5, M5b measured and killed"
+    source: "as reported in the handoff"
+  full_suite: "left to CI by instruction"
+lib_test_modified_by_step: false

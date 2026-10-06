@@ -1,6 +1,6 @@
 defmodule Letflow.Routers.PromotionContextAllowlistDriftTest do
   @moduledoc """
-  ISS-1021 T-12 (design section 6 file 4): the `/context` plan allowlist and the keys
+  ISS-1021 T-12 (design section 6 file 4; ISS-1023 adds the `entries_gate` pin): the `/context` plan allowlist and the keys
   `PromotionPlan.compute_promotion_plan/5` really emits must not drift apart. The expected sets
   are written literally here (not derived from the allowlist): a new or renamed plan key fails
   this test until a person classifies it for a non-operator reader.
@@ -20,6 +20,7 @@ defmodule Letflow.Routers.PromotionContextAllowlistDriftTest do
     "target_definition_id" => "target_tenant_id"
   }
   @entries "entries"
+  @entries_gate ["source_tenant_id", "target_tenant_id"]
 
   setup do
     {:ok, Fixture.three_tenants!()}
@@ -32,6 +33,16 @@ defmodule Letflow.Routers.PromotionContextAllowlistDriftTest do
     assert Enum.sort(allowlist.own_tenant) == @own_tenant
     assert allowlist.own_side == @own_side
     assert allowlist.entries == @entries
+    assert Enum.sort(allowlist.entries_gate) == @entries_gate
+  end
+
+  # ISS-1023: a new tenant-id key added to `own_tenant` fails this until a person decides
+  # whether it must also gate `entries`.
+  test "entries_gate_is_the_own_tenant_pair" do
+    allowlist = Promotions.plan_allowlist()
+
+    assert Enum.sort(allowlist.entries_gate) == Enum.sort(allowlist.own_tenant)
+    assert Enum.all?(allowlist.entries_gate, &(&1 in allowlist.own_tenant))
   end
 
   test "allowlist_covers_exactly_the_keys_the_plan_builder_emits", ctx do

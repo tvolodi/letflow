@@ -1,0 +1,395 @@
+defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
+  @moduledoc """
+  ISS-1023 T-13 (`lib/letflow/design/iss1023-context-entries-own-sides.md` sections 3, 5, 6):
+  `GET /promotions/:id/context` returns the `entries` of a NON-operator's `serialised_plan` as
+  stored only when BOTH stored `source_tenant_id` and `target_tenant_id` are the caller's own
+  tenant (case-insensitive); in every other case (a foreign id on either side, a missing, `null`
+  or non-binary id, an empty or whitespace-padded id) it is `[]`. An operator sees the decoded
+  plan unchanged. `entries` is the definition diff of BOTH sides' graphs, so a review naming
+  tenants B and C held in the platform tenant P's schema must not hand B's and C's graph content
+  to a non-operator reader of P. See `test/specs/ISS-1023.md`.
+
+  The reader is `PLATFORM_ADMIN` of P with the pin cleared (`Fixture.unpin!/0`): the only role
+  that holds `:PromotionsRead` today (design section 2), and with no pin on P a non-operator
+  (`tenant_view/1`). REQ-447's `TENANT_ADMIN` / `TENANT_AUDITOR` of P would take the same code
+  path and are not used because the roles do not exist in `lib/` yet.
+
+  Reviews are seeded through the real `PromotionReviewStore.insert_review/2`
+  (`Scope.seed_review!/4`); legacy shapes use ONE recipe, `overwrite_plan!/3` (seed, then
+  overwrite the `serialised_plan` column verbatim). `async: false` (VM-global platform pin;
+  restored by the fixture's `on_exit`).
+  """
+
+  use Letflow.DataCase, async: false
+
+  import Ecto.Query
+
+  alias Letflow.Definitions.PromotionReview
+  alias Letflow.Support.PlatformTenantFixture, as: Fixture
+  alias Letflow.Support.PromotionScopeFixture, as: Scope
+
+  @allowlisted ~w(process_key base_version source_tenant_id target_tenant_id source_definition_id target_definition_id entries)
+  @envelope ~w(review_id plan_digest serialised_plan status requested_by def_type def_id created_at row_version)
+  @admin ["PLATFORM_ADMIN"]
+
+  setup do
+    tenants = Fixture.three_tenants!()
+    Fixture.pin!(tenants.p.tenant_id)
+    {:ok, tenants}
+  end
+
+  # --- helpers (copied from T-11, design OQ-7) ---------------------------------------------
+
+  defp context_resp(fixture, review_id, roles) do
+    Letflow.Routers.Promotions.call(
+      Fixture.router_conn(:get, "/#{review_id}/context", fixture, roles, nil),
+      Letflow.Routers.Promotions.init([])
+    )
+  end
+
+  defp read_plan!(fixture, review_id) do
+    resp = context_resp(fixture, review_id, @admin)
+    assert resp.status == 200
+    {resp.resp_body, Jason.decode!(resp.resp_body)["serialised_plan"]}
+  end
+
+  defp overwrite_plan!(fixture, review_id, json_text) do
+    query = from(r in PromotionReview, where: r.id == ^review_id)
+
+    assert {1, _} =
+             Repo.update_all(query, [set: [serialised_plan: json_text]],
+               prefix: fixture.schema_name
+             )
+
+    :ok
+  end
+
+  defp seed_and_overwrite!(fixture, json_text) do
+    %{review: review} = Scope.seed_review!(fixture, fixture.tenant_id, fixture.tenant_id)
+    :ok = overwrite_plan!(fixture, review.id, json_text)
+    review
+  end
+
+  # Two entries carrying B's and C's graph content (B = ctx.b, C = ctx.a; both foreign to P).
+  defp foreign_entries(ctx) do
+    b = ctx.b.tenant_id
+    c = ctx.a.tenant_id
+    # the plan digest covers `entries` only and is unique per schema while pending, so every
+    # seeded review needs distinct entries; `seq` is not a marker
+    seq = System.unique_integer([:positive, :monotonic])
+
+    [
+      %{
+        type: :graph_node,
+        seq: seq,
+        id: "n-iss1023-b",
+        change_kind: :added,
+        before: nil,
+        after: %{
+          "id" => "n-iss1023-b",
+          "node_type" => "SERVICE_TASK",
+          "service_id" => "svc-iss1023-b-secret",
+          "label" => "B-ONLY-LABEL-iss1023",
+          "tenant_id" => b
+        }
+      },
+      %{
+        type: :service_binding,
+        seq: seq,
+        id: "n-iss1023-c",
+        change_kind: :modified,
+        before: %{"service_id" => "svc-iss1023-c-before"},
+        after: %{"service_id" => "svc-iss1023-c-after", "owner" => c}
+      }
+    ]
+  end
+
+  # Graph content and tenant ids that must never reach a non-operator reader.
+  defp markers(ctx) do
+    [
+      ctx.b.tenant_id,
+      ctx.a.tenant_id,
+      "n-iss1023-b",
+      "n-iss1023-c",
+      "svc-iss1023-b-secret",
+      "svc-iss1023-c-before",
+      "svc-iss1023-c-after",
+      "B-ONLY-LABEL-iss1023"
+    ]
+  end
+
+  # `process_key` is NOT a marker (residual R4/R8): it is excluded on purpose.
+  defp overrides(ctx, src_def, tgt_def) do
+    %{
+      entries: foreign_entries(ctx),
+      source_definition_id: src_def,
+      target_definition_id: tgt_def,
+      process_key: Scope.unique_key("iss1023-key")
+    }
+  end
+
+  defp refute_markers!(raw, list) do
+    for m <- list do
+      refute raw =~ m, "marker #{m} leaked"
+      refute raw =~ String.upcase(m), "upper-cased marker #{m} leaked"
+    end
+
+    :ok
+  end
+
+  defp roundtrip(term), do: term |> Jason.encode!() |> Jason.decode!()
+
+  # --- operator control --------------------------------------------------------------------
+
+  describe "operator" do
+    test "operator_reads_the_same_foreign_review_with_entries_unchanged", ctx do
+      src_def = Ecto.UUID.generate()
+      tgt_def = Ecto.UUID.generate()
+
+      %{review: review, plan: stored} =
+        Scope.seed_review!(
+          ctx.p,
+          ctx.b.tenant_id,
+          ctx.a.tenant_id,
+          overrides(ctx, src_def, tgt_def)
+        )
+
+      # pin is on P and the caller is P's PLATFORM_ADMIN: the operator
+      {raw, plan} = read_plan!(ctx.p, review.id)
+
+      assert plan["entries"] == roundtrip(stored.entries)
+      assert plan == roundtrip(stored)
+
+      # every marker is in the body, so the refutations below are not vacuous
+      for m <- markers(ctx) ++ [src_def, tgt_def], do: assert(raw =~ m, "marker #{m} missing")
+    end
+  end
+
+  # --- the AC: foreign reviews, non-operator reader in P -----------------------------------
+
+  describe "foreign reviews, non-operator reader" do
+    test "foreign_reviews_entries_are_empty_for_a_non_operator_reader_in_p", ctx do
+      b = ctx.b.tenant_id
+      c = ctx.a.tenant_id
+
+      # (B source, C target), (C source, B target), (B, B)
+      for {source, target} <- [{b, c}, {c, b}, {b, b}] do
+        src_def = Ecto.UUID.generate()
+        tgt_def = Ecto.UUID.generate()
+
+        %{review: review} =
+          Scope.seed_review!(ctx.p, source, target, overrides(ctx, src_def, tgt_def))
+
+        Fixture.unpin!()
+        {raw, plan} = read_plan!(ctx.p, review.id)
+        Fixture.pin!(ctx.p.tenant_id)
+
+        assert plan["entries"] == []
+        refute_markers!(raw, markers(ctx) ++ [src_def, tgt_def])
+        assert Map.keys(plan) -- @allowlisted == []
+      end
+    end
+
+    test "one_foreign_side_is_enough_to_withhold_entries", ctx do
+      p = ctx.p.tenant_id
+      b = ctx.b.tenant_id
+
+      Fixture.unpin!()
+
+      for {source, target} <- [{p, b}, {b, p}] do
+        # own-side definition ids stay out of the marker set (design: they are shown for the own side)
+        %{review: review} =
+          Scope.seed_review!(
+            ctx.p,
+            source,
+            target,
+            overrides(ctx, Ecto.UUID.generate(), Ecto.UUID.generate())
+          )
+
+        {raw, plan} = read_plan!(ctx.p, review.id)
+
+        assert plan["entries"] == []
+        refute_markers!(raw, markers(ctx))
+      end
+
+      # control: both sides own (P/P) shows the stored entries
+      %{review: review, plan: stored} =
+        Scope.seed_review!(ctx.p, p, p, overrides(ctx, Ecto.UUID.generate(), nil))
+
+      {_raw, plan} = read_plan!(ctx.p, review.id)
+      assert plan["entries"] == roundtrip(stored.entries)
+      assert plan["entries"] != []
+    end
+
+    test "own_tenant_reviews_still_show_entries", ctx do
+      a = ctx.a.tenant_id
+
+      # A's admin is a non-operator (pin on P)
+      %{review: review, plan: stored} =
+        Scope.seed_review!(ctx.a, a, a, overrides(ctx, Ecto.UUID.generate(), nil))
+
+      {_raw, plan} = read_plan!(ctx.a, review.id)
+      assert plan["entries"] == roundtrip(stored.entries)
+      assert plan["entries"] != []
+      assert plan["source_tenant_id"] == a
+      assert plan["target_tenant_id"] == a
+
+      # P/P read as P's PLATFORM_ADMIN with the pin cleared (a non-operator)
+      %{review: p_review, plan: p_stored} =
+        Scope.seed_review!(ctx.p, ctx.p.tenant_id, ctx.p.tenant_id, overrides(ctx, nil, nil))
+
+      Fixture.unpin!()
+      {_raw, p_plan} = read_plan!(ctx.p, p_review.id)
+      assert p_plan["entries"] == roundtrip(p_stored.entries)
+      assert p_plan["entries"] != []
+    end
+
+    test "own_ids_case_insensitive_keep_entries", ctx do
+      a = ctx.a.tenant_id
+      upper = String.upcase(a)
+      assert upper != a
+
+      %{review: review, plan: stored} =
+        Scope.seed_review!(ctx.a, upper, a, overrides(ctx, nil, nil))
+
+      {_raw, plan} = read_plan!(ctx.a, review.id)
+      assert plan["entries"] == roundtrip(stored.entries)
+      assert plan["entries"] != []
+    end
+
+    test "withheld_entries_leave_the_rest_of_the_response_unchanged", ctx do
+      %{review: review, plan: stored} =
+        Scope.seed_review!(
+          ctx.p,
+          ctx.b.tenant_id,
+          ctx.a.tenant_id,
+          overrides(ctx, Ecto.UUID.generate(), Ecto.UUID.generate())
+        )
+
+      Fixture.unpin!()
+      resp = context_resp(ctx.p, review.id, @admin)
+      assert resp.status == 200
+
+      body = Jason.decode!(resp.resp_body)
+      plan = body["serialised_plan"]
+
+      assert body |> Map.keys() |> Enum.sort() == Enum.sort(@envelope)
+      assert body["status"] == "pending_review"
+      assert body["review_id"] == review.id
+      refute Map.has_key?(plan, "source_tenant_id")
+      refute Map.has_key?(plan, "target_tenant_id")
+      # R4/R8 documented: the plan's process_key is still returned
+      assert plan["process_key"] == stored.process_key
+      assert plan["entries"] == []
+    end
+  end
+
+  # --- legacy and malformed stored ids -----------------------------------------------------
+
+  describe "legacy plans" do
+    test "legacy_plans_with_missing_or_non_binary_tenant_ids_fail_closed", ctx do
+      a = ctx.a.tenant_id
+      b = ctx.b.tenant_id
+
+      entries_json =
+        ~s([{"type":"graph_node","id":"n-iss1023-legacy","change_kind":"added","before":null,"after":{"label":"LEGACY-MARKER-iss1023"}}])
+
+      plan_text = fn fields ->
+        fields
+        |> Enum.map(fn {k, v} -> Jason.encode!(k) <> ":" <> v end)
+        |> Kernel.++([~s("process_key":"p"), ~s("entries":#{entries_json})])
+        |> Enum.join(",")
+        |> then(&("{" <> &1 <> "}"))
+      end
+
+      own = Jason.encode!(a)
+      bad_values = ["7", ~s(["#{a}"]), ~s({"id":"#{a}"}), "true", "null"]
+
+      cases =
+        [
+          {"both ids missing", []},
+          {"source missing", [{"target_tenant_id", own}]},
+          {"target missing", [{"source_tenant_id", own}]},
+          {"foreign source, own target",
+           [{"source_tenant_id", Jason.encode!(b)}, {"target_tenant_id", own}]},
+          {"own source, foreign target",
+           [{"source_tenant_id", own}, {"target_tenant_id", Jason.encode!(b)}]},
+          {"both foreign",
+           [{"source_tenant_id", Jason.encode!(b)}, {"target_tenant_id", Jason.encode!(b)}]},
+          {"odd keys only", [{"tenantId", own}, {"tenant_ids", ~s(["#{a}"])}]}
+        ] ++
+          for(
+            v <- bad_values,
+            do: {"source #{v}", [{"source_tenant_id", v}, {"target_tenant_id", own}]}
+          ) ++
+          for(
+            v <- bad_values,
+            do: {"target #{v}", [{"source_tenant_id", own}, {"target_tenant_id", v}]}
+          ) ++
+          for(
+            v <- [" " <> a, a <> " ", ""],
+            do:
+              {"source #{inspect(v)}",
+               [{"source_tenant_id", Jason.encode!(v)}, {"target_tenant_id", own}]}
+          )
+
+      for {label, fields} <- cases do
+        review = seed_and_overwrite!(ctx.a, plan_text.(fields))
+        {raw, plan} = read_plan!(ctx.a, review.id)
+
+        assert plan["entries"] == [], label
+        refute raw =~ "LEGACY-MARKER-iss1023", label
+        refute raw =~ "n-iss1023-legacy", label
+        refute raw =~ b, label
+      end
+
+      # positive control: both ids own shows the decoded fixture entries
+      control = plan_text.([{"source_tenant_id", own}, {"target_tenant_id", own}])
+      review = seed_and_overwrite!(ctx.a, control)
+      {_raw, plan} = read_plan!(ctx.a, review.id)
+      assert plan["entries"] == Jason.decode!(entries_json)
+      assert plan["entries"] != []
+
+      # operator view of the same legacy text: the decoded stored plan, unchanged
+      op_text = plan_text.([{"source_tenant_id", Jason.encode!(b)}, {"target_tenant_id", own}])
+      op_review = seed_and_overwrite!(ctx.p, op_text)
+      {_raw, op_plan} = read_plan!(ctx.p, op_review.id)
+      assert op_plan == Jason.decode!(op_text)
+    end
+  end
+
+  # --- AC5 tripwire ------------------------------------------------------------------------
+
+  describe "AC5" do
+    # Today only PLATFORM_ADMIN holds :PromotionsRead (design section 2); the strings
+    # TENANT_ADMIN / TENANT_AUDITOR resolve to no role (`role_from_string/1`). When REQ-447 adds
+    # TENANT_ADMIN / TENANT_AUDITOR with :PromotionsRead this test fails: MOVE those two rows
+    # to the allowed side and re-assert them against the new rule (they become non-operator
+    # readers of P's operator-created reviews and must read `entries == []`).
+    test "non_admin_core_roles_in_the_platform_tenant_are_denied_promotions_read", ctx do
+      %{review: review} =
+        Scope.seed_review!(
+          ctx.p,
+          ctx.b.tenant_id,
+          ctx.a.tenant_id,
+          overrides(ctx, Ecto.UUID.generate(), Ecto.UUID.generate())
+        )
+
+      for roles <- [
+            ["PROCESS_DESIGNER"],
+            ["PROCESS_OPERATOR"],
+            ["TASK_WORKER"],
+            ["AGENT_RUNNER"],
+            ["CANDIDATE"],
+            ["TENANT_ADMIN"],
+            ["TENANT_AUDITOR"],
+            []
+          ] do
+        resp = context_resp(ctx.p, review.id, roles)
+
+        assert resp.status == 403, "#{inspect(roles)}"
+        refute_markers!(resp.resp_body, markers(ctx))
+      end
+    end
+  end
+end

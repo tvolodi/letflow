@@ -1,11 +1,11 @@
 defmodule Letflow.Routers.PromotionContextShapingTest do
   @moduledoc """
   REQ-446 T-8 (`lib/letflow/design/req446-named-scoped-permissions.md` sections 1c / 4b / 5):
-  INV-10 response shaping on `GET /promotions/:id/context`. For a caller that is not a
-  platform-tenant operator, the decoded `serialised_plan` omits every key ending in `tenant_id`
-  whose value is not the caller's own tenant id, at any depth, EXCEPT that the walk does not
-  descend into the top-level `entries` list. An operator sees the plan unchanged. See
-  `test/specs/REQ-446.md`.
+  INV-10 response shaping on `GET /promotions/:id/context`. ISS-1021 replaced the REQ-446
+  key-suffix walk with a top-level key ALLOWLIST: for a caller that is not a platform-tenant
+  operator the decoded `serialised_plan` holds only `process_key`, `base_version`, own tenant
+  ids, own-side definition ids and `entries` as stored (not descended: residual R1). An
+  operator sees the plan unchanged. See `test/specs/REQ-446.md` and `test/specs/ISS-1021.md`.
 
   The reviews are inserted straight into the schema under test through the real
   `PromotionReviewStore.insert_review/2` (a "legacy" row: the submit handler no longer lets an
@@ -63,8 +63,9 @@ defmodule Letflow.Routers.PromotionContextShapingTest do
       assert shaped["target_tenant_id"] == ctx.a.tenant_id
       assert Map.has_key?(shaped, "source_tenant_id") == false
 
-      # everything that is not a foreign tenant id equals the stored value
-      assert shaped["source_definition_id"] == plan.source_definition_id
+      # ISS-1021: the source side is B (foreign), so its definition id is omitted too
+      assert Map.has_key?(shaped, "source_definition_id") == false
+      # the target side is A (own): kept, as are the plain scalars
       assert shaped["target_definition_id"] == plan.target_definition_id
       assert shaped["process_key"] == plan.process_key
       assert shaped["base_version"] == "1.0.0"
@@ -72,7 +73,7 @@ defmodule Letflow.Routers.PromotionContextShapingTest do
       assert body["requested_by"] == review.requested_by
     end
 
-    test "context_nested_tenant_ids_walked_but_entries_not_descended", ctx do
+    test "context_unknown_top_level_keys_dropped_and_entries_not_descended", ctx do
       %{review: review} =
         Scope.seed_review!(ctx.a, ctx.a.tenant_id, ctx.a.tenant_id, %{
           meta: %{
@@ -86,11 +87,8 @@ defmodule Letflow.Routers.PromotionContextShapingTest do
       body = ctx.a |> context(review.id) |> Map.fetch!(:resp_body) |> Jason.decode!()
       plan = body["serialised_plan"]
 
-      # outside `entries`: walked at depth, own id kept, scalars untouched
-      assert plan["meta"] == %{
-               "rows" => [[%{}, %{"tenant_id" => ctx.a.tenant_id, "k" => 1}]],
-               "n" => 3
-             }
+      # outside the allowlist: an unknown top-level key is omitted whole (ISS-1021)
+      assert Map.has_key?(plan, "meta") == false
 
       # inside `entries`: left exactly as stored (known, accepted residual: not descended)
       [entry] = plan["entries"]

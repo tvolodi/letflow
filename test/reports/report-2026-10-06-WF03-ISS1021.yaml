@@ -1,0 +1,97 @@
+run_id: WF03-ISS1021-Q1003-20261006
+step: release-validation
+agent: RELEASE-VALIDATOR
+generated_at: "2026-10-06T12:25:00Z"
+branch: fix/ISS-1021-context-allowlist
+scope: scoped (host loaded; full suite and mix letflow.check.test left to CI by instruction); working tree UNCOMMITTED
+verdict: VERIFIED
+command: >
+  MIX_ENV=test MIX_TEST_PARTITION=3 mix test test/letflow/routers test/letflow/api test/letflow/definitions
+  test/letflow/event_store test/docs test/letflow/no_smtp_secret_guard_test.exs
+  test/letflow/login_directory/no_secret_in_repo_test.exs test/letflow/engine/lua/platform_test.exs
+  test/letflow/req064_tenant_id_removal_test.exs --timeout 300000
+result:
+  passed: 2375
+  total: 2376
+  failed: 1
+  output: "Finished in 1522.0 seconds (18.1s async, 1503.8s sync); Result: 2375/2376 passed"
+failures:
+  - file: test/letflow/api/platform_prefix_uniform_403_test.exs
+    test: "uniform_403_platform_prefixes_for_non_operators (Letflow.Api.PlatformPrefixUniform403Test), line 141"
+    error: "A PROCESS_DESIGNER Letflow.Routers.Tenants: a request changed a row (assertion at :174, state_snapshot() == before)"
+    classification: >
+      load-dependent flake, unrelated to the change. The test snapshots global state around 403 requests to
+      the Tenants router (not Promotions) and the host was heavily loaded; re-run alone with the same
+      env: "Finished in 10.5 seconds; Result: 5 passed; exit 0". Not touched by the diff.
+    rerun: "MIX_ENV=test MIX_TEST_PARTITION=3 mix test test/letflow/api/platform_prefix_uniform_403_test.exs --timeout 300000 -> 5 passed"
+earlier_attempts: >
+  Two earlier runs of the same command were discarded as evidence: one printed only a log tail, one was killed
+  by the 600 s background limit. The result above is the third, complete run.
+other_checks:
+  compile_warnings_as_errors: "MIX_ENV=test mix compile --warnings-as-errors --force: Compiling 349 files, Generated letflow app, exit 0"
+  format_check: "mix format --check-formatted: exit 0"
+  check_boundaries: "mix letflow.check_boundaries: OK -- 1049 edges checked, 0 violations"
+  check_issue_refs: "mix letflow.check_issue_refs: OK -- every cross-reference is prefixed and well-formed"
+  not_run_by_instruction: ["scripts/test_parallel.sh full suite", "mix letflow.check.test"]
+other_consumers:
+  searched: "test/, web/src, web/tests, web/e2e, apps/, scripts/ for /context, serialised_plan, source_definition_id, review_context"
+  tests: >
+    16 test files reference /context or serialised_plan; all are under test/letflow/{routers,api,definitions,event_store}
+    (inside the scoped dirs) except test/letflow/engine/lua/platform_test.exs and test/letflow/req064_tenant_id_removal_test.exs,
+    which were run explicitly and passed.
+  web: >
+    web/src/api/promotions.ts reads GET /promotions/{id}/context and uses only serialised_plan.entries (line 161) and
+    re-stringifies the plan (line 149); entries is always present as a list for non-operators, so the SPA is unaffected.
+    No web/, apps/ or scripts/ test asserts other plan keys through the router.
+diff_checks:
+  decision_record_0046: "git diff --numstat: 19 added / 0 removed (appended closure section, additions only, 0 deleted lines). PASS"
+  lib_scope: "git status: only lib/letflow/routers/promotions.ex modified in lib/; design md is a new file under lib/letflow/design/. PASS"
+  deleted_helpers: "grep for shape_tenant_ids / tenant_id_key? in lib/ test/ web/src apps/ scripts/: no callers; only historical mentions in test/reports/*.yaml, test/specs/ISS-0999.md, test/specs/ISS-1021.md. PASS"
+  requirements_and_status_untouched: "git status for docs/requirements.yaml and docs/status: empty. PASS"
+  t8_assertions: >
+    promotion_context_shaping_test.exs diff (11 added / 13 removed) is exactly the design section 6 list: foreign-side
+    source_definition_id now asserted absent, meta test renamed to context_unknown_top_level_keys_dropped_and_entries_not_descended
+    with meta asserted absent. entries, envelope and operator assertions unchanged. No other weakening. The shaping
+    test's own moduledoc comment on /context was reworded to describe the allowlist. PASS
+criteria:
+  - n: 1
+    text: "non-operator serialised_plan built from an allowlist of top-level keys; entries as stored; unknown top-level key never reaches a non-operator"
+    status: VERIFIED
+    evidence: "@plan_allowlist + shape_plan/2 builds a new map via Map.fetch per allowlisted key; T-8, T-11 (unknown_top_level_key_omitted, entries_kept_exactly_as_stored) and T-12 drift tests pass in the 2375"
+  - n: 2
+    text: "source_tenant_id/target_tenant_id kept only when equal to the caller's own (case-insensitive)"
+    status: VERIFIED
+    evidence: "own_tenant_value?/2 (downcase compare) applied to both keys; own_tenant_ids_kept_case_insensitively and context_omits_foreign_tenant_ids_for_non_operator pass"
+  - n: 3
+    text: "odd key names tenantId, tenant_ids, source_tenant, x_tenant_id carrying B's id never reach A's admin; operator sees all unchanged; nine-key envelope unchanged"
+    status: VERIFIED
+    evidence: "odd_tenant_keys_never_reach_a_non_operator, operator_sees_all_unchanged, envelope_has_nine_keys_for_both_views pass; operator branch of shape_plan/2 returns the plan as is"
+  - n: 4
+    text: "existing T-8 tests updated"
+    status: VERIFIED
+    evidence: "promotion_context_shaping_test.exs updated per design section 6 (see t8_assertions); 4 tests pass"
+  - n: 5
+    text: "SECURITY-REVIEWER verdict recorded"
+    status: VERIFIED
+    evidence: "recorded in docs/issues/ISS-1021.yaml resolution and in the gates block below from the orchestrator's handoff; not independently re-derived by this role"
+gates:
+  security_reviewer:
+    verdict: PASS
+    open_question: "OQ-1 ratified"
+    residuals:
+      R1: "STANDING TRACKED exception (INV-10): entries copied as stored; Q-1005 / GH #2297 / ISS-1023"
+      R5: "accepted"
+      R7: "accepted"
+    source: "as reported in the RELEASE-VALIDATOR handoff; not re-verified here"
+  reviewer:
+    verdict: PASS
+    source: "as reported in the handoff"
+  test_design_validator:
+    verdict: PASS
+    source: "as reported in the handoff"
+  code_design_validator:
+    verdict: PASS
+    round: 2
+    source: "as reported in the handoff"
+  full_suite: "left to CI by instruction"
+lib_test_modified_by_step: false

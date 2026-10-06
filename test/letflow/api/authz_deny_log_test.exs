@@ -169,6 +169,16 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
   defp set_clock(ref, t), do: :atomics.put(ref, 1, t)
 
+  # Spins until `n` callers have incremented `ref` (a barrier for the race test); bounded by a
+  # monotonic deadline so a missing arrival fails the test rather than hanging it.
+  defp await_arrivals(ref, n, deadline) do
+    cond do
+      :atomics.get(ref, 1) >= n -> :ok
+      System.monotonic_time(:millisecond) > deadline -> raise "barrier deadline exceeded"
+      true -> await_arrivals(ref, n, deadline)
+    end
+  end
+
   @caller_a "11111111-1111-4111-8111-111111111111"
   @caller_b "22222222-2222-4222-8222-222222222222"
 
@@ -719,7 +729,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
     test "50 concurrent denials of one key emit exactly one line; the rest are counted", ctx do
       fixture = sampling_setup(ctx)
-      clock = new_clock(1000)
+      new_clock(1000)
       {conn, access} = direct(fixture, @caller_a, ["PLATFORM_ADMIN"], :TenantsManage)
 
       # The sampler is created lazily and, by design (section 7), that FIRST-USE creation is the one
@@ -727,6 +737,17 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       # guarantee alone, whatever order the tests run in.
       log_k(fixture, @caller_b, :TenantsManage)
       AuthzDenyLog.reset()
+
+      # Deterministic race: the sampler reads the clock BEFORE it reads the slot, so a clock that blocks
+      # until all 50 tasks have arrived makes every task see "never emitted" and reach the
+      # compare-and-swap together. Exactly one may win it; an unconditional write would let all 50 emit.
+      arrived = :atomics.new(1, signed: true)
+
+      Application.put_env(:letflow, :authz_deny_log_clock, fn ->
+        :atomics.add(arrived, 1, 1)
+        await_arrivals(arrived, 50, System.monotonic_time(:millisecond) + 8_000)
+        1000
+      end)
 
       log =
         capture_log(fn ->
@@ -743,7 +764,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       first_count = log |> one_line!() |> Map.get("suppressed", "0") |> String.to_integer()
       assert first_count in 0..49
 
-      set_clock(clock, 1060)
+      new_clock(1060)
       next = log_k(fixture, @caller_a, :TenantsManage) |> one_line!()
       assert first_count + String.to_integer(Map.get(next, "suppressed", "0")) == 49
     end

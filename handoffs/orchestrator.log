@@ -2731,3 +2731,4 @@
 2026-10-06T05:16:42Z | DISPATCH | WF-02 | WF02-REQ456-20261006 | ORCH → CODE-DESIGN-VALIDATOR, REVIEWER, RELEASE-VALIDATOR | Amendment 1 (letflow-9a review) applied in commit; steps 07a/07b/07c dispatched
 2026-10-06T05:20:51Z | PASS | WF-02 | WF02-REQ456-20261006 | CODE-DESIGN-VALIDATOR, REVIEWER, RELEASE-VALIDATOR → ORCH | Amendment 1 steps 07a (PASS attempt 3 after 2 design reconciliations), 07b PASS, 07c PASS
 2026-10-06T05:22:20Z | DISPATCH | WF-02 | WF02-REQ456-20261006 | ORCH → REVIEWER | Step 08b: roster edit (actor-swiftroute-alice into legacy_platform_admin per T-0150); roster is in every scope's digest set
+2026-10-06T05:22:49Z | PASS | WF-02 | WF02-REQ456-20261006 | REVIEWER → ORCH | Step 08b PASS (roster edit c4f93684)

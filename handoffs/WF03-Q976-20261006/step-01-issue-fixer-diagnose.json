@@ -1,0 +1,63 @@
+{
+  "handoff_id": "2546b4b7-7649-420e-87cf-c049488b68ab",
+  "run_id": "WF03-Q976-20261006",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-Q976-20261006/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-10-06T05:30:00Z",
+  "started_at": "2026-10-06T05:30:00Z",
+  "completed_at": "2026-10-06T05:36:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-0995": "queue Q-976 / GH #2257 (queue/GH title ISS-0995 per gh; local record docs/issues/ISS-0995.yaml). Authorization denials carry no route, no caller/tenant correlation; A2 (PR #2256) deleted the platform_scope_shadow_deny log line and added none. Required: one structured log line on every authorization denial (platform and tenant scope): HTTP method, route PATTERN, policy key, platform-scope boolean, keyed hash (HMAC) of caller id and tenant id; INV-4; hash key a config secret; sampling per design; SECURITY-REVIEWER gate."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0995.yaml",
+      "lib/letflow/plugs/authorize.ex",
+      "lib/letflow/plugs/http_metrics.ex",
+      "config/runtime.exs",
+      "lib/letflow/secrets.ex"
+    ],
+    "owned_modules": [
+      "Letflow.Plugs.Authorize",
+      "Letflow.Api.AuthzDenyLog"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3",
+    "branch_name": "fix/ISS-0995-deny-attribution-Q976"
+  },
+  "task": {
+    "description": "WF-03 Step 0 + 0.5 + 1 (ORCH performed directly: diagnosis is a read-only finding of fact)",
+    "acceptance_criteria": [
+      "Overlap check",
+      "Registry lookup",
+      "Root cause with citations"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "STEP 0 overlap: gh pr list (open PRs 2267, 2249, 1121.. none touches authorize.ex / authorization / runtime.exs); no branch or main commit for Q-976/GH 2257; GH 2257 OPEN. STEP 0.5 registry: docs/issues has ISS-0995 only as this open record; the A1 line (git show 342c5095, authorize.ex shadow_log/3) was removed by A2 ccbf994e; no prior fix. ROOT CAUSE (feature gap): the only denial point is lib/letflow/plugs/authorize.ex call/2 case decision.kind :Deny403 -> Response.forbidden/2 |> halt (covers platform and tenant scope, :Unknown, :UnmatchedPlatformPath, :UnmatchedRoute); it logs nothing. Facts for design: (1) route pattern IS cleanly obtainable: Plug.Router puts {composed_template, fun} in conn.private[:plug_route] (deps/plug/lib/plug/router.ex:520-528, append_match_path composes forward prefixes); Plug.Router.match_path/1 raises if absent; Letflow.Plugs.HttpMetrics already uses this and maps a trailing /*_path to unmatched. (2) platform-scope flag: Letflow.Api.Authorization.permission_scope(required_permission(policy_key)) gives :platform|:tenant; ctx.platform_tenant? is the caller-is-platform-tenant fact. (3) key source: config :letflow, :secrets_master_key (32 raw bytes, required and validated at boot in EVERY env by config/runtime.exs; Letflow.Secrets reads it via Application.fetch_env!(:letflow,:secrets_master_key), secrets.ex:447); the login-directory pepper is a separate required env pair (REQ-435) and must NOT be reused or added to. A sub-key derived from the master key with a fixed domain-separation label needs no new env var or boot failure. (4) Logger: config/test.exs leaves the default console formatter (capture_log works; metadata not printed unless configured); prod/dev use Letflow.Obs.Logger JSON (message + metadata fields). Unit test authorize_test.exs calls the plug directly with no router (no :plug_route key). (5) conn.method is client-supplied and must be allow-listed before logging. NEEDED: new module + one call at the Deny403 branch of Authorize; no change to response bytes.",
+    "artifacts_out": [],
+    "owned_modules": [
+      "Letflow.Plugs.Authorize",
+      "Letflow.Api.AuthzDenyLog"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/ISS-0995-deny-attribution-Q976",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER"
+  }
+}

@@ -17,7 +17,10 @@ defmodule Letflow.Support.PlatformTenantFixture do
       test in this suite uses (no scope-fact keys on purpose: the plug recomputes them).
     * `mint_token!/2`, `api_conn/5` -- a real API token for a fresh user of a fixture tenant,
       and a request carrying it for the full `Letflow.Router` pipeline.
-    * `shadow_lines/1` -- the `platform_scope_shadow_deny` lines of a captured log.
+    * `capture_repo_queries/1`, `touches_tenant?/2` -- the `[:letflow, :repo, :query]` events issued
+      by the calling process while `fun` runs, and whether one of them reads/writes a given tenant
+      (its schema name appears in the SQL text, or its id in the bound parameters). Used to prove
+      that a denied request never queried the named tenant's schema.
   """
 
   import Plug.Conn
@@ -173,13 +176,59 @@ defmodule Letflow.Support.PlatformTenantFixture do
   @spec dispatch_api(Plug.Conn.t()) :: Plug.Conn.t()
   def dispatch_api(conn), do: Letflow.Router.call(conn, Letflow.Router.init([]))
 
-  # --- Log inspection -------------------------------------------------------
+  # --- Query capture --------------------------------------------------------
 
-  @doc "The `platform_scope_shadow_deny` lines of a captured log, one string per line."
-  @spec shadow_lines(String.t()) :: [String.t()]
-  def shadow_lines(log) do
-    log
-    |> String.split("\n")
-    |> Enum.filter(&String.contains?(&1, "platform_scope_shadow_deny"))
+  @doc false
+  def handle_query_event(_event, _measurements, metadata, {test_pid, ref}) do
+    # `:telemetry` runs handlers in the process that issued the query, so this keeps only the
+    # calling test's own queries even though the event is VM-global.
+    if self() == test_pid, do: send(test_pid, {:repo_query, ref, metadata})
+    :ok
+  end
+
+  @doc """
+  Runs `fun` and returns `{result, queries}`: the `[:letflow, :repo, :query]` telemetry metadata
+  maps of every query issued by the CALLING process while `fun` ran, in order.
+  """
+  @spec capture_repo_queries((-> result)) :: {result, [map()]} when result: term()
+  def capture_repo_queries(fun) when is_function(fun, 0) do
+    ref = make_ref()
+    handler_id = {__MODULE__, ref}
+
+    :telemetry.attach(
+      handler_id,
+      [:letflow, :repo, :query],
+      &__MODULE__.handle_query_event/4,
+      {self(), ref}
+    )
+
+    try do
+      result = fun.()
+      {result, drain_queries(ref, [])}
+    after
+      :telemetry.detach(handler_id)
+    end
+  end
+
+  defp drain_queries(ref, acc) do
+    receive do
+      {:repo_query, ^ref, metadata} -> drain_queries(ref, [metadata | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  @doc """
+  True when the captured query `metadata` reads or writes `fixture`'s tenant: its schema name
+  appears in the SQL text, or its tenant id (string or 16-byte dumped form) is a bound parameter.
+  """
+  @spec touches_tenant?(map(), fixture()) :: boolean()
+  def touches_tenant?(metadata, fixture) do
+    query = Map.get(metadata, :query)
+    params = Map.get(metadata, :params) || []
+    {:ok, dumped} = Ecto.UUID.dump(fixture.tenant_id)
+
+    (is_binary(query) and String.contains?(query, fixture.schema_name)) or
+      Enum.any?(params, &(&1 == fixture.tenant_id or &1 == dumped))
   end
 end

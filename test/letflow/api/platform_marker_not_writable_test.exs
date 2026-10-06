@@ -1,11 +1,14 @@
 defmodule Letflow.Api.PlatformMarkerNotWritableTest do
   @moduledoc """
   ISS-0993 / ISS-0994 design section 3.1 and section 12 item 17 (ISS-0994 acceptance criterion e;
-  spec `test/specs/ISS-0993-A1.md`): the platform-tenant pin is deployment configuration, not data;
+  specs `test/specs/ISS-0993-A1.md`, `ISS-0993-A2.md`): the platform-tenant pin is deployment configuration, not data;
   no `/api/v1` route can write it.
 
-  A1 scope (purely additive; passes with `Tenant.update_changeset/2` still present). Item 17(0),
-  the A2-only deletion check of `update_changeset`, is a separate A2 file and is NOT here.
+  Scope (A1 + A2): written in A1 and unchanged in what it asserts; the one A2 expectation it
+  contains (a tenant administrator's follow-up call is 403) is enforced. Item 17(0), the check
+  that `Tenant.update_changeset/2` was DELETED, is the separate A2 file
+  `test/letflow/identity/tenant_update_changeset_removed_test.exs`; the cast-field lists below
+  are literal, so the four remaining changesets are the only writers of a tenant row.
 
     * (a) the cast-field lists of `create_changeset`, `admin_patch_changeset`, `status_changeset`
       and `settings_changeset` equal literal expected lists, and the `Tenant` schema has no

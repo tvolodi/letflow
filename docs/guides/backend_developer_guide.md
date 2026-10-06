@@ -203,6 +203,8 @@ Design: `lib/letflow/design/iss0993-platform-scope-separation.md`.
   `:Unknown` is denied for every role, so a route without an explicit key answers 403.
 - Promotion access goes through `Letflow.Definitions.PromotionAccess.checker_for/1`, not an
   allow-all checker (the old default was deleted).
+  `POST /definitions/:process_key/rollback` names no tenant id (the rollback is always in the
+  caller's own tenant), so it has no `authorize_target_tenant/2` call; only its checker is wired.
 - `POST /identity/roles` refuses the `PLATFORM_ADMIN` name unless the caller holds platform
   scope (`Authorization.platform_admin_name?/1`); the platform tenant can never be
   deactivated (`Identity.deactivate_tenant/1` returns `:platform_tenant_protected`).

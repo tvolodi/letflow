@@ -1198,7 +1198,8 @@ defmodule Letflow.Identity do
   Sets a tenant's `status` to `:active`, via `Tenant.status_changeset/2`.
   Idempotent, same reasoning as `deactivate_tenant/1`.
   """
-  @spec reactivate_tenant(slug :: String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
+  @spec reactivate_tenant(slug :: String.t()) ::
+          {:ok, Tenant.t()} | {:error, :not_found | Ecto.Changeset.t()}
   def reactivate_tenant(slug), do: set_tenant_status(slug, :active)
 
   @doc """

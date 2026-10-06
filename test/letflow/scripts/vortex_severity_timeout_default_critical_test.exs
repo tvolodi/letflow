@@ -39,10 +39,18 @@ defmodule Letflow.Scripts.VortexSeverityTimeoutDefaultCriticalTest do
     graph
   end
 
-  # The node the timeout edge of severity-classification points at, found structurally.
+  # The node the STALLED timeout path of severity-classification ends at, found structurally
+  # (v1.6, ISS-1002 / Q-984: severity-classification -> escalate-severity-classification-to-ceo
+  # -> default-to-critical; the CEO escalation level sits in between).
   defp timeout_node(d) do
-    [edge] = Enum.filter(edges(d), &(&1["id"] == "timeout-severity-classification"))
-    assert edge["source"] == "severity-classification"
+    [first] = Enum.filter(edges(d), &(&1["id"] == "timeout-severity-classification"))
+    assert first["source"] == "severity-classification"
+    assert first["target"] == "escalate-severity-classification-to-ceo"
+
+    [edge] =
+      Enum.filter(edges(d), &(&1["id"] == "timeout-escalate-severity-classification-to-ceo"))
+
+    assert edge["source"] == first["target"]
     Enum.find(nodes(d), &(&1["id"] == edge["target"]))
   end
 
@@ -87,8 +95,8 @@ defmodule Letflow.Scripts.VortexSeverityTimeoutDefaultCriticalTest do
     Map.merge(%{"false_positive" => false}, echoed_variables(node))
   end
 
-  test "fixture version is 1.4 (1.4 forced the QA re-seed of the explicit default-to-critical step)" do
-    assert doc()["version"] == "1.5"
+  test "fixture version is 1.6 (1.4 forced the QA re-seed of the explicit default-to-critical step; 1.6 = ISS-1002 CEO escalation level)" do
+    assert doc()["version"] == "1.6"
   end
 
   test "the timeout step is named default-to-critical and its stub sets severity = 'critical' explicitly" do

@@ -7,6 +7,10 @@ description: >
   Production Manager reviews; if value > 10000 Financial Controller signs off.
   Timer escalation to CEO. Exercises: sequential chain, timer escalation,
   conditional branch.
+  Escalation follows D-ESC: timer -> higher role -> fail closed (ISS-1002 / Q-984):
+  capacity-review -> escalate-to-ceo -> auto-reject-order; budget-approval ->
+  escalate-budget-approval-to-ceo -> auto-reject-order. A stalled level repeats
+  its own role as escalation_role (co-required attribute only; no third level).
 graph:
   nodes:
     - id: start
@@ -15,16 +19,30 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-production-manager
+        escalation_timer_duration: PT4H
+        escalation_role: role-ceo
     - id: escalate-to-ceo
       node_type: HUMAN_TASK
       attributes:
         role: role-ceo
+        description: "top of chain: escalation_role is nominal; stalled = fail closed"
+        escalation_timer_duration: PT4H
+        escalation_role: role-ceo
     - id: budget-gate
       node_type: EXCLUSIVE_GATEWAY
     - id: budget-approval
       node_type: HUMAN_TASK
       attributes:
         role: role-controller
+        escalation_timer_duration: P2D
+        escalation_role: role-ceo
+    - id: escalate-budget-approval-to-ceo
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-ceo
+        description: "top of chain: escalation_role is nominal; stalled = fail closed"
+        escalation_timer_duration: P2D
+        escalation_role: role-ceo
     - id: assign-line
       node_type: SERVICE_TASK
       attributes:
@@ -100,6 +118,17 @@ graph:
     # on_timeout for budget-approval (also fallback)
     - id: timeout-budget-approval
       source: budget-approval
+      target: escalate-budget-approval-to-ceo
+    - id: e7-escalated
+      source: escalate-budget-approval-to-ceo
+      target: assign-line
+      condition: "variables.budget_decision == 'approve'"
+    - id: e8-escalated
+      source: escalate-budget-approval-to-ceo
+      target: auto-reject-order
+      condition: "variables.budget_decision == 'reject'"
+    - id: timeout-escalate-budget-approval-to-ceo
+      source: escalate-budget-approval-to-ceo
       target: auto-reject-order
     - id: e9
       source: assign-line

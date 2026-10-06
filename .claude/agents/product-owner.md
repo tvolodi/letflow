@@ -150,6 +150,8 @@ Read two fields from every BA sign-off in step 1: `access_verdict` and `access_n
   diagnose it and do not judge whether it is a defect.
 - Platform-scope scenarios have no BA sign-off, so they have no `access_verdict`; this gate does not
   apply to them (see step 1).
+- For platform-scope scenarios read the UAT report directly: any `expect_refusal` step recorded FAIL
+  makes `release_recommendation` BLOCKED, with the same no-override rule.
 - Plain-language rule: `access_note` is copied into `release_rationale` only as plain-language prose.
   Correct: "One vertical reported that a person could open another company's records, so the release
   is blocked until it is reviewed." Forbidden: "BA-VORTEX access_verdict FAIL, route_to_security_review."

@@ -105,8 +105,8 @@ headings, each its own bullet as AC1 requires):
 > - **(b) Write refusal steps.**
 >   - Every set of scenarios you author for your vertical must include at least one step with
 >     `expect_refusal: true` for each sensitive action your vertical has.
->   - The sensitive actions are exactly this CLOSED list: approving, paying, seeing personal data,
->     changing users. Do not add other actions to the list and do not drop any. If your vertical has
+>   - The sensitive actions are exactly this CLOSED list: approving, paying or releasing, seeing personal
+>     or commercially sensitive data, changing users. Do not add other actions to the list and do not drop any. If your vertical has
 >     none of these four, say so in the scenario file's header comment.
 >   - Write the refusal step's `action:` in business language, as a person trying something they
 >     are not allowed to do. Correct: "The warehouse clerk tries to approve the supplier invoice."
@@ -235,9 +235,11 @@ appended sentence: "The sign-off must contain `access_verdict` and `access_note`
 > - Attempt the action for real. Do not skip it, do not assume it would be refused, and do not read
 >   the code to decide the outcome.
 > - The step PASSES only if the product refuses. Refused means: the request is rejected with a
->   permission or not-found response, or the screen shows no control for the action, or the screen
->   shows a refusal message, AND you queried back and confirmed that nothing was created, changed
->   or revealed.
+>   permission or not-found response, or the screen shows no control for the action AND opening the
+>   action's page or link directly is also refused, or the screen shows a refusal message, AND you
+>   queried back and confirmed that nothing was created, changed or revealed. A screen with no control
+>   must not count alone (a hidden button can sit over a working server route). If the direct attempt
+>   is not possible, record the step BLOCKED, not PASS.
 > - The step FAILS with severity BLOCKER if the action succeeds, or if any part of the protected
 >   data or effect is delivered. Do not reclassify it as MAJOR or MINOR.
 > - A step that fails because of a broken environment (not a permission refusal; for example a
@@ -259,6 +261,8 @@ appended sentence: "The sign-off must contain `access_verdict` and `access_note`
 > - For each actor you authenticate, observe the built-in role(s) actually held: the role claim in
 >   the session or token, or the role attribute on the account (the same observation as the
 >   `fact: role` rule in "Evaluating a `when:` branch").
+> - Prefer the server's answer (`GET /api/v1/me/access` once REQ-449 is merged); until then use the
+>   token claim and write `source: token_claim` in `actors_observed`.
 > - Compare them with that actor's `builtin_roles` in `test/fixtures/uat/actors.yaml`.
 > - Record the comparison per scenario in the report under `actors_observed`, one entry per actor:
 >   `actor`, `roster_roles`, `observed_roles`, `match` (true or false). Actors listed under
@@ -303,6 +307,8 @@ appended sentence: "The sign-off must contain `access_verdict` and `access_note`
 >   diagnose it and do not judge whether it is a defect.
 > - Platform-scope scenarios have no BA sign-off, so they have no `access_verdict`; this gate does not
 >   apply to them (see step 1).
+> - For platform-scope scenarios read the UAT report directly: any `expect_refusal` step recorded FAIL
+>   makes `release_recommendation` BLOCKED, with the same no-override rule.
 
 ### 5.3 Schema changes (locate the YAML block by its content, `report_id: po-signoff-`, not by line number)
 
@@ -343,6 +349,8 @@ Edit the numbered list in the Step 4 fenced block (locate it by content: the fen
 >     recommendation is NOT `APPROVED` if any sign-off has `access_verdict: FAIL`, or
 >     `access_verdict: NOT_COVERED` for a vertical that is not listed in `refusal_coverage_exempt`
 >     in `test/fixtures/uat/actors.yaml`. A missing `access_verdict` counts as `NOT_COVERED`.
+>     For platform-scope scenarios read the UAT report directly: any `expect_refusal` step recorded FAIL
+>     makes `release_recommendation` BLOCKED, with the same no-override rule.
 
 and extend the closing "FAIL (BLOCKED) -> route per each issue's `suggested_action`" sentence:
 

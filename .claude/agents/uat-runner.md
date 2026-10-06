@@ -248,9 +248,11 @@ the named actor tries the action and the product is expected to refuse it.
 - Attempt the action for real. Do not skip it, do not assume it would be refused, and do not read
   the code to decide the outcome.
 - The step PASSES only if the product refuses. Refused means: the request is rejected with a
-  permission or not-found response, or the screen shows no control for the action, or the screen
-  shows a refusal message, AND you queried back and confirmed that nothing was created, changed
-  or revealed.
+  permission or not-found response, or the screen shows no control for the action AND opening the
+  action's page or link directly is also refused, or the screen shows a refusal message, AND you
+  queried back and confirmed that nothing was created, changed or revealed. A screen with no control
+  must not count alone (a hidden button can sit over a working server route). If the direct attempt
+  is not possible, record the step BLOCKED, not PASS.
 - The step FAILS with severity BLOCKER if the action succeeds, or if any part of the protected
   data or effect is delivered. Do not reclassify it as MAJOR or MINOR.
 - A step that fails because of a broken environment (not a permission refusal; for example a
@@ -272,6 +274,8 @@ the named actor tries the action and the product is expected to refuse it.
 - For each actor you authenticate, observe the built-in role(s) actually held: the role claim in
   the session or token, or the role attribute on the account (the same observation as the
   `fact: role` rule in "Evaluating a `when:` branch").
+- Prefer the server's answer (`GET /api/v1/me/access` once REQ-449 is merged); until then use the
+  token claim and write `source: token_claim` in `actors_observed`.
 - Compare them with that actor's `builtin_roles` in `test/fixtures/uat/actors.yaml`.
 - Record the comparison per scenario in the report under `actors_observed`, one entry per actor:
   `actor`, `roster_roles`, `observed_roles`, `match` (true or false). Actors listed under

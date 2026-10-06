@@ -134,8 +134,8 @@ scenario's `actors:` map), "role" (one of the eight built-in roles in `docs/role
 - **(b) Write refusal steps.**
   - Every set of scenarios you author for your vertical must include at least one step with
     `expect_refusal: true` for each sensitive action your vertical has.
-  - The sensitive actions are exactly this CLOSED list: approving, paying, seeing personal data,
-    changing users. Do not add other actions to the list and do not drop any. If your vertical has
+  - The sensitive actions are exactly this CLOSED list: approving, paying or releasing, seeing personal
+    or commercially sensitive data, changing users. Do not add other actions to the list and do not drop any. If your vertical has
     none of these four, say so in the scenario file's header comment.
   - Write the refusal step's `action:` in business language, as a person trying something they
     are not allowed to do. Correct: "The warehouse clerk tries to approve the supplier invoice."

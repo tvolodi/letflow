@@ -170,6 +170,8 @@ section for why these are separate, non-substitutable gates.
     recommendation is NOT `APPROVED` if any sign-off has `access_verdict: FAIL`, or
     `access_verdict: NOT_COVERED` for a vertical that is not listed in `refusal_coverage_exempt`
     in `test/fixtures/uat/actors.yaml`. A missing `access_verdict` counts as `NOT_COVERED`.
+    For platform-scope scenarios read the UAT report directly: any `expect_refusal` step recorded FAIL
+    makes `release_recommendation` BLOCKED, with the same no-override rule.
 4. Arbitrate any cross-vertical disagreement found; route to REQ-ANALYST if the
    underlying requirement is ambiguous.
 5. Write test/uat-reports/po-signoff-<run_id>.yaml.

@@ -1,0 +1,35 @@
+id: ISS-0997
+title: "Business confirmation of the default routes added to shipped definitions by REQ-455 (11 gateways across meridian, swiftroute, vortex)"
+discovered_by: ORCH (WF-02 REQ-455)
+discovered_in_run: WF02-REQ455-20261006 (Q-972 / GH #2244)
+severity: MINOR
+owner: "BA-<VERTICAL> (meridian, swiftroute, vortex)"
+description: >
+  REQ-455 adds a deterministic no-default-route check to the definition validator. Eleven shipped or
+  seeded gateways failed it and were fixed in the same change by adding one unconditional
+  `<gateway>-default` edge (is_default: true), following the ISS-0928 precedent. The targets were chosen
+  as the business-safe (more cautious) branch by engineering, not by the business. Each needs a BA to
+  confirm or change the target. Defaults as shipped: meridian eligibility-gate -> decline-application;
+  meridian authority-routing -> decline-application (-> end-declined; NOT committee-vote-fork, because a
+  second inbound edge turns that PARALLEL_GATEWAY fork into combined_unsupported per
+  Transition.gateway_role/2); meridian kyc-routing (sim yaml) -> assessment-join; meridian severity-routing
+  -> remediation-subprocess; meridian post-remediation-check -> remediation-unresolved-escalation;
+  swiftroute ceo-approval-gate -> ceo-approval; swiftroute injury-check -> safety-notification; vortex
+  budget-gate -> budget-approval; vortex false-positive-check -> severity-routing; vortex severity-routing
+  -> corrective-action-subprocess. Full table with fixture files:
+  lib/letflow/design/req455-definition-validator-gaps.md section 7.
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+  - test/fixtures/qa/swiftroute_process_definition.json
+  - test/fixtures/qa/vortex_production_order_release_process_definition.json
+  - test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+  - test/fixtures/simulation/meridian/process_claim_intake.yaml
+  - test/fixtures/simulation/meridian/process_policy_binding.yaml
+  - test/fixtures/simulation/swiftroute/process_route_approval.yaml
+  - test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml
+  - test/fixtures/simulation/vortex/process_quality_check.yaml
+  - test/fixtures/simulation/vortex/process_work_order.yaml
+queue_ref: null  # not yet registered: BA-owned business confirmation, registered by the queue admin after the REQ-455 PR merges
+github_ref: null  # GH issue is filed together with the queue registration after the REQ-455 PR merges
+status: open

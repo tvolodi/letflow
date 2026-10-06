@@ -739,3 +739,35 @@ history:
       TEST-DESIGNER skipped (no executable surface, WF-02 Step 3 docs-only rule).
       Full mix letflow.check alias not run (hangs in this environment); component
       checks and 66 direct tests passed.
+
+  - req: REQ-455
+    event: started
+    agent: ORCH
+    at: "2026-10-05T23:26:51Z"
+    note: >
+      WF-02 run WF02-REQ455-20261006 (queue task 972, GH#2244) started on branch
+      feature/WF02-REQ455-20261006. The started event was not logged at pickup;
+      recorded retroactively by DOC-UPDATER at Step 6 using the run's recorded
+      start time (step-01 handoff created_at).
+
+  - req: REQ-455
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-06T03:20:14Z"
+    note: >
+      Process definition validator gaps closed (queue task 972, GH#2244,
+      branch feature/WF02-REQ455-20261006): reachability to and from an end,
+      decision without a default route, data used before it is collected (new
+      violations, activation refused) and unbound task roles at install (a
+      reported warning, never a binding). Design
+      lib/letflow/design/req455-definition-validator-gaps.md. Gates recorded in
+      the run handoffs: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER and RELEASE-VALIDATOR (step 05).
+      Deviation: the meridian authority-routing default edge targets
+      decline-application (-> end-declined), not committee-vote-fork as the
+      design first proposed, because a second inbound edge turns the
+      PARALLEL_GATEWAY fork into combined_unsupported per
+      Transition.gateway_role/2; the design doc is corrected. BA business
+      confirmation of every default route in the design's table is still
+      required (one BA-owned issue, filed by ORCH). Full-suite ISS-0069 sweep
+      is left to CI.

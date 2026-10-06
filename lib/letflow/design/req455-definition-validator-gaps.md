@@ -335,7 +335,7 @@ issue naming every row below, owner BA, in addition to the in-change fix):
 | Gateway | Proposed default target |
 |---|---|
 | meridian `eligibility-gate` | `decline-application` |
-| meridian `authority-routing` | `committee-vote-fork` |
+| meridian `authority-routing` | `decline-application` (-> `end-declined`); see "Deviation recorded at implementation" below |
 | meridian `kyc-routing` (sim yaml only) | `assessment-join` (identical to the QA fixture's existing ISS-0928 default `e9-default`, for parity) |
 | meridian `severity-routing` | `remediation-subprocess` |
 | meridian `post-remediation-check` | `remediation-unresolved-escalation` |
@@ -344,6 +344,8 @@ issue naming every row below, owner BA, in addition to the in-change fix):
 | vortex `budget-gate` | `budget-approval` |
 | vortex `false-positive-check` | `severity-routing` |
 | vortex `severity-routing` | `corrective-action-subprocess` |
+
+**Deviation recorded at implementation (DOC-UPDATER, 2026-10-06).** The originally proposed default target for `authority-routing` was `committee-vote-fork`. It was not used: `committee-vote-fork` is a PARALLEL_GATEWAY fork, and a second inbound edge turns it into `combined_unsupported` per `Transition.gateway_role/2`, so the definition would be rejected. The shipped default is `authority-routing-default` -> `decline-application` (-> `end-declined`) in both the QA fixture and the simulation yaml. This is a business-visible routing choice (an amount matching neither branch is declined); **BA business confirmation of this default route is required** and is covered by the single BA-owned issue ORCH files for this table (no separate issue filed here).
 
 QA JSON files get a version bump (patch, as ISS-0928 did 1.1 -> 1.2) because `(name, version)` is unique
 (`uq_definition_version`) and a re-seed of an existing environment must create a new row; ELIXIR-DEV

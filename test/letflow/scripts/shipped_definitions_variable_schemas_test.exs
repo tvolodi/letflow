@@ -99,6 +99,15 @@ defmodule Letflow.Scripts.ShippedDefinitionsVariableSchemasTest do
   defp valid?(schema, value),
     do: VariableSchema.validations_for(%{"v" => schema}, ["v"], %{"v" => value}) == %{"v" => :ok}
 
+  describe "risk_rating (open rating scale)" do
+    test "keeps 'acceptable' (submitted by the req208 simulation) alongside the form values and 'unacceptable'" do
+      enum =
+        declared(doc("meridian_loan_origination_process_definition.json"))["risk_rating"]["enum"]
+
+      assert Enum.sort(enum) == Enum.sort(~w(low medium high acceptable unacceptable))
+    end
+  end
+
   describe "the fixture set under test" do
     test "every process-definition fixture is either a decision fixture or an explicit no-decision one" do
       known = Enum.map(@decision_fixtures, &elem(&1, 0)) ++ @no_decision_fixtures

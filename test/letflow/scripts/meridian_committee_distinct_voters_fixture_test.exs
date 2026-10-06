@@ -1,6 +1,6 @@
 defmodule Letflow.Scripts.MeridianCommitteeDistinctVotersFixtureTest do
   @moduledoc """
-  ISS-1024 / Q-1006 (GH #2299) -- the QA Meridian "Loan Origination" fixture (v1.8) must
+  ISS-1024 / Q-1006 (GH #2299) -- the QA Meridian "Loan Origination" fixture (v1.8, now v1.9) must
   route its three committee vote tasks to three DIFFERENT roles.
 
   v1.7 defect: `committee-vote-cro`, `committee-vote-director` and `committee-vote-ceo` all

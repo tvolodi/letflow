@@ -133,7 +133,6 @@ defmodule Letflow.Engine.ShippedDefinitionVariableSchemasEngineTest do
     proj = projection(schema, instance_id)
     assert proj.status == :error
     assert proj.variables == before_vars, "rejected value must not be merged"
-    refute Map.has_key?(proj.variables, key) and proj.variables[key] == output[key]
     assert Repo.get!(EngineTask, task.id, prefix: schema).status == :pending
     assert event_count(schema, instance_id, "EXECUTION_ERROR") == 1
     assert event_count(schema, instance_id, "TASK_COMPLETED") == completed_before

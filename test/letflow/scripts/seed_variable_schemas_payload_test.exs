@@ -56,6 +56,11 @@ defmodule Letflow.Scripts.SeedVariableSchemasPayloadTest do
                  ~r/rewrite_service_task_base "\$\(cat "[^"]*(?:fixture_path|FIXTURE_PATH)[^"]*"\)"/
 
         assert src =~ ~r/-d "\$\{(?:payload|PAYLOAD)\}"/
+
+        # ...and nothing is piped onto the payload after the helper (a `| jq '. + {...}'` would
+        # otherwise alter variable_schemas undetected).
+        assert src =~
+                 ~r/^\s*(?:local )?(?:payload|PAYLOAD)=\$\(rewrite_service_task_base "\$\(cat "[^"]*"\)"\)\s*$/m
       end
 
       test "never strips or overrides variable_schemas in the payload" do

@@ -22,6 +22,33 @@ defmodule Letflow.Definitions.ShippedDefinitionsDefaultEdgeScrutinyTest do
   or a clear-style condition phrased outside the regex above, is not detected here; the Meridian
   fixture test pins the kyc-routing shape by exact id/target/condition instead.
 
+  ## ISS-1001 / Q-983 second rule: a default never leads to an irreversible action
+
+  The `fallback-l2-approval` bug (Meridian loan, `l2-approval` -> `create-facility` with no
+  condition: a missing/unrecognised/timed-out `l2_decision` created the loan = approval by
+  default). Principle: defaults route toward MORE scrutiny and never toward the irreversible
+  (approving / creating / paying out) branch. Per node `N` (any node type), an outgoing edge
+  `E` is a *default-style edge* iff
+
+    * `E.is_default == true`, OR
+    * `E` has NO `condition` AND `N` has at least one OTHER outgoing edge WITH a condition
+      (an unconditioned edge beside conditioned siblings is what the engine takes when none of
+      them holds -- the `fallback-*` / `timeout-*`-style edges of the QA fixtures).
+
+  `E` is a VIOLATION iff it is default-style and its target node's id matches
+  `@irreversible_target` (id starts with `create-`, `disburse-`, `release-`, `payout-`,
+  `transfer-`, `execute-`, `activate-`, `provision-`, `refund-` or `issue-`, or is exactly one
+  of those words) -- ANY node type, so a SERVICE_TASK that creates/disburses and a HUMAN_TASK
+  that disburses (`disburse-loan`) are both covered.
+
+  Blind spots (deliberate): an irreversible action whose id lacks those prefixes (e.g. `book-loan`,
+  `ceo-approval`) is not detected -- approval HUMAN_TASKs (`*-approval`) are intentionally NOT in
+  the list, because a default into a human approval task is escalation (more scrutiny), not the
+  irreversible act itself; the action is judged by id only, not by the node's endpoint/attributes; a
+  default reaching an irreversible node only INDIRECTLY (default -> X -> create-facility) is not
+  followed (the direct edge is what ISS-1001 and its issue acceptance criteria name; the Meridian
+  fixture test additionally graph-walks `l2-approval` with the real condition evaluator).
+
   Discovery is by structure over the same set as `ShippedDefinitionsValidationTest`
   (`priv/**/*.json`, `test/fixtures/qa/*.json`, `test/fixtures/simulation/**/process_*.yaml`).
   Pure file I/O, `async: true`.
@@ -33,6 +60,12 @@ defmodule Letflow.Definitions.ShippedDefinitionsDefaultEdgeScrutinyTest do
 
   @root Path.expand("../../..", __DIR__)
   @clear_condition ~r/==\s*'(clear|cleared|approved|pass|passed|ok)'/i
+  @irreversible_target ~r/^(create|disburse|release|payout|transfer|execute|activate|provision|refund|issue)([-_].*)?$/
+
+  # Every entry MUST name the queue task that removes it; add none silently (ORCH rule). Entries
+  # are exactly {definition label, edge id, target id}. Empty: the vortex Q-982 finding is a
+  # different shape (a capacity-rejected order reaches `end-released`) and is not flagged here.
+  @allowlist []
 
   # Returns [{gateway_id, default_edge_id, clear_target}] for each violating gateway.
   defp default_edge_violations(%{"nodes" => nodes, "edges" => edges}) do
@@ -49,6 +82,30 @@ defmodule Letflow.Definitions.ShippedDefinitionsDefaultEdgeScrutinyTest do
       {gw, default["id"], default["target"]}
     end
   end
+
+  # ISS-1001 rule: returns [{node_id, edge_id, target_id}] for default-style edges into an
+  # irreversible-action node (see moduledoc).
+  defp irreversible_default_violations(%{"nodes" => nodes, "edges" => edges}) do
+    node_ids = MapSet.new(nodes, & &1["id"])
+
+    for %{"id" => source} <- nodes,
+        outgoing = Enum.filter(edges, &(&1["source"] == source)),
+        edge <- outgoing,
+        default_style?(edge, outgoing),
+        edge["target"] in node_ids,
+        edge["target"] =~ @irreversible_target do
+      {source, edge["id"], edge["target"]}
+    end
+  end
+
+  defp default_style?(edge, outgoing) do
+    edge["is_default"] == true or
+      (not conditioned?(edge) and
+         Enum.any?(outgoing, &(&1["id"] != edge["id"] and conditioned?(&1))))
+  end
+
+  defp conditioned?(edge),
+    do: is_binary(edge["condition"]) and String.trim(edge["condition"]) != ""
 
   defp review_targets(conditional, nodes_by_id) do
     conditional
@@ -159,6 +216,83 @@ defmodule Letflow.Definitions.ShippedDefinitionsDefaultEdgeScrutinyTest do
 
       assert violations == [],
              "default edge routes like the clear branch (skips manual review):\n" <>
+               inspect(violations, pretty: true)
+    end
+  end
+
+  describe "ISS-1001 rule itself (synthetic graphs)" do
+    defp irreversible_graph(edge_overrides) do
+      %{
+        "nodes" => [
+          %{"id" => "task", "node_type" => "HUMAN_TASK"},
+          %{"id" => "create-facility", "node_type" => "SERVICE_TASK"},
+          %{"id" => "disburse-loan", "node_type" => "HUMAN_TASK"},
+          %{"id" => "decline-application", "node_type" => "SERVICE_TASK"},
+          %{"id" => "next-approval", "node_type" => "HUMAN_TASK"}
+        ],
+        "edges" =>
+          [
+            %{
+              "id" => "ok",
+              "source" => "task",
+              "target" => "create-facility",
+              "condition" => "variables.d == 'approve'"
+            }
+          ] ++ edge_overrides
+      }
+    end
+
+    test "an unconditioned edge beside conditioned siblings into create-facility is a violation (the fallback-l2-approval shape)" do
+      graph =
+        irreversible_graph([%{"id" => "fb", "source" => "task", "target" => "create-facility"}])
+
+      assert [{"task", "fb", "create-facility"}] = irreversible_default_violations(graph)
+    end
+
+    test "an is_default edge into disburse-loan is a violation" do
+      graph =
+        irreversible_graph([
+          %{"id" => "dflt", "source" => "task", "target" => "disburse-loan", "is_default" => true}
+        ])
+
+      assert [{"task", "dflt", "disburse-loan"}] = irreversible_default_violations(graph)
+    end
+
+    test "a default edge to decline-application or to an approval human task is clean" do
+      graph =
+        irreversible_graph([
+          %{"id" => "fb", "source" => "task", "target" => "decline-application"},
+          %{"id" => "dflt", "source" => "task", "target" => "next-approval", "is_default" => true}
+        ])
+
+      assert [] = irreversible_default_violations(graph)
+    end
+
+    test "a sole unconditioned edge (no conditioned siblings) into create-facility is not a default-style edge" do
+      graph = %{
+        "nodes" => [
+          %{"id" => "a", "node_type" => "SERVICE_TASK"},
+          %{"id" => "create-facility", "node_type" => "SERVICE_TASK"}
+        ],
+        "edges" => [%{"id" => "e", "source" => "a", "target" => "create-facility"}]
+      }
+
+      assert [] = irreversible_default_violations(graph)
+    end
+  end
+
+  describe "ISS-1001: every shipped definition" do
+    test "no default-style edge leads to an irreversible action node (create-/disburse-/release-/...)" do
+      violations =
+        for {label, graph} <- discover(),
+            {node, edge, target} <- irreversible_default_violations(graph),
+            {label, edge, target} not in @allowlist,
+            do: {label, node, edge, target}
+
+      assert violations == [],
+             "a default / unconditioned fallback edge leads to an irreversible action " <>
+               "(approval by default); defaults must route toward MORE scrutiny:
+" <>
                inspect(violations, pretty: true)
     end
   end

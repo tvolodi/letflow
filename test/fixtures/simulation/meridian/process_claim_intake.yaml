@@ -222,10 +222,10 @@ graph:
       source: l2-approval
       target: decline-application
       condition: "variables.l2_decision == 'reject'"
-    # fallback for l2-approval
+    # fallback for l2-approval (ISS-1001: more scrutiny, never approval by default)
     - id: fallback-l2-approval
       source: l2-approval
-      target: create-facility
+      target: decline-application
     - id: e29
       source: committee-vote-fork
       target: committee-vote-cro

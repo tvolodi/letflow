@@ -826,3 +826,25 @@ history:
       platform-events payloads for non-operators; suffix-only key matching;
       allowlist per event type, MAJOR, depends on this requirement). Full suite
       deferred to CI.
+  - req: REQ-458
+    event: started
+    agent: ORCH
+    at: "2026-10-06T06:19:24Z"
+    note: >
+      WF-02 run WF02-REQ458-20261006 (queue task 975, GH#2247) started on branch
+      feature/WF02-REQ458-20261006. Recorded retroactively at close, at the time of the first
+      baseline audit commit; the baseline audit commits (edea1d5b, a6e6f526, 3ebac128) precede this entry.
+
+  - req: REQ-458
+    event: done
+    agent: ORCH
+    at: "2026-10-06T06:39:03Z"
+    note: >
+      Baseline process audit of the five scopes complete (queue task 975, GH#2247):
+      one artefact per scope under test/uat-reports/ (process-audit-<scope>-WF05-BASELINE*),
+      run report process-audit-run-report-WF05-BASELINE-20261006.yaml with per-scope
+      verdicts, counts by severity, seeded definition versions and the covered-by table.
+      AC2 was amended (BA decision, supervisor-approved; REQ-VALIDATOR PASS): a BLOCKER or
+      MAJOR finding is either filed as ISS-1000..ISS-1017 (Q-982..Q-999, GH #2269..#2286)
+      or recorded in the run report as covered by REQ-457 (Q-974, GH #2246) or
+      REQ-454/REQ-447 (Q-971, GH #2243). No audited file modified (AC3).

@@ -1,0 +1,114 @@
+# Run report for REQ-458 (Q-975 / GH #2247): baseline PROCESS-AUDITOR pass, five scopes.
+# Analysis only. Nothing audited was modified (git diff --name-status --diff-filter=MDR origin/main HEAD is empty).
+report_id: process-audit-run-report-WF05-BASELINE-20261006
+requirement: REQ-458
+queue_task: Q-975
+github: GH-2247
+run_ids: [WF05-BASELINE-20261006, WF05-BASELINE2-20261006]
+note: >
+  First pass (WF05-BASELINE) returned FAIL for meridian, platform, swiftroute and vortex. After the QA definitions were
+  re-seeded (versions below) those four scopes were re-audited (WF05-BASELINE2); bilimbaga was not re-audited because
+  its inputs did not change. The BASELINE2 reports (bilimbaga: BASELINE) are the final per-scope artefacts and are the
+  ones counted here. The first-pass artefacts are retained as history.
+
+per_scope:
+  - scope: bilimbaga
+    artefact: test/uat-reports/process-audit-bilimbaga-WF05-BASELINE-20261006.yaml
+    verdict: PASS_WITH_FINDINGS
+    findings: {BLOCKER: 0, MAJOR: 2, MINOR: 1}
+  - scope: meridian
+    artefact: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml
+    verdict: PASS_WITH_FINDINGS
+    findings: {BLOCKER: 0, MAJOR: 8, MINOR: 0}
+    note: "BA reclassified the l2-approval part of PA-MERIDIAN-008 from MAJOR to BLOCKER (ISS-1001); the artefact itself still reads PASS_WITH_FINDINGS."
+  - scope: platform
+    artefact: test/uat-reports/process-audit-platform-WF05-BASELINE2-20261006.yaml
+    verdict: PASS_WITH_FINDINGS
+    findings: {BLOCKER: 0, MAJOR: 4, MINOR: 0}
+  - scope: swiftroute
+    artefact: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml
+    verdict: PASS_WITH_FINDINGS
+    findings: {BLOCKER: 0, MAJOR: 10, MINOR: 1}
+  - scope: vortex
+    artefact: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml
+    verdict: FAIL
+    findings: {BLOCKER: 1, MAJOR: 8, MINOR: 0}
+totals_as_reported: {BLOCKER: 1, MAJOR: 32, MINOR: 2}
+totals_after_ba_reclassification: {BLOCKER: 2, MAJOR: 31, MINOR: 2}
+
+# Versions seeded on QA for the re-audit.
+seeded_definitions:
+  - {name: "Loan Origination", version: "1.5", id: 58fc2a1f-c9da-48e8-91e4-2375916d7996}
+  - {name: "Regulatory", version: "1.4", id: 2d6840e0-9fab-4324-9b57-dabe21d50c93}
+  - {name: "Shipment Approval", version: "1.2", id: 4cf27178-f0f7-40fb-8f3e-181b57a9ad19}
+  - {name: "Production Order Release", version: "1.2", id: 9eee1d02-8677-45c4-976e-7786febf0616}
+  - {name: "Supplier Quality Deviation", version: "1.3", id: f499826b-c9f6-49d8-ae11-4bc049d381dd}
+  - {name: "8D", version: "1.0 (unchanged)", id: 1ac1d9cb-40e3-4869-8e21-86388120db59}
+
+seeding_credential_note: >
+  temporary: legacy PLATFORM_ADMIN realm role, tenant-scope only after A2, until REQ-447/454.
+
+# Every BLOCKER/MAJOR finding is either filed (issue record) or covered by an existing requirement/issue.
+# MINOR findings are listed. The ids are those in the FINAL artefact of each scope.
+findings_table:
+  - {finding: PA-BILIMBAGA-001, severity: MAJOR, item: D3, disposition: filed, issue: ISS-1017, queue: Q-999, github: GH-2286}
+  - {finding: PA-BILIMBAGA-002, severity: MINOR, item: "-", disposition: listed_in_artefact}
+  - {finding: PA-BILIMBAGA-003, severity: MAJOR, item: E1, disposition: covered_by, requirement: REQ-457, queue: Q-974, github: GH-2246}
+  - {finding: PA-MERIDIAN-001, severity: MAJOR, item: A4, disposition: filed, issue: ISS-1013, queue: Q-995, github: GH-2282}
+  - {finding: PA-MERIDIAN-002, severity: MAJOR, item: B2, disposition: filed, issue: ISS-1014, queue: Q-996, github: GH-2283}
+  - {finding: PA-MERIDIAN-003, severity: MAJOR, item: C1, disposition: filed, issue: ISS-1015, queue: Q-997, github: GH-2284}
+  - {finding: PA-MERIDIAN-004, severity: MAJOR, item: D2, disposition: filed, issue: ISS-1016, queue: Q-998, github: GH-2285}
+  - {finding: PA-MERIDIAN-005, severity: MAJOR, item: D4, disposition: covered_by, requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - {finding: PA-MERIDIAN-006, severity: MAJOR, item: D4, disposition: covered_by, requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - {finding: PA-MERIDIAN-007, severity: MAJOR, item: E1, disposition: covered_by, requirement: REQ-457, queue: Q-974, github: GH-2246}
+  - {finding: PA-MERIDIAN-008, severity: "MAJOR (l2 part BLOCKER by BA)", item: F1, disposition: filed, issue: ISS-1001, queue: Q-983, github: GH-2270, also: "ISS-1012 (Q-994 / GH-2281, cross-company unanswered-approval handling)"}
+  - {finding: PA-PLATFORM-001, severity: MAJOR, item: D4, disposition: covered_by, requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - {finding: PA-PLATFORM-002, severity: MAJOR, item: D4, disposition: covered_by, requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - {finding: PA-PLATFORM-003, severity: MAJOR, item: E1, disposition: covered_by, requirement: REQ-457, queue: Q-974, github: GH-2246}
+  - {finding: PA-PLATFORM-004, severity: MAJOR, item: E2, disposition: covered_by, requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - {finding: PA-SWIFTROUTE-001, severity: MAJOR, item: A4, disposition: filed, issue: ISS-1007, queue: Q-989, github: GH-2276}
+  - {finding: PA-SWIFTROUTE-002, severity: MAJOR, item: C1, disposition: filed, issue: ISS-1008, queue: Q-990, github: GH-2277}
+  - {finding: PA-SWIFTROUTE-003, severity: MAJOR, item: D1, disposition: filed, issue: ISS-1009, queue: Q-991, github: GH-2278}
+  - {finding: PA-SWIFTROUTE-004, severity: MAJOR, item: D2, disposition: filed, issue: ISS-1010, queue: Q-992, github: GH-2279}
+  - {finding: PA-SWIFTROUTE-005, severity: MAJOR, item: D3, disposition: filed, issue: ISS-1011, queue: Q-993, github: GH-2280}
+  - {finding: PA-SWIFTROUTE-006, severity: MAJOR, item: D4, disposition: covered_by, requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - {finding: PA-SWIFTROUTE-007, severity: MAJOR, item: D4, disposition: covered_by, requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - {finding: PA-SWIFTROUTE-008, severity: MINOR, item: D4, disposition: listed_in_artefact, note: "dispatcher tobias unresolved; also named in ISS-1011"}
+  - {finding: PA-SWIFTROUTE-009, severity: MAJOR, item: E1, disposition: covered_by, requirement: REQ-457, queue: Q-974, github: GH-2246}
+  - {finding: PA-SWIFTROUTE-010, severity: MAJOR, item: E2, disposition: covered_by, requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - {finding: PA-SWIFTROUTE-011, severity: MAJOR, item: F1, disposition: filed, issue: ISS-1012, queue: Q-994, github: GH-2281}
+  - {finding: PA-VORTEX-001, severity: BLOCKER, item: A1, disposition: filed, issue: ISS-1000, queue: Q-982, github: GH-2269}
+  - {finding: PA-VORTEX-002, severity: MAJOR, item: A4, disposition: filed, issue: ISS-1002, queue: Q-984, github: GH-2271}
+  - {finding: PA-VORTEX-003, severity: MAJOR, item: C1, disposition: filed, issue: ISS-1003, queue: Q-985, github: GH-2272}
+  - {finding: PA-VORTEX-004, severity: MAJOR, item: D1, disposition: filed, issue: ISS-1004, queue: Q-986, github: GH-2273}
+  - {finding: PA-VORTEX-005, severity: MAJOR, item: D2, disposition: filed, issue: ISS-1005, queue: Q-987, github: GH-2274}
+  - {finding: PA-VORTEX-006, severity: MAJOR, item: D3, disposition: filed, issue: ISS-1006, queue: Q-988, github: GH-2275}
+  - {finding: PA-VORTEX-007, severity: MAJOR, item: D4, disposition: covered_by, requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - {finding: PA-VORTEX-008, severity: MAJOR, item: E1, disposition: covered_by, requirement: REQ-457, queue: Q-974, github: GH-2246}
+  - {finding: PA-VORTEX-009, severity: MAJOR, item: F1, disposition: filed, issue: ISS-1012, queue: Q-994, github: GH-2281, note: "cross-company; one issue covers the SwiftRoute/Meridian/Vortex inconsistency"}
+
+covered_by_summary:
+  - {class: "E1 (no refusal scenarios)", findings: [PA-VORTEX-008, PA-SWIFTROUTE-009, PA-MERIDIAN-007, PA-PLATFORM-003, PA-BILIMBAGA-003], requirement: REQ-457, queue: Q-974, github: GH-2246}
+  - {class: "D4/E2 (roster roles vs charter, over-privileged actors)", findings: [PA-VORTEX-007, PA-SWIFTROUTE-006, PA-SWIFTROUTE-007, PA-SWIFTROUTE-010, PA-MERIDIAN-005, PA-MERIDIAN-006, PA-PLATFORM-001, PA-PLATFORM-002, PA-PLATFORM-004], requirement: "REQ-454 / REQ-447", queue: Q-971, github: GH-2243}
+  - class: note
+    note: "Finding numbers follow the final artefacts. The platform E1 finding is PA-PLATFORM-003 (not -002) and the platform D4/E2 findings are 001, 002 and 004."
+
+filed_issues:
+  - {issue: ISS-1000, queue: Q-982, github: GH-2269, severity: BLOCKER, scope: vortex, ships_with: "its fix PR (letflow-4)"}
+  - {issue: ISS-1001, queue: Q-983, github: GH-2270, severity: BLOCKER, scope: meridian, ships_with: "its fix PR (letflow-3)"}
+  - {issue: ISS-1002, queue: Q-984, github: GH-2271, severity: MAJOR, scope: vortex}
+  - {issue: ISS-1003, queue: Q-985, github: GH-2272, severity: MAJOR, scope: vortex}
+  - {issue: ISS-1004, queue: Q-986, github: GH-2273, severity: MAJOR, scope: vortex}
+  - {issue: ISS-1005, queue: Q-987, github: GH-2274, severity: MAJOR, scope: vortex}
+  - {issue: ISS-1006, queue: Q-988, github: GH-2275, severity: MAJOR, scope: vortex}
+  - {issue: ISS-1007, queue: Q-989, github: GH-2276, severity: MAJOR, scope: swiftroute}
+  - {issue: ISS-1008, queue: Q-990, github: GH-2277, severity: MAJOR, scope: swiftroute}
+  - {issue: ISS-1009, queue: Q-991, github: GH-2278, severity: MAJOR, scope: swiftroute}
+  - {issue: ISS-1010, queue: Q-992, github: GH-2279, severity: MAJOR, scope: swiftroute}
+  - {issue: ISS-1011, queue: Q-993, github: GH-2280, severity: MAJOR, scope: swiftroute}
+  - {issue: ISS-1012, queue: Q-994, github: GH-2281, severity: MAJOR, scope: swiftroute}
+  - {issue: ISS-1013, queue: Q-995, github: GH-2282, severity: MAJOR, scope: meridian}
+  - {issue: ISS-1014, queue: Q-996, github: GH-2283, severity: MAJOR, scope: meridian}
+  - {issue: ISS-1015, queue: Q-997, github: GH-2284, severity: MAJOR, scope: meridian}
+  - {issue: ISS-1016, queue: Q-998, github: GH-2285, severity: MAJOR, scope: meridian}
+  - {issue: ISS-1017, queue: Q-999, github: GH-2286, severity: MAJOR, scope: bilimbaga}

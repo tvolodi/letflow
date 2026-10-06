@@ -2194,7 +2194,6 @@ volumes:
     status: closed
     opened: 2026-09-07
     closed: 2026-09-09
-    entries: 34
     lines: 1212
     bytes_working_tree: 74041
     frozen_prefix_lines: 1212
@@ -2910,7 +2909,6 @@ volumes:
     status: closed
     opened: 2026-09-11
     closed: 2026-09-12
-    entries: 34
     lines: 1240
     bytes_working_tree: 72197
     frozen_prefix_lines: 1213
@@ -6030,7 +6028,7 @@ volumes:
     path: docs/status/requirement_status.v26.yaml
     status: current
     opened: 2026-10-03
-    entries: 34
+    entries: 35
     note: >
       Opened by DOC-UPDATER's own ISS-0983 closing SCOPE-CHANGE append,
       successor to volume 25 (closed at 29 entries / 1211 frozen-prefix
@@ -6155,6 +6153,11 @@ volumes:
       Incremented to 33 by DOC-UPDATER REQ-456 Step 6 appends (a retroactive
       started event and a done event, 2026-10-06T05:11:05Z) -- recounted from the file: 33
       on-disk `- req:` entries; 801 lines / 45192 bytes, under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
+
+      Incremented to 35 by ORCH REQ-458 close appends (a retroactive started event
+      and a done event, 2026-10-06T06:39:03Z) -- recounted from the file: 35
+      on-disk `- req:` entries; 824 lines / 46370 bytes, under the
       1200-line/120000-byte roll ceiling, no roll triggered.
 
 known_anomalies:

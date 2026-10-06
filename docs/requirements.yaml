@@ -34108,7 +34108,7 @@ requirements:
   - id: REQ-453
     title: "Access rules for BA-<VERTICAL>, UAT-RUNNER and PRODUCT-OWNER: report-do-not-decide, never widen a role, refusal steps executed, access verdict in the sign-off"
     owner: REQ-ANALYST
-    status: pending
+    status: done
     stage: S7
     impl_order: 970  # letflow-queue task id, GH#2242. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-962, Q-969.
     description: >

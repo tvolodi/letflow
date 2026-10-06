@@ -119,6 +119,7 @@ tests calls them.
     @spec log_denial(Plug.Conn.t(), Letflow.Api.Authorization.AccessContext.t(), policy_key()) :: :ok
     @spec build_fields(Plug.Conn.t(), Letflow.Api.Authorization.AccessContext.t(), policy_key()) :: fields()
     @spec format_message(fields(), non_neg_integer()) :: String.t()
+    @spec metadata(fields(), non_neg_integer()) :: keyword()
     @spec hash_id(:user | :tenant, term(), binary()) :: hashed_id()
     @spec subkey() :: binary()                         # 32 bytes
     @spec route_pattern(Plug.Conn.t()) :: String.t()
@@ -126,6 +127,18 @@ tests calls them.
     @spec policy_token(term()) :: String.t()
     @spec platform_scope?(policy_key()) :: boolean()
     @spec reset() :: :ok                               # TEST ONLY (@doc false): zero sampler + clear one-time flags
+
+Contract of `format_message/2` and `metadata/2` (both pure, same arguments: the `fields()` map and the
+suppressed count `n`, the number of denials withheld since the previous emitted line for the slot):
+* `format_message/2` returns the section-6 message; the trailing `" suppressed=<n>"` is present only when
+  `n > 0`.
+* `metadata/2` returns a keyword list with atom keys in this fixed order: `authz_method`, `authz_route`,
+  `authz_policy`, `authz_platform_scope`, `authz_caller_platform_tenant`, `authz_caller`, `authz_tenant`,
+  and, ONLY when `n > 0`, a final `authz_suppressed` (positive integer). Values are exactly the
+  corresponding `fields()` values (strings and booleans), nothing else.
+* `log_denial/3` emits `Logger.warning(format_message(f, n), metadata(f, n))`, so message and metadata
+  cannot drift; test (a) compares them by calling both functions on one `fields()` map and by checking a
+  captured event.
 
 Contract of `log_denial/3`:
 * Always returns `:ok`. It never raises, never exits, never throws into the request process (section 8).
@@ -350,7 +363,7 @@ Name safety (verified `lib/letflow/obs/logger.ex`, `lib/letflow/secrets/redactio
   `component: "Letflow.Api.AuthzDenyLog"`, a ready filter.
 
 Level: `warning` (a denial is expected traffic but security-relevant, above the `info` noise floor).
-`LETFLOW_LOG_LEVEL`/`config :logger, level` (runtime.exs:218) can still raise the floor above `warning`;
+`LOG_LEVEL` (`config/runtime.exs:198`, applied at :218 as `config :logger, level`) can still raise the floor above `warning`;
 that is the operator's existing, intended lever.
 
 ---
@@ -380,9 +393,10 @@ of the victim's id, which is unknowable without the key. (A caller can only choo
 
 `:persistent_term.get(key, nil)`; if `nil`, build both atomics refs and `:persistent_term.put` them.
 Two requests racing at first use may each create a pair; the later `put` wins; events recorded against
-the losing pair are lost (worst case: one extra emitted line in the first window). This is safe because
-the term is write-once in steady state (a one-time put with no existing value does not trigger the
-global-GC scan that replacement/erase does). Creating it from `Application.start/2` was rejected: it
+the losing pair are lost (worst case: one extra emitted line in the first window). Creation is idempotent in
+intent: `get` with a `nil` default, and `put` only when it is `nil`. The first put of a new key does not
+trigger the global-GC scan; in the rare first-use race the loser's put REPLACES the term and does trigger
+that scan once, ever. That is rare, one time and harmless, and accepted. Creating it from `Application.start/2` was rejected: it
 couples the boot path to a log helper, and lazy creation has no failure mode that matters. NO child is
 added to the supervision tree (satisfies the explicit constraint; also keeps the S3 "empty
 InstanceSupervisor" and 0004 shape untouched).
@@ -463,6 +477,9 @@ be down. Not reused. (ELIXIR-DEV: do not couple them.)
 protections:
 * `route_pattern/1`, `platform_scope?/1`, `hash_id/3` each have a local fallback (`"unmatched"`, `true`,
   `"none"`) so a single field failure still yields a line (degraded, not lost, never identifying).
+  `method_token/1` is total over any term (non-binary -> `"OTHER"`) but the READS of `conn.method`,
+  `conn.private` and `conn.assigns.auth_context.tenant_id` have deliberately NO local fallback: a value
+  that is not a `%Plug.Conn{}` falls to the single outer rescue (failure line only).
 * The sampler is wrapped separately: failure -> emit (fail-open), see section 7.
 * The outer failure handler logs NO value from the failed call: not `Exception.message/1`, not
   `inspect(reason)`, not `__STACKTRACE__`, not the conn/ctx/ids. Exception messages are the realistic leak
@@ -595,10 +612,8 @@ Result: one denial produces exactly one line; an attacker cannot create a second
   already hold the key to every stored secret (`Letflow.Secrets`), so no new capability.
 * Test console noise: existing denial tests will now print `authz_deny` warning lines. Harmless; do not
   silence them by changing logger config in this change (see Files). Tests that already assert the exact
-  absence of any log output around a denial would break; ELIXIR-DEV must run
-  `grep -rn 'capture_log' test/ -l` intersected with files exercising denials (`authorize_test.exs`,
-  `platform_*`, `authorization_*`, `tenant_status_test.exs`) and fix any assertion that expects an empty
-  log. (Not exhaustively audited by the designer: 42 test files use `capture_log`; a sample grep for `log == ""` found none.)
+  absence of any log output around a denial would break. This is an explicit BUILD STEP for ELIXIR-DEV, see
+  section 12a.
 
 ---
 
@@ -613,6 +628,18 @@ Result: one denial produces exactly one line; an attacker cannot create a second
   a counter would need a Metrics.Registry family (OBS-02), a cardinality review and a doc update, and the
   issue does not ask for it. Candidate follow-up if wanted: `[:letflow, :authz, :deny]` with `policy` and
   `platform_scope` labels only (never ids).
+
+### 12a. Build steps for ELIXIR-DEV (ordered)
+
+1. Create `lib/letflow/api/authz_deny_log.ex` per sections 2-8.
+2. Edit `lib/letflow/plugs/authorize.ex` (alias, one call in the `:Deny403` branch, moduledoc paragraph).
+3. AUDIT existing tests that capture logs around a denial: run
+   `grep -rln "capture_log" test/` (42 files at design time), intersect with files that exercise denials
+   (`test/letflow/plugs/authorize_test.exs`, `test/letflow/api/platform_*`, `authorization_*`,
+   `tenant_status_test.exs`, router/integration tests), read each hit, and fix any assertion that expects an
+   empty or exact log across a denial (the new `authz_deny` line is expected). Record the files checked in
+   the handoff. Do not change logger config to hide the new line.
+4. Run `mix compile --warnings-as-errors` and the focused tests listed in section 13.
 
 ### Files changed (expected)
 
@@ -653,7 +680,7 @@ user id, `tenant` equals the recomputed HMAC of the tenant id; no `suppressed=`.
 
 (b) Tenant-scope deny: a role lacking a tenant permission (e.g. `TASK_WORKER` on a definitions-write
 route via the full router, `POST /api/v1/definitions`), asserts `policy=DefinitionsCreate`,
-`platform_scope=false`, route `/api/v1/definitions` (exact value taken from the route table), one line.
+`platform_scope=false`, route `/api/v1/definitions/` (VERIFIED: `definitions.ex:248` declares `authz_post "/"`, so the trailing slash survives the `/*glob` strip; any other `"/"` route behaves the same), one line.
 
 (c) `:Unknown` and markers: direct plug call with no `:policy_key` -> `policy=Unknown`,
 `platform_scope=false`; `:UnmatchedPlatformPath` (non-operator caller) -> `platform_scope=true`; through
@@ -689,25 +716,33 @@ string, `nil`, `:get` -> `OTHER`. Assert the captured text has exactly one newli
 denial for a request carrying `\r\n` in the method/path/header (no second `authz_deny` line, no
 injected `caller=`).
 
-(h) Sampling (injectable clock via `:authz_deny_log_clock`, e.g. an Agent/`:atomics`-backed fun; no
-sleeps): window `60`, clock fixed at `1_000`: 5 denials, same caller/policy/tenant, via one conn ->
-exactly ONE line (no `suppressed=`); a DIFFERENT caller -> its own line; a different policy key, same
-caller -> its own line. Advance clock to `1_060`: the next denial emits ONE line with `suppressed=4`;
-the one after that (same second) emits nothing. Advance to `1_120` with no denials in between, next
-denial -> `suppressed` absent (counter was reset by the winner; 0). Clock set BACKWARDS (`500`) -> emits
-(R2). Window `0` -> every denial logs, no `suppressed=`. Invalid window (`-1`, `"x"`) -> behaves as 60.
-Concurrency: spawn 50 `Task`s denying the same key at the same clock value -> `capture_log` contains
-exactly one line, and a following advance-and-deny line carries `suppressed=49`. (A genuine
-`compare_exchange` race test; the line count must be exactly one.) Collision behaviour: a test that finds
-two caller hashes mapping to the same slot is not required; document-only (section 7).
+(h) Sampling (injectable clock via `:authz_deny_log_clock`, e.g. an `:atomics`/Agent-backed fun the test
+advances; no sleeps). Window `60`, `reset/0` in setup. Every expected value below follows the section-7
+algorithm exactly: a withheld denial increments the slot counter; the next EMITTED line for that slot
+carries `suppressed=<counter>` and zeroes it. "K" = caller A, tenant T, policy `TenantsManage`.
+1. Clock `1000`: denial K#1 -> EMIT, no `suppressed=` (slot never used, counter 0). Denials K#2..K#5 at
+   `1000` -> no line (counter 4). A DIFFERENT caller at `1000` -> its own line. Same caller, DIFFERENT
+   policy key at `1000` -> its own line. Captured lines so far: exactly 3.
+2. Clock `1059` (`59 < 60`): K#6 -> no line (counter 5). This pins the window boundary.
+3. Clock `1060` (`60 >= 60`): K#7 -> EMIT with `suppressed=5` (counter 5 -> 0, last = 1060). K#8 at `1060`
+   -> no line (counter 1).
+4. Clock `1120`: K#9 -> EMIT with `suppressed=1` (counter 1 -> 0, last = 1120).
+5. Clock `1180`: K#10 -> EMIT with NO `suppressed=` (counter was 0). This is the "truly zero withheld"
+   window.
+6. Clock set BACKWARDS to `500` (`now < last`): K#11 -> EMIT, no `suppressed=` (R2).
+Window `0` (fresh `reset/0`): 5 denials of K -> 5 lines, none with `suppressed=`. Invalid windows (`-1`,
+`"x"`, `1.5`) behave as 60 (repeat step 1: one line, four withheld).
+Concurrency: after `reset/0`, clock `1000`, spawn 50 `Task`s that each deny K once and await all:
+`capture_log` contains EXACTLY ONE `authz_deny` line (no `suppressed=`; one CAS winner, 49 counted).
+Then clock `1060` and one more K denial: that line carries `suppressed=49`. Collision behaviour is
+document-only (section 7) and is not tested.
 
 (i) Never raises / fail-safe: (1) master key absent or non-32-byte binary in Application env ->
 response still the same 403, one line emitted, plus exactly one "authz deny log hash key fallback in use"
 notice per boot (a second denial logs no second notice), notice contains no key material; (2) non-binary
 `user_id` (e.g. `12_345`) in `AccessContext` -> `caller=none`, 403 unchanged; (3) a clock fun that raises
 `RuntimeError` whose MESSAGE contains the sentinel `"SENTINEL-USER-ID-777"` -> sampler fail-open: the
-denial line IS emitted, the response unchanged, and the sentinel does not appear in the captured log; (4)
-force the outer failure path by calling `AuthzDenyLog.log_denial(:not_a_conn, ctx, :X)`: returns `:ok`,
+denial line IS emitted, the response unchanged, and the sentinel does not appear in the captured log; (4) force the outer failure path (deterministic because `conn.method`, `conn.private`, and the `auth_context`/tenant reads have NO per-field fallback: only `route_pattern/1`, `platform_scope?/1` and `hash_id/3` degrade locally, so a non-conn argument reaches the single outer `rescue`) by calling `AuthzDenyLog.log_denial(:not_a_conn, ctx, :X)`: returns `:ok`,
 logs only the constant `authz_deny_log_failed class=error exception=Elixir.FunctionClauseError`
 (or whatever module the implementation raises, asserted against the same regexp), once per boot per
 class/module (call twice, one line), and the line contains no id, no `inspect` of the args.

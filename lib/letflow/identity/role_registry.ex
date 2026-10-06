@@ -54,6 +54,27 @@ defmodule Letflow.Identity.RoleRegistry do
   end
 
   @doc """
+  REQ-447 (design section 3.6b): the id of the group the `PLATFORM_ADMIN`
+  binding (`kind == :platform_role`) points to in `opts[:prefix]`'s schema, or
+  `:none` when there is no such binding. Resolved by BINDING, never by group name.
+  """
+  @spec platform_admin_group_id(opts :: [prefix: String.t()]) :: {:ok, Ecto.UUID.t()} | :none
+  def platform_admin_group_id(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    query =
+      from(t in TenantRole,
+        where: t.name == "PLATFORM_ADMIN" and t.kind == :platform_role,
+        select: t.group_id
+      )
+
+    case Repo.one(query, prefix: prefix) do
+      nil -> :none
+      group_id -> {:ok, group_id}
+    end
+  end
+
+  @doc """
   Inserts or updates the `(name -> group_id)` binding for the given `kind` domain
   (ISS-0774): validates `name`'s format, `kind == :platform_role`'s membership in
   `Letflow.Api.Authorization.roles/0`'s seven literal strings, and `group_id`'s UUID

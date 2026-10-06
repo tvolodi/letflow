@@ -393,21 +393,27 @@ defmodule Letflow.Routers.Identity do
         Response.not_found(conn)
 
       {:ok, _existing} ->
-        case Validation.validate(@patch_schema, conn.body_params) do
-          {:errors, field_errors} ->
-            Response.send_problem(conn, Validation.problem(field_errors))
+        with_platform_admin_member_guard(conn, id, opts, fn ->
+          do_patch(conn, id, opts)
+        end)
+    end
+  end
 
-          {:ok, attrs} ->
-            case Identity.update_user_profile(id, attrs, opts) do
-              {:ok, user} -> Response.ok(conn, user_map(user))
-              {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
-              {:error, :not_found} -> Response.not_found(conn)
-              {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
-              {:error, {:login_directory, _reason}} -> Response.internal_error(conn)
-              {:error, :tenant_id_required} -> Response.internal_error(conn)
-              {:error, :invalid_tenant_id} -> Response.internal_error(conn)
-              {:error, :tenant_prefix_mismatch} -> Response.internal_error(conn)
-            end
+  defp do_patch(conn, id, opts) do
+    case Validation.validate(@patch_schema, conn.body_params) do
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      {:ok, attrs} ->
+        case Identity.update_user_profile(id, attrs, opts) do
+          {:ok, user} -> Response.ok(conn, user_map(user))
+          {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
+          {:error, :not_found} -> Response.not_found(conn)
+          {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
+          {:error, {:login_directory, _reason}} -> Response.internal_error(conn)
+          {:error, :tenant_id_required} -> Response.internal_error(conn)
+          {:error, :invalid_tenant_id} -> Response.internal_error(conn)
+          {:error, :tenant_prefix_mismatch} -> Response.internal_error(conn)
         end
     end
   end
@@ -429,23 +435,29 @@ defmodule Letflow.Routers.Identity do
         Response.not_found(conn)
 
       {:ok, _existing} ->
-        case Validation.validate(@status_schema, conn.body_params) do
-          {:errors, field_errors} ->
-            Response.send_problem(conn, Validation.problem(field_errors))
+        with_platform_admin_member_guard(conn, id, opts, fn ->
+          do_status_update(conn, id, opts)
+        end)
+    end
+  end
 
-          {:ok, %{"status" => status_string}} ->
-            status = String.to_existing_atom(status_string)
+  defp do_status_update(conn, id, opts) do
+    case Validation.validate(@status_schema, conn.body_params) do
+      {:errors, field_errors} ->
+        Response.send_problem(conn, Validation.problem(field_errors))
 
-            case Identity.update_user_status(id, status, opts) do
-              {:ok, user} -> Response.ok(conn, user_map(user))
-              {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
-              {:error, :not_found} -> Response.not_found(conn)
-              {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
-              {:error, {:login_directory, _reason}} -> Response.internal_error(conn)
-              {:error, :tenant_id_required} -> Response.internal_error(conn)
-              {:error, :invalid_tenant_id} -> Response.internal_error(conn)
-              {:error, :tenant_prefix_mismatch} -> Response.internal_error(conn)
-            end
+      {:ok, %{"status" => status_string}} ->
+        status = String.to_existing_atom(status_string)
+
+        case Identity.update_user_status(id, status, opts) do
+          {:ok, user} -> Response.ok(conn, user_map(user))
+          {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
+          {:error, :not_found} -> Response.not_found(conn)
+          {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
+          {:error, {:login_directory, _reason}} -> Response.internal_error(conn)
+          {:error, :tenant_id_required} -> Response.internal_error(conn)
+          {:error, :invalid_tenant_id} -> Response.internal_error(conn)
+          {:error, :tenant_prefix_mismatch} -> Response.internal_error(conn)
         end
     end
   end
@@ -503,9 +515,62 @@ defmodule Letflow.Routers.Identity do
   # ── DELETE /groups/:id (design §3.4) ────────────────────────────────────
 
   defp handle_delete_group(conn, id, opts) do
-    case Identity.delete_group(id, opts) do
-      :ok -> Response.no_content(conn)
-      {:error, :not_found_or_has_members} -> Response.not_found(conn)
+    with_platform_admin_group_guard(conn, id, opts, fn ->
+      case Identity.delete_group(id, opts) do
+        :ok -> Response.no_content(conn)
+        {:error, :not_found_or_has_members} -> Response.not_found(conn)
+      end
+    end)
+  end
+
+  # ── REQ-447 platform-escalation guards (design section 3.6b) ────────────
+  #
+  # All decided by platform scope RECOMPUTED from the DB-resolved auth_context
+  # (never a request value, never a stored flag); the fixed 403 body names no
+  # role. A guard runs after the permission gate and before any write.
+
+  defp platform_scope?(conn) do
+    PlatformTenant.scope_facts_for(conn.assigns.auth_context).platform_scope?
+  end
+
+  # :UsersGroupsRolesManage in this tenant, on the caller's RECOMPUTED context
+  # (roles parsed from the DB-resolved auth_context; platform_tenant? recomputed).
+  defp users_groups_roles_manage?(conn) do
+    auth_context = conn.assigns.auth_context
+
+    Authorization.has_permission_in_scope?(
+      Authorization.roles_from_strings(Map.get(auth_context, :roles, [])),
+      :UsersGroupsRolesManage,
+      PlatformTenant.platform_tenant?(Map.get(auth_context, :tenant_id))
+    )
+  end
+
+  defp forbid_insufficient(conn), do: Response.forbidden(conn, "insufficient permissions")
+
+  # `group_id` is the group bound to PLATFORM_ADMIN (by binding id, not name).
+  defp with_platform_admin_group_guard(conn, group_id, opts, fun) do
+    if not platform_scope?(conn) and platform_admin_group?(group_id, opts) do
+      forbid_insufficient(conn)
+    else
+      fun.()
+    end
+  end
+
+  defp platform_admin_group?(group_id, opts) when is_binary(group_id) do
+    case RoleRegistry.platform_admin_group_id(opts) do
+      {:ok, bound_id} -> String.downcase(to_string(bound_id)) == String.downcase(group_id)
+      :none -> false
+    end
+  end
+
+  defp platform_admin_group?(_group_id, _opts), do: false
+
+  # `user_id` is a member of the group bound to PLATFORM_ADMIN.
+  defp with_platform_admin_member_guard(conn, user_id, opts, fun) do
+    if not platform_scope?(conn) and Identity.platform_admin_member?(user_id, opts) do
+      forbid_insufficient(conn)
+    else
+      fun.()
     end
   end
 
@@ -523,6 +588,12 @@ defmodule Letflow.Routers.Identity do
   ]
 
   defp handle_add_member(conn, group_id, opts) do
+    with_platform_admin_group_guard(conn, group_id, opts, fn ->
+      do_add_member(conn, group_id, opts)
+    end)
+  end
+
+  defp do_add_member(conn, group_id, opts) do
     case Validation.validate(@add_member_schema, conn.body_params) do
       {:errors, field_errors} ->
         Response.send_problem(conn, Validation.problem(field_errors))
@@ -615,10 +686,12 @@ defmodule Letflow.Routers.Identity do
   # ── DELETE /groups/:id/members/:user_id (design §3.6) ───────────────────
 
   defp handle_remove_member(conn, group_id, user_id, opts) do
-    case Identity.remove_group_member(group_id, user_id, opts) do
-      :ok -> Response.no_content(conn)
-      {:error, :group_not_found} -> Response.not_found(conn)
-    end
+    with_platform_admin_group_guard(conn, group_id, opts, fn ->
+      case Identity.remove_group_member(group_id, user_id, opts) do
+        :ok -> Response.no_content(conn)
+        {:error, :group_not_found} -> Response.not_found(conn)
+      end
+    end)
   end
 
   # ── POST /tokens (design §6.1, AC1/AC2/AC3, INV-4) ──────────────────────
@@ -634,35 +707,46 @@ defmodule Letflow.Routers.Identity do
       {:errors, field_errors} ->
         Response.send_problem(conn, Validation.problem(field_errors))
 
-      {:ok, %{"user_id" => user_id, "roles" => roles} = attrs} ->
-        case parse_expires_at(Map.get(attrs, "expires_at")) do
-          {:error, :expires_at_invalid} ->
-            Response.unprocessable(conn, "expires_at_invalid")
+      {:ok, %{"roles" => roles} = attrs} ->
+        # REQ-447 design section 3.6b (F1 / INV-10): issuing a token that carries
+        # PLATFORM_ADMIN is a platform-scope action, decided on recomputed scope
+        # BEFORE Identity.create_token/3 (which stays unchanged); fixed 403 body.
+        if Enum.any?(roles, &Authorization.platform_admin_name?/1) and not platform_scope?(conn) do
+          forbid_insufficient(conn)
+        else
+          do_create_token(conn, attrs, opts)
+        end
+    end
+  end
 
-          {:ok, parsed_expires_at} ->
-            case Identity.create_token(
-                   user_id,
-                   %{roles: roles, expires_at: parsed_expires_at},
-                   opts
-                 ) do
-              {:ok, %{token: token, plaintext: plaintext}} ->
-                Response.created(conn, token_created_map(token, plaintext))
+  defp do_create_token(conn, %{"user_id" => user_id, "roles" => roles} = attrs, opts) do
+    case parse_expires_at(Map.get(attrs, "expires_at")) do
+      {:error, :expires_at_invalid} ->
+        Response.unprocessable(conn, "expires_at_invalid")
 
-              {:error, :user_not_found} ->
-                Response.not_found(conn)
+      {:ok, parsed_expires_at} ->
+        case Identity.create_token(
+               user_id,
+               %{roles: roles, expires_at: parsed_expires_at},
+               opts
+             ) do
+          {:ok, %{token: token, plaintext: plaintext}} ->
+            Response.created(conn, token_created_map(token, plaintext))
 
-              {:error, :invalid_role_set} ->
-                Response.unprocessable(conn, "roles_invalid")
+          {:error, :user_not_found} ->
+            Response.not_found(conn)
 
-              {:error, :expires_at_in_past} ->
-                Response.unprocessable(conn, "expires_at_in_past")
+          {:error, :invalid_role_set} ->
+            Response.unprocessable(conn, "roles_invalid")
 
-              {:error, %Ecto.Changeset{}} ->
-                Response.unprocessable(conn, "validation failed")
+          {:error, :expires_at_in_past} ->
+            Response.unprocessable(conn, "expires_at_in_past")
 
-              {:error, {:transaction_failed, _exception}} ->
-                Response.internal_error(conn)
-            end
+          {:error, %Ecto.Changeset{}} ->
+            Response.unprocessable(conn, "validation failed")
+
+          {:error, {:transaction_failed, _exception}} ->
+            Response.internal_error(conn)
         end
     end
   end
@@ -687,10 +771,16 @@ defmodule Letflow.Routers.Identity do
   # ── DELETE /tokens/:id (design §6.1, AC4) ────────────────────────────────
 
   defp handle_revoke_token(conn, id, opts) do
-    case Identity.revoke_token(id, opts) do
-      {:ok, token} -> Response.ok(conn, token_map(token))
-      {:error, :not_found} -> Response.not_found(conn)
-      {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
+    # REQ-447 design section 3.6b (M1): revoking a token that carries
+    # PLATFORM_ADMIN needs recomputed platform scope; checked before any write.
+    if not platform_scope?(conn) and Identity.token_carries_platform_admin?(id, opts) do
+      forbid_insufficient(conn)
+    else
+      case Identity.revoke_token(id, opts) do
+        {:ok, token} -> Response.ok(conn, token_map(token))
+        {:error, :not_found} -> Response.not_found(conn)
+        {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
+      end
     end
   end
 
@@ -721,14 +811,21 @@ defmodule Letflow.Routers.Identity do
         Response.send_problem(conn, Validation.problem(field_errors))
 
       {:ok, %{"name" => name, "kind" => kind_string, "group_id" => group_id}} ->
-        if Authorization.platform_admin_name?(name) and
-             not PlatformTenant.scope_facts_for(conn.assigns.auth_context).platform_scope? do
+        cond do
           # ISS-0993 hardening H1 (design section 10): binding the PLATFORM_ADMIN
           # name is a platform-scope action. One shared predicate, any `kind`,
           # decided BEFORE upsert_role/4; fixed body that names no role.
-          Response.forbidden(conn, "insufficient permissions")
-        else
-          upsert_role(conn, name, kind_string, group_id, opts)
+          Authorization.platform_admin_name?(name) and not platform_scope?(conn) ->
+            forbid_insufficient(conn)
+
+          # REQ-447 H2 (design section 3.6): binding ANY built-in role name, of
+          # any `kind` (upsert_role/4 overwrites kind and group_id on conflict),
+          # needs :UsersGroupsRolesManage in this tenant, BEFORE upsert_role/4.
+          Authorization.builtin_role_name?(name) and not users_groups_roles_manage?(conn) ->
+            forbid_insufficient(conn)
+
+          true ->
+            upsert_role(conn, name, kind_string, group_id, opts)
         end
     end
   end

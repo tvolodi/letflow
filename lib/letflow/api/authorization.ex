@@ -604,6 +604,23 @@ defmodule Letflow.Api.Authorization do
 
   def platform_admin_name?(_other), do: false
 
+  @doc """
+  REQ-447 H2 (design section 3.6): true iff `name` is the name of ANY role of
+  `roles/0` (so `TENANT_ADMIN`, `PLATFORM_ADMIN` and any later built-in), compared
+  after the same stricter trim + upcase fold as `platform_admin_name?/1`, or when
+  `platform_admin_name?/1` is true. A non-binary `name` is `false`. ONE predicate
+  for the `POST /roles` built-in-name guard.
+  """
+  @spec builtin_role_name?(term()) :: boolean()
+  def builtin_role_name?(name) when is_binary(name) do
+    folded = name |> String.trim() |> String.upcase()
+
+    platform_admin_name?(name) or
+      Enum.any?(@roles, &(Atom.to_string(&1) == folded))
+  end
+
+  def builtin_role_name?(_other), do: false
+
   defp role_from_string("PLATFORM_ADMIN"), do: :PLATFORM_ADMIN
   defp role_from_string("PROCESS_DESIGNER"), do: :PROCESS_DESIGNER
   defp role_from_string("PROCESS_OPERATOR"), do: :PROCESS_OPERATOR

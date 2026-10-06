@@ -4620,7 +4620,7 @@ is worth periodically asking "has this logged condition ever actually cleared on
 anywhere, or does it only ever get logged" -- if the latter, the skip is masking a gap, not
 guarding one.
 
-## Two PRs in a row failed CI on a repo-wide "no tracked file assigns a secret literal" guard that a local scoped run never executed (2026-10-06, ORCH/ELIXIR-DEV, Q-958 / REQ-444, earlier Q-956 / #2224)
+## Two PRs in a row failed CI on a repo-wide "no tracked file assigns a secret literal" guard that a local scoped run never executed (2026-10-06, ORCH/ELIXIR-DEV, Q-958 / REQ-444, earlier PR #2224)
 
 A test that boots a subprocess with a realistic environment is tempting to write with literal
 placeholder values for the secret-shaped variables (pepper, SMTP username/password). The repo has

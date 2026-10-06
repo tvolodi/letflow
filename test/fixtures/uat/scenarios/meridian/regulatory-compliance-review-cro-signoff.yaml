@@ -1,0 +1,96 @@
+# Authored by BA-MERIDIAN (ISS-1016 / Q-998, process-audit PA-MERIDIAN-004, checklist D2).
+# Written against test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json on main.
+# Covers the human tasks risk-evaluation (normal completion) and findings-sign-off (role-cro):
+# evidence-collection -> risk-evaluation -> severity-routing (medium) -> findings-sign-off -> archive-review.
+---
+id: meridian-regulatory-compliance-review-cro-signoff
+company_id: meridian
+process_id: proc-meridian-regulatory-compliance-review
+title: A compliance review with medium findings is evaluated in time and signed off by the CRO
+version: "1.0"
+tags: [happy_path, regulatory]
+
+description: >
+  A periodic compliance review of the loan portfolio is run. The compliance officer
+  collects the evidence, the risk manager completes the risk evaluation inside the 21
+  day limit and rates the highest finding as medium, so no remediation is needed. The
+  Chief Risk Officer signs the findings off and the review is archived and closed. This
+  checks that a normally completed review reaches the CRO and ends closed.
+
+actors:
+  compliance_officer: actor-meridian-claudia
+  risk_manager: actor-meridian-miriam
+  cro: actor-meridian-thomas
+
+preconditions:
+  - description: Regulatory compliance review process definition is active
+    check: process_definition_active
+  - description: No pending compliance review instances for Meridian
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: compliance_officer
+    action: Initiates a periodic compliance review for the 2026 Q2 loan portfolio and completes the evidence collection
+    via: api
+    input:
+      review_id: sim-meridian-review-002
+      review_type: periodic
+      portfolio_ref: "MER-PORTFOLIO-2026-Q2"
+      review_period: "2026-Q2"
+      initiator_actor_id: actor-meridian-claudia
+      documents_uploaded: true
+    produces:
+      instance_id: "the process instance ID for this compliance review"
+    sla_context:
+      expected_within_hours: 168
+
+  - step: 2
+    actor: risk_manager
+    action: Completes the risk evaluation of the evidence well within the 21 days, rating the highest finding as medium
+    via: api
+    input:
+      highest_severity: medium
+      risk_notes: "Two files with outdated income proofs; no systemic issue."
+    sla_context:
+      expected_within_hours: 240
+
+  - step: 3
+    actor: cro
+    action: Reviews the findings and signs them off
+    via: api
+    input:
+      cro_decision: sign_off
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      A medium finding goes straight to the CRO for sign-off and does not start a
+      remediation sub-process
+    verification:
+      method: task_assigned
+      detail: >
+        task 'findings-sign-off' assigned to role-cro (actor-meridian-thomas); no
+        'remediation-subprocess' started; no BaFin regulatory notice filed
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Findings are signed off by the wrong person or are needlessly escalated, so the
+        bank's review record is not trustworthy for the regulator.
+      suggested_action: route_to_wf03
+
+  - id: EO-002
+    description: After the CRO signs off, the review is archived and the process ends closed
+    verification:
+      method: instance_state
+      detail: instance status == COMPLETED, end node is 'end-closed', archive-review executed, reopen-review not executed
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        A signed-off review is never archived, so the regulator cannot be shown a
+        completed review for the period.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel instance sim-meridian-review-002 if not already completed

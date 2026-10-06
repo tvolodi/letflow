@@ -1,0 +1,109 @@
+# Authored by BA-MERIDIAN (ISS-1016 / Q-998, process-audit PA-MERIDIAN-004, checklist D2).
+# Written against test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json on main.
+# Covers the human task ceo-override (role-ceo): findings-sign-off -> timeout-findings-sign-off ->
+# cro-sign-off-timeout -> ceo-override -> archive-review.
+# DEPENDENCY: findings-sign-off carries only a timeout edge, no escalation_timer_duration, in the
+# fixture on main (ISS-0995 / Q-995 owns the missing timers). If the timer is not armed, step 3 cannot
+# be forced with advance-timer and the scenario is BLOCKED there, not passed.
+---
+id: meridian-regulatory-compliance-review-ceo-override
+company_id: meridian
+process_id: proc-meridian-regulatory-compliance-review
+title: When the CRO does not sign off the findings, the CEO decides
+version: "1.0"
+tags: [escalation, timeout, regulatory]
+
+description: >
+  A periodic compliance review reaches CRO sign-off with medium findings, but the CRO
+  does not act in time. The sign-off times out, the matter is escalated, and the CEO
+  decides: here the CEO signs the findings off and the review is archived and closed.
+  This checks that an unanswered sign-off is not left open and that the CEO's
+  decision is what closes the review.
+
+actors:
+  compliance_officer: actor-meridian-claudia
+  risk_manager: actor-meridian-miriam
+  cro: actor-meridian-thomas
+  ceo: actor-meridian-eva
+
+preconditions:
+  - description: Regulatory compliance review process definition is active
+    check: process_definition_active
+  - description: No pending compliance review instances for Meridian
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: compliance_officer
+    action: Initiates a periodic compliance review for the 2026 Q3 loan portfolio and completes the evidence collection
+    via: api
+    input:
+      review_id: sim-meridian-review-003
+      review_type: periodic
+      portfolio_ref: "MER-PORTFOLIO-2026-Q3"
+      review_period: "2026-Q3"
+      initiator_actor_id: actor-meridian-claudia
+      documents_uploaded: true
+    produces:
+      instance_id: "the process instance ID for this compliance review"
+
+  - step: 2
+    actor: risk_manager
+    action: Completes the risk evaluation and rates the highest finding as medium
+    via: api
+    input:
+      highest_severity: medium
+      risk_notes: "Documentation gaps on three files; no systemic issue."
+
+  - step: 3
+    actor: cro
+    action: >
+      Does not act on the findings sign-off. The task stays open until the
+      sign-off time limit is reached.
+    via: api
+    note: >
+      No action is taken on purpose. UAT-RUNNER then advances the findings-sign-off
+      timer with POST /api/v1/instances/{instance_id}/advance-timer rather than waiting.
+    input:
+      advance_timer_node: findings-sign-off
+
+  - step: 4
+    actor: ceo
+    action: Receives the escalated findings and signs them off
+    via: gui
+    input:
+      ceo_decision: sign_off
+      ceo_notes: "Findings are minor; signed off in the CRO's absence."
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      When the CRO does not sign off in time, the CRO's task is no longer actionable
+      and a ceo-override task is created for the CEO
+    verification:
+      method: task_assigned
+      detail: >
+        after the timeout: task 'ceo-override' assigned to role-ceo (actor-meridian-eva);
+        'findings-sign-off' is no longer open
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A review whose CRO is unavailable stalls and the bank misses its reporting
+        deadline to the regulator, with nobody told.
+      suggested_action: route_to_wf03
+
+  - id: EO-002
+    description: After the CEO signs off, the review is archived and the process ends closed
+    verification:
+      method: instance_state
+      detail: instance status == COMPLETED, end node is 'end-closed', archive-review executed, reopen-review not executed
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        The CEO's sign-off does not close the review, so it stays open or is reopened
+        against the CEO's decision.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel instance sim-meridian-review-003 if not already completed

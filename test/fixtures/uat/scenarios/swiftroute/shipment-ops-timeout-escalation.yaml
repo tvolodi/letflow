@@ -7,6 +7,12 @@
 # synthetic fixtures under test/fixtures/simulation/<company>/scenarios/ instead. Do
 # not edit the ported content below except to keep it byte-identical to a re-pull of
 # the same commit.
+#
+# EXCEPTION (ISS-1009(a) / Q-991, BA-SWIFTROUTE, process-audit PA-SWIFTROUTE-003): aligned with the
+# deployed definition test/fixtures/qa/swiftroute_process_definition.json, which is the source of
+# truth: ops-review has escalation_timer_duration PT2H (not 4 hours) with escalation_role role-ceo,
+# and the escalated task ceo-approval reads variables.ceo_decision (not capacity_decision).
+# No longer byte-identical to the ported source for those three points only.
 ---
 id: swiftroute-shipment-ops-timeout-escalation
 company_id: swiftroute
@@ -17,7 +23,7 @@ tags: [escalation, timeout]
 
 description: >
   When an operations manager does not act on a shipment approval request
-  within 4 hours, the process must automatically escalate to the CEO.
+  within 2 hours, the process must automatically escalate to the CEO.
   This scenario verifies the timer escalation path works correctly —
   the CEO receives the escalated task and can approve or reject directly,
   without waiting for the ops manager. This is a critical safety mechanism
@@ -51,7 +57,7 @@ steps:
   - step: 2
     actor: system
     action: >
-      The 4-hour operations manager review timer fires.
+      The 2-hour operations manager review timer fires.
       UAT-RUNNER advances the timer by injecting a timer-fire event
       rather than waiting 4 real hours.
     via: api
@@ -66,12 +72,12 @@ steps:
     action: Receives the escalated task and approves the shipment
     via: gui
     input:
-      capacity_decision: approve
+      ceo_decision: approve
 
 expected_outcomes:
   - id: EO-001
     description: >
-      After the 4-hour timer fires, the CEO (not the operations manager)
+      After the 2-hour timer fires, the CEO (not the operations manager)
       receives an escalated approval task
     verification:
       method: task_assigned

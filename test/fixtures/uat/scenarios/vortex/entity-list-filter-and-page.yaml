@@ -1,3 +1,9 @@
+# ISS-1004 / Q-986 (BA-VORTEX, process-audit PA-VORTEX-004): this is an ENTITY-LIST scenario,
+# not a process scenario. Its six steps filter and page batch records and match no step of
+# the supplier-quality-deviation process, so it no longer claims one (process_id: n/a; the
+# proc-vortex-quality-deviation alias sidecar that only existed for it is removed). It does
+# NOT count as coverage of any vortex process definition.
+#
 # Ported verbatim from R-Co tests/simulation/scenarios/vortex-entity-list-filter-and-page.yaml
 # (https://github.com/tvolodi/R-Co, commit d19bfec4a9ec492345346bfccd8e389bd9cd92db).
 # Byte-identical below this header except for this comment block itself and the
@@ -11,7 +17,7 @@
 id: vortex-entity-list-filter-and-page
 company_id: vortex
 platform_workflow: PW-10
-process_id: proc-vortex-quality-deviation
+process_id: n/a
 title: The quality manager filters the batch list to find every quarantined batch from one supplier
 version: "1.0"
 tags: [happy_path, regression]

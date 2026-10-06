@@ -59,6 +59,11 @@ actors:
     builtin_roles: [TASK_WORKER]
     routing_roles: []
     note: "seed_meridian_persona_actors.sh PERSONAS line (no routing role); TASK_WORKER implicit per script header"
+  actor-meridian-oliver:
+    tenant: meridian
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_meridian_persona_actors.sh PERSONAS line (actor-meridian-oliver|, no routing role; dept-risk member per org_structure.yaml); TASK_WORKER implicit per script header. Process-audit WF05-BASELINE3 PA-MERIDIAN-009 / ISS-1006 / Q-988: seeded account now recorded in the roster"
 
   actor-swiftroute-lena:
     tenant: swiftroute
@@ -107,18 +112,40 @@ actors:
     routing_roles: [role-procurement-manager]
     note: "seed_vortex_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
 
+  actor-bilimbaga-candidate:
+    tenant: bilimbaga
+    builtin_roles: [CANDIDATE]
+    routing_roles: []
+    note: "Seeded user candidate-user in realm bilimbaga (ai-dala-infra/scripts/qa-login.sh candidate-user; ISS-0690, ISS-0718, ISS-0725). CANDIDATE only, least privilege per docs/roles.md: lists installed modules; exam-session actions come from the exam module's own grants; no routing role, no TASK_WORKER."
+
+  actor-vortex-dirk:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-ceo]
+    note: "seed_vortex_persona_actors.sh PERSONAS line (actor-vortex-dirk|role-ceo); TASK_WORKER implicit per script header. Same entry as ISS-1006 / Q-988 (vortex D3); added here so the CEO-escalation scenarios pass SCHEMA-7"
+  actor-vortex-max:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_vortex_persona_actors.sh PERSONAS line (actor-vortex-max|, no routing role); TASK_WORKER implicit per script header. Process-audit WF05-BASELINE3 PA-VORTEX-008 / ISS-1006 / Q-988: seeded account now recorded in the roster"
+  actor-vortex-claudia:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_vortex_persona_actors.sh PERSONAS line (actor-vortex-claudia|, no routing role); TASK_WORKER implicit per script header. Process-audit WF05-BASELINE3 PA-VORTEX-008 / ISS-1006 / Q-988: seeded account now recorded in the roster"
+
 # Actors whose built-in role could not be established. A recorded gap, not a pass for SCHEMA-8..10.
 unresolved:
+  actor-swiftroute-hans:
+    searched:
+      - "scripts/seed_swiftroute_persona_actors.sh: persona list is lena, marco, alice only; hans absent, and no role-accountant group is seeded"
+      - "test/fixtures/simulation/swiftroute/org_structure.yaml: actor-swiftroute-hans (Hans Richter) is in dept-finance, the person the finance-estimate task (role-accountant) is meant for"
+      - "used only in swiftroute/driver-incident-assess-and-estimate.yaml; resolving it is ISS-1011 / Q-993 (swiftroute D3)"
   actor-swiftroute-tobias:
     searched:
       - "scripts/seed_swiftroute_persona_actors.sh: persona list is lena, marco, alice only; tobias absent"
       - "priv/keycloak/realms/bpm-default.json: no such user"
       - "grep -r actor-swiftroute-tobias scripts priv: no seed or realm hit; used only in swiftroute/shipment-ops-timeout-escalation.yaml"
-  actor-bilimbaga-candidate:
-    searched:
-      - "scripts/seed_*_persona_actors.sh: no bilimbaga seed script exists"
-      - "priv/keycloak/realms/bpm-default.json: no such user (the realm defines a CANDIDATE role but no actor account)"
-      - "grep -r actor-bilimbaga-candidate scripts priv: no hit; scripts/uat_preflight.sh only labels candidate-like actors heuristically"
 
 # Scenario id -> reason a platform-tenant actor may appear outside scope platform.
 platform_actor_allowed:

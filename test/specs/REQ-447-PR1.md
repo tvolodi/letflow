@@ -84,3 +84,88 @@ role_registry.ex, `b4e75ae4b90b` tenant_status.ex, prefixes of SHA-256).
 * Not covered by Part A: migration module and mix task (AC5), `POST /roles` built-in-name guard (H2), platform-escalation guards (3.6b) and the
   `POST /tokens` router check, the realm-side infra contract beyond `bpm-default.json`. AC4 and the PR 2 removal tests are PR 2.
 * `test/specs` and test names: ExUnit atom limit (255 characters) was hit three times while renaming; names were shortened rather than the descriptions dropped.
+
+---
+
+# PART B: migration (`TenantAdminMigration.run/1`, `verify/0`), `mix letflow.migrate_tenant_admins`, `ApiToken.roles_rewrite_changeset/2` (AC5)
+
+Design: `lib/letflow/design/req447-tenant-admin-role.md` section 3.8 and `lib/letflow/design/req447-infra-realm-mapping.md` section 8 (runbook).
+Part A above is unchanged. PART C (H2, 3.6b guards, `POST /tokens`) is still not covered.
+
+New files:
+
+* `test/letflow/identity/tenant_admin_migration_test.exs` (36 tests, real Postgres, `async: false`)
+* `test/mix/tasks/letflow.migrate_tenant_admins_test.exs` (9 tests: 4 in-process, 5 in a child `mix` process, `async: false`)
+* `test/support/tenant_admin_migration_fixture.ex` (shared fixtures: legacy-state tenants, pinned operator tenant, row snapshot, registration isolation)
+
+## Fixture facts that shape the tests
+
+* `TenantFixture.provisioned_tenant!/1` switches the sandbox to `:auto`, so fixture data is COMMITTED and removed by the fixture teardown.
+  Consequence 1: a child `mix` process sees the test's tenants, so the exit-status paths are tested end to end through the real task.
+  Consequence 2: the sweep covers every committed registration. The shared test DB holds a leftover throwaway template-build registration
+  (`tenant_template_build_...`) that always fails the sweep (`failed=1`), which would make every task run exit 1 (and `System.halt` the VM in
+  process). `operator_tenant!/0` therefore deletes the other registrations after the first fixture call and restores them in `on_exit`
+  (verified present again afterwards). The sandbox cannot do this, because its transaction is discarded by the `:auto` switch.
+* The Mix task halts on a refusal or a failed tenant, which would kill the test VM. Those paths run in a child process
+  (`System.cmd(mix, ["letflow.migrate_tenant_admins" | args], env: MIX_ENV, MIX_TEST_PARTITION, LETFLOW_PLATFORM_TENANT_ID)`); the pin is the
+  child's environment variable exactly as in production. Non-halting paths run in process through `Mix.Shell.Process`.
+
+## Criterion to test mapping
+
+| Criterion | Test(s) | Why it exists |
+|---|---|---|
+| AC5 two PLATFORM_ADMIN members + tokens end in TENANT_ADMIN, no PLATFORM_ADMIN binding | "two PLATFORM_ADMIN members and tokens end as TENANT_ADMIN members..." (2 users, 5 tokens: PA only, PA+PROCESS_DESIGNER+TENANT_ADMIN, PROCESS_DESIGNER+PA, a revoked PA token, a bystander token) | Exact report keys and counts; members in the TENANT_ADMIN group; binding kind; legacy group and members KEPT; every token column except `roles` unchanged (hash, name, user, expiry, revoked_at, last_used_at, inserted_at); order kept and de-duplication; bystander untouched |
+| AC5 token plaintext keeps working | same test, and the `roles_rewrite_changeset/2` test: `changes == %{roles: [...]}` and the updated row equals the original except `roles` | The narrow changeset is the reason the plaintext token survives |
+| AC5 second run changes nothing | "a second run changes nothing": whole report `migrated == [] and failed == [] and unchanged == [a]`, full row snapshot equal, one `role_binding.removed` entry in total; a member added AFTER the first run to the inert legacy group is not promoted | Idempotency, and the "copy is gated on the binding" rule |
+| AC5 platform tenant untouched | snapshot of P equal after the run, P in no report list; `platform_tenant_binding_ensured` reports false then true and the migration never creates the binding | Decision 0046 D2: the operator tenant is never swept |
+| Existing TENANT_ADMIN binding | "an existing TENANT_ADMIN binding keeps its group": the copy targets the custom-named group, only the missing member is copied (one `group_member.copied` entry) | Design step 2 note |
+| Empty tenant | binding created with zero members, `tenant_admin_member_count_after == 0` (lockout surfaced as 0) | Design step 6 |
+| Per-tenant transaction, sweep continues | routing role named TENANT_ADMIN gives `failed` with `:role_name_taken_by_routing_role`, keys exactly `[:reason, :schema_name, :tenant_id]`, rows unchanged, the next tenant converted (the failing tenant is created first so it is processed first); routing role named PLATFORM_ADMIN gives `:platform_admin_name_is_routing_role`, untouched; a failure AFTER earlier writes (audit lock table dropped, so the binding and the copy are already written when it raises) rolls the tenant back entirely and the next tenant still converts | The first two fail before any write; the third proves the transaction really spans the writes |
+| Preconditions refuse with the exact tag and ZERO writes | pin unset, non-UUID pin, unregistered UUID, wrong slug, missing slug, missing realm, realm mismatch, no options (first tag is the slug), pinned tenant with no binding / a binding with no members / members in an unbound group named PLATFORM_ADMIN, pinned tenant with no realm; each compares a full row snapshot (groups, members, roles, tokens, audit) before and after | The safety net of the whole requirement |
+| Wrong-but-registered pin cannot strip the operator | pin on ordinary tenant A (it has members); the operator's slug, A's slug with the operator's realm, and A's slug alone are each refused (`slug_mismatch`, `realm_mismatch`, `realm_required`) | M2 of the design |
+| Dry run | no write statement in the captured query telemetry (no INSERT/UPDATE/DELETE/SAVEPOINT/BEGIN/ROLLBACK/DDL) with and without slug/realm, row snapshots unchanged; never refuses (`would_refuse` tags in a fixed order, including all three at once); counts equal a real run's on identical data for three tenants (new binding with 2 members and 2 tokens, existing binding with one overlapping member, already converted); `preconditions` map exact; failed tenants listed in a dry run; only an exact `dry_run: true` is a dry run (`"true"`, `1`, `:yes`, `nil`, `"dry"` are real runs and refuse without options, and `"true"` with options really writes) | One mechanism, same numbers, no surprise writes |
+| Audit entries | `group_member.copied` after_state is exactly `%{"user_id" => id}`; `role_binding.removed` before_state exactly `%{"name" => "PLATFORM_ADMIN"}`; `token.roles_migrated` before/after exactly `%{"roles" => [...]}`; actor nil; no email, username, display name or token hash in any entry or in the report; no entry in the platform tenant | INV-2 / INV-4 |
+| Exceptions become `:unexpected_error`, nothing printed | `run/1` (real and dry) with the pinned tenant's `tenant_role` table gone returns `{:error, {:precondition_failed, :unexpected_error}}`, stdout empty; `verify/0` with a tenant's table gone returns `{:error, :unexpected_error}`; this module's log lines name only `Postgrex.Error` (not the table, not "does not exist") | The rpc wrapper must not print Postgrex text |
+| `verify/0` | exact top-level and per-tenant keys; exact values for the platform tenant and an ordinary tenant before and after a run (`platform_admin_group_member_count` is 0 afterwards: the legacy group is unbound, so it is not counted); no user attribute or token hash in the term; `pin_configured: false` when unset | Runbook steps B and G read these fields |
+| Mix task flags and output | in process: `--dry-run` prints the exact first line (`pinned slug=... operators=1 members_to_copy=2 tokens_to_rewrite=1 would_refuse=`), `SUMMARY`, one tenant line; `would_refuse=<tag>` for unset pin, wrong slug, wrong realm, no halt; a real run with `--platform-tenant=X --expected-realm-id Y` (both `=` and space forms) prints exact lines and a second run prints `migrated=0 unchanged=1`; output carries no email, username, display name, user id, token hash, `Postgrex`, `Ecto` or a map | Output contract of 3.8 |
+| Mix task exit status | child process: `--dry-runn`, `--bogus=1`, `--dry-run extra`, `extra` give `REFUSED invalid_option`, exit 1, no SUMMARY; seven refusals (`not_configured`, `not_registered`, `slug_required`, `slug_mismatch`, `realm_required`, `realm_mismatch`, a wrong-but-registered pin) and `has_no_operator` give `REFUSED <tag>`, exit 1, rows unchanged; `--dry-run` with only `would_refuse` exits 0 (and, unpinned, both tenants count as ordinary); `--dry-run` with a failed tenant exits 1 and prints `tenant <id>: FAILED reason=<atom>`; a real run converts, exits 0, DB state verified, second run `migrated=0 unchanged=2`, then with a failing tenant exits 1 while the other stays unchanged | The task's halts cannot be tested in process |
+| Runbook expressions (infra file section 8) | the fenced blocks of steps A, B, D, E, F, G are extracted from the infra markdown at test time and evaluated with `Code.eval_string` (E and F with `"bpm-default-slug"` and `expected_realm_id: "bpm-default"` replaced by the fixture's slug and realm): A prints `true` twice; B, D, E, F, G print `SUMMARY` and no `ERROR`; D's first line names slug, realm, `operators=1`, `would_refuse=[]`; D writes nothing; F reports `migrated=0 unchanged=1 failed=0`; G shows `pa_binding=false ta_binding=true ta_members=2 tokens_pa=0` for the converted tenant and `platform=true pa_binding=true` for the operator; a wrong slug in E prints `ERROR precondition platform_tenant_slug_mismatch` and writes nothing | Proves the documented commands are valid against the code (the runbook is otherwise untested by design). They run on the test node, so the rpc transport itself (`bin/letflow rpc`) is not exercised |
+
+## Mutation checks
+
+The code under test did not exist before the REQ-447 commits, so mutation is the evidence. One logical edit per mutant (M4 is two lines: the source of the
+copy and the guard clause that short-circuits it), applied by script with the file's SHA-256 recorded before and verified after a `finally` restore
+(`git status` shows no change under `lib/`). Run set per mutant: both new test files (45 tests, 45 passed unmutated). Partition 3, sequential.
+
+| Mutant | Change | Failed / 45 | Killed by |
+|---|---|---|---|
+| M1 | dry run writes: `if dry?` forced to `if false` in `process_tenant` | 9 | "writes nothing" (write statements and snapshot), "counts equal a real run", "never refuses", runbook, 4 in-process task tests, subprocess dry-run |
+| M2 | slug mismatch no longer refused | 6 | "wrong slug", "a wrong-but-registered pin", dry "never refuses", runbook (wrong slug), in-process and subprocess task refusals |
+| M3 | realm mismatch no longer refused | 6 | "expected_realm_id mismatch", "pinned tenant with no realm", "a wrong-but-registered pin", dry "never refuses", task tests |
+| M4 | copy not gated on the PLATFORM_ADMIN binding (members of any group named PLATFORM_ADMIN are copied) | 4 | "a second run changes nothing ... member added later is NOT promoted" (the targeted kill), "counts equal a real run", "nothing to convert" (the mutant crashes on a group-less tenant, an artefact), subprocess |
+| M5a | token rewrite drops the other roles | 2 | the AC5 main test and the audit test |
+| M5b | `roles_rewrite_changeset` also clears `revoked_at` (`api_token.ex`) | 1 | the AC5 main test (revoked token column compare) |
+| M6 | idempotency broken: the legacy binding is not deleted | 7 | AC5 main, "a second run changes nothing", "per-tenant ... sweep continues", `verify/0` values, runbook, in-process and subprocess task tests |
+| M7 | platform tenant not skipped by the sweep | 10 | AC5 main (platform snapshot), "second run", `platform_tenant_binding_ensured`, "counts equal", audit test, runbook, task tests |
+| M8 | `has_no_operator` check removed | 5 | the three operator-less preconditions, dry "never refuses", subprocess refusals |
+| M9 | any truthy `dry_run` is a dry run | 1 | "only an exact dry_run: true is a dry run" |
+| M10 | `would_refuse` dropped from a dry run | 3 | dry "never refuses", in-process and subprocess dry-run tests |
+
+All mutants reverted; checksum prefixes verified identical after each (`tenant_admin_migration.ex` `9e4c95f374ce`, `api_token.ex` `56a8471a5b56`).
+
+## Counts and checks (partition 3, sequential)
+
+* `tenant_admin_migration_test.exs` 36 passed, `letflow.migrate_tenant_admins_test.exs` 9 passed, together 45 passed after a `--force` recompile
+  (0 occurrences of "default values for the optional arguments"; the new files declare no default arguments; the two unused-alias warnings found on the
+  forced compile were removed and the pair re-run: 45 passed, no warning).
+* `mix format --check-formatted` on the three new files: clean.
+
+## KNOWN residuals
+
+* `mix letflow.check.test` (the whole parallel suite) was not run: the host is low on memory and the instruction was touched files only. The ISS-0069 class was
+  checked on the touched files by a forced recompile. The full-suite run belongs to TEST-RUNNER.
+* The real-run-with-a-failed-tenant exit 1 and the dry-run-with-a-failed-tenant exit 1 share one line of the task; both are exercised through a child process.
+* The test database holds a committed leftover registration (`tenant_template_build_d5137dcab200abf9d4c757debf5175bb`, provisioned 2026-09-27) that fails any
+  sweep. The tests are isolated from it (see above) but a human may want to clean it; it also means `mix letflow.migrate_tenant_admins` itself would exit 1 on that
+  database.
+* The pair takes about 100 s because the child processes boot the application five times.

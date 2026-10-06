@@ -2713,3 +2713,7 @@
 2026-10-06T04:13:51Z | DISPATCH | WF-02 | WF02-REQ456-20261006 | ORCH → CODE-DESIGNER | Step 01 design dispatched
 2026-10-06T04:20:35Z | PASS | WF-02 | WF02-REQ456-20261006 | CODE-DESIGNER → ORCH | Step 01: lib/letflow/design/req456_process_auditor.md produced (715 lines)
 2026-10-06T04:20:35Z | DISPATCH | WF-02 | WF02-REQ456-20261006 | ORCH → CODE-DESIGN-VALIDATOR | Step 01b design gate dispatched
+2026-10-06T04:24:16Z | FAIL | WF-02 | WF02-REQ456-20261006 | CODE-DESIGN-VALIDATOR → ORCH | Step 01b FAIL (rework 1): severity contradiction, tool wording, curl commands unspecified
+2026-10-06T04:24:16Z | REWORK | WF-02 | WF02-REQ456-20261006 | ORCH → CODE-DESIGNER | Rework 1 dispatched
+2026-10-06T04:24:16Z | PASS | WF-02 | WF02-REQ456-20261006 | CODE-DESIGN-VALIDATOR → ORCH | Step 01b PASS (attempt 2), all names grepped against worktree
+2026-10-06T04:24:16Z | DISPATCH | WF-02 | WF02-REQ456-20261006 | ORCH → general-purpose | Step 02a implementation dispatched (instruction-only; no ELIXIR-DEV scope)

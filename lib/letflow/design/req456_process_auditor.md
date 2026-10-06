@@ -86,7 +86,7 @@ a `docs/agents/ba-personas/platform.yaml`, `seed_bilimbaga_*.sh`, `seed_platform
 | D8 | PRODUCT-OWNER learns the audit artefact per scope from the handoff `context.audit_artefacts` (map scope -> path, set by ORCH for EVERY scope in the run including blocked ones). It reads that file. A scope with no path, or a path that does not exist, is `MISSING`. PRODUCT-OWNER runs no command and does not recompute digests. | PRODUCT-OWNER is read-only by its role file; ORCH owns the digest match. |
 | D9 | Findings: ORCH files EVERY finding (BLOCKER, MAJOR and MINOR) per `docs/agents/protocols/ISSUE_QUEUE.md`; it files one issue per finding id and de-duplicates a checklist F pair that two scopes report. | The requirement says findings are handed to ORCH, which files them. |
 | D10 | `suggested_owner` closed list (five values): `BA-<VERTICAL-SLUG>` (a business decision or a scenario of that vertical), `REQ-ANALYST` (platform-scope scenarios or a missing requirement), `ORCH` (roster, seed script, environment), `ELIXIR-DEV` (a defect in a shipped definition or its fixture, fixed through WF-03), `SECURITY-REVIEWER` (an access finding that needs a security look). | The auditor routes, never fixes. |
-| D11 | Severity: each checklist sub-item has a DEFAULT severity (section 3.6). The auditor may raise a severity, never lower it. | Weak-model determinism; BLOCKER is reserved for "the business can be harmed with nobody stopping it". |
+| D11 | Severity: each checklist sub-item has a DEFAULT severity (the checklist table). The auditor may raise a severity, never lower it, except the single exception stated in the A3 and C1 cells (NOT_AVAILABLE validator output: MAJOR). | Weak-model determinism; BLOCKER is reserved for "the business can be harmed with nobody stopping it". |
 | D12 | Model: no `model:` key in the role file frontmatter (REQ-456 open question 1 default). | Same as every other validating role (none of `code-design-validator.md`, `req-validator.md`, `release-validator.md` has one). |
 | D13 | SECURITY-REVIEWER: PROCESS-AUDITOR covers scenarios, roster and seed-script role use under checklist E. SECURITY-REVIEWER is NOT edited and is NOT routed for the REQ-456 diff (instruction text, no tenant-data path; REVIEWER checks scope). It is called only through a finding with `suggested_owner: SECURITY-REVIEWER` (REQ-456 open question 2 default). Reason is logged in section 11. | REQ-456 default. |
 | D14 | The auditor's own handoff: it completes its own handoff file's `result` block (the one file the handoff protocol requires every role to update). The AGENT_SYSTEM capability row says `test/uat-reports/process-audit-*` only, matching the requirement text; the role file states the handoff update explicitly. | Resolves the apparent conflict between "no write outside process-audit-*" and the handoff protocol; see open question OQ-3. |
@@ -130,7 +130,8 @@ Create the file with exactly this content (everything between the two horizontal
 > 2. **You never sign off run results.** You do not read UAT reports, BA sign-offs or PRODUCT-OWNER
 >    sign-offs, and you do not say whether a release may ship. You review the design, not a run.
 > 3. **You do not run a UAT.** UAT-RUNNER does that. You never call the running instance.
-> 4. **No shell beyond read-only search.** Use Read, Glob and Grep only. Do not run `mix`, `git`,
+> 4. **No shell beyond read-only search.** Read, Glob and Grep are the only tools you use for reading and
+>    searching; Write is used only for your report and your own handoff. Do not run `mix`, `git`,
 >    `curl`, `sha256sum` or any other command. The file digests and the definition validator output are
 >    computed by ORCH and handed to you in the handoff `context`; you copy the digests into your report
 >    exactly as given.
@@ -138,7 +139,8 @@ Create the file with exactly this content (everything between the two horizontal
 >    do not say how to fix it, you do not choose the business rule, and you do not judge whether a
 >    finding is a security flaw (use `suggested_owner: SECURITY-REVIEWER` for an access concern and stop).
 > 6. **No lowering.** You may raise a finding's severity above the default in the checklist table. You
->    may never lower it, and you may never answer `NOT_APPLICABLE` to avoid work: `NOT_APPLICABLE`
+>    may never lower it, except where the table itself states a lower value (A3 and C1 when the only
+>    cause is a validator output that is NOT_AVAILABLE), and you may never answer `NOT_APPLICABLE` to avoid work: `NOT_APPLICABLE`
 >    needs the evidence stated in the checklist.
 > 7. **No merge, no commit, no push.** ORCH commits your report.
 >
@@ -190,8 +192,8 @@ Create the file with exactly this content (everything between the two horizontal
 > ## Procedure (do the steps in order; do not skip a step)
 >
 > 1. Read the mandatory reading and the handoff `context`. Check the inputs as described above.
-> 2. Read every file in `input_digests` completely, except `docs/roles.md` and the shared roster which
->    you read once and keep in mind.
+> 2. Read ALL files in `input_digests` completely, including `docs/roles.md` and the roster
+>    (`test/fixtures/uat/actors.yaml`).
 > 3. Read `validator_output`. For every definition with `status: NOT_AVAILABLE`, remember it: checklist
 >    items A3 and C1 cannot be answered YES for that definition.
 > 4. Read the files in `cross_scope_inputs` only when you reach item F1.
@@ -220,11 +222,11 @@ Create the file with exactly this content (everything between the two horizontal
 > |---|---|---|---|
 > | A1 | Does every approval or decision have a rejection outcome (a branch that ends the matter without approval: decline, reject, return to sender)? | The scope has no process definition (state which files you looked for). | BLOCKER |
 > | A2 | Where the business needs a rework or correction loop, does the process have one? A loop is needed when a scenario step, a scenario description or a node name says the requester can correct and resubmit, or something is returned for correction. | No scenario text and no node name in the scope mentions correction, resubmission or return; say so. | MAJOR |
-> | A3 | Does every outcome end? The definition validator output for each definition lists none of `unreachable_node`, `no_path_to_end`, `no_default_route`, and every rejection branch found under A1 reaches an end node. | The scope has no process definition. | BLOCKER |
+> | A3 | Does every outcome end? The definition validator output for each definition lists none of `unreachable_node`, `no_path_to_end`, `no_default_route`, and every rejection branch found under A1 reaches an end node. | The scope has no process definition. | BLOCKER, except MAJOR when the only cause is a validator output with `status: NOT_AVAILABLE` |
 > | A4 | For every human task: is there a stated consequence if nobody acts, that is, the task has both `escalation_timer_duration` and `escalation_role`, or a timer node on its route, or the definition's `description` or a scenario `description` says explicitly that waiting without limit is intended? | The scope has no human task. | MAJOR |
 > | B1 | Is it impossible for the same person to both request and approve the same matter, given the roles the tasks route to and the roster (`routing_roles` of each actor)? It fails when the task that starts the matter and the approval task route to a role that one roster actor holds, or an approval task has no route at all. | The scope has no approval. | BLOCKER when the approval is of paying or releasing something or of a commitment on the organisation's behalf; otherwise MAJOR |
 > | B2 | Is it impossible for the same person to both enter and verify the same data (a data-entry task and its check task route to different roles with no shared actor)? | The scope has no verification step. | MAJOR |
-> | C1 | Does every decision read only values that every path to it collects? The definition validator output lists no `variable_never_collected`, AND you have read each decision's condition and found no value that at least one path to it never collects. | The scope has no process definition. | BLOCKER for a `variable_never_collected` code; MAJOR for a gap you found by reading |
+> | C1 | Does every decision read only values that every path to it collects? The definition validator output lists no `variable_never_collected`, AND you have read each decision's condition and found no value that at least one path to it never collects. | The scope has no process definition. | BLOCKER for a `variable_never_collected` code; MAJOR for a gap you found by reading, and MAJOR when the only cause is a validator output with `status: NOT_AVAILABLE` |
 > | D1 | Does every scenario step correspond to a step the process has (a human task for a person step, a start for a submit step), and does every scenario `process_id` of the form `proc-...` resolve through a sidecar in `test/fixtures/uat/process-definition-aliases/`? | All scenarios of the scope have `process_id` `n/a` or a `sys-...` label (state it). | MAJOR |
 > | D2 | Does every human task of the process appear as a step in at least one scenario of the scope (the reverse direction)? | The scope has no process definition. | MAJOR |
 > | D3 | Does every role a human task routes to have at least one actor in the roster (`routing_roles` of an actor whose `tenant` is this scope), and does every scenario actor exist under `actors:` in the roster? Actors listed under `unresolved:` count as missing for this item. | The scope has no human task and no scenario actor. | MAJOR |
@@ -461,16 +463,19 @@ the neighbouring headings; keep the words `Step 0b`). Exact text:
 >    validator output and the other scopes' files are not part of the match.)
 > 5. Otherwise produce the definition validator output for each deployed process definition of the scope.
 >    For each `test/fixtures/uat/process-definition-aliases/*.yaml` whose `company_id` is the scope, take
->    its `definition_name` (once per name) and, with the bearer token of any roster actor of this scope
->    (`<credential_source> token <actor_id>`, the same protocol `scripts/uat_preflight.sh` uses; every
->    built-in role in `docs/roles.md` that can read definitions suffices):
->      GET  <base_url>/api/v1/definitions/active/<url-encoded definition_name>      (read the `id`)
->      POST <base_url>/api/v1/definitions/<id>/validate
->    Run both with `curl -s`. From the validate answer keep: for a 200 body its `warnings` list and
->    `violation_codes: []`; for a 422 body the `code` of every entry of `errors` as `violation_codes`
->    (a 422 body has no `warnings`). If a call cannot be made (definition not deployed, no token), record
->    `status: NOT_AVAILABLE` for that definition; never invent output. A scope with no process
->    definition has an empty `validator_output`.
+>    its `definition_name` (once per name). Get a bearer token for any roster actor of this scope from
+>    the credential source with the `qa-uat-env` token protocol of `scripts/uat_preflight.sh`
+>    (`fetch_credential`, line ~311: it runs `<credential_source> token <actor_id>` and takes the first
+>    stdout line that `parse_token_line`, line ~297, accepts: `Token: <jwt>` or a bare JWT; any built-in
+>    role in `docs/roles.md` that can read definitions suffices). Then run, literally:
+>      curl -s -H "Authorization: Bearer <token>" <base_url>/api/v1/definitions/active/<url-encoded name>
+>      curl -s -X POST -H "Authorization: Bearer <token>" <base_url>/api/v1/definitions/<id>/validate
+>    `<id>` is the top-level `id` field of the JSON body of the first call. From the second answer keep:
+>    for a 200 body its `warnings` list and `violation_codes: []`; for a 422 body the `code` of every
+>    entry of `errors` as `violation_codes` (a 422 body has no `warnings`). If a call cannot be made
+>    (definition not deployed, no token), record `status: NOT_AVAILABLE` for that definition; never
+>    invent output. Never write the token into any file or handoff. A scope with no process definition
+>    has an empty `validator_output`.
 > 6. Also compute the digests of the process definition files of every OTHER scope (the S3 group of each
 >    other scope): this is `cross_scope_inputs`, used only by checklist item F1.
 > 7. Dispatch PROCESS-AUDITOR with `context`: `scope`, `run_id`, `commit_sha` (current `HEAD`),
@@ -713,3 +718,9 @@ Definition of done additions (decided here; the builder runs them and quotes the
 Settled by the requirement's own defaults, not open: model (no override), SECURITY-REVIEWER scope (D13).
 Settled by the BA decisions adopted unchanged: `Step 0b` naming, `audit_verdicts` field name, ORCH runs the
 digest command and the validator and hands the outputs to the auditor, digest algorithm and command.
+
+## 13. Rework 1 (CODE-DESIGN-VALIDATOR FAIL) -- applied
+
+1. A3/C1 table cells and independence rule 6 now state the NOT_AVAILABLE exception (MAJOR); D11 updated.
+2. Rule 4 reworded (Read/Glob/Grep for reading; Write only for report and own handoff); procedure step 2 reads ALL input_digests files.
+3. WF-05 Step 0b step 5 gives the two literal curl commands; token protocol cited as `fetch_credential` (scripts/uat_preflight.sh ~311, runs `<credential_source> token <actor_id>`) with `parse_token_line` (~297).

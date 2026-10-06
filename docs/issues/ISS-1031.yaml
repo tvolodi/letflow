@@ -1,0 +1,52 @@
+id: ISS-1031
+title: "CI flake: BpmDefaultRealmDisplacement's dedicated advisory-lock connection is load-shed while still connecting (DBConnection 'dropped from queue after 4000ms')"
+discovered_by: CI - main run 206338d3 and PR #2313 run 37490851195; diagnosed by letflow-3 ORCH
+discovered_in_run: CI-206338d3-and-37490851195
+discovered_at: "2026-10-06T16:00:00Z"
+severity: MINOR
+priority: P4
+failure_class: defect
+occurrence: 2
+owner: ELIXIR-DEV (test support only; no lib/ change)
+description: >
+  Business consequence: none for users (test support only); an intermittent red CI run on an
+  unrelated change, costing a re-run and eroding trust in CI.
+
+  Failing tests (SECOND occurrence of the same failure family): main CI 206338d3
+  test/support/bpm_default_realm_displacement_test.exs:141, and PR #2313 run 37490851195
+  test/letflow/routers/req077_promotion_pipeline_test.exs:1279. Both raise
+  DBConnection.ConnectionError "connection not available and request was dropped from queue after
+  4000ms" from Letflow.Support.BpmDefaultRealmDisplacement.acquire_dedicated_lock!/0.
+
+  Root cause: acquire_dedicated_lock!/0 starts a brand-new Postgrex connection (a DBConnection pool
+  of ONE whose physical connect is asynchronous) and immediately queries pg_advisory_lock on it. No
+  queue options are configured (config/test.exs sets none), so the pool inherits DBConnection's
+  overload-shedding defaults (queue_target 50 ms, queue_interval 2000 ms). DBConnection.ConnectionPool
+  drops a queued request on its second interval poll (about 4000 ms; the message in CI) when the head of
+  the queue is still waiting; on a CPU-starved runner with several test partitions a connect that slow
+  happens. Shedding is meant for a shared, saturated pool and is wrong for a private pool of one. It is
+  not server-side connection exhaustion (no 'too many clients'). Secondary latent flake: pg_advisory_lock
+  legitimately blocks while another process on the same database holds the lock, and Postgrex.query!
+  has a 15 s default query timeout.
+fix_direction: >
+  Test support only. Add BpmDefaultRealmDisplacement.dedicated_connection_opts/0 (@doc false) merging
+  queue_target 30000, queue_interval 30000, connect_timeout 30000, timeout 120000 into the
+  Repo.config minus :pool/:pool_size; pass an explicit timeout to the lock, unlock and ensure_seeded!
+  queries. Regression: a delaying TCP proxy test double holds the connect for 7500 ms; the old option
+  shape is shed 10/10, the production options succeed 10/10.
+acceptance_criteria:
+  - "test/support/bpm_default_realm_displacement_connect_test.exs: the old option shape pointed at a 7500 ms delaying proxy raises 'dropped from queue' for all 10 concurrent connections, and dedicated_connection_opts/0 completes SELECT 1 for all 10"
+  - "No lib/ change; displace!/0 and with_lock/1 behaviour (unlink, ownership, release) unchanged; every caller test still passes"
+affected_files:
+  - test/support/bpm_default_realm_displacement.ex
+  - test/support/bpm_default_realm_displacement_connect_test.exs
+queue_ref: Q-1013  # queue allocated issue_ref ISS-1013, which collides with an existing local file; local filename kept as ISS-1031
+github_ref: GH-2314
+status: resolved
+resolved_in_run: WF03-ISS1031-Q1013-20261006
+resolved_at: "2026-10-06T16:40:00Z"
+resolution: >
+  BpmDefaultRealmDisplacement.dedicated_connection_opts/0 gives the dedicated lock connection explicit
+  queue_target/queue_interval/connect_timeout/timeout (30 s / 30 s / 30 s / 120 s) and every query on
+  it an explicit timeout; root cause documented in the module. Regression test added (fail-first: the
+  old option shape is shed).

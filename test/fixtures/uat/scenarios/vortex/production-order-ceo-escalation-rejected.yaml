@@ -1,0 +1,119 @@
+# Authored by BA-VORTEX (ISS-1005 / Q-987, process-audit PA-VORTEX-005, checklist D2).
+# Covers the human task escalate-to-ceo of test/fixtures/qa/vortex_production_order_release_process_definition.json,
+# written against that fixture on main (nodes capacity-review, escalate-to-ceo, budget-gate, assign-line,
+# auto-reject-order, notify-planner; edges timeout-capacity-review, e3/e4). The fixture has no timer duration
+# on capacity-review yet (ISS-0984 / Q-984 owns that), so no number of hours is asserted here.
+# Depends on the roster entry for actor-vortex-dirk (CEO; ISS-1006 / Q-988).
+---
+id: vortex-production-order-ceo-escalation-rejected
+company_id: vortex
+process_id: proc-vortex-production-order-release
+title: "Unanswered production order is escalated to the CEO, who rejects it and the order is closed as rejected"
+version: "1.0"
+tags: [escalation, timeout]
+
+description: >
+  A production order of EUR 8,000 waits for the Production Manager's capacity
+  review and she does not act. The review timer fires and the order moves to
+  the CEO. The CEO rejects it. The order is closed as rejected without the line
+  being assigned. This checks that a CEO rejection really stops the order.
+
+actors:
+  planner: actor-vortex-anna
+  production_manager: actor-vortex-sabine
+  ceo: actor-vortex-dirk
+
+preconditions:
+  - description: Production order release process definition is active
+    check: process_definition_active
+  - description: No open production order instances for Vortex
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: planner
+    action: >
+      Creates a production order for product code VX-TURBO-2000, quantity
+      20 units, order value EUR 8000, requested start date 2026-06-15
+    via: api
+    input:
+      order_id: sim-order-ceo-002
+      product_code: VX-TURBO-2000
+      quantity: 20
+      order_value_eur: 8000
+      requested_start: "2026-06-15"
+      planner_actor_id: actor-vortex-anna
+    produces:
+      instance_id: "the process instance ID for this production order"
+    sla_context:
+      expected_within_hours: 1
+
+  - step: 2
+    actor: production_manager
+    action: >
+      Does not review the order. The capacity review stays open and the
+      Production Manager takes no action on it.
+    via: api
+    note: >
+      No action is taken on purpose; this step records that the Production
+      Manager stays silent so the escalation path is the only way forward.
+
+  - step: 3
+    actor: system
+    action: >
+      The capacity review timer fires. UAT-RUNNER advances the timer by
+      injecting a timer-fire event rather than waiting for real time.
+    via: api
+    input:
+      timer_node_id: capacity-review
+    note: >
+      Requires POST /api/v1/instances/:id/advance-timer. If not available,
+      this scenario is marked SKIP with severity MINOR.
+
+  - step: 4
+    actor: ceo
+    action: >
+      Receives the escalated review task and rejects the order
+    via: gui
+    input:
+      capacity_decision: reject
+      ceo_notes: "Rejected on escalation, no capacity this period."
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      When the Production Manager does not act, the order is not stuck: the
+      capacity review task is handed to the CEO (escalate-to-ceo) and the
+      Production Manager's own task is no longer actionable.
+    verification:
+      method: task_assigned
+      detail: >
+        After the timer fires: an escalate-to-ceo task is assigned to role-ceo
+        (actor-vortex-dirk); no capacity-review task remains open for
+        role-production-manager.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A production order can sit unreviewed forever because the one person
+        responsible is away. Nothing tells anyone and production never starts.
+      suggested_action: route_to_wf03
+
+  - id: EO-002
+    description: >
+      After the CEO rejects, the order is closed as rejected: the line is never
+      assigned.
+    verification:
+      method: instance_state
+      detail: >
+        instance status == COMPLETED and end node is 'end-rejected'; audit log
+        shows auto-reject-order executed and no assign-line execution.
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        An order the CEO rejected is still released to production, committing
+        line time and material to work management refused.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel the sim-order-ceo-002 instance if not already completed

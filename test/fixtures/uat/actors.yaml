@@ -113,6 +113,12 @@ actors:
     routing_roles: []
     note: "Seeded user candidate-user in realm bilimbaga (ai-dala-infra/scripts/qa-login.sh candidate-user; ISS-0690, ISS-0718, ISS-0725). CANDIDATE only, least privilege per docs/roles.md: lists installed modules; exam-session actions come from the exam module's own grants; no routing role, no TASK_WORKER."
 
+  actor-vortex-dirk:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-ceo]
+    note: "seed_vortex_persona_actors.sh PERSONAS line (actor-vortex-dirk|role-ceo); TASK_WORKER implicit per script header. Same entry as ISS-1006 / Q-988 (vortex D3); added here so the CEO-escalation scenarios pass SCHEMA-7"
+
 # Actors whose built-in role could not be established. A recorded gap, not a pass for SCHEMA-8..10.
 unresolved:
   actor-swiftroute-tobias:

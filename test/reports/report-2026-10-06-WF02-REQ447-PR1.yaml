@@ -1,0 +1,54 @@
+run_id: WF02-REQ447-PR1-20261006
+step: "WF-02 Step 5"
+agent: RELEASE-VALIDATOR
+branch: feat/REQ-447-tenant-admin-role
+requirement: REQ-447 PR 1 (Q-964 / GH #2235); REQ-447 stays pending (AC4 is PR 2)
+verdict: NOT_VERIFIED_ONE_FAILING_EXISTING_TEST   # fix the read-function allowlist, then re-run run 1 (api dir)
+criteria:
+  ac1_seven_roles_grant_rule_unknown_denied: VERIFIED   # authorization_tenant_admin_test + authorization_test grids (7 roles) pass in run 1
+  ac2_tenant_admin_routes_2xx_and_403: VERIFIED   # tenant_admin_routes_test.exs passes in run 2 (real Postgres)
+  ac3_seeding_tenant_admin_everywhere_platform_admin_only_in_platform: VERIFIED   # tenant_admin_seeding_test, tenant_onboarding_test pass
+  ac5_migration_two_members_one_token_idempotent_platform_untouched: VERIFIED   # tenant_admin_migration_test + mix/tasks/letflow.migrate_tenant_admins_test pass (run 1, run 3)
+  ac6_inactive_tenant_halts_tenant_admin: VERIFIED   # plugs/tenant_status_test additions pass (run 1)
+  ac7_realm_file_role_and_realm_test_unedited: VERIFIED   # bpm-default.json adds TENANT_ADMIN + tenant-admin-user; authorization_role_realm_test.exs not in the diff and passes
+  ac8_onboarding_admin_role_report: VERIFIED   # design section 7: wizard admin holds NO role (fields dropped by validation; never provisioned); filed as Q-1012 / GH #2312 / ISS-1030
+  ac9_compile_format_boundaries_tests: NOT_VERIFIED   # run 1 has 1 failure (see failure below); compile/format/boundaries/issue_refs/registration all clean
+  ac4_pr2_scope: NOT_APPLICABLE   # confirmed absent: C6 switch still defined (authorization.ex:535), no effective_role_strings, no :platform_admin_outside_platform_tenant, create_token/3 body unchanged
+failure:
+  test: "test/letflow/api/platform_marker_not_writable_test.exs:302 (f) source scans routers and identity code reference Letflow.PlatformTenant only through its read functions"
+  message: "lib/letflow/identity/role_registry.ex:180 calls PlatformTenant.platform_prefix?"
+  cause: >
+    The new read function Letflow.PlatformTenant.platform_prefix?/1 (platform_tenant.ex:113) is called from
+    lib/letflow/identity/role_registry.ex (seedable_role_names/1), but the test's read_functions allowlist
+    (platform_marker_not_writable_test.exs:~308) does not list platform_prefix?. The test is not in the PR diff.
+    Fails on this branch only; origin/main has no such call.
+  fix: "add platform_prefix? to the read_functions list in that test (a read-only function, consistent with the test's intent); it is a test edit, not a lib change"
+real_output:
+  compile_warnings_as_errors_force: "MIX_ENV=test --force: Compiling 353 files (.ex), Generated letflow app, exit 0"
+  format_check: "exit 0"
+  check_boundaries: "OK -- 1077 edges checked, 0 violations"
+  check_issue_refs: "OK -- every cross-reference is prefixed and well-formed. (618 file(s) under docs/issues/)"
+  check_requirements_registration: "425 entries = 425 registered + 0 deferred + 0 neither + 0 unclassified, exit 0"
+  mix_test_runs:   # MIX_TEST_PARTITION=3, --timeout 300000, sequential
+    run1: "test/letflow/api test/letflow/plugs test/letflow/identity + identity_test, role_registry_test, definitions/role_binding_test: Finished in 513.4 seconds; Result: 1064/1065 passed; Failed: 1 test (platform_marker_not_writable_test above); exit 2"
+    run2: "routers identity_test, identity_roles_guard, tenant_admin_routes, tenants, onboarding(+scope_extension), tenant_modules*, tenant_solutions, promotion_* (all 9), req446_cross_tenant_denial, me, tasks + test/letflow/tenant_onboarding_test.exs: Finished in 393.8 seconds; Result: 296 passed; exit 0"
+    run3: "test/mix (whole dir, incl. migrate_tenant_admins) + test/docs + no_smtp_secret_guard + login_directory/no_secret_in_repo: Finished in 235.0 seconds; Result: 471 passed; exit 0"
+    run4: "extra grep-found files (audit_test, pack_update_migration, role_binding_install, identity_login_directory, identity_migration, bilimbaga_solution_e2e, exam/pack_install, routers/modules, req442_tenants_mode, meridian fixture, simulation req206/207/208): Finished in 148.0 seconds; Result: 150 passed; exit 0"
+  optional_arguments_warning_grep: "0 matches for 'default values for the optional arguments' in runs 1-4; mix letflow.check.test itself NOT run (instructed)"
+diff_checks:
+  lib_matches_design: "authorization.ex (7th role, tenant-scope rule, builtin_role_name?, task-worker exclusion), role_registry.ex (seedable_role_names, name-collision guard, platform_admin_group_id), identity.ex (platform_admin_member?, token_carries_platform_admin?; create_token/3 only a moduledoc edit), tenant_admin_migration.ex + mix task, platform_tenant.platform_prefix?, routers/identity.ex guards, realm file. No PR 2 content found."
+  requirements_yaml: "git diff origin/main...HEAD -- docs/requirements.yaml: exactly +1/-0 (the 'ordering:' line); status still pending"
+  decision_records: "docs/migration/ untouched (empty diff stat)"
+  realm_secrets: "only dev-seed convention (tenant-admin-user / password 'tenant-admin-pass', same shape as the other seeded users)"
+  existing_test_changes: "spot-checked authorization_test.exs (largest): grids extended with TENANT_ADMIN rows, counts 6->7 roles (114->133, 138->161, 144->168, 192->224, 10/12->14), expectations flip only for :ModulesManage/:FixtureRead per the design's tenant-scope rule; no assertion removed or loosened. Other existing-test edits (platform_scope_*, role_backfill, identity_test, tenant_modules*, tenant_solutions*, tenant_onboarding, req446/promotion) are role-count/enumeration updates justified by the design."
+gates:
+  security_reviewer_design: "PASS (round 2/3)"
+  security_reviewer_code: "first review FAIL (BLOCKER: group-id string compare), fixed in 7926e68e (cast-based compare); re-review PASS"
+  reviewer: "PASS (conditional items fixed)"
+  code_design_validator: "PASS (round 4)"
+  test_design_validator: PASS
+  recorded_from: "verdicts reported by the caller; not independently verifiable from repo artifacts"
+  full_suite: "deferred to CI"
+notes:
+  - "Nothing edited, committed, pushed or switched; the report file is the only write."
+  - "Not run by instruction: full suite, mix letflow.check.test, scripts/test_parallel.sh."

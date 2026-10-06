@@ -1,0 +1,53 @@
+{
+  "handoff_id": "4ccb3c2d-11da-479a-974a-6eb744683195",
+  "run_id": "WF02-REQ456-20261006",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ456-20261006/step-01-code-designer.json",
+  "created_at": "2026-10-06T04:13:51Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-456"
+    ],
+    "requirement_text": {
+      "REQ-456": "Approved by the user on 2026-10-06. No role in the roster reviews a process design before it is run: BA-<VERTICAL> authors scenarios and signs off its own vertical's results, and the only automated checks are structural. That breaks this project's rule that every producing step has a validating step. This entry defines the missing validator, following the precedent of REQ-359 (BA role) and REQ-361 (PRODUCT-OWNER): role file, roster entries, workflow step, artefact. Write the role file so a weak model can execute it: numbered procedure, closed checklists, closed verdict values, examples.\nBUILDS: 1. .claude/agents/process-auditor.md. AGENT_ID PROCESS-AUDITOR. Independence: it never authors or edits a definition, a scenario, a seed script or the roster, and never signs off run results. Inputs: the process definitions and forms of one scope (vertical or platform), its scenarios, test/fixtures/uat/actors.yaml, the seed scripts, docs/roles.md, and the validator output of REQ-455. It reads; it does not run a UAT. Checklist, each item answered YES, NO or NOT_APPLICABLE with evidence: A. Missing business paths: for every approval or decision, is there a rejection outcome, a rework or correction loop where the business needs one, and an end for each outcome; for every human task, what happens if nobody acts (timer, escalation or an explicit statement that waiting forever is intended). B. Separation of duties: can the same person both request and approve, or both enter and verify, given the roles the tasks route to and the roster. C. Data on some paths only: a decision reads a value that at least one path to it does not collect (the certain case is REQ-455's). D. Consistency inside the scope: every scenario step corresponds to a step the process has and the reverse for every human task; every role a task routes to has an actor in the roster; every actor has the least built-in role for its steps (docs/roles.md). E. Access: the scenarios contain a refusal step for each sensitive action (approve, pay, see personal data, change users); no admin actor performs ordinary business steps; no tenant actor depends on a platform permission. F. Consistency across scopes: the same business concept (for example an approval with a limit) is not modelled in two incompatible ways without a stated reason. Verdict PASS, PASS_WITH_FINDINGS or FAIL; any BLOCKER finding is FAIL. Findings state the business consequence in plain language and are handed to ORCH, which files them per docs/agents/protocols/ISSUE_QUEUE.md. 2. Artefact test/uat-reports/process-audit-<scope>-<run_id>.yaml with a schema in the role file: scope, audited inputs with a content digest of each file, the checklist answers, findings (id, severity, checklist item, business description, affected definition or scenario, suggested owner), verdict. 3. docs/agents/workflows/WF-05_uat_run.md: a new step between environment preparation and the run. ORCH dispatches PROCESS-AUDITOR for a scope when no audit artefact exists whose input digests match the current files; an unchanged scope is not re-audited. A FAIL verdict blocks UAT-RUNNER for that scope only. This keeps the gate off the per-run path when nothing changed. 4. docs/agents/AGENT_SYSTEM.md (roster row, capability row: read yes, write process-audit reports only, no shell beyond read-only search, no merge), docs/agents/ORCHESTRATOR.md (routing and the gate), CLAUDE.md roster table. 5. .claude/agents/product-owner.md: reads the audit verdicts of the run's scopes; a scope with no PASS or PASS_WITH_FINDINGS audit is not APPROVED.\nOPEN QUESTIONS: Model for this agent. Default: the same default as the other validating roles; no model override in the role file. | Whether SECURITY-REVIEWER also reviews seed scripts. Default: PROCESS-AUDITOR covers scenarios, roster and seed-script role use under checklist E; SECURITY-REVIEWER stays on code and is called only through a finding."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/instructions/core-directives.md",
+      "docs/roles.md",
+      "docs/agents/uat-scenario-schema.md",
+      ".claude/agents/ba-analyst.md",
+      ".claude/agents/product-owner.md",
+      "docs/agents/workflows/WF-05_uat_run.md",
+      "docs/agents/AGENT_SYSTEM.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "CLAUDE.md",
+      "lib/letflow/design/req453_access_rules.md",
+      "lib/letflow/design/req455-definition-validator-gaps.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/"
+    ],
+    "branch_name": "feature/WF02-REQ456-20261006"
+  },
+  "task": {
+    "description": "WF-02 step 01 (CODE-DESIGNER): produce lib/letflow/design/req456_process_auditor.md. Local-only: do NOT push, do not commit (ORCH commits). Work ONLY in the worktree C:\\Users\\tvolo\\AppData\\Local\\Temp\\wt-q973 (branch feature/WF02-REQ456-20261006); never touch C:\\Users\\tvolo\\dev\\ai-dala\\letflow-2. This requirement is instruction/workflow text only (no Elixir code). The design must give the EXACT new text (or exact insert lines with anchors) for each of the six files: (1) .claude/agents/process-auditor.md (new; mirror frontmatter/sections of ba-analyst.md and product-owner.md; the FIRST independence rule must state it authors/edits nothing and that findings are not answered by editing its report; numbered procedure; closed checklist A-F answered YES|NO|NOT_APPLICABLE with evidence; verdicts PASS|PASS_WITH_FINDINGS|FAIL; severity BLOCKER|MAJOR|MINOR; artefact schema with run_id, generated_at, commit sha, scope, audited_inputs [{path,digest}] with the digest algorithm named, checklist, findings [{id,severity,checklist_item,business_description,affected,suggested_owner (closed list)}], verdict; correct and forbidden examples; plain business language like the BA language rule; checklist E uses the closed sensitive-action list from ba-analyst.md), (2) docs/agents/workflows/WF-05_uat_run.md (new 'Step 0b - Process audit' between Step 0 and Step 1 so existing 'Step 4' citations stay valid; update the ASCII overview, Step 1 readiness list, Step 4 PO sentence; include the DIGEST-RULE sentence: ORCH dispatches PROCESS-AUDITOR for a scope unless an audit artefact exists whose input digests match the current files; an unchanged scope is not re-audited, an older artefact is cited by path; a FAIL verdict blocks UAT-RUNNER for that scope only; platform scope included), (3) docs/agents/AGENT_SYSTEM.md (roster row, capability row writing only test/uat-reports/process-audit-*, artifact-location row; minimal inserts only, do not reflow), (4) docs/agents/ORCHESTRATOR.md (routing + gate line; minimal inserts only; ORCH files findings per docs/agents/protocols/ISSUE_QUEUE.md), (5) CLAUDE.md roster table row (minimal), (6) .claude/agents/product-owner.md (new audit gate step like step 3a, `audit_verdicts: {<scope>: PASS|PASS_WITH_FINDINGS|FAIL|MISSING}` field in the po-signoff schema + derivation rule, forbidden bullet; MUST contain the sentence: a scope without a PASS or PASS_WITH_FINDINGS audit is not APPROVED). Re-verify everything against the current files in the worktree (the REQ-456 text is in this handoff's context). BA DECISIONS ALREADY MADE, ADOPT, DO NOT REOPEN: 'Step 0b' naming; the `audit_verdicts` field name; ORCH runs the digest command and the REQ-455 validator and passes the outputs to the auditor as inputs (the auditor stays read-only, no shell beyond read-only search; digest = SHA-256 hex of the file bytes; give the exact command ORCH runs that exists in this Windows/Git Bash repo environment, e.g. sha256sum); the definition of done includes an explicit grep for PROCESS-AUDITOR in all six files. AC4 TRAP: every file path, field name and mix task named in new text must exist on the branch or be created by this entry. REQ-455 (merged, in the worktree) has NO mix task for the validator: it is exposed as POST /definitions/:id/validate (lib/letflow/routers/definitions.ex, Letflow.Definitions.validate_definition_graph/2) whose result carries violations with codes :unreachable_node (CHK-22), :no_path_to_end (CHK-23), :no_default_route (CHK-24), :variable_never_collected (check 3) and a warnings list with 'unbound_task_role: ...' lines (check 4, lib/letflow/definitions/role_binding.ex). Read the merged code and lib/letflow/design/req455-definition-validator-gaps.md and use ONLY the real names, with file:line evidence in a table in your design; invent nothing. Also decide and document: which concrete files form a scope's process definitions/forms (find the real locations: priv/, test/fixtures/qa, test/fixtures/simulation, scripts/seed_*.sh, test/fixtures/uat/scenarios/<scope>/; platform scope included), how checklist F reads other scopes' artefacts, handling of a blocked scope in PO derivation and ENV_NOT_READY, whether SECURITY-REVIEWER applies (expected: not applicable, log reason), whether TEST-DESIGNER applies (expected: no new ExUnit; the ACs demand only mix letflow.check plus greps). Follow the precedent of lib/letflow/design/req453_access_rules.md. Return a result summary with open design-intent questions (max 3), each with your recommended default.\n",
+    "acceptance_criteria": [
+      ".claude/agents/process-auditor.md exists with the independence rules, the numbered procedure, checklist items A to F with the three answer values, the verdict values and the artefact schema",
+      "AGENT_SYSTEM.md roster and capability tables, ORCHESTRATOR.md and CLAUDE.md each list PROCESS-AUDITOR, and the capability row grants no write outside test/uat-reports/process-audit-*",
+      "WF-05 contains the audit step with the digest rule (unchanged scope is not re-audited) and the FAIL-blocks-that-scope rule; product-owner.md reads the audit verdict",
+      "every file path, field name and mix task named in the new text exists on the branch or is created by this entry (REQ-VALIDATOR greps each and quotes the result)",
+      "mix letflow.check passes, real output quoted"
+    ]
+  },
+  "result": null,
+  "rework_count": 0
+}

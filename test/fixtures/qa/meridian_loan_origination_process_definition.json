@@ -1,7 +1,7 @@
 {
   "name": "Loan Origination",
-  "version": "1.8",
-  "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking. KYC/AML fails closed (v1.7): the eligibility gate lets an application on to approval only when the screening answered kyc_status 'clear' or the compliance officer's manual review recorded kyc_outcome 'cleared' (the kyc-manual-review task is completed with output variable kyc_outcome = cleared | rejected); a rejected, missing or timed-out review (kyc-timeout records kyc_outcome 'unresolved') declines the application. Committee votes are person-distinct by role (v1.8): committee-vote-cro routes to role-cro, committee-vote-director to role-credit-director and committee-vote-ceo to role-ceo, three different roles held by three different people, so one committee member cannot cast two or three of the votes.",
+  "version": "1.9",
+  "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking. KYC/AML fails closed (v1.7): the eligibility gate lets an application on to approval only when the screening answered kyc_status 'clear' or the compliance officer's manual review recorded kyc_outcome 'cleared' (the kyc-manual-review task is completed with output variable kyc_outcome = cleared | rejected); a rejected, missing or timed-out review (kyc-timeout records kyc_outcome 'unresolved') declines the application. Committee votes are person-distinct by role (v1.8): committee-vote-cro routes to role-cro, committee-vote-director to role-credit-director and committee-vote-ceo to role-ceo, three different roles held by three different people, so one committee member cannot cast two or three of the votes. Timeouts before the eligibility gate no longer skip the value the gate reads (v1.9, ISS-1015 / Q-997): when credit-memo-review or risk-assessment times out, the flag service task now leads to a human escalation review (credit-memo-escalation-review for role-credit-director records credit_decision; risk-assessment-escalation-review for role-cro records risk_rating) before assessment-join, so a timeout means more scrutiny, not a silent decline; the eligibility-gate default to decline-application stays as the fail-closed fallback if a review is completed without the value. Every human task carries a form_schema naming the decision field(s) to record; form_schema is a UI rendering payload only, the fail-closed gateway defaults are the enforcement.",
   "graph": {
     "nodes": [
       {
@@ -16,7 +16,24 @@
         "id": "credit-memo-review",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-credit-manager"
+          "role": "role-credit-manager",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "credit_decision": {
+                "type": "string",
+                "title": "Credit decision",
+                "description": "Credit memo outcome. 'pass' lets the application proceed to the eligibility gate; 'fail' declines it. eligibility-gate reads this.",
+                "enum": [
+                  "pass",
+                  "fail"
+                ]
+              }
+            },
+            "required": [
+              "credit_decision"
+            ]
+          }
         }
       },
       {
@@ -29,10 +46,53 @@
         }
       },
       {
+        "id": "credit-memo-escalation-review",
+        "node_type": "HUMAN_TASK",
+        "attributes": {
+          "role": "role-credit-director",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "credit_decision": {
+                "type": "string",
+                "title": "Credit decision",
+                "description": "Escalation review of a credit memo that was not completed in time. Record the credit decision yourself: 'pass' proceeds to the eligibility gate, 'fail' declines. Leaving it unset declines the application (fail-closed).",
+                "enum": [
+                  "pass",
+                  "fail"
+                ]
+              }
+            },
+            "required": [
+              "credit_decision"
+            ]
+          }
+        }
+      },
+      {
         "id": "risk-assessment",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-risk-manager"
+          "role": "role-risk-manager",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "risk_rating": {
+                "type": "string",
+                "title": "Risk rating",
+                "description": "Risk assessment outcome. 'unacceptable' declines the application; any other rating lets it proceed to the eligibility gate. eligibility-gate reads this.",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "unacceptable"
+                ]
+              }
+            },
+            "required": [
+              "risk_rating"
+            ]
+          }
         }
       },
       {
@@ -42,6 +102,32 @@
           "endpoint": "https://httpbin.org/anything/internal/applications/{{variables.application_id}}/flag",
           "method": "POST",
           "timeout_ms": 300000
+        }
+      },
+      {
+        "id": "risk-assessment-escalation-review",
+        "node_type": "HUMAN_TASK",
+        "attributes": {
+          "role": "role-cro",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "risk_rating": {
+                "type": "string",
+                "title": "Risk rating",
+                "description": "Escalation review of a risk assessment that was not completed in time. Record the risk rating yourself: 'unacceptable' declines, any other rating proceeds to the eligibility gate. Leaving it unset declines the application (fail-closed).",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "unacceptable"
+                ]
+              }
+            },
+            "required": [
+              "risk_rating"
+            ]
+          }
         }
       },
       {
@@ -57,7 +143,24 @@
         "id": "kyc-manual-review",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-compliance-officer"
+          "role": "role-compliance-officer",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "kyc_outcome": {
+                "type": "string",
+                "title": "KYC/AML outcome",
+                "description": "Result of the manual KYC/AML review. Only 'cleared' lets the application proceed; 'rejected' (or no answer) declines it.",
+                "enum": [
+                  "cleared",
+                  "rejected"
+                ]
+              }
+            },
+            "required": [
+              "kyc_outcome"
+            ]
+          }
         }
       },
       {
@@ -89,14 +192,49 @@
         "id": "l1-approval",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-credit-manager"
+          "role": "role-credit-manager",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "l1_decision": {
+                "type": "string",
+                "title": "L1 decision",
+                "description": "Level 1 credit decision: 'approve' or 'escalate' passes to L2 approval, 'reject' declines.",
+                "enum": [
+                  "approve",
+                  "escalate",
+                  "reject"
+                ]
+              }
+            },
+            "required": [
+              "l1_decision"
+            ]
+          }
         }
       },
       {
         "id": "l2-approval",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-credit-director"
+          "role": "role-credit-director",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "l2_decision": {
+                "type": "string",
+                "title": "L2 decision",
+                "description": "Level 2 credit decision: 'approve' creates the facility, 'reject' (or no answer) declines.",
+                "enum": [
+                  "approve",
+                  "reject"
+                ]
+              }
+            },
+            "required": [
+              "l2_decision"
+            ]
+          }
         }
       },
       {
@@ -107,21 +245,72 @@
         "id": "committee-vote-cro",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-cro"
+          "role": "role-cro",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "committee_vote_cro": {
+                "type": "string",
+                "title": "CRO vote",
+                "description": "The CRO's committee vote. Two matching votes of three decide; a missing vote counts for neither side.",
+                "enum": [
+                  "approve",
+                  "reject"
+                ]
+              }
+            },
+            "required": [
+              "committee_vote_cro"
+            ]
+          }
         }
       },
       {
         "id": "committee-vote-director",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-credit-director"
+          "role": "role-credit-director",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "committee_vote_director": {
+                "type": "string",
+                "title": "Credit director vote",
+                "description": "The credit director's committee vote. Two matching votes of three decide; a missing vote counts for neither side.",
+                "enum": [
+                  "approve",
+                  "reject"
+                ]
+              }
+            },
+            "required": [
+              "committee_vote_director"
+            ]
+          }
         }
       },
       {
         "id": "committee-vote-ceo",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-ceo"
+          "role": "role-ceo",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "committee_vote_ceo": {
+                "type": "string",
+                "title": "CEO vote",
+                "description": "The CEO's committee vote. Two matching votes of three decide; a missing vote counts for neither side.",
+                "enum": [
+                  "approve",
+                  "reject"
+                ]
+              }
+            },
+            "required": [
+              "committee_vote_ceo"
+            ]
+          }
         }
       },
       {
@@ -172,7 +361,18 @@
         "id": "disburse-loan",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-loan-ops"
+          "role": "role-loan-ops",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "disbursement_reference": {
+                "type": "string",
+                "title": "Disbursement reference",
+                "description": "Core-banking reference of the disbursement that was made. Recorded for audit; no gateway reads it. Optional. No personal data beyond what the process needs.",
+                "minLength": 1
+              }
+            }
+          }
         }
       },
       {
@@ -200,10 +400,12 @@
       { "id": "e3",                          "source": "parallel-assessment-fork", "target": "kyc-aml-check" },
       { "id": "e4",                          "source": "credit-memo-review",     "target": "assessment-join" },
       { "id": "timeout-credit-memo-review",  "source": "credit-memo-review",     "target": "credit-memo-timeout" },
-      { "id": "e5",                          "source": "credit-memo-timeout",    "target": "assessment-join" },
+      { "id": "e5",                          "source": "credit-memo-timeout",    "target": "credit-memo-escalation-review" },
+      { "id": "e5-escalation-reviewed",     "source": "credit-memo-escalation-review", "target": "assessment-join" },
       { "id": "e6",                          "source": "risk-assessment",        "target": "assessment-join" },
       { "id": "timeout-risk-assessment",     "source": "risk-assessment",        "target": "risk-assessment-timeout" },
-      { "id": "e7",                          "source": "risk-assessment-timeout", "target": "assessment-join" },
+      { "id": "e7",                          "source": "risk-assessment-timeout", "target": "risk-assessment-escalation-review" },
+      { "id": "e7-escalation-reviewed",     "source": "risk-assessment-escalation-review", "target": "assessment-join" },
       { "id": "e8",                          "source": "kyc-aml-check",          "target": "kyc-routing" },
       { "id": "e9",                          "source": "kyc-routing",            "target": "assessment-join",      "condition": "variables.kyc_status == 'clear'" },
       { "id": "e10",                         "source": "kyc-routing",            "target": "kyc-manual-review",    "condition": "variables.kyc_status == 'hit'" },

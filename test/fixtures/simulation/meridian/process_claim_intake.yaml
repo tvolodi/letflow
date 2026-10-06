@@ -18,20 +18,32 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-credit-manager
+        form_schema: {"type": "object", "properties": {"credit_decision": {"type": "string", "title": "Credit decision", "description": "Credit memo outcome. 'pass' lets the application proceed to the eligibility gate; 'fail' declines it. eligibility-gate reads this.", "enum": ["pass", "fail"]}}, "required": ["credit_decision"]}
     - id: credit-memo-timeout
       node_type: SERVICE_TASK
       attributes:
         endpoint: POST /internal/applications/{application_id}/flag
         timeout_ms: 300000
+    - id: credit-memo-escalation-review
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-credit-director
+        form_schema: {"type": "object", "properties": {"credit_decision": {"type": "string", "title": "Credit decision", "description": "Escalation review of a credit memo that was not completed in time. Record the credit decision yourself: 'pass' proceeds to the eligibility gate, 'fail' declines. Leaving it unset declines the application (fail-closed).", "enum": ["pass", "fail"]}}, "required": ["credit_decision"]}
     - id: risk-assessment
       node_type: HUMAN_TASK
       attributes:
         role: role-risk-manager
+        form_schema: {"type": "object", "properties": {"risk_rating": {"type": "string", "title": "Risk rating", "description": "Risk assessment outcome. 'unacceptable' declines the application; any other rating lets it proceed to the eligibility gate. eligibility-gate reads this.", "enum": ["low", "medium", "high", "unacceptable"]}}, "required": ["risk_rating"]}
     - id: risk-assessment-timeout
       node_type: SERVICE_TASK
       attributes:
         endpoint: POST /internal/applications/{application_id}/flag
         timeout_ms: 300000
+    - id: risk-assessment-escalation-review
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-cro
+        form_schema: {"type": "object", "properties": {"risk_rating": {"type": "string", "title": "Risk rating", "description": "Escalation review of a risk assessment that was not completed in time. Record the risk rating yourself: 'unacceptable' declines, any other rating proceeds to the eligibility gate. Leaving it unset declines the application (fail-closed).", "enum": ["low", "medium", "high", "unacceptable"]}}, "required": ["risk_rating"]}
     - id: kyc-aml-check
       node_type: SERVICE_TASK
       attributes:
@@ -41,6 +53,7 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-compliance-officer
+        form_schema: {"type": "object", "properties": {"kyc_outcome": {"type": "string", "title": "KYC/AML outcome", "description": "Result of the manual KYC/AML review. Only 'cleared' lets the application proceed; 'rejected' (or no answer) declines it.", "enum": ["cleared", "rejected"]}}, "required": ["kyc_outcome"]}
     - id: kyc-timeout
       node_type: SERVICE_TASK
       attributes:
@@ -58,24 +71,29 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-credit-manager
+        form_schema: {"type": "object", "properties": {"l1_decision": {"type": "string", "title": "L1 decision", "description": "Level 1 credit decision: 'approve' or 'escalate' passes to L2 approval, 'reject' declines.", "enum": ["approve", "escalate", "reject"]}}, "required": ["l1_decision"]}
     - id: l2-approval
       node_type: HUMAN_TASK
       attributes:
         role: role-credit-director
+        form_schema: {"type": "object", "properties": {"l2_decision": {"type": "string", "title": "L2 decision", "description": "Level 2 credit decision: 'approve' creates the facility, 'reject' (or no answer) declines.", "enum": ["approve", "reject"]}}, "required": ["l2_decision"]}
     - id: committee-vote-fork
       node_type: PARALLEL_GATEWAY
     - id: committee-vote-cro
       node_type: HUMAN_TASK
       attributes:
         role: role-cro
+        form_schema: {"type": "object", "properties": {"committee_vote_cro": {"type": "string", "title": "CRO vote", "description": "The CRO's committee vote. Two matching votes of three decide; a missing vote counts for neither side.", "enum": ["approve", "reject"]}}, "required": ["committee_vote_cro"]}
     - id: committee-vote-director
       node_type: HUMAN_TASK
       attributes:
         role: role-credit-director
+        form_schema: {"type": "object", "properties": {"committee_vote_director": {"type": "string", "title": "Credit director vote", "description": "The credit director's committee vote. Two matching votes of three decide; a missing vote counts for neither side.", "enum": ["approve", "reject"]}}, "required": ["committee_vote_director"]}
     - id: committee-vote-ceo
       node_type: HUMAN_TASK
       attributes:
         role: role-ceo
+        form_schema: {"type": "object", "properties": {"committee_vote_ceo": {"type": "string", "title": "CEO vote", "description": "The CEO's committee vote. Two matching votes of three decide; a missing vote counts for neither side.", "enum": ["approve", "reject"]}}, "required": ["committee_vote_ceo"]}
     - id: committee-vote-cro-timeout
       node_type: SERVICE_TASK
       attributes:
@@ -104,6 +122,7 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-loan-ops
+        form_schema: {"type": "object", "properties": {"disbursement_reference": {"type": "string", "title": "Disbursement reference", "description": "Core-banking reference of the disbursement that was made. Recorded for audit; no gateway reads it. Optional. No personal data beyond what the process needs.", "minLength": 1}}}
     - id: decline-application
       node_type: SERVICE_TASK
       attributes:
@@ -133,8 +152,12 @@ graph:
     - id: timeout-credit-memo-review
       source: credit-memo-review
       target: credit-memo-timeout
+    # ISS-1015: a timeout goes to a human escalation review that records credit_decision, then rejoins
     - id: e5
       source: credit-memo-timeout
+      target: credit-memo-escalation-review
+    - id: e5-escalation-reviewed
+      source: credit-memo-escalation-review
       target: assessment-join
     - id: e6
       source: risk-assessment
@@ -143,8 +166,12 @@ graph:
     - id: timeout-risk-assessment
       source: risk-assessment
       target: risk-assessment-timeout
+    # ISS-1015: likewise for risk_rating
     - id: e7
       source: risk-assessment-timeout
+      target: risk-assessment-escalation-review
+    - id: e7-escalation-reviewed
+      source: risk-assessment-escalation-review
       target: assessment-join
     - id: e8
       source: kyc-aml-check

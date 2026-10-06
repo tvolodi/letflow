@@ -26,12 +26,53 @@ acceptance_criteria:
   - "Human tasks in both definitions have forms with required decision fields"
   - "A test covers the timeout path"
   - "The process validator reports status OK"
+  - "(BA decision on GH #2284, added with Q-1002) kyc-manual-review has a form with a required kyc_outcome field (cleared | rejected)"
 affected_files:
   - test/fixtures/qa/meridian_loan_origination_process_definition.json
   - test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+  - test/fixtures/simulation/meridian/process_claim_intake.yaml
+  - test/fixtures/simulation/meridian/process_policy_binding.yaml
+  - scripts/seed_meridian_definition.sh
+  - test/letflow/scripts/meridian_timeout_review_and_forms_fixture_test.exs
 # Ref clash: the queue's issue_ref for Q-997 came back ISS-0997, which is not the local number
 # (docs/issues/ISS-0997.yaml is a different issue); ISS-1015 was the next free local number
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-997
 github_ref: GH-2284
-status: open
+status: resolved
+resolved_in_run: WF03-ISS1015-Q997-20261006
+resolved_at: "2026-10-06T14:00:00Z"
+resolution: >
+  Loan Origination v1.9, Regulatory Compliance Review v1.7. (1) A timeout before eligibility-gate no
+  longer skips the value the gate reads: credit-memo-timeout (e5) now leads to the new HUMAN_TASK
+  credit-memo-escalation-review (role-credit-director) and risk-assessment-timeout (e7) to the new
+  HUMAN_TASK risk-assessment-escalation-review (role-cro); each is completed with the missing
+  credit_decision / risk_rating and then rejoins assessment-join (new edges e5-escalation-reviewed,
+  e7-escalation-reviewed). The direction is more scrutiny, not a silent decline. Both roles already
+  exist (actors.yaml; no role invented). The review tasks have no timeout edge of their own, so an
+  unanswered review waits for a person rather than declining. The gate itself is unchanged:
+  eligibility-gate-default -> decline-application stays the fail-closed fallback if a review is
+  completed without the value, and Q-1002's kyc contract and the kyc_status 'clear' fast path are
+  intact. (2) Every HUMAN_TASK in both definitions has a form_schema with required decision fields
+  whose enums are the values the edge conditions compare against: credit_decision pass|fail;
+  risk_rating low|medium|high|unacceptable; kyc_outcome cleared|rejected (BA criterion);
+  l1_decision approve|escalate|reject; l2_decision approve|reject; committee_vote_cro / _director /
+  _ceo approve|reject; highest_severity none|low|medium|high|critical; remediation_status
+  resolved|unresolved; cro_decision and ceo_decision sign_off|reject_and_reopen; plus two free-text
+  audit fields no gateway reads (disbursement_reference on disburse-loan, evidence_summary on
+  evidence-collection). The simulation YAML copies (process_claim_intake.yaml,
+  process_policy_binding.yaml) mirror the new nodes, edges and forms (a test compares them).
+
+  CAVEAT: form_schema is a UI RENDERING PAYLOAD ONLY (REQ-273, Letflow.Engine.TaskActivation
+  moduledoc). The engine does not reject a completion that violates it; the required list is
+  enforced by the form UI, not the server. Server-side authority would be a variable_schemas row
+  (REQ-109); none is bound by these definitions. What actually protects the process is the
+  fail-closed gateway defaults (the eligibility gate's default, the Q-1002 kyc edges, l2 / tally /
+  post-remediation defaults), so a completion that skips a field declines or escalates, never
+  approves.
+follow_ups:
+  - "QA needs a re-seed of Meridian Loan Origination v1.9 and Regulatory Compliance Review v1.7 (scripts/seed_meridian_definition.sh creates and activates them; the platform deprecates v1.8 / v1.6). No persona or role re-seed: the two new tasks use role-credit-director and role-cro, already seeded."
+  - "Server-side enforcement of the decision fields (kyc_outcome and the other enumerated values) would need variable_schemas rows (REQ-109) registered for the tenant; not built here, not required by this issue."
+  - "BA to confirm the open choices: escalation reviewers (role-credit-director for credit, role-cro for risk), the risk_rating vocabulary (low|medium|high|unacceptable), the two free-text audit fields, and whether the escalation reviews need an SLA of their own."
+  - "Process-audit re-run to confirm PA-MERIDIAN-003 (checklist C1) is no longer reported."
+regression_test: test/letflow/scripts/meridian_timeout_review_and_forms_fixture_test.exs

@@ -122,8 +122,9 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
   # doc §4.5). ISS-1018 / Q-1000 bumped it to "1.5" (fallback-ceo-override
   # now targets reopen-review instead of archive-review). ISS-1025 / Q-1007
   # bumped it to "1.6" (remediation-subprocess is now a HUMAN_TASK, not an
-  # attribute-less SUB_PROCESS).
-  defp check_t1(doc), do: ok_if(doc["version"] == "1.6", {:version, doc["version"]})
+  # attribute-less SUB_PROCESS). ISS-1015 / Q-997 bumped it to "1.7" (every
+  # HUMAN_TASK carries a form_schema).
+  defp check_t1(doc), do: ok_if(doc["version"] == "1.7", {:version, doc["version"]})
 
   defp check_t2(doc),
     do:

@@ -36,7 +36,7 @@ queue_ref: Q-995
 github_ref: GH-2282
 status: resolved
 resolved_in_run: WF03-ISS1013-Q995-20261007
-resolved_at: "2026-10-07T00:00:00Z"
+resolved_at: "2026-10-06T21:18:00Z"
 resolution: >
   BA ruling D-ESC (GH #2281) applied to both Meridian definitions: loan v1.11 -> v1.12, regulatory
   v1.8 -> v1.9 (simulation YAML copies mirrored). Every HUMAN_TASK now carries the

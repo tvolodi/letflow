@@ -120,14 +120,22 @@ defmodule Letflow.Scripts.MeridianRegulatoryRemediationFixtureTest do
 
   defp check_version(d), do: ok_if(d["version"] == "1.6", {:version, d["version"]})
 
+  defp edge_shape(d) do
+    d
+    |> edges()
+    |> Enum.map(
+      &{&1["id"], &1["source"], &1["target"], &1["condition"], &1["is_default"] == true}
+    )
+    |> Enum.sort()
+  end
+
   defp check_yaml_parity(d, y) do
     same =
       Enum.sort(Enum.map(nodes(d), &{&1["id"], &1["node_type"]})) ==
         Enum.sort(Enum.map(nodes(y), &{&1["id"], &1["node_type"]})) and
         node(d, "remediation-subprocess")["attributes"] ==
           node(y, "remediation-subprocess")["attributes"] and
-        Enum.sort(Enum.map(edges(d), &{&1["id"], &1["source"], &1["target"]})) ==
-          Enum.sort(Enum.map(edges(y), &{&1["id"], &1["source"], &1["target"]}))
+        edge_shape(d) == edge_shape(y)
 
     ok_if(same, :json_yaml_drift)
   end
@@ -423,6 +431,25 @@ defmodule Letflow.Scripts.MeridianRegulatoryRemediationFixtureTest do
                    end)
                  )
                )
+    end
+
+    test "M8 yaml mirror edge conditions drift (e8 loses 'true', e9 loosened) -> parity red" do
+      for {id, fun} <- [
+            {"e8", &Map.delete(&1, "condition")},
+            {"e9", &Map.put(&1, "condition", "variables.remediation_status != 'unresolved'")}
+          ] do
+        y =
+          update_in(yaml_doc(), ["graph", "edges"], fn es ->
+            Enum.map(es, &if(&1["id"] == id, do: fun.(&1), else: &1))
+          end)
+
+        assert {:error, _} = check_yaml_parity(doc(), y), id
+      end
+    end
+
+    test "M9 seed script header names the fixture version" do
+      script = Path.expand("../../../scripts/seed_meridian_definition.sh", __DIR__)
+      assert File.read!(script) =~ ~s(Regulatory Compliance Review" v#{doc()["version"]} )
     end
 
     test "M7 version not bumped -> red" do

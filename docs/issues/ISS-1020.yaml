@@ -66,4 +66,4 @@ resolution: >
   Letflow.Engine.Transition gateway dispatch; fail-first on the v1.6 fixture (9 of 16 fail).
 follow_ups:
   - "QA needs a re-seed of Meridian Loan Origination v1.7 (scripts/seed_meridian_definition.sh creates and activates it; the platform deprecates v1.6)."
-  - "Operators completing kyc-manual-review must supply output variable kyc_outcome (cleared | rejected); there is no form definition for this task, so the contract lives in the definition description and this issue."
+  - "Operators completing kyc-manual-review must supply output variable kyc_outcome (cleared | rejected); there is no form definition for this task, so the contract lives in the definition description and this issue. BA decision (letflow-2): accepted as is for QA/demo; the proper kyc-manual-review form with a required kyc_outcome field (cleared | rejected) is tracked as an explicit acceptance criterion of Q-997 / ISS-1015 (GH #2284) -- no new issue."

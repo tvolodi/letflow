@@ -1,0 +1,106 @@
+run_id: WF03-ISS0999-Q981-20261006
+step: release-validation
+agent: RELEASE-VALIDATOR
+generated_at: "2026-10-06T08:30:00Z"
+branch: fix/ISS-0999-platform-events-allowlist
+scope: scoped (host loaded; full suite and mix letflow.check.test left to CI by instruction); working tree UNCOMMITTED
+verdict: VERIFIED (after re-verification below; first-run verdict was NOT VERIFIED)
+first_run_reason: >
+  One existing test, outside the T-7 file, now fails because of the change:
+  test/letflow/routers/promotions_test.exs:183 ("response shape (design §2.6) envelope has exactly
+  items/next_cursor; item has exactly the 6 named keys"). It asserts a non-operator item carries
+  actor_id (lines 198-206 and 210). The change removes actor_id for a non-operator by design
+  (design 3.4), so the test needed the same update as T-7 but design section 6 only listed T-7.
+  Not pre-existing: failure cause is the intended behaviour change. Fix is a test-only edit (five
+  keys, drop the actor_id equality line, optionally refute actor_id). Everything else verified.
+command: >
+  MIX_ENV=test MIX_TEST_PARTITION=3 mix test test/letflow/routers test/letflow/api test/docs
+  test/letflow/no_smtp_secret_guard_test.exs test/letflow/login_directory/no_secret_in_repo_test.exs
+  --timeout 300000
+result:
+  passed: 1509
+  total: 1510
+  failed: 1
+  output: "Finished in 1004.5 seconds (10.2s async, 994.3s sync); Result: 1509/1510 passed; Failed: 1 test (two identical runs: 1023.9s and 1004.5s, both 1509/1510)"
+failures:
+  - file: test/letflow/routers/promotions_test.exs
+    test: "response shape (design §2.6) envelope has exactly items/next_cursor; item has exactly the 6 named keys (Letflow.Routers.PromotionsTest)"
+    line: 183
+    error: |
+      Assertion with == failed (promotions_test.exs:198)
+      left:  ["event_id", "event_type", "payload", "sequence_num", "timestamp"]
+      right: ["actor_id", "event_id", "event_type", "payload", "sequence_num", "timestamp"]
+    classification: regression introduced by the change (stale expectation), not environmental
+other_checks:
+  compile_warnings_as_errors: "MIX_ENV=test mix compile --warnings-as-errors --force: Compiling 349 files, Generated letflow app, exit 0"
+  format_check: "mix format --check-formatted: exit 0"
+  check_boundaries: "mix letflow.check_boundaries: OK -- 1049 edges checked, 0 violations"
+  check_issue_refs: "mix letflow.check_issue_refs: OK -- 593 file(s) under docs/issues/, every cross-reference prefixed and well-formed"
+  not_run_by_instruction: ["scripts/test_parallel.sh full suite", "mix letflow.check.test"]
+diff_checks:
+  decision_record_0046: "git diff --numstat: 19 added / 0 removed, appended section only (Closure ... ISS-0999 / Q-981, 2026-10-06); no earlier text changed. PASS"
+  lib_scope: "git diff and git status: only lib/letflow/routers/promotions.ex modified in lib/; the design md is a new file under lib/letflow/design/. PASS"
+  context_route_unchanged: "review_context_map/2, shape_plan/2, shape_tenant_ids/2, tenant_id_key?/1, own_tenant_value?/2 are untouched by the diff (only the platform_event_map call site stopped using shape_tenant_ids). PASS"
+  requirements_and_status_untouched: "git status for docs/requirements.yaml and docs/status: empty. PASS"
+  t7_assertions: >
+    Shaping-test assertion changes match design section 6 (e6/e7/e8 payload == %{}, actor_id removed
+    from envelope comparison, five-key set, own-tenant retention assertions kept, e1..e4b per-key
+    assertions kept). No assertion weakened beyond those listed; added refute/assert cases for
+    actor_id, unlisted keys, scalar rule, unknown type. PASS
+criteria:
+  - n: 1
+    text: "allowlist per event type for the 3 types; unknown key never reaches a non-operator"
+    status: VERIFIED
+    evidence: >
+      @platform_event_allowlist literal with the three types in promotions.ex; shape_platform_event_payload/3
+      hand-builds the map (no recursion, scalar-only, unknown type or non-map payload -> %{}).
+      T-9 drift test and T-7 allowlist cases pass in the 1509 passing.
+  - n: 2
+    text: "non-operator: source_definition_id, review_id, foreign actor_id omitted; operator sees all"
+    status: VERIFIED_WITH_CAVEAT
+    evidence: >
+      platform_event_map/2 adds actor_id only for :operator; allowlist omits source_definition_id and
+      review_id. T-7 and T-10 assertions pass. Caveat: the actor_id removal breaks the stale
+      assertion in promotions_test.exs:183 (see failures); behaviour is as designed.
+  - n: 3
+    text: "two-tenant test: operator promotes B into A, A's admin reads, no identifier of B or operator in body; operator sees all; tenant_ids/tenantId case covered"
+    status: VERIFIED
+    evidence: >
+      promotion_platform_events_two_tenant_test.exs (T-10) uses Promotion.promote_definition/3, and
+      T-7 unlisted_tenant_keys_never_reach_a_non_operator covers tenant_ids/tenantId/source_tenant/x_tenant_id;
+      all pass.
+  - n: 4
+    text: "existing T-7 shaping tests still pass or are updated with the allowlist"
+    status: VERIFIED (re-verified after fix; first run was NOT VERIFIED)
+    evidence: >
+      Re-verification: promotions_test.exs updated by the coordinator (5 keys, refute actor_id) and green. First run: T-7 file updated and passing. But another existing test of the same route,
+      promotions_test.exs:183, was not updated and fails (see failures). Criterion holds for the T-7
+      file, fails for the route's other pre-existing shape test.
+  - n: 5
+    text: "SECURITY-REVIEWER verdict recorded"
+    status: VERIFIED
+    evidence: "Recorded in gates block below from the orchestrator's handoff (verdict PASS); not independently re-derived by this role."
+gates:
+  security_reviewer:
+    verdict: PASS
+    residuals: [R1, R2, R3, R4, R5]
+    tracked_followup: "Q-1003 / GH #2291 / ISS-1021 (GET /promotions/:id/context allowlist)"
+    source: "as reported in the RELEASE-VALIDATOR handoff; not re-verified here"
+lib_test_modified_by_step: false
+re_verification:
+  generated_at: "2026-10-06T09:10:00Z"
+  trigger: "coordinator fixed test/letflow/routers/promotions_test.exs (diff: 6-key list to 5 keys, actor_id equality replaced by refute Map.has_key?(item, actor_id))"
+  command: >
+    MIX_ENV=test MIX_TEST_PARTITION=3 mix test test/letflow/routers/promotions_test.exs
+    test/letflow/definitions/promotion_test.exs test/letflow/event_store/platform_events_test.exs
+    test/letflow/routers/promotion_platform_events_shaping_test.exs
+    test/letflow/routers/promotion_platform_events_two_tenant_test.exs
+    test/letflow/routers/promotion_platform_events_allowlist_drift_test.exs
+    test/letflow/api/platform_scope_inventory_test.exs --timeout 300000
+  result: "Finished in 97.0 seconds; Result: 103 passed; exit 0"
+  other_consumers: >
+    grep of test/, web/src, web/e2e, apps, scripts for platform-events / platform_events: no match in web/, apps/ or scripts/.
+    Test consumers besides those run above: req446_cross_tenant_denial_test.exs, promotion_scope_test.exs,
+    platform_scope_authorization_test.exs (all under test/letflow/routers or test/letflow/api, so inside
+    the first scoped run, which passed except the one fixed test), test/support/promotion_scope_fixture.ex.
+  note: "first-run failure above kept as history"

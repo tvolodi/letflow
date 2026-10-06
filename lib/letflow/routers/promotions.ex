@@ -74,9 +74,15 @@ defmodule Letflow.Routers.Promotions do
   rows of the caller's own schema, so no separate platform permission exists.
   INV-10 response shaping: for a caller that is NOT a platform-tenant operator
   (`Letflow.PlatformTenant.scope_facts_for/1` on `auth_context.tenant_id`, never a
-  request value), R11 event payloads and the R4 `serialised_plan` omit every
-  key ending in `tenant_id` whose value is not the caller's own tenant id, at
-  any depth (R4 does not descend into `entries`). Operators see them unchanged.
+  request value), R11 is shaped by a per-event-type payload ALLOWLIST
+  (ISS-0999, `@platform_event_allowlist`): only listed scalar keys are kept, the
+  tenant-id keys only when they are the caller's own, `source_definition_id`,
+  `review_id`, teardown `error` and every unknown key are omitted, an unknown
+  event type gets payload `{}` (event kept), and the item has no `actor_id`.
+  The R4 `serialised_plan` is still shaped by the key-suffix rule: it omits
+  every key ending in `tenant_id` whose value is not the caller's own tenant id,
+  at any depth (R4 does not descend into `entries`). Operators see both
+  unchanged.
 
   The rule for naming ANOTHER tenant (`Letflow.PlatformTenant.cross_tenant_promotion_operator_only?/0`): only a
   request that reads or writes a tenant OTHER than the caller's is
@@ -936,19 +942,83 @@ defmodule Letflow.Routers.Promotions do
   defp non_empty_platform_event_type(""), do: nil
   defp non_empty_platform_event_type(value) when is_binary(value), do: value
 
+  # -- Response allowlist (INV-2) --
+  # Per-event-type payload allowlist for a NON-operator reader of R11
+  # (lib/letflow/design/iss0999-platform-events-allowlist.md, INV-10): a
+  # promotion event written at a target tenant carries identifiers of other
+  # tenants' schemas, so the shaping is an ALLOWLIST, not a key-pattern deny.
+  # `plain` keys are kept when their value is a scalar; `own_tenant` keys are
+  # kept only when the value is the caller's own tenant id. Everything else
+  # (notably source_definition_id, review_id, teardown `error`) is omitted.
+  # An event type with no entry here gets payload %{} (event kept).
+  @platform_event_allowlist %{
+    "DEFINITION_PROMOTED" => %{
+      plain: ["target_definition_id", "process_key"],
+      own_tenant: ["source_tenant_id", "target_tenant_id"]
+    },
+    "DEFINITION_VERSION_ROLLED_BACK" => %{
+      plain: ["process_key", "from_version", "to_version"],
+      own_tenant: []
+    },
+    "PROMOTION_ASSERTION_TEARDOWN_FAILED" => %{
+      plain: ["run_id", "sandbox_id"],
+      own_tenant: ["tenant_id"]
+    }
+  }
+
+  # Test seam for the registry-drift test only (ISS-0999 T-9).
+  @doc false
+  @spec platform_event_allowlist() :: %{
+          String.t() => %{plain: [String.t()], own_tenant: [String.t()]}
+        }
+  def platform_event_allowlist, do: @platform_event_allowlist
+
   # Hand-built allowlist (design §2.6), same discipline as Routers.Audit's
-  # audit_item/1 -- never a raw struct/Jason.Encoder derivation.
+  # audit_item/1 -- never a raw struct/Jason.Encoder derivation. A non-operator
+  # item has no `actor_id` key (the actor may be a user of another tenant).
   @spec platform_event_map(EventStore.platform_event_item(), tenant_view()) :: map()
   defp platform_event_map(item, view) do
-    %{
+    base = %{
       "event_id" => item.event_id,
       "event_type" => item.event_type,
-      "actor_id" => item.actor_id,
       "timestamp" => iso8601(item.timestamp),
       "sequence_num" => item.sequence_num,
-      "payload" => shape_tenant_ids(item.payload, view)
+      "payload" => shape_platform_event_payload(item.payload, item.event_type, view)
     }
+
+    case view do
+      :operator -> Map.put(base, "actor_id", item.actor_id)
+      {:tenant, _own} -> base
+    end
   end
+
+  # Operator: unchanged. Non-operator: exactly the allowlisted keys that pass
+  # the value rules; %{} for an unknown type, a non-map payload or the `$ref`
+  # oversized form. No recursion: a map or list value is omitted (fail closed).
+  @spec shape_platform_event_payload(term(), String.t(), tenant_view()) :: term()
+  defp shape_platform_event_payload(payload, _event_type, :operator), do: payload
+
+  defp shape_platform_event_payload(payload, event_type, {:tenant, own})
+       when is_map(payload) and not is_struct(payload) do
+    case Map.fetch(@platform_event_allowlist, event_type) do
+      {:ok, %{plain: plain, own_tenant: own_keys}} ->
+        Enum.reduce(payload, %{}, fn {key, val}, acc ->
+          cond do
+            key in plain and scalar?(val) -> Map.put(acc, key, val)
+            key in own_keys and own_tenant_value?(val, own) -> Map.put(acc, key, val)
+            true -> acc
+          end
+        end)
+
+      :error ->
+        %{}
+    end
+  end
+
+  defp shape_platform_event_payload(_payload, _event_type, {:tenant, _own}), do: %{}
+
+  defp scalar?(value),
+    do: is_binary(value) or is_number(value) or is_boolean(value) or is_nil(value)
 
   # ── INV-10 response shaping (REQ-446) ────────────────────────────────────
 

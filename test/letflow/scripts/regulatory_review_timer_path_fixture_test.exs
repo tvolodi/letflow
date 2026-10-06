@@ -119,8 +119,9 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
   # ISS-0926 bumped the shipped fixture to "1.3" (body_template added to
   # regulatory-auto-escalation, new node remediation-unresolved-escalation
   # split out from e10's own inbound meaning -- see that fix's own design
-  # doc §4.5).
-  defp check_t1(doc), do: ok_if(doc["version"] == "1.4", {:version, doc["version"]})
+  # doc §4.5). ISS-1018 / Q-1000 bumped it to "1.5" (fallback-ceo-override
+  # now targets reopen-review instead of archive-review).
+  defp check_t1(doc), do: ok_if(doc["version"] == "1.5", {:version, doc["version"]})
 
   defp check_t2(doc),
     do:
@@ -451,6 +452,64 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
         )
 
       assert {:error, _} = check_t12(json_doc(), old_yaml)
+    end
+  end
+
+  describe "ISS-1018 / Q-1000: ceo-override fails toward scrutiny" do
+    defp reachable_from(doc, start, variables),
+      do: walk_edges(doc, [start], MapSet.new([start]), variables)
+
+    defp walk_edges(_doc, [], seen, _variables), do: seen
+
+    defp walk_edges(doc, [node | rest], seen, variables) do
+      next =
+        for edge <- out_edges(doc, node),
+            is_nil(edge["condition"]) or
+              Letflow.Engine.Expr.evaluate_condition(edge["condition"], variables),
+            edge["target"] not in seen,
+            do: edge["target"]
+
+      next = Enum.uniq(next)
+      walk_edges(doc, rest ++ next, Enum.into(next, seen), variables)
+    end
+
+    for doc_name <- [:json_doc, :yaml_doc] do
+      test "fallback-ceo-override targets reopen-review, never archive-review (#{doc_name})" do
+        doc = unquote(doc_name)()
+        ceo_edges = out_edges(doc, "ceo-override")
+
+        assert %{"target" => "reopen-review"} =
+                 fallback = Enum.find(ceo_edges, &(&1["id"] == "fallback-ceo-override"))
+
+        refute conditioned?(fallback)
+
+        assert [%{"id" => "e14", "condition" => "variables.ceo_decision == 'sign_off'"}] =
+                 Enum.filter(ceo_edges, &(&1["target"] == "archive-review"))
+      end
+
+      test "a missing or unrecognised ceo_decision never reaches archive-review (#{doc_name})" do
+        for variables <- [
+              %{},
+              %{"ceo_decision" => nil},
+              %{"ceo_decision" => "maybe"},
+              %{"ceo_decision" => "SIGN_OFF"},
+              %{"ceo_decision" => ""}
+            ] do
+          reached = reachable_from(unquote(doc_name)(), "ceo-override", variables)
+
+          refute "archive-review" in reached,
+                 "reached archive-review with #{inspect(variables)}"
+
+          assert "reopen-review" in reached
+          assert "end-reopened" in reached
+        end
+      end
+    end
+
+    test "the walk is not vacuous: an explicit ceo_decision 'sign_off' reaches archive-review" do
+      assert "archive-review" in reachable_from(json_doc(), "ceo-override", %{
+               "ceo_decision" => "sign_off"
+             })
     end
   end
 end

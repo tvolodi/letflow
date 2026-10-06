@@ -1,0 +1,61 @@
+id: ISS-1001
+title: "[BLOCKER] Meridian Loan Origination: l2-approval has an unconditional fallback to create-facility (missing/unknown l2_decision creates the loan)"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:32:35Z"
+severity: BLOCKER
+failure_class: defect
+occurrence: 1
+owner: "letflow-3 (author of the fixtures, Q-928/Q-980); ELIXIR-DEV or CODE-DESIGNER for the definition change"
+process_audit_report: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-MERIDIAN-008
+checklist_item: F1
+scope: meridian
+description: >
+  Severity BLOCKER (BA reclassified from MAJOR PA-MERIDIAN-008, l2 part only). Scope meridian. Checklist F1 (consistent handling of unanswered or unrecognised approvals). Audit: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml finding PA-MERIDIAN-008.
+
+  In test/fixtures/qa/meridian_loan_origination_process_definition.json, task l2-approval has edge e21 (variables.l2_decision == 'approve' -> create-facility), edge e22 (== 'reject' -> decline-application) and edge fallback-l2-approval (l2-approval -> create-facility) with NO condition. Any missing or unrecognised l2_decision value (including a timeout) therefore creates the loan facility: approval by default.
+
+  Business consequence: a loan above the first-level threshold can be set up without the credit director's second-level approval. This violates the principle that defaults route toward more scrutiny (BA decision 0047 / Q-972 note; same principle as ISS-0998 / Q-980 for kyc).
+
+  Fix direction: make fallback-l2-approval target decline-application, or a manual-review / escalation node (more scrutiny), never create-facility. Keep fallback-l1-approval -> l2-approval (that escalation is acceptable: more scrutiny). Observation, not part of this issue: fallback-ceo-override in test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json also moves forward by default; BA decided to treat l2 only here.
+
+  Add a definition-level drift/validator test so an unconditional default edge can never lead to a facility-creating or disbursing node.
+
+  Re-seed note: a changed definition needs a new version seeded on QA (no QA writes from this filing).
+
+
+
+  Audit artefact: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml; finding PA-MERIDIAN-008 (l2 part, reclassified MAJOR -> BLOCKER by BA); checklist item F1; scope meridian; severity BLOCKER. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: letflow-3 (author of the fixtures, Q-928/Q-980); ELIXIR-DEV or CODE-DESIGNER for the definition change.
+acceptance_criteria:
+  - "In test/fixtures/qa/meridian_loan_origination_process_definition.json the edge fallback-l2-approval (or its replacement) does not target create-facility; it targets decline-application or a manual-review/escalation node"
+  - "fallback-l1-approval -> l2-approval is unchanged"
+  - "A definition-level drift test fails if any unconditional/default edge in the Meridian loan definition leads (directly) to create-facility or disburse-loan"
+  - "An instance whose l2_decision is missing or unrecognised never reaches create-facility (test via the engine or a graph-walk test)"
+  - "The process validator reports status OK; existing Meridian scenarios still pass"
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/simulation/meridian/process_claim_intake.yaml
+  - scripts/seed_meridian_definition.sh
+  - test/letflow/scripts/meridian_loan_origination_fixture_test.exs
+  - test/letflow/definitions/shipped_definitions_default_edge_scrutiny_test.exs
+regression_test: test/letflow/definitions/shipped_definitions_default_edge_scrutiny_test.exs
+# Ref clash: the queue's issue_ref for Q-983 came back ISS-0983, which is not the local number
+# (docs/issues/ISS-0983.yaml is a different issue); ISS-1001 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-983
+github_ref: GH-2270
+status: resolved
+resolved_in_run: WF03-ISS1001-Q983-20261006
+resolved_at: "2026-10-06T06:45:00Z"
+resolution: >
+  Fixture v1.6: fallback-l2-approval now targets decline-application (an unrecognised, missing or
+  timed-out l2_decision declines instead of creating the facility); fallback-l1-approval ->
+  l2-approval unchanged; the simulation copy test/fixtures/simulation/meridian/process_claim_intake.yaml
+  carried the same edge and is fixed the same way. Drift test extended: no default-style edge
+  (is_default, or an unconditioned edge beside conditioned siblings) may target an irreversible
+  action node (create-/disburse-/release-/...); fail-first on the old fixture. Graph-walk test: a
+  missing/unrecognised l2_decision never reaches create-facility.
+follow_ups:
+  - "QA needs a re-seed of Meridian Loan Origination v1.6 (scripts/seed_meridian_definition.sh creates and activates it; the platform deprecates v1.5)."
+  - "fallback-ceo-override in the Meridian regulatory compliance review definition is a separate BLOCKER finding (Q-1000 / GH #2287)."

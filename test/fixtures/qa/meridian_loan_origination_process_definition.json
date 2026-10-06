@@ -1,6 +1,6 @@
 {
   "name": "Loan Origination",
-  "version": "1.5",
+  "version": "1.6",
   "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking.",
   "graph": {
     "nodes": [
@@ -224,7 +224,7 @@
       { "id": "fallback-l1-approval",        "source": "l1-approval",            "target": "l2-approval" },
       { "id": "e21",                         "source": "l2-approval",            "target": "create-facility",      "condition": "variables.l2_decision == 'approve'" },
       { "id": "e22",                         "source": "l2-approval",            "target": "decline-application",  "condition": "variables.l2_decision == 'reject'" },
-      { "id": "fallback-l2-approval",        "source": "l2-approval",            "target": "create-facility" },
+      { "id": "fallback-l2-approval",        "source": "l2-approval",            "target": "decline-application" },
       { "id": "e29",                         "source": "committee-vote-fork",    "target": "committee-vote-cro" },
       { "id": "e30",                         "source": "committee-vote-fork",    "target": "committee-vote-director" },
       { "id": "e31",                         "source": "committee-vote-fork",    "target": "committee-vote-ceo" },

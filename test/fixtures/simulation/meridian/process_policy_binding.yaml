@@ -148,10 +148,10 @@ graph:
       source: ceo-override
       target: reopen-review
       condition: "variables.ceo_decision == 'reject_and_reopen'"
-    # fallback for ceo-override
+    # fallback for ceo-override (ISS-1018: more scrutiny, never close-by-default)
     - id: fallback-ceo-override
       source: ceo-override
-      target: archive-review
+      target: reopen-review
     - id: e16
       source: archive-review
       target: end-closed

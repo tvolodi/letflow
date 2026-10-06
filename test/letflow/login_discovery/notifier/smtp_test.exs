@@ -132,6 +132,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpTest do
 
       # the sink saw no other recipient on ANY connection, and one connection in total
       assert SmtpSink.connections(sink) == 1
+      SmtpSink.await_closed(sink)
       assert SmtpSink.transcripts(sink) |> Enum.flat_map(& &1.rcpts) == [@recipient]
 
       # plain text, fixed subject, every active tenant's slug, name and base-URL link
@@ -155,6 +156,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpTest do
 
       assert Smtp.deliver_tenant_list(@recipient, @tenants) == :ok
 
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       # this makes the "no password in any log" tests non-vacuous: the secret really was used
       assert transcript.auth == [{S.user(), S.pass()}]
@@ -168,6 +170,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpTest do
 
       assert Smtp.deliver_tenant_list(@recipient, @tenants) == :ok
       assert [%{rcpts: [@recipient]}] = SmtpSink.messages(sink)
+      SmtpSink.await_closed(sink)
       assert [%{commands: commands}] = SmtpSink.transcripts(sink)
       assert List.first(commands) == "QUIT"
       assert Enum.count(commands, &(&1 == "DATA")) == 1
@@ -195,6 +198,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpTest do
 
       assert Smtp.deliver_tenant_list(@recipient, @tenants) == :ok
 
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       assert transcript.tls?
       assert transcript.sni == "localhost"
@@ -207,6 +211,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpTest do
       S.configure_smtp!(sink, host: "localhost", tls: :tls, tls_cacerts: [sink.ca_der])
 
       assert Smtp.deliver_tenant_list(@recipient, @tenants) == :ok
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       assert transcript.tls?
       assert transcript.sni == "localhost"
@@ -220,6 +225,8 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpTest do
       assert {:error, :failed} = Smtp.deliver_tenant_list(@recipient, @tenants)
       assert SmtpSink.messages(sink) == []
 
+      SmtpSink.await_closed(sink)
+
       for transcript <- SmtpSink.transcripts(sink) do
         assert transcript.auth == []
         assert transcript.mail_from == nil
@@ -232,6 +239,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpTest do
 
       assert {:error, :failed} = Smtp.deliver_tenant_list(@recipient, @tenants)
       assert SmtpSink.messages(sink) == []
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       assert transcript.auth == []
       assert transcript.mail_from == nil
@@ -242,6 +250,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpTest do
       S.configure_smtp!(sink, host: "localhost", tls: :starttls, tls_cacerts: [sink.ca_der])
 
       assert {:error, :failed} = Smtp.deliver_tenant_list(@recipient, @tenants)
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       assert transcript.auth == []
       assert transcript.mail_from == nil
@@ -266,6 +275,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpTest do
 
       assert {:error, :failed} = Smtp.deliver_tenant_list(@recipient, @tenants)
 
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       assert transcript.auth == []
       assert transcript.mail_from == nil

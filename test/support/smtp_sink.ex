@@ -84,6 +84,52 @@ defmodule Letflow.Test.SmtpSink do
     store |> Agent.get(& &1) |> Enum.sort() |> Enum.map(&elem(&1, 1))
   end
 
+  @doc """
+  Blocks until every connection the sink has accepted so far has been fully recorded,
+  i.e. its handler process has finished (its last command is in `commands`, `open?` is
+  `false`). Returns `:ok`; raises with the still-open connections' commands if that does
+  not happen within `timeout_ms`.
+
+  Why it exists: a client returns as soon as it has *sent* QUIT, which can be before the
+  handler has received and recorded it, so a transcript read straight after a delivery
+  may be missing its tail (the ISS-0996 race). No polling and no sleeping: it monitors
+  each still-open handler and waits for the `:DOWN`; the handler records `open?: false`
+  (synchronously) in its `after` block, before it exits, so the `:DOWN` happens-after
+  the final transcript write.
+
+  Do NOT call it for a script whose connection is deliberately left open (`:hang`,
+  `:slow_drip` mid-flight): the handler only ends when the client closes.
+  """
+  @spec await_closed(map(), timeout()) :: :ok
+  def await_closed(%{pid: store} = sink, timeout_ms \\ 5_000) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+
+    pending =
+      for {id, %{open?: true, handler: handler}} when is_pid(handler) <- Agent.get(store, & &1),
+          do: {id, handler, Process.monitor(handler)}
+
+    # A connection accepted but whose handler pid is not yet recorded cannot exist once a
+    # delivery has returned (the client has had the greeting from the handler).
+    Enum.each(pending, fn {_id, handler, ref} ->
+      remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+      receive do
+        {:DOWN, ^ref, :process, ^handler, _reason} -> :ok
+      after
+        remaining ->
+          Enum.each(pending, fn {_i, _h, r} -> Process.demonitor(r, [:flush]) end)
+
+          open =
+            for {id, %{open?: true} = c} <- Agent.get(store, & &1), do: {id, c.commands}
+
+          raise "SmtpSink.await_closed/2: connection(s) still open after #{timeout_ms}ms " <>
+                  "(id, commands newest-first): #{inspect(open)} for sink port #{sink.port}"
+      end
+    end)
+
+    :ok
+  end
+
   @spec connections(map()) :: non_neg_integer()
   def connections(%{pid: store}), do: Agent.get(store, &map_size/1)
 
@@ -139,6 +185,7 @@ defmodule Letflow.Test.SmtpSink do
             end
           end)
 
+        update(store, id, &%{&1 | handler: handler})
         :gen_tcp.controlling_process(sock, handler)
         send(handler, :go)
         accept_loop(lsock, script, tls, store, id + 1)
@@ -151,6 +198,7 @@ defmodule Letflow.Test.SmtpSink do
   defp new_conn do
     %{
       open?: true,
+      handler: nil,
       tls?: false,
       ehlo: nil,
       commands: [],

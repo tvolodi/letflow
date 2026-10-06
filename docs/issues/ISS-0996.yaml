@@ -1,0 +1,40 @@
+id: ISS-0996
+title: "SmtpSink: tests read the SMTP transcript before the sink handler has recorded QUIT (race; main CI backend gate red twice)"
+discovered_by: ORCH (main CI)
+discovered_in_run: WF03-ISS0996-SMTPSINK-20261006
+discovered_at: "2026-10-06T01:30:00Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 2
+owner: ELIXIR-DEV (test support only; no lib/ change)
+description: >
+  test/support/smtp_sink.ex records each SMTP command in a per-connection handler process. The
+  client (gen_smtp send_blocking) returns :ok as soon as it has SENT QUIT, which can be before the
+  handler has received and recorded it. Tests that read SmtpSink.transcripts/1 right after
+  Smtp.deliver_tenant_list/2 then saw commands = ["DATA", ...] with open?: true.
+  Failures on main CI (second occurrence of the class):
+    run 37398065729 (5639215b): test/letflow/login_discovery/notifier/smtp_test.exs:165
+      "a direct Smtp.deliver_tenant_list/2 call sends exactly one message and QUITs"
+    run 37401341773 (ccbf994e): test/letflow/login_discovery/notifier/smtp_encoder_test.exs:163
+      "SMTP DATA framing: no line is a lone dot or starts with a dot ..."
+  Product code is correct (QUIT is sent).
+
+  Fix: SmtpSink.await_closed/2 (monitors each still-open handler and waits for its :DOWN; the
+  handler records open?: false before exiting; no sleep, raises with a clear message on timeout),
+  called before every SmtpSink.transcripts/1 read after a delivery in smtp_test, smtp_encoder_test
+  and smtp_smoke_test and notifier_no_leak_test, plus smtp_sink_await_closed_test.exs (a 50-iteration back-to-back loop
+  regression and the timeout/no-op semantics). Fail-first: the old read pattern, 50 deliveries per
+  run, observed an unrecorded QUIT in 43, 45 and 42 of 50 iterations on a loaded host.
+affected_files:
+  - test/support/smtp_sink.ex
+  - test/letflow/login_discovery/notifier/smtp_test.exs
+  - test/letflow/login_discovery/notifier/smtp_encoder_test.exs
+  - test/letflow/login_discovery/notifier/smtp_smoke_test.exs
+  - test/letflow/login_discovery/notifier_no_leak_test.exs
+  - test/letflow/login_discovery/notifier/smtp_sink_await_closed_test.exs
+# Renumbered: the queue's issue_ref for Q-978 came back ISS-0978, which is already taken by another
+# issue (docs/issues/ISS-0978.yaml); ISS-0996 was the next free local number (origin/main ccbf994e
+# and every open PR checked).
+queue_ref: Q-978
+github_ref: GH-2259
+status: open

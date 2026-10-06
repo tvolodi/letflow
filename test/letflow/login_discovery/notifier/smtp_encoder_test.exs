@@ -87,6 +87,7 @@ defmodule Letflow.LoginDiscovery.Notifier.Smtp.EncoderTest do
       assert id =~ ~r/\A<[0-9a-f]{24}@mail\.example\.org>\z/
       refute id =~ to_string(node())
 
+      SmtpSink.await_closed(sink)
       assert [%{ehlo: "mail.example.org"}] = SmtpSink.transcripts(sink)
 
       second = S.start_sink!(:accept)
@@ -171,12 +172,14 @@ defmodule Letflow.LoginDiscovery.Notifier.Smtp.EncoderTest do
 
       # the transaction really completed after the hostile content: one message, QUIT sent
       assert [%{rcpts: [@recipient]}] = SmtpSink.messages(sink)
+      SmtpSink.await_closed(sink)
       assert [%{commands: ["QUIT" | _]}] = SmtpSink.transcripts(sink)
     end
 
     test "the hostile payload adds no recipient, no header and no second message", %{sink: sink} do
       {data, header_block, _body} = deliver!(sink, @hostile_tenants)
 
+      SmtpSink.await_closed(sink)
       assert SmtpSink.transcripts(sink) |> Enum.flat_map(& &1.rcpts) == [@recipient]
       assert SmtpSink.connections(sink) == 1
 

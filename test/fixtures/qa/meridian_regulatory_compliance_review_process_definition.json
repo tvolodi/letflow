@@ -1,7 +1,7 @@
 {
   "name": "Regulatory Compliance Review",
-  "version": "1.5",
-  "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates within 21 days. If risk-evaluation is still open when its P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice and closes. Critical findings spawn a remediation sub-process. Exercises: HUMAN_TASK escalation timer, conditional sub-process, DLQ path. Edge e3 carries the constant condition 'true' on purpose: it always wins on normal task completion but is skipped by the escalation-timer path, which follows the single non-conditioned edge timeout-risk-evaluation. The 21-day SLA-breach path and the remediation-unresolved path file distinct BaFin regulatory-notice reasons (sla_breach_30_days on regulatory-auto-escalation via timeout-risk-evaluation; remediation_unresolved on the new node remediation-unresolved-escalation via e10) -- the two inbound meanings of the former shared node are now split into two nodes because edges carry no variable-assignment mechanism.",
+  "version": "1.6",
+  "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates within 21 days. If risk-evaluation is still open when its P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice and closes. Critical findings go to a remediation step. Exercises: HUMAN_TASK escalation timer, DLQ path. Edge e3 carries the constant condition 'true' on purpose: it always wins on normal task completion but is skipped by the escalation-timer path, which follows the single non-conditioned edge timeout-risk-evaluation. The 21-day SLA-breach path and the remediation-unresolved path file distinct BaFin regulatory-notice reasons (sla_breach_30_days on regulatory-auto-escalation via timeout-risk-evaluation; remediation_unresolved on the new node remediation-unresolved-escalation via e10) -- the two inbound meanings of the former shared node are now split into two nodes because edges carry no variable-assignment mechanism. Remediation is a person, not a sub-process (v1.6, ISS-1025 / Q-1007): the node remediation-subprocess (id kept stable; it is a HUMAN_TASK, not a SUB_PROCESS) is assigned to role-compliance-officer, who completes it with output variable remediation_status = resolved | unresolved. Only 'resolved' reaches findings-sign-off (edge e9); 'unresolved', a missing or unrecognised value, or no answer within the P30D deadline (timeout-remediation-subprocess) all end at remediation-unresolved-escalation, never at findings-sign-off. Edge e8 carries the constant condition 'true' for the same reason as e3.",
   "graph": {
     "nodes": [
       {
@@ -59,7 +59,12 @@
       },
       {
         "id": "remediation-subprocess",
-        "node_type": "SUB_PROCESS"
+        "node_type": "HUMAN_TASK",
+        "attributes": {
+          "role": "role-compliance-officer",
+          "escalation_timer_duration": "P30D",
+          "escalation_role": "role-ceo"
+        }
       },
       {
         "id": "post-remediation-check",
@@ -126,7 +131,8 @@
       { "id": "e6",                        "source": "severity-routing",       "target": "remediation-subprocess", "condition": "variables.highest_severity == 'critical'" },
       { "id": "e7",                        "source": "severity-routing",       "target": "findings-sign-off",      "condition": "variables.highest_severity == 'none' || variables.highest_severity == 'low' || variables.highest_severity == 'medium' || variables.highest_severity == 'high'" },
       { "id": "severity-routing-default", "source": "severity-routing", "target": "remediation-subprocess", "is_default": true },
-      { "id": "e8",                        "source": "remediation-subprocess", "target": "post-remediation-check" },
+      { "id": "e8",                        "source": "remediation-subprocess", "target": "post-remediation-check", "condition": "true" },
+      { "id": "timeout-remediation-subprocess", "source": "remediation-subprocess", "target": "remediation-unresolved-escalation" },
       { "id": "e9",                        "source": "post-remediation-check", "target": "findings-sign-off",      "condition": "variables.remediation_status == 'resolved'" },
       { "id": "e10",                       "source": "post-remediation-check", "target": "remediation-unresolved-escalation", "condition": "variables.remediation_status == 'unresolved'" },
       { "id": "post-remediation-check-default", "source": "post-remediation-check", "target": "remediation-unresolved-escalation", "is_default": true },

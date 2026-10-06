@@ -60,6 +60,35 @@ affected_files:
   - test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
   - scripts/seed_meridian_definition.sh
   - test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml
+  - test/fixtures/simulation/meridian/process_policy_binding.yaml
+  - test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs
+  - test/letflow/scripts/meridian_regulatory_remediation_fixture_test.exs
 queue_ref: Q-1007  # queue allocated issue_ref ISS-1007, which collides with an existing local file; local filename kept as ISS-1025 (next free on origin/main) and the GH issue retitled to match
 github_ref: GH-2300
-status: open
+status: resolved
+resolved_in_run: WF03-ISS1025-Q1007-20261006
+resolved_at: "2026-10-06T13:00:00Z"
+resolution: >
+  Option (b). Fixture v1.6. remediation-subprocess (node id kept stable so edges e6, e8 and
+  severity-routing-default are untouched; it is no longer a sub-process) is a HUMAN_TASK for
+  role-compliance-officer (a role this fixture already uses for evidence-collection; no new role,
+  so the persona/role seed is unchanged) that is completed with output variable remediation_status =
+  resolved | unresolved. Deadline: escalation_timer_duration P30D with escalation_role role-ceo, the
+  same mechanism as risk-evaluation; e8 (-> post-remediation-check) now carries the constant
+  condition "true" so normal completion wins and the timer path follows the single non-conditioned
+  edge timeout-remediation-subprocess -> remediation-unresolved-escalation. Only an exact
+  'resolved' reaches findings-sign-off (e9); 'unresolved', missing, null, empty or unrecognised
+  values and a timed-out task end at remediation-unresolved-escalation. The safe defaults
+  (post-remediation-check-default, severity-routing-default -> remediation, BA-confirmed) are
+  unchanged. Option (a) (a Meridian child definition) was not taken: the engine's sub-process
+  output mapping would add a second definition, seed unit and ordering concern for a step that is a
+  single person's answer. The simulation copy process_policy_binding.yaml mirrors the change.
+  New test file test/letflow/scripts/meridian_regulatory_remediation_fixture_test.exs (fail-first on
+  v1.5); the ISS-0932 T1 (version) and T8b (inbound edge set) guards were updated. The BaFin
+  scenario depends only on the 21-day timer path and is unchanged. This does not verify WHO
+  actually completes the task or that the value is honest; it removes the structural
+  unreachability and the silent default.
+follow_ups:
+  - "QA needs a re-seed of Meridian Regulatory Compliance Review v1.6 (scripts/seed_meridian_definition.sh creates and activates it; the platform deprecates v1.5). No persona/role re-seed needed."
+  - "Process-audit re-run to confirm PA-MERIDIAN-005 (checklist C1) is no longer reported."
+regression_test: test/letflow/scripts/meridian_regulatory_remediation_fixture_test.exs

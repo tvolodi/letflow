@@ -120,8 +120,10 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
   # regulatory-auto-escalation, new node remediation-unresolved-escalation
   # split out from e10's own inbound meaning -- see that fix's own design
   # doc §4.5). ISS-1018 / Q-1000 bumped it to "1.5" (fallback-ceo-override
-  # now targets reopen-review instead of archive-review).
-  defp check_t1(doc), do: ok_if(doc["version"] == "1.5", {:version, doc["version"]})
+  # now targets reopen-review instead of archive-review). ISS-1025 / Q-1007
+  # bumped it to "1.6" (remediation-subprocess is now a HUMAN_TASK, not an
+  # attribute-less SUB_PROCESS).
+  defp check_t1(doc), do: ok_if(doc["version"] == "1.6", {:version, doc["version"]})
 
   defp check_t2(doc),
     do:
@@ -199,6 +201,7 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
 
   # REQ-455: post-remediation-check gained an is_default edge (CHK-24) to this node,
   # so its inbound set is e10 plus that default; both mean "remediation unresolved".
+  # ISS-1025 / Q-1007: the P30D deadline edge of the remediation human task is the third.
   defp check_t8b(doc) do
     inbound =
       doc
@@ -215,7 +218,8 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
     body_template = (n["attributes"] || %{})["body_template"]
 
     ok_if(
-      inbound == ["e10", "post-remediation-check-default"] and outbound == [{"e18", "end-closed"}] and
+      inbound == ["e10", "post-remediation-check-default", "timeout-remediation-subprocess"] and
+        outbound == [{"e18", "end-closed"}] and
         is_binary(body_template) and String.contains?(body_template, "remediation_unresolved"),
       {inbound, outbound, n["attributes"]}
     )
@@ -303,7 +307,7 @@ defmodule Letflow.Scripts.RegulatoryReviewTimerPathFixtureTest do
       assert check_t8(json_doc()) == :ok
     end
 
-    test "T8b remediation-unresolved-escalation: one inbound edge (e10), e18 -> end-closed, body_template reports remediation_unresolved" do
+    test "T8b remediation-unresolved-escalation: inbound e10 + defaults/deadline edge, e18 -> end-closed, body_template reports remediation_unresolved" do
       assert check_t8b(json_doc()) == :ok
     end
 

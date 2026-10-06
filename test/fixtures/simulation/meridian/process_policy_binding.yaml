@@ -6,8 +6,12 @@ description: >
   Periodic BaFin-mandated compliance review. Compliance Officer collects evidence;
   Risk Manager evaluates within 21 days. If risk-evaluation is still open when its
   P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice
-  and closes. Critical findings spawn a remediation sub-process.
-  Exercises: HUMAN_TASK escalation timer, conditional sub-process, DLQ path.
+  and closes. Critical findings go to a remediation step.
+  Exercises: HUMAN_TASK escalation timer, DLQ path.
+  Remediation is a person, not a sub-process (ISS-1025 / Q-1007): remediation-subprocess
+  is a HUMAN_TASK for role-compliance-officer recording remediation_status =
+  resolved | unresolved; only 'resolved' reaches findings-sign-off, everything else
+  (including no answer within P30D) ends at remediation-unresolved-escalation.
   Edge e3 carries the constant condition 'true' on purpose: it always wins on normal
   task completion but is skipped by the escalation-timer path, which follows the
   single non-conditioned edge timeout-risk-evaluation.
@@ -43,7 +47,11 @@ graph:
     - id: severity-routing
       node_type: EXCLUSIVE_GATEWAY
     - id: remediation-subprocess
-      node_type: SUB_PROCESS
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-compliance-officer
+        escalation_timer_duration: P30D
+        escalation_role: role-ceo
     - id: post-remediation-check
       node_type: EXCLUSIVE_GATEWAY
     - id: findings-sign-off
@@ -113,6 +121,11 @@ graph:
     - id: e8
       source: remediation-subprocess
       target: post-remediation-check
+      condition: "true"
+    # escalation timer (P30D) fallback for remediation-subprocess -> unresolved notice
+    - id: timeout-remediation-subprocess
+      source: remediation-subprocess
+      target: remediation-unresolved-escalation
     - id: e9
       source: post-remediation-check
       target: findings-sign-off

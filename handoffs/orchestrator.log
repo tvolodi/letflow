@@ -2732,3 +2732,5 @@
 2026-10-06T05:20:51Z | PASS | WF-02 | WF02-REQ456-20261006 | CODE-DESIGN-VALIDATOR, REVIEWER, RELEASE-VALIDATOR → ORCH | Amendment 1 steps 07a (PASS attempt 3 after 2 design reconciliations), 07b PASS, 07c PASS
 2026-10-06T05:22:20Z | DISPATCH | WF-02 | WF02-REQ456-20261006 | ORCH → REVIEWER | Step 08b: roster edit (actor-swiftroute-alice into legacy_platform_admin per T-0150); roster is in every scope's digest set
 2026-10-06T05:22:49Z | PASS | WF-02 | WF02-REQ456-20261006 | REVIEWER → ORCH | Step 08b PASS (roster edit c4f93684)
+2026-10-06T05:29:34Z | RUN_START | WF-03 | WF03-Q976-20261006 | ORCH | ISS-0995 / Q-976 / GH#2257 started on fix/ISS-0995-deny-attribution-Q976 (local branch from origin/main 72c81b6d, not pushed)
+2026-10-06T07:05:00Z | RUN_DONE | WF-03 | WF03-Q976-20261006 | ORCH | gates green (design after 1 rework, security PASS, idiom PASS, test-design PASS w/ 8 independently applied mutants, release); scoped runs only (653 passed); local commit, NOT pushed (CI-slot rule); queue lock 976 and GH#2257 left to parent.

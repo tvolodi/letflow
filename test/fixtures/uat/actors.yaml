@@ -118,6 +118,16 @@ actors:
     builtin_roles: [TASK_WORKER]
     routing_roles: [role-ceo]
     note: "seed_vortex_persona_actors.sh PERSONAS line (actor-vortex-dirk|role-ceo); TASK_WORKER implicit per script header. Same entry as ISS-1006 / Q-988 (vortex D3); added here so the CEO-escalation scenarios pass SCHEMA-7"
+  actor-vortex-max:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_vortex_persona_actors.sh PERSONAS line (actor-vortex-max|, no routing role); TASK_WORKER implicit per script header. Process-audit WF05-BASELINE3 PA-VORTEX-008 / ISS-1006 / Q-988: seeded account now recorded in the roster"
+  actor-vortex-claudia:
+    tenant: vortex
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_vortex_persona_actors.sh PERSONAS line (actor-vortex-claudia|, no routing role); TASK_WORKER implicit per script header. Process-audit WF05-BASELINE3 PA-VORTEX-008 / ISS-1006 / Q-988: seeded account now recorded in the roster"
 
 # Actors whose built-in role could not be established. A recorded gap, not a pass for SCHEMA-8..10.
 unresolved:

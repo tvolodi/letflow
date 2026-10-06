@@ -1,6 +1,6 @@
 {
   "name": "Regulatory Compliance Review",
-  "version": "1.4",
+  "version": "1.5",
   "description": "Periodic BaFin-mandated compliance review. Compliance Officer collects evidence; Risk Manager evaluates within 21 days. If risk-evaluation is still open when its P21D escalation timer fires, the flow auto-escalates to a BaFin regulatory notice and closes. Critical findings spawn a remediation sub-process. Exercises: HUMAN_TASK escalation timer, conditional sub-process, DLQ path. Edge e3 carries the constant condition 'true' on purpose: it always wins on normal task completion but is skipped by the escalation-timer path, which follows the single non-conditioned edge timeout-risk-evaluation. The 21-day SLA-breach path and the remediation-unresolved path file distinct BaFin regulatory-notice reasons (sla_breach_30_days on regulatory-auto-escalation via timeout-risk-evaluation; remediation_unresolved on the new node remediation-unresolved-escalation via e10) -- the two inbound meanings of the former shared node are now split into two nodes because edges carry no variable-assignment mechanism.",
   "graph": {
     "nodes": [
@@ -136,7 +136,7 @@
       { "id": "e13",                       "source": "cro-sign-off-timeout",   "target": "ceo-override" },
       { "id": "e14",                       "source": "ceo-override",           "target": "archive-review",         "condition": "variables.ceo_decision == 'sign_off'" },
       { "id": "e15",                       "source": "ceo-override",           "target": "reopen-review",          "condition": "variables.ceo_decision == 'reject_and_reopen'" },
-      { "id": "fallback-ceo-override",     "source": "ceo-override",           "target": "archive-review" },
+      { "id": "fallback-ceo-override",     "source": "ceo-override",           "target": "reopen-review" },
       { "id": "e16",                       "source": "archive-review",         "target": "end-closed" },
       { "id": "e17",                       "source": "reopen-review",          "target": "end-reopened" },
       { "id": "e18",                       "source": "remediation-unresolved-escalation", "target": "end-closed" }

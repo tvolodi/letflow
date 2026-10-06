@@ -33,15 +33,31 @@ defmodule Letflow.Definitions.ShippedDefinitionsDefaultEdgeScrutinyTest do
     * `E.is_default == true`, OR
     * `E` has NO `condition` AND `N` has at least one OTHER outgoing edge WITH a condition
       (an unconditioned edge beside conditioned siblings is what the engine takes when none of
-      them holds -- the `fallback-*` / `timeout-*`-style edges of the QA fixtures).
+      them holds -- the `fallback-*` edges of the QA fixtures; a `timeout-*` edge counts only if its
+      node also has a conditioned sibling, so the loan `timeout-*` paths via `assessment-join` are NOT covered).
 
   `E` is a VIOLATION iff it is default-style and its target node's id matches
   `@irreversible_target` (id starts with `create-`, `disburse-`, `release-`, `payout-`,
-  `transfer-`, `execute-`, `activate-`, `provision-`, `refund-` or `issue-`, or is exactly one
-  of those words) -- ANY node type, so a SERVICE_TASK that creates/disburses and a HUMAN_TASK
+  `transfer-`, `execute-`, `activate-`, `provision-`, `refund-`, `issue-` or `archive-` (the
+  last added by ISS-1018 for `archive-review`, which closes a review as signed off), or is
+  exactly one of those words) -- ANY node type, so a SERVICE_TASK that creates/disburses and a HUMAN_TASK
   that disburses (`disburse-loan`) are both covered.
 
-  Blind spots (deliberate): an irreversible action whose id lacks those prefixes (e.g. `book-loan`,
+  ## ISS-1018 / Q-1000 third rule: a default never shares the target of an approve/close branch
+
+  The `fallback-ceo-override` bug (Meridian regulatory review: `ceo-override` -> `archive-review`
+  with no condition, the same target as `ceo_decision == 'sign_off'`: a missing/unrecognised
+  decision closed the review without sign-off). A default-style edge (same definition as above)
+  is a VIOLATION iff its target equals the target of a SIBLING conditioned edge whose condition
+  compares a variable `== 'approve' | 'approved' | 'sign_off' | 'signed_off' | 'accept' |
+  'accepted' | 'close' | 'closed'` (`@approving_condition`). Independent of the target's id, so it
+  also catches approving defaults into nodes the id list above does not know. Blind spot: an
+  approving condition phrased outside that regex (`>=`, `in`, `!=`) is not seen. Exception
+  (BA-accepted, ISS-1001): a target that is a HUMAN_TASK is not a violation -- a default into a
+  further human task is escalation to more scrutiny (`fallback-l1-approval` -> `l2-approval`, which
+  shares its target with the `l1_decision == 'approve'` branch by design).
+
+  Blind spots of the second rule (deliberate): an irreversible action whose id lacks those prefixes (e.g. `book-loan`,
   `ceo-approval`) is not detected -- approval HUMAN_TASKs (`*-approval`) are intentionally NOT in
   the list, because a default into a human approval task is escalation (more scrutiny), not the
   irreversible act itself; the action is judged by id only, not by the node's endpoint/attributes; a
@@ -60,7 +76,9 @@ defmodule Letflow.Definitions.ShippedDefinitionsDefaultEdgeScrutinyTest do
 
   @root Path.expand("../../..", __DIR__)
   @clear_condition ~r/==\s*'(clear|cleared|approved|pass|passed|ok)'/i
-  @irreversible_target ~r/^(create|disburse|release|payout|transfer|execute|activate|provision|refund|issue)([-_].*)?$/
+  @irreversible_target ~r/^(create|disburse|release|payout|transfer|execute|activate|provision|refund|issue|archive)([-_].*)?$/
+
+  @approving_condition ~r/==\s*'(approve|approved|sign_off|signed_off|accept|accepted|close|closed)'/i
 
   # Every entry MUST name the queue task that removes it; add none silently (ORCH rule). Entries
   # are exactly {definition label, edge id, target id}. Empty: the vortex Q-982 finding is a
@@ -96,6 +114,30 @@ defmodule Letflow.Definitions.ShippedDefinitionsDefaultEdgeScrutinyTest do
         edge["target"] =~ @irreversible_target do
       {source, edge["id"], edge["target"]}
     end
+  end
+
+  # ISS-1018 rule: [{node_id, edge_id, target_id}] for default-style edges whose target is
+  # also the target of a sibling edge conditioned on an approve/sign-off/close value.
+  defp approving_default_violations(%{"nodes" => nodes, "edges" => edges}) do
+    human_tasks =
+      for %{"node_type" => "HUMAN_TASK", "id" => id} <- nodes, into: MapSet.new(), do: id
+
+    for %{"id" => source} <- nodes,
+        outgoing = Enum.filter(edges, &(&1["source"] == source)),
+        edge <- outgoing,
+        default_style?(edge, outgoing),
+        edge["target"] not in human_tasks,
+        edge["target"] in approving_targets(edge, outgoing) do
+      {source, edge["id"], edge["target"]}
+    end
+  end
+
+  defp approving_targets(default_edge, outgoing) do
+    for sibling <- outgoing,
+        sibling["id"] != default_edge["id"],
+        conditioned?(sibling),
+        sibling["condition"] =~ @approving_condition,
+        do: sibling["target"]
   end
 
   defp default_style?(edge, outgoing) do
@@ -278,6 +320,75 @@ defmodule Letflow.Definitions.ShippedDefinitionsDefaultEdgeScrutinyTest do
       }
 
       assert [] = irreversible_default_violations(graph)
+    end
+  end
+
+  describe "ISS-1018 rule itself (synthetic graphs)" do
+    defp approving_graph(default_target) do
+      %{
+        "nodes" => [
+          %{"id" => "ceo-override", "node_type" => "HUMAN_TASK"},
+          %{"id" => "close-it", "node_type" => "SERVICE_TASK"},
+          %{"id" => "reopen-it", "node_type" => "SERVICE_TASK"}
+        ],
+        "edges" => [
+          %{
+            "id" => "a",
+            "source" => "ceo-override",
+            "target" => "close-it",
+            "condition" => "variables.ceo_decision == 'sign_off'"
+          },
+          %{
+            "id" => "b",
+            "source" => "ceo-override",
+            "target" => "reopen-it",
+            "condition" => "variables.ceo_decision == 'reject_and_reopen'"
+          },
+          %{"id" => "fb", "source" => "ceo-override", "target" => default_target}
+        ]
+      }
+    end
+
+    test "a fallback to the same target as the sign_off branch is a violation, even for an id the irreversible list does not know" do
+      assert [{"ceo-override", "fb", "close-it"}] =
+               approving_default_violations(approving_graph("close-it"))
+    end
+
+    test "a fallback to a further human task (escalation) is clean even if an approve branch shares it" do
+      graph = approving_graph("reopen-it")
+
+      graph =
+        graph
+        |> update_in(
+          ["nodes"],
+          &[
+            %{"id" => "close-it", "node_type" => "HUMAN_TASK"}
+            | Enum.reject(&1, fn n -> n["id"] == "close-it" end)
+          ]
+        )
+        |> update_in(
+          ["edges"],
+          &(&1 ++ [%{"id" => "fb2", "source" => "ceo-override", "target" => "close-it"}])
+        )
+
+      assert [] = approving_default_violations(graph)
+    end
+
+    test "a fallback to the reject/reopen branch is clean" do
+      assert [] = approving_default_violations(approving_graph("reopen-it"))
+    end
+  end
+
+  describe "ISS-1018: every shipped definition" do
+    test "no default-style edge shares its target with an approve/sign-off/close branch" do
+      violations =
+        for {label, graph} <- discover(),
+            {node, edge, target} <- approving_default_violations(graph),
+            do: {label, node, edge, target}
+
+      assert violations == [],
+             "a default / unconditioned fallback edge leads to the same target as an " <>
+               "approving branch (approval by default):\n" <> inspect(violations, pretty: true)
     end
   end
 

@@ -1,0 +1,57 @@
+id: ISS-1018
+title: "[BLOCKER] Meridian Regulatory Compliance Review: ceo-override's unconditional fallback edge archives the review (closes it without CEO sign-off)"
+discovered_by: BA (letflow-2), while reviewing the extended drift test for ISS-1001 / Q-983
+discovered_in_run: WF03-ISS1001-Q983-20261006
+discovered_at: "2026-10-06T06:50:00Z"
+severity: BLOCKER
+failure_class: defect
+occurrence: 1
+owner: "letflow-3 (same fixture family and drift test as ISS-1001); ELIXIR-DEV for the fixture change"
+process_audit_report: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml
+checklist_item: F1
+scope: meridian
+description: >
+  BLOCKER (BA-confirmed, same class as ISS-1001). Process:
+  test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json (v1.4). Node
+  ceo-override has edges e14 (ceo_decision == 'sign_off' -> archive-review), e15 (ceo_decision ==
+  'reject_and_reopen' -> reopen-review) and fallback-ceo-override (ceo-override -> archive-review,
+  NO condition). Any missing or unrecognised ceo_decision value therefore archives the regulatory
+  review as if signed off: the review is closed without the CEO's sign-off (fail-open). This
+  violates the BA principle "defaults route toward MORE scrutiny, never less" (decision 0047 /
+  Q-972 BA confirmation).
+
+  Fix (v1.5): fallback-ceo-override now targets reopen-review. The simulation copy
+  test/fixtures/simulation/meridian/process_policy_binding.yaml carried the same edge and is fixed
+  the same way. The drift test
+  test/letflow/definitions/shipped_definitions_default_edge_scrutiny_test.exs gained (a) `archive-`
+  in the irreversible-action id list and (b) a third rule: a default-style edge must not share its
+  target with a sibling edge conditioned on an approve/sign-off/close value (HUMAN_TASK targets
+  exempt: escalation). Fail-first: both rules flag the old fixture with
+  {"ceo-override", "fallback-ceo-override", "archive-review"}. Graph-walk tests in
+  test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs: a missing/unrecognised
+  ceo_decision never reaches archive-review (JSON and YAML fixtures). The version assertion in
+  that test is bumped to 1.5; scripts/seed_meridian_definition.sh header comment bumped (comment
+  only).
+acceptance_criteria:
+  - "fallback-ceo-override (or its replacement) no longer leads to archive-review; an unrecognised or missing ceo_decision routes to reopen-review or a manual-review node"
+  - "The extended drift test fails if an unconditional/default edge leads to the same target as an approve/sign-off/close branch of the same node, and covers ceo-override"
+  - "The QA fixture version is bumped, and the definition is re-seeded on QA when Meridian scenarios next run (noted, not part of this change)"
+  - "SECURITY-REVIEWER n/a (fixture); REVIEWER confirms the principle is applied to every fallback/default edge in the regulatory fixture"
+affected_files:
+  - test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+  - test/fixtures/simulation/meridian/process_policy_binding.yaml
+  - scripts/seed_meridian_definition.sh
+  - test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs
+  - test/letflow/definitions/shipped_definitions_default_edge_scrutiny_test.exs
+regression_test: test/letflow/definitions/shipped_definitions_default_edge_scrutiny_test.exs
+# Ref clash: the queue's issue_ref for Q-1000 came back ISS-1000, which is the local number of a
+# different issue (the vortex Production Order Release BLOCKER, Q-982 / GH #2269); ISS-1018 is the
+# local number the GitHub issue title carries.
+queue_ref: Q-1000
+github_ref: GH-2287
+status: resolved
+resolved_in_run: WF03-ISS1001-Q983-20261006
+resolved_at: "2026-10-06T07:00:00Z"
+resolution: "Regulatory fixture v1.5: fallback-ceo-override -> reopen-review; drift test extended (archive- irreversible id + approving-target rule); graph-walk tests. See description."
+follow_ups:
+  - "QA needs a re-seed of Meridian Regulatory Compliance Review v1.5 (scripts/seed_meridian_definition.sh creates and activates it; the platform deprecates v1.4)."

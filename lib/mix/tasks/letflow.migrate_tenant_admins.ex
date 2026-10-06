@@ -18,7 +18,9 @@ defmodule Mix.Tasks.Letflow.MigrateTenantAdmins do
   Output is only tenant ids, slugs, realm ids, reason tags and counts: never a
   user attribute, a token or an exception message. A refused real run prints one
   line `REFUSED <tag>` and exits 1; `--dry-run` never refuses (it prints
-  `would_refuse=<tags>`). Exit status 1 also when any tenant failed.
+  `would_refuse=<tags>`). Exit status 1 also when any tenant failed (a `--dry-run` included: a failed tenant is a pre-flight
+  signal; only `would_refuse` leaves a dry run at 0). An unknown option or a positional
+  argument prints `REFUSED invalid_option` and exits 1 before anything runs.
   """
 
   use Mix.Task
@@ -30,7 +32,13 @@ defmodule Mix.Tasks.Letflow.MigrateTenantAdmins do
   @impl Mix.Task
   @spec run(argv :: [String.t()]) :: :ok
   def run(argv) do
-    {parsed, _rest, _invalid} = OptionParser.parse(argv, strict: @switches)
+    {parsed, rest, invalid} = OptionParser.parse(argv, strict: @switches)
+
+    if invalid != [] or rest != [] do
+      Mix.shell().info("REFUSED invalid_option")
+      System.halt(1)
+    end
+
     Mix.Task.run("app.start")
 
     opts = [

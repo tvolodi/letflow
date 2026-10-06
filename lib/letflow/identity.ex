@@ -1354,8 +1354,7 @@ defmodule Letflow.Identity do
 
     1. `user_id` must reference an existing user in `opts[:prefix]`'s schema, or
        this returns `{:error, :user_not_found}`.
-    2. `attrs.roles` must be non-empty and every entry must be one of the five
-       literal role-name strings `Letflow.Api.Authorization.roles/0` returns as
+    2. `attrs.roles` must be non-empty and every entry must be one of the literal role-name strings `Letflow.Api.Authorization.roles/0` returns as
        strings — exact match, case-sensitive. **This function does NOT call
        `Authorization.roles_from_strings/1`** (that function's contract is
        "silently drop an unrecognized string," correct for untrusted bearer-token

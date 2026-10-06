@@ -17,7 +17,8 @@ defmodule Mix.Tasks.Letflow.Seed do
 
   Creates the `bpm-default` tenant row (`idp_realm_id` and `slug` both
   `"bpm-default"`), provisions its Postgres schema, replays that schema's
-  migrations, and (ISS-0778) seeds its six platform-role group bindings --
+  migrations, and (ISS-0778) seeds its platform-role group bindings (seven roles in the platform tenant,
+  six elsewhere) --
   the same
   `Letflow.Identity.create_tenant/1` -> `Letflow.TenantOnboarding.provision_and_migrate/1`
   chain `POST /tenants` uses.

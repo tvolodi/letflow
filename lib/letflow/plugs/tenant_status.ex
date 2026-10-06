@@ -14,7 +14,10 @@ defmodule Letflow.Plugs.TenantStatus do
      `isTenantInactive` (`src/identity/service.zig:133-151`,
      `src/api/middleware/auth.zig:1663-1674`). ISS-0993 (A2): the exemption now applies ONLY
      to a `PLATFORM_ADMIN` of the platform tenant (`Letflow.PlatformTenant`); a
-     `PLATFORM_ADMIN` of the inactive tenant itself is halted. Authorized exactly in this shape by REVIEWER — see
+     `PLATFORM_ADMIN` of the inactive tenant itself is halted. `TENANT_ADMIN` (REQ-447)
+     has no exemption from this gate: it is halted in an inactive tenant, including the
+     platform tenant's own `TENANT_ADMIN` for the platform tenant.
+     Authorized exactly in this shape by REVIEWER — see
      `docs/migration/stage-4-api-surface.md`'s 2026-08-22 (REQ-075) sign-off
      entry; do not narrow to write-only or widen the exemption without a
      fresh sign-off.

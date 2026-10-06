@@ -5,7 +5,7 @@ defmodule Letflow.Routers.TenantSolutions do
   Mounted at `/tenant/solutions` by `Letflow.Plugs.ApiPipeline` (full path
   `POST /api/v1/tenant/solutions`). Follows the same shape as
   `Letflow.Routers.TenantModules`: a single `authz_post` route gated by
-  `:ModulesManage` (`PLATFORM_ADMIN`-only), delegating to
+  `:ModulesManage` (tenant scope: `PLATFORM_ADMIN` (legacy tenant) and `TENANT_ADMIN`), delegating to
   `Letflow.Modules.Solutions.install/3`.
 
   Tenant scoping (INV-1): `prefix` comes ONLY from

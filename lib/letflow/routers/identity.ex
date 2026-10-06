@@ -70,7 +70,7 @@ defmodule Letflow.Routers.Identity do
   that actually knows which domain it is writing, so this route does not
   infer `kind` from `name`'s shape the way the pre-ISS-0774 code implicitly
   did everywhere downstream. `kind: "platform_role"` additionally requires
-  `name` to be one of `Letflow.Api.Authorization.roles/0`'s six recognized
+  `name` to be one of `Letflow.Api.Authorization.roles/0`'s seven recognized
   literals — `RoleRegistry.upsert_role/4` rejects any other value with
   `{:error, :name_not_a_recognized_platform_role}`, surfaced here as `422`,
   before any `Repo` call. See
@@ -556,14 +556,18 @@ defmodule Letflow.Routers.Identity do
     end
   end
 
-  defp platform_admin_group?(group_id, opts) when is_binary(group_id) do
-    case RoleRegistry.platform_admin_group_id(opts) do
-      {:ok, bound_id} -> String.downcase(to_string(bound_id)) == String.downcase(group_id)
-      :none -> false
+  # Compared after Ecto.UUID.cast/1 on BOTH sides: Repo.get(Group, id) casts through the
+  # same function, which also accepts a raw 16-byte binary, so a string compare could miss
+  # an id the downstream lookup resolves to the bound group (INV-10). Fail closed.
+  defp platform_admin_group?(group_id, opts) do
+    with {:ok, requested} <- Ecto.UUID.cast(group_id),
+         {:ok, bound_id} <- RoleRegistry.platform_admin_group_id(opts),
+         {:ok, bound} <- Ecto.UUID.cast(bound_id) do
+      requested == bound
+    else
+      _no_match -> false
     end
   end
-
-  defp platform_admin_group?(_group_id, _opts), do: false
 
   # `user_id` is a member of the group bound to PLATFORM_ADMIN.
   defp with_platform_admin_member_guard(conn, user_id, opts, fun) do

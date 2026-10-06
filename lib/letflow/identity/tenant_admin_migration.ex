@@ -73,11 +73,8 @@ defmodule Letflow.Identity.TenantAdminMigration do
           | :platform_tenant_has_no_operator
           | :unexpected_error
 
-  @type reason_tag ::
-          :role_name_taken_by_routing_role
-          | :platform_admin_name_is_routing_role
-          | :tenant_schema_missing
-          | :unexpected_error
+  # One source: the type is built from @reason_tags (a union of its atoms).
+  @type reason_tag :: unquote(Enum.reduce(Enum.reverse(@reason_tags), &{:|, [], [&1, &2]}))
 
   @type tenant_report :: %{
           tenant_id: String.t(),
@@ -390,9 +387,8 @@ defmodule Letflow.Identity.TenantAdminMigration do
     end)
   end
 
-  @doc false
   @spec rewrite_roles([String.t()]) :: [String.t()]
-  def rewrite_roles(roles) do
+  defp rewrite_roles(roles) do
     roles
     |> Enum.map(fn role -> if role == @legacy, do: @target, else: role end)
     |> Enum.uniq()

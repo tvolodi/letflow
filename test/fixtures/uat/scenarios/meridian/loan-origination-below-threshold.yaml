@@ -13,11 +13,12 @@
 # the credit manager who reviewed the credit memo at step 2 (actor-meridian-ben), so first-level
 # approval is an independent check of the memo. Added actor l1_approver and EO-004. No longer
 # byte-identical to the ported source for those points only.
-# DEPENDENCY (definition, not changed here): test/fixtures/qa/meridian_loan_origination_process_definition.json
-# still routes BOTH credit-memo-review and l1-approval to role-credit-manager, and the roster gives that
-# role only to Ben. Until l1-approval is re-routed to a different role, or a second person holds
-# role-credit-manager (definition / seed work, not UAT files), Lars cannot act at l1-approval and step 4
-# is BLOCKED rather than silently passing with Ben. The scenario states the intended rule.
+# DEPENDENCY (definition, not changed here; Q-1010 / GH #2308): written for the TARGET loan definition,
+# test/fixtures/qa/meridian_loan_origination_process_definition.json version >= 1.11, which routes
+# l1-approval to the new role role-credit-approver-l1, held by actor-meridian-lars (credit-memo-review
+# stays on role-credit-manager / Ben). Needs loan >= v1.11 plus the matching roster/seed grant. On a
+# definition < v1.11 (v1.10 routes BOTH steps to role-credit-manager) Lars cannot act at l1-approval and
+# step 4 is BLOCKED rather than silently passing with Ben.
 ---
 id: meridian-loan-origination-below-threshold
 company_id: meridian
@@ -134,7 +135,7 @@ expected_outcomes:
     verification:
       method: task_assigned
       detail: >
-        task type 'l1-approval' assigned to role-credit-manager,
+        task type 'l1-approval' assigned to role-credit-approver-l1 (held by actor-meridian-lars),
         task type 'l2-approval' assigned to role-credit-director
     on_fail:
       severity: BLOCKER

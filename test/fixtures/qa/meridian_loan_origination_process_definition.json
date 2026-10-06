@@ -368,13 +368,10 @@
               "disbursement_reference": {
                 "type": "string",
                 "title": "Disbursement reference",
-                "description": "Core-banking reference of the disbursement that was made. Recorded for audit; no gateway reads it.",
+                "description": "Core-banking reference of the disbursement that was made. Recorded for audit; no gateway reads it. Optional. No personal data beyond what the process needs.",
                 "minLength": 1
               }
-            },
-            "required": [
-              "disbursement_reference"
-            ]
+            }
           }
         }
       },

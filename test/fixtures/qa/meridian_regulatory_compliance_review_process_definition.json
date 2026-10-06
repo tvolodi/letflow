@@ -19,13 +19,10 @@
               "evidence_summary": {
                 "type": "string",
                 "title": "Evidence summary",
-                "description": "Summary of the evidence collected for this review (what was gathered and where it is filed). Recorded for audit; no gateway reads it.",
+                "description": "Summary of the evidence collected for this review (what was gathered and where it is filed). Recorded for audit; no gateway reads it. Optional. No personal data beyond what the process needs.",
                 "minLength": 1
               }
-            },
-            "required": [
-              "evidence_summary"
-            ]
+            }
           }
         }
       },

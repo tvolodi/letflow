@@ -122,7 +122,7 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-loan-ops
-        form_schema: {"type": "object", "properties": {"disbursement_reference": {"type": "string", "title": "Disbursement reference", "description": "Core-banking reference of the disbursement that was made. Recorded for audit; no gateway reads it.", "minLength": 1}}, "required": ["disbursement_reference"]}
+        form_schema: {"type": "object", "properties": {"disbursement_reference": {"type": "string", "title": "Disbursement reference", "description": "Core-banking reference of the disbursement that was made. Recorded for audit; no gateway reads it. Optional. No personal data beyond what the process needs.", "minLength": 1}}}
     - id: decline-application
       node_type: SERVICE_TASK
       attributes:

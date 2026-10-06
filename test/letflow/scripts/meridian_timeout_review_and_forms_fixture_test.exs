@@ -275,11 +275,11 @@ defmodule Letflow.Scripts.MeridianTimeoutReviewAndFormsFixtureTest do
       "committee-vote-cro" => %{"committee_vote_cro" => ["approve", "reject"]},
       "committee-vote-director" => %{"committee_vote_director" => ["approve", "reject"]},
       "committee-vote-ceo" => %{"committee_vote_ceo" => ["approve", "reject"]},
-      "disburse-loan" => %{"disbursement_reference" => :free}
+      "disburse-loan" => %{"disbursement_reference" => :optional_free}
     }
 
     @reg_forms %{
-      "evidence-collection" => %{"evidence_summary" => :free},
+      "evidence-collection" => %{"evidence_summary" => :optional_free},
       "risk-evaluation" => %{"highest_severity" => ["none", "low", "medium", "high", "critical"]},
       "remediation-subprocess" => %{"remediation_status" => ["resolved", "unresolved"]},
       "findings-sign-off" => %{"cro_decision" => ["sign_off", "reject_and_reopen"]},
@@ -305,7 +305,12 @@ defmodule Letflow.Scripts.MeridianTimeoutReviewAndFormsFixtureTest do
           assert is_map(fs), "#{id} has no form_schema"
           assert :ok == JsonSchemaShape.check(fs), "#{id} form_schema not well formed"
           assert fs["type"] == "object"
-          assert Enum.sort(fs["required"]) == Enum.sort(Map.keys(fields)), "#{id} required"
+          # :optional_free = documented optional audit text that no gateway reads (BA: keep as
+          # OPTIONAL free text, no personal data): present in properties, NOT required.
+          required_fields = for {f, allowed} <- fields, allowed != :optional_free, do: f
+
+          assert Enum.sort(Map.get(fs, "required", [])) == Enum.sort(required_fields),
+                 "#{id} required"
 
           assert Enum.sort(Map.keys(fs["properties"])) == Enum.sort(Map.keys(fields)),
                  "#{id} properties"
@@ -317,9 +322,20 @@ defmodule Letflow.Scripts.MeridianTimeoutReviewAndFormsFixtureTest do
             assert is_binary(prop["description"]) and prop["description"] != "",
                    "#{id}.#{field} description"
 
-            if allowed == :free,
-              do: assert(prop["minLength"] == 1, "#{id}.#{field} free text must be non-empty"),
-              else: assert(prop["enum"] == allowed, "#{id}.#{field} enum")
+            case allowed do
+              :optional_free ->
+                assert prop["minLength"] == 1,
+                       "#{id}.#{field} free text must be non-empty when given"
+
+                assert prop["description"] =~ "Optional.",
+                       "#{id}.#{field} must be documented as optional"
+
+                assert prop["description"] =~ "No personal data beyond what the process needs.",
+                       "#{id}.#{field} must carry the no-personal-data note"
+
+              enum ->
+                assert prop["enum"] == enum, "#{id}.#{field} enum"
+            end
           end
         end
       end
@@ -330,7 +346,7 @@ defmodule Letflow.Scripts.MeridianTimeoutReviewAndFormsFixtureTest do
 
         for {id, fields} <- forms(unquote(forms_attr)),
             {field, allowed} <- fields,
-            allowed != :free do
+            allowed not in [:free, :optional_free] do
           literals =
             for cond <- conds,
                 [_, lit] <- Regex.scan(~r/variables\.#{field} (?:==|!=) '([^']*)'/, cond),

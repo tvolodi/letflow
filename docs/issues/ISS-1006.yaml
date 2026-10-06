@@ -1,0 +1,37 @@
+id: ISS-1006
+title: "Vortex roster: no actor holds the CEO routing role used by escalate-to-ceo"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:03Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "ORCH / UAT-RUNNER (roster) with BA-VORTEX; tenant-admin seed per REQ-454"
+process_audit_report: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-VORTEX-006
+checklist_item: D3
+scope: vortex
+description: >
+  Scope vortex. Checklist D3 (every routed role has a roster holder). Audit: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml finding PA-VORTEX-006.
+
+  Task escalate-to-ceo in test/fixtures/qa/vortex_production_order_release_process_definition.json routes to the CEO role, but test/fixtures/uat/actors.yaml has no vortex actor holding it (the CEO person exists only in scripts/seed_vortex_persona_actors.sh and the simulation org structure). An escalated order has nobody to receive it.
+
+  Fix direction: add a vortex CEO actor to the roster and the persona seed script with the CEO routing role and least-privilege access (coordinate with REQ-454 / Q-971 on how persona actors are created).
+
+
+
+  Audit artefact: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml; finding PA-VORTEX-006; checklist item D3; scope vortex; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ORCH / UAT-RUNNER (roster) with BA-VORTEX; tenant-admin seed per REQ-454.
+acceptance_criteria:
+  - "actors.yaml lists a vortex actor holding the CEO routing role"
+  - "scripts/seed_vortex_persona_actors.sh seeds the same actor with the same role"
+  - "The audit D3 check for vortex answers YES"
+affected_files:
+  - test/fixtures/uat/actors.yaml
+  - scripts/seed_vortex_persona_actors.sh
+  - test/fixtures/qa/vortex_production_order_release_process_definition.json
+# Ref clash: the queue's issue_ref for Q-988 came back ISS-0988, which is not the local number
+# (docs/issues/ISS-0988.yaml is a different issue); ISS-1006 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-988
+github_ref: GH-2275
+status: open

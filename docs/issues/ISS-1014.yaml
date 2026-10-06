@@ -1,0 +1,36 @@
+id: ISS-1014
+title: "Meridian loan origination: same actor does credit-memo-review and l1-approval (four-eyes broken)"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:45Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "BA-MERIDIAN (scenario/roster), CODE-DESIGNER if routing changes"
+process_audit_report: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-MERIDIAN-002
+checklist_item: B2
+scope: meridian
+description: >
+  Scope meridian. Checklist B2 (separation of duties). Audit: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml finding PA-MERIDIAN-002.
+
+  In test/fixtures/qa/meridian_loan_origination_process_definition.json both credit-memo-review and l1-approval route to the credit manager role, and test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml steps 2 and 4 are performed by the same actor. The first-level approval is not an independent check of the memo.
+
+  Fix direction: route l1-approval to a different role (or require a different person than the memo reviewer), and update the scenario to use two actors.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml; finding PA-MERIDIAN-002; checklist item B2; scope meridian; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: BA-MERIDIAN (scenario/roster), CODE-DESIGNER if routing changes.
+acceptance_criteria:
+  - "credit-memo-review and l1-approval are performed by different roles/actors in the definition and in loan-origination-below-threshold.yaml"
+  - "A test or the audit B2 check for meridian answers YES"
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml
+  - test/fixtures/uat/actors.yaml
+# Ref clash: the queue's issue_ref for Q-996 came back ISS-0996, which is not the local number
+# (docs/issues/ISS-0996.yaml is a different issue); ISS-1014 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-996
+github_ref: GH-2283
+status: open

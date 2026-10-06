@@ -1,0 +1,37 @@
+id: ISS-1005
+title: "Vortex: no scenario exercises the escalate-to-ceo task of Production Order Release"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:32:57Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "BA-VORTEX / UAT (scenario)"
+process_audit_report: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-VORTEX-005
+checklist_item: D2
+scope: vortex
+description: >
+  Scope vortex. Checklist D2 (every human task appears in at least one scenario). Audit: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml finding PA-VORTEX-005.
+
+  The human task escalate-to-ceo in test/fixtures/qa/vortex_production_order_release_process_definition.json appears in no scenario step; capacity-review, budget-approval, severity-classification and corrective-action-8d each do.
+
+  Business consequence: nobody has verified what happens when the production manager does not act and the order moves to the CEO.
+
+  Fix direction: add a scenario (or steps in production-order-above-threshold.yaml) in which capacity-review times out, the CEO acts at escalate-to-ceo, and the outcome (approve or reject) is checked. Depends on the CEO actor existing in the roster (see the D3 vortex issue).
+
+
+
+  Audit artefact: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml; finding PA-VORTEX-005; checklist item D2; scope vortex; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: BA-VORTEX / UAT (scenario).
+acceptance_criteria:
+  - "A vortex scenario contains a step performed at escalate-to-ceo with an expected outcome"
+  - "The scenario passes preflight and a UAT run (or is explicitly marked blocked by the D3 roster issue)"
+  - "The audit D2 check for vortex answers YES"
+affected_files:
+  - test/fixtures/uat/scenarios/vortex/
+# Ref clash: the queue's issue_ref for Q-987 came back ISS-0987, which is not the local number
+# (docs/issues/ISS-0987.yaml is a different issue); ISS-1005 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-987
+github_ref: GH-2274
+status: open

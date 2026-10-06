@@ -1,0 +1,37 @@
+id: ISS-1013
+title: "Meridian: no escalation timer on l1-approval, l2-approval, disburse-loan and the compliance ceo-override; other timeout paths have no duration"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:40Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "ELIXIR-DEV / CODE-DESIGNER (definition); BA-MERIDIAN confirms durations"
+process_audit_report: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-MERIDIAN-001
+checklist_item: A4
+scope: meridian
+description: >
+  Scope meridian. Checklist A4. Audit: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml finding PA-MERIDIAN-001.
+
+  Tasks l1-approval, l2-approval and disburse-loan in test/fixtures/qa/meridian_loan_origination_process_definition.json and ceo-override in test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json have no escalation timer or owner; the timeout paths on other tasks exist without a duration. Business consequence: loans and regulatory reviews can stall silently. (Where a timer is added, the target of its fallback must follow the more-scrutiny principle; see the BLOCKER issue on fallback-l2-approval.)
+
+  Fix direction: add duration + escalation role to the four tasks and durations to the existing timeout paths.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-meridian-WF05-BASELINE2-20261006.yaml; finding PA-MERIDIAN-001; checklist item A4; scope meridian; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ELIXIR-DEV / CODE-DESIGNER (definition); BA-MERIDIAN confirms durations.
+acceptance_criteria:
+  - "l1-approval, l2-approval, disburse-loan and ceo-override have a timer duration and escalation route (or documented waiver)"
+  - "Existing timeout paths in the two definitions carry a duration"
+  - "A definition-level test asserts every human task has a timer or waiver"
+  - "The process validator reports status OK"
+affected_files:
+  - test/fixtures/qa/meridian_loan_origination_process_definition.json
+  - test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+# Ref clash: the queue's issue_ref for Q-995 came back ISS-0995, which is not the local number
+# (docs/issues/ISS-0995.yaml is a different issue); ISS-1013 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-995
+github_ref: GH-2282
+status: open

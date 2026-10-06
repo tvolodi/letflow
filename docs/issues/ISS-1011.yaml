@@ -1,0 +1,36 @@
+id: ISS-1011
+title: "SwiftRoute roster: finance-estimate routes to an accountant role no actor holds; dispatcher tobias is unresolved"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:29Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "ORCH / UAT-RUNNER (roster) with BA-SWIFTROUTE; tenant-admin seed per REQ-454"
+process_audit_report: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-SWIFTROUTE-005
+checklist_item: D3
+scope: swiftroute
+description: >
+  Scope swiftroute. Checklist D3. Audit: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml finding PA-SWIFTROUTE-005.
+
+  The finance-estimate task in test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml routes to an accountant role; test/fixtures/uat/actors.yaml has no swiftroute actor with it. The timeout scenario uses dispatcher actor-swiftroute-tobias, listed under unresolved (no built-in role recorded; see also minor PA-SWIFTROUTE-008, which stays in the artefact).
+
+  Fix direction: add an accountant actor and resolve tobias in the roster and persona seed script (least privilege; coordinate with REQ-454 / Q-971).
+
+
+
+  Audit artefact: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml; finding PA-SWIFTROUTE-005; checklist item D3; scope swiftroute; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ORCH / UAT-RUNNER (roster) with BA-SWIFTROUTE; tenant-admin seed per REQ-454.
+acceptance_criteria:
+  - "actors.yaml has a swiftroute actor holding the accountant routing role"
+  - "actor-swiftroute-tobias is a resolved roster entry with recorded access"
+  - "The audit D3 check for swiftroute answers YES"
+affected_files:
+  - test/fixtures/uat/actors.yaml
+  - scripts/seed_swiftroute_persona_actors.sh
+# Ref clash: the queue's issue_ref for Q-993 came back ISS-0993, which is not the local number
+# (docs/issues/ISS-0993.yaml is a different issue); ISS-1011 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-993
+github_ref: GH-2280
+status: open

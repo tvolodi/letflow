@@ -1,0 +1,36 @@
+id: ISS-1007
+title: "SwiftRoute: no escalation timer on ceo-approval or on the incident operations-assessment and finance-estimate tasks"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:08Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "ELIXIR-DEV / CODE-DESIGNER (definition); BA-SWIFTROUTE confirms durations"
+process_audit_report: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-SWIFTROUTE-001
+checklist_item: A4
+scope: swiftroute
+description: >
+  Scope swiftroute. Checklist A4. Audit: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml finding PA-SWIFTROUTE-001.
+
+  The CEO co-sign task ceo-approval in test/fixtures/qa/swiftroute_process_definition.json and the two incident tasks (operations assessment, finance estimate) in test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml have no escalation timer or route. Business consequence: a high-value shipment can wait for the CEO indefinitely and an incident can stay unassessed with nobody reminded.
+
+  Fix direction: add timer duration and escalation role to the three tasks, following ops-review (which has one), or document why waiting is intended.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml; finding PA-SWIFTROUTE-001; checklist item A4; scope swiftroute; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ELIXIR-DEV / CODE-DESIGNER (definition); BA-SWIFTROUTE confirms durations.
+acceptance_criteria:
+  - "ceo-approval, operations assessment and finance estimate each have a timer duration and escalation route or a documented waiver"
+  - "A definition-level test asserts every human task in the swiftroute definitions has a timer or a waiver"
+  - "The process validator reports status OK"
+affected_files:
+  - test/fixtures/qa/swiftroute_process_definition.json
+  - test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml
+# Ref clash: the queue's issue_ref for Q-989 came back ISS-0989, which is not the local number
+# (docs/issues/ISS-0989.yaml is a different issue); ISS-1007 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-989
+github_ref: GH-2276
+status: open

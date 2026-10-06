@@ -1,0 +1,35 @@
+id: ISS-1010
+title: "SwiftRoute incident process: operations-assessment and finance-estimate tasks appear in no scenario"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:33:23Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "BA-SWIFTROUTE / UAT (scenario)"
+process_audit_report: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-SWIFTROUTE-004
+checklist_item: D2
+scope: swiftroute
+description: >
+  Scope swiftroute. Checklist D2. Audit: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml finding PA-SWIFTROUTE-004.
+
+  The two human tasks of test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml (operations assessment, finance estimate) are in no scenario, so nobody has verified an incident can be assessed and costed. Note finance-estimate routing depends on the D3 swiftroute issue (no accountant actor).
+
+  Fix direction: add a driver-incident scenario walking both tasks.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-swiftroute-WF05-BASELINE2-20261006.yaml; finding PA-SWIFTROUTE-004; checklist item D2; scope swiftroute; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: BA-SWIFTROUTE / UAT (scenario).
+acceptance_criteria:
+  - "A swiftroute scenario performs both tasks with expected outcomes"
+  - "The audit D2 check for swiftroute answers YES"
+affected_files:
+  - test/fixtures/uat/scenarios/swiftroute/
+  - test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml
+# Ref clash: the queue's issue_ref for Q-992 came back ISS-0992, which is not the local number
+# (docs/issues/ISS-0992.yaml is a different issue); ISS-1010 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-992
+github_ref: GH-2279
+status: open

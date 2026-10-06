@@ -1,0 +1,36 @@
+id: ISS-1017
+title: "Bilimbaga roster: the exam candidate actor is only in the unresolved section of actors.yaml"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE-20261006
+discovered_at: "2026-10-06T06:34:02Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "ORCH / UAT-RUNNER (roster) with BA-BILIMBAGA; tenant-admin seed per REQ-454"
+process_audit_report: test/uat-reports/process-audit-bilimbaga-WF05-BASELINE-20261006.yaml
+process_audit_finding: PA-BILIMBAGA-001
+checklist_item: D3
+scope: bilimbaga
+description: >
+  Scope bilimbaga. Checklist D3. Audit: test/uat-reports/process-audit-bilimbaga-WF05-BASELINE-20261006.yaml finding PA-BILIMBAGA-001 (first baseline run; the second baseline covered the other four scopes).
+
+  The only actor of test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml, the candidate, is listed under unresolved in test/fixtures/uat/actors.yaml instead of the actors section, so no one can be sure the candidate is a real, correctly set-up user of the tenant. (The MINOR PA-BILIMBAGA-002, access level never recorded, stays in the artefact and is resolved by this fix.)
+
+  Fix direction: resolve the candidate: add an actors entry with the built-in role the candidate needs (least privilege) and a seeded user.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-bilimbaga-WF05-BASELINE-20261006.yaml; finding PA-BILIMBAGA-001; checklist item D3; scope bilimbaga; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ORCH / UAT-RUNNER (roster) with BA-BILIMBAGA; tenant-admin seed per REQ-454.
+acceptance_criteria:
+  - "The candidate is in the actors section of actors.yaml with a recorded role"
+  - "Preflight finds the seeded candidate user"
+  - "The audit D3 check for bilimbaga answers YES"
+affected_files:
+  - test/fixtures/uat/actors.yaml
+  - test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+# Ref clash: the queue's issue_ref for Q-999 came back ISS-0999, which is not the local number
+# (docs/issues/ISS-0999.yaml is a different issue); ISS-1017 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-999
+github_ref: GH-2286
+status: open

@@ -1,0 +1,38 @@
+id: ISS-1004
+title: "Vortex scenario entity-list-filter-and-page.yaml is tied to the quality-deviation process but tests batch list paging, not a process step"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:32:52Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "BA-VORTEX / UAT (scenario)"
+process_audit_report: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-VORTEX-004
+checklist_item: D1
+scope: vortex
+description: >
+  Scope vortex. Checklist D1 (scenario steps match the definition steps they claim to cover). Audit: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml finding PA-VORTEX-004.
+
+  test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml names process proc-vortex-quality-deviation, but all six steps are list filtering and paging steps over batch records and match no step of that process (its own sidecar says so).
+
+  Business consequence: a reader assumes the quality-deviation process is covered by this scenario; it is not.
+
+  Fix direction: either detach the scenario from the process id (declare it an entity-list scenario with no process) or replace its steps with real quality-deviation steps; document the choice in the scenario.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml; finding PA-VORTEX-004; checklist item D1; scope vortex; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: BA-VORTEX / UAT (scenario).
+acceptance_criteria:
+  - "The scenario no longer claims a process whose steps it does not exercise, or its steps match the named process"
+  - "The scenario/sidecar consistency check (preflight or a test) passes for the vortex scenario set"
+  - "Coverage notes for the quality-deviation process do not count this scenario"
+affected_files:
+  - test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml
+  - test/fixtures/uat/process-definition-aliases/proc-vortex-quality-deviation.yaml
+# Ref clash: the queue's issue_ref for Q-986 came back ISS-0986, which is not the local number
+# (docs/issues/ISS-0986.yaml is a different issue); ISS-1004 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-986
+github_ref: GH-2273
+status: open

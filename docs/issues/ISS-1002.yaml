@@ -1,0 +1,40 @@
+id: ISS-1002
+title: "Vortex definitions: no escalation timer on five human tasks (capacity-review, escalate-to-ceo, budget-approval, severity-classification, corrective-action-8d)"
+discovered_by: PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline / Q-975; filed by ORCH)
+discovered_in_run: WF05-BASELINE2-20261006
+discovered_at: "2026-10-06T06:32:41Z"
+severity: MAJOR
+failure_class: defect
+occurrence: 1
+owner: "ELIXIR-DEV / CODE-DESIGNER (definition); BA-VORTEX confirms durations"
+process_audit_report: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml
+process_audit_finding: PA-VORTEX-002
+checklist_item: A4
+scope: vortex
+description: >
+  Scope vortex. Checklist A4 (every human task has a time limit and an escalation, or a stated reason none is needed). Audit: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml finding PA-VORTEX-002.
+
+  None of the human tasks capacity-review, escalate-to-ceo, budget-approval (test/fixtures/qa/vortex_production_order_release_process_definition.json), severity-classification (test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json) or corrective-action-8d (test/fixtures/qa/vortex_8d_corrective_action_definition.json) carries an escalation timer duration or escalation role; the edges named timeout-... exist but have no duration (compare ops-review in test/fixtures/qa/swiftroute_process_definition.json).
+
+  Business consequence: an order or a quality deviation can sit open indefinitely; the CEO escalation and automatic rejection the process promises never start; a suspect batch could stay quarantined unnoticed.
+
+  Fix direction: add a timer duration and an escalation role (or explicit description saying waiting is intended) to each of the five tasks, following the ops-review pattern in the swiftroute definition. BA-VORTEX supplies the durations.
+
+
+
+  Audit artefact: test/uat-reports/process-audit-vortex-WF05-BASELINE2-20261006.yaml; finding PA-VORTEX-002; checklist item A4; scope vortex; severity MAJOR. Discovered by PROCESS-AUDITOR run WF05-BASELINE2-20261006 (REQ-458 baseline, Q-975 / GH #2247). Suggested owner: ELIXIR-DEV / CODE-DESIGNER (definition); BA-VORTEX confirms durations.
+acceptance_criteria:
+  - "Each of the five named tasks has a timer duration and an escalation route (or a documented reason in its description)"
+  - "The timeout edges (timeout-capacity-review, timeout-escalate-to-ceo, timeout-budget-approval, severity timeout) become reachable by the timer"
+  - "A definition-level test asserts every human task in the three vortex definitions has a timer duration or a documented waiver"
+  - "The process validator reports status OK"
+affected_files:
+  - test/fixtures/qa/vortex_production_order_release_process_definition.json
+  - test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+  - test/fixtures/qa/vortex_8d_corrective_action_definition.json
+# Ref clash: the queue's issue_ref for Q-984 came back ISS-0984, which is not the local number
+# (docs/issues/ISS-0984.yaml is a different issue); ISS-1002 was the next free local number
+# (origin/main, every open PR and remote branch checked).
+queue_ref: Q-984
+github_ref: GH-2271
+status: open

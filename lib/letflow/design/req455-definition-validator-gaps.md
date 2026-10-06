@@ -345,7 +345,7 @@ issue naming every row below, owner BA, in addition to the in-change fix):
 | vortex `false-positive-check` | `severity-routing` |
 | vortex `severity-routing` | `corrective-action-subprocess` |
 
-**Deviation recorded at implementation (DOC-UPDATER, 2026-10-06).** The originally proposed default target for `authority-routing` was `committee-vote-fork`. It was not used: `committee-vote-fork` is a PARALLEL_GATEWAY fork, and a second inbound edge turns it into `combined_unsupported` per `Transition.gateway_role/2`, so the definition would be rejected. The shipped default is `authority-routing-default` -> `decline-application` (-> `end-declined`) in both the QA fixture and the simulation yaml. This is a business-visible routing choice (an amount matching neither branch is declined); **BA business confirmation of this default route is required** and is covered by the single BA-owned issue ORCH files for this table (no separate issue filed here).
+**Deviation recorded at implementation (DOC-UPDATER, 2026-10-06).** The originally proposed default target for `authority-routing` was `committee-vote-fork`. It was not used: `committee-vote-fork` is a PARALLEL_GATEWAY fork, and a second inbound edge turns it into `combined_unsupported` per `Transition.gateway_role/2`, so the definition would be rejected. The shipped default is `authority-routing-default` -> `decline-application` (-> `end-declined`) in both the QA fixture and the simulation yaml. This is a business-visible routing choice (an amount matching neither branch is declined); **BA-confirmed by letflow-2 (BA), 2026-10-06** (see the BA decision record at the end of section 7; no separate issue is filed). The decline reason must read 'no authority route matched'; the committee escalation replaces this default once the engine supports it.
 
 QA JSON files get a version bump (patch, as ISS-0928 did 1.1 -> 1.2) because `(name, version)` is unique
 (`uq_definition_version`) and a re-seed of an existing environment must create a new row; ELIXIR-DEV
@@ -399,7 +399,7 @@ Docs: `docs/anti-patterns.md` entry only if the build hits a new mistake; DOC-UP
 | Per built check: one test with a minimal violating definition asserting code AND offending node/edge id; one valid-neighbour test | CHK-22 `:unreachable_node` (minimal graph: `start->end`, plus gateways `x`,`y` with `x->y`, `y->x`, `x->end` default so only unreachability fires; assert node ids `x`,`y`); CHK-23 `:no_path_to_end` (`start->g`, `g->end` conditional, `g->h` default, `h->k`, `k->h` default; assert `h`,`k`); CHK-24 `:no_default_route` (gateway with two conditional edges; assert gateway id); check 3 `:variable_never_collected` (declared `{a}`, HUMAN_TASK `t` with conditional edge reading `ghost`, no writer upstream; assert edge id and `ghost`); each with a valid neighbour (fully connected start->end; gateway with a default; same human-task condition reading a variable declared / written by the task's own form `properties` / written by an upstream SERVICE_TASK) | `graph_flow_test.exs`, `semantic_validation_test.exs` |
 | ISS-0928 shape rejected at validation, with a test | Gateway shape: `Definitions.create/2` returns `{:error, {:graph_validation_failed, vs}}` containing `:no_default_route` naming the gateway (earlier phases pass, so the flow phase is the one that reports). Service-task shape: `Graph.validate_edge_conditions/1` -> `:unexpected_edge_condition` x2 and `Graph.validate_flow/1` -> `:no_default_route` naming the task; `Definitions.create/2` rejects it. | `graph_flow_test.exs`, `store_test.exs` or the new activation file |
 | Check 4: unbound role named in the warning list; nothing bound (tenant_role count unchanged) | Section 5. Install a pack whose HUMAN_TASK routes to `role-unbound-x`; assert `"role-unbound-x"` appears in `result.warnings` (and the HTTP body's `"warnings"`), a bound role (pre-inserted via `RoleRegistry.upsert_role/4`) does not, and `Repo.aggregate(TenantRole, :count, prefix: ...)` is equal before and after. | `role_binding_install_test.exs` |
-| Every shipped / seeded definition is run through the validator in a test; each failure fixed or filed and named | Section 7 (12 graphs; fixes in-change for the 11 failing; one BA-owned issue filed by ORCH naming the table rows) | `shipped_definitions_validation_test.exs` |
+| Every shipped / seeded definition is run through the validator in a test; each failure fixed or filed and named | Section 7 (12 graphs; fixes in-change for the 11 failing; defaults BA-confirmed 2026-10-06, no separate issue) | `shipped_definitions_validation_test.exs` |
 | `mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test`, `mix letflow.check_boundaries` pass with real output | New module `Letflow.Definitions.RoleBinding` references `Letflow.Identity.RoleRegistry`; `solution_pack.ex` already references `Letflow.Api.Authorization` and `Letflow.Identity.*`, and the boundary task checks only `lib/letflow/modules/<id>/` edges (rules 0-5), so no boundary rule is engaged. ELIXIR-DEV quotes the real output. | CI / TEST-RUNNER |
 
 ---
@@ -476,4 +476,21 @@ for enforcement; "A new tenant-scoped migration's tables..." (`:2186`) -- not ap
 * **OQ-8. Existing `role_mapping_checklist.bound`** compares `manifest.required_roles` to the static
   platform-role atoms, not to `tenant_role` rows, so it reports `bound: false` for tenant-routing roles
   that are in fact bound. Pre-existing, outside REQ-455, **not changed**; recorded as a finding.
-* **OQ-9. Fixture default targets** in section 7 are engineering proposals pending BA confirmation.
+* **OQ-9. Fixture default targets** in section 7: RESOLVED, BA-confirmed by letflow-2, 2026-10-06 (principle: every default routes toward MORE scrutiny or refusal, never less; see the BA decision record).
+
+## BA decision record (2026-10-06)
+
+BA-confirmed by letflow-2, 2026-10-06, principle: **every default routes toward MORE scrutiny or refusal, never less.**
+
+| Definition | Gateway | Default target | BA |
+|---|---|---|---|
+| meridian loan origination | eligibility-gate | decline-application | YES |
+| meridian loan origination | authority-routing | decline-application (reason 'no authority route matched') | YES |
+| meridian regulatory compliance review | severity-routing | remediation-subprocess | YES |
+| meridian regulatory compliance review | post-remediation-check | remediation-unresolved-escalation | YES |
+| swiftroute | ceo-approval-gate | ceo-approval | YES |
+| vortex | budget-gate | budget-approval | YES |
+| vortex | false-positive-check | severity-routing | YES |
+| vortex | severity-routing | corrective-action-subprocess | YES |
+
+The six simulation fixtures follow the same principle and were checked one by one by the implementer; each default lands on a branch at least as scrutinised as the conditional branches it replaces, with the single exception recorded in the PR body (meridian `kyc-routing`, see the PR).

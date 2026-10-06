@@ -163,7 +163,7 @@ graph:
       condition: "variables.kyc_status == 'inconclusive'"
     - id: kyc-routing-default
       source: kyc-routing
-      target: assessment-join
+      target: kyc-manual-review
       is_default: true
     - id: e12
       source: kyc-manual-review

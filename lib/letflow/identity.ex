@@ -1183,15 +1183,23 @@ defmodule Letflow.Identity do
   `:invalid_transition` error variant, matching this codebase's own
   established idempotency precedent for
   `TenantProvisioning.provision_tenant_schema/1`.
+
+  ISS-0993 / INV-10: the configured platform tenant (resolved ROW id equal to
+  `Letflow.PlatformTenant.configured_id/0`) can never be deactivated; the call
+  returns `{:error, :platform_tenant_protected}` before any write, for every
+  caller of this function. With no pin configured nothing is protected.
   """
-  @spec deactivate_tenant(slug :: String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
+  @spec deactivate_tenant(slug :: String.t()) ::
+          {:ok, Tenant.t()}
+          | {:error, :not_found | :platform_tenant_protected | Ecto.Changeset.t()}
   def deactivate_tenant(slug), do: set_tenant_status(slug, :inactive)
 
   @doc """
   Sets a tenant's `status` to `:active`, via `Tenant.status_changeset/2`.
   Idempotent, same reasoning as `deactivate_tenant/1`.
   """
-  @spec reactivate_tenant(slug :: String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
+  @spec reactivate_tenant(slug :: String.t()) ::
+          {:ok, Tenant.t()} | {:error, :not_found | Ecto.Changeset.t()}
   def reactivate_tenant(slug), do: set_tenant_status(slug, :active)
 
   @doc """
@@ -1221,9 +1229,13 @@ defmodule Letflow.Identity do
         {:error, :not_found}
 
       %Tenant{} = tenant ->
-        tenant
-        |> Tenant.status_changeset(%{status: status})
-        |> Repo.update()
+        if status == :inactive and Letflow.PlatformTenant.platform_tenant?(tenant.id) do
+          {:error, :platform_tenant_protected}
+        else
+          tenant
+          |> Tenant.status_changeset(%{status: status})
+          |> Repo.update()
+        end
     end
   end
 

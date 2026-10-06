@@ -42,6 +42,7 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
   import Plug.Conn
   import Ecto.Query
 
+  alias Letflow.Support.PlatformTenantFixture
   alias Ecto.Adapters.SQL.Sandbox
   alias Letflow.ServiceCatalog
   alias Letflow.ServiceCatalog.Entry
@@ -70,11 +71,14 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
       end
 
     conn
-    |> assign(:auth_context, %{
-      user_id: Ecto.UUID.generate(),
-      tenant_id: Ecto.UUID.generate(),
-      roles: roles
-    })
+    |> assign(
+      :auth_context,
+      PlatformTenantFixture.operator_auth_context(
+        Ecto.UUID.generate(),
+        Ecto.UUID.generate(),
+        roles
+      )
+    )
     |> assign(:trace_id, "fixed-test-trace-id")
   end
 

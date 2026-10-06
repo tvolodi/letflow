@@ -80,8 +80,8 @@
 #
 # Beyond token validity, two further per-scenario checks (ISS-0894) use the token(s)
 # obtained above: `app_roles` (GET /tasks/inbox; /me/modules for candidate-labeled
-# actors; /admin/services for actor-platform-admin, see ISS-0909c -- 403 there is a
-# role-binding gap, see ISS-0886) and `definitions` (GET
+# actors; /identity/users for actor-platform-admin, see ISS-0909c/ISS-0993 -- 403 there is
+# a role-binding gap, see ISS-0886) and `definitions` (GET
 # /api/v1/definitions/active/<process_id> for proc-* process ids -- 404 there is a
 # definition-resolution gap, see ISS-0893/ISS-0897). When a
 # test/fixtures/uat/process-definition-aliases/<process_id>.yaml sidecar exists, its
@@ -435,6 +435,34 @@ for path, tok in cands:
             break
 g["deployed_sha"] = sha_state
 
+# platform_operator (ISS-0993, optional, read-only): /api/v1/admin/services is PLATFORM
+# scope, honoured only for a PLATFORM_ADMIN whose tenant is the one named by
+# LETFLOW_PLATFORM_TENANT_ID on the server. When a platform-tenant account is configured
+# for this run (UAT_PF_PLATFORM_OPERATOR_USER = a username the credential source knows;
+# UAT_PF_PLATFORM_OPERATOR_REALM = its realm, default bpm-default), probe that route with
+# it. Not configured => OK (skipped): this check never fails a run that has no operator.
+op_user = os.environ.get("UAT_PF_PLATFORM_OPERATOR_USER", "").strip()
+op_realm = os.environ.get("UAT_PF_PLATFORM_OPERATOR_REALM", "").strip() or "bpm-default"
+if not op_user:
+    g["platform_operator"] = ("OK", "not configured (optional; set UAT_PF_PLATFORM_OPERATOR_USER to probe)", "")
+else:
+    op_state, op_realm_used = try_login("platform-operator", op_user, [op_realm])
+    if op_state != "OK":
+        g["platform_operator"] = ("GAP", "platform operator login failed (%s)" % op_state,
+                                  "ai-dala-infra (platform tenant account)")
+    else:
+        op_st, _ = http("GET", base + "/api/v1/admin/services",
+                        auth(tokens[("platform-operator", op_realm_used)]))
+        if op_st == 200:
+            g["platform_operator"] = ("OK", "GET /admin/services -> 200 with the platform-tenant account", "")
+        elif op_st == 403:
+            g["platform_operator"] = ("GAP",
+                "GET /admin/services -> 403 with the platform-tenant account: its tenant is not the "
+                "configured platform tenant (LETFLOW_PLATFORM_TENANT_ID) or PLATFORM_ADMIN is not bound",
+                "ai-dala-infra (set LETFLOW_PLATFORM_TENANT_ID) / letflow (ISS-0886 role backfill)")
+        else:
+            g["platform_operator"] = ("UNKNOWN", "GET /admin/services -> %s" % op_st, "")
+
 # tenants
 tenants_found = None
 tenants_reason = ""
@@ -600,11 +628,16 @@ for s in scenarios:
                 # /tasks/inbox is uninformative for a platform admin -- an admin may
                 # hold no TASK-oriented role at all regardless of their actual role
                 # grant, so a 403/200 there says nothing real about role binding.
-                # /admin/services is PLATFORM_ADMIN-only (:AdminServicesRead ->
-                # :UsersGroupsRolesManage, lib/letflow/routers/admin_services.ex's own
-                # moduledoc), so 200 there is a real, specific signal for this actor.
-                # ISS-0909(c).
-                path = "/api/v1/admin/services"
+                # GET /api/v1/identity/users is a tenant-scope admin-only route
+                # (:UsersManage -> :UsersGroupsRolesManage, held by PLATFORM_ADMIN in
+                # every tenant), so 200 there is a real, specific role-binding signal
+                # for this actor in ITS OWN tenant realm. /admin/services used to be
+                # the probe, but ISS-0993 made it PLATFORM scope (:PlatformServicesManage,
+                # honoured only for a PLATFORM_ADMIN of the configured platform tenant),
+                # which a tenant-realm account can never satisfy; that route is now
+                # probed by the separate optional "platform_operator" global check.
+                # ISS-0909(c), ISS-0993.
+                path = "/api/v1/identity/users"
             elif is_candidate:
                 path = "/api/v1/me/modules"
             else:

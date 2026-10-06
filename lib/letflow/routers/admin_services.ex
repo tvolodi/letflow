@@ -42,8 +42,7 @@ defmodule Letflow.Routers.AdminServices do
   gets `403` and never sees another tenant's `owner_tenant_id`. (These keys
   used to map to the tenant permission `:UsersGroupsRolesManage` by accident.)
   The tenant-facing catalogue is the separate, tenant-filtered `GET /services`.
-  A1 runs the platform check in shadow mode: enforcement is the legacy outcome
-  and a `platform_scope_shadow_deny` line is logged where A2 will deny.
+  Enforcement is live (A2): a non-operator gets the same fixed 403 whether the path matches a route or not; the platform-tenant operator keeps the router's 404 on an unmatched path. No handler here names an existing tenant (no `authorize_target_tenant/2` call is needed): the platform gate runs before any handler.
 
   ## `GET /` — `Letflow.ServiceCatalog.list_all/1` (design §5, REVISED in
   ## rework iteration 2 — FLAGGED FOR REVIEWER SIGN-OFF, not pre-approved)

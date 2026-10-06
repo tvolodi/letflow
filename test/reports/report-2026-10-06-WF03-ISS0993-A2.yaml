@@ -1,0 +1,83 @@
+run_id: WF03-ISS0993-A2
+step: release-validation
+agent: RELEASE-VALIDATOR
+generated_at: "2026-10-06T00:35:00Z"
+branch: fix/ISS-0993-A2-platform-scope-enforce
+scope: "ISS-0993 PR A2 (Q-960 / GH #2229), implementation commit 04b63850 + uncommitted TEST-DESIGNER tests; scoped run (shared loaded host, no full suite, no mix letflow.check.test by instruction)"
+env: "MIX_ENV=test MIX_TEST_PARTITION=3 (mix refuses compile/format with the partition var unless MIX_ENV=test)"
+checks:
+  - cmd: "mix compile --warnings-as-errors"
+    result: "exit 0 (Compiling 5 files, no warnings)"
+  - cmd: "mix format --check-formatted"
+    result: "exit 0"
+  - cmd: "mix letflow.check_boundaries"
+    result: "OK -- 1031 edges checked, 0 violations"
+  - cmd: "bash -n scripts/uat_preflight.sh"
+    result: "exit 0"
+  - cmd: "mix test test/letflow/api --timeout 300000"
+    result: "428 passed, 0 failed (143.4s)"
+  - cmd: "mix test test/letflow/plugs routers/tenants_test.exs routers/platform_scope_routes_test.exs routers/promotion_scope_test.exs --timeout 300000"
+    result: "386 passed, 0 failed (195.3s)"
+  - cmd: "mix test routers/req077_promotion_pipeline_test.exs routers/onboarding_test.exs identity_test.exs req442_tenant_mode_schema_test.exs no_smtp_secret_guard_test.exs login_directory/no_secret_in_repo_test.exs platform_tenant_runtime_config_test.exs --timeout 300000"
+    result: "141 passed, 0 failed (107.0s)"
+    note: "pepper no-secret guard = test/letflow/login_directory/no_secret_in_repo_test.exs (grep for pepper in tests); platform_tenant_runtime_config_test.exs added as the runtime-config counterpart"
+  - cmd: "grep default_permission_checker | platform_scope_shadow_deny | Tenant.update_changeset under lib/ and config/ (excluding lib/letflow/design/)"
+    result: "default_permission_checker: 0 hits; platform_scope_shadow_deny: 0 hits; Tenant.update_changeset: no definition (grep 'def update_changeset' lib/letflow/identity/tenant.ex empty), no caller; only a moduledoc sentence at lib/letflow/identity/tenant.ex:41 describing the former function. Other modules' own update_changeset/2 (ProcessDefinition, InstanceProjection etc.) are unrelated."
+not_run_by_instruction:
+  - "mix letflow.check.test"
+  - "scripts/test_parallel.sh / full suite"
+criteria:
+  - id: design-13-A2-authorize-and-authorization
+    status: VERIFIED
+    evidence: "authorize.ex diff removes forcing + shadow log (no 'legacy|forc|shadow' hits); authorization.ex:1057-1060 denies :Unknown for every role; platform_admin_name?/1 at authorization.ex:589; platform_scope_authorization_test / authorize_test green"
+  - id: design-13-A2-tenant-status
+    status: VERIFIED
+    evidence: "tenant_status.ex uses PlatformTenant.scope_facts(tenant.id, raw_roles).platform_scope?; platform_tenant_status_test.exs + tenant_status_test.exs green (in the 428/386 runs)"
+  - id: design-13-A2-tenants-identity-409
+    status: VERIFIED
+    evidence: "identity.ex:1233 returns {:error, :platform_tenant_protected} in set_tenant_status/2; tenants.ex:418 maps to 409; spec updated; tenants_test + platform_tenant_status_test green"
+  - id: design-13-A2-update_changeset-deleted
+    status: VERIFIED
+    evidence: "no def update_changeset in tenant.ex; identity_test REQ-019 + req442_tenant_mode_schema_test repointed/dropped and green (141 passed); identity/tenant_update_changeset_removed_test.exs run separately: 4 passed, 0 failed"
+  - id: design-13-A2-promotions-definitions-helper
+    status: VERIFIED
+    evidence: "TenantTarget.authorize_target_tenant/2 and PromotionAccess.checker_for/1 wired in promotions.ex (lines 297/307/413/633), tenants.ex handle_promote, definitions.ex:1181; promotion_plan.ex/promotion.ex allow-all default removed (default_permission_checker 0 hits); promotion_scope_test + req077_promotion_pipeline_test + promote_source_tenant_test green"
+  - id: design-13-A2-roles-H1
+    status: VERIFIED
+    evidence: "routers/identity.ex:724 platform_admin_name? and not platform_scope? -> 403 before upsert_role/4; platform_admin_role_binding_test.exs green"
+  - id: design-13-A2-uat_preflight
+    status: VERIFIED
+    evidence: "scripts/uat_preflight.sh: actor-platform-admin probe moved to /api/v1/identity/users; optional platform_operator check probing /api/v1/admin/services added (OK-skipped when UAT_PF_PLATFORM_OPERATOR_USER unset); bash -n exit 0. Script not executed against a live instance."
+  - id: design-12-tests
+    status: VERIFIED
+    evidence: "Named tests present and green: uniform_403_platform_prefixes_for_non_operators (platform_prefix_uniform_403_test.exs:135), promote_route_source_tenant_equals_own (promote_source_tenant_test.exs), items 5 (platform_scope_routes_test), 7 (promotion_scope_test), 9 (platform_tenant_status_test, tenant_update_changeset_removed_test), 10 (platform_admin_role_binding_test), 17 (platform_marker_not_writable_test); A1-only shadow/legacy tests deleted (platform_scope_shadow_test, promotion_scope_legacy_test) as design item 14 is A1-only. No skips found in the new/changed test files."
+  - id: design-15-A2-entry-gate
+    status: NOT VERIFIED
+    evidence: "Gate 4a is operational (pin set per instance, shadow-log window with zero operator denials, operator token rules, dated evidence recorded in the A2 PR description). Not a code property; no such evidence exists in the working tree or commit. Must be supplied in the PR description by infra/ORCH before merge. Dated evidence missing = gate fails per design."
+  - id: ISS-0994-a
+    status: VERIFIED
+    evidence: "platform_scope_routes_test + platform_prefix_uniform_403_test (A PLATFORM_ADMIN 403 on tenants/onboarding/platform-migrations/event-retention/admin-services incl. own slug) green"
+  - id: ISS-0994-b
+    status: VERIFIED
+    evidence: "platform_tenant_status_test + tenant_status_test green: own inactive tenant's PLATFORM_ADMIN halted 403 tenant_inactive; platform-tenant admin exempt"
+  - id: ISS-0994-c
+    status: VERIFIED
+    evidence: "deactivating platform tenant -> 409, row unchanged (platform_tenant_status_test); PATCH has no status key"
+  - id: ISS-0994-d
+    status: VERIFIED
+    evidence: "tenant_settings_scope_test green; PATCH /tenant/settings resolves to :TenantSettingsManage for non-platform PLATFORM_ADMIN"
+  - id: ISS-0994-e
+    status: VERIFIED
+    evidence: "platform_marker_not_writable_test green (cast lists, @patch_schema, extra keys, pin unchanged on POST /tenants and /onboarding, source scans)"
+  - id: ISS-0994-f
+    status: VERIFIED_BY_CITATION
+    evidence: "INV-10 carried by workflow-rules PR (commit 67a5c343 'docs(rules): ... INV-10'); design section 14 marks MET BY CITATION"
+  - id: ISS-0994-full-mix-test
+    status: NOT VERIFIED
+    evidence: "Full suite and mix letflow.check.test deliberately not run (host loaded, per task instruction). Must be run by TEST-RUNNER / CI before merge."
+failures: []
+gaps:
+  - "design 4a A2 entry gate evidence absent (operational)."
+  - "full suite / mix letflow.check.test not run."
+  - "uat_preflight.sh checked by bash -n only."
+verdict: "Code and scoped tests VERIFIED (955 passed, 0 failed across three scoped invocations). Overall NOT release-ready until (1) design 4a dated gate evidence is recorded in the PR and (2) full suite plus mix letflow.check.test are run by another party."

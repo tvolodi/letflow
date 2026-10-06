@@ -296,6 +296,7 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
     assert SmtpSink.connections(env.sink) == 0
 
     assert Smtp.deliver_tenant_list(@typed, tenants()) == :ok
+    SmtpSink.await_closed(env.sink)
     assert [%{auth: [{user, pass}]}] = SmtpSink.transcripts(env.sink)
     assert {user, pass} == {S.user(), S.pass()}
     assert [%{rcpts: [rcpt]}] = SmtpSink.messages(env.sink)

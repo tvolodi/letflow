@@ -1,6 +1,6 @@
 defmodule Letflow.Routers.TenantSettingsScopeTest do
   @moduledoc """
-  ISS-0993 / ISS-0994 design section 12 item 6 (spec `test/specs/ISS-0993-A1.md`):
+  ISS-0993 / ISS-0994 design section 12 item 6 (specs `test/specs/ISS-0993-A1.md`, `ISS-0993-A2.md`):
   `PATCH /tenant/settings` is an own-tenant, tenant-scope operation (`:TenantSettingsManage`),
   not the platform registry permission.
 
@@ -9,10 +9,9 @@ defmodule Letflow.Routers.TenantSettingsScopeTest do
     * the platform tenant's `PLATFORM_ADMIN` is allowed on its own row;
     * no tenant-bearing request value (body or query) redirects the write to another tenant.
 
-  No shadow line is produced (tenant-scope key: legacy and real decisions agree).
-  Existing coverage in `tenant_settings_test.exs` is untouched.
+  The outcome does not depend on the platform pin (tenant-scope key). Existing coverage in `tenant_settings_test.exs` is untouched.
 
-  INV-10 check, enforced from the merge of Q-960 PR A. `async: false` (VM-global pin, shared log).
+  INV-10 check, enforced from the merge of Q-960 PR A. `async: false` (VM-global pin).
   """
 
   use Letflow.DataCase, async: false
@@ -43,10 +42,7 @@ defmodule Letflow.Routers.TenantSettingsScopeTest do
     b_before = settings_of(ctx.b)
     p_before = settings_of(ctx.p)
 
-    {resp, lines} =
-      ExUnit.CaptureLog.with_log([level: :warning], fn ->
-        patch(ctx.a, ["PLATFORM_ADMIN"], %{"app_name" => "Scope Test A"})
-      end)
+    resp = patch(ctx.a, ["PLATFORM_ADMIN"], %{"app_name" => "Scope Test A"})
 
     assert resp.status == 200
     body = Jason.decode!(resp.resp_body)
@@ -56,7 +52,6 @@ defmodule Letflow.Routers.TenantSettingsScopeTest do
     assert settings_of(ctx.a)["app_name"] == "Scope Test A"
     assert settings_of(ctx.b) == b_before
     assert settings_of(ctx.p) == p_before
-    assert Fixture.shadow_lines(lines) == []
   end
 
   test "a PROCESS_DESIGNER of an ordinary tenant gets 403 and nothing is written", ctx do

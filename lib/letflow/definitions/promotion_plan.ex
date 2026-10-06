@@ -11,21 +11,17 @@ defmodule Letflow.Definitions.PromotionPlan do
   (INV-PRM-1). The two `Repo.get_by/3` reads (source/target ACTIVE
   `process_definitions` rows) are plain reads, no lock.
 
-  ## `permission_checker` has no real enforcement by default (design §9.1)
+  ## `permission_checker` has no built-in default (design §9.1; ISS-0993 section 9)
 
-  There is no data path in Letflow today from `actor_id` to "does this actor
-  hold a `promotion.submit`-equivalent permission" —
-  `Letflow.Identity.RoleRegistry` is a `role_name -> group_id` binding
-  registry with no user->role assignment and no group-membership table. This
-  module does **not** invent that resolution: `opts[:permission_checker]`
-  has no built-in default and must be supplied by the caller. If a caller
+  `opts[:permission_checker]` must be supplied by the caller. If a caller
   omits it, `compute_promotion_plan/5` raises a `KeyError` rather than
-  silently allowing every actor through — silently defaulting to
-  "always allowed" would be worse than crashing, since it would look like
-  real enforcement while performing none. `default_permission_checker/2` is
-  exposed as a reference implementation only, and its own `@doc` restates
-  this same gap — it performs **no real enforcement**, it always returns
-  `true`.
+  silently allowing every actor through. The allow-all
+  default checker that used to live here was DELETED by ISS-0993
+  (A2); every HTTP call site now passes
+  `Letflow.Definitions.PromotionAccess.checker_for(conn.assigns.auth_context)`,
+  which accepts a source tenant only when it is the caller's own tenant or the
+  caller holds platform scope. A test that needs an allow-all checker supplies
+  its own anonymous function.
 
   ## Entry ordering is a determinism precondition for `PromotionDigest` (design §2.5)
 
@@ -167,17 +163,6 @@ defmodule Letflow.Definitions.PromotionPlan do
         end
     end
   end
-
-  @doc """
-  Reference `permission_checker` implementation — performs **no real
-  enforcement**. Always returns `true`, regardless of `actor_id` or
-  `source_tenant_id`. Not used as a default anywhere in this module
-  (`compute_promotion_plan/5` has no built-in default, per design §9.1);
-  exposed only so a caller has a named, explicit "allow everything" option
-  to opt into deliberately rather than reinventing an equivalent inline.
-  """
-  @spec default_permission_checker(Ecto.UUID.t(), Ecto.UUID.t()) :: boolean()
-  def default_permission_checker(_actor_id, _source_tenant_id), do: true
 
   @doc """
   Default `tenant_classifier` — classifies every tenant as `:test`. There is

@@ -74,8 +74,9 @@ defmodule Letflow.Routers.Tenants do
   name its OWN tenant there, a platform-tenant operator may name another
   (decision point OQ-2, `Letflow.PlatformTenant.cross_tenant_promotion_operator_only?/0`).
   `Letflow.Api.TenantTarget.authorize_target_tenant/2` (404 byte-identical to a
-  nonexistent source, called BEFORE any read of the source tenant) implements
-  it; it ships in A1 but is not yet called by `handle_promote` (A2).
+  nonexistent source, called BEFORE any read of the source tenant, including
+  for a never-provisioned id) implements it in `handle_promote/3`; the
+  `permission_checker` is `Letflow.Definitions.PromotionAccess.checker_for/1`.
 
   ## Scope rule (ISS-0993 / ISS-0994): PLATFORM scope
 
@@ -84,9 +85,12 @@ defmodule Letflow.Routers.Tenants do
   PLATFORM-scope permission: honoured only for a `PLATFORM_ADMIN` whose
   database-resolved tenant is the configured platform tenant
   (`Letflow.PlatformTenant`, `LETFLOW_PLATFORM_TENANT_ID`). A `PLATFORM_ADMIN` of
-  any other tenant, including for its own slug, gets 403. A1 runs this in
-  shadow mode: enforcement is still the legacy outcome and a
-  `platform_scope_shadow_deny` line is logged where A2 will deny.
+  any other tenant, including for its own slug, gets 403 (a fixed body, the same
+  for matched and unmatched paths under this mount, see
+  `Letflow.Api.AuthorizedRouter.authz_unmatched/1`). Every `:slug` handler also
+  calls `Letflow.Api.TenantTarget.authorize_target_tenant/2` before any lookup
+  (defence in depth). Deactivating the platform tenant itself is refused with
+  409 (`Identity.deactivate_tenant/1` returns `:platform_tenant_protected`).
 
   ## Relationship to REQ-076 (AC7)
 
@@ -170,10 +174,11 @@ defmodule Letflow.Routers.Tenants do
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
+  alias Letflow.Api.TenantTarget
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.Definitions.Promotion
-  alias Letflow.Definitions.PromotionPlan
+  alias Letflow.Definitions.PromotionAccess
   alias Letflow.EventStore.PlatformEvents
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
@@ -322,8 +327,10 @@ defmodule Letflow.Routers.Tenants do
   # ── GET /tenants/:slug (design §6.3) ─────────────────────────────────────
 
   defp handle_get(conn, slug) do
-    case Identity.get_tenant_by_slug(slug) do
-      {:ok, tenant} -> Response.ok(conn, tenant_map(tenant))
+    with :ok <- TenantTarget.authorize_target_tenant(conn, slug),
+         {:ok, tenant} <- Identity.get_tenant_by_slug(slug) do
+      Response.ok(conn, tenant_map(tenant))
+    else
       {:error, :not_found} -> Response.not_found(conn)
     end
   end
@@ -348,28 +355,27 @@ defmodule Letflow.Routers.Tenants do
   ]
 
   defp handle_patch(conn, slug) do
-    case Identity.get_tenant_by_slug(slug) do
-      {:error, :not_found} ->
-        Response.not_found(conn)
+    with :ok <- TenantTarget.authorize_target_tenant(conn, slug),
+         {:ok, _existing} <- Identity.get_tenant_by_slug(slug) do
+      case Validation.validate(@patch_schema, conn.body_params) do
+        {:errors, field_errors} ->
+          Response.send_problem(conn, Validation.problem(field_errors))
 
-      {:ok, _existing} ->
-        case Validation.validate(@patch_schema, conn.body_params) do
-          {:errors, field_errors} ->
-            Response.send_problem(conn, Validation.problem(field_errors))
+        {:ok, attrs} ->
+          opts = [
+            actor_id: conn.assigns.auth_context.user_id,
+            trace_id: conn.assigns[:trace_id]
+          ]
 
-          {:ok, attrs} ->
-            opts = [
-              actor_id: conn.assigns.auth_context.user_id,
-              trace_id: conn.assigns[:trace_id]
-            ]
-
-            case Identity.patch_tenant(slug, attrs, opts) do
-              {:ok, tenant} -> Response.ok(conn, tenant_map(tenant))
-              {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
-              {:error, :not_found} -> Response.not_found(conn)
-              {:error, :audit_failed} -> Response.internal_error(conn)
-            end
-        end
+          case Identity.patch_tenant(slug, attrs, opts) do
+            {:ok, tenant} -> Response.ok(conn, tenant_map(tenant))
+            {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
+            {:error, :not_found} -> Response.not_found(conn)
+            {:error, :audit_failed} -> Response.internal_error(conn)
+          end
+      end
+    else
+      {:error, :not_found} -> Response.not_found(conn)
     end
   end
 
@@ -378,6 +384,13 @@ defmodule Letflow.Routers.Tenants do
   # OQ-3: bodyless -- conn.body_params ignored on both.
 
   defp handle_deactivate(conn, slug) do
+    case TenantTarget.authorize_target_tenant(conn, slug) do
+      :ok -> deactivate(conn, slug)
+      {:error, :not_found} -> Response.not_found(conn)
+    end
+  end
+
+  defp deactivate(conn, slug) do
     case Identity.deactivate_tenant(slug) do
       {:ok, tenant} ->
         # ISS-0437: evict this tenant's Admission-tracked entry so it stops
@@ -398,13 +411,25 @@ defmodule Letflow.Routers.Tenants do
 
       {:error, :not_found} ->
         Response.not_found(conn)
+
+      # INV-10: the configured platform tenant can never be deactivated; the
+      # guard lives in Identity.set_tenant_status/2 (row unchanged). Fixed
+      # message, no ids.
+      {:error, :platform_tenant_protected} ->
+        Response.conflict(conn, "the platform tenant cannot be deactivated")
+
+      {:error, %Ecto.Changeset{}} ->
+        Response.unprocessable(conn, "validation failed")
     end
   end
 
   defp handle_reactivate(conn, slug) do
-    case Identity.reactivate_tenant(slug) do
-      {:ok, tenant} -> Response.ok(conn, tenant_map(tenant))
+    with :ok <- TenantTarget.authorize_target_tenant(conn, slug),
+         {:ok, tenant} <- Identity.reactivate_tenant(slug) do
+      Response.ok(conn, tenant_map(tenant))
+    else
       {:error, :not_found} -> Response.not_found(conn)
+      {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
     end
   end
 
@@ -418,6 +443,17 @@ defmodule Letflow.Routers.Tenants do
   # structurally uninfluenceable by the request.
 
   defp handle_promote(conn, test_tenant_id, process_key) do
+    # ISS-0993 row 34 / design section 8: BEFORE any read of the source tenant
+    # (no existence oracle, no schema touched), a non-operator may name only
+    # its OWN tenant as the source; anything else (another tenant, a
+    # nonexistent or malformed id, a slug) is the same zero-detail 404.
+    case TenantTarget.authorize_target_tenant(conn, test_tenant_id) do
+      :ok -> do_promote(conn, test_tenant_id, process_key)
+      {:error, :not_found} -> Response.not_found(conn)
+    end
+  end
+
+  defp do_promote(conn, test_tenant_id, process_key) do
     actor_id = conn.assigns.auth_context.user_id
     target_tenant_id = conn.assigns.auth_context.tenant_id
 
@@ -427,7 +463,7 @@ defmodule Letflow.Routers.Tenants do
         test_tenant_id,
         target_tenant_id,
         process_key,
-        permission_checker: &PromotionPlan.default_permission_checker/2,
+        permission_checker: PromotionAccess.checker_for(conn.assigns.auth_context),
         event_appender: &PlatformEvents.append_definition_promoted/2
       )
 

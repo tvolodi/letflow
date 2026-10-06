@@ -353,11 +353,11 @@ mail_adapter =
 # echoing the value. Parsed by the single parser Letflow.PlatformTenant.parse_env/1.
 case Letflow.PlatformTenant.parse_env(System.get_env("LETFLOW_PLATFORM_TENANT_ID")) do
   {:ok, nil} ->
-    # A1 text only (A2 replaces it). Silent under :test, where the pin is always unset.
+    # A2 text (design section 3). Silent under :test, where the pin is always unset.
     if config_env() != :test do
       IO.puts(
         :stderr,
-        "[warning] LETFLOW_PLATFORM_TENANT_ID is unset: platform scope is not enforced yet (shadow mode)."
+        "[warning] LETFLOW_PLATFORM_TENANT_ID is unset: platform-scope operations are denied for every caller."
       )
     end
 
@@ -367,6 +367,25 @@ case Letflow.PlatformTenant.parse_env(System.get_env("LETFLOW_PLATFORM_TENANT_ID
   {:error, :invalid_uuid} ->
     raise "environment variable LETFLOW_PLATFORM_TENANT_ID must be unset/blank or a UUID. " <>
             "The value is not echoed."
+end
+
+# REQ-444 (decision 0043 D-D, 0042 OQ-3): the email-first ENABLEMENT GATE. Placed after
+# REQ-439's trusted-proxy check and REQ-441's mail block so it sees the resolved
+# `login_discovery_enabled` and `mail_adapter` (nil when LETFLOW_MAIL_ADAPTER is unset).
+# Outside :dev/:test, an enabled mount refuses to boot without a legal-confirmation marker
+# and a delivering adapter. The marker is ADVISORY: it cannot prove a confirmation
+# happened, it only makes enabling without one a deliberate, auditable act. The raised
+# text is fixed and never contains the marker or adapter value (INV-4).
+login_directory_legal_marker = ld_get.("LETFLOW_LOGIN_DIRECTORY_LEGAL_CONFIRMATION")
+
+case Letflow.LoginDiscovery.BootCheck.check(
+       config_env(),
+       login_discovery_enabled,
+       login_directory_legal_marker,
+       mail_adapter
+     ) do
+  :ok -> :ok
+  {:error, reason} -> raise Letflow.LoginDiscovery.BootCheck.message(reason)
 end
 
 if config_env() == :prod do

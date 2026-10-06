@@ -1178,7 +1178,8 @@ defmodule Letflow.Routers.Definitions do
             attrs["target_version"],
             actor_id,
             Keyword.merge(opts,
-              permission_checker: &Letflow.Definitions.PromotionPlan.default_permission_checker/2,
+              permission_checker:
+                Letflow.Definitions.PromotionAccess.checker_for(conn.assigns.auth_context),
               event_appender:
                 &Letflow.EventStore.PlatformEvents.append_definition_version_rolled_back/2
             )

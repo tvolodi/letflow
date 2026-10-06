@@ -88,6 +88,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpSmokeTest do
     assert message.data =~ "https://app.example.org/?realm=globex"
     assert message.data =~ "Acme Corp"
 
+    SmtpSink.await_closed(sink)
     assert [transcript] = SmtpSink.transcripts(sink)
     assert transcript.ehlo == "mail.example.org"
     assert transcript.auth == [{@user, @pass}]
@@ -132,6 +133,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpSmokeTest do
       configure(sink, "localhost", :starttls, tls_cacerts: [sink.ca_der])
 
       assert Smtp.deliver_tenant_list(@recipient, @tenants) == :ok
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       assert transcript.tls?
       assert transcript.auth == [{@user, @pass}]
@@ -144,6 +146,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpSmokeTest do
 
       assert Smtp.deliver_tenant_list(@recipient, @tenants) == {:error, :failed}
       assert SmtpSink.connections(sink) == 1
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       assert transcript.auth == []
       assert transcript.mail_from == nil
@@ -154,6 +157,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpSmokeTest do
       configure(sink, "localhost", :starttls, tls_cacerts: [])
 
       assert Smtp.deliver_tenant_list(@recipient, @tenants) == {:error, :failed}
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       assert transcript.auth == []
       assert transcript.mail_from == nil
@@ -164,6 +168,7 @@ defmodule Letflow.LoginDiscovery.Notifier.SmtpSmokeTest do
       configure(sink, "localhost", :starttls)
 
       assert Smtp.deliver_tenant_list(@recipient, @tenants) == {:error, :failed}
+      SmtpSink.await_closed(sink)
       assert [transcript] = SmtpSink.transcripts(sink)
       assert transcript.auth == []
       assert transcript.mail_from == nil

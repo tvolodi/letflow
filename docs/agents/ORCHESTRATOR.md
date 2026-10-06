@@ -116,6 +116,7 @@ INPUT: trigger
 │           R-Co's own WF-05 sequencing precedent ("it never runs in parallel
 │           with a BO agent"; runs after all BA-equivalent sign-offs))
 │
+├─ A BA sign-off or PRODUCT-OWNER issue has suggested_action route_to_security_review?  └─► Gate: WF-05 Step 4 (not APPROVED while any access_verdict is FAIL, or NOT_COVERED outside refusal_coverage_exempt); route: file per ISSUE_QUEUE.md as BLOCKER and dispatch SECURITY-REVIEWER with the entry text, never WF-03 directly.
 └─ Does not match any standard workflow?
       └─► Build an ad-hoc workflow (§6). Never skip a standard workflow that DOES
           match — there is no human to ask for permission to skip one (see

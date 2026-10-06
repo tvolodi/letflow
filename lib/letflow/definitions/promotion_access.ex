@@ -1,11 +1,9 @@
 defmodule Letflow.Definitions.PromotionAccess do
   @moduledoc """
   The real `permission_checker` for the promotion pipeline (ISS-0993 design
-  section 9), replacing the allow-all `PromotionPlan.default_permission_checker/2`.
-
-  A1 ships this module and does NOT wire it into any call site yet (A2 replaces
-  every `&PromotionPlan.default_permission_checker/2` in `promotions.ex`,
-  `tenants.ex` and `definitions.ex` with `checker_for(conn.assigns.auth_context)`).
+  section 9), replacing the former allow-all default checker (deleted from `PromotionPlan`).
+  Every call site in `promotions.ex`, `tenants.ex` and `definitions.ex` passes
+  `checker_for(conn.assigns.auth_context)`.
 
   The checker is invoked as `checker.(actor_id, source_tenant_id)`
   (`Promotion`, `PromotionPlan`, `Definitions.rollback_definition_version/4`).

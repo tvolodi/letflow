@@ -706,3 +706,36 @@ history:
       branch feature/WF02-REQ452-20261006). Validated by REVIEWER PASS,
       TEST-DESIGN-VALIDATOR PASS, RELEASE-VALIDATOR PASS; SECURITY-REVIEWER N/A
       (dev tooling, no tenant-data path).
+
+  - req: REQ-444
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-05T21:24:12Z"
+    note: >
+      Backend enablement gate implemented in the Q-958 PR (queue task 958,
+      GH#2218). SECURITY-REVIEWER PASS (INV-4 PASS, INV-6 not applicable),
+      REVIEWER PASS (AC corrections and the REQ-439 test narrowing accepted),
+      RELEASE-VALIDATOR: all six corrected criteria VERIFIED in code and
+      targeted tests (report test/reports/report-2026-10-06-WF02-REQ444.yaml).
+      Full-suite run deferred to CI: a local full run failed for an
+      unidentified, likely environmental reason on a loaded host. Enabling the
+      email-first feature outside dev/test still requires runbook
+      docs/runbooks/login-directory-enablement.md section B: legal
+      confirmation by a named person, QA nginx real_ip (T-0155), ISS-0991 and
+      ISS-0992 trackers, SMTP credentials and DNS.
+
+  - req: REQ-453
+    event: done
+    agent: ORCH
+    at: "2026-10-06T00:06:35Z"
+    note: >
+      Access rules for BA-<VERTICAL>, UAT-RUNNER and PRODUCT-OWNER (queue task
+      970, GH#2242, branch feature/WF02-REQ453-20261006): ba-analyst.md Access and
+      roles section, sign-off access_verdict/access_note, uat-runner.md refusal
+      steps and no-substitution, product-owner.md and WF-05 Step 4 access gate,
+      one ORCHESTRATOR.md routing line. Instruction text only. Validated by
+      CODE-DESIGN-VALIDATOR PASS (after 1 rework), REVIEWER PASS, RELEASE-VALIDATOR
+      PASS; SECURITY-REVIEWER OUT-OF-SCOPE (instruction text, no tenant-data path);
+      TEST-DESIGNER skipped (no executable surface, WF-02 Step 3 docs-only rule).
+      Full mix letflow.check alias not run (hangs in this environment); component
+      checks and 66 direct tests passed.

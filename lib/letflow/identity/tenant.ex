@@ -36,14 +36,16 @@ defmodule Letflow.Identity.Tenant do
 
   ## Changesets (REQ-019)
 
-  `create_changeset/3` and `update_changeset/2` implement
-  `lib/letflow/design/req019-tenant-realm-binding.md` §3.
+  `create_changeset/3` and `admin_patch_changeset/2` implement
+  `lib/letflow/design/req019-tenant-realm-binding.md` §3. (ISS-0993 deleted the
+  former `update_changeset/2`, which had no caller under `lib/` and cast
+  `:status`; `status_changeset/2` is the only status writer.)
 
   **`idp_realm_id` is immutable after creation.** This is enforced
-  structurally, not by a runtime rejection check: `update_changeset/2`'s
-  `cast/3` field list simply does not include `:idp_realm_id`, so there is no
-  field in that changeset's allowed inputs that could ever carry a value into
-  it — an attempted change to it via `update_changeset/2` produces no change
+  structurally, not by a runtime rejection check: no update-type changeset's
+  `cast/3` field list includes `:idp_realm_id`, so there is no field in any
+  changeset's allowed inputs that could ever carry a value into it — an
+  attempted change to it via `admin_patch_changeset/2` produces no change
   at all (not a validation error), because the field was never cast in the
   first place.
 
@@ -124,36 +126,17 @@ defmodule Letflow.Identity.Tenant do
   end
 
   @doc """
-  Changeset for updating an existing tenant. Only `:display_name` and
-  `:status` are castable — `:slug` and `:idp_realm_id` are both structurally
-  absent from this changeset's allowed fields, so neither can ever be
-  changed via this path. `:idp_realm_id`'s absence is the immutability
-  invariant (see moduledoc); `:slug`'s absence is this module's own
-  conservative default (not a cited REQ-019 requirement — see the design
-  doc §8 OQ-2).
-  """
-  @spec update_changeset(t :: %__MODULE__{}, attrs :: map()) :: Ecto.Changeset.t()
-  def update_changeset(tenant, attrs) do
-    tenant
-    |> cast(attrs, [:display_name, :status])
-    |> validate_required([:display_name])
-    |> unique_constraint(:slug)
-  end
-
-  @doc """
   Changeset for `PATCH /tenants/:slug` (REQ-075) — casts **only**
   `:display_name` and (REQ-442) `:login_disclosure_mode`, the latter validated
   against `login_disclosure_modes/0` (`nil` is allowed: reset to the deployment
   fallback). It is the only changeset that casts `:login_disclosure_mode`.
   `:status` is deliberately absent from this changeset's
-  cast list (a real, flagged divergence from `update_changeset/2`'s cast
-  list, which includes `:status` — see
+  cast list (see
   `lib/letflow/design/req075-tenant-administration-routes.md` §6.4): this is
   what makes it structurally impossible for `PATCH /tenants/:slug` to ever
   flip a tenant's `:status`, so `deactivate_tenant/1`/`reactivate_tenant/1`
   (via `status_changeset/2`) remain the only two writers of that field. `:slug`
-  and `:idp_realm_id` are absent for the same reason `update_changeset/2`
-  excludes them (immutability).
+  and `:idp_realm_id` are absent for the same reason (immutability).
   """
   @spec admin_patch_changeset(t :: %__MODULE__{}, attrs :: map()) :: Ecto.Changeset.t()
   def admin_patch_changeset(tenant, attrs) do

@@ -35,6 +35,7 @@ REQ-107's manual-walkthrough precedent. Observe actual resulting state by queryi
 instance back — "no error was thrown" is never a passing criterion on its own. Record
 the verdict as "system did X after action Y," with the actual observed evidence, not
 an inferred one. Write `test/uat-reports/uat-<date>-<run-id>.yaml`.
+For a step marked `expect_refusal: true`, follow "Refusal steps and actor access" below.
 
 ## Reading the scenario corpus
 
@@ -237,12 +238,61 @@ no `role-*` rows of kind `process_routing_role` (e.g. `role-credit-manager` /
 role" on claim. Record the affected steps BLOCKED/PRECONDITION_MISSING; do not substitute
 actors (ISS-0931).
 
+## Refusal steps and actor access
+
+A step with `expect_refusal: true` (`docs/agents/uat-scenario-schema.md`, "Refusal step") means
+the named actor tries the action and the product is expected to refuse it.
+
+- Execute the step as the actor named on that step. Use that actor's own credential from
+  `credential_source`.
+- Attempt the action for real. Do not skip it, do not assume it would be refused, and do not read
+  the code to decide the outcome.
+- The step PASSES only if the product refuses. Refused means: the request is rejected with a
+  permission or not-found response, or the screen shows no control for the action AND opening the
+  action's page or link directly is also refused, or the screen shows a refusal message, AND you
+  queried back and confirmed that nothing was created, changed or revealed. A screen with no control
+  must not count alone (a hidden button can sit over a working server route). If the direct attempt
+  is not possible, record the step BLOCKED, not PASS.
+- The step FAILS with severity BLOCKER if the action succeeds, or if any part of the protected
+  data or effect is delivered. Do not reclassify it as MAJOR or MINOR.
+- A step that fails because of a broken environment (not a permission refusal; for example a
+  server error, a timeout, a login failure) does NOT pass. Record it BLOCKED/PRECONDITION_NOT_MET
+  or ENV_*, not PASS and not FAIL.
+- Record for the step: the actor, the action attempted, and what the actor saw (the response status
+  and message, or the screen text). Never record a token, password or secret.
+- Never substitute a stronger actor. If the named actor's account is missing, or does not hold the
+  role the roster lists, record the scenario BLOCKED/CREDENTIALS_MISSING, as for any missing
+  account. Do not use another actor's credential, an administrator's credential, or the
+  `QA_AUTH_TOKEN` to run the step. Correct: "BLOCKED/CREDENTIALS_MISSING: account for
+  actor-vortex-karl not found." Forbidden: "Ran step 4 as the platform admin because
+  karl's login was missing."
+- This no-substitution rule applies to every step, not only refusal steps. (Seed scripts that
+  need an administrator token are environment preparation done by ORCH, not a scenario step.)
+
+### Role observed versus roster
+
+- For each actor you authenticate, observe the built-in role(s) actually held: the role claim in
+  the session or token, or the role attribute on the account (the same observation as the
+  `fact: role` rule in "Evaluating a `when:` branch").
+- Prefer the server's answer (`GET /api/v1/me/access` once REQ-449 is merged); until then use the
+  token claim and write `source: token_claim` in `actors_observed`.
+- Compare them with that actor's `builtin_roles` in `test/fixtures/uat/actors.yaml`.
+- Record the comparison per scenario in the report under `actors_observed`, one entry per actor:
+  `actor`, `roster_roles`, `observed_roles`, `match` (true or false). Actors listed under
+  `unresolved:` in the roster have no `roster_roles`: record `roster_roles: unresolved` and
+  `match: false`.
+- A mismatch is a finding, not a note. Add `access_mismatch` to the report's `observations` with the
+  actor and both role lists, and keep the scenario's own verdict as observed. Do not "fix" the
+  mismatch, do not change the account, and do not stop the run.
+- If `observed_roles` contains `PLATFORM_ADMIN` for an actor whose roster `tenant` is not `platform`,
+  state that in the observation in the first line.
+
 ## Forbidden
 
 Don't mock the backend or intercept HTTP calls — the whole point is exercising the real
 system. Don't record PASS on the absence of an error; confirm the expected state was
 actually reached. Don't invent scenario coverage beyond what the stage's actual
-requirements define.
+requirements define. Don't run any step as a different actor than the one it names, and don't use a stronger credential to make a blocked step run.
 
 ## Note on scope
 

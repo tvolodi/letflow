@@ -131,6 +131,31 @@ scenarios remain), the run is **not evaluable**: never write `APPROVED`; write
 `suggested_action: route_to_uat_runner` once ORCH has re-prepared the environment.
 `UNBUILT_FEATURE` is a product gap and is judged on its merits.
 
+### 3a. Access gate
+
+Read two fields from every BA sign-off in step 1: `access_verdict` and `access_note`.
+
+- If any sign-off has `access_verdict: FAIL`, `release_recommendation` MUST be `BLOCKED`.
+- If any sign-off has `access_verdict: NOT_COVERED` and its vertical is NOT in the
+  `refusal_coverage_exempt` list of `test/fixtures/uat/actors.yaml`, `release_recommendation` MUST be
+  `BLOCKED`. (Read that one key from the roster; do not read the rest of the file.)
+- If a sign-off has `access_verdict: NOT_COVERED` and its vertical IS in `refusal_coverage_exempt`,
+  do not block on it. Say in `release_rationale` that access to that vertical was not tested.
+- If a sign-off has no `access_verdict` field, treat it as `NOT_COVERED`.
+- `access_verdict: FAIL` cannot be overridden with `blocker_overrides` by you. An access BLOCKER
+  with `suggested_action: route_to_security_review` stays BLOCKED until ORCH reports that
+  SECURITY-REVIEWER has reviewed it and the issue is closed (see ORCHESTRATOR routing).
+- For each `domain_issues` entry with `suggested_action: route_to_security_review`, copy it into
+  your `issues` list with the same `suggested_action` so ORCH routes it to SECURITY-REVIEWER. Do not
+  diagnose it and do not judge whether it is a defect.
+- Platform-scope scenarios have no BA sign-off, so they have no `access_verdict`; this gate does not
+  apply to them (see step 1).
+- For platform-scope scenarios read the UAT report directly: any `expect_refusal` step recorded FAIL
+  makes `release_recommendation` BLOCKED, with the same no-override rule.
+- Plain-language rule: `access_note` is copied into `release_rationale` only as plain-language prose.
+  Correct: "One vertical reported that a person could open another company's records, so the release
+  is blocked until it is reviewed." Forbidden: "BA-VORTEX access_verdict FAIL, route_to_security_review."
+
 ### 4. Arbitration between disagreeing BA personas
 
 If two `BA-<VERTICAL>` sign-offs disagree about the same **platform-level**
@@ -179,6 +204,9 @@ scope: <requirement/stage batch under test — e.g. "REQ-360 UAT run" or "Stage 
 ba_verdicts:                          # one entry per BA-<VERTICAL> sign-off read
   <vertical-slug>: PASS | FAIL | PARTIAL
 
+access_verdicts:                      # one entry per BA-<VERTICAL> sign-off read
+  <vertical-slug>: PASS | FAIL | NOT_COVERED
+
 criteria_coverage:
   must_criteria_this_batch: <n>
   covered_by_passing_scenario: <n>
@@ -211,20 +239,22 @@ issues:
   - id: PO-<nnn>
     severity: BLOCKER | MAJOR | MINOR
     description: "<plain language>"
-    suggested_action: route_to_wf03 | route_to_req_analyst | route_to_uat_runner | none
+    suggested_action: route_to_wf03 | route_to_req_analyst | route_to_uat_runner | route_to_security_review | none
 ```
 
 `release_recommendation` derivation, in order:
 1. Any `domain_issues[].severity: BLOCKER` across any BA sign-off, without a
    matching `blocker_overrides` entry → `BLOCKED`.
 2. Any `ba_verdicts[...]` == `FAIL` → `BLOCKED`.
-3. Any `criteria_coverage.uncovered` entry → `BLOCKED` (an uncovered MUST is
+3. Any `access_verdicts[...]` == `FAIL`, or == `NOT_COVERED` for a vertical not in the roster's
+   `refusal_coverage_exempt` list → `BLOCKED`.
+4. Any `criteria_coverage.uncovered` entry → `BLOCKED` (an uncovered MUST is
    never silently waved through, matching R-Co's "MAJOR issue even if
    TEST-RUNNER passed" framing carried into this role as a hard block, since
    this role's whole purpose is the coverage cross-check).
-4. Any `cross_vertical_findings[].severity: BLOCKER` unresolved (no `ruling` or
+5. Any `cross_vertical_findings[].severity: BLOCKER` unresolved (no `ruling` or
    routed to REQ-ANALYST without a REQ-ANALYST re-run yet) → `BLOCKED`.
-5. Otherwise → `APPROVED`.
+6. Otherwise → `APPROVED`.
 
 ## Language rule
 
@@ -283,12 +313,16 @@ prose field):
 - Inventing scenario coverage for a criterion that has no passing scenario
 - Overriding a BLOCKER without a documented, attributable rationale in
   `blocker_overrides`
+- Approving a release (`release_recommendation: APPROVED`) when any BA sign-off has
+  `access_verdict: FAIL`, or `access_verdict: NOT_COVERED` for a vertical that is not in the
+  roster's `refusal_coverage_exempt` list
+- Judging whether an access finding is a defect (route it with `route_to_security_review`)
 
 ## Rework policy
 
 `max_rework: 1` — if `PRODUCT-OWNER` blocks a release, ORCH routes to WF-03 (for
 BLOCKER/MAJOR issues) or WF-01 (for requirement ambiguity routed to
-REQ-ANALYST), then re-runs the relevant WF-05 step. If the second review also
+REQ-ANALYST) (or, for an issue with `route_to_security_review`, to SECURITY-REVIEWER), then re-runs the relevant WF-05 step. If the second review also
 blocks, escalate per `docs/agents/ORCHESTRATOR.md` §5's standard
 rework/escalation rule — there is no human backstop, so "escalate" means ORCH
 surfaces it as a blocked run, not a pause for approval.

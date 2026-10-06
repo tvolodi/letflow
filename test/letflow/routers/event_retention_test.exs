@@ -27,6 +27,7 @@ defmodule Letflow.Routers.EventRetentionTest do
   import Plug.Conn
   import Ecto.Query
 
+  alias Letflow.Support.PlatformTenantFixture
   alias Letflow.EventStore.EventHistoryRetirement
   alias Letflow.EventStore.EventHistoryRetirementOutcome
   alias Letflow.EventStore.RetentionOperations
@@ -44,11 +45,10 @@ defmodule Letflow.Routers.EventRetentionTest do
     user_id = Keyword.get(fields, :user_id, Ecto.UUID.generate())
 
     conn(method, path)
-    |> assign(:auth_context, %{
-      user_id: user_id,
-      tenant_id: Ecto.UUID.generate(),
-      roles: roles
-    })
+    |> assign(
+      :auth_context,
+      PlatformTenantFixture.operator_auth_context(user_id, Ecto.UUID.generate(), roles)
+    )
     |> assign(:trace_id, "fixed-test-trace-id")
   end
 

@@ -33534,8 +33534,9 @@ requirements:
   - id: REQ-444
     title: "Email-first enablement gate (split from REQ-437, BA decision D-D): shipped defaults off outside dev, and a boot-time refusal without a legal-confirmation marker, a real mail adapter and the rotation tooling"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
+    # AC corrected 2026-10-06 (REVIEWER-accepted; REQ-439 runtime-test narrowing pending REVIEWER ack)
     impl_order: 958  # letflow-queue task id, GH#2218. Re-registered 2026-10-05 by ORCH, depends_on Q-946, Q-957, Q-951; supersedes Q-956/GH#2214, Q-953/GH#2207 (both blocked).
     description: >
       Makes the hard gate on enabling the feature outside dev (0042 OQ-3: a
@@ -33570,13 +33571,19 @@ requirements:
       other than :dev and :test, when the mount is enabled, boot REFUSES
       (raises, echoing no value) unless ALL of: (i) the confirmation marker
       LETFLOW_LOGIN_DIRECTORY_LEGAL_CONFIRMATION is set to a non-blank value
-      of at least 8 characters, which the operator sets only after a named
+      of at least 8 characters (trimmed character count, not bytes); the
+      marker is ADVISORY: any 8 non-blank characters pass. The operator sets it only after a named
       person has confirmed OQ-3 (the value is that person's reference and a
       date; never logged); (ii) the configured notifier adapter is on the list
       of delivering adapters (not Noop, not the test double); (iii) the
       pepper and key id of REQ-435 are configured (its own boot checks
       already require them, asserted here as a precondition, not
-      re-implemented). The marker cannot prove a confirmation happened; it
+      re-implemented). Boot-checkable here: (i) marker, (ii) delivering
+      adapter. (iii) pepper and key id are enforced by REQ-435's own boot
+      checks. Decision 0042 Decision 8's remaining preconditions (legal
+      confirmation by a named person, real-host client-IP verification,
+      SMTP/DNS alignment) are runbook-only, listed in
+      docs/runbooks/login-directory-enablement.md section B. The marker cannot prove a confirmation happened; it
       makes enabling without one a deliberate, auditable act.
       3. Rotation-procedure precondition: the rotation runbook of REQ-443
       exists at docs/runbooks/login-directory-pepper-rotation.md (enforced as
@@ -33585,12 +33592,13 @@ requirements:
       enforcement.
     open_questions:
       - "OPEN, the one remaining user/legal decision of the series (0042 OQ-3, decision 0043 D-D). Until a named person confirms, the marker stays unset in every non-dev environment and the feature stays off. BA position (PROPOSED, needs legal confirmation): platform operator is controller for the directory; legitimate interest / contract necessity for login routing; minimisation by keyed hash; to be written into the privacy notice and DPA."
-      - "Whether environments other than :dev and :test should be exempt (for example an isolated demo) is not decided; the default here is that only :dev and :test are exempt. QA runs MIX_ENV=prod, so QA is gated too."
+      - "Whether environments other than :dev and :test should be exempt (for example an isolated demo) is not decided; the default here is that only :dev and :test are exempt. QA runs MIX_ENV=prod, so QA is gated too. Decision 0043's wording (prod/staging) should be aligned with this scope; it is read per its Conflicts flagged item 9."
       - "Keycloak Organizations: DEFERRED (BA decision D-G), not relevant here."
     acceptance_criteria:
-      - "defaults: a test loads config/config.exs, config/prod.exs and the runtime.exs defaults for env :prod (Config.Reader) and asserts Letflow.Routers.LoginDiscovery enabled is false; asserts dev and test may be true; and a grep shows no file sets it true for :prod"
-      - "boot refusal, tested through the pure check and through config/runtime.exs evaluated with a controlled environment: in :prod with LETFLOW_LOGIN_DISCOVERY_ENABLED=true (and a valid LETFLOW_TRUSTED_PROXIES) boot raises when the marker is unset, blank or shorter than 8 characters; raises when the marker is valid but the adapter is Noop or the test double; passes with a valid marker and the Smtp adapter module (REQ-441) configured; never refuses in :dev or :test; never refuses when enabled is false; no raised message echoes the marker value"
-      - "REQ-439's existing boot_check tests pass unmodified and git diff on lib/letflow/plugs/client_ip.ex is empty"
+      - "defaults: a test reads config/config.exs and asserts the Letflow.Routers.LoginDiscovery key evaluates to enabled: false for :prod and may be true for :dev and :test. The runtime.exs default stays covered by client_ip_runtime_config_test (runtime.exs cannot be evaluated for :prod without the master key and pepper)."
+      - "grep scope: a grep scoped to the Letflow.Routers.LoginDiscovery key shows no config file sets it true for :prod (config/prod.exs enabled: true belongs to an unrelated key)."
+      - "boot refusal, tested through the pure check and through config/runtime.exs evaluated with a controlled environment: in :prod with LETFLOW_LOGIN_DISCOVERY_ENABLED=true (and a valid LETFLOW_TRUSTED_PROXIES) boot raises when the marker is unset, blank or shorter than 8 characters; raises when the marker is valid but the adapter is Noop or the test double; passes with a valid marker and the Smtp adapter module (REQ-441) configured; never refuses in :dev or :test; never refuses when enabled is false; no raised message echoes the marker value. The test double and Noop are tested through the pure check (BootCheck.check/4). The config/runtime.exs-evaluated-in-a-subprocess form covers the unset, blank, short-marker, Noop (unset adapter) and Smtp cases only, because elixirc_paths(:prod) is [\"lib\"] (mix.exs:21) and the double is not compiled there."
+      - "REQ-439's pure ClientIp.boot_check/3 tests (test/letflow/plugs/client_ip_test.exs) pass unmodified and git diff on lib/letflow/plugs/client_ip.ex is empty; the one runtime subprocess test of test/letflow/client_ip_runtime_config_test.exs that boots :prod with the mount enabled (enabled with a non-empty list boots) is updated ONLY in its child environment to also satisfy REQ-444's preconditions (legal-confirmation marker, smtp adapter with its required variables, pepper pair), no assertion changed."
       - "the rotation runbook docs/runbooks/login-directory-pepper-rotation.md exists (repository test), and REQ-443 is in this entry's depends_on"
       - "`mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix test` for the touched areas and `mix letflow.check_boundaries` pass, real output quoted; the SECURITY-REVIEWER verdict is recorded against INV-4 and INV-6"
     depends_on: [REQ-437, REQ-441, REQ-443]
@@ -34100,7 +34108,7 @@ requirements:
   - id: REQ-453
     title: "Access rules for BA-<VERTICAL>, UAT-RUNNER and PRODUCT-OWNER: report-do-not-decide, never widen a role, refusal steps executed, access verdict in the sign-off"
     owner: REQ-ANALYST
-    status: pending
+    status: done
     stage: S7
     impl_order: 970  # letflow-queue task id, GH#2242. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-962, Q-969.
     description: >

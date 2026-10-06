@@ -28,12 +28,10 @@ defmodule Letflow.Routers.EventRetention do
   tenant (`Letflow.PlatformTenant`, `LETFLOW_PLATFORM_TENANT_ID`; unset means
   nobody). A `PLATFORM_ADMIN` of any other tenant gets 403. Wording in this
   moduledoc that calls the permission "`PLATFORM_ADMIN`-only" is superseded by
-  this rule. A1 runs the check in shadow mode: enforcement is still the legacy
-  outcome, and a `platform_scope_shadow_deny` line is logged where A2 will deny.
-  Under A2 an unmatched sub-path of this mount answers the same 403 for a
-  non-operator (decision point
-  design OQ-4, introduced in A2). This
-  router's catch-all is `authz_unmatched(:platform_prefix)`.
+  this rule. Enforcement is live (A2): a non-operator gets the same fixed 403 whether the path matches a route or not; the platform-tenant operator keeps the router's 404 on an unmatched path. No handler here names an existing tenant (no `authorize_target_tenant/2` call is needed): the platform gate runs before any handler.
+  An unmatched sub-path of this mount answers the same 403 for a
+  non-operator (design OQ-4); this router's catch-all is
+  `authz_unmatched(:platform_prefix)`.
 
   ## Permission decision -- reused, not new: `:TenantsManage`
 

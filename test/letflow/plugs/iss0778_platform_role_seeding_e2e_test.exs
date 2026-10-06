@@ -68,6 +68,7 @@ defmodule Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest do
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.Oidc.Iss0778PlatformAdminTokenVerifierDouble
+  alias Letflow.Support.PlatformTenantFixture
   alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -94,6 +95,10 @@ defmodule Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest do
   defp mint_caller!(slug_prefix, roles) do
     tenant = TenantFixture.provisioned_tenant!(slug_prefix: slug_prefix)
     user = insert_user!(tenant)
+
+    # ISS-0993 (A2): onboarding is PLATFORM scope; this PLATFORM_ADMIN caller is the platform
+    # operator, so its tenant is pinned as THE platform tenant (restored by the fixture's on_exit).
+    if "PLATFORM_ADMIN" in roles, do: PlatformTenantFixture.pin!(tenant.tenant_id)
 
     {:ok, %{plaintext: plaintext}} =
       Identity.create_token(user.id, %{roles: roles, expires_at: nil}, prefix: tenant.schema_name)
@@ -212,6 +217,11 @@ defmodule Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest do
       # Bind this freshly-onboarded tenant to the one realm the test doubles
       # recognize -- see this file's own moduledoc "Fixture mechanics" section.
       bind_tenant_to_bpm_default_realm!(new_tenant_id)
+
+      # ISS-0993 (A2): GET /api/v1/tenants is PLATFORM scope. The freshly-onboarded tenant is the
+      # one whose PLATFORM_ADMIN-claiming OIDC token this step proves reaches a gated route, so
+      # it is pinned as THE platform tenant here (the proof is about the seeded role binding).
+      PlatformTenantFixture.pin!(new_tenant_id)
 
       # ── Step 2/3 (design §5.2/§5.3): a PLATFORM_ADMIN-claiming OIDC token
       # reaches a PLATFORM_ADMIN-gated route (GET /api/v1/tenants, :TenantsManage

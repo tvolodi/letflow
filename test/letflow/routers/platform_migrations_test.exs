@@ -32,6 +32,7 @@ defmodule Letflow.Routers.PlatformMigrationsTest do
   import Plug.Conn
   import Ecto.Query
 
+  alias Letflow.Support.PlatformTenantFixture
   alias Letflow.Entities.Definitions
   alias Letflow.Platform.MigrationRollout.Outcome
   alias Letflow.Platform.MigrationRollout.Rollout
@@ -54,11 +55,14 @@ defmodule Letflow.Routers.PlatformMigrationsTest do
       end
 
     conn
-    |> assign(:auth_context, %{
-      user_id: Ecto.UUID.generate(),
-      tenant_id: Ecto.UUID.generate(),
-      roles: roles
-    })
+    |> assign(
+      :auth_context,
+      PlatformTenantFixture.operator_auth_context(
+        Ecto.UUID.generate(),
+        Ecto.UUID.generate(),
+        roles
+      )
+    )
     |> assign(:trace_id, "fixed-test-trace-id")
   end
 

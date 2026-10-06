@@ -53,16 +53,17 @@ defmodule Letflow.Routers.TenantModulesTest do
   defp json(conn), do: Jason.decode!(conn.resp_body)
 
   # ═══════════════════════════════════════════════════════════════════════
-  # AC1 — 201 for PLATFORM_ADMIN, 403 for every other role, no row on 403
+  # AC1 — 201 for TENANT_ADMIN, 403 for every other role (incl. an ordinary tenant's PLATFORM_ADMIN), no row on 403
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC1 -- role gate" do
-    test "201 for PLATFORM_ADMIN, 403 for every other role, no tenant_modules row written on a 403" do
+    test "201 for TENANT_ADMIN, 403 for every other role, no tenant_modules row written on a 403" do
       %{tenant_id: tenant_id, schema_name: prefix} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req403-ac1")
 
-      # REQ-447: TENANT_ADMIN holds :ModulesManage (tenant scope); its 201 is the next test.
-      for role <- Authorization.roles(), role not in [:PLATFORM_ADMIN, :TENANT_ADMIN] do
+      # REQ-447 PR 2: TENANT_ADMIN holds :ModulesManage (tenant scope) and is the allowed role;
+      # an ordinary (non-platform) tenant's PLATFORM_ADMIN holds nothing, so it stays in the 403 loop.
+      for role <- Authorization.roles(), role != :TENANT_ADMIN do
         conn = install(tenant_id, [Atom.to_string(role)], %{"module_id" => "fixture"})
 
         assert conn.status == 403,
@@ -71,7 +72,7 @@ defmodule Letflow.Routers.TenantModulesTest do
         assert Installs.list_installed(prefix: prefix) == []
       end
 
-      conn = install(tenant_id, ["PLATFORM_ADMIN"], %{"module_id" => "fixture"})
+      conn = install(tenant_id, ["TENANT_ADMIN"], %{"module_id" => "fixture"})
 
       assert conn.status == 201
       body = json(conn)
@@ -99,7 +100,7 @@ defmodule Letflow.Routers.TenantModulesTest do
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC2 -- prefix is server-derived only, a body tenant_id/tenant is ignored" do
-    test "installing as tenant A's PLATFORM_ADMIN with tenant B named in the body lands only in tenant A" do
+    test "installing as tenant A's TENANT_ADMIN with tenant B named in the body lands only in tenant A" do
       %{tenant_id: tenant_id_a, schema_name: prefix_a} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req403-ac2-a")
 
@@ -107,7 +108,7 @@ defmodule Letflow.Routers.TenantModulesTest do
         TenantFixture.provisioned_tenant!(slug_prefix: "req403-ac2-b")
 
       conn =
-        install(tenant_id_a, ["PLATFORM_ADMIN"], %{
+        install(tenant_id_a, ["TENANT_ADMIN"], %{
           "module_id" => "fixture",
           "tenant_id" => tenant_id_b,
           "tenant" => tenant_id_b
@@ -129,7 +130,7 @@ defmodule Letflow.Routers.TenantModulesTest do
     test "404 for an unknown module id" do
       %{tenant_id: tenant_id} = TenantFixture.provisioned_tenant!(slug_prefix: "req403-ac3-404")
 
-      conn = install(tenant_id, ["PLATFORM_ADMIN"], %{"module_id" => "does-not-exist"})
+      conn = install(tenant_id, ["TENANT_ADMIN"], %{"module_id" => "does-not-exist"})
 
       assert conn.status == 404
     end
@@ -137,9 +138,9 @@ defmodule Letflow.Routers.TenantModulesTest do
     test "409 for a second install of the same module" do
       %{tenant_id: tenant_id} = TenantFixture.provisioned_tenant!(slug_prefix: "req403-ac3-409")
 
-      assert install(tenant_id, ["PLATFORM_ADMIN"], %{"module_id" => "fixture"}).status == 201
+      assert install(tenant_id, ["TENANT_ADMIN"], %{"module_id" => "fixture"}).status == 201
 
-      conn = install(tenant_id, ["PLATFORM_ADMIN"], %{"module_id" => "fixture"})
+      conn = install(tenant_id, ["TENANT_ADMIN"], %{"module_id" => "fixture"})
 
       assert conn.status == 409
     end
@@ -147,7 +148,7 @@ defmodule Letflow.Routers.TenantModulesTest do
     test "422 for a module whose depends_on is not installed" do
       %{tenant_id: tenant_id} = TenantFixture.provisioned_tenant!(slug_prefix: "req403-ac3-422")
 
-      conn = install(tenant_id, ["PLATFORM_ADMIN"], %{"module_id" => "fixture_dependent"})
+      conn = install(tenant_id, ["TENANT_ADMIN"], %{"module_id" => "fixture_dependent"})
 
       assert conn.status == 422
       assert json(conn)["detail"] =~ "fixture"
@@ -156,8 +157,8 @@ defmodule Letflow.Routers.TenantModulesTest do
     test "422 when the request body is not a JSON object or module_id is missing/not a string" do
       %{tenant_id: tenant_id} = TenantFixture.provisioned_tenant!(slug_prefix: "req403-ac3-body")
 
-      assert install(tenant_id, ["PLATFORM_ADMIN"], %{}).status == 422
-      assert install(tenant_id, ["PLATFORM_ADMIN"], %{"module_id" => 123}).status == 422
+      assert install(tenant_id, ["TENANT_ADMIN"], %{}).status == 422
+      assert install(tenant_id, ["TENANT_ADMIN"], %{"module_id" => 123}).status == 422
     end
   end
 end

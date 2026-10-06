@@ -81,9 +81,9 @@ defmodule Letflow.Routers.PromotionPlatformEventsTwoTenantTest do
       ctx.b.tenant.slug
     ]
 
-    # PLATFORM_ADMIN held in A while the pin is P: a non-operator (TENANT_ADMIN is answered 403
-    # by this harness's hand-assigned auth_context, so it is not a usable reader here)
-    for roles <- [["PLATFORM_ADMIN"]] do
+    # TENANT_ADMIN held in A while the pin is P: a non-operator tenant administrator
+    # (REQ-447 PR 2: a PLATFORM_ADMIN of A holds nothing, asserted 403 after the loop)
+    for roles <- [["TENANT_ADMIN"]] do
       resp = get_events(ctx.a, roles)
       item = promoted_item(resp)
       assert item, "no DEFINITION_PROMOTED item for #{inspect(roles)}"
@@ -98,10 +98,14 @@ defmodule Letflow.Routers.PromotionPlatformEventsTwoTenantTest do
       assert item["payload"]["target_definition_id"] == ctx.result.target_definition_id
       assert item["payload"]["process_key"] == ctx.key
     end
+
+    legacy = get_events(ctx.a, ["PLATFORM_ADMIN"])
+    assert legacy.status == 403, "legacy A PLATFORM_ADMIN answered #{legacy.status}"
+    refute_ids(legacy.resp_body, leaked)
   end
 
   test "b_as_reader_sees_nothing_of_a_or_p", ctx do
-    resp = get_events(ctx.b, ["PLATFORM_ADMIN"])
+    resp = get_events(ctx.b, ["TENANT_ADMIN"])
     assert resp.status == 200, resp.resp_body
 
     items = Jason.decode!(resp.resp_body)["items"]

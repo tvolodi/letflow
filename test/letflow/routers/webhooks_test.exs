@@ -113,7 +113,7 @@ defmodule Letflow.Routers.WebhooksTest do
     test "POST /subscriptions with no secret supplied returns 2xx with hmac_secret_once carrying the plaintext" do
       tenant = provisioned_tenant("req182-secret-create")
 
-      {conn, body} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {conn, body} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       assert conn.status == 201
       assert is_binary(body["hmac_secret_once"])
@@ -124,10 +124,10 @@ defmodule Letflow.Routers.WebhooksTest do
     test "a subsequent GET list of the same subscription never includes hmac_secret_once or a raw secret" do
       tenant = provisioned_tenant("req182-secret-list")
 
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       list_conn =
-        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/subscriptions", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       list_body = Jason.decode!(list_conn.resp_body)
 
@@ -149,14 +149,14 @@ defmodule Letflow.Routers.WebhooksTest do
   describe "AC2: PATCH accepts status or is_active, both reading back as PAUSED" do
     test "PATCH {status: \"PAUSED\"} reads back as PAUSED via GET and list" do
       tenant = provisioned_tenant("req182-patch-status")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       patch_conn =
         json_conn(
           :patch,
           "/subscriptions/#{created["id"]}",
           tenant,
-          [roles: ["PLATFORM_ADMIN"]],
+          [roles: ["TENANT_ADMIN"]],
           %{
             "status" => "PAUSED"
           }
@@ -168,7 +168,7 @@ defmodule Letflow.Routers.WebhooksTest do
       assert patched["status"] == "PAUSED"
 
       list_conn =
-        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/subscriptions", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       list_body = Jason.decode!(list_conn.resp_body)
       assert [item] = list_body["items"]
@@ -177,14 +177,14 @@ defmodule Letflow.Routers.WebhooksTest do
 
     test "PATCH {is_active: false} reads back as PAUSED via GET and list" do
       tenant = provisioned_tenant("req182-patch-is-active")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       patch_conn =
         json_conn(
           :patch,
           "/subscriptions/#{created["id"]}",
           tenant,
-          [roles: ["PLATFORM_ADMIN"]],
+          [roles: ["TENANT_ADMIN"]],
           %{
             "is_active" => false
           }
@@ -196,7 +196,7 @@ defmodule Letflow.Routers.WebhooksTest do
       assert patched["status"] == "PAUSED"
 
       list_conn =
-        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/subscriptions", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       list_body = Jason.decode!(list_conn.resp_body)
       assert [item] = list_body["items"]
@@ -232,7 +232,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
     test "PATCH /subscriptions/:id -> 403 for a caller with no role holding WebhooksManage" do
       tenant = provisioned_tenant("req182-403-update")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       conn =
         json_conn(:patch, "/subscriptions/#{created["id"]}", tenant, [roles: ["TASK_WORKER"]], %{
@@ -244,7 +244,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
       # No state change on 403.
       list_conn =
-        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/subscriptions", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       [item] = Jason.decode!(list_conn.resp_body)["items"]
       assert item["status"] == "ACTIVE"
@@ -252,7 +252,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
     test "DELETE /subscriptions/:id -> 403 for a caller with no role holding WebhooksManage" do
       tenant = provisioned_tenant("req182-403-delete")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       conn =
         build_conn(:delete, "/subscriptions/#{created["id"]}", tenant, roles: ["TASK_WORKER"])
@@ -262,7 +262,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
       # Still present afterward.
       list_conn =
-        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/subscriptions", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       assert length(Jason.decode!(list_conn.resp_body)["items"]) == 1
     end
@@ -271,14 +271,14 @@ defmodule Letflow.Routers.WebhooksTest do
       tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req182-cross-a")
       tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req182-cross-b")
 
-      {_conn, created_in_b} = create_subscription(tenant_b, ["PLATFORM_ADMIN"])
+      {_conn, created_in_b} = create_subscription(tenant_b, ["TENANT_ADMIN"])
 
       patch_conn =
         json_conn(
           :patch,
           "/subscriptions/#{created_in_b["id"]}",
           tenant_a,
-          [roles: ["PLATFORM_ADMIN"]],
+          [roles: ["TENANT_ADMIN"]],
           %{
             "status" => "PAUSED"
           }
@@ -287,7 +287,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
       delete_conn =
         build_conn(:delete, "/subscriptions/#{created_in_b["id"]}", tenant_a,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -300,7 +300,7 @@ defmodule Letflow.Routers.WebhooksTest do
           :patch,
           "/subscriptions/#{Ecto.UUID.generate()}",
           tenant_a,
-          [roles: ["PLATFORM_ADMIN"]],
+          [roles: ["TENANT_ADMIN"]],
           %{
             "status" => "PAUSED"
           }
@@ -312,7 +312,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
       # Tenant B's row is untouched.
       list_b_conn =
-        build_conn(:get, "/subscriptions", tenant_b, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/subscriptions", tenant_b, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       [item_b] = Jason.decode!(list_b_conn.resp_body)["items"]
       assert item_b["status"] == "ACTIVE"
@@ -328,13 +328,13 @@ defmodule Letflow.Routers.WebhooksTest do
       tenant = provisioned_tenant("req182-shape")
 
       {_conn, _created} =
-        create_subscription(tenant, ["PLATFORM_ADMIN"], %{
+        create_subscription(tenant, ["TENANT_ADMIN"], %{
           "target_url" => "https://example.com/hook",
           "event_types" => ["instance.completed"]
         })
 
       list_conn =
-        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/subscriptions", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       assert list_conn.status == 200
       body = Jason.decode!(list_conn.resp_body)
@@ -356,30 +356,30 @@ defmodule Letflow.Routers.WebhooksTest do
   describe "AC5: DELETE removes the subscription; second DELETE is 404, not a duplicate success" do
     test "DELETE removes the subscription such that a subsequent list excludes it" do
       tenant = provisioned_tenant("req182-delete")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       delete_conn =
-        build_conn(:delete, "/subscriptions/#{created["id"]}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:delete, "/subscriptions/#{created["id"]}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert delete_conn.status == 204
 
       list_conn =
-        build_conn(:get, "/subscriptions", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/subscriptions", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       assert Jason.decode!(list_conn.resp_body)["items"] == []
     end
 
     test "a second DELETE of the same id returns 404, not a duplicate success" do
       tenant = provisioned_tenant("req182-delete-twice")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       first_delete =
-        build_conn(:delete, "/subscriptions/#{created["id"]}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:delete, "/subscriptions/#{created["id"]}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       second_delete =
-        build_conn(:delete, "/subscriptions/#{created["id"]}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:delete, "/subscriptions/#{created["id"]}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert first_delete.status == 204
@@ -394,7 +394,7 @@ defmodule Letflow.Routers.WebhooksTest do
   describe "REQ-184 AC1: response shape matches WebhookDeliveryAttempt exactly, field-by-field" do
     test "each item has exactly the 9 contracted fields with the expected values" do
       tenant = provisioned_tenant("req184-shape")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       delivery =
         insert_delivery!(tenant, created["id"], %{
@@ -407,7 +407,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
       conn =
         build_conn(:get, "/subscriptions/#{created["id"]}/deliveries", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -442,13 +442,13 @@ defmodule Letflow.Routers.WebhooksTest do
 
     test "a SUCCESS delivery with no error carries http_status_code and last_error correctly" do
       tenant = provisioned_tenant("req184-shape-success")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       insert_delivery!(tenant, created["id"], %{status: :SUCCESS, http_status_code: 200})
 
       conn =
         build_conn(:get, "/subscriptions/#{created["id"]}/deliveries", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -462,7 +462,7 @@ defmodule Letflow.Routers.WebhooksTest do
   describe "REQ-184 AC2: limit param enforcement" do
     test "more delivery attempts than the requested limit returns exactly limit items, most-recent first" do
       tenant = provisioned_tenant("req184-limit")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       base_time = DateTime.utc_now() |> DateTime.truncate(:second)
 
@@ -481,7 +481,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
       conn =
         build_conn(:get, "/subscriptions/#{created["id"]}/deliveries?limit=2", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -503,7 +503,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
     test "an omitted limit defaults to 20" do
       tenant = provisioned_tenant("req184-limit-default")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
       base_time = DateTime.utc_now() |> DateTime.truncate(:second)
 
@@ -516,7 +516,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
       conn =
         build_conn(:get, "/subscriptions/#{created["id"]}/deliveries", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -537,7 +537,7 @@ defmodule Letflow.Routers.WebhooksTest do
         ] do
       test "limit=#{raw_limit} (#{slug}) falls back to the default of 20, not an error or a zero-item result" do
         tenant = provisioned_tenant("req184-limit-#{unquote(slug)}")
-        {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+        {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
 
         base_time = DateTime.utc_now() |> DateTime.truncate(:second)
 
@@ -553,7 +553,7 @@ defmodule Letflow.Routers.WebhooksTest do
             :get,
             "/subscriptions/#{created["id"]}/deliveries?limit=#{unquote(raw_limit)}",
             tenant,
-            roles: ["PLATFORM_ADMIN"]
+            roles: ["TENANT_ADMIN"]
           )
           |> dispatch()
 
@@ -569,7 +569,7 @@ defmodule Letflow.Routers.WebhooksTest do
   describe "REQ-184 AC3: route requires WebhooksManage -- 403 for a caller lacking it" do
     test "GET /subscriptions/:id/deliveries -> 403 for a caller with no role holding WebhooksManage" do
       tenant = provisioned_tenant("req184-403")
-      {_conn, created} = create_subscription(tenant, ["PLATFORM_ADMIN"])
+      {_conn, created} = create_subscription(tenant, ["TENANT_ADMIN"])
       insert_delivery!(tenant, created["id"])
 
       conn =
@@ -587,12 +587,12 @@ defmodule Letflow.Routers.WebhooksTest do
       tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req184-cross-a")
       tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req184-cross-b")
 
-      {_conn, created_in_b} = create_subscription(tenant_b, ["PLATFORM_ADMIN"])
+      {_conn, created_in_b} = create_subscription(tenant_b, ["TENANT_ADMIN"])
       insert_delivery!(tenant_b, created_in_b["id"])
 
       conn =
         build_conn(:get, "/subscriptions/#{created_in_b["id"]}/deliveries", tenant_a,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -606,7 +606,7 @@ defmodule Letflow.Routers.WebhooksTest do
 
       conn =
         build_conn(:get, "/subscriptions/#{Ecto.UUID.generate()}/deliveries", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -617,9 +617,7 @@ defmodule Letflow.Routers.WebhooksTest do
       tenant = provisioned_tenant("req184-malformed")
 
       conn =
-        build_conn(:get, "/subscriptions/not-a-uuid/deliveries", tenant,
-          roles: ["PLATFORM_ADMIN"]
-        )
+        build_conn(:get, "/subscriptions/not-a-uuid/deliveries", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 404

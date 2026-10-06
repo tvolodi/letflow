@@ -171,8 +171,11 @@ defmodule Letflow.Api.PlatformTenantStatusTest do
       end
     end
 
-    test "the same through the full pipeline with a real token (pin set and unset)", ctx do
-      token = Fixture.mint_token!(ctx.a, ["PLATFORM_ADMIN"])
+    test "the same through the full pipeline with a real TENANT_ADMIN token (pin set and unset)",
+         ctx do
+      # REQ-447 PR 2: a PLATFORM_ADMIN token cannot be minted in an ordinary tenant any more; the
+      # inactive tenant's own admin identity is TENANT_ADMIN.
+      token = Fixture.mint_token!(ctx.a, ["TENANT_ADMIN"])
       set_status!(ctx.a, :inactive)
 
       for pinned? <- [true, false], path <- ["/api/v1/promotions", "/api/v1/tenants"] do
@@ -189,7 +192,7 @@ defmodule Letflow.Api.PlatformTenantStatusTest do
     test "every other role of an inactive tenant is halted as well", ctx do
       set_status!(ctx.a, :inactive)
 
-      for roles <- [["PROCESS_DESIGNER"], ["TASK_WORKER"], []] do
+      for roles <- [["PROCESS_DESIGNER"], ["TASK_WORKER"], ["TENANT_ADMIN"], []] do
         conn = status_plug(ctx.a, roles)
         assert conn.halted and conn.status == 403, inspect(roles)
       end

@@ -18,14 +18,15 @@ defmodule Letflow.Routers.EntitiesExportTest do
   ## A real, load-bearing gap in today's role matrix (design §5, stated there
   explicitly, re-confirmed against `lib/letflow/api/authorization.ex` here)
 
-  `role_allows?/2`'s only clause naming ANY of `:EntitiesRecordsExport` /
-  `:EntitiesRecordsExportUnredacted` is `:PLATFORM_ADMIN`'s unconditional
-  catch-all (`role_allows?(:PLATFORM_ADMIN, _permission), do: true`) -- every
-  other role's clause is a closed, static list that names neither atom.
-  Mechanically, this means: for ANY combination of the five real roles, the
-  resulting permission set either contains NEITHER atom (PLATFORM_ADMIN
-  excluded) or BOTH atoms plus everything else (PLATFORM_ADMIN included,
-  since its clause ORs in literally every permission). There is today no
+  `role_allows?/2`'s only clauses naming ANY of `:EntitiesRecordsExport` /
+  `:EntitiesRecordsExportUnredacted` are the unconditional catch-alls of
+  `:TENANT_ADMIN` (REQ-447: every tenant-scope permission; this is the ordinary
+  tenant's admin identity in this file) and `:PLATFORM_ADMIN` (platform tenant
+  only) -- every other role's clause is a closed, static list that names
+  neither atom. Mechanically, this means: for ANY combination of the real
+  roles, the resulting permission set either contains NEITHER atom (the admin
+  roles excluded) or BOTH atoms plus everything else (an admin role included,
+  since its clause ORs in every tenant-scope permission). There is today no
   real, token-backed caller who holds `:EntitiesRecordsExport` without also
   holding `:EntitiesRecordsExportUnredacted` -- this is the exact,
   deliberate, narrow-by-default role-matrix state design §5 documents
@@ -38,7 +39,7 @@ defmodule Letflow.Routers.EntitiesExportTest do
 
     * the FULL-DISCLOSURE side of the two-tier mechanism (both atoms held,
       `unredacted: true` bypasses `FieldGrants` entirely) is proven at the
-      real HTTP layer with a PLATFORM_ADMIN caller (describe
+      real HTTP layer with a TENANT_ADMIN caller (describe
       "escalated mode -- full disclosure" below);
     * the FAIL-CLOSED side of the SAME check
       (`check_unredacted_permission/2` in `lib/letflow/routers/entities.ex`,
@@ -120,7 +121,7 @@ defmodule Letflow.Routers.EntitiesExportTest do
     |> Repo.insert!(prefix: tenant.schema_name)
   end
 
-  defp tenant_ctx(slug_prefix, roles \\ ["PLATFORM_ADMIN"]) do
+  defp tenant_ctx(slug_prefix, roles \\ ["TENANT_ADMIN"]) do
     tenant =
       TenantFixture.provisioned_tenant!(
         slug_prefix: slug_prefix,
@@ -145,7 +146,7 @@ defmodule Letflow.Routers.EntitiesExportTest do
   # A SECOND credential for a tenant that already exists, belonging to a
   # DIFFERENT user in the same schema -- mirrors entities_test.exs's own
   # second_user_ctx/2, needed by the two-caller redaction-comparison test.
-  defp second_user_ctx(ctx, roles \\ ["PLATFORM_ADMIN"]) do
+  defp second_user_ctx(ctx, roles \\ ["TENANT_ADMIN"]) do
     user =
       %User{}
       |> Ecto.Changeset.change(%{
@@ -312,8 +313,8 @@ defmodule Letflow.Routers.EntitiesExportTest do
   # Letflow.Api.Authorization.evaluate_access/2 -- the EXACT function and
   # atom `check_unredacted_permission/2` (lib/letflow/routers/entities.ex)
   # calls -- rather than via a real HTTP round trip: today's role matrix
-  # (design §5) grants :EntitiesRecordsExport to no role but PLATFORM_ADMIN,
-  # which also always holds :EntitiesRecordsExportUnredacted, so no real
+  # (design §5) grants :EntitiesRecordsExport to no role but the admin roles
+  # (TENANT_ADMIN in an ordinary tenant), which also always hold :EntitiesRecordsExportUnredacted, so no real
   # token-backed caller can currently clear the route-level gate while
   # failing this second one.
   # ═══════════════════════════════════════════════════════════════════════
@@ -357,7 +358,7 @@ defmodule Letflow.Routers.EntitiesExportTest do
 
   # ═══════════════════════════════════════════════════════════════════════
   # AC -- escalated mode's FULL-DISCLOSURE half: both atoms held (real HTTP,
-  # PLATFORM_ADMIN, which holds both today).
+  # TENANT_ADMIN, which holds both today).
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "escalated mode -- full disclosure" do

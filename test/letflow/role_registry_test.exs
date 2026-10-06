@@ -515,6 +515,20 @@ defmodule Letflow.Identity.RoleRegistryTest do
       assert rows == []
     end
 
+    test "REQ-447 PR 2: kind: :platform_role with the name PLATFORM_ADMIN is refused outside the platform tenant, and writes no row",
+         ctx do
+      group = insert_group!(ctx)
+
+      assert {:error, :platform_admin_outside_platform_tenant} =
+               RoleRegistry.upsert_role("PLATFORM_ADMIN", :platform_role, group.id,
+                 prefix: ctx.schema_name
+               )
+
+      assert Repo.all(from(r in TenantRole, where: r.name == "PLATFORM_ADMIN"),
+               prefix: ctx.schema_name
+             ) == []
+    end
+
     test "kind: :process_routing_role accepts a name outside the closed platform-role set (open-ended domain, no literal-set check)",
          ctx do
       group = insert_group!(ctx)

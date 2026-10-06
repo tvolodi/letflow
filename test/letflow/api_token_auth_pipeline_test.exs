@@ -60,7 +60,7 @@ defmodule Letflow.ApiTokenAuthPipelineTest do
       user = insert_user!(tenant)
 
       {:ok, %{token: token, plaintext: plaintext}} =
-        Identity.create_token(user.id, %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+        Identity.create_token(user.id, %{roles: ["TENANT_ADMIN"], expires_at: nil},
           prefix: tenant.schema_name
         )
 
@@ -70,7 +70,9 @@ defmodule Letflow.ApiTokenAuthPipelineTest do
 
       assert first_conn.status == 200
       assert first_conn.assigns.auth_context.user_id == user.id
-      assert first_conn.assigns.auth_context.roles == ["PLATFORM_ADMIN"]
+      # REQ-447 PR 2: the ordinary tenant's admin identity is TENANT_ADMIN (a
+      # PLATFORM_ADMIN token cannot be minted for a non-platform schema any more).
+      assert first_conn.assigns.auth_context.roles == ["TENANT_ADMIN"]
 
       {:ok, _revoked} = Identity.revoke_token(token.id, prefix: tenant.schema_name)
 
@@ -92,7 +94,7 @@ defmodule Letflow.ApiTokenAuthPipelineTest do
       user_a = insert_user!(tenant_a)
 
       {:ok, %{plaintext: plaintext}} =
-        Identity.create_token(user_a.id, %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+        Identity.create_token(user_a.id, %{roles: ["TENANT_ADMIN"], expires_at: nil},
           prefix: tenant_a.schema_name
         )
 
@@ -116,7 +118,7 @@ defmodule Letflow.ApiTokenAuthPipelineTest do
       user = insert_user!(tenant)
 
       {:ok, %{plaintext: plaintext}} =
-        Identity.create_token(user.id, %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+        Identity.create_token(user.id, %{roles: ["TENANT_ADMIN"], expires_at: nil},
           prefix: tenant.schema_name
         )
 
@@ -133,7 +135,7 @@ defmodule Letflow.ApiTokenAuthPipelineTest do
       user = insert_user!(tenant)
 
       {:ok, %{plaintext: plaintext}} =
-        Identity.create_token(user.id, %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+        Identity.create_token(user.id, %{roles: ["TENANT_ADMIN"], expires_at: nil},
           prefix: tenant.schema_name
         )
 

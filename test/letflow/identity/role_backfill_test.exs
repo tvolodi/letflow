@@ -56,10 +56,18 @@ defmodule Letflow.Identity.RoleBackfillTest do
     {:ok, %Group{id: group_id}} =
       RoleRegistry.get_or_create_group_by_name("PLATFORM_ADMIN", prefix: schema_name)
 
-    {:ok, _role} =
-      RoleRegistry.upsert_role("PLATFORM_ADMIN", :platform_role, group_id, prefix: schema_name)
+    insert_legacy_platform_admin_role!(group_id, schema_name)
 
     %{tenant_id: tenant_id, schema_name: schema_name}
+  end
+
+  # REQ-447 PR 2: RoleRegistry.upsert_role/4 refuses a PLATFORM_ADMIN binding outside the platform
+  # tenant, so the LEGACY row (a pre-REQ-447 deployment's data, which this file's subject is
+  # backfilling around) is inserted raw.
+  defp insert_legacy_platform_admin_role!(group_id, schema_name) do
+    %TenantRole{}
+    |> TenantRole.changeset(%{name: "PLATFORM_ADMIN", kind: :platform_role, group_id: group_id})
+    |> Repo.insert!(prefix: schema_name)
   end
 
   defp insert_user!(schema_name) do
@@ -458,7 +466,12 @@ defmodule Letflow.Identity.RoleBackfillTest do
         {:ok, %Group{id: group_id}} =
           RoleRegistry.get_or_create_group_by_name(name, prefix: schema_name)
 
-        {:ok, _} = RoleRegistry.upsert_role(name, :platform_role, group_id, prefix: schema_name)
+        if name == "PLATFORM_ADMIN" do
+          insert_legacy_platform_admin_role!(group_id, schema_name)
+        else
+          {:ok, _} =
+            RoleRegistry.upsert_role(name, :platform_role, group_id, prefix: schema_name)
+        end
       end
     end
 

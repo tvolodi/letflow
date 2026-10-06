@@ -16,8 +16,9 @@ defmodule Letflow.Routers.PlatformScopeRoutesTest do
 
   Handlers are reached only with nonexistent ids and empty bodies, so no row is written; the
   tenant row count is asserted unchanged around every group. Item 14 (through the FULL
-  `Letflow.Router`, real bearer tokens): `GET /tenants` is 403 for A's `PLATFORM_ADMIN` and 200 for
-  P's, while a tenant-scope route stays 200 for A's `PLATFORM_ADMIN`.
+  `Letflow.Router`, real bearer tokens): `GET /tenants` is 403 for A's legacy `PLATFORM_ADMIN` token
+  (which now holds nothing) and 200 for P's, while a tenant-scope route is 200 for A's `TENANT_ADMIN`
+  and 403 for A's legacy `PLATFORM_ADMIN` token (REQ-447 PR 2: the own-tenant power is removed).
 
   INV-10 check, enforced from the merge of Q-960 PR A. `async: false` (VM-global pin).
   """
@@ -72,6 +73,36 @@ defmodule Letflow.Routers.PlatformScopeRoutesTest do
   end
 
   defp tenant_count, do: Repo.aggregate(Tenant, :count, :id)
+
+  # REQ-447 PR 2: `Identity.create_token/3` refuses PLATFORM_ADMIN outside the platform tenant's
+  # schema, so a LEGACY (pre-PR 2) tenant-schema PLATFORM_ADMIN token is a raw insert.
+  defp mint_legacy_platform_admin_token!(fixture) do
+    user =
+      %Letflow.Identity.User{}
+      |> Ecto.Changeset.change(%{
+        username: "legacy-pa-#{Ecto.UUID.generate()}",
+        display_name: "Legacy Platform Admin",
+        email: "legacy-pa-#{Ecto.UUID.generate()}@example.com",
+        password_hash: "__NO_PASSWORD_SET__",
+        status: :active,
+        auth_source: :internal
+      })
+      |> Repo.insert!(prefix: fixture.schema_name)
+
+    plaintext = "lf_tok_" <> Base.encode16(:crypto.strong_rand_bytes(32), case: :lower)
+
+    %Letflow.Identity.ApiToken{}
+    |> Letflow.Identity.ApiToken.insert_changeset(%{
+      user_id: user.id,
+      name: "legacy-platform-admin",
+      token_hash: :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower),
+      roles: ["PLATFORM_ADMIN"],
+      expires_at: nil
+    })
+    |> Repo.insert!(prefix: fixture.schema_name)
+
+    plaintext
+  end
 
   setup do
     tenants = Fixture.three_tenants!()
@@ -159,8 +190,10 @@ defmodule Letflow.Routers.PlatformScopeRoutesTest do
   end
 
   describe "item 14: GET /tenants through the full pipeline (real bearer tokens)" do
-    test "A PLATFORM_ADMIN gets 403; P PLATFORM_ADMIN gets 200", ctx do
-      token_a = Fixture.mint_token!(ctx.a, ["PLATFORM_ADMIN"])
+    test "A's legacy PLATFORM_ADMIN token and A's TENANT_ADMIN get 403; P PLATFORM_ADMIN gets 200",
+         ctx do
+      token_a = mint_legacy_platform_admin_token!(ctx.a)
+      token_a_admin = Fixture.mint_token!(ctx.a, ["TENANT_ADMIN"])
       token_p = Fixture.mint_token!(ctx.p, ["PLATFORM_ADMIN"])
 
       resp_a =
@@ -171,6 +204,12 @@ defmodule Letflow.Routers.PlatformScopeRoutesTest do
       refute resp_a.resp_body =~ ctx.b.tenant.slug
       refute resp_a.resp_body =~ ctx.p.tenant.slug
 
+      resp_a_admin =
+        Fixture.api_conn(:get, "/api/v1/tenants", token_a_admin, ctx.a.tenant.slug, nil)
+        |> Fixture.dispatch_api()
+
+      assert resp_a_admin.status == 403
+
       resp_p =
         Fixture.api_conn(:get, "/api/v1/tenants", token_p, ctx.p.tenant.slug, nil)
         |> Fixture.dispatch_api()
@@ -178,20 +217,28 @@ defmodule Letflow.Routers.PlatformScopeRoutesTest do
       assert resp_p.status == 200
     end
 
-    test "a tenant-scope route stays 200 for a tenant PLATFORM_ADMIN", ctx do
-      token_a = Fixture.mint_token!(ctx.a, ["PLATFORM_ADMIN"])
+    test "a tenant-scope route is 200 for a TENANT_ADMIN and 403 for a legacy tenant PLATFORM_ADMIN",
+         ctx do
+      token_a = Fixture.mint_token!(ctx.a, ["TENANT_ADMIN"])
+      legacy_a = mint_legacy_platform_admin_token!(ctx.a)
 
       resp =
         Fixture.api_conn(:get, "/api/v1/promotions", token_a, ctx.a.tenant.slug, nil)
         |> Fixture.dispatch_api()
 
       assert resp.status == 200
+
+      legacy_resp =
+        Fixture.api_conn(:get, "/api/v1/promotions", legacy_a, ctx.a.tenant.slug, nil)
+        |> Fixture.dispatch_api()
+
+      assert legacy_resp.status == 403
     end
   end
 
   describe "item 5(e): a token minted in tenant A presented with the platform tenant's slug" do
     test "is rejected 401 and does not reach any platform route", ctx do
-      token_a = Fixture.mint_token!(ctx.a, ["PLATFORM_ADMIN"])
+      token_a = Fixture.mint_token!(ctx.a, ["TENANT_ADMIN"])
 
       token_p = Fixture.mint_token!(ctx.p, ["PLATFORM_ADMIN"])
 

@@ -27,8 +27,10 @@ defmodule Letflow.Api.PlatformPrefixUniform403Test do
   covered by `promote_source_tenant_test.exs` and `promotion_scope_test.exs`.
 
   Companion cases: the platform tenant's `PLATFORM_ADMIN` is NOT given a 403 on an unmatched path
-  under any of the five prefixes (it keeps the router's zero-detail 404), and neither is a
-  `PLATFORM_ADMIN` under an ordinary router (`:UnmatchedRoute`), where every other role gets 403.
+  under any of the five prefixes (it keeps the router's zero-detail 404), and neither is the
+  platform tenant's `PLATFORM_ADMIN` under an ordinary router (`:UnmatchedRoute`), where every
+  other caller gets 403 (REQ-447 PR 2: that includes a `PLATFORM_ADMIN` of an ordinary tenant and a
+  `TENANT_ADMIN` of any tenant).
   The `:UnmatchedPlatformPath` / `:UnmatchedRoute` decision grid (roles x `platform_tenant?`) is
   covered by `authorization_test.exs`.
 
@@ -217,7 +219,7 @@ defmodule Letflow.Api.PlatformPrefixUniform403Test do
       assert body["title"] == "Not Found"
     end
 
-    test "ordinary routers (:UnmatchedRoute): a PLATFORM_ADMIN reaches the 404, other roles get 403",
+    test "ordinary routers (:UnmatchedRoute): only the platform tenant's PLATFORM_ADMIN reaches the 404, every other caller gets 403",
          ctx do
       ordinary = [
         Letflow.Routers.Identity,
@@ -235,15 +237,19 @@ defmodule Letflow.Api.PlatformPrefixUniform403Test do
             Fixture.router_conn(:get, "/x/y/z/w", fixture, ["PLATFORM_ADMIN"], nil)
           )
 
-        assert admin.status == 404, "#{inspect(router)}: #{admin.status}"
+        # REQ-447 PR 2: the 404 pass-through is the PLATFORM tenant's PLATFORM_ADMIN only (ctx.p is
+        # pinned); an ordinary tenant's PLATFORM_ADMIN holds nothing and is denied (legacy removed).
+        expected_admin_status = if fixture == ctx.p, do: 404, else: 403
 
-        denied =
-          dispatch(
-            router,
-            Fixture.router_conn(:get, "/x/y/z/w", fixture, ["PROCESS_DESIGNER"], nil)
-          )
+        assert admin.status == expected_admin_status,
+               "#{inspect(router)} PLATFORM_ADMIN: #{admin.status}"
 
-        assert denied.status == 403, "#{inspect(router)}: #{denied.status}"
+        for role <- ["PROCESS_DESIGNER", "TENANT_ADMIN"] do
+          denied =
+            dispatch(router, Fixture.router_conn(:get, "/x/y/z/w", fixture, [role], nil))
+
+          assert denied.status == 403, "#{inspect(router)} #{role}: #{denied.status}"
+        end
       end
     end
   end

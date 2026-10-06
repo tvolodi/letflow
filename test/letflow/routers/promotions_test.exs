@@ -41,7 +41,7 @@ defmodule Letflow.Routers.PromotionsTest do
   # ── Shared dispatch helpers (mirrors req077_promotion_pipeline_test.exs) ───────
 
   defp build_conn(tenant_fixture, fields) do
-    roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
+    roles = Keyword.get(fields, :roles, ["TENANT_ADMIN"])
     query_string = Keyword.get(fields, :query_string, "")
 
     path =
@@ -113,18 +113,30 @@ defmodule Letflow.Routers.PromotionsTest do
 
   # ---------------------------------------------------------------------------
   # authz -- :Unknown gate (design §2.4, router moduledoc's own "The :Unknown
-  # authorization decision"): PLATFORM_ADMIN only, Deny403 for everyone else,
-  # including a caller with no roles at all.
+  # authorization decision"): historically PLATFORM_ADMIN only; now :PromotionsRead (tenant
+  # scope, held by TENANT_ADMIN), Deny403 for everyone else, including a caller with no roles at
+  # all and a PLATFORM_ADMIN of an ordinary tenant (REQ-447 PR 2: it holds nothing there).
   # ---------------------------------------------------------------------------
 
-  describe "authz -- PLATFORM_ADMIN only (design §2.4)" do
-    test "PLATFORM_ADMIN gets 200" do
+  describe "authz -- TENANT_ADMIN only (design §2.4)" do
+    test "TENANT_ADMIN gets 200" do
       tenant = provisioned_tenant("req11-authz-allow")
-      resp = get_platform_events(tenant, roles: ["PLATFORM_ADMIN"])
+      resp = get_platform_events(tenant, roles: ["TENANT_ADMIN"])
       assert resp.status == 200
     end
 
-    test "a non-PLATFORM_ADMIN role (e.g. TASK_WORKER) gets 403, no event data leaks" do
+    test "a PLATFORM_ADMIN of an ordinary tenant gets 403 (legacy own-tenant power removed, REQ-447 PR 2)" do
+      tenant = provisioned_tenant("req11-authz-legacy")
+      type_name = register_event_type!(tenant.tenant_id)
+      event = seed_platform_event!(tenant.schema_name, type_name)
+
+      resp = get_platform_events(tenant, roles: ["PLATFORM_ADMIN"])
+
+      assert resp.status == 403
+      refute resp.resp_body =~ event.event_id
+    end
+
+    test "a non-TENANT_ADMIN role (e.g. TASK_WORKER) gets 403, no event data leaks" do
       tenant = provisioned_tenant("req11-authz-deny")
       type_name = register_event_type!(tenant.tenant_id)
       event = seed_platform_event!(tenant.schema_name, type_name)
@@ -335,7 +347,7 @@ defmodule Letflow.Routers.PromotionsTest do
   # ===========================================================================
 
   defp build_list_conn(tenant_fixture, fields) do
-    roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
+    roles = Keyword.get(fields, :roles, ["TENANT_ADMIN"])
     query_string = Keyword.get(fields, :query_string, "")
 
     path = if query_string == "", do: "/", else: "/?" <> query_string
@@ -419,7 +431,7 @@ defmodule Letflow.Routers.PromotionsTest do
   end
 
   # ---------------------------------------------------------------------------
-  # AC1 -- authenticated PLATFORM_ADMIN-only, paginated, most-recent-first.
+  # AC1 -- authenticated TENANT_ADMIN, paginated, most-recent-first.
   # ---------------------------------------------------------------------------
 
   describe "GET /promotions -- AC1 (paginated, most-recent-first, real HTTP)" do
@@ -561,11 +573,11 @@ defmodule Letflow.Routers.PromotionsTest do
   end
 
   # ---------------------------------------------------------------------------
-  # AC6 -- non-PLATFORM_ADMIN -> 403 (same Deny403 every other route returns).
+  # AC6 -- non-TENANT_ADMIN -> 403 (same Deny403 every other route returns).
   # ---------------------------------------------------------------------------
 
-  describe "GET /promotions -- AC6 (authz, non-PLATFORM_ADMIN -> 403)" do
-    test "a non-PLATFORM_ADMIN role gets 403, no review data leaks" do
+  describe "GET /promotions -- AC6 (authz, non-TENANT_ADMIN -> 403)" do
+    test "a non-TENANT_ADMIN role gets 403, no review data leaks" do
       tenant = provisioned_tenant("req397-authz-deny")
       %{review: review} = seed_review!(tenant.schema_name, tenant.tenant_id)
 
@@ -575,6 +587,16 @@ defmodule Letflow.Routers.PromotionsTest do
       body = Jason.decode!(resp.resp_body)
       assert body["status"] == 403
       refute Map.has_key?(body, "items")
+      refute resp.resp_body =~ review.id
+    end
+
+    test "a PLATFORM_ADMIN of an ordinary tenant gets 403, no review data leaks (REQ-447 PR 2)" do
+      tenant = provisioned_tenant("req397-authz-legacy")
+      %{review: review} = seed_review!(tenant.schema_name, tenant.tenant_id)
+
+      resp = list_reviews_http(tenant, roles: ["PLATFORM_ADMIN"])
+
+      assert resp.status == 403
       refute resp.resp_body =~ review.id
     end
 

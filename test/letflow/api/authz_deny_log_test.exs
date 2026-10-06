@@ -261,12 +261,12 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       refute log =~ slug
     end
 
-    test "A's PLATFORM_ADMIN on a cross-tenant platform route is attributed and denied (INV-10)",
+    test "A's TENANT_ADMIN on a cross-tenant platform route is attributed and denied (INV-10)",
          ctx do
       log =
         capture_log(fn ->
           {conn, _identity} =
-            api(:patch, "/api/v1/tenants/" <> ctx.b.tenant.slug, ctx.a, ["PLATFORM_ADMIN"], %{
+            api(:patch, "/api/v1/tenants/" <> ctx.b.tenant.slug, ctx.a, ["TENANT_ADMIN"], %{
               "display_name" => "Hijacked"
             })
 
@@ -575,7 +575,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
             {:patch, ctx.b.tenant.slug, %{"display_name" => "X"}},
             {:patch, "no-such-slug-uniq-77", %{"display_name" => "X"}}
           ],
-          roles <- [["PLATFORM_ADMIN"], ["PROCESS_DESIGNER"]] do
+          roles <- [["TENANT_ADMIN"], ["PROCESS_DESIGNER"]] do
         {conn, _identity} = api(method, "/api/v1/tenants/" <> slug, ctx.a, roles, body)
 
         assert bytes(conn) == expected,

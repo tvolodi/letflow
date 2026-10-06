@@ -80,9 +80,16 @@ defmodule Letflow.Support.TenantAdminMigrationFixture do
   end
 
   # The legacy state of a tenant: a PLATFORM_ADMIN group, its binding, and `count` members.
+  # REQ-447 PR 2: RoleRegistry.upsert_role/4 refuses a PLATFORM_ADMIN binding outside the platform
+  # tenant, so the legacy binding (pre-REQ-447 data, the very thing the migration reads) is
+  # inserted raw. `bind!/4` stays for every other role name.
   def legacy!(fx, count) do
     group = group!(fx.schema_name, "PLATFORM_ADMIN")
-    bind!(fx.schema_name, "PLATFORM_ADMIN", :platform_role, group)
+
+    %TenantRole{}
+    |> TenantRole.changeset(%{name: "PLATFORM_ADMIN", kind: :platform_role, group_id: group.id})
+    |> Repo.insert!(prefix: fx.schema_name)
+
     users = for _ <- 1..count//1, do: member!(fx.schema_name, group, new_user!(fx.schema_name))
     %{group: group, users: users}
   end

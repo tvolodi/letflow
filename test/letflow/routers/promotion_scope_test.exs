@@ -8,8 +8,10 @@ defmodule Letflow.Routers.PromotionScopeTest do
 
   Item 7:
 
-    * every one of the twelve routes: a `PLATFORM_ADMIN` of an ordinary tenant, of the platform
-      tenant, and with the pin unset reaches the handler (not 403); every other role gets 403;
+    * every one of the twelve routes: a `TENANT_ADMIN` of an ordinary tenant (and with the pin
+      unset) and the platform tenant's own `PLATFORM_ADMIN` reach the handler (not 403); every
+      other role gets 403, including (REQ-447 PR 2, legacy removed) a `PLATFORM_ADMIN` of an
+      ordinary tenant or with the pin unset, which holds nothing;
     * `POST /promotions` and `/plan` naming a foreign source and/or target (another EXISTING tenant)
       answer the byte-identical 404 of a nonexistent tenant (full body and headers, request-id
       excluded), issue no query against the foreign tenant and write no review;
@@ -163,11 +165,26 @@ defmodule Letflow.Routers.PromotionScopeTest do
       end
     end
 
-    test "a PLATFORM_ADMIN (ordinary tenant, platform tenant, pin unset) reaches the handler",
+    test "a TENANT_ADMIN (ordinary tenant, pin unset) and the platform tenant's PLATFORM_ADMIN reach the handler",
+         ctx do
+      for {label, fixture, roles, pin?} <- [
+            {"ordinary tenant TENANT_ADMIN", ctx.a, ["TENANT_ADMIN"], true},
+            {"platform tenant PLATFORM_ADMIN", ctx.p, ["PLATFORM_ADMIN"], true},
+            {"pin unset TENANT_ADMIN", ctx.p, ["TENANT_ADMIN"], false}
+          ],
+          row <- @rows do
+        if pin?, do: Fixture.pin!(ctx.p.tenant_id), else: Fixture.unpin!()
+
+        resp = request(row, fixture, roles, ctx.b.tenant_id)
+
+        refute resp.status == 403, "#{label}: #{elem(row, 1)} #{elem(row, 2)}"
+      end
+    end
+
+    test "REQ-447 PR 2: a PLATFORM_ADMIN of an ordinary tenant, or with the pin unset, is denied 403 on every row",
          ctx do
       for {label, fixture, pin?} <- [
             {"ordinary tenant", ctx.a, true},
-            {"platform tenant", ctx.p, true},
             {"pin unset", ctx.p, false}
           ],
           row <- @rows do
@@ -175,7 +192,7 @@ defmodule Letflow.Routers.PromotionScopeTest do
 
         resp = request(row, fixture, ["PLATFORM_ADMIN"], ctx.b.tenant_id)
 
-        refute resp.status == 403, "#{label}: #{elem(row, 1)} #{elem(row, 2)}"
+        assert resp.status == 403, "#{label}: #{elem(row, 1)} #{elem(row, 2)}"
       end
     end
 
@@ -216,7 +233,7 @@ defmodule Letflow.Routers.PromotionScopeTest do
                :post,
                path,
                ctx.a,
-               ["PLATFORM_ADMIN"],
+               ["TENANT_ADMIN"],
                plan_body(source, target, key)
              )}
           end
@@ -246,7 +263,7 @@ defmodule Letflow.Routers.PromotionScopeTest do
               :post,
               path,
               ctx.a,
-              ["PLATFORM_ADMIN"],
+              ["TENANT_ADMIN"],
               plan_body(ctx.b.tenant_id, target, key)
             )
           end)
@@ -267,7 +284,7 @@ defmodule Letflow.Routers.PromotionScopeTest do
           :post,
           "/plan",
           ctx.a,
-          ["PLATFORM_ADMIN"],
+          ["TENANT_ADMIN"],
           plan_body(ctx.a.tenant_id, ctx.a.tenant_id, key)
         )
 
@@ -282,12 +299,12 @@ defmodule Letflow.Routers.PromotionScopeTest do
 
       {foreign, foreign_queries} =
         Fixture.capture_repo_queries(fn ->
-          promote(ctx.b.tenant_id, key, ctx.a, ["PLATFORM_ADMIN"])
+          promote(ctx.b.tenant_id, key, ctx.a, ["TENANT_ADMIN"])
         end)
 
       {nonexistent, nonexistent_queries} =
         Fixture.capture_repo_queries(fn ->
-          promote(Ecto.UUID.generate(), key, ctx.a, ["PLATFORM_ADMIN"])
+          promote(Ecto.UUID.generate(), key, ctx.a, ["TENANT_ADMIN"])
         end)
 
       assert foreign.status == 404
@@ -313,7 +330,8 @@ defmodule Letflow.Routers.PromotionScopeTest do
   describe "item 7: stored foreign ids on apply and run-assertions (R7/R8)" do
     # A review row that names a foreign tenant on one side, stored in A's schema. Such a row can
     # only be written by the operator (or by a pre-fix build): submit it with the pin on A, then
-    # return the pin to P so A's PLATFORM_ADMIN is an ordinary tenant admin again.
+    # return the pin to P so A's TENANT_ADMIN is an ordinary tenant admin again (the stored review is
+    # written as A's PLATFORM_ADMIN while A is the pinned platform tenant).
     defp store_review_in_a!(ctx, source, target, key, base_version \\ "1.0.0") do
       Fixture.pin!(ctx.a.tenant_id)
 
@@ -357,14 +375,14 @@ defmodule Letflow.Routers.PromotionScopeTest do
       }
     end
 
-    defp apply_review(ctx, review_id, digest) do
-      promotions(:post, "/#{review_id}/apply", ctx.a, ["PLATFORM_ADMIN"], %{
+    defp apply_review(ctx, review_id, digest, roles \\ ["TENANT_ADMIN"]) do
+      promotions(:post, "/#{review_id}/apply", ctx.a, roles, %{
         "plan_digest" => digest
       })
     end
 
     defp run_assertions(ctx, review_id, digest) do
-      promotions(:post, "/#{review_id}/run-assertions", ctx.a, ["PLATFORM_ADMIN"], %{
+      promotions(:post, "/#{review_id}/run-assertions", ctx.a, ["TENANT_ADMIN"], %{
         "plan_digest" => digest,
         "artifact" => artifact()
       })
@@ -416,7 +434,7 @@ defmodule Letflow.Routers.PromotionScopeTest do
       # the operator reaches the domain logic (the review exists but is not approved: a domain
       # answer, not the zero-detail authorization 404)
       Fixture.pin!(ctx.a.tenant_id)
-      refute apply_review(ctx, review_id, digest).status == 404
+      refute apply_review(ctx, review_id, digest, ["PLATFORM_ADMIN"]).status == 404
     end
   end
 
@@ -507,11 +525,23 @@ defmodule Letflow.Routers.PromotionScopeTest do
           :post,
           "/plan",
           ctx.p,
-          ["PLATFORM_ADMIN"],
+          ["TENANT_ADMIN"],
           plan_body(ctx.b.tenant_id, ctx.a.tenant_id, key)
         )
 
       assert resp.status == 404
+
+      # REQ-447 PR 2: with no pin there is no platform tenant, so a PLATFORM_ADMIN holds nothing.
+      legacy =
+        promotions(
+          :post,
+          "/plan",
+          ctx.p,
+          ["PLATFORM_ADMIN"],
+          plan_body(ctx.b.tenant_id, ctx.a.tenant_id, key)
+        )
+
+      assert legacy.status == 403
     end
   end
 
@@ -584,11 +614,11 @@ defmodule Letflow.Routers.PromotionScopeTest do
       event_a = seed_platform_event!(ctx.a)
       event_b = seed_platform_event!(ctx.b)
 
-      ids_a = event_ids(ctx.a, ["PLATFORM_ADMIN"])
+      ids_a = event_ids(ctx.a, ["TENANT_ADMIN"])
       assert event_a.event_id in ids_a
       refute event_b.event_id in ids_a
 
-      ids_b = event_ids(ctx.b, ["PLATFORM_ADMIN"])
+      ids_b = event_ids(ctx.b, ["TENANT_ADMIN"])
       assert event_b.event_id in ids_b
       refute event_a.event_id in ids_b
     end

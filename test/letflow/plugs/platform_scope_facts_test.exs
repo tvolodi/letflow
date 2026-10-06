@@ -37,7 +37,10 @@ defmodule Letflow.Plugs.PlatformScopeFactsTest do
 
   defp token_context(fixture, roles) do
     token = Fixture.mint_token!(fixture, roles)
+    context_for_token(fixture, token)
+  end
 
+  defp context_for_token(fixture, token) do
     conn =
       run_pipeline([
         {"authorization", "Bearer " <> token},
@@ -74,18 +77,31 @@ defmodule Letflow.Plugs.PlatformScopeFactsTest do
       assert facts(context) == %{platform_tenant?: true, platform_scope?: false}
     end
 
-    test "an ordinary tenant's PLATFORM_ADMIN: both facts false", ctx do
-      context = token_context(ctx.a, ["PLATFORM_ADMIN"])
+    # REQ-447 PR 2: PLATFORM_ADMIN tokens are issuable only in the platform tenant's schema, so the
+    # ordinary tenant's admin identity is TENANT_ADMIN.
+    test "an ordinary tenant's TENANT_ADMIN: both facts false", ctx do
+      context = token_context(ctx.a, ["TENANT_ADMIN"])
 
       assert context.tenant_id == ctx.a.tenant_id
       assert facts(context) == %{platform_tenant?: false, platform_scope?: false}
     end
 
     test "pin unset: both facts false for everyone, the would-be operator included", ctx do
+      # REQ-447 PR 2: a PLATFORM_ADMIN token can be minted only in P while P is pinned, so the
+      # tokens are minted first; A's admin identity is TENANT_ADMIN.
+      tokens =
+        for {fixture, roles} <- [
+              {ctx.p, ["PLATFORM_ADMIN"]},
+              {ctx.p, ["PROCESS_DESIGNER"]},
+              {ctx.a, ["TENANT_ADMIN"]},
+              {ctx.a, ["PROCESS_DESIGNER"]}
+            ],
+            do: {fixture, Fixture.mint_token!(fixture, roles)}
+
       Fixture.unpin!()
 
-      for fixture <- [ctx.p, ctx.a], roles <- [["PLATFORM_ADMIN"], ["PROCESS_DESIGNER"]] do
-        assert facts(token_context(fixture, roles)) ==
+      for {fixture, token} <- tokens do
+        assert facts(context_for_token(fixture, token)) ==
                  %{platform_tenant?: false, platform_scope?: false}
       end
     end
@@ -93,7 +109,13 @@ defmodule Letflow.Plugs.PlatformScopeFactsTest do
     test "the stored facts equal the recomputed facts for every combination", ctx do
       for pin <- [ctx.p.tenant_id, nil],
           fixture <- [ctx.p, ctx.a, ctx.b],
-          roles <- [["PLATFORM_ADMIN"], ["PROCESS_DESIGNER"]] do
+          # REQ-447 PR 2: PLATFORM_ADMIN is mintable only in the pinned platform tenant
+          admin =
+            if(fixture.tenant_id == ctx.p.tenant_id and pin == ctx.p.tenant_id,
+              do: "PLATFORM_ADMIN",
+              else: "TENANT_ADMIN"
+            ),
+          roles <- [[admin], ["PROCESS_DESIGNER"]] do
         Fixture.pin!(pin)
         context = token_context(fixture, roles)
 
@@ -103,7 +125,7 @@ defmodule Letflow.Plugs.PlatformScopeFactsTest do
     end
 
     test "a token minted in tenant A is not accepted under the platform tenant's slug", ctx do
-      token = Fixture.mint_token!(ctx.a, ["PLATFORM_ADMIN"])
+      token = Fixture.mint_token!(ctx.a, ["TENANT_ADMIN"])
 
       conn =
         run_pipeline([

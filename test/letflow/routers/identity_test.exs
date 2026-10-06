@@ -101,7 +101,7 @@ defmodule Letflow.Routers.IdentityTest do
     } do
       conn =
         build_conn(:post, "/users", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{
             "username" => "alice",
             "display_name" => "Alice Anderson",
@@ -145,7 +145,7 @@ defmodule Letflow.Routers.IdentityTest do
       insert_user!(tenant, username: "bob")
 
       conn =
-        build_conn(:get, "/users", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -176,7 +176,7 @@ defmodule Letflow.Routers.IdentityTest do
       user = insert_user!(tenant, username: "carol")
 
       conn =
-        build_conn(:get, "/users/#{user.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users/#{user.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -202,7 +202,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:patch, "/users/#{user.id}", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"display_name" => "Dave Updated"}
         )
         |> dispatch()
@@ -231,7 +231,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/users/#{user.id}/status", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"status" => "inactive"}
         )
         |> dispatch()
@@ -271,11 +271,11 @@ defmodule Letflow.Routers.IdentityTest do
       tenant_b_user = insert_user!(tenant_b, username: "only-in-b")
 
       resp_cross_tenant =
-        build_conn(:get, "/users/#{tenant_b_user.id}", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users/#{tenant_b_user.id}", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       resp_never_existed =
-        build_conn(:get, "/users/#{Ecto.UUID.generate()}", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users/#{Ecto.UUID.generate()}", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert resp_cross_tenant.status == 404
@@ -469,7 +469,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       created =
         build_conn(:post, "/tokens", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
         )
         |> dispatch()
@@ -505,7 +505,7 @@ defmodule Letflow.Routers.IdentityTest do
       insert_user!(tenant_b, username: "alice2", display_name: "Alice Anderson 2")
 
       conn =
-        build_conn(:get, "/users", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -527,7 +527,7 @@ defmodule Letflow.Routers.IdentityTest do
       insert_user!(tenant, username: "inactive-1", status: :inactive)
 
       conn =
-        build_conn(:get, "/users?status=inactive", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users?status=inactive", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -537,7 +537,7 @@ defmodule Letflow.Routers.IdentityTest do
 
     test "an invalid status query param is rejected with 422", %{tenant: tenant} do
       conn =
-        build_conn(:get, "/users?status=bogus", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users?status=bogus", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 422
@@ -553,7 +553,7 @@ defmodule Letflow.Routers.IdentityTest do
       )
 
       conn =
-        build_conn(:get, "/users?search=zeb", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users?search=zeb", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -567,7 +567,7 @@ defmodule Letflow.Routers.IdentityTest do
       for i <- 1..3, do: insert_user!(tenant, username: "page-user-#{i}")
 
       conn =
-        build_conn(:get, "/users?page_size=2", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users?page_size=2", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -580,7 +580,7 @@ defmodule Letflow.Routers.IdentityTest do
           :get,
           "/users?page_size=2&cursor=#{URI.encode_www_form(body["next_cursor"])}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -597,7 +597,7 @@ defmodule Letflow.Routers.IdentityTest do
 
     test "an invalid cursor is rejected with 400", %{tenant: tenant} do
       conn =
-        build_conn(:get, "/users?cursor=not-a-valid-cursor!!!", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/users?cursor=not-a-valid-cursor!!!", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 400
@@ -612,7 +612,7 @@ defmodule Letflow.Routers.IdentityTest do
     test "POST /users with a missing required field returns 422", %{tenant: tenant} do
       conn =
         build_conn(:post, "/users", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"display_name" => "No Username", "email" => "x@example.com"}
         )
         |> dispatch()
@@ -625,7 +625,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/users/#{user.id}/status", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"status" => "not-a-real-status"}
         )
         |> dispatch()
@@ -638,7 +638,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/users", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"username" => "dupe", "display_name" => "Dupe", "email" => "dupe@example.com"}
         )
         |> dispatch()
@@ -655,7 +655,7 @@ defmodule Letflow.Routers.IdentityTest do
     test "PATCH /users/:id 404s for an absent id", %{tenant: tenant} do
       conn =
         build_conn(:patch, "/users/#{Ecto.UUID.generate()}", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"display_name" => "Nope"}
         )
         |> dispatch()
@@ -666,7 +666,7 @@ defmodule Letflow.Routers.IdentityTest do
     test "POST /users/:id/status 404s for an absent id", %{tenant: tenant} do
       conn =
         build_conn(:post, "/users/#{Ecto.UUID.generate()}/status", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"status" => "inactive"}
         )
         |> dispatch()
@@ -691,7 +691,7 @@ defmodule Letflow.Routers.IdentityTest do
     } do
       conn =
         build_conn(:post, "/groups", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"name" => "engineers", "description" => "Eng team"}
         )
         |> dispatch()
@@ -719,7 +719,7 @@ defmodule Letflow.Routers.IdentityTest do
     test "POST /groups defaults display_name to name when omitted", %{tenant: tenant} do
       conn =
         build_conn(:post, "/groups", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"name" => "support"}
         )
         |> dispatch()
@@ -739,7 +739,7 @@ defmodule Letflow.Routers.IdentityTest do
     test "POST /groups rejects an empty display_name with 422", %{tenant: tenant} do
       conn =
         build_conn(:post, "/groups", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"name" => "reject-empty", "display_name" => ""}
         )
         |> dispatch()
@@ -751,7 +751,7 @@ defmodule Letflow.Routers.IdentityTest do
       insert_group!(tenant, name: "alpha")
 
       conn =
-        build_conn(:get, "/groups", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/groups", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -767,7 +767,7 @@ defmodule Letflow.Routers.IdentityTest do
       group = insert_group!(tenant, name: "empty-group")
 
       conn =
-        build_conn(:delete, "/groups/#{group.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:delete, "/groups/#{group.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 204
@@ -782,7 +782,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/groups/#{group.id}/members", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => user.id}
         )
         |> dispatch()
@@ -805,7 +805,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn_for = fn ->
         build_conn(:post, "/groups/#{group.id}/members", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => user.id}
         )
         |> dispatch()
@@ -828,7 +828,7 @@ defmodule Letflow.Routers.IdentityTest do
       insert_group_member!(tenant, group.id, user.id)
 
       conn =
-        build_conn(:get, "/groups/#{group.id}/members", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/groups/#{group.id}/members", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -863,7 +863,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:delete, "/groups/#{group.id}/members/#{user.id}", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -880,7 +880,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:delete, "/groups/#{group.id}/members/#{Ecto.UUID.generate()}", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -893,7 +893,7 @@ defmodule Letflow.Routers.IdentityTest do
           :delete,
           "/groups/#{Ecto.UUID.generate()}/members/#{Ecto.UUID.generate()}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -913,7 +913,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn_for = fn user_id ->
         build_conn(:post, "/groups/#{group_a.id}/members", tenant_a,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => user_id}
         )
         |> dispatch()
@@ -941,11 +941,11 @@ defmodule Letflow.Routers.IdentityTest do
       insert_group_member!(tenant, group.id, user.id)
 
       resp =
-        build_conn(:delete, "/groups/#{group.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:delete, "/groups/#{group.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       resp_never_existed =
-        build_conn(:delete, "/groups/#{Ecto.UUID.generate()}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:delete, "/groups/#{Ecto.UUID.generate()}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert resp.status == 404
@@ -961,7 +961,7 @@ defmodule Letflow.Routers.IdentityTest do
       group = insert_group!(tenant, name: "no-members")
 
       resp =
-        build_conn(:delete, "/groups/#{group.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:delete, "/groups/#{group.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert resp.status == 204
@@ -980,7 +980,7 @@ defmodule Letflow.Routers.IdentityTest do
       insert_group!(tenant_b, name: "engineers")
 
       conn =
-        build_conn(:get, "/groups", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/groups", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       body = Jason.decode!(conn.resp_body)
@@ -999,7 +999,7 @@ defmodule Letflow.Routers.IdentityTest do
       insert_group_member!(tenant_b, group_b.id, user_b.id)
 
       conn =
-        build_conn(:get, "/groups/#{group_a.id}/members", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/groups/#{group_a.id}/members", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       body = Jason.decode!(conn.resp_body)
@@ -1021,7 +1021,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn_1 =
         build_conn(:get, "/groups/#{group.id}/members?page_size=1", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -1034,7 +1034,7 @@ defmodule Letflow.Routers.IdentityTest do
           :get,
           "/groups/#{group.id}/members?page_size=1&cursor=#{URI.encode_www_form(body_1["next_cursor"])}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -1053,7 +1053,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:get, "/groups/#{group.id}/members?cursor=not-a-valid-cursor!!!", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -1070,7 +1070,7 @@ defmodule Letflow.Routers.IdentityTest do
 
     test "POST /groups with a missing required name returns 422", %{tenant: tenant} do
       conn =
-        build_conn(:post, "/groups", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        build_conn(:post, "/groups", tenant, roles: ["TENANT_ADMIN"], body: %{})
         |> dispatch()
 
       assert conn.status == 422
@@ -1081,7 +1081,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/groups", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"name" => "dupe-group"}
         )
         |> dispatch()
@@ -1096,7 +1096,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/groups/#{group.id}/members", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{}
         )
         |> dispatch()
@@ -1110,7 +1110,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/groups/#{group.id}/members", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_ids" => [user.id]}
         )
         |> dispatch()
@@ -1125,7 +1125,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/groups/#{Ecto.UUID.generate()}/members", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => user.id}
         )
         |> dispatch()
@@ -1136,7 +1136,7 @@ defmodule Letflow.Routers.IdentityTest do
     test "GET /groups/:id/members for a nonexistent group returns 404", %{tenant: tenant} do
       conn =
         build_conn(:get, "/groups/#{Ecto.UUID.generate()}/members", tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -1161,7 +1161,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/tokens", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
         )
         |> dispatch()
@@ -1195,7 +1195,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       create_conn =
         build_conn(:post, "/tokens", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
         )
         |> dispatch()
@@ -1204,7 +1204,7 @@ defmodule Letflow.Routers.IdentityTest do
       plaintext = Jason.decode!(create_conn.resp_body)["token"]
 
       list_conn =
-        build_conn(:get, "/tokens", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/tokens", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert list_conn.status == 200
@@ -1240,7 +1240,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       create_conn =
         build_conn(:post, "/tokens", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
         )
         |> dispatch()
@@ -1250,7 +1250,7 @@ defmodule Letflow.Routers.IdentityTest do
       token_id = created_body["id"]
 
       revoke_conn =
-        build_conn(:delete, "/tokens/#{token_id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:delete, "/tokens/#{token_id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert revoke_conn.status == 200
@@ -1269,7 +1269,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/tokens", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
         )
         |> dispatch()
@@ -1295,7 +1295,7 @@ defmodule Letflow.Routers.IdentityTest do
         ExUnit.CaptureLog.capture_log(fn ->
           success_conn =
             build_conn(:post, "/tokens", tenant,
-              roles: ["PLATFORM_ADMIN"],
+              roles: ["TENANT_ADMIN"],
               body: %{"user_id" => user.id, "roles" => ["TASK_WORKER"]}
             )
             |> dispatch()
@@ -1309,7 +1309,7 @@ defmodule Letflow.Routers.IdentityTest do
           # plaintext (nor any plaintext of its own, since it never generates one).
           failed_conn =
             build_conn(:post, "/tokens", tenant,
-              roles: ["PLATFORM_ADMIN"],
+              roles: ["TENANT_ADMIN"],
               body: %{"user_id" => user.id, "roles" => ["NOT_A_REAL_ROLE"]}
             )
             |> dispatch()
@@ -1332,7 +1332,7 @@ defmodule Letflow.Routers.IdentityTest do
     end
   end
 
-  describe "REQ-076: token permission gating (:TokensManage, PLATFORM_ADMIN only)" do
+  describe "REQ-076: token permission gating (:TokensManage, TENANT_ADMIN only)" do
     test "POST /tokens -> 403 for a role without :TokensManage, no row inserted" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req076-tokens-403")
       user = insert_user!(tenant, username: "token-owner-403")
@@ -1397,7 +1397,7 @@ defmodule Letflow.Routers.IdentityTest do
         )
 
       conn =
-        build_conn(:get, "/roles", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/roles", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -1415,7 +1415,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/roles", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{
             "name" => "CUSTOM_APPROVER",
             "kind" => "process_routing_role",
@@ -1438,7 +1438,7 @@ defmodule Letflow.Routers.IdentityTest do
 
       conn =
         build_conn(:post, "/roles", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"name" => "", "kind" => "process_routing_role", "group_id" => group.id}
         )
         |> dispatch()

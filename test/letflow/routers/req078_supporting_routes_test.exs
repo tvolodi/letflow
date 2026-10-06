@@ -60,7 +60,7 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
   # ── Shared helpers ─────────────────────────────────────────────────────────
 
   defp build_conn(method, path, tenant_fixture, fields) do
-    roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
+    roles = Keyword.get(fields, :roles, ["TENANT_ADMIN"])
     body = Keyword.get(fields, :body, nil)
     headers = Keyword.get(fields, :headers, [])
 
@@ -289,7 +289,7 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
       entry = seed_audit_entry!(tenant.schema_name)
 
       resp =
-        build_conn(:get, "/", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/", tenant, roles: ["TENANT_ADMIN"])
         |> Letflow.Routers.Audit.call(@audit_opts)
 
       assert resp.status == 200
@@ -413,7 +413,7 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
       entry_b = seed_audit_entry!(tenant_b.schema_name, resource_id: instance_b)
 
       resp =
-        build_conn(:get, "/", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/", tenant_a, roles: ["TENANT_ADMIN"])
         |> Letflow.Routers.Audit.call(@audit_opts)
 
       assert resp.status == 200

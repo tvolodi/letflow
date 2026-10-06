@@ -73,7 +73,10 @@ defmodule Letflow.Api.TenantTargetTest do
 
   describe "ordinary caller (rules 2 and 3)" do
     for {label, roles} <- [
-          admin: ["PLATFORM_ADMIN"],
+          admin: ["TENANT_ADMIN"],
+          # REQ-447 PR 2: a non-platform tenant's PLATFORM_ADMIN is a legacy identity that holds
+          # nothing; it must stay an ordinary caller (no platform scope) for target purposes.
+          legacy_platform_admin: ["PLATFORM_ADMIN"],
           designer: ["PROCESS_DESIGNER"],
           no_roles: []
         ] do

@@ -34,7 +34,6 @@ defmodule Letflow.Routers.OnboardingScopeExtensionTest do
   import Plug.Test
   import Plug.Conn
 
-  alias Letflow.Support.PlatformTenantFixture
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
@@ -55,7 +54,7 @@ defmodule Letflow.Routers.OnboardingScopeExtensionTest do
     |> Repo.insert!(prefix: tenant.schema_name)
   end
 
-  # Mints a real, fully-provisioned tenant + PLATFORM_ADMIN caller with a real API
+  # Mints a real, fully-provisioned tenant + TENANT_ADMIN caller with a real API
   # token, then flips that tenant's status to :migrating administratively --
   # Tenant.status_changeset/2's own existing writer, not a new REQ-076-specific status
   # mechanism (design §12.1: this extension adds no second status rule).
@@ -64,12 +63,10 @@ defmodule Letflow.Routers.OnboardingScopeExtensionTest do
     tenant = fixture.tenant
     user = insert_user!(fixture)
 
-    # ISS-0993 (A2): onboarding is PLATFORM scope; this PLATFORM_ADMIN caller is the platform
-    # operator, so its tenant is pinned as THE platform tenant (restored on exit).
-    PlatformTenantFixture.pin!(fixture.tenant_id)
-
+    # REQ-447 PR 2: `/identity/tokens` is a tenant-scope route and this tenant is an ordinary
+    # one, so its administrator is TENANT_ADMIN (no platform pin needed).
     {:ok, %{plaintext: plaintext}} =
-      Identity.create_token(user.id, %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+      Identity.create_token(user.id, %{roles: ["TENANT_ADMIN"], expires_at: nil},
         prefix: fixture.schema_name
       )
 

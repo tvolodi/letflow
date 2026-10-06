@@ -170,7 +170,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
     test "non_operator_never_receives_a_foreign_tenant_id", ctx do
       seeded = seed!(ctx.a, ctx.b)
 
-      resp = get_events(ctx.a, ["PLATFORM_ADMIN"])
+      resp = get_events(ctx.a, ["TENANT_ADMIN"])
       assert resp.status == 200
 
       refute resp.resp_body =~ ctx.b.tenant_id
@@ -193,7 +193,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
 
     test "own_tenant_id_is_retained", ctx do
       seeded = seed!(ctx.a, ctx.b)
-      items = ctx.a |> get_events(["PLATFORM_ADMIN"]) |> decode_items() |> by_id()
+      items = ctx.a |> get_events(["TENANT_ADMIN"]) |> decode_items() |> by_id()
 
       own = ctx.a.tenant_id
 
@@ -208,7 +208,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
 
     test "other_payload_fields_and_envelope_unchanged", ctx do
       seeded = seed!(ctx.a, ctx.b)
-      shaped = ctx.a |> get_events(["PLATFORM_ADMIN"]) |> decode_items()
+      shaped = ctx.a |> get_events(["TENANT_ADMIN"]) |> decode_items()
 
       # baseline: the same schema read UNSHAPED (A pinned as THE platform tenant)
       Fixture.pin!(ctx.a.tenant_id)
@@ -236,7 +236,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
         assert s["payload"] == e.shaped
       end
 
-      body = Jason.decode!(get_events(ctx.a, ["PLATFORM_ADMIN"]).resp_body)
+      body = Jason.decode!(get_events(ctx.a, ["TENANT_ADMIN"]).resp_body)
       assert body |> Map.keys() |> Enum.sort() == ["items", "next_cursor"]
     end
 
@@ -244,7 +244,13 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
       seeded = seed!(ctx.p, ctx.b)
       Fixture.unpin!()
 
-      resp = get_events(ctx.p, ["PLATFORM_ADMIN"])
+      # REQ-447 PR 2: with no pin there is no platform tenant, so a PLATFORM_ADMIN holds nothing
+      # anywhere (403, no event data); the tenant's own TENANT_ADMIN is shaped like everyone else.
+      denied = get_events(ctx.p, ["PLATFORM_ADMIN"])
+      assert denied.status == 403
+      refute denied.resp_body =~ ctx.b.tenant_id
+
+      resp = get_events(ctx.p, ["TENANT_ADMIN"])
       refute resp.resp_body =~ ctx.b.tenant_id
       refute resp.resp_body =~ "actor_id"
 
@@ -254,7 +260,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
 
     test "unknown_type_payload_is_empty_even_with_nested_own_tenant_id", ctx do
       [_, _, _, _, _, _, _, _, e8] = seed!(ctx.a, ctx.b)
-      items = ctx.a |> get_events(["PLATFORM_ADMIN"]) |> decode_items() |> by_id()
+      items = ctx.a |> get_events(["TENANT_ADMIN"]) |> decode_items() |> by_id()
 
       assert items[e8.id]["event_type"] == e8.type
       # e8 stores A's own id inside a nested list; the allowlist does not descend
@@ -314,7 +320,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
       assert {:ok, %{event_id: id}} =
                PlatformEvents.append_definition_promoted(attrs, ctx.a.schema_name)
 
-      resp = get_events(ctx.a, ["PLATFORM_ADMIN"])
+      resp = get_events(ctx.a, ["TENANT_ADMIN"])
       item = resp |> decode_items() |> by_id() |> Map.fetch!(id)
 
       assert item["payload"] |> Map.keys() |> Enum.sort() ==
@@ -329,8 +335,8 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
       seeded = seed!(ctx.a, ctx.b)
       e6 = Enum.at(seeded, 6)
 
-      shaped_all = ctx.a |> get_events(["PLATFORM_ADMIN"]) |> decode_items()
-      shaped_page = Jason.decode!(get_events(ctx.a, ["PLATFORM_ADMIN"], "page_size=2").resp_body)
+      shaped_all = ctx.a |> get_events(["TENANT_ADMIN"]) |> decode_items()
+      shaped_page = Jason.decode!(get_events(ctx.a, ["TENANT_ADMIN"], "page_size=2").resp_body)
 
       item = shaped_all |> by_id() |> Map.fetch!(e6.id)
       assert item["event_type"] == e6.type
@@ -370,7 +376,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
       assert {:ok, %{event_id: id}} =
                PlatformEvents.append_definition_promoted(attrs, ctx.a.schema_name)
 
-      resp = get_events(ctx.a, ["PLATFORM_ADMIN"])
+      resp = get_events(ctx.a, ["TENANT_ADMIN"])
       item = resp |> decode_items() |> by_id() |> Map.fetch!(id)
 
       refute Map.has_key?(item["payload"], "process_key")
@@ -380,7 +386,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
 
     test "non_operator_item_has_no_actor_id", ctx do
       seed!(ctx.a, ctx.b)
-      items = ctx.a |> get_events(["PLATFORM_ADMIN"]) |> decode_items()
+      items = ctx.a |> get_events(["TENANT_ADMIN"]) |> decode_items()
 
       assert length(items) == 9
       for item <- items, do: assert(Map.has_key?(item, "actor_id") == false)
@@ -395,28 +401,28 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
       {String.to_integer(seq), event_id}
     end
 
-    defp walk(fixture, query_prefix) do
+    defp walk(fixture, query_prefix, roles) do
       Stream.unfold({:first, nil}, fn
         :done ->
           nil
 
         {:first, nil} ->
-          page(fixture, query_prefix, nil)
+          page(fixture, query_prefix, roles, nil)
 
         {:next, cursor} ->
-          page(fixture, query_prefix, cursor)
+          page(fixture, query_prefix, roles, cursor)
       end)
       |> Enum.to_list()
     end
 
-    defp page(fixture, query_prefix, cursor) do
+    defp page(fixture, query_prefix, roles, cursor) do
       query =
         if cursor,
           do: query_prefix <> "&cursor=" <> URI.encode_www_form(cursor),
           else: query_prefix
 
       body =
-        fixture |> get_events(["PLATFORM_ADMIN"], query) |> then(&Jason.decode!(&1.resp_body))
+        fixture |> get_events(roles, query) |> then(&Jason.decode!(&1.resp_body))
 
       next = if body["next_cursor"], do: {:next, body["next_cursor"]}, else: :done
       {body, next}
@@ -427,7 +433,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
       seeded_ids = Enum.map(seeded, & &1.id)
 
       # shaped (A is an ordinary tenant)
-      pages = walk(ctx.a, "page_size=2")
+      pages = walk(ctx.a, "page_size=2", ["TENANT_ADMIN"])
       ids = for p <- pages, i <- p["items"], do: i["event_id"]
       assert ids == seeded_ids
       assert pages |> List.last() |> Map.fetch!("next_cursor") == nil
@@ -442,7 +448,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
 
       # unshaped read of the same schema (A pinned as THE platform tenant): same paging
       Fixture.pin!(ctx.a.tenant_id)
-      raw_pages = walk(ctx.a, "page_size=2")
+      raw_pages = walk(ctx.a, "page_size=2", ["PLATFORM_ADMIN"])
       Fixture.pin!(ctx.p.tenant_id)
 
       assert for(p <- raw_pages, do: Enum.map(p["items"], & &1["event_id"])) ==
@@ -454,7 +460,7 @@ defmodule Letflow.Routers.PromotionPlatformEventsShapingTest do
       # the event_type filter narrows exactly as before
       filtered =
         ctx.a
-        |> get_events(["PLATFORM_ADMIN"], "event_type=DEFINITION_PROMOTED")
+        |> get_events(["TENANT_ADMIN"], "event_type=DEFINITION_PROMOTED")
         |> decode_items()
 
       assert Enum.map(filtered, & &1["event_id"]) ==

@@ -97,7 +97,7 @@ defmodule Letflow.Routers.EntitiesTest do
   # A provisioned tenant plus a real API token carrying `roles`. Every role
   # string below is one of Letflow.Api.Authorization's own five closed roles,
   # so the 403/non-403 assertions are driven by that module's real matrix.
-  defp tenant_ctx(slug_prefix, roles \\ ["PLATFORM_ADMIN"]) do
+  defp tenant_ctx(slug_prefix, roles \\ ["TENANT_ADMIN"]) do
     tenant =
       TenantFixture.provisioned_tenant!(
         slug_prefix: slug_prefix,
@@ -128,7 +128,7 @@ defmodule Letflow.Routers.EntitiesTest do
   # DIFFERENT user in the same schema. REQ-311's INV-1 two-user test needs
   # two callers whose `user_entity_grants` rows differ while every other
   # input -- the request body included -- is byte-identical.
-  defp second_user_ctx(ctx, roles \\ ["PLATFORM_ADMIN"]) do
+  defp second_user_ctx(ctx, roles \\ ["TENANT_ADMIN"]) do
     user =
       %User{}
       |> Ecto.Changeset.change(%{
@@ -2789,8 +2789,8 @@ defmodule Letflow.Routers.EntitiesTest do
       assert Repo.aggregate("entity_type_restrictions", :count, prefix: ctx.schema_name) == 0
     end
 
-    test "a PLATFORM_ADMIN caller (holds every permission) succeeds against the same body" do
-      ctx = tenant_ctx("iss0935-restrictions-403-control", ["PLATFORM_ADMIN"])
+    test "a TENANT_ADMIN caller (holds every tenant permission) succeeds against the same body" do
+      ctx = tenant_ctx("iss0935-restrictions-403-control", ["TENANT_ADMIN"])
 
       conn =
         import_restrictions(ctx, %{

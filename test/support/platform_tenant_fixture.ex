@@ -27,7 +27,9 @@ defmodule Letflow.Support.PlatformTenantFixture do
   import Plug.Test
 
   alias Letflow.Identity
+  alias Letflow.Identity.ApiToken
   alias Letflow.Identity.User
+  alias Letflow.PlatformTenant
   alias Letflow.Repo
   alias Letflow.TenantFixture
 
@@ -137,7 +139,15 @@ defmodule Letflow.Support.PlatformTenantFixture do
     |> assign(:trace_id, "platform-scope-test-trace-id")
   end
 
-  @doc "Mints a real API token for a fresh active user of `fixture`, holding exactly `roles`."
+  @doc """
+  Mints a real API token for a fresh active user of `fixture`, holding exactly `roles`.
+
+  REQ-447 PR 2: `Identity.create_token/3` refuses `PLATFORM_ADMIN` outside the platform tenant's
+  schema. When `roles` contains `"PLATFORM_ADMIN"` and `fixture` is not the pinned platform tenant
+  at call time, the token is inserted RAW instead, exactly as a pre-REQ-447 row would exist, so a
+  test can prove that such a stored legacy token now holds nothing at request time. Use
+  `"TENANT_ADMIN"` for an ordinary tenant's administrator.
+  """
   @spec mint_token!(fixture(), [String.t()]) :: String.t()
   def mint_token!(fixture, roles) do
     user =
@@ -152,10 +162,33 @@ defmodule Letflow.Support.PlatformTenantFixture do
       })
       |> Repo.insert!(prefix: fixture.schema_name)
 
-    {:ok, %{plaintext: plaintext}} =
-      Identity.create_token(user.id, %{roles: roles, expires_at: nil},
-        prefix: fixture.schema_name
-      )
+    if "PLATFORM_ADMIN" in roles and not PlatformTenant.platform_prefix?(fixture.schema_name) do
+      insert_legacy_token!(user, roles, fixture.schema_name)
+    else
+      {:ok, %{plaintext: plaintext}} =
+        Identity.create_token(user.id, %{roles: roles, expires_at: nil},
+          prefix: fixture.schema_name
+        )
+
+      plaintext
+    end
+  end
+
+  # A raw, changeset-level token insert (bypasses the create_token/3 platform-tenant gate) in the
+  # same shape `Identity.create_token/3` writes: `lf_tok_` + 64 lower-case hex, SHA-256 hex hash.
+  defp insert_legacy_token!(user, roles, schema_name) do
+    plaintext = "lf_tok_" <> Base.encode16(:crypto.strong_rand_bytes(32), case: :lower)
+    token_hash = Base.encode16(:crypto.hash(:sha256, plaintext), case: :lower)
+
+    %ApiToken{}
+    |> ApiToken.insert_changeset(%{
+      user_id: user.id,
+      name: "legacy-" <> String.slice(token_hash, 0, 8),
+      token_hash: token_hash,
+      roles: roles,
+      expires_at: nil
+    })
+    |> Repo.insert!(prefix: schema_name)
 
     plaintext
   end

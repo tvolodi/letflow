@@ -82,7 +82,7 @@ defmodule Letflow.Routers.EntitiesAggregateTest do
     |> Repo.insert!(prefix: tenant.schema_name)
   end
 
-  defp tenant_ctx(slug_prefix, roles \\ ["PLATFORM_ADMIN"]) do
+  defp tenant_ctx(slug_prefix, roles \\ ["TENANT_ADMIN"]) do
     tenant =
       TenantFixture.provisioned_tenant!(
         slug_prefix: slug_prefix,
@@ -185,8 +185,8 @@ defmodule Letflow.Routers.EntitiesAggregateTest do
       assert conn.status == 403
     end
 
-    test "PLATFORM_ADMIN succeeds" do
-      ctx = tenant_ctx("req315-perm-admin", ["PLATFORM_ADMIN"])
+    test "TENANT_ADMIN succeeds" do
+      ctx = tenant_ctx("req315-perm-admin", ["TENANT_ADMIN"])
       seed_widget!(ctx)
 
       conn = aggregate(ctx, %{"entity_type" => "widget", "aggregates" => [%{"fn" => "count"}]})

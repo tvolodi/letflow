@@ -9,8 +9,8 @@ defmodule Letflow.Api.PlatformAdminRoleBindingTest do
 
     * `PROCESS_DESIGNER` of an ordinary tenant (A) and of the platform tenant (P): 403 for the name
       `PLATFORM_ADMIN` and every variant, for BOTH kinds (`platform_role`, `process_routing_role`);
-    * `PLATFORM_ADMIN` of an ordinary tenant (A): the same 403 (it has `:RolesManage` but not platform
-      scope);
+    * `TENANT_ADMIN` of an ordinary tenant (A): the same 403 (it has `:RolesManage` but not platform
+      scope); a legacy `PLATFORM_ADMIN` of A holds nothing at all since REQ-447 PR 2 (403 as well);
     * `PLATFORM_ADMIN` of the platform tenant (P): unchanged success for the exact name as a
       `platform_role`; the variants are never accepted as a `platform_role` (the registry only knows
       the exact literal), see the last group of cases;
@@ -145,10 +145,11 @@ defmodule Letflow.Api.PlatformAdminRoleBindingTest do
       end
     end
 
-    test "every name variant, both kinds, A PLATFORM_ADMIN / A PROCESS_DESIGNER / P PROCESS_DESIGNER (item 10(g))",
+    test "every name variant, both kinds, A TENANT_ADMIN / A legacy PLATFORM_ADMIN / A PROCESS_DESIGNER / P PROCESS_DESIGNER (item 10(g))",
          ctx do
       for {fixture, roles} <- [
             {ctx.a, ["PROCESS_DESIGNER"]},
+            {ctx.a, ["TENANT_ADMIN"]},
             {ctx.a, ["PLATFORM_ADMIN"]},
             {ctx.p, ["PROCESS_DESIGNER"]}
           ],
@@ -177,6 +178,7 @@ defmodule Letflow.Api.PlatformAdminRoleBindingTest do
       bodies =
         for {fixture, group, roles} <- [
               {ctx.a, group_a, ["PROCESS_DESIGNER"]},
+              {ctx.a, group_a, ["TENANT_ADMIN"]},
               {ctx.a, group_a, ["PLATFORM_ADMIN"]},
               {ctx.p, group_p, ["PROCESS_DESIGNER"]}
             ],

@@ -4,7 +4,7 @@ defmodule Letflow.Routers.TenantSolutionsTest do
   `Letflow.Modules.Solutions.install/3`.
 
   Covers:
-  - AC4 (HTTP): 201 for PLATFORM_ADMIN; 403 for other 5 roles; 409 when exam
+  - AC4 (HTTP): 201 for TENANT_ADMIN; 403 for the other roles (incl. a non-platform PLATFORM_ADMIN); 409 when exam
     already installed; 404 for path-traversal and unknown solution ids.
   - AC5 (HTTP): two-tenant isolation — solution install by tenant A writes
     rows only in tenant A's schema.
@@ -47,17 +47,18 @@ defmodule Letflow.Routers.TenantSolutionsTest do
   defp json(conn), do: Jason.decode!(conn.resp_body)
 
   # ═══════════════════════════════════════════════════════════════════════
-  # AC4 — 201 for PLATFORM_ADMIN, 403 for every other role
+  # AC4 — 201 for TENANT_ADMIN, 403 for every other role
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC4 -- role gate" do
-    test "201 for PLATFORM_ADMIN; 403 for every other role; no row written on 403" do
+    test "201 for TENANT_ADMIN; 403 for every other role (incl. PLATFORM_ADMIN of an ordinary tenant); no row written on 403" do
       %{tenant_id: tenant_id, schema_name: prefix} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-ac4-role")
 
-      # REQ-447: TENANT_ADMIN holds :ModulesManage (tenant scope) and installs into its OWN tenant;
-      # its 201 is asserted in the next test.
-      for role <- Authorization.roles(), role not in [:PLATFORM_ADMIN, :TENANT_ADMIN] do
+      # REQ-447: TENANT_ADMIN holds :ModulesManage (tenant scope) and installs into its OWN tenant
+      # (its 201 is asserted below). PR 2: PLATFORM_ADMIN is NOT exempt any more: in an ordinary
+      # tenant it holds nothing, so it is 403 like every other role.
+      for role <- Authorization.roles(), role != :TENANT_ADMIN do
         conn =
           install_solution(tenant_id, [Atom.to_string(role)], %{"solution_id" => "fixture-bundle"})
 
@@ -68,7 +69,7 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       # Confirm no rows were written by the 403 attempts
       assert Installs.list_installed(prefix: prefix) == []
 
-      conn = install_solution(tenant_id, ["PLATFORM_ADMIN"], %{"solution_id" => "fixture-bundle"})
+      conn = install_solution(tenant_id, ["TENANT_ADMIN"], %{"solution_id" => "fixture-bundle"})
       assert conn.status == 201
 
       body = json(conn)
@@ -113,7 +114,7 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       actor_id = Ecto.UUID.generate()
       assert {:ok, _} = Installs.install("exam", actor_id, prefix: prefix)
 
-      conn = install_solution(tenant_id, ["PLATFORM_ADMIN"], %{"solution_id" => "bilimbaga"})
+      conn = install_solution(tenant_id, ["TENANT_ADMIN"], %{"solution_id" => "bilimbaga"})
       assert conn.status == 409
     end
   end
@@ -127,7 +128,7 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       %{tenant_id: tenant_id} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-ac4-traversal")
 
-      conn = install_solution(tenant_id, ["PLATFORM_ADMIN"], %{"solution_id" => "../config"})
+      conn = install_solution(tenant_id, ["TENANT_ADMIN"], %{"solution_id" => "../config"})
       assert conn.status == 404
     end
 
@@ -135,7 +136,7 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       %{tenant_id: tenant_id} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-ac4-upper")
 
-      conn = install_solution(tenant_id, ["PLATFORM_ADMIN"], %{"solution_id" => "BILIMBAGA"})
+      conn = install_solution(tenant_id, ["TENANT_ADMIN"], %{"solution_id" => "BILIMBAGA"})
       assert conn.status == 404
     end
 
@@ -143,7 +144,7 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       %{tenant_id: tenant_id} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-ac4-nope")
 
-      conn = install_solution(tenant_id, ["PLATFORM_ADMIN"], %{"solution_id" => "nope"})
+      conn = install_solution(tenant_id, ["TENANT_ADMIN"], %{"solution_id" => "nope"})
       assert conn.status == 404
     end
   end
@@ -161,7 +162,7 @@ defmodule Letflow.Routers.TenantSolutionsTest do
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-ac5-b")
 
       conn =
-        install_solution(tenant_id_a, ["PLATFORM_ADMIN"], %{"solution_id" => "fixture-bundle"})
+        install_solution(tenant_id_a, ["TENANT_ADMIN"], %{"solution_id" => "fixture-bundle"})
 
       assert conn.status == 201
 
@@ -182,7 +183,7 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       %{tenant_id: tenant_id} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-body-missing")
 
-      conn = install_solution(tenant_id, ["PLATFORM_ADMIN"], %{})
+      conn = install_solution(tenant_id, ["TENANT_ADMIN"], %{})
       assert conn.status == 422
     end
 
@@ -190,7 +191,7 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       %{tenant_id: tenant_id} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-body-type")
 
-      conn = install_solution(tenant_id, ["PLATFORM_ADMIN"], %{"solution_id" => 42})
+      conn = install_solution(tenant_id, ["TENANT_ADMIN"], %{"solution_id" => 42})
       assert conn.status == 422
     end
   end

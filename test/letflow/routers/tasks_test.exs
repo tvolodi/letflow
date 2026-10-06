@@ -373,7 +373,7 @@ defmodule Letflow.Routers.TasksTest do
       task = insert_task!(tenant, %{node_id: "n1", node_name: "Node One"})
 
       conn =
-        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{task.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -392,7 +392,7 @@ defmodule Letflow.Routers.TasksTest do
       task_2 = insert_task!(tenant, %{node_id: "n2"})
 
       conn_1 =
-        build_conn(:get, "/?page_size=1", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/?page_size=1", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn_1.status == 200
@@ -405,7 +405,7 @@ defmodule Letflow.Routers.TasksTest do
           :get,
           "/?page_size=1&cursor=#{URI.encode_www_form(body_1["next_cursor"])}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -551,11 +551,11 @@ defmodule Letflow.Routers.TasksTest do
       tenant_b_task = insert_task!(tenant_b, %{})
 
       resp_cross_tenant =
-        build_conn(:get, "/#{tenant_b_task.id}", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{tenant_b_task.id}", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       resp_never_existed =
-        build_conn(:get, "/#{Ecto.UUID.generate()}", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{Ecto.UUID.generate()}", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert resp_cross_tenant.status == 404
@@ -580,7 +580,7 @@ defmodule Letflow.Routers.TasksTest do
         insert_task!(tenant_b, %{node_id: "shared_node", node_name: "Shared Node"})
 
       conn =
-        build_conn(:get, "/", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -599,7 +599,7 @@ defmodule Letflow.Routers.TasksTest do
     test "GET /tasks item shape is exactly the nine allowlisted keys", %{tenant: tenant} do
       insert_task!(tenant, %{})
 
-      conn = build_conn(:get, "/", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      conn = build_conn(:get, "/", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
@@ -614,7 +614,7 @@ defmodule Letflow.Routers.TasksTest do
          %{tenant: tenant} do
       task = insert_task!(tenant, %{})
 
-      conn = build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      conn = build_conn(:get, "/#{task.id}", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
@@ -771,7 +771,7 @@ defmodule Letflow.Routers.TasksTest do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req083-route-order")
 
       conn =
-        build_conn(:get, "/inbox", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/inbox", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -785,7 +785,7 @@ defmodule Letflow.Routers.TasksTest do
 
     test "GET /tasks?status=bogus is rejected with 400", %{tenant: tenant} do
       conn =
-        build_conn(:get, "/?status=bogus", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/?status=bogus", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 400
@@ -793,7 +793,7 @@ defmodule Letflow.Routers.TasksTest do
 
     test "GET /tasks?instance_id=not-a-uuid is rejected with 400", %{tenant: tenant} do
       conn =
-        build_conn(:get, "/?instance_id=not-a-uuid", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/?instance_id=not-a-uuid", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 400
@@ -801,7 +801,7 @@ defmodule Letflow.Routers.TasksTest do
 
     test "GET /tasks/:id with a malformed id is rejected with 400", %{tenant: tenant} do
       conn =
-        build_conn(:get, "/not-a-uuid", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/not-a-uuid", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 400
@@ -810,7 +810,7 @@ defmodule Letflow.Routers.TasksTest do
     test "GET /tasks?cursor=not-a-valid-cursor!!! is rejected with 422 (this router's own convention, distinct from Identity's 400)",
          %{tenant: tenant} do
       conn =
-        build_conn(:get, "/?cursor=not-a-valid-cursor!!!", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/?cursor=not-a-valid-cursor!!!", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 422
@@ -824,7 +824,7 @@ defmodule Letflow.Routers.TasksTest do
       pending_task = insert_task!(tenant, %{})
 
       conn =
-        build_conn(:get, "/?status=COMPLETED", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/?status=COMPLETED", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -971,7 +971,7 @@ defmodule Letflow.Routers.TasksTest do
   describe "REQ-132 AC3: GET /tasks for a plain-:Allow role (task_scope: :all) stays unfiltered" do
     setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req132-ac3")}
 
-    test "a PLATFORM_ADMIN caller sees tasks assigned to three different users/groups, none of which are their own",
+    test "a TENANT_ADMIN caller sees tasks assigned to three different users/groups, none of which are their own",
          %{tenant: tenant} do
       user_a = Ecto.UUID.generate()
       user_b = Ecto.UUID.generate()
@@ -984,7 +984,7 @@ defmodule Letflow.Routers.TasksTest do
         insert_task!(tenant, %{assignee_type: "GROUP", assignee_ref: some_group.id})
 
       conn =
-        build_conn(:get, "/?page_size=50", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/?page_size=50", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -1047,7 +1047,7 @@ defmodule Letflow.Routers.TasksTest do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req083-notfound")
 
       conn =
-        build_conn(:get, "/#{Ecto.UUID.generate()}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{Ecto.UUID.generate()}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 404
@@ -1059,7 +1059,7 @@ defmodule Letflow.Routers.TasksTest do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req083-unmatched")
 
       conn =
-        build_conn(:get, "/bogus/nested/path", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/bogus/nested/path", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 404
@@ -1082,7 +1082,7 @@ defmodule Letflow.Routers.TasksTest do
       {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
 
       conn =
-        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{task.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -1096,7 +1096,7 @@ defmodule Letflow.Routers.TasksTest do
       {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
 
       conn =
-        build_conn(:get, "/", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -1151,7 +1151,7 @@ defmodule Letflow.Routers.TasksTest do
       # (frozen at instance-start) rather than a live process_definitions
       # lookup for the process's currently-active version.
       conn =
-        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{task.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -1174,7 +1174,7 @@ defmodule Letflow.Routers.TasksTest do
       {_instance_id, task} = start_instance_with_pending_task!(tenant, graph_human_task_end())
 
       conn =
-        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{task.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -1232,7 +1232,7 @@ defmodule Letflow.Routers.TasksTest do
       assert persisted.form_schema == schema
 
       conn =
-        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{task.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -1293,7 +1293,7 @@ defmodule Letflow.Routers.TasksTest do
       # (pinned at activation), not re-derived from the process's currently
       # active definition.
       conn =
-        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{task.id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -1323,7 +1323,7 @@ defmodule Letflow.Routers.TasksTest do
       # (ISS-0905) derives to assignee_type "ROLE"/assignee_ref "approver" --
       # POST /tasks/:id/complete now enforces that check (Tasks.authorize_completion/3),
       # so the caller completing this task must actually hold "approver",
-      # same as a real tenant's PLATFORM_ADMIN would need a role grant to
+      # same as a real tenant's TENANT_ADMIN would need a role grant to
       # act as this task's assignee. This test is about the engine
       # completion flow (AC1), not authorization, so the caller is wired to
       # satisfy the gate rather than testing it.
@@ -1334,7 +1334,7 @@ defmodule Letflow.Routers.TasksTest do
 
       conn =
         build_conn(:post, "/#{task.id}/complete", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           user_id: caller.id,
           body: %{"decision" => "approved"}
         )
@@ -1396,7 +1396,7 @@ defmodule Letflow.Routers.TasksTest do
         Repo.get!(InstanceProjection, task.instance_id, prefix: tenant.schema_name)
 
       conn =
-        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["TENANT_ADMIN"], body: %{})
         |> dispatch()
 
       assert conn.status == 409
@@ -1423,7 +1423,7 @@ defmodule Letflow.Routers.TasksTest do
         Repo.get!(InstanceProjection, task.instance_id, prefix: tenant.schema_name)
 
       conn =
-        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["TENANT_ADMIN"], body: %{})
         |> dispatch()
 
       assert conn.status == 409
@@ -1452,7 +1452,7 @@ defmodule Letflow.Routers.TasksTest do
       force_instance_status!(tenant, task.instance_id, :error)
 
       conn =
-        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        build_conn(:post, "/#{task.id}/complete", tenant, roles: ["TENANT_ADMIN"], body: %{})
         |> dispatch()
 
       assert conn.status == 409
@@ -1566,7 +1566,7 @@ defmodule Letflow.Routers.TasksTest do
       ]
 
       for {verb, body} <- verb_bodies do
-        fields = [roles: ["PLATFORM_ADMIN"]] ++ if body, do: [body: body], else: []
+        fields = [roles: ["TENANT_ADMIN"]] ++ if body, do: [body: body], else: []
 
         resp_cross_tenant =
           build_conn(:post, "/#{task_b.id}/#{verb}", tenant_a, fields) |> dispatch()
@@ -1683,7 +1683,7 @@ defmodule Letflow.Routers.TasksTest do
 
       conn =
         build_conn(:post, "/#{task.id}/assign", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => target_user}
         )
         |> dispatch()
@@ -1705,7 +1705,7 @@ defmodule Letflow.Routers.TasksTest do
 
       conn =
         build_conn(:post, "/#{task.id}/assign", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => Ecto.UUID.generate()}
         )
         |> dispatch()
@@ -1723,7 +1723,7 @@ defmodule Letflow.Routers.TasksTest do
 
       conn =
         build_conn(:post, "/#{task.id}/reassign", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => new_user}
         )
         |> dispatch()
@@ -1740,7 +1740,7 @@ defmodule Letflow.Routers.TasksTest do
 
       conn =
         build_conn(:post, "/#{task.id}/reassign", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => Ecto.UUID.generate()}
         )
         |> dispatch()
@@ -1798,7 +1798,7 @@ defmodule Letflow.Routers.TasksTest do
     test "POST /tasks/:id/assign with a malformed id is rejected with 400", %{tenant: tenant} do
       conn =
         build_conn(:post, "/not-a-uuid/assign", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => Ecto.UUID.generate()}
         )
         |> dispatch()
@@ -1810,7 +1810,7 @@ defmodule Letflow.Routers.TasksTest do
       task = insert_task!(tenant, %{})
 
       conn =
-        build_conn(:post, "/#{task.id}/assign", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        build_conn(:post, "/#{task.id}/assign", tenant, roles: ["TENANT_ADMIN"], body: %{})
         |> dispatch()
 
       assert conn.status == 422
@@ -1822,7 +1822,7 @@ defmodule Letflow.Routers.TasksTest do
 
       conn =
         build_conn(:post, "/#{task.id}/reassign", tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           body: %{"user_id" => ""}
         )
         |> dispatch()
@@ -1832,7 +1832,7 @@ defmodule Letflow.Routers.TasksTest do
 
     test "POST /tasks/:id/complete with a malformed id is rejected with 400", %{tenant: tenant} do
       conn =
-        build_conn(:post, "/not-a-uuid/complete", tenant, roles: ["PLATFORM_ADMIN"], body: %{})
+        build_conn(:post, "/not-a-uuid/complete", tenant, roles: ["TENANT_ADMIN"], body: %{})
         |> dispatch()
 
       assert conn.status == 400
@@ -2287,7 +2287,7 @@ defmodule Letflow.Routers.TasksTest do
 
   defp complete_request(tenant, task, caller, body) do
     build_conn(:post, "/#{task.id}/complete", tenant,
-      roles: ["PLATFORM_ADMIN"],
+      roles: ["TENANT_ADMIN"],
       user_id: caller.id,
       body: body
     )

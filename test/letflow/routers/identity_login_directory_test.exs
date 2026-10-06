@@ -25,7 +25,7 @@ defmodule Letflow.Routers.IdentityLoginDirectoryTest do
     |> assign(:auth_context, %{
       user_id: Ecto.UUID.generate(),
       tenant_id: tenant.tenant_id,
-      roles: ["PLATFORM_ADMIN"]
+      roles: ["TENANT_ADMIN"]
     })
     |> assign(:trace_id, "fixed-test-trace-id")
     |> Letflow.Routers.Identity.call(@opts)

@@ -318,7 +318,7 @@ defmodule Letflow.Routers.Req442TenantsModeTest do
           |> assign(:auth_context, %{
             user_id: Ecto.UUID.generate(),
             tenant_id: t.tenant_id,
-            roles: ["PLATFORM_ADMIN"]
+            roles: ["TENANT_ADMIN"]
           })
           |> assign(:trace_id, "req442-settings-trace")
           |> Letflow.Routers.TenantSettings.call(Letflow.Routers.TenantSettings.init([]))
@@ -517,7 +517,7 @@ defmodule Letflow.Routers.Req442TenantsModeTest do
              ).status ==
                200
 
-      for roles <- [["PLATFORM_ADMIN"], ["PROCESS_OPERATOR"]] do
+      for roles <- [["TENANT_ADMIN"], ["PROCESS_OPERATOR"]] do
         resp = get_audit(t.tenant_id, roles)
         assert resp.status == 200
         assert resp.resp_body =~ "tenant.platform_setting.updated"

@@ -6,9 +6,10 @@ defmodule Letflow.Api.PlatformScopeNotConferredTest do
   be produced from inside an ordinary tenant.
 
     * 10(b) `Identity.sync_role_claims_from_token/3` with a claimed `PLATFORM_ADMIN` in an
-      ordinary tenant A writes the membership (the role IS present for the user in A), yet every
-      one of the 21 platform routes answers 403 for that caller; the same role list held in the
-      platform tenant is let through (control);
+      ordinary tenant A: REQ-447 PR 2 changed this from "writes the membership, yet every platform
+      route is 403" to "the claim is ignored outright" (no membership, marker left nil), even
+      with a legacy binding present; a legacy STORED membership (a raw row) is still 403 on all
+      21 platform routes; the same role list held in the platform tenant is let through (control);
     * 10(d) a group named `PLATFORM_ADMIN` in A (with the user as a member), and edits to A's
       display name and settings, confer no platform scope: the 21 routes stay 403 for A's caller,
       and `PlatformTenant` still reports A as a non-platform tenant;
@@ -112,55 +113,102 @@ defmodule Letflow.Api.PlatformScopeNotConferredTest do
       {:ok, tenants}
     end
 
-    test "the role is present in A, and every platform route answers 403 for that caller", ctx do
-      user = insert_user!(ctx.a)
-
-      # the onboarding step that binds each platform role literal to a group of the same name
-      assert {:ok, _roles} =
-               RoleRegistry.seed_default_platform_role_groups(prefix: ctx.a.schema_name)
-
-      # REQ-447 PR 1: seeding no longer binds PLATFORM_ADMIN in an ordinary tenant. A LEGACY
-      # tenant (one onboarded before REQ-447 and not yet migrated) still has that binding, and
-      # that is the state this test proves confers no platform scope, so bind it explicitly.
-      {:ok, %Group{id: legacy_group_id}} =
-        RoleRegistry.get_or_create_group_by_name("PLATFORM_ADMIN", prefix: ctx.a.schema_name)
-
-      assert {:ok, _legacy_binding} =
-               RoleRegistry.upsert_role("PLATFORM_ADMIN", :platform_role, legacy_group_id,
-                 prefix: ctx.a.schema_name
-               )
-
-      claimed = %IdentityContext{
+    defp claim(user, roles) do
+      %IdentityContext{
         external_user_id: Ecto.UUID.generate(),
         tenant_id: nil,
         realm: "claims-realm-#{Ecto.UUID.generate()}",
-        roles: ["PLATFORM_ADMIN"],
+        roles: roles,
         email: user.email,
         preferred_username: user.username,
         display_name: user.display_name
       }
+    end
 
-      synced = Identity.sync_role_claims_from_token(user, claimed, prefix: ctx.a.schema_name)
+    # A LEGACY `PLATFORM_ADMIN` binding (a tenant onboarded before REQ-447, not yet migrated). A raw
+    # insert: REQ-447 PR 2's `upsert_role/4` refuses to create one outside the platform tenant.
+    defp legacy_binding!(fixture) do
+      {:ok, %Group{id: group_id} = group} =
+        RoleRegistry.get_or_create_group_by_name("PLATFORM_ADMIN", prefix: fixture.schema_name)
 
-      # the claim was honoured as a TENANT role: the membership row exists and the marker is set
-      assert synced.role_claims_synced_at != nil
+      %Letflow.Identity.TenantRole{}
+      |> Letflow.Identity.TenantRole.changeset(%{
+        name: "PLATFORM_ADMIN",
+        kind: :platform_role,
+        group_id: group_id
+      })
+      |> Repo.insert!(prefix: fixture.schema_name)
+
+      group
+    end
+
+    test "REQ-447 PR 2 (changed): the claim is IGNORED in A (no membership written, marker left nil); the platform tenant honours it",
+         ctx do
+      user = insert_user!(ctx.a)
+
+      # the onboarding step that binds each role literal to a group of the same name
+      assert {:ok, _roles} =
+               RoleRegistry.seed_default_platform_role_groups(prefix: ctx.a.schema_name)
+
+      legacy_binding!(ctx.a)
+
+      synced =
+        ExUnit.CaptureLog.capture_log(fn ->
+          send(
+            self(),
+            {:synced,
+             Identity.sync_role_claims_from_token(user, claim(user, ["PLATFORM_ADMIN"]),
+               prefix: ctx.a.schema_name
+             )}
+          )
+        end)
+
+      assert is_binary(synced)
+      assert_received {:synced, %User{role_claims_synced_at: nil}}
+
+      # old assertion ("PLATFORM_ADMIN" in roles after the sync) is now its opposite
       roles = Identity.list_effective_role_names(user.id, prefix: ctx.a.schema_name)
-      assert "PLATFORM_ADMIN" in roles
-
-      # ... and it opens no platform route
+      refute "PLATFORM_ADMIN" in roles
       assert_all_forbidden(ctx.a, roles)
 
-      # the same role list in the platform tenant is let through (control: the roles are real)
+      # the same claim in the platform tenant's schema is honoured (control: the role is real)
+      assert {:ok, _roles} =
+               RoleRegistry.seed_default_platform_role_groups(prefix: ctx.p.schema_name)
+
+      user_p = insert_user!(ctx.p)
+
+      Identity.sync_role_claims_from_token(user_p, claim(user_p, ["PLATFORM_ADMIN"]),
+        prefix: ctx.p.schema_name
+      )
+
+      roles_p = Identity.list_effective_role_names(user_p.id, prefix: ctx.p.schema_name)
+      assert "PLATFORM_ADMIN" in roles_p
+
       listing =
         dispatch(
           Letflow.Routers.Tenants,
-          Fixture.router_conn(:get, "/", ctx.p, roles, nil)
+          Fixture.router_conn(:get, "/", ctx.p, roles_p, nil)
         )
 
       assert listing.status == 200
 
       # and the tenant itself is not the platform tenant
       refute PlatformTenant.platform_tenant?(ctx.a.tenant_id)
+      refute PlatformTenant.scope_facts(ctx.a.tenant_id, roles).platform_scope?
+    end
+
+    test "a LEGACY stored membership of PLATFORM_ADMIN in A (written before PR 2) opens no platform route",
+         ctx do
+      user = insert_user!(ctx.a)
+      group = legacy_binding!(ctx.a)
+
+      assert {:ok, _member} =
+               Identity.add_group_member(group.id, user.id, prefix: ctx.a.schema_name)
+
+      roles = Identity.list_effective_role_names(user.id, prefix: ctx.a.schema_name)
+      assert "PLATFORM_ADMIN" in roles
+
+      assert_all_forbidden(ctx.a, roles)
       refute PlatformTenant.scope_facts(ctx.a.tenant_id, roles).platform_scope?
     end
   end
@@ -182,19 +230,29 @@ defmodule Letflow.Api.PlatformScopeNotConferredTest do
       assert {:ok, _member} =
                Identity.add_group_member(group.id, user.id, prefix: ctx.a.schema_name)
 
-      assert {:ok, _role} =
+      # REQ-447 PR 2: the write path refuses the binding in an ordinary tenant ...
+      assert {:error, :platform_admin_outside_platform_tenant} =
                RoleRegistry.upsert_role("PLATFORM_ADMIN", :platform_role, group.id,
                  prefix: ctx.a.schema_name
                )
+
+      # ... so a binding can only be a pre-existing legacy row: insert one directly.
+      %Letflow.Identity.TenantRole{}
+      |> Letflow.Identity.TenantRole.changeset(%{
+        name: "PLATFORM_ADMIN",
+        kind: :platform_role,
+        group_id: group.id
+      })
+      |> Repo.insert!(prefix: ctx.a.schema_name)
 
       roles = Identity.list_effective_role_names(user.id, prefix: ctx.a.schema_name)
       assert "PLATFORM_ADMIN" in roles
       assert_all_forbidden(ctx.a, roles)
 
-      # (2) A edits its own settings (an ordinary tenant admin may) ...
+      # (2) A edits its own settings (an ordinary tenant admin, TENANT_ADMIN, may) ...
       settings =
         Letflow.Routers.TenantSettings.call(
-          Fixture.router_conn(:patch, "/", ctx.a, ["PLATFORM_ADMIN"], %{"app_name" => "Renamed A"}),
+          Fixture.router_conn(:patch, "/", ctx.a, ["TENANT_ADMIN"], %{"app_name" => "Renamed A"}),
           Letflow.Routers.TenantSettings.init([])
         )
 
@@ -249,8 +307,8 @@ defmodule Letflow.Api.PlatformScopeNotConferredTest do
       b = tenant.("nc-b", realm_b)
       Fixture.pin!(p.tenant_id)
 
-      # the role literals are bound to groups in every tenant (onboarding does this), so a claimed
-      # PLATFORM_ADMIN really IS granted as a tenant role in A and B as well as in P
+      # the role literals are bound to groups in every tenant (onboarding does this; REQ-447 binds
+      # PLATFORM_ADMIN only in P), and the claimed PLATFORM_ADMIN of A's and B's tokens is dropped
       for fixture <- [p, a, b] do
         assert {:ok, _roles} =
                  RoleRegistry.seed_default_platform_role_groups(prefix: fixture.schema_name)

@@ -2,7 +2,7 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
   @moduledoc """
   REQ-446 T-1 / AC8 / AC9 (`lib/letflow/design/req446-named-scoped-permissions.md` section 5):
   ONE table-driven test naming each of the twelve formerly-`:Unknown` routes, as a
-  `PLATFORM_ADMIN` of the NON-platform tenant A (pin on the platform tenant P) carrying
+  `TENANT_ADMIN` of the NON-platform tenant A (pin on the platform tenant P) carrying
   identifiers that belong to tenant B. See `test/specs/REQ-446.md`.
 
   Per route (rows 1-10, the identifier rows): the request carrying B's identifier and the same
@@ -11,7 +11,7 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
   slug, B's review id or B's process keys; no query of the A calls touches B's schema; a
   before/after snapshot of A, B and P (definitions, reviews with row version, assertion-run
   count) is identical. The CONTROL, run only after the snapshot comparison, is the same request by
-  a `PLATFORM_ADMIN` of B with B's own identifier and must answer the stated status, which proves
+  a `TENANT_ADMIN` of B with B's own identifier and must answer the stated status, which proves
   the identifier and body are valid and A's 404 is the authorization denial and not a malformed
   request.
 
@@ -19,7 +19,9 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
   rows are written is byte-identical and names nothing of B, and the control shows B's own admin
   does see B's row.
 
-  `@callers` has two lines (A's `PLATFORM_ADMIN` and, from REQ-447 PR 1, a `TENANT_ADMIN` of A). `async: false` (VM-global platform pin and query telemetry).
+  `@callers` is A's `TENANT_ADMIN` (REQ-447 PR 2 removed the legacy own-tenant `PLATFORM_ADMIN` power: A's
+  `PLATFORM_ADMIN` now holds nothing and is asserted 403 on every row by the last test). `async: false`
+  (VM-global platform pin and query telemetry).
   """
 
   use Letflow.DataCase, async: false
@@ -31,8 +33,8 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
   alias Letflow.Support.PromotionScopeFixture, as: Scope
 
   # Roles of the caller that is an admin of tenant A. The pin stays on the platform tenant.
-  # REQ-447 PR 1: the second line is a TENANT_ADMIN of A (the role the REQ-446 moduledoc reserved).
-  @callers [["PLATFORM_ADMIN"], ["TENANT_ADMIN"]]
+  # REQ-447 PR 2: the legacy A PLATFORM_ADMIN line is gone (it is denied 403, see the last test).
+  @callers [["TENANT_ADMIN"]]
 
   setup do
     tenants = Fixture.three_tenants!()
@@ -259,6 +261,34 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
     ]
   end
 
+  test "REQ-447 PR 2: A's legacy PLATFORM_ADMIN holds nothing: 403 on every re-keyed route, B untouched",
+       ctx do
+    for i <- 0..9 do
+      s = seed_b!(ctx)
+      row = Enum.at(identifier_rows(ctx, s), i)
+      before = Scope.snapshot([ctx.a, ctx.b, ctx.p])
+
+      resp =
+        call(
+          row.router,
+          row.method,
+          row.path.(row.foreign),
+          ctx.a,
+          ["PLATFORM_ADMIN"],
+          row.body.(row.foreign)
+        )
+
+      assert resp.status == 403, "#{row.name}: answered #{resp.status} #{resp.resp_body}"
+      assert_names_nothing_of_b(resp.resp_body, ctx, s, row.name)
+      assert Scope.snapshot([ctx.a, ctx.b, ctx.p]) == before, "#{row.name}: a row changed"
+    end
+
+    for path <- ["/", "/platform-events"] do
+      resp = call(PromotionsRouter, :get, path, ctx.a, ["PLATFORM_ADMIN"], nil)
+      assert resp.status == 403, "GET #{path}: answered #{resp.status}"
+    end
+  end
+
   defp assert_names_nothing_of_b(body, ctx, s, label) do
     for {what, needle} <- [
           {"B's tenant id", ctx.b.tenant_id},
@@ -324,7 +354,7 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
     control = row.control
 
     resp =
-      call(row.router, row.method, control.path, ctx.b, ["PLATFORM_ADMIN"], control.body)
+      call(row.router, row.method, control.path, ctx.b, ["TENANT_ADMIN"], control.body)
 
     assert resp.status == control.status,
            "#{label}: control answered #{resp.status} (expected #{control.status}): #{resp.resp_body}"
@@ -351,7 +381,7 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
     refute second.resp_body =~ ctx.b.tenant_id
     assert Scope.snapshot([ctx.a, ctx.b, ctx.p]) == before
 
-    control = call(PromotionsRouter, :get, "/", ctx.b, ["PLATFORM_ADMIN"], nil)
+    control = call(PromotionsRouter, :get, "/", ctx.b, ["TENANT_ADMIN"], nil)
     assert control.status == 200
     assert control.resp_body =~ b_review.id
   end
@@ -378,7 +408,7 @@ defmodule Letflow.Routers.Req446CrossTenantDenialTest do
     refute second.resp_body =~ ctx.b.tenant_id
     assert Scope.snapshot([ctx.a, ctx.b, ctx.p]) == before
 
-    control = call(PromotionsRouter, :get, "/platform-events", ctx.b, ["PLATFORM_ADMIN"], nil)
+    control = call(PromotionsRouter, :get, "/platform-events", ctx.b, ["TENANT_ADMIN"], nil)
     assert control.status == 200
     assert control.resp_body =~ b_event_id
   end

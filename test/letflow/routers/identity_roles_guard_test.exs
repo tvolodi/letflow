@@ -14,8 +14,8 @@ defmodule Letflow.Routers.IdentityRolesGuardTest do
       keeps its kind and group); an ordinary routing role is still 2xx (no over-block).
     * `TENANT_ADMIN` (A and P): may bind the six built-in platform roles other than `PLATFORM_ADMIN`
       (2xx), never `PLATFORM_ADMIN` (403, also on P where it has no platform scope).
-    * Legacy tenant `PLATFORM_ADMIN` of A (C6 on): same as TENANT_ADMIN. The platform operator may bind
-      everything.
+    * Legacy tenant `PLATFORM_ADMIN` of A (REQ-447 PR 2, C6 removed): holds nothing, 403 for every name
+      and kind. The platform operator may bind everything.
 
   `async: false`: the platform tenant pin is VM-global.
   """
@@ -158,19 +158,16 @@ defmodule Letflow.Routers.IdentityRolesGuardTest do
       end
     end
 
-    test "a legacy tenant PLATFORM_ADMIN of A (C6 on) binds the six names and is refused for PLATFORM_ADMIN",
+    test "a legacy tenant PLATFORM_ADMIN of A (own-tenant power removed, REQ-447 PR 2) is refused for every built-in name",
          ctx do
-      for name <- @non_platform_admin do
-        group = group!(ctx.a)
-        conn = post_role(ctx.a, ["PLATFORM_ADMIN"], body(name, "platform_role", group))
-        assert conn.status == 200, "#{name}: #{conn.status} #{conn.resp_body}"
-      end
-
       group = group!(ctx.a)
       before = role_rows(ctx.a)
-      conn = post_role(ctx.a, ["PLATFORM_ADMIN"], body("PLATFORM_ADMIN", "platform_role", group))
-      assert conn.status == 403
-      assert role_rows(ctx.a) == before
+
+      for name <- @builtin, kind <- @kinds do
+        conn = post_role(ctx.a, ["PLATFORM_ADMIN"], body(name, kind, group))
+        assert conn.status == 403, "#{name} #{kind}: #{conn.status} #{conn.resp_body}"
+        assert role_rows(ctx.a) == before, "#{name} #{kind}: a role row changed"
+      end
     end
 
     test "CONTROL: the platform operator binds TENANT_ADMIN and PLATFORM_ADMIN in P", ctx do

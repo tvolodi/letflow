@@ -900,16 +900,30 @@ defmodule Letflow.IdentityTest do
       assert {:ok, %{token: %ApiToken{} = token, plaintext: plaintext}} =
                Identity.create_token(
                  user.id,
-                 %{roles: ["PLATFORM_ADMIN", "TASK_WORKER"], expires_at: nil},
+                 %{roles: ["TENANT_ADMIN", "TASK_WORKER"], expires_at: nil},
                  prefix: schema_name
                )
 
       assert plaintext =~ ~r/^lf_tok_[0-9a-f]{64}$/
       assert token.user_id == user.id
-      assert token.roles == ["PLATFORM_ADMIN", "TASK_WORKER"]
+      assert token.roles == ["TENANT_ADMIN", "TASK_WORKER"]
       assert token.name == "token-" <> String.slice(token.token_hash, 0, 8)
       assert token.revoked_at == nil
       assert token.last_used_at == nil
+    end
+
+    test "REQ-447 PR 2: a PLATFORM_ADMIN token is refused ({:error, :invalid_role_set}) in an ordinary tenant" do
+      %{schema_name: schema_name} = req076_tenant!("req447-token-padmin")
+      user = insert_identity_user!(schema_name)
+
+      assert {:error, :invalid_role_set} =
+               Identity.create_token(
+                 user.id,
+                 %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+                 prefix: schema_name
+               )
+
+      assert {:ok, []} = Identity.list_tokens(prefix: schema_name)
     end
 
     test "returns {:error, :user_not_found} for a user_id that does not exist in this schema" do
@@ -918,7 +932,7 @@ defmodule Letflow.IdentityTest do
       assert {:error, :user_not_found} =
                Identity.create_token(
                  Ecto.UUID.generate(),
-                 %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+                 %{roles: ["TENANT_ADMIN"], expires_at: nil},
                  prefix: schema_name
                )
     end
@@ -951,7 +965,7 @@ defmodule Letflow.IdentityTest do
       assert {:error, :expires_at_in_past} =
                Identity.create_token(
                  user.id,
-                 %{roles: ["PLATFORM_ADMIN"], expires_at: past},
+                 %{roles: ["TENANT_ADMIN"], expires_at: past},
                  prefix: schema_name
                )
     end
@@ -963,7 +977,7 @@ defmodule Letflow.IdentityTest do
       assert {:ok, %{token: %ApiToken{id: id}, plaintext: plaintext}} =
                Identity.create_token(
                  user.id,
-                 %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+                 %{roles: ["TENANT_ADMIN"], expires_at: nil},
                  prefix: schema_name
                )
 
@@ -1105,7 +1119,7 @@ defmodule Letflow.IdentityTest do
       user_a = insert_identity_user!(schema_a)
 
       {:ok, %{plaintext: plaintext}} =
-        Identity.create_token(user_a.id, %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+        Identity.create_token(user_a.id, %{roles: ["TENANT_ADMIN"], expires_at: nil},
           prefix: schema_a
         )
 

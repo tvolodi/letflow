@@ -293,7 +293,7 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
   # --- (8) legacy tenant PLATFORM_ADMIN ----------------------------------------------------------------
 
   describe "D10: legacy tenant PLATFORM_ADMIN" do
-    test "legacy PLATFORM_ADMIN of ordinary tenant A gets 403 for a PLATFORM_ADMIN token and 201 for a TENANT_ADMIN token",
+    test "legacy PLATFORM_ADMIN of ordinary tenant A holds nothing (403 for every token); a TENANT_ADMIN of A mints a TENANT_ADMIN token (201) but not a PLATFORM_ADMIN one (403)",
          ctx do
       user = insert_user!(ctx.a)
       before = token_count(ctx.a)
@@ -307,14 +307,33 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
       assert_forbidden(conn, "legacy PLATFORM_ADMIN of A")
       assert token_count(ctx.a) == before
 
-      # it still holds tenant-scope powers (positive control for the 403 above)
+      # REQ-447 PR 2: the legacy own-tenant power is REMOVED, so it no longer holds even the
+      # tenant-scope :TokensManage (was 201)
       conn =
         call(:post, "/tokens", ctx.a, @operator, %{
           "user_id" => user.id,
           "roles" => ["TENANT_ADMIN"]
         })
 
+      assert_forbidden(conn, "legacy PLATFORM_ADMIN of A, TENANT_ADMIN token")
+      assert token_count(ctx.a) == before
+
+      # positive control: the TENANT_ADMIN of A holds the tenant-scope power
+      conn =
+        call(:post, "/tokens", ctx.a, @admin, %{
+          "user_id" => user.id,
+          "roles" => ["TENANT_ADMIN"]
+        })
+
       assert conn.status == 201, conn.resp_body
+
+      conn =
+        call(:post, "/tokens", ctx.a, @admin, %{
+          "user_id" => user.id,
+          "roles" => ["PLATFORM_ADMIN"]
+        })
+
+      assert_forbidden(conn, "TENANT_ADMIN of A, PLATFORM_ADMIN token")
     end
   end
 

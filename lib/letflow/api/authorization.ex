@@ -1099,14 +1099,14 @@ defmodule Letflow.Api.Authorization do
       # permissions, not routes). :UnmatchedPlatformPath (the five platform
       # prefixes) lets only a platform-tenant PLATFORM_ADMIN reach the router's
       # 404, so every other caller gets the same 403 as a matched platform
-      # route (OQ-4). :UnmatchedRoute keeps today's outcome everywhere else.
+      # route (OQ-4). :UnmatchedRoute needs the platform flag too (REQ-447 LOW-3).
       endpoint == :UnmatchedPlatformPath ->
         if ctx.platform_tenant? == true and has_role?(ctx.roles, :PLATFORM_ADMIN),
           do: %AccessDecision{kind: :Allow, task_scope: nil},
           else: %AccessDecision{kind: :Deny403, task_scope: nil}
 
       endpoint == :UnmatchedRoute ->
-        if has_role?(ctx.roles, :PLATFORM_ADMIN),
+        if ctx.platform_tenant? == true and has_role?(ctx.roles, :PLATFORM_ADMIN),
           do: %AccessDecision{kind: :Allow, task_scope: nil},
           else: %AccessDecision{kind: :Deny403, task_scope: nil}
 

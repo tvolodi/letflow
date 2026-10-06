@@ -92,7 +92,8 @@ defmodule Letflow.Identity.RoleRegistry do
   loudly rejecting a typo'd platform-role grant instead of silently creating a dead
   role binding nothing ever resolves. REQ-447 PR 2: a `:platform_role` binding named
   `PLATFORM_ADMIN` outside the platform tenant's schema returns
-  `{:error, :platform_admin_outside_platform_tenant}` (also before any `Repo` call).`kind == :process_routing_role` gets no such
+  `{:error, :platform_admin_outside_platform_tenant}` (also before any `Repo` call).
+  `kind == :process_routing_role` gets no such
   literal-set check — that domain is open-ended by design (any
   process-definition-chosen string), only `validate_role_name/1`'s existing format
   checks apply.

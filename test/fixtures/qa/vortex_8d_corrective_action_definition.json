@@ -1,7 +1,7 @@
 {
   "name": "8D Corrective Action",
-  "version": "1.0",
-  "description": "8D corrective-action child process spawned by Supplier Quality Deviation for CRITICAL severity; Procurement completes it.",
+  "version": "1.1",
+  "description": "8D corrective-action child process spawned by Supplier Quality Deviation for CRITICAL severity; Procurement completes it. Escalation follows D-ESC: timer -> higher role -> fail closed (v1.1, ISS-1002 / Q-984; BA ruling GH #2281). Documented deviation: corrective-action-8d carries an E6 waiver (long-running remediation work) instead of a timer pair, because an escalation timer cancels the task and would end the child, and with it the parent deviation, without any corrective action; the BA-proposed P14D reminder cannot be modelled without an engine feature that notifies while keeping the task open.",
   "graph": {
     "nodes": [
       {
@@ -12,7 +12,8 @@
         "id": "corrective-action-8d",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-procurement-manager"
+          "role": "role-procurement-manager",
+          "description": "Waiver: long-running remediation work (BA ruling GH #2281, E6). The 8D corrective action is open-ended work; an escalation timer would cancel the task and close the deviation with no corrective action, so it stays open until the procurement manager completes it."
         }
       },
       {

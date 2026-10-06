@@ -6,6 +6,10 @@ description: >
   Raised when incoming goods fail inspection. Quality Manager classifies severity.
   For CRITICAL a sub-process is spawned. Exercises: sub-process spawn,
   severity-driven branching, compensation.
+  Escalation follows D-ESC: timer -> higher role -> fail closed (ISS-1002 / Q-984):
+  severity-classification -> escalate-severity-classification-to-ceo -> stalled:
+  default-to-critical. The stalled level repeats its own role as escalation_role
+  (co-required attribute only; no third level).
 graph:
   nodes:
     - id: start
@@ -19,6 +23,14 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-quality-manager
+        escalation_timer_duration: PT4H
+        escalation_role: role-ceo
+    - id: escalate-severity-classification-to-ceo
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-ceo
+        escalation_timer_duration: PT4H
+        escalation_role: role-ceo
     - id: false-positive-check
       node_type: EXCLUSIVE_GATEWAY
     - id: release-quarantine
@@ -66,9 +78,17 @@ graph:
     - id: e2
       source: severity-classification
       target: false-positive-check
-    # on_timeout: default-to-critical (also serves as fallback since e2 has no condition)
+      condition: "true"
+    # on_timeout: escalate to the CEO (the node's only unconditioned edge)
     - id: timeout-severity-classification
       source: severity-classification
+      target: escalate-severity-classification-to-ceo
+    - id: e2-escalated
+      source: escalate-severity-classification-to-ceo
+      target: false-positive-check
+      condition: "true"
+    - id: timeout-escalate-severity-classification-to-ceo
+      source: escalate-severity-classification-to-ceo
       target: default-to-critical
     - id: e3
       source: false-positive-check

@@ -37,4 +37,29 @@ affected_files:
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-984
 github_ref: GH-2271
-status: open
+status: resolved
+resolved_in_run: WF03-ISS1002-Q984-20261007
+resolved_at: "2026-10-06T21:40:00Z"
+resolution: >
+  BA ruling D-ESC (GH #2281) applied to the three Vortex definitions: Production Order Release
+  v1.4 -> v1.5, Supplier Quality Deviation v1.5 -> v1.6, 8D Corrective Action v1.0 -> v1.1
+  (simulation YAML copies mirrored). capacity-review (role-production-manager, PT4H) ->
+  escalate-to-ceo (role-ceo, now PT4H) -> stalled: auto-reject-order; budget-approval (role-controller,
+  P2D) -> new escalate-budget-approval-to-ceo (role-ceo, same budget_decision, P2D) -> stalled:
+  auto-reject-order; severity-classification (role-quality-manager, PT4H) -> new
+  escalate-severity-classification-to-ceo (role-ceo, PT4H) -> stalled: default-to-critical
+  (severity critical, 8D, the ISS-1003 explicit-critical behaviour is intact; never
+  release-quarantine). corrective-action-8d carries the E6 waiver "long-running remediation work"
+  instead of a timer pair (an escalation timer cancels the task and would end the child, closing the
+  deviation with no corrective action; a notify-and-keep-open reminder needs an engine feature).
+  Because the engine follows the FIRST unconditioned edge on a timer fire, severity-classification
+  normal-completion edge e2 now carries the constant condition "true" (previously the timeout edge
+  was inert: no timer was ever armed). No lib/ change. New tests:
+  vortex_d_esc_escalation_fixture_test.exs (definition level, JSON + YAML),
+  vortex_escalation_timer_test.exs (engine level, real fixtures, real timer fire).
+follow_ups:
+  - "QA re-seed needed after merge: scripts/seed_vortex_definition.sh (order release v1.5, 8D v1.1, supplier deviation v1.6). No persona re-seed: no new role is introduced (role-ceo, role-controller, role-quality-manager, role-production-manager, role-procurement-manager already exist)."
+  - "BA (letflow-2): confirm the proposed durations the ruling did not fix literally: escalate-to-ceo PT4H (it had none), severity-classification PT4H and its CEO level PT4H, capacity-review PT4H (E7 operational default), budget-approval P2D (E7 financial)."
+  - "BA (letflow-2): corrective-action-8d is waived, not timed. The P14D reminder cannot be modelled as notify-and-keep-open: an escalation timer cancels the task and the child ends, which closes the deviation without corrective action. Options: accept the waiver, or a new engine feature (a non-cancelling reminder timer), or a CEO escalation task that takes over the 8D at P14D."
+  - "Notification is the inbox task plus the audit history only (E5); e-mail out of scope until REQ-441."
+regression_test: test/letflow/scripts/vortex_d_esc_escalation_fixture_test.exs

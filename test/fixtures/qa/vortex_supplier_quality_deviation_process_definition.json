@@ -1,7 +1,7 @@
 {
   "name": "Supplier Quality Deviation",
-  "version": "1.5",
-  "description": "Raised when incoming goods fail inspection. Quality Manager classifies severity. For CRITICAL a sub-process is spawned. Exercises: sub-process spawn, severity-driven branching, compensation. If the Quality Manager does not classify the severity in time, the default-to-critical step sets severity to critical explicitly: an unclassified deviation is handled as critical (8D corrective action) until a human classifies it.",
+  "version": "1.6",
+  "description": "Raised when incoming goods fail inspection. Quality Manager classifies severity. For CRITICAL a sub-process is spawned. Exercises: sub-process spawn, severity-driven branching, compensation. If the Quality Manager does not classify the severity in time, the default-to-critical step sets severity to critical explicitly: an unclassified deviation is handled as critical (8D corrective action) until a human classifies it. Escalation follows D-ESC: timer -> higher role -> fail closed (v1.6, ISS-1002 / Q-984; BA ruling GH #2281). severity-classification (role-quality-manager, PT4H) carries the escalation_timer_duration + escalation_role pair; when the timer fires the engine cancels the task and follows the node's single unconditioned (timeout) edge, so the normal-completion edge e2 carries the constant condition 'true'. Chain: severity-classification -> escalate-severity-classification-to-ceo (role-ceo, PT4H, takes the same classification) -> stalled: default-to-critical (severity critical, 8D corrective action), never a release of the quarantine. The 8D child (8D Corrective Action v1.1) carries a documented waiver. Deviations (documented): the stalled escalation level repeats its own role as escalation_role (co-required CHK-21 attribute only) because there is no third level; the duration is the BA E7 operational default.",
   "graph": {
     "nodes": [
       {
@@ -21,7 +21,18 @@
         "id": "severity-classification",
         "node_type": "HUMAN_TASK",
         "attributes": {
-          "role": "role-quality-manager"
+          "role": "role-quality-manager",
+          "escalation_timer_duration": "PT4H",
+          "escalation_role": "role-ceo"
+        }
+      },
+      {
+        "id": "escalate-severity-classification-to-ceo",
+        "node_type": "HUMAN_TASK",
+        "attributes": {
+          "role": "role-ceo",
+          "escalation_timer_duration": "PT4H",
+          "escalation_role": "role-ceo"
         }
       },
       {
@@ -96,8 +107,10 @@
     "edges": [
       { "id": "e0",                             "source": "start",                        "target": "quarantine-batch" },
       { "id": "e1",                             "source": "quarantine-batch",             "target": "severity-classification" },
-      { "id": "e2",                             "source": "severity-classification",      "target": "false-positive-check" },
-      { "id": "timeout-severity-classification", "source": "severity-classification",     "target": "default-to-critical" },
+      { "id": "e2",                             "source": "severity-classification",      "target": "false-positive-check", "condition": "true" },
+      { "id": "timeout-severity-classification", "source": "severity-classification",     "target": "escalate-severity-classification-to-ceo" },
+      { "id": "e2-escalated",                   "source": "escalate-severity-classification-to-ceo", "target": "false-positive-check", "condition": "true" },
+      { "id": "timeout-escalate-severity-classification-to-ceo", "source": "escalate-severity-classification-to-ceo", "target": "default-to-critical" },
       { "id": "e3",                             "source": "false-positive-check",         "target": "release-quarantine",           "condition": "variables.false_positive == true" },
       { "id": "e4",                             "source": "false-positive-check",         "target": "severity-routing",             "condition": "variables.false_positive == false" },
       { "id": "false-positive-check-default", "source": "false-positive-check", "target": "severity-routing", "is_default": true },

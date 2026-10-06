@@ -6030,7 +6030,7 @@ volumes:
     path: docs/status/requirement_status.v26.yaml
     status: current
     opened: 2026-10-03
-    entries: 31
+    entries: 33
     note: >
       Opened by DOC-UPDATER's own ISS-0983 closing SCOPE-CHANGE append,
       successor to volume 25 (closed at 29 entries / 1211 frozen-prefix
@@ -6150,6 +6150,11 @@ volumes:
       Incremented to 31 by DOC-UPDATER REQ-455 Step 6 appends (a retroactive
       started event and a done event, 2026-10-06T03:20:14Z) -- recounted from the file: 31
       on-disk `- req:` entries; 773 lines / 43033 bytes, under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
+
+      Incremented to 33 by DOC-UPDATER REQ-456 Step 6 appends (a retroactive
+      started event and a done event, 2026-10-06T05:11:05Z) -- recounted from the file: 33
+      on-disk `- req:` entries; 801 lines / 45192 bytes, under the
       1200-line/120000-byte roll ceiling, no roll triggered.
 
 known_anomalies:

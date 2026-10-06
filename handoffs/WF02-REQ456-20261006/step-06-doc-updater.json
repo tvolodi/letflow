@@ -7,9 +7,9 @@
   "to_agent": "DOC-UPDATER",
   "file": "handoffs/WF02-REQ456-20261006/step-06-doc-updater.json",
   "created_at": "2026-10-06T05:10:48Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-10-06T05:10:57Z",
+  "completed_at": "2026-10-06T05:13:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -37,6 +37,21 @@
       "mix letflow.check passes, real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "summary": "REQ-456 flipped pending->done; started (retroactive, at=step-01 created_at 2026-10-06T04:13:51Z) and done (2026-10-06T05:11:05Z) events appended to v26 (current per index); index entries recomputed.",
+    "evidence": {
+      "git_diff_numstat": "1 1 docs/requirements.yaml; 6 1 docs/status/requirement_status.index.yaml (the 1 deletion is the replaced `entries: 31` line); 28 0 docs/status/requirement_status.v26.yaml (deletions 0)",
+      "entries_recount": "grep -c \"^  - req:\" docs/status/requirement_status.v26.yaml = 33 (was 31); index entries set to 33 plus an Incremented-to-33 note; v26 is 801 lines / 45192 bytes, under the 1200/120000 ceiling, no roll",
+      "other_docs": "grep for REQ-456/PROCESS-AUDITOR: only the six files, process-auditor.md, requirements/status files and design docs; README.md and migration decision 0004 do not list the roster as current behavior, no change",
+      "tests": "MIX_TEST_PARTITION=3 MIX_ENV=test mix test test/docs/requirement_status_invariants_test.exs test/support/status_history_test.exs -> \"Finished in 7.1 seconds ... Result: 30 passed\", exit 0"
+    },
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v26.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ456-20261006/step-06-doc-updater.json"
+    ],
+    "gaps": []
+  },
   "rework_count": 0
 }

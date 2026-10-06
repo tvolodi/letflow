@@ -107,6 +107,12 @@ actors:
     routing_roles: [role-procurement-manager]
     note: "seed_vortex_persona_actors.sh PERSONAS line; TASK_WORKER implicit per script header"
 
+  actor-bilimbaga-candidate:
+    tenant: bilimbaga
+    builtin_roles: [CANDIDATE]
+    routing_roles: []
+    note: "Seeded user candidate-user in realm bilimbaga (ai-dala-infra/scripts/qa-login.sh candidate-user; ISS-0690, ISS-0718, ISS-0725). CANDIDATE only, least privilege per docs/roles.md: lists installed modules; exam-session actions come from the exam module's own grants; no routing role, no TASK_WORKER."
+
 # Actors whose built-in role could not be established. A recorded gap, not a pass for SCHEMA-8..10.
 unresolved:
   actor-swiftroute-tobias:
@@ -114,11 +120,6 @@ unresolved:
       - "scripts/seed_swiftroute_persona_actors.sh: persona list is lena, marco, alice only; tobias absent"
       - "priv/keycloak/realms/bpm-default.json: no such user"
       - "grep -r actor-swiftroute-tobias scripts priv: no seed or realm hit; used only in swiftroute/shipment-ops-timeout-escalation.yaml"
-  actor-bilimbaga-candidate:
-    searched:
-      - "scripts/seed_*_persona_actors.sh: no bilimbaga seed script exists"
-      - "priv/keycloak/realms/bpm-default.json: no such user (the realm defines a CANDIDATE role but no actor account)"
-      - "grep -r actor-bilimbaga-candidate scripts priv: no hit; scripts/uat_preflight.sh only labels candidate-like actors heuristically"
 
 # Scenario id -> reason a platform-tenant actor may appear outside scope platform.
 platform_actor_allowed:

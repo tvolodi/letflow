@@ -34,4 +34,29 @@ affected_files:
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-995
 github_ref: GH-2282
-status: open
+status: resolved
+resolved_in_run: WF03-ISS1013-Q995-20261007
+resolved_at: "2026-10-06T21:18:00Z"
+resolution: >
+  BA ruling D-ESC (GH #2281) applied to both Meridian definitions: loan v1.11 -> v1.12, regulatory
+  v1.8 -> v1.9 (simulation YAML copies mirrored). Every HUMAN_TASK now carries the
+  escalation_timer_duration + escalation_role pair (no waivers needed). Chains: l1-approval (P2D) ->
+  l2-approval -> new escalate-l2-approval-to-ceo (role-ceo) -> stalled: decline-application, never
+  create-facility; disburse-loan (P1D) -> new escalate-disburse-loan-to-credit-director -> stalled:
+  disbursement-held-notice -> new END end-disbursement-held (no payout); credit-memo-review /
+  risk-assessment (P2D) -> the Q-997 escalation reviews, which now have their own P2D timer and rejoin
+  assessment-join unset (the eligibility-gate default declines); kyc-manual-review and the three
+  committee votes (P2D) fail closed directly; regulatory ceo-override (P3D, top of chain) -> reopen-review,
+  evidence-collection (P7D) -> risk-evaluation, findings-sign-off (P3D) -> ceo-override; the P21D and
+  P30D paths are unchanged. Because the engine follows the FIRST unconditioned edge on a timer fire,
+  every normal-completion edge of a timer-pair node now carries the constant condition 'true' (the
+  pre-existing unconditioned timeout-* edges were previously inert: no timer was ever armed on those
+  nodes). No lib/ change. New tests: meridian_d_esc_escalation_fixture_test.exs (definition level,
+  JSON + YAML), meridian_loan_escalation_timer_test.exs (engine level, real fixture, real timer fire).
+follow_ups:
+  - "QA re-seed needed after merge: scripts/seed_meridian_definition.sh (loan v1.12, regulatory v1.9). No persona re-seed: no new role is introduced."
+  - "BA (letflow-2): confirm the proposed durations the ruling did not fix: regulatory evidence-collection P7D and findings-sign-off P3D; loan kyc-manual-review P2D and the three committee votes P2D (E7 gives financial P2D only)."
+  - "BA (letflow-2): kyc-manual-review and the committee votes have no higher-role escalation task (they fail closed directly, the E4 shape); decide whether a CRO/CEO escalation task is wanted. Their escalation_role is only the CHK-21 co-required attribute."
+  - "BA (letflow-2): separation of duties across the new chain: role-credit-director now also holds credit-memo-escalation-review, l2-approval, committee-vote-director and escalate-disburse-loan-to-credit-director; role-ceo holds the committee vote and the CEO escalations. A person holding both can act twice on one instance (engine-level one-person-one-task rule is a separate follow-up, see ISS-1028)."
+  - "Notification is the inbox task plus the audit history only (E5); e-mail out of scope until REQ-441."
+regression_test: test/letflow/scripts/meridian_d_esc_escalation_fixture_test.exs

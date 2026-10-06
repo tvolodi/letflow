@@ -23,6 +23,8 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-compliance-officer
+        escalation_timer_duration: P7D
+        escalation_role: role-risk-manager
         form_schema: {"type": "object", "properties": {"evidence_summary": {"type": "string", "title": "Evidence summary", "description": "Summary of the evidence collected for this review (what was gathered and where it is filed). Recorded for audit; no gateway reads it. Optional. No personal data beyond what the process needs.", "minLength": 1}}}
     - id: evidence-collection-timeout
       node_type: SERVICE_TASK
@@ -61,6 +63,8 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-cro
+        escalation_timer_duration: P3D
+        escalation_role: role-ceo
         form_schema: {"type": "object", "properties": {"cro_decision": {"type": "string", "title": "CRO decision", "description": "CRO decision on the findings: 'sign_off' archives the review, 'reject_and_reopen' reopens it.", "enum": ["sign_off", "reject_and_reopen"]}}, "required": ["cro_decision"]}
     - id: cro-sign-off-timeout
       node_type: SERVICE_TASK
@@ -71,6 +75,8 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-ceo
+        escalation_timer_duration: P3D
+        escalation_role: role-ceo
         form_schema: {"type": "object", "properties": {"ceo_decision": {"type": "string", "title": "CEO decision", "description": "CEO decision after the CRO did not respond: 'sign_off' archives the review; 'reject_and_reopen' (or no answer) reopens it.", "enum": ["sign_off", "reject_and_reopen"]}}, "required": ["ceo_decision"]}
     - id: archive-review
       node_type: SERVICE_TASK
@@ -93,6 +99,7 @@ graph:
     - id: e1
       source: evidence-collection
       target: risk-evaluation
+      condition: "true"
     # on_timeout for evidence-collection
     - id: timeout-evidence-collection
       source: evidence-collection

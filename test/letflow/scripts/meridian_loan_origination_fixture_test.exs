@@ -30,8 +30,8 @@ defmodule Letflow.Scripts.MeridianLoanOriginationFixtureTest do
     graph
   end
 
-  test "fixture version is 1.9 (ISS-1015: timeouts route to escalation reviews, human tasks carry forms; 1.8 was ISS-1024: committee votes route to three distinct roles; 1.7 was ISS-1020, the KYC fail-closed gate; 1.6 was ISS-1001, 1.5 ISS-0998)" do
-    assert doc()["version"] == "1.11"
+  test "fixture version is 1.12 (ISS-1013: D-ESC timers; 1.9 was ISS-1015: timeouts route to escalation reviews, human tasks carry forms; 1.8 was ISS-1024: committee votes route to three distinct roles; 1.7 was ISS-1020, the KYC fail-closed gate; 1.6 was ISS-1001, 1.5 ISS-0998)" do
+    assert doc()["version"] == "1.12"
   end
 
   # --- ISS-1001 / Q-983: l2-approval fails toward scrutiny, never to create-facility ---
@@ -62,10 +62,10 @@ defmodule Letflow.Scripts.MeridianLoanOriginationFixtureTest do
     walk(document, rest ++ next, Enum.into(next, seen), variables)
   end
 
-  test "ISS-1001: fallback-l2-approval targets decline-application (never create-facility)" do
+  test "ISS-1001 / ISS-1013: fallback-l2-approval targets the CEO escalation task, whose own fallback is decline-application (never create-facility)" do
     l2_edges = edges_from(doc(), "l2-approval")
 
-    assert %{"target" => "decline-application"} =
+    assert %{"target" => "escalate-l2-approval-to-ceo"} =
              fallback = Enum.find(l2_edges, &(&1["id"] == "fallback-l2-approval"))
 
     refute Map.has_key?(fallback, "condition")
@@ -73,6 +73,16 @@ defmodule Letflow.Scripts.MeridianLoanOriginationFixtureTest do
     # exactly one edge from l2-approval reaches create-facility: the explicit 'approve'
     assert [%{"id" => "e21", "condition" => "variables.l2_decision == 'approve'"}] =
              Enum.filter(l2_edges, &(&1["target"] == "create-facility"))
+
+    esc_edges = edges_from(doc(), "escalate-l2-approval-to-ceo")
+
+    assert %{"target" => "decline-application"} =
+             stalled = Enum.find(esc_edges, &(&1["id"] == "timeout-escalate-l2-approval-to-ceo"))
+
+    refute Map.has_key?(stalled, "condition")
+
+    assert [%{"id" => "e21-escalated", "condition" => "variables.l2_decision == 'approve'"}] =
+             Enum.filter(esc_edges, &(&1["target"] == "create-facility"))
   end
 
   test "ISS-1001: fallback-l1-approval -> l2-approval is unchanged (escalation = more scrutiny)" do

@@ -1,7 +1,7 @@
 {
   "name": "Loan Origination",
-  "version": "1.11",
-  "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking. KYC/AML fails closed (v1.7): the eligibility gate lets an application on to approval only when the screening answered kyc_status 'clear' or the compliance officer's manual review recorded kyc_outcome 'cleared' (the kyc-manual-review task is completed with output variable kyc_outcome = cleared | rejected); a rejected, missing or timed-out review (kyc-timeout records kyc_outcome 'unresolved') declines the application. Committee votes are person-distinct by role (v1.8): committee-vote-cro routes to role-cro, committee-vote-director to role-credit-director and committee-vote-ceo to role-ceo, three different roles held by three different people, so one committee member cannot cast two or three of the votes. Timeouts before the eligibility gate no longer skip the value the gate reads (v1.9, ISS-1015 / Q-997): when credit-memo-review or risk-assessment times out, the flag service task now leads to a human escalation review (credit-memo-escalation-review for role-credit-director records credit_decision; risk-assessment-escalation-review for role-cro records risk_rating) before assessment-join, so a timeout means more scrutiny, not a silent decline; the eligibility-gate default to decline-application stays as the fail-closed fallback if a review is completed without the value. Every human task carries a form_schema naming the decision field(s) to record; form_schema is a UI rendering payload only, the fail-closed gateway defaults are the enforcement.",
+  "version": "1.12",
+  "description": "Full SME loan origination flow. Three parallel assessment tracks (credit, risk, KYC/AML). Standard path uses L1+L2 sign-off; large loans go to Credit Committee (multi-voter, mapped to HUMAN_TASK). Exercises: parallel fork-join, conditional authority routing, service-task core banking. KYC/AML fails closed (v1.7): the eligibility gate lets an application on to approval only when the screening answered kyc_status 'clear' or the compliance officer's manual review recorded kyc_outcome 'cleared' (the kyc-manual-review task is completed with output variable kyc_outcome = cleared | rejected); a rejected, missing or timed-out review (kyc-timeout records kyc_outcome 'unresolved') declines the application. Committee votes are person-distinct by role (v1.8): committee-vote-cro routes to role-cro, committee-vote-director to role-credit-director and committee-vote-ceo to role-ceo, three different roles held by three different people, so one committee member cannot cast two or three of the votes. Timeouts before the eligibility gate no longer skip the value the gate reads (v1.9, ISS-1015 / Q-997): when credit-memo-review or risk-assessment times out, the flag service task now leads to a human escalation review (credit-memo-escalation-review for role-credit-director records credit_decision; risk-assessment-escalation-review for role-cro records risk_rating) before assessment-join, so a timeout means more scrutiny, not a silent decline; the eligibility-gate default to decline-application stays as the fail-closed fallback if a review is completed without the value. Every human task carries a form_schema naming the decision field(s) to record; form_schema is a UI rendering payload only, the fail-closed gateway defaults are the enforcement. Escalation follows D-ESC: timer -> higher role -> fail closed (v1.12, ISS-1013 / Q-995; BA ruling GH #2281). Every human task carries the escalation_timer_duration + escalation_role pair; when the timer fires the engine cancels the task and follows the node's single unconditioned (timeout) edge, so every normal-completion edge of a timer-pair node carries the constant condition 'true'. Chains: l1-approval (P2D) -> l2-approval (role-credit-director, via fallback-l1-approval) -> l2-approval (P2D) -> escalate-l2-approval-to-ceo (role-ceo, same l2_decision) -> stalled (P2D): decline-application, never create-facility. disburse-loan (role-loan-ops, P1D) -> escalate-disburse-loan-to-credit-director (role-credit-director, P1D) -> stalled: disbursement-held-notice -> end-disbursement-held (no payout, hold notice filed). credit-memo-review and risk-assessment (P2D) time out into the ISS-1015 escalation reviews (credit-memo-escalation-review, risk-assessment-escalation-review, P2D each); a stalled review leaves credit_decision / risk_rating unset and the eligibility-gate default declines. The three committee votes (P2D) lapse into committee-tally: a lapsed vote counts for neither side, the other two votes still decide by majority, and anything short of a majority declines by the tally default; kyc-manual-review (P2D) lapses into kyc-timeout and the eligibility gate declines. Deviations (documented, no waivers): kyc-manual-review and the three committee votes have no higher-role escalation task, they fail closed directly (E4 shape), and their escalation_role is the co-required CHK-21 attribute only (role-cro / role-ceo); on every stalled-escalation level escalation_role repeats the task's own role because there is no third level. All durations are the BA E7 financial defaults (P2D; disburse-loan P1D).",
   "graph": {
     "nodes": [
       {
@@ -17,6 +17,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-credit-manager",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-credit-director",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -50,6 +52,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-credit-director",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-credit-director",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -74,6 +78,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-risk-manager",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-cro",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -109,6 +115,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-cro",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-cro",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -144,6 +152,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-compliance-officer",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-cro",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -193,6 +203,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-credit-approver-l1",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-credit-director",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -218,6 +230,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-credit-director",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-ceo",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -246,6 +260,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-cro",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-ceo",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -270,6 +286,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-credit-director",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-ceo",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -294,6 +312,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-ceo",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-ceo",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -362,6 +382,8 @@
         "node_type": "HUMAN_TASK",
         "attributes": {
           "role": "role-loan-ops",
+          "escalation_timer_duration": "P1D",
+          "escalation_role": "role-credit-director",
           "form_schema": {
             "type": "object",
             "properties": {
@@ -373,6 +395,56 @@
               }
             }
           }
+        }
+      },
+      {
+        "id": "escalate-l2-approval-to-ceo",
+        "node_type": "HUMAN_TASK",
+        "attributes": {
+          "role": "role-ceo",
+          "escalation_timer_duration": "P2D",
+          "escalation_role": "role-ceo",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "l2_decision": {
+                "type": "string",
+                "title": "L2 decision (CEO escalation)",
+                "description": "Escalation of an L2 credit decision that the credit director did not make in time: 'approve' creates the facility, 'reject' (or no answer within the escalation deadline) declines. Same decision variable as l2-approval.",
+                "enum": ["approve", "reject"]
+              }
+            },
+            "required": ["l2_decision"]
+          }
+        }
+      },
+      {
+        "id": "escalate-disburse-loan-to-credit-director",
+        "node_type": "HUMAN_TASK",
+        "attributes": {
+          "role": "role-credit-director",
+          "escalation_timer_duration": "P1D",
+          "escalation_role": "role-credit-director",
+          "form_schema": {
+            "type": "object",
+            "properties": {
+              "disbursement_reference": {
+                "type": "string",
+                "title": "Disbursement reference",
+                "description": "Escalation of a disbursement that loan operations did not make in time: core-banking reference of the disbursement that was made. Recorded for audit; no gateway reads it. Optional. No personal data beyond what the process needs. If nobody completes this task within the escalation deadline the loan is held undisbursed and a hold notice is filed.",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "disbursement-held-notice",
+        "node_type": "SERVICE_TASK",
+        "attributes": {
+          "endpoint": "https://httpbin.org/anything/internal/applications/{{variables.application_id}}/disbursement-hold",
+          "method": "POST",
+          "timeout_ms": 300000
         }
       },
       {
@@ -391,6 +463,10 @@
       {
         "id": "end-declined",
         "node_type": "END"
+      },
+      {
+        "id": "end-disbursement-held",
+        "node_type": "END"
       }
     ],
     "edges": [
@@ -398,20 +474,22 @@
       { "id": "e1",                          "source": "parallel-assessment-fork", "target": "credit-memo-review" },
       { "id": "e2",                          "source": "parallel-assessment-fork", "target": "risk-assessment" },
       { "id": "e3",                          "source": "parallel-assessment-fork", "target": "kyc-aml-check" },
-      { "id": "e4",                          "source": "credit-memo-review",     "target": "assessment-join" },
+      { "id": "e4",                          "source": "credit-memo-review",     "target": "assessment-join", "condition": "true" },
       { "id": "timeout-credit-memo-review",  "source": "credit-memo-review",     "target": "credit-memo-timeout" },
       { "id": "e5",                          "source": "credit-memo-timeout",    "target": "credit-memo-escalation-review" },
-      { "id": "e5-escalation-reviewed",     "source": "credit-memo-escalation-review", "target": "assessment-join" },
-      { "id": "e6",                          "source": "risk-assessment",        "target": "assessment-join" },
+      { "id": "e5-escalation-reviewed",     "source": "credit-memo-escalation-review", "target": "assessment-join", "condition": "true" },
+      { "id": "timeout-credit-memo-escalation-review", "source": "credit-memo-escalation-review", "target": "assessment-join" },
+      { "id": "e6",                          "source": "risk-assessment",        "target": "assessment-join", "condition": "true" },
       { "id": "timeout-risk-assessment",     "source": "risk-assessment",        "target": "risk-assessment-timeout" },
       { "id": "e7",                          "source": "risk-assessment-timeout", "target": "risk-assessment-escalation-review" },
-      { "id": "e7-escalation-reviewed",     "source": "risk-assessment-escalation-review", "target": "assessment-join" },
+      { "id": "e7-escalation-reviewed",     "source": "risk-assessment-escalation-review", "target": "assessment-join", "condition": "true" },
+      { "id": "timeout-risk-assessment-escalation-review", "source": "risk-assessment-escalation-review", "target": "assessment-join" },
       { "id": "e8",                          "source": "kyc-aml-check",          "target": "kyc-routing" },
       { "id": "e9",                          "source": "kyc-routing",            "target": "assessment-join",      "condition": "variables.kyc_status == 'clear'" },
       { "id": "e10",                         "source": "kyc-routing",            "target": "kyc-manual-review",    "condition": "variables.kyc_status == 'hit'" },
       { "id": "e11",                         "source": "kyc-routing",            "target": "kyc-manual-review",    "condition": "variables.kyc_status == 'inconclusive'" },
       { "id": "e9-default",                  "source": "kyc-routing",            "target": "kyc-manual-review",      "is_default": true },
-      { "id": "e12",                         "source": "kyc-manual-review",      "target": "assessment-join" },
+      { "id": "e12",                         "source": "kyc-manual-review",      "target": "assessment-join", "condition": "true" },
       { "id": "timeout-kyc-manual-review",   "source": "kyc-manual-review",      "target": "kyc-timeout" },
       { "id": "e13",                         "source": "kyc-timeout",            "target": "assessment-join" },
       { "id": "e14",                         "source": "assessment-join",        "target": "eligibility-gate" },
@@ -427,13 +505,16 @@
       { "id": "fallback-l1-approval",        "source": "l1-approval",            "target": "l2-approval" },
       { "id": "e21",                         "source": "l2-approval",            "target": "create-facility",      "condition": "variables.l2_decision == 'approve'" },
       { "id": "e22",                         "source": "l2-approval",            "target": "decline-application",  "condition": "variables.l2_decision == 'reject'" },
-      { "id": "fallback-l2-approval",        "source": "l2-approval",            "target": "decline-application" },
+      { "id": "fallback-l2-approval",        "source": "l2-approval",            "target": "escalate-l2-approval-to-ceo" },
+      { "id": "e21-escalated", "source": "escalate-l2-approval-to-ceo", "target": "create-facility", "condition": "variables.l2_decision == 'approve'" },
+      { "id": "e22-escalated", "source": "escalate-l2-approval-to-ceo", "target": "decline-application", "condition": "variables.l2_decision == 'reject'" },
+      { "id": "timeout-escalate-l2-approval-to-ceo", "source": "escalate-l2-approval-to-ceo", "target": "decline-application" },
       { "id": "e29",                         "source": "committee-vote-fork",    "target": "committee-vote-cro" },
       { "id": "e30",                         "source": "committee-vote-fork",    "target": "committee-vote-director" },
       { "id": "e31",                         "source": "committee-vote-fork",    "target": "committee-vote-ceo" },
-      { "id": "e32",                         "source": "committee-vote-cro",     "target": "committee-vote-join" },
-      { "id": "e33",                         "source": "committee-vote-director", "target": "committee-vote-join" },
-      { "id": "e34",                         "source": "committee-vote-ceo",     "target": "committee-vote-join" },
+      { "id": "e32",                         "source": "committee-vote-cro",     "target": "committee-vote-join", "condition": "true" },
+      { "id": "e33",                         "source": "committee-vote-director", "target": "committee-vote-join", "condition": "true" },
+      { "id": "e34",                         "source": "committee-vote-ceo",     "target": "committee-vote-join", "condition": "true" },
       { "id": "timeout-committee-vote-cro",      "source": "committee-vote-cro",      "target": "committee-vote-cro-timeout" },
       { "id": "timeout-committee-vote-director", "source": "committee-vote-director", "target": "committee-vote-director-timeout" },
       { "id": "timeout-committee-vote-ceo",      "source": "committee-vote-ceo",      "target": "committee-vote-ceo-timeout" },
@@ -445,7 +526,11 @@
       { "id": "e40",                         "source": "committee-tally",        "target": "decline-application",  "condition": "(variables.committee_vote_cro == 'reject' && variables.committee_vote_director == 'reject') || (variables.committee_vote_cro == 'reject' && variables.committee_vote_ceo == 'reject') || (variables.committee_vote_director == 'reject' && variables.committee_vote_ceo == 'reject')" },
       { "id": "e40-default",                 "source": "committee-tally",        "target": "decline-application",  "is_default": true },
       { "id": "e26",                         "source": "create-facility",        "target": "disburse-loan" },
-      { "id": "e27",                         "source": "disburse-loan",          "target": "end-disbursed" },
+      { "id": "e27",                         "source": "disburse-loan",          "target": "end-disbursed", "condition": "true" },
+      { "id": "timeout-disburse-loan", "source": "disburse-loan", "target": "escalate-disburse-loan-to-credit-director" },
+      { "id": "e27-escalated", "source": "escalate-disburse-loan-to-credit-director", "target": "end-disbursed", "condition": "true" },
+      { "id": "timeout-escalate-disburse-loan-to-credit-director", "source": "escalate-disburse-loan-to-credit-director", "target": "disbursement-held-notice" },
+      { "id": "e41", "source": "disbursement-held-notice", "target": "end-disbursement-held" },
       { "id": "e28",                         "source": "decline-application",    "target": "end-declined" }
     ]
   },

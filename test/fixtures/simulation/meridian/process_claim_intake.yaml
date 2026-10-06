@@ -18,6 +18,8 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-credit-manager
+        escalation_timer_duration: P2D
+        escalation_role: role-credit-director
         form_schema: {"type": "object", "properties": {"credit_decision": {"type": "string", "title": "Credit decision", "description": "Credit memo outcome. 'pass' lets the application proceed to the eligibility gate; 'fail' declines it. eligibility-gate reads this.", "enum": ["pass", "fail"]}}, "required": ["credit_decision"]}
     - id: credit-memo-timeout
       node_type: SERVICE_TASK
@@ -28,11 +30,15 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-credit-director
+        escalation_timer_duration: P2D
+        escalation_role: role-credit-director
         form_schema: {"type": "object", "properties": {"credit_decision": {"type": "string", "title": "Credit decision", "description": "Escalation review of a credit memo that was not completed in time. Record the credit decision yourself: 'pass' proceeds to the eligibility gate, 'fail' declines. Leaving it unset declines the application (fail-closed).", "enum": ["pass", "fail"]}}, "required": ["credit_decision"]}
     - id: risk-assessment
       node_type: HUMAN_TASK
       attributes:
         role: role-risk-manager
+        escalation_timer_duration: P2D
+        escalation_role: role-cro
         form_schema: {"type": "object", "properties": {"risk_rating": {"type": "string", "title": "Risk rating", "description": "Risk assessment outcome. 'unacceptable' declines the application; any other rating lets it proceed to the eligibility gate. eligibility-gate reads this.", "enum": ["low", "medium", "high", "unacceptable"]}}, "required": ["risk_rating"]}
     - id: risk-assessment-timeout
       node_type: SERVICE_TASK
@@ -43,6 +49,8 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-cro
+        escalation_timer_duration: P2D
+        escalation_role: role-cro
         form_schema: {"type": "object", "properties": {"risk_rating": {"type": "string", "title": "Risk rating", "description": "Escalation review of a risk assessment that was not completed in time. Record the risk rating yourself: 'unacceptable' declines, any other rating proceeds to the eligibility gate. Leaving it unset declines the application (fail-closed).", "enum": ["low", "medium", "high", "unacceptable"]}}, "required": ["risk_rating"]}
     - id: kyc-aml-check
       node_type: SERVICE_TASK
@@ -53,6 +61,8 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-compliance-officer
+        escalation_timer_duration: P2D
+        escalation_role: role-cro
         form_schema: {"type": "object", "properties": {"kyc_outcome": {"type": "string", "title": "KYC/AML outcome", "description": "Result of the manual KYC/AML review. Only 'cleared' lets the application proceed; 'rejected' (or no answer) declines it.", "enum": ["cleared", "rejected"]}}, "required": ["kyc_outcome"]}
     - id: kyc-timeout
       node_type: SERVICE_TASK
@@ -71,11 +81,15 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-credit-approver-l1
+        escalation_timer_duration: P2D
+        escalation_role: role-credit-director
         form_schema: {"type": "object", "properties": {"l1_decision": {"type": "string", "title": "L1 decision", "description": "Level 1 credit decision: 'approve' or 'escalate' passes to L2 approval, 'reject' declines.", "enum": ["approve", "escalate", "reject"]}}, "required": ["l1_decision"]}
     - id: l2-approval
       node_type: HUMAN_TASK
       attributes:
         role: role-credit-director
+        escalation_timer_duration: P2D
+        escalation_role: role-ceo
         form_schema: {"type": "object", "properties": {"l2_decision": {"type": "string", "title": "L2 decision", "description": "Level 2 credit decision: 'approve' creates the facility, 'reject' (or no answer) declines.", "enum": ["approve", "reject"]}}, "required": ["l2_decision"]}
     - id: committee-vote-fork
       node_type: PARALLEL_GATEWAY
@@ -83,16 +97,22 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-cro
+        escalation_timer_duration: P2D
+        escalation_role: role-ceo
         form_schema: {"type": "object", "properties": {"committee_vote_cro": {"type": "string", "title": "CRO vote", "description": "The CRO's committee vote. Two matching votes of three decide; a missing vote counts for neither side.", "enum": ["approve", "reject"]}}, "required": ["committee_vote_cro"]}
     - id: committee-vote-director
       node_type: HUMAN_TASK
       attributes:
         role: role-credit-director
+        escalation_timer_duration: P2D
+        escalation_role: role-ceo
         form_schema: {"type": "object", "properties": {"committee_vote_director": {"type": "string", "title": "Credit director vote", "description": "The credit director's committee vote. Two matching votes of three decide; a missing vote counts for neither side.", "enum": ["approve", "reject"]}}, "required": ["committee_vote_director"]}
     - id: committee-vote-ceo
       node_type: HUMAN_TASK
       attributes:
         role: role-ceo
+        escalation_timer_duration: P2D
+        escalation_role: role-ceo
         form_schema: {"type": "object", "properties": {"committee_vote_ceo": {"type": "string", "title": "CEO vote", "description": "The CEO's committee vote. Two matching votes of three decide; a missing vote counts for neither side.", "enum": ["approve", "reject"]}}, "required": ["committee_vote_ceo"]}
     - id: committee-vote-cro-timeout
       node_type: SERVICE_TASK
@@ -122,7 +142,28 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-loan-ops
+        escalation_timer_duration: P1D
+        escalation_role: role-credit-director
         form_schema: {"type": "object", "properties": {"disbursement_reference": {"type": "string", "title": "Disbursement reference", "description": "Core-banking reference of the disbursement that was made. Recorded for audit; no gateway reads it. Optional. No personal data beyond what the process needs.", "minLength": 1}}}
+    - id: escalate-l2-approval-to-ceo
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-ceo
+        escalation_timer_duration: P2D
+        escalation_role: role-ceo
+        form_schema: {"type": "object", "properties": {"l2_decision": {"type": "string", "title": "L2 decision (CEO escalation)", "description": "Escalation of an L2 credit decision that the credit director did not make in time: 'approve' creates the facility, 'reject' (or no answer within the escalation deadline) declines. Same decision variable as l2-approval.", "enum": ["approve", "reject"]}}, "required": ["l2_decision"]}
+    - id: escalate-disburse-loan-to-credit-director
+      node_type: HUMAN_TASK
+      attributes:
+        role: role-credit-director
+        escalation_timer_duration: P1D
+        escalation_role: role-credit-director
+        form_schema: {"type": "object", "properties": {"disbursement_reference": {"type": "string", "title": "Disbursement reference", "description": "Escalation of a disbursement that loan operations did not make in time: core-banking reference of the disbursement that was made. Recorded for audit; no gateway reads it. Optional. No personal data beyond what the process needs. If nobody completes this task within the escalation deadline the loan is held undisbursed and a hold notice is filed.", "minLength": 1}}}
+    - id: disbursement-held-notice
+      node_type: SERVICE_TASK
+      attributes:
+        endpoint: POST /internal/applications/{application_id}/disbursement-hold
+        timeout_ms: 300000
     - id: decline-application
       node_type: SERVICE_TASK
       attributes:
@@ -131,6 +172,8 @@ graph:
     - id: end-disbursed
       node_type: END
     - id: end-declined
+      node_type: END
+    - id: end-disbursement-held
       node_type: END
   edges:
     - id: e0
@@ -148,6 +191,7 @@ graph:
     - id: e4
       source: credit-memo-review
       target: assessment-join
+      condition: "true"
     # on_timeout for credit-memo-review
     - id: timeout-credit-memo-review
       source: credit-memo-review
@@ -159,9 +203,14 @@ graph:
     - id: e5-escalation-reviewed
       source: credit-memo-escalation-review
       target: assessment-join
+      condition: "true"
+    - id: timeout-credit-memo-escalation-review
+      source: credit-memo-escalation-review
+      target: assessment-join
     - id: e6
       source: risk-assessment
       target: assessment-join
+      condition: "true"
     # on_timeout for risk-assessment
     - id: timeout-risk-assessment
       source: risk-assessment
@@ -171,6 +220,10 @@ graph:
       source: risk-assessment-timeout
       target: risk-assessment-escalation-review
     - id: e7-escalation-reviewed
+      source: risk-assessment-escalation-review
+      target: assessment-join
+      condition: "true"
+    - id: timeout-risk-assessment-escalation-review
       source: risk-assessment-escalation-review
       target: assessment-join
     - id: e8
@@ -195,6 +248,7 @@ graph:
     - id: e12
       source: kyc-manual-review
       target: assessment-join
+      condition: "true"
     # on_timeout for kyc-manual-review
     - id: timeout-kyc-manual-review
       source: kyc-manual-review
@@ -259,6 +313,17 @@ graph:
     # fallback for l2-approval (ISS-1001: more scrutiny, never approval by default)
     - id: fallback-l2-approval
       source: l2-approval
+      target: escalate-l2-approval-to-ceo
+    - id: e21-escalated
+      source: escalate-l2-approval-to-ceo
+      target: create-facility
+      condition: "variables.l2_decision == 'approve'"
+    - id: e22-escalated
+      source: escalate-l2-approval-to-ceo
+      target: decline-application
+      condition: "variables.l2_decision == 'reject'"
+    - id: timeout-escalate-l2-approval-to-ceo
+      source: escalate-l2-approval-to-ceo
       target: decline-application
     - id: e29
       source: committee-vote-fork
@@ -272,12 +337,15 @@ graph:
     - id: e32
       source: committee-vote-cro
       target: committee-vote-join
+      condition: "true"
     - id: e33
       source: committee-vote-director
       target: committee-vote-join
+      condition: "true"
     - id: e34
       source: committee-vote-ceo
       target: committee-vote-join
+      condition: "true"
     # on_timeout for committee-vote-cro
     - id: timeout-committee-vote-cro
       source: committee-vote-cro
@@ -320,6 +388,20 @@ graph:
     - id: e27
       source: disburse-loan
       target: end-disbursed
+      condition: "true"
+    - id: timeout-disburse-loan
+      source: disburse-loan
+      target: escalate-disburse-loan-to-credit-director
+    - id: e27-escalated
+      source: escalate-disburse-loan-to-credit-director
+      target: end-disbursed
+      condition: "true"
+    - id: timeout-escalate-disburse-loan-to-credit-director
+      source: escalate-disburse-loan-to-credit-director
+      target: disbursement-held-notice
+    - id: e41
+      source: disbursement-held-notice
+      target: end-disbursement-held
     - id: e28
       source: decline-application
       target: end-declined

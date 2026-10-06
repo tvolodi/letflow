@@ -127,11 +127,11 @@ defmodule Letflow.Scripts.MeridianTimeoutReviewAndFormsFixtureTest do
 
   describe "versions" do
     test "loan is 1.9 and regulatory is 1.7 (the bumps force the QA re-seed); seed header names both" do
-      assert loan()["version"] == "1.11"
-      assert reg()["version"] == "1.8"
+      assert loan()["version"] == "1.12"
+      assert reg()["version"] == "1.9"
       script = File.read!(Path.expand("../../../scripts/seed_meridian_definition.sh", __DIR__))
-      assert script =~ ~s("Loan Origination" v1.11 )
-      assert script =~ ~s("Regulatory Compliance Review" v1.8 )
+      assert script =~ ~s("Loan Origination" v1.12 )
+      assert script =~ ~s("Regulatory Compliance Review" v1.9 )
     end
   end
 
@@ -144,10 +144,14 @@ defmodule Letflow.Scripts.MeridianTimeoutReviewAndFormsFixtureTest do
       end
     end
 
-    test "the review is an unconditioned single hop to assessment-join; no timeout edge hides a second exit" do
+    test "the review is a single hop to assessment-join; no edge hides a second exit (ISS-1013: 'true' completion plus one timeout edge)" do
       for {_timeout, review, _role, _var} <- @reviews do
-        assert [%{"target" => "assessment-join"} = e] = edges_from(loan(), review)
-        refute Map.has_key?(e, "condition")
+        edges = edges_from(loan(), review)
+        assert Enum.all?(edges, &(&1["target"] == "assessment-join"))
+        assert [%{"condition" => "true"}] = Enum.filter(edges, &Map.has_key?(&1, "condition"))
+
+        assert [e] = Enum.reject(edges, &Map.has_key?(&1, "condition"))
+        assert e["id"] == "timeout-" <> review
         refute e["is_default"] == true
       end
     end
@@ -275,7 +279,9 @@ defmodule Letflow.Scripts.MeridianTimeoutReviewAndFormsFixtureTest do
       "committee-vote-cro" => %{"committee_vote_cro" => ["approve", "reject"]},
       "committee-vote-director" => %{"committee_vote_director" => ["approve", "reject"]},
       "committee-vote-ceo" => %{"committee_vote_ceo" => ["approve", "reject"]},
-      "disburse-loan" => %{"disbursement_reference" => :optional_free}
+      "disburse-loan" => %{"disbursement_reference" => :optional_free},
+      "escalate-l2-approval-to-ceo" => %{"l2_decision" => ["approve", "reject"]},
+      "escalate-disburse-loan-to-credit-director" => %{"disbursement_reference" => :optional_free}
     }
 
     @reg_forms %{

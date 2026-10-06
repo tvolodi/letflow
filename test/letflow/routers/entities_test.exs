@@ -732,11 +732,15 @@ defmodule Letflow.Routers.EntitiesTest do
       assert Map.has_key?(body_of(conn), "items")
     end
 
-    test "an unrecognised path UNDER /entities reaches the ROUTER's own catch-all, still a 404" do
+    test "an unrecognised path UNDER /entities is refused with 403 for a tenant admin (REQ-447 PR 2)" do
+      # Mount is live: the request is answered by the ApiPipeline's Authorize plug on the
+      # :UnmatchedRoute marker. Only a platform-tenant operator reaches the router's own 404
+      # catch-all (the legacy tenant PLATFORM_ADMIN that used to get the 404 pass-through no
+      # longer exists outside the platform tenant).
       ctx = tenant_ctx("req310-mount-catchall")
 
       conn = request(:get, "/api/v1/entities/no-such-thing", ctx)
-      assert conn.status == 404
+      assert conn.status == 403
     end
   end
 

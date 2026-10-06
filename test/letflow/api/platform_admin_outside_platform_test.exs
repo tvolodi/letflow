@@ -384,7 +384,7 @@ defmodule Letflow.Api.PlatformAdminOutsidePlatformTest do
 
   # --- AC4 read side: stored binding, token row, claim ----------------------------------------
 
-  describe "AC4: a stored PLATFORM_ADMIN binding and membership in an ordinary tenant confers nothing" do
+  describe "AC4: stored legacy PLATFORM_ADMIN binding confers nothing" do
     test "403 on every platform route, 403 (not a catch-all) on tenant routes, 403 (not 404) on an unmatched path",
          ctx do
       user = insert_user!(ctx.a)
@@ -405,7 +405,7 @@ defmodule Letflow.Api.PlatformAdminOutsidePlatformTest do
                403
     end
 
-    test "controls: the same tenant routes are 200 for TENANT_ADMIN (and a PLATFORM_ADMIN + TENANT_ADMIN list keeps only the latter), the platform operator still passes",
+    test "controls: TENANT_ADMIN routes are 200, a mixed list keeps only TENANT_ADMIN, the operator still passes",
          ctx do
       assert_all_status(
         Enum.filter(tenant_specs(), &(elem(&1, 1) == :get)),
@@ -445,7 +445,7 @@ defmodule Letflow.Api.PlatformAdminOutsidePlatformTest do
     end
   end
 
-  describe "AC4: an API token row carrying PLATFORM_ADMIN in an ordinary tenant is dropped at resolution (full pipeline)" do
+  describe "AC4: legacy PLATFORM_ADMIN token row is dropped at resolution" do
     test "auth_context.roles never carries it; platform routes and tenant routes are 403; unmatched is 403",
          ctx do
       user = insert_user!(ctx.a)
@@ -502,7 +502,7 @@ defmodule Letflow.Api.PlatformAdminOutsidePlatformTest do
     end
   end
 
-  describe "AC4: a claimed PLATFORM_ADMIN is ignored by claim sync outside the platform schema" do
+  describe "AC4: claimed PLATFORM_ADMIN ignored by claim sync (ordinary tenant)" do
     defp claimed(user, roles) do
       %IdentityContext{
         external_user_id: Ecto.UUID.generate(),
@@ -573,7 +573,7 @@ defmodule Letflow.Api.PlatformAdminOutsidePlatformTest do
 
   # --- hand-assigned contexts -----------------------------------------------------------------
 
-  describe "AC4: a hand-assigned context carrying PLATFORM_ADMIN + TASK_WORKER in an ordinary tenant" do
+  describe "AC4: hand-assigned PLATFORM_ADMIN + TASK_WORKER context (ordinary tenant)" do
     # A hand-assigned context for a SPECIFIC user id (the fixture helper draws a random one).
     defp tasks_conn(path, fixture, user_id, roles) do
       Fixture.router_conn(:get, path, fixture, roles, nil)

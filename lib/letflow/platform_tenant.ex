@@ -104,6 +104,23 @@ defmodule Letflow.PlatformTenant do
   def platform_tenant?(_other), do: false
 
   @doc """
+  REQ-447: true iff the tenant schema name `prefix` belongs to the platform
+  tenant. Derived purely from the schema name
+  (`Letflow.TenantProvisioning.tenant_id_for_schema_name/1`), no database
+  access; fail closed (a non-binary, a malformed schema name, or no configured
+  pin is false). Never logs the id.
+  """
+  @spec platform_prefix?(term()) :: boolean()
+  def platform_prefix?(prefix) when is_binary(prefix) do
+    case Letflow.TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      {:ok, tenant_id} -> platform_tenant?(tenant_id)
+      {:error, _reason} -> false
+    end
+  end
+
+  def platform_prefix?(_other), do: false
+
+  @doc """
   Both scope facts from a tenant id and the raw role strings. `platform_scope?`
   is `platform_tenant?` AND `:PLATFORM_ADMIN` among the parsed roles.
   """

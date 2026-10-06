@@ -1,7 +1,7 @@
 defmodule Letflow.Identity.RoleBackfill do
   @moduledoc """
   ISS-0886: one-time-per-tenant remediation for tenants provisioned before
-  ISS-0778 shipped (2026-09-22) and therefore never got the six platform-role
+  ISS-0778 shipped (2026-09-22) and therefore never got the platform-role
   `Group`+`TenantRole` bindings (`Letflow.Api.Authorization.roles/0`) that
   `Letflow.TenantOnboarding.provision_and_migrate/1` now seeds automatically
   at tenant-creation time. Without those rows, every non-admin OIDC user on
@@ -25,7 +25,7 @@ defmodule Letflow.Identity.RoleBackfill do
   Before seeding each tenant, this module reads how many platform-role
   `tenant_role` rows that tenant already held (a read-only classification
   query, not a new write path) so the accumulated result can tell an operator
-  which tenants were genuinely affected (`:seeded`, held fewer than all six
+  which tenants were genuinely affected (`:seeded`, missed a seedable role
   before this call) from which were already fully seeded (`:unchanged`,
   a true no-op write) — design §2.1 step 2, resolving the design's OQ-2 in
   favor of keeping the split: the issue's own `fix_direction` implies
@@ -94,11 +94,11 @@ defmodule Letflow.Identity.RoleBackfill do
 
   @doc """
   Sweeps every tenant registered in `Letflow.TenantProvisioning.list_registrations/0`,
-  seeding the six platform-role bindings for each via
+  seeding the platform-role bindings (REQ-447: seven roles, `PLATFORM_ADMIN` only in the platform tenant) for each via
   `Letflow.Identity.RoleRegistry.seed_default_platform_role_groups/1`.
 
   For every tenant this call genuinely seeds (`:seeded`, per `classify/3`'s
-  existing "held fewer than all six platform roles before this call" test),
+  existing "missed a role of `RoleRegistry.seedable_role_names/1` before this call" test),
   ISS-0910 additionally bulk-resets `role_claims_synced_at` to `nil` for every
   user row in that tenant's own schema
   (`reset_role_claims_sync_markers/1`, in a transaction separate from
@@ -162,25 +162,32 @@ defmodule Letflow.Identity.RoleBackfill do
       {:halt, {:error, {:backfill_failed, tenant_id, {:unexpected_exception, exception}}}}
   end
 
-  # Only a genuinely `:seeded` tenant (held fewer than all six platform
-  # roles before this call) gets its users' role_claims_synced_at markers
+  # Only a genuinely `:seeded` tenant (missed a role of
+  # RoleRegistry.seedable_role_names/1 before this call) gets its users'
+  # role_claims_synced_at markers
   # reset -- design §2 shape (a): the gate stays visible here, at the same
   # call site classify/3 already uses, rather than hidden inside
   # reset_role_claims_sync_markers/1 itself.
   @spec classify(map(), Ecto.UUID.t(), String.t(), [String.t()]) :: map()
-  defp classify(acc, tenant_id, schema_name, held_platform_role_names_before)
-       when length(held_platform_role_names_before) < 6 do
-    reset_count = reset_role_claims_sync_markers(schema_name)
+  defp classify(acc, tenant_id, schema_name, held_platform_role_names_before) do
+    # REQ-447: no hard-coded count; PLATFORM_ADMIN is only seedable in the
+    # platform tenant, so the entitled set differs per tenant.
+    missing? =
+      Enum.any?(RoleRegistry.seedable_role_names(schema_name), fn name ->
+        name not in held_platform_role_names_before
+      end)
 
-    %{
-      acc
-      | seeded: [tenant_id | acc.seeded],
-        role_claims_markers_reset: acc.role_claims_markers_reset + reset_count
-    }
-  end
+    if missing? do
+      reset_count = reset_role_claims_sync_markers(schema_name)
 
-  defp classify(acc, tenant_id, _schema_name, _held_platform_role_names_before) do
-    %{acc | unchanged: [tenant_id | acc.unchanged]}
+      %{
+        acc
+        | seeded: [tenant_id | acc.seeded],
+          role_claims_markers_reset: acc.role_claims_markers_reset + reset_count
+      }
+    else
+      %{acc | unchanged: [tenant_id | acc.unchanged]}
+    end
   end
 
   @spec held_platform_role_names(String.t()) :: [String.t()]

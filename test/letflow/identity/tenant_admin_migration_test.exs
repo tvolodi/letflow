@@ -901,7 +901,8 @@ defmodule Letflow.Identity.TenantAdminMigrationTest do
 
     # The first fenced block after the line that starts with "Step <letter>".
     defp runbook_expression(letter) do
-      text = File.read!(@runbook)
+      # normalise Windows checkouts (autocrlf) so the fence split below is line-ending independent
+      text = String.replace(File.read!(@runbook), <<13, 10>>, <<10>>)
       [_before, rest] = String.split(text, "Step #{letter}", parts: 2)
       [_prose, after_fence] = String.split(rest, "```\n", parts: 2)
       [code, _tail] = String.split(after_fence, "\n```", parts: 2)

@@ -37,10 +37,11 @@ defmodule Letflow.Api.AuthzDenyLogTest do
     def log(_event, _config), do: :ok
   end
 
-  # A synchronous `:logger` handler. `ExUnit.CaptureLog` reads through the Logger backend, which can
-  # discard events when the Logger is overloaded (CI emits ~700k lines of Ecto debug output; one
-  # first-seen-key denial line was missing once in main CI). A handler runs in the emitting process
-  # and `send/2`s before `Logger.warning/2` returns, so nothing can be dropped on the way.
+  # A synchronous `:logger` handler. `ExUnit.CaptureLog` reads through the Logger backend, which is
+  # suspected (UNPROVEN) of discarding events under overload: CI emits ~700k lines of Ecto debug
+  # output, and one first-seen-key denial line was once missing from a capture in main CI. A handler
+  # runs in the emitting process and `send/2`s before `Logger.warning/2` returns, so nothing can be
+  # dropped on the way to the test process.
   defmodule Sink do
     @moduledoc false
     @doc false
@@ -64,7 +65,9 @@ defmodule Letflow.Api.AuthzDenyLogTest do
   # Runs `fun`, then returns the formatted text of every log event it emitted (from any process
   # that had finished by then) that came from the authz deny log, one per line, in arrival order.
   # Replaces `capture_log/1`: the same text shape for `deny_lines/1`, `one_line!/1` and the
-  # `refute log =~ secret` checks, but only this module's events, taken synchronously.
+  # `refute log =~ secret` checks, but ONLY this module's events (a deliberate narrowing: the
+  # leak checks examine what AuthzDenyLog emitted, not other loggers' lines) and message text only
+  # (no level or metadata; the Forwarder test covers those), taken synchronously.
   defp sink_log(fun) do
     ref = make_ref()
     id = :"authz_deny_sink_#{System.unique_integer([:positive])}"
@@ -74,6 +77,9 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
     try do
       fun.()
+
+      # a crashed handler is removed by :logger; fail loudly rather than pass "logs nothing" vacuously
+      assert {:ok, _config} = :logger.get_handler_config(id)
     after
       :logger.remove_handler(id)
     end

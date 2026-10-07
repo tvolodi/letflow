@@ -954,3 +954,24 @@ history:
       classification now must also supply severity. Gates:
       SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGN-VALIDATOR PASS (all
       mutants killed), RELEASE-VALIDATOR PASS. Full suite not run (left to CI).
+
+  - req: REQ-463
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-07T14:24:11Z"
+    note: >
+      Engine build (queue task 1026, GH#2341, run WF02-REQ463-20261007):
+      optional HUMAN_TASK attribute distinct_from (separation of duties by
+      user id, per the REQ-459 design rule A). Enforced at completion by
+      Letflow.Engine.SeparationOfDuties.check/5 in the :completion_guards
+      step of run_complete_task (4b, after both row locks, before 4c) and at
+      claim by check_for_claim/3 (total, fails open); refusal is a zero-detail
+      HTTP 403 {"detail":"separation of duties","status":403} on both
+      POST /tasks/:id/complete and POST /tasks/:id/claim; completion refusal
+      writes one PII-free task.completion_refused audit record, claim refusal
+      none. Branch feat/REQ-463-distinct-from-Q-1026, local, not pushed or
+      merged. Gates recorded in the run handoffs: SECURITY-REVIEWER (02c,
+      re-check 02c2 after rework 1), REVIEWER (02d, re-check 02d2),
+      TEST-DESIGN-VALIDATOR (03b, 24 mutants killed), TEST-RUNNER (step 04,
+      61 single-file mix test invocations, all exit 0, zero failures),
+      RELEASE-VALIDATOR (05, re-check 05b PASS). Full suite left to CI.

@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ460-20261007/step-04-test-runner.json",
   "created_at": "2026-10-07T08:53:31Z",
   "started_at": "2026-10-07T08:53:31Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-07T09:00:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -53,6 +53,10 @@
       "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the changed and new test files named above (plus test/letflow/routers/tasks_test.exs), and mix letflow.check_boundaries pass, real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "summary": "SCOPED run (full suite and scripts/test_parallel.sh NOT run, per RAM constraint), sequential, one BEAM at a time. Tooling, all exit 0: check_issue_refs OK; lint_handoffs 'OK -- 0 new violations across 3414 handoff files'; check_uat_scenario_schema '38 file(s) checked, 0 violation(s)'; check_boundaries 'OK -- 960 edges checked, 0 violations'; check_requirements_registration '433 entries = 433 registered + 0 deferred + 0 neither + 0 unclassified'; check_req_id_collision OK; check_deferral_staleness '0 deferred of 433 entries; 0 stale'; check_async_sandbox_reachability 'OK -- 145 async:true test file(s) scanned, 0 new violations'; mix format --check-formatted exit 0; mix compile --warnings-as-errors exit 0. Tests (MIX_TEST_PARTITION=3), real Result lines: engine_variable_schema_merge_test 'Result: 5 passed'; shipped_definition_variable_schemas_engine_test 'Result: 10 passed'; swiftroute_decision_forms_fixture_test 'Result: 12 passed'; engine/required_outputs_test 'Result: 19 passed' x2; api/output_refused_test 'Result: 4 passed' x2; engine_required_outputs_test 'Result: 25 passed' x2; routers/tasks_required_outputs_test 'Result: 9 passed' x2; routers/tasks_test 'Result: 77 passed'; engine_complete_task_test 'Result: 11 passed'; engine_sub_process_test 'Result: 16 passed'; engine/variable_merge_test 'Result: 17 passed'; engine/variable_schema_test 'Result: 20 passed'; api/error_test 'Result: 14 passed'; api/response_test 'Result: 21 passed'; api/context_test 'Result: 11 passed'; api/validation_test 'Result: 39 passed'; api/authz_deny_log_test 'Result: 36 passed'; docs/requirement_status_invariants_test 'Result: 25 passed'. 22 invocations, 0 failures, no flake across repeats. Nothing to route.",
+    "verdict": "PASS_SCOPED",
+    "report": "test/reports/report-2026-10-07-WF02-REQ460-20261007.yaml"
+  },
   "rework_count": 0
 }

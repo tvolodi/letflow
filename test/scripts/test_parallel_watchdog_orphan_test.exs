@@ -20,7 +20,14 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
   `Port.open/2` with `:exit_status` + `:stderr_to_stdout` -- exactly how
   `Mix.Tasks.Letflow.Check.Test` reads it -- and the primary assertion is the elapsed time
   until `{:exit_status, _}` arrives: seconds, versus the watchdog timeout (`@timeout_s`
-  = #{300} s here; an orphaned sleep would hold the pipe that long).
+  = 240 s here; an orphaned sleep would hold the pipe that long).
+
+  The script runs inside `bash -c "set -o pipefail; bash script | cat"`. On Linux the Port
+  alone only reports the exit status at pipe EOF, but on Windows erts reports it from the
+  process handle without waiting for EOF -- the first version of this test passed against
+  the BUGGY script there (the orphans only showed up as an 11 minute `mix test | grep`
+  stall). A shell pipeline waits for EOF on every platform, so the bound is discriminating
+  everywhere; `pipefail` keeps the script's own exit status.
 
   Cases:
 
@@ -42,11 +49,11 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
 
   # The watchdog's sleep length. Large on purpose: an orphan would hold the pipe this
   # long, which dwarfs the prompt-return bound below.
-  @timeout_s 300
+  @timeout_s 240
   # Prompt-return bound (ms). Generous for a loaded 4-vCPU runner and a slow Windows
-  # fork-heavy bash (observed ~2-6 s), but ~7x below @timeout_s, so a regression of the
+  # fork-heavy bash (observed ~2-6 s), but ~6x below @timeout_s, so a regression of the
   # orphaned-sleep kind cannot hide inside it.
-  @prompt_ms 45_000
+  @prompt_ms 40_000
 
   defp bash,
     do:
@@ -122,7 +129,7 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
     # Prepend the stub dir to PATH *inside* bash, in POSIX form (cygpath on Windows
     # git-bash, a no-op elsewhere), so a drive-letter path never lands in a `:`-list.
     launcher =
-      ~S{d=$(cygpath -u "$1" 2>/dev/null || printf '%s' "$1"); PATH="$d:$PATH"; export PATH; shift; exec bash "$@"}
+      ~S{d=$(cygpath -u "$1" 2>/dev/null || printf '%s' "$1"); PATH="$d:$PATH"; export PATH; shift; set -o pipefail; bash "$@" 2>&1 | cat}
 
     env =
       [
@@ -194,7 +201,7 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
     ErlangError -> :ok
   end
 
-  defp unique_timeout, do: @timeout_s + :rand.uniform(500)
+  defp unique_timeout, do: @timeout_s + :rand.uniform(50)
 
   test "success: pipe is released promptly and no watchdog sleep is orphaned", %{tmp_dir: tmp} do
     t = unique_timeout()

@@ -1,0 +1,126 @@
+{
+  "handoff_id": "8f4a7d09-ea93-4a22-b8bb-066b8b79ad9e",
+  "run_id": "WF02-REQ459-20261007",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ459-20261007/step-01b-code-design-validator.json",
+  "created_at": "2026-10-07T06:33:00Z",
+  "started_at": "2026-10-07T06:33:00Z",
+  "completed_at": "2026-10-07T06:41:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-459"
+    ],
+    "related_handoff_ids": [
+      "91d5e12e-d198-41c2-bdb7-c6b0c9b98345"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req459-required-outputs-and-distinct-person.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/"
+    ],
+    "branch_name": "design/REQ-459-required-outputs-distinct-person"
+  },
+  "task": {
+    "description": "WF-02 step 01b (CODE-DESIGN-VALIDATOR): hard gate on lib/letflow/design/req459-required-outputs-and-distinct-person.md. Re-derive the run_complete_task order independently, grep-verify citations, twelve sections, traceability, literal bodies, no implementation code, REQ-460 regression line, test list, semantic_validation early return, DISTINCT ON read.",
+    "acceptance_criteria": [
+      "twelve numbered sections, each answering its question, no implementation code beyond @spec",
+      "section 2 one total order; nothing written before a refusal except one audit record; independently re-derived",
+      "one traceability row per binding constraint of rule A and rule C, none weakened or re-decided",
+      "sections 3 and 4 literal bodies; rule A body is only the phrase and a status",
+      "every cited file path and function name exists, verified with grep"
+    ]
+  },
+  "result": {
+    "verdict": "FAIL",
+    "summary": "The design is right on the hard facts and fails one gate check, 'function signatures fully specified including error shape'. My independent derivation of run_complete_task matches section 2 in every step; every refusal path writes nothing before the refusal and the single audit record is written after Repo.transaction/1 has returned (outside the rolled-back transaction); citations resolve; twelve sections, literal bodies and traceability rows are present; REQ-460's service-task regression line is indeed unreproducible (engine.ex:3394 passes nil) and the test-list correction is right. But several new public functions the builders must write (RequiredOutputs.required_outputs/1, missing_keys/2, rejected_keys/2; SemanticValidation.required_output_schema_violations/2 and decision_key_warnings/2; SeparationOfDuties.check/5; the :completion_guards step result) have no @spec or argument order, and step 4b and the REQ-463 adjustment name two different entry points for one step. Route back to CODE-DESIGNER to add the specs and reconcile 4b; nothing else needs redoing.",
+    "failed_checks": [
+      "function signatures fully specified including error shape (findings 1, 2)"
+    ],
+    "findings": [
+      {
+        "n": 1,
+        "severity": "MAJOR",
+        "check": "signatures fully specified including error shape",
+        "where": "design sections 1.2, 2.2 step 4, Adjustments REQ-460/461/463",
+        "text": "New functions the builders must write have no @spec or only a name/arity: Letflow.Engine.RequiredOutputs.required_outputs/1, missing_keys/2, rejected_keys/2 (argument order, element types and return types unstated; 'missing_keys/2 over the SUBMITTED output_variables' does not say which argument is the map or which is the key list); SemanticValidation.required_output_schema_violations/2 and decision_key_warnings/2 (argument types and return type unstated; the wire text of decision_key_not_required needs the definition name yet no stated argument carries it); SeparationOfDuties.check/5 (five arguments unnamed); the :completion_guards Multi.run step (its success payload when guards pass is never stated, only {:ok, :no_guards} is). graph.ex check_required_outputs/1, check_distinct_from/1, check_distinct_from_position/1 are private and follow the existing (t()) :: [Violation.t()] shape, so they are tolerated. grep '@spec|@type' finds only 12 blocks in the file, none for the functions above."
+      },
+      {
+        "n": 2,
+        "severity": "MAJOR",
+        "check": "internal consistency, unambiguous to build",
+        "where": "design section 2.2 step 4b vs Adjustments for REQ-463 item 1",
+        "text": "Step 4b says the guard calls SeparationOfDuties.blocking_nodes/5 and returns {:error, {:completion_refused, {:separation_of_duties, ids}}}. Adjustments for REQ-463 introduces a second public function SeparationOfDuties.check/5 'for step 4b, returns the completion_refusal tuple'. Two entry points for one step and only one of them is specified. Fix together with finding 1."
+      },
+      {
+        "n": 3,
+        "severity": "MINOR",
+        "check": "accuracy of claim",
+        "where": "design section 2.2 step 4a",
+        "text": "4a says the default-off path is 'byte-identical in behaviour ... to today'. True for step 4 only. Step 6b-iv refuses a schema-rejected value on EVERY HUMAN_TASK completion, including nodes with neither attribute (that is why five existing tests must change). Wording should say so."
+      },
+      {
+        "n": 4,
+        "severity": "MINOR",
+        "check": "accuracy of reasoning",
+        "where": "design section 1.4 reason 1",
+        "text": "Says a violation for check 3 would make Definitions.create/2 reject meridian (definitions.ex:557-561). Check 3 lives in SemanticValidation, which create/2 does not call (557-561 runs validate_graph, validate_node_attributes, validate_edge_conditions, validate_flow). It would block validate and activate, not create. The WARNING conclusion is unaffected."
+      },
+      {
+        "n": 5,
+        "severity": "MINOR",
+        "check": "citation precision",
+        "where": "design 'Citations verified' and section 7",
+        "text": "'authorization.ex:1347-1352' has no directory; the file is lib/letflow/api/authorization.ex (lines correct, core_role_allows?(:TENANT_ADMIN) at 1352). tasks.ex:428/606/676, variable_merge.ex:205 and form_expression_reevaluation.ex:154 point at the @spec line, the def is 1-2 lines lower. scheduler.ex escalation branch is 310-317 (arm at 312). No citation names a nonexistent file or function or an out-of-range line."
+      },
+      {
+        "n": 6,
+        "severity": "MINOR",
+        "check": "section 2 completeness",
+        "where": "design section 2.2",
+        "text": "The total order does not mention the function-level rescue at engine.ex:2362-2364 ({:error, {:transaction_failed, exception}}) that wraps every step including the new ones and the post-transaction audit call. Not an ordering divergence, but an exit path the order omits."
+      },
+      {
+        "n": 7,
+        "severity": "ADVISORY",
+        "check": "downstream requirement text",
+        "where": "Adjustments REQ-461/REQ-462/REQ-464",
+        "text": "Check 3 is a permanent WARNING (REQ-461 delegated severity and 'which keys count' to the design, so this is not a re-decision of binding rule C). Consequence: REQ-462 BUILDS item 3 is a no-op and REQ-462 acceptance line 4 cannot pass for meridian while credit_decision, risk_rating and the votes stay unadopted. ORCH must amend REQ-462 before dispatch (design says so). Design surfaces check 3 and check 4 warnings at validate and pack install only, not activate (same accepted gap as REQ-455 OQ-4), while REQ-461 item 4 and REQ-464 check 4 say 'activate'."
+      },
+      {
+        "n": 8,
+        "severity": "ADVISORY",
+        "check": "requirement wording",
+        "where": "design sections 2.4, 4c vs REQ-460 acceptance",
+        "text": "Audit write is best-effort (D-3): with a failing audit store the count is zero, not 'exactly one'; design states it, REVIEWER should confirm. Step 4c requires a COMPUTED required key to be submitted even though step 5 recomputes computed fields server-side; decide explicitly or forbid computed keys in required_outputs."
+      }
+    ],
+    "verified": [
+      "Engine order re-derived from engine.ex 2212-2365, 2458-2604, 3875-3999, 4020-4147, 4328-4506, 4911-5021, 5258-5325 BEFORE reading section 2. Section 2 matches in every step and in the W1-W13 write order. No write occurs between the first lock (:task, 2273) and the tail Multi.merge (2348) except the tail: grep of repo./Repo. insert/update/delete, Audit., EventStore.append over engine.ex 2250-5260 finds only the escalation-timer function (3056, 3071), a service-task event in another function (3803), tail helpers (4900, 4914, 5112, 5154, 5245) and the two post-transaction audit helpers (4993, 5056).",
+      "Every refusal (4b, 4c, 6b-iv) is a Multi.run {:error, ...} ahead of the tail; Repo.transaction/1 (2358) returns {:error, step, reason, changes}; maybe_snapshot_after_complete_task (2418-2454) and emit_task_completed_telemetry (2384-2405) match only {:ok, ...}; the interpret_complete_result error clause (5307-5325) runs after the transaction returned and already hosts the ISS-0784 audit via its own Repo.transaction (4993). Only the router calls Engine.complete_task (routers/tasks.ex:340, grep lib), so no enclosing transaction. Confirmed: the audit record is outside the rolled-back transaction. Row locks (FOR UPDATE 2461, 2476) change no column; design says so.",
+      "No isolation setting in lib or config (grep), so READ COMMITTED; the instance-lock argument for parallel branches holds (second completer's guard SELECT runs after acquiring the projection lock).",
+      "merge_output_variables/7 has one caller (engine.ex:2321). REQ-460's service-task regression line is NOT reproducible: advance_service_task_dispatch/4 (3381) passes nil validations at 3394; sub_process.ex:824-847 passes real validations and engine_sub_process_test.exs:777 asserts variable_schema_rejected. Design correct.",
+      "Test list: engine_complete_task_test.exs has no schema-rejection ERROR assertion; tests asserting instance ERROR from a HUMAN_TASK schema rejection are engine_variable_schema_merge_test.exs:212,337,434, shipped_definition_variable_schemas_engine_test.exs:132, swiftroute_decision_forms_fixture_test.exs:292 (all quoted OK). grep variable_schema_rejected in test/ finds no other completion-path assertion. Design list is right, REQ-460's list is wrong, as design says.",
+      "semantic_validation.ex:189-192 validate/2 first clause returns %{valid: true, violations: []} when declared_fields == %{}; second clause 194-207; moduledoc 128-141. Design's empty-schema trap and its fix are accurate.",
+      "DISTINCT ON read: tasks has node_id, instance_id, status, completed_by, completed_at, inserted_at (task.ex:57-77, migration 20260818110003:70-85); only indexes are idx_task_instance(instance_id) and idx_task_token(token_id) (migration grep). Design makes no plan claim and defers EXPLAIN to ELIXIR-DEV.",
+      "Twelve sections exist in order (## 0..12 plus traceability, adjustments, decisions, OQs, security), each answers its REQ-459 question. Sections 3 and 4 have literal bodies; rule A body is exactly {\"detail\":\"separation of duties\",\"status\":403}. Code fences hold only JSON and @spec/@type. No TBD/TODO/deferral language (grep).",
+      "Traceability A1-A11, C1-C7 covers all 8 rule A bullets, all 4 rule C bullets and every BA 2026-10-07 amendment; none weakened. Status, body shape and severity are decisions REQ-459 asked the design to make (sections 3, 4), flagged D-1..D-6.",
+      "Citations: python extraction of 171 file:line cites, no unresolvable file, none out of range once bare tasks.ex is read as lib/letflow/tasks.ex; 70+ line and function spot checks OK. New names (RequiredOutputs, SeparationOfDuties, ValidationWarnings, output_refused, record_completion_refusal_audit, member_counts, CHK-25..27) do not exist in lib/ and are marked NEW."
+    ],
+    "advisory_non_blocking": [
+      "4a says the default-off path is 'byte-identical in behaviour ... to today'. True for step 4 only. Step 6b-iv refuses a schema-rejected value on EVERY HUMAN_TASK completion, including nodes with neither attribute (that is why five existing tests must change). Wording should say so.",
+      "Says a violation for check 3 would make Definitions.create/2 reject meridian (definitions.ex:557-561). Check 3 lives in SemanticValidation, which create/2 does not call (557-561 runs validate_graph, validate_node_attributes, validate_edge_conditions, validate_flow). It would block validate and activate, not create. The WARNING conclusion is unaffected.",
+      "'authorization.ex:1347-1352' has no directory; the file is lib/letflow/api/authorization.ex (lines correct, core_role_allows?(:TENANT_ADMIN) at 1352). tasks.ex:428/606/676, variable_merge.ex:205 and form_expression_reevaluation.ex:154 point at the @spec line, the def is 1-2 lines lower. scheduler.ex escalation branch is 310-317 (arm at 312). No citation names a nonexistent file or function or an out-of-range line.",
+      "The total order does not mention the function-level rescue at engine.ex:2362-2364 ({:error, {:transaction_failed, exception}}) that wraps every step including the new ones and the post-transaction audit call. Not an ordering divergence, but an exit path the order omits.",
+      "Check 3 is a permanent WARNING (REQ-461 delegated severity and 'which keys count' to the design, so this is not a re-decision of binding rule C). Consequence: REQ-462 BUILDS item 3 is a no-op and REQ-462 acceptance line 4 cannot pass for meridian while credit_decision, risk_rating and the votes stay unadopted. ORCH must amend REQ-462 before dispatch (design says so). Design surfaces check 3 and check 4 warnings at validate and pack install only, not activate (same accepted gap as REQ-455 OQ-4), while REQ-461 item 4 and REQ-464 check 4 say 'activate'.",
+      "Audit write is best-effort (D-3): with a failing audit store the count is zero, not 'exactly one'; design states it, REVIEWER should confirm. Step 4c requires a COMPUTED required key to be submitted even though step 5 recomputes computed fields server-side; decide explicitly or forbid computed keys in required_outputs."
+    ]
+  },
+  "rework_count": 0
+}

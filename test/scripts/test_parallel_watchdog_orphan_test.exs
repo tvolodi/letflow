@@ -37,7 +37,9 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
     3. EXIT-trap site: the script aborts (`exit 1`) while a partition's watchdog is
        still running (admission-control abort) -> non-zero and prompt; only the trap's
        watchdog kill can release the pipe here
-    4. hung partition: the watchdog must still TERM the partition group after
+    4. Step 3 site in isolation: a finished partition's watchdog sleep is gone while a later
+       partition is still running (the trap would only reap it at exit)
+    5. hung partition: the watchdog must still TERM the partition group after
        `TEST_PARALLEL_PARTITION_TIMEOUT_S` -> script exits non-zero within seconds
 
   Needs a real `bash`; on Windows set `UAT_PF_BASH` (or `TEST_PARALLEL_BASH`) to git-bash.
@@ -69,6 +71,9 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
   #   STUB_MODE=fail            partition STUB_FAIL_PARTITION (default 1) reports a failure, exit 2
   #   STUB_MODE=die_early       partition 1 exits 1 at once with no Result and no ready-file
   #   STUB_MODE=hang            partition 1 sleeps for 600 s (until killed)
+  #   STUB_MODE=staggered       partition 1 passes after 2 s; partition 2 waits 6 s, writes the number of
+  #                             live `sleep $TEST_PARALLEL_PARTITION_TIMEOUT_S` processes (read from
+  #                             /proc, which exists on Linux and in git-bash) to $STUB_MARKER, then passes
   defp write_stubs(tmp) do
     bin = Path.join(tmp, "stubbin")
     File.mkdir_p!(bin)
@@ -92,6 +97,21 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
           echo "Result: 0/1 passed"
           echo "Failed: 1 tests"
           exit 2
+        fi
+        echo "Result: 1 passed"
+        exit 0 ;;
+      staggered)
+        if [ "$part" = "1" ]; then
+          sleep 2
+        fi
+        if [ "$part" = "2" ]; then
+          sleep 6
+          n=0
+          for d in /proc/[0-9]*; do
+            c=$(tr "\\0" " " <"$d/cmdline" 2>/dev/null)
+            case "$c" in "sleep $TEST_PARALLEL_PARTITION_TIMEOUT_S "*) n=$((n + 1)) ;; esac
+          done
+          echo "$n" > "$STUB_MARKER"
         fi
         echo "Result: 1 passed"
         exit 0 ;;
@@ -201,7 +221,7 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
     ErlangError -> :ok
   end
 
-  defp unique_timeout, do: @timeout_s + :rand.uniform(50)
+  defp unique_timeout, do: @timeout_s + :rand.uniform(300)
 
   test "success: pipe is released promptly and no watchdog sleep is orphaned", %{tmp_dir: tmp} do
     t = unique_timeout()
@@ -281,6 +301,39 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
 
     assert out =~ "exited during its own template build"
     assert_no_orphan_sleep(t)
+  end
+
+  test "Step 3 reaps a finished partition watchdog while later partitions still run",
+       %{tmp_dir: tmp} do
+    t = unique_timeout()
+    marker = Path.join(tmp, "sleep_count")
+
+    # Partition 1 finishes after 2 s (long enough that its watchdog `sleep` really is
+    # running, so this does not race the fork); partition 2 counts live `sleep <t>`
+    # processes at 6 s. Only partition 2's own watchdog may remain. The EXIT trap would also reap
+    # an orphan, but only at script exit -- this is what pins the Step 3 kill itself.
+    {status, out, elapsed} =
+      run_script(
+        tmp,
+        [
+          {"STUB_MODE", "staggered"},
+          {"STUB_MARKER", marker},
+          {"TEST_PARALLEL_PARTITION_TIMEOUT_S", "#{t}"}
+        ],
+        @prompt_ms
+      )
+
+    IO.puts("[watchdog-orphan] staggered case returned in #{elapsed} ms")
+    refute status == :timeout, "script did not release its stdout pipe in time; output:
+#{out}"
+    assert status == 0, out
+    assert File.exists?(marker), "stub partition 2 did not record the sleep count:
+#{out}"
+
+    assert marker |> File.read!() |> String.trim() == "1",
+           "expected exactly 1 live watchdog sleep (partition 2's own) while partition 2 " <>
+             "ran, got #{String.trim(File.read!(marker))} -- partition 1's watchdog sleep was " <>
+             "orphaned by the Step 3 kill"
   end
 
   test "hung partition: the watchdog still TERMs it after the timeout", %{tmp_dir: tmp} do

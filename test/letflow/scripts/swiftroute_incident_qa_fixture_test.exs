@@ -90,7 +90,7 @@ defmodule Letflow.Scripts.SwiftrouteIncidentQaFixtureTest do
              {"role-accountant", "P1D", "role-ceo"}
   end
 
-  test "the fail-closed notice nodes exist as SERVICE_TASKs, and completion edges are unconditioned-safe" do
+  test "the fail-closed notice nodes exist as SERVICE_TASKs, and completion edges carry the true condition (timer-fire safe)" do
     j = json()
 
     for id <- @notice_nodes, do: assert(node(j, id)["node_type"] == "SERVICE_TASK")

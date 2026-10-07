@@ -72,7 +72,7 @@ steps:
     expect_refusal: true
     via: api
     input:
-      severity: low
+      severity: minor
       false_positive: true
 
   - step: 4

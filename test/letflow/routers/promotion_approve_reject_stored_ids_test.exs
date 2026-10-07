@@ -3,10 +3,12 @@ defmodule Letflow.Routers.PromotionApproveRejectStoredIdsTest do
   ISS-1026 (Q-1008 / GH #2305): `POST /promotions/:id/approve` and `POST /promotions/:id/reject`
   re-check the review's STORED `source_tenant_id` / `target_tenant_id` against the caller before
   any state change, exactly as apply and run-assertions already do. A non-operator holder of
-  `:PromotionsManage` (here `PLATFORM_ADMIN` of tenant A, the platform pin being on P) who names a
+  `:PromotionsManage` (here `TENANT_ADMIN` of tenant A, the platform pin being on P) who names a
   review whose stored plan has a foreign side gets the SAME 404 as for a nonexistent review, the
   row is left untouched, and the self-approval and digest gates never run for it. The operator
-  (PLATFORM_ADMIN of the pinned P) is unchanged. See `test/specs/ISS-1026.md`.
+  (PLATFORM_ADMIN of the pinned P) is unchanged. REQ-447 PR 2: an ordinary tenant's
+  administrator is `TENANT_ADMIN` (its `PLATFORM_ADMIN` would hold nothing).
+  See `test/specs/ISS-1026.md`.
 
   Reviews are seeded through the real `PromotionReviewStore.insert_review/2`
   (`Scope.seed_review!/4`); legacy shapes use the `overwrite_plan!/3` raw-JSON recipe. Requests are
@@ -24,7 +26,6 @@ defmodule Letflow.Routers.PromotionApproveRejectStoredIdsTest do
   alias Letflow.Support.PlatformTenantFixture, as: Fixture
   alias Letflow.Support.PromotionScopeFixture, as: Scope
 
-  @admin ["PLATFORM_ADMIN"]
   @wrong_digest String.duplicate("0", 64)
 
   setup do
@@ -36,8 +37,17 @@ defmodule Letflow.Routers.PromotionApproveRejectStoredIdsTest do
 
   # --- helpers -----------------------------------------------------------------------------
 
+  # The platform tenant's own administrator is PLATFORM_ADMIN (the operator); every other tenant's
+  # (and the would-be platform tenant once the pin is cleared) is TENANT_ADMIN.
+  defp admin_roles(fixture) do
+    if Letflow.PlatformTenant.platform_tenant?(fixture.tenant_id),
+      do: ["PLATFORM_ADMIN"],
+      else: ["TENANT_ADMIN"]
+  end
+
   defp post(fixture, review_id, action, body, user_id) do
-    conn = Fixture.router_conn(:post, "/#{review_id}/#{action}", fixture, @admin, body)
+    roles = admin_roles(fixture)
+    conn = Fixture.router_conn(:post, "/#{review_id}/#{action}", fixture, roles, body)
     ac = %{conn.assigns.auth_context | user_id: user_id}
 
     Letflow.Routers.Promotions.call(

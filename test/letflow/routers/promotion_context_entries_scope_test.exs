@@ -9,10 +9,11 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
   tenants B and C held in the platform tenant P's schema must not hand B's and C's graph content
   to a non-operator reader of P. See `test/specs/ISS-1023.md`.
 
-  The reader is `PLATFORM_ADMIN` of P with the pin cleared (`Fixture.unpin!/0`): the only role
-  that holds `:PromotionsRead` today (design section 2), and with no pin on P a non-operator
-  (`tenant_view/1`). REQ-447's `TENANT_ADMIN` of P takes the same code path and is covered in the
-  AC5 describe; `TENANT_AUDITOR` does not exist in `lib/` yet.
+  The non-operator reader is `TENANT_ADMIN` (REQ-447 PR 2: a `PLATFORM_ADMIN` outside the pinned
+  platform tenant holds nothing, so an ordinary tenant's admin identity is `TENANT_ADMIN`): of an
+  ordinary tenant, or of P with the pin cleared (`Fixture.unpin!/0`), where it is a non-operator
+  (`tenant_view/1`). The operator is the `PLATFORM_ADMIN` of the pinned P (`@operator`).
+  `TENANT_AUDITOR` does not exist in `lib/` yet.
 
   Reviews are seeded through the real `PromotionReviewStore.insert_review/2`
   (`Scope.seed_review!/4`); legacy shapes use ONE recipe, `overwrite_plan!/3` (seed, then
@@ -30,7 +31,8 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
 
   @allowlisted ~w(process_key base_version source_tenant_id target_tenant_id source_definition_id target_definition_id entries)
   @envelope ~w(review_id plan_digest serialised_plan status requested_by def_type def_id created_at row_version)
-  @admin ["PLATFORM_ADMIN"]
+  @reader ["TENANT_ADMIN"]
+  @operator ["PLATFORM_ADMIN"]
 
   setup do
     tenants = Fixture.three_tenants!()
@@ -47,8 +49,8 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
     )
   end
 
-  defp read_plan!(fixture, review_id) do
-    resp = context_resp(fixture, review_id, @admin)
+  defp read_plan!(fixture, review_id, roles \\ @reader) do
+    resp = context_resp(fixture, review_id, roles)
     assert resp.status == 200
     {resp.resp_body, Jason.decode!(resp.resp_body)["serialised_plan"]}
   end
@@ -155,7 +157,7 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
         )
 
       # pin is on P and the caller is P's PLATFORM_ADMIN: the operator
-      {raw, plan} = read_plan!(ctx.p, review.id)
+      {raw, plan} = read_plan!(ctx.p, review.id, @operator)
 
       assert plan["entries"] == roundtrip(stored.entries)
       assert plan == roundtrip(stored)
@@ -224,7 +226,7 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
     test "own_tenant_reviews_still_show_entries", ctx do
       a = ctx.a.tenant_id
 
-      # A's admin is a non-operator (pin on P)
+      # A's TENANT_ADMIN is a non-operator (pin on P)
       %{review: review, plan: stored} =
         Scope.seed_review!(ctx.a, a, a, overrides(ctx, Ecto.UUID.generate(), nil))
 
@@ -234,7 +236,7 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
       assert plan["source_tenant_id"] == a
       assert plan["target_tenant_id"] == a
 
-      # P/P read as P's PLATFORM_ADMIN with the pin cleared (a non-operator)
+      # P/P read as P's TENANT_ADMIN with the pin cleared (a non-operator)
       %{review: p_review, plan: p_stored} =
         Scope.seed_review!(ctx.p, ctx.p.tenant_id, ctx.p.tenant_id, overrides(ctx, nil, nil))
 
@@ -267,7 +269,7 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
         )
 
       Fixture.unpin!()
-      resp = context_resp(ctx.p, review.id, @admin)
+      resp = context_resp(ctx.p, review.id, @reader)
       assert resp.status == 200
 
       body = Jason.decode!(resp.resp_body)
@@ -353,7 +355,7 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
       # operator view of the same legacy text: the decoded stored plan, unchanged
       op_text = plan_text.([{"source_tenant_id", Jason.encode!(b)}, {"target_tenant_id", own}])
       op_review = seed_and_overwrite!(ctx.p, op_text)
-      {_raw, op_plan} = read_plan!(ctx.p, op_review.id)
+      {_raw, op_plan} = read_plan!(ctx.p, op_review.id, @operator)
       assert op_plan == Jason.decode!(op_text)
     end
   end
@@ -361,7 +363,7 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
   # --- AC5 tripwire ------------------------------------------------------------------------
 
   describe "AC5" do
-    # PLATFORM_ADMIN and (REQ-447 PR 1) TENANT_ADMIN hold :PromotionsRead; the string
+    # The platform tenant's PLATFORM_ADMIN and (REQ-447 PR 1) TENANT_ADMIN hold :PromotionsRead; the string
     # TENANT_AUDITOR still resolves to no role (`role_from_string/1`). When REQ-448 adds
     # TENANT_AUDITOR with :PromotionsRead this test fails: MOVE that row to the allowed side
     # (next test) and re-assert it against the new rule (a non-operator reader of P's
@@ -421,7 +423,7 @@ defmodule Letflow.Routers.PromotionContextEntriesScopeTest do
 
       # Control: the operator (PLATFORM_ADMIN of the pinned P) sees the same review in full.
       Fixture.pin!(ctx.p.tenant_id)
-      {raw, operator_plan} = read_plan!(ctx.p, review.id)
+      {raw, operator_plan} = read_plan!(ctx.p, review.id, @operator)
       assert operator_plan["entries"] != []
       for m <- markers(ctx), do: assert(raw =~ m, "marker #{m} missing")
     end

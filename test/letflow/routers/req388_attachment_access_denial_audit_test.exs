@@ -36,7 +36,7 @@ defmodule Letflow.Routers.Req388AttachmentAccessDenialAuditTest do
   # ── Dispatch helpers (mirrors req212_attachments_routes_test.exs) ───────
 
   defp build_conn(method, path, tenant, fields) do
-    roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
+    roles = Keyword.get(fields, :roles, ["TENANT_ADMIN"])
     user_id = Keyword.get(fields, :user_id, Ecto.UUID.generate())
 
     conn(method, path)
@@ -52,7 +52,7 @@ defmodule Letflow.Routers.Req388AttachmentAccessDenialAuditTest do
     |> assign(:auth_context, %{
       user_id: Ecto.UUID.generate(),
       tenant_id: tenant.tenant_id,
-      roles: ["PLATFORM_ADMIN"]
+      roles: ["TENANT_ADMIN"]
     })
     |> assign(:trace_id, "req388-audit-trace-id")
     |> Letflow.Routers.Audit.call(@audit_opts)
@@ -101,7 +101,7 @@ defmodule Letflow.Routers.Req388AttachmentAccessDenialAuditTest do
           :get,
           "/#{instance_id}/attachments/#{tenant_b_attachment.id}",
           tenant_a,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           user_id: actor_id
         )
         |> dispatch()
@@ -139,7 +139,7 @@ defmodule Letflow.Routers.Req388AttachmentAccessDenialAuditTest do
           :get,
           "/#{instance_id}/attachments/#{never_issued_id}",
           tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           user_id: actor_id
         )
         |> dispatch()
@@ -176,7 +176,7 @@ defmodule Letflow.Routers.Req388AttachmentAccessDenialAuditTest do
           :get,
           "/#{instance_y}/attachments/#{attachment.id}",
           tenant,
-          roles: ["PLATFORM_ADMIN"],
+          roles: ["TENANT_ADMIN"],
           user_id: actor_id
         )
         |> dispatch()
@@ -213,7 +213,7 @@ defmodule Letflow.Routers.Req388AttachmentAccessDenialAuditTest do
           :get,
           "/#{instance_id}/attachments/#{attachment.id}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -264,7 +264,7 @@ defmodule Letflow.Routers.Req388AttachmentAccessDenialAuditTest do
               :get,
               "/#{instance_id}/attachments/#{never_issued_id}",
               tenant,
-              roles: ["PLATFORM_ADMIN"]
+              roles: ["TENANT_ADMIN"]
             )
             |> dispatch()
 

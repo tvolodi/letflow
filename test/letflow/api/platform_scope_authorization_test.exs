@@ -6,7 +6,8 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
 
     * every core permission has exactly one scope (the scope table); the platform list is exact;
       Catalog (module) permissions are `:tenant`; any other atom is `:platform` (fail closed);
-    * `has_permission_in_scope?/3` and the C6 decision point;
+    * `has_permission_in_scope?/3` (REQ-447 PR 2: the C6 own-tenant switch is deleted, a non-platform
+      tenant's `PLATFORM_ADMIN` confers nothing, tenant-scope included);
     * `evaluate_access/2` grid roles x `platform_tenant?` x keys, including the two catch-all
       marker keys (rule 1a);
     * `:Unknown` (A2 state): denied for every role, in and out of the platform tenant (see the
@@ -15,7 +16,8 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
 
   INV-10 check, enforced from the merge of Q-960 PR A (the scope-table completeness check).
 
-  `async: false`: one test toggles the C6 application-config switch (restored afterwards).
+  `async: false`: kept from the era when one test toggled the (now deleted) C6 application-config
+  switch; the module no longer touches global state.
   """
 
   use ExUnit.Case, async: false
@@ -177,17 +179,30 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
             :PromotionsManage,
             :DefinitionsRollback,
             :UsersGroupsRolesManage
-          ],
-          flag <- [true, false] do
-        assert Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], permission, flag),
-               "#{permission} flag=#{flag}"
+          ] do
+        # REQ-447 PR 2: PLATFORM_ADMIN holds tenant-scope permissions in the platform
+        # tenant only; outside it the role confers NOTHING (legacy own-tenant powers gone).
+        assert Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], permission, true),
+               "#{permission} platform tenant"
+
+        refute Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], permission, false),
+               "#{permission} non-platform tenant must NOT be honoured"
+
+        # TENANT_ADMIN holds them everywhere.
+        for flag <- [true, false] do
+          assert Authorization.has_permission_in_scope?([:TENANT_ADMIN], permission, flag),
+                 "TENANT_ADMIN #{permission} flag=#{flag}"
+        end
       end
 
       assert Authorization.has_permission_in_scope?([:PROCESS_DESIGNER], :DefinitionsWrite, false)
       refute Authorization.has_permission_in_scope?([:TASK_WORKER], :DefinitionsWrite, false)
     end
 
-    test "C6: with the interim own-tenant powers switched off, a tenant's PLATFORM_ADMIN loses the tenant-scope catch-all" do
+    test "REQ-447 PR 2: the C6 switch is gone, and a non-platform tenant's PLATFORM_ADMIN confers NOTHING (tenant scope included)" do
+      refute function_exported?(Authorization, :tenant_platform_admin_own_tenant_powers?, 0)
+
+      # Even with the former config key set to true, nothing is honoured: the key is dead.
       original = Application.fetch_env(:letflow, :tenant_platform_admin_own_tenant_powers)
 
       on_exit(fn ->
@@ -200,28 +215,33 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
         end
       end)
 
-      Application.put_env(:letflow, :tenant_platform_admin_own_tenant_powers, false)
+      Application.put_env(:letflow, :tenant_platform_admin_own_tenant_powers, true)
 
-      refute Authorization.has_permission_in_scope?(
-               [:PLATFORM_ADMIN],
-               :TenantSettingsManage,
+      # Every permission, tenant scope and platform scope, is denied to a lone
+      # PLATFORM_ADMIN outside the platform tenant...
+      for permission <- Authorization.permissions() do
+        refute Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], permission, false),
+               "#{inspect(permission)} must not be conferred by a non-platform PLATFORM_ADMIN"
+      end
+
+      # ...and the platform tenant's PLATFORM_ADMIN is unchanged (control).
+      for permission <- Authorization.permissions() do
+        assert Authorization.has_permission_in_scope?([:PLATFORM_ADMIN], permission, true),
+               "#{inspect(permission)} must stay held by the platform tenant's PLATFORM_ADMIN"
+      end
+
+      # Other roles keep what they hold, including alongside a (dropped) PLATFORM_ADMIN.
+      assert Authorization.has_permission_in_scope?([:PROCESS_DESIGNER], :DefinitionsWrite, false)
+
+      assert Authorization.has_permission_in_scope?(
+               [:PROCESS_DESIGNER, :PLATFORM_ADMIN],
+               :DefinitionsWrite,
                false
              )
 
-      assert Authorization.has_permission_in_scope?(
-               [:PLATFORM_ADMIN],
-               :TenantSettingsManage,
-               true
-             )
-
-      # other roles keep what they hold
-      assert Authorization.has_permission_in_scope?([:PROCESS_DESIGNER], :DefinitionsWrite, false)
-
-      Application.put_env(:letflow, :tenant_platform_admin_own_tenant_powers, true)
-
-      assert Authorization.has_permission_in_scope?(
-               [:PLATFORM_ADMIN],
-               :TenantSettingsManage,
+      refute Authorization.has_permission_in_scope?(
+               [:TASK_WORKER, :PLATFORM_ADMIN],
+               :DefinitionsWrite,
                false
              )
     end
@@ -244,10 +264,15 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
       end
     end
 
-    test "tenant keys of the new permissions: PLATFORM_ADMIN and TENANT_ADMIN allowed in and out of the platform tenant, others denied" do
+    test "tenant keys of the new permissions: TENANT_ADMIN allowed in and out of the platform tenant, PLATFORM_ADMIN only in it, others denied" do
       for key <- [:TenantSettingsManage, :PromotionsRead, :PromotionsManage, :DefinitionsRollback],
           flag <- [true, false] do
-        assert Authorization.evaluate_access(ctx([:PLATFORM_ADMIN], flag), key).kind == :Allow
+        # REQ-447 PR 2: PLATFORM_ADMIN is honoured only in the platform tenant.
+        expected_platform_admin = if flag, do: :Allow, else: :Deny403
+
+        assert Authorization.evaluate_access(ctx([:PLATFORM_ADMIN], flag), key).kind ==
+                 expected_platform_admin
+
         assert Authorization.evaluate_access(ctx([:TENANT_ADMIN], flag), key).kind == :Allow
 
         for role <- Authorization.roles() -- [:PLATFORM_ADMIN, :TENANT_ADMIN] do
@@ -278,11 +303,15 @@ defmodule Letflow.Api.PlatformScopeAuthorizationTest do
       assert Authorization.evaluate_access(ctx([], true), :UnmatchedPlatformPath).kind == :Deny403
     end
 
-    test "catch-all marker :UnmatchedRoute (rule 1a): Allow for a PLATFORM_ADMIN of any tenant, others denied" do
-      for flag <- [true, false] do
-        assert Authorization.evaluate_access(ctx([:PLATFORM_ADMIN], flag), :UnmatchedRoute).kind ==
-                 :Allow
+    test "catch-all marker :UnmatchedRoute (rule 1a, REQ-447 PR 2): Allow only for a platform-tenant PLATFORM_ADMIN, others denied" do
+      assert Authorization.evaluate_access(ctx([:PLATFORM_ADMIN], true), :UnmatchedRoute).kind ==
+               :Allow
 
+      # Changed assertion: this used to be :Allow for a PLATFORM_ADMIN of ANY tenant.
+      assert Authorization.evaluate_access(ctx([:PLATFORM_ADMIN], false), :UnmatchedRoute).kind ==
+               :Deny403
+
+      for flag <- [true, false] do
         for role <- Authorization.roles() -- [:PLATFORM_ADMIN] do
           assert Authorization.evaluate_access(ctx([role], flag), :UnmatchedRoute).kind ==
                    :Deny403

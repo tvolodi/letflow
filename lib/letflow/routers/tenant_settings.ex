@@ -8,9 +8,10 @@ defmodule Letflow.Routers.TenantSettings do
 
   One route: `PATCH /` (full path `/tenant/settings`), gated by the dedicated
   `:TenantSettingsManage` permission (ISS-0993: TENANT scope, held by
-  `PLATFORM_ADMIN` of the caller's own tenant through the interim catch-all, C6;
+  `TENANT_ADMIN` and by the platform tenant's `PLATFORM_ADMIN` (REQ-447 PR 2
+  removed the interim C6 catch-all for a `PLATFORM_ADMIN` of any other tenant);
   it used to reuse `:TenantsManage`, which is now the PLATFORM-scope registry
-  permission). Works for a `PLATFORM_ADMIN` of any tenant on its OWN tenant only.
+  permission). Works for such a caller on its OWN tenant only.
   `Letflow.Routers.Tenants`, there is **no target-tenant path parameter** —
   the tenant patched is always the caller's own, from
   `conn.assigns.auth_context.tenant_id` (design §1's "difference from

@@ -10,7 +10,7 @@ defmodule Letflow.Api.PromoteSourceTenantTest do
   queried. Cases (every `Repo` query issued by the request is captured with the
   `[:letflow, :repo, :query]` telemetry event, filtered to the calling process):
 
-    * (a) A's `PLATFORM_ADMIN` naming A's own id (also upper-cased) passes authorization: the
+    * (a) A's `TENANT_ADMIN` naming A's own id (also upper-cased) passes authorization: the
       domain logic runs (queries against A's schema are observed, and the outcome is the domain
       one, not the zero-detail authorization 404);
     * (b) A naming B (an EXISTING tenant) and A naming a random unused UUID answer the SAME 404:
@@ -23,7 +23,8 @@ defmodule Letflow.Api.PromoteSourceTenantTest do
       queried: this is also the control that proves the query capture is not vacuous).
 
   Other roles get 403 whatever source they name; with no platform tenant configured nobody is the
-  operator, so the would-be operator is held to the own-tenant rule too.
+  operator, so the would-be operator (a PLATFORM_ADMIN holds nothing outside the platform tenant,
+  REQ-447 PR 2) gets 403, and a `TENANT_ADMIN` is held to the own-tenant rule.
 
   INV-10 check, enforced from the merge of Q-960 PR A. `async: false` (VM-global pin and query
   telemetry).
@@ -104,7 +105,7 @@ defmodule Letflow.Api.PromoteSourceTenantTest do
       insert_active_definition!(ctx.a, @process_key)
 
       for source <- [ctx.a.tenant_id, String.upcase(ctx.a.tenant_id)] do
-        {resp, queries} = promote_captured(ctx.a, source, ["PLATFORM_ADMIN"], @process_key)
+        {resp, queries} = promote_captured(ctx.a, source, ["TENANT_ADMIN"], @process_key)
 
         # source == target == A: the domain rejects re-promoting an existing version (409), which
         # is NOT the authorization 404: the request got past TenantTarget.
@@ -115,7 +116,7 @@ defmodule Letflow.Api.PromoteSourceTenantTest do
 
     test "an own-id request for a process key nobody defines is the domain 404, after reading A",
          ctx do
-      {resp, queries} = promote_captured(ctx.a, ctx.a.tenant_id, ["PLATFORM_ADMIN"])
+      {resp, queries} = promote_captured(ctx.a, ctx.a.tenant_id, ["TENANT_ADMIN"])
 
       assert resp.status == 404
       assert touching(queries, ctx.a) != []
@@ -128,10 +129,10 @@ defmodule Letflow.Api.PromoteSourceTenantTest do
       b_before = definition_rows(ctx.b)
 
       {foreign, foreign_queries} =
-        promote_captured(ctx.a, ctx.b.tenant_id, ["PLATFORM_ADMIN"], @process_key)
+        promote_captured(ctx.a, ctx.b.tenant_id, ["TENANT_ADMIN"], @process_key)
 
       {random, random_queries} =
-        promote_captured(ctx.a, Ecto.UUID.generate(), ["PLATFORM_ADMIN"], @process_key)
+        promote_captured(ctx.a, Ecto.UUID.generate(), ["TENANT_ADMIN"], @process_key)
 
       for resp <- [foreign, random] do
         assert resp.status == 404
@@ -155,7 +156,7 @@ defmodule Letflow.Api.PromoteSourceTenantTest do
     end
 
     test "the response body names neither tenant", ctx do
-      resp = promote(ctx.a, ctx.b.tenant_id, ["PLATFORM_ADMIN"])
+      resp = promote(ctx.a, ctx.b.tenant_id, ["TENANT_ADMIN"])
 
       refute resp.resp_body =~ ctx.b.tenant_id
       refute resp.resp_body =~ ctx.b.tenant.slug
@@ -167,7 +168,7 @@ defmodule Letflow.Api.PromoteSourceTenantTest do
     test "a non-UUID, a slug and an over-long string are the same 404 with no query against B",
          ctx do
       {reference, reference_queries} =
-        promote_captured(ctx.a, ctx.b.tenant_id, ["PLATFORM_ADMIN"], @process_key)
+        promote_captured(ctx.a, ctx.b.tenant_id, ["TENANT_ADMIN"], @process_key)
 
       for {label, source} <- [
             {"not a uuid", "not-a-uuid"},
@@ -176,7 +177,7 @@ defmodule Letflow.Api.PromoteSourceTenantTest do
             {"over-long", String.duplicate("x", 300)},
             {"uuid with a suffix", ctx.b.tenant_id <> "x"}
           ] do
-        {resp, queries} = promote_captured(ctx.a, source, ["PLATFORM_ADMIN"], @process_key)
+        {resp, queries} = promote_captured(ctx.a, source, ["TENANT_ADMIN"], @process_key)
 
         assert resp.status == 404, "#{label}: #{resp.status}"
         assert resp.resp_body == reference.resp_body, label
@@ -213,17 +214,41 @@ defmodule Letflow.Api.PromoteSourceTenantTest do
   end
 
   describe "other callers" do
-    test "pin unset: the would-be operator is held to the own-tenant rule", ctx do
+    test "pin unset: a TENANT_ADMIN is held to the own-tenant rule", ctx do
       Fixture.unpin!()
 
-      {resp, queries} = promote_captured(ctx.p, ctx.b.tenant_id, ["PLATFORM_ADMIN"])
+      {resp, queries} = promote_captured(ctx.p, ctx.b.tenant_id, ["TENANT_ADMIN"])
 
       assert resp.status == 404
       assert touching(queries, ctx.b) == []
 
-      {own, own_queries} = promote_captured(ctx.p, ctx.p.tenant_id, ["PLATFORM_ADMIN"])
+      {own, own_queries} = promote_captured(ctx.p, ctx.p.tenant_id, ["TENANT_ADMIN"])
       assert own.status == 404
       assert touching(own_queries, ctx.p) != []
+    end
+
+    test "pin unset: the would-be operator (P PLATFORM_ADMIN) holds nothing at all (403, fails closed)",
+         ctx do
+      Fixture.unpin!()
+
+      for source <- [ctx.b.tenant_id, ctx.p.tenant_id] do
+        {resp, queries} = promote_captured(ctx.p, source, ["PLATFORM_ADMIN"])
+
+        assert resp.status == 403, "#{source}: #{resp.status}"
+        assert touching(queries, ctx.b) == []
+      end
+    end
+
+    test "REQ-447 PR 2: a PLATFORM_ADMIN of an ordinary tenant holds nothing (403, never the own-tenant 404/409)",
+         ctx do
+      insert_active_definition!(ctx.a, @process_key)
+
+      for source <- [ctx.a.tenant_id, ctx.b.tenant_id] do
+        {resp, queries} = promote_captured(ctx.a, source, ["PLATFORM_ADMIN"], @process_key)
+
+        assert resp.status == 403, "#{source}: #{resp.status}"
+        assert touching(queries, ctx.b) == []
+      end
     end
 
     test "other roles are denied 403 whatever source they name", ctx do

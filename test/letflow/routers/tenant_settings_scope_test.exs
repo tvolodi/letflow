@@ -4,7 +4,8 @@ defmodule Letflow.Routers.TenantSettingsScopeTest do
   `PATCH /tenant/settings` is an own-tenant, tenant-scope operation (`:TenantSettingsManage`),
   not the platform registry permission.
 
-    * an ordinary tenant's `PLATFORM_ADMIN` is allowed (200) and changes ONLY its own row;
+    * an ordinary tenant's `TENANT_ADMIN` is allowed (200) and changes ONLY its own row; an
+      ordinary tenant's `PLATFORM_ADMIN` holds nothing there any more (403, REQ-447 PR 2);
     * a `PROCESS_DESIGNER` of an ordinary tenant is denied 403, and its row is unchanged;
     * the platform tenant's `PLATFORM_ADMIN` is allowed on its own row;
     * no tenant-bearing request value (body or query) redirects the write to another tenant.
@@ -38,11 +39,11 @@ defmodule Letflow.Routers.TenantSettingsScopeTest do
     assert {"PATCH", "/", :TenantSettingsManage} in Letflow.Routers.TenantSettings.__authz_routes__()
   end
 
-  test "an ordinary tenant's PLATFORM_ADMIN gets 200 and changes only its own settings", ctx do
+  test "an ordinary tenant's TENANT_ADMIN gets 200 and changes only its own settings", ctx do
     b_before = settings_of(ctx.b)
     p_before = settings_of(ctx.p)
 
-    resp = patch(ctx.a, ["PLATFORM_ADMIN"], %{"app_name" => "Scope Test A"})
+    resp = patch(ctx.a, ["TENANT_ADMIN"], %{"app_name" => "Scope Test A"})
 
     assert resp.status == 200
     body = Jason.decode!(resp.resp_body)
@@ -64,10 +65,23 @@ defmodule Letflow.Routers.TenantSettingsScopeTest do
     assert settings_of(ctx.a) == before
   end
 
-  test "no role other than PLATFORM_ADMIN may patch settings", ctx do
+  test "an ordinary tenant's PLATFORM_ADMIN gets 403 and nothing is written (legacy removed)",
+       ctx do
     before = settings_of(ctx.a)
 
-    for role <- ["PROCESS_OPERATOR", "TASK_WORKER", "AGENT_RUNNER", "CANDIDATE"] do
+    resp = patch(ctx.a, ["PLATFORM_ADMIN"], %{"app_name" => "Denied"})
+
+    assert resp.status == 403
+    assert settings_of(ctx.a) == before
+  end
+
+  test "no role other than TENANT_ADMIN (or the platform tenant's PLATFORM_ADMIN) may patch settings",
+       ctx do
+    before = settings_of(ctx.a)
+
+    denied = ["PROCESS_OPERATOR", "TASK_WORKER", "AGENT_RUNNER", "CANDIDATE", "PLATFORM_ADMIN"]
+
+    for role <- denied do
       assert patch(ctx.a, [role], %{"app_name" => "Denied"}).status == 403, role
     end
 
@@ -89,7 +103,7 @@ defmodule Letflow.Routers.TenantSettingsScopeTest do
   test "the outcome does not depend on the platform pin (tenant scope)", ctx do
     Fixture.unpin!()
 
-    resp = patch(ctx.a, ["PLATFORM_ADMIN"], %{"app_name" => "Unpinned"})
+    resp = patch(ctx.a, ["TENANT_ADMIN"], %{"app_name" => "Unpinned"})
     assert resp.status == 200
     assert settings_of(ctx.a)["app_name"] == "Unpinned"
   end
@@ -100,7 +114,7 @@ defmodule Letflow.Routers.TenantSettingsScopeTest do
     resp =
       patch(
         ctx.a,
-        ["PLATFORM_ADMIN"],
+        ["TENANT_ADMIN"],
         %{"app_name" => "Own Only", "tenant_id" => ctx.b.tenant_id, "slug" => ctx.b.tenant.slug},
         "/?tenant_id=#{ctx.b.tenant_id}&slug=#{ctx.b.tenant.slug}"
       )

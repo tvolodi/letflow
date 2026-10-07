@@ -113,11 +113,15 @@ defmodule Letflow.Plugs.Authorize do
         # ISS-0993 (design section 4): `platform_tenant?` is RECOMPUTED from the
         # database-resolved tenant id; the flag stored in auth_context (if any)
         # is never read, so a hand-assigned context stays fail-closed.
+        platform_tenant? =
+          PlatformTenant.platform_tenant?(Map.get(conn.assigns.auth_context, :tenant_id))
+
+        # REQ-447 PR 2 (design 3.5): PLATFORM_ADMIN is dropped outside the
+        # platform tenant by the one shared resolution function.
         ctx = %Authorization.AccessContext{
           user_id: conn.assigns.auth_context.user_id,
-          roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles),
-          platform_tenant?:
-            PlatformTenant.platform_tenant?(Map.get(conn.assigns.auth_context, :tenant_id))
+          roles: Authorization.effective_roles(conn.assigns.auth_context.roles, platform_tenant?),
+          platform_tenant?: platform_tenant?
         }
 
         # No :policy_key private key present (a plain get/post/patch/delete)

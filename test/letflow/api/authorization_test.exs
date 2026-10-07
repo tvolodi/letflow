@@ -167,9 +167,15 @@ defmodule Letflow.Api.AuthorizationTest do
 
   describe "acceptance criterion 3 — all three AccessDecisionKind variants reachable" do
     test "Allow is returned for an allowed endpoint" do
-      ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN]}
+      # REQ-447 PR 2: the platform tenant's PLATFORM_ADMIN (the only place the role counts).
+      ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN], platform_tenant?: true}
       decision = Authorization.evaluate_access(ctx, :AuditRead)
       assert decision.kind == :Allow
+    end
+
+    test "REQ-447 PR 2: a PLATFORM_ADMIN context of a NON-platform tenant is Deny403 (legacy own-tenant powers removed)" do
+      ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN], platform_tenant?: false}
+      assert Authorization.evaluate_access(ctx, :AuditRead).kind == :Deny403
     end
 
     test "Deny403 is returned for a denied endpoint" do
@@ -195,11 +201,40 @@ defmodule Letflow.Api.AuthorizationTest do
     end
 
     test "TASK_WORKER + PLATFORM_ADMIN gets plain Allow with unrestricted scope" do
-      ctx = %AccessContext{user_id: "worker-1", roles: [:TASK_WORKER, :PLATFORM_ADMIN]}
+      # REQ-447 PR 2: PLATFORM_ADMIN widens only in the platform tenant.
+      ctx = %AccessContext{
+        user_id: "worker-1",
+        roles: [:TASK_WORKER, :PLATFORM_ADMIN],
+        platform_tenant?: true
+      }
+
       decision = Authorization.evaluate_access(ctx, :TasksList)
 
       assert decision.kind == :Allow
       assert decision.task_scope == :all
+    end
+
+    test "TASK_WORKER + PLATFORM_ADMIN outside the platform tenant is row-filtered exactly like TASK_WORKER alone" do
+      # REQ-447 PR 2 (lib 0696b9eb): defence in depth inside evaluate_access/2 itself.
+      # A hand-built context (not via effective_roles/2) must not widen the task scope.
+      legacy = %AccessContext{
+        user_id: "worker-1",
+        roles: [:TASK_WORKER, :PLATFORM_ADMIN],
+        platform_tenant?: false
+      }
+
+      plain = %AccessContext{user_id: "worker-1", roles: [:TASK_WORKER], platform_tenant?: false}
+
+      decision = Authorization.evaluate_access(legacy, :TasksList)
+
+      assert decision.kind == :AllowWithRowFilter
+      assert decision.task_scope == {:own_user_and_groups, "worker-1"}
+      assert decision == Authorization.evaluate_access(plain, :TasksList)
+      refute decision.task_scope == :all
+
+      # default flag (unset) behaves as non-platform
+      default = %AccessContext{user_id: "worker-1", roles: [:TASK_WORKER, :PLATFORM_ADMIN]}
+      assert Authorization.evaluate_access(default, :TasksList) == decision
     end
 
     test "TASK_WORKER + PROCESS_DESIGNER gets plain Allow with unrestricted scope" do
@@ -642,7 +677,15 @@ defmodule Letflow.Api.AuthorizationTest do
       # actually takes at request time.
       for {role, by_permission} <- @new_permission_grid,
           {policy_key, expected_allowed} <- by_permission do
-        ctx = %AccessContext{user_id: "u-#{role}", roles: [role]}
+        # REQ-447 PR 2: PLATFORM_ADMIN counts only in the platform tenant, so the
+        # PLATFORM_ADMIN row is evaluated as the platform tenant's own caller; every
+        # other role is evaluated in an ordinary tenant (platform_tenant?: false).
+        ctx = %AccessContext{
+          user_id: "u-#{role}",
+          roles: [role],
+          platform_tenant?: role == :PLATFORM_ADMIN
+        }
+
         decision = Authorization.evaluate_access(ctx, policy_key)
         expected_kind = if expected_allowed, do: :Allow, else: :Deny403
 
@@ -1021,7 +1064,15 @@ defmodule Letflow.Api.AuthorizationTest do
 
     test "evaluate_access/2 agrees with the grid end-to-end" do
       for {role, expected_allowed} <- @req315_grid do
-        ctx = %AccessContext{user_id: "u-#{role}", roles: [role]}
+        # REQ-447 PR 2: PLATFORM_ADMIN counts only in the platform tenant, so the
+        # PLATFORM_ADMIN row is evaluated as the platform tenant's own caller; every
+        # other role is evaluated in an ordinary tenant (platform_tenant?: false).
+        ctx = %AccessContext{
+          user_id: "u-#{role}",
+          roles: [role],
+          platform_tenant?: role == :PLATFORM_ADMIN
+        }
+
         decision = Authorization.evaluate_access(ctx, :EntitiesAggregate)
         expected_kind = if expected_allowed, do: :Allow, else: :Deny403
 
@@ -1359,7 +1410,7 @@ defmodule Letflow.Api.AuthorizationTest do
 
   describe "REQ-318 AC5 — evaluate_access/2 accepts :EntitiesRecordsExportUnredacted as a direct argument" do
     test "a role holding it (PLATFORM_ADMIN, via the catch-all) is granted" do
-      ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN]}
+      ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN], platform_tenant?: true}
 
       assert %Authorization.AccessDecision{kind: :Allow} =
                Authorization.evaluate_access(ctx, :EntitiesRecordsExportUnredacted)
@@ -1380,7 +1431,7 @@ defmodule Letflow.Api.AuthorizationTest do
     end
 
     test "evaluate_access/2 also accepts the two route-level atoms directly, same grant/deny shape" do
-      admin_ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN]}
+      admin_ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN], platform_tenant?: true}
       operator_ctx = %AccessContext{user_id: "u2", roles: [:PROCESS_OPERATOR]}
 
       for permission <- [:EntitiesRecordsExport, :EntitiesRecordsImport] do
@@ -1527,7 +1578,15 @@ defmodule Letflow.Api.AuthorizationTest do
     test "evaluate_access/2 agrees with the grid end-to-end" do
       for {role, by_permission} <- @req317_grid,
           {policy_key, expected_allowed} <- by_permission do
-        ctx = %AccessContext{user_id: "u-#{role}", roles: [role]}
+        # REQ-447 PR 2: PLATFORM_ADMIN counts only in the platform tenant, so the
+        # PLATFORM_ADMIN row is evaluated as the platform tenant's own caller; every
+        # other role is evaluated in an ordinary tenant (platform_tenant?: false).
+        ctx = %AccessContext{
+          user_id: "u-#{role}",
+          roles: [role],
+          platform_tenant?: role == :PLATFORM_ADMIN
+        }
+
         decision = Authorization.evaluate_access(ctx, policy_key)
         expected_kind = if expected_allowed, do: :Allow, else: :Deny403
 

@@ -272,7 +272,7 @@ defmodule Letflow.Definitions.RoleBindingInstallTest do
         |> assign(:auth_context, %{
           user_id: Ecto.UUID.generate(),
           tenant_id: tenant.tenant_id,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         })
         |> assign(:trace_id, "req455-test-trace-id")
         |> Letflow.Routers.Definitions.call(@definitions_opts)

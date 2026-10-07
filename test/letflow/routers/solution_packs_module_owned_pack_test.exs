@@ -64,7 +64,7 @@ defmodule Letflow.Routers.SolutionPacksModuleOwnedPackTest do
     |> assign(:auth_context, %{
       user_id: Ecto.UUID.generate(),
       tenant_id: tenant_fixture.tenant_id,
-      roles: ["PLATFORM_ADMIN"]
+      roles: ["TENANT_ADMIN"]
     })
     |> assign(:trace_id, "req411-module-owned-pack-test")
   end

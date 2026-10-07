@@ -6,8 +6,10 @@ defmodule Letflow.Routers.ModulesTest do
   coverage (this project's established convention when the design is fully
   specified — no separate TEST-DESIGNER dispatch).
 
-  Covers AC1 (404 before any permission check, every role including
-  PLATFORM_ADMIN), AC2 (200/403 split once installed, via the fixture's own
+  Covers AC1 (404 before any permission check, every role that can hold a
+  token in an ordinary tenant -- REQ-447 PR 2: a PLATFORM_ADMIN token can no
+  longer be minted outside the platform tenant, so TENANT_ADMIN is the
+  tenant-admin identity), AC2 (200/403 split once installed, via the fixture's own
   `role_grants`), AC3 (byte-identical 404 body for an unknown module id vs
   an uninstalled known module), AC4 (two-tenant install isolation — still
   404, not 403, for a tenant that never installed it).
@@ -143,14 +145,16 @@ defmodule Letflow.Routers.ModulesTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════════
-  # AC1 — 404 for every role, including PLATFORM_ADMIN, when not installed
+  # AC1 — 404 for every mintable role, including TENANT_ADMIN, when not installed
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC1 -- 404 for every role when the fixture is not installed, before any permission check" do
     test "GET /api/v1/modules/fixture/items/42 is 404 for every role in Authorization.roles/0" do
       ctx = tenant_ctx("req404-ac1")
 
-      for role <- Authorization.roles() do
+      # REQ-447 PR 2: `Identity.create_token/3` refuses a PLATFORM_ADMIN token in an ordinary
+      # tenant (`:invalid_role_set`), so it is excluded from the minting loop; TENANT_ADMIN stays.
+      for role <- Authorization.roles(), role != :PLATFORM_ADMIN do
         role_ctx = token_for(ctx, role)
 
         conn = request(:get, "/api/v1/modules/fixture/items/42", role_ctx)
@@ -178,13 +182,14 @@ defmodule Letflow.Routers.ModulesTest do
       assert granted_conn.status == 200
       assert Jason.decode!(granted_conn.resp_body) == %{"fixture" => true, "id" => "42"}
 
-      # PLATFORM_ADMIN's core matrix unconditionally allows every permission
-      # (see Letflow.Api.Authorization.core_role_allows?/2), so it must be
-      # excluded here -- this needs a role the fixture's own role_grants does
-      # NOT name AND whose core matrix does not separately grant :FixtureRead.
+      # PLATFORM_ADMIN (cannot be minted in an ordinary tenant, REQ-447 PR 2) and
+      # TENANT_ADMIN (holds every tenant-scope permission) must be excluded here --
+      # this needs a role the fixture's own role_grants does NOT name AND whose
+      # core matrix does not separately grant :FixtureRead.
       ungranted_role =
         Enum.find(Authorization.roles(), fn role ->
-          role != :PLATFORM_ADMIN and role not in Map.keys(Fixture.manifest().role_grants)
+          role not in [:PLATFORM_ADMIN, :TENANT_ADMIN] and
+            role not in Map.keys(Fixture.manifest().role_grants)
         end)
 
       ungranted_ctx = token_for(ctx, ungranted_role)
@@ -203,7 +208,7 @@ defmodule Letflow.Routers.ModulesTest do
   describe "AC3 -- 404 body is byte-identical regardless of which branch produced it" do
     test "unknown module id and uninstalled known module produce the exact same resp_body" do
       ctx = tenant_ctx("req404-ac3")
-      role_ctx = token_for(ctx, :PLATFORM_ADMIN)
+      role_ctx = token_for(ctx, :TENANT_ADMIN)
 
       trace_id = "req404-ac3-shared-trace-id"
 
@@ -257,7 +262,7 @@ defmodule Letflow.Routers.ModulesTest do
   describe "INV-5 timing parity -- Installs.installed?/2 runs unconditionally, not short-circuited by the free catalog checks" do
     test "an unknown module id still pays exactly one tenant_modules query, same as a known-uninstalled id" do
       ctx = tenant_ctx("req404-inv5")
-      role_ctx = token_for(ctx, :PLATFORM_ADMIN)
+      role_ctx = token_for(ctx, :TENANT_ADMIN)
 
       {unknown_conn, unknown_count} =
         count_tenant_modules_queries(fn ->

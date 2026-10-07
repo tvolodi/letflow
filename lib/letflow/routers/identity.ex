@@ -537,11 +537,12 @@ defmodule Letflow.Routers.Identity do
   # (roles parsed from the DB-resolved auth_context; platform_tenant? recomputed).
   defp users_groups_roles_manage?(conn) do
     auth_context = conn.assigns.auth_context
+    platform_tenant? = PlatformTenant.platform_tenant?(Map.get(auth_context, :tenant_id))
 
     Authorization.has_permission_in_scope?(
-      Authorization.roles_from_strings(Map.get(auth_context, :roles, [])),
+      Authorization.effective_roles(Map.get(auth_context, :roles, []), platform_tenant?),
       :UsersGroupsRolesManage,
-      PlatformTenant.platform_tenant?(Map.get(auth_context, :tenant_id))
+      platform_tenant?
     )
   end
 
@@ -858,6 +859,11 @@ defmodule Letflow.Routers.Identity do
         Response.not_found(conn)
 
       {:error, :name_not_a_recognized_platform_role} ->
+        Response.unprocessable(conn, "name_not_a_recognized_platform_role")
+
+      # REQ-447 PR 2 (design 3.4): defence in depth behind H1 (which already
+      # answers 403 first); the wire contract gains no new public code.
+      {:error, :platform_admin_outside_platform_tenant} ->
         Response.unprocessable(conn, "name_not_a_recognized_platform_role")
 
       {:error, %Ecto.Changeset{}} ->

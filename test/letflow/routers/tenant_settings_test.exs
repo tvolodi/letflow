@@ -60,7 +60,7 @@ defmodule Letflow.Routers.TenantSettingsTest do
   # ── Shared test dispatch helpers ─────────────────────────────────────────
 
   defp build_conn(method, path, tenant_fixture, fields) do
-    roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
+    roles = Keyword.get(fields, :roles, ["TENANT_ADMIN"])
     body = Keyword.get(fields, :body, %{})
 
     conn(method, path)
@@ -88,7 +88,7 @@ defmodule Letflow.Routers.TenantSettingsTest do
   end
 
   defp get_audit(tenant_fixture, fields) do
-    roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
+    roles = Keyword.get(fields, :roles, ["TENANT_ADMIN"])
     query_string = Keyword.get(fields, :query_string, "")
     path = if query_string == "", do: "/", else: "/?" <> query_string
 
@@ -425,14 +425,28 @@ defmodule Letflow.Routers.TenantSettingsTest do
   # Authorization
   # ═══════════════════════════════════════════════════════════════════════
 
-  describe "authorization: :TenantsManage is PLATFORM_ADMIN-only" do
-    test "a non-PLATFORM_ADMIN authenticated caller gets 403, row unchanged" do
+  describe "authorization: :TenantSettingsManage is a tenant-admin permission" do
+    test "a non-TENANT_ADMIN authenticated caller gets 403, row unchanged" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req382-authz-403")
       before = Repo.get!(Tenant, tenant.tenant_id)
 
       resp =
         patch_settings(tenant,
           roles: ["PROCESS_DESIGNER"],
+          body: %{"app_name" => "Should Not Apply"}
+        )
+
+      assert resp.status == 403
+      assert Repo.get!(Tenant, tenant.tenant_id) == before
+    end
+
+    test "REQ-447 PR 2: a PLATFORM_ADMIN of an ordinary tenant holds nothing and gets 403, row unchanged" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req447-authz-legacy")
+      before = Repo.get!(Tenant, tenant.tenant_id)
+
+      resp =
+        patch_settings(tenant,
+          roles: ["PLATFORM_ADMIN"],
           body: %{"app_name" => "Should Not Apply"}
         )
 

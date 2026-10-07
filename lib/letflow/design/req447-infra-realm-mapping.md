@@ -82,13 +82,13 @@ If any check fails after R4: re-add `PLATFORM_ADMIN` to the failing user (restor
 
 For each user of section 2 (token minted through `scripts/qa-uat-env.sh token <user>` inside one command, never echoed):
 
-* `GET /api/v1/users`: 200.
-* `GET /api/v1/tokens`: 200.
+* `GET /api/v1/identity/users`: 200.
+* `GET /api/v1/identity/tokens`: 200.
 * `GET /api/v1/tenants`: 403 (a tenant admin has no platform scope).
 * `GET /api/v1/admin/services`: 403.
 * For `actor-swiftroute-alice` additionally `GET /api/v1/tasks/inbox` (exact route): she must still see her own tasks and, as `TENANT_ADMIN`, all tenant tasks (letflow behaviour defined in design 3.1).
 * For `admin-user` (bpm-default, unchanged): `GET /api/v1/tenants` 200 and `GET /api/v1/admin/services` 200 (proves the operator was not demoted; this is the guard for P1).
-* Negative controls (a user that must NOT be an administrator; F5): `actor-swiftroute-lena` (swiftroute), `candidate-user` (bilimbaga) and a non-admin user of the PLATFORM realm, `worker-user` (bpm-default), get 403 on `GET /api/v1/users`. Run them after R2 and after R4. A 200 for either means `TENANT_ADMIN` leaked into a default role, group or client scope: stop and report.
+* Negative controls (a user that must NOT be an administrator; F5): `actor-swiftroute-lena` (swiftroute), `candidate-user` (bilimbaga) and a non-admin user of the PLATFORM realm, `worker-user` (bpm-default), get 403 on `GET /api/v1/identity/users`. Run them after R2 and after R4. A 200 for either means `TENANT_ADMIN` leaked into a default role, group or client scope: stop and report.
 
 After letflow PR 2 is deployed, repeat the same checks once (R7).
 

@@ -30,7 +30,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
   "REQ-378 §2.2: one-time sync-on-first-login is a one-way gate against
   post-revocation re-sync", closes the coverage gap the rework's handoff
   flagged: every test above pre-seeds `group_members` directly via
-  `grant_platform_admin!/2`, sidestepping
+  `grant_tenant_admin!/2`, sidestepping
   `Letflow.Identity.sync_role_claims_from_token/3` entirely. The new tests
   exercise that function for real, via
   `Letflow.Oidc.Iss0736RoleClaimTokenVerifierDouble` (`test/support/`) —
@@ -86,7 +86,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
     |> put_req_header("authorization", "Bearer valid-test-token")
   end
 
-  defp grant_platform_admin!(user_id, schema_name) do
+  defp grant_tenant_admin!(user_id, schema_name) do
     {:ok, group} =
       Identity.create_group(%{"name" => "iss0736-admins-#{Ecto.UUID.generate()}"},
         prefix: schema_name
@@ -94,7 +94,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
 
     {:ok, _role} =
       %TenantRole{}
-      |> TenantRole.changeset(%{name: "PLATFORM_ADMIN", kind: :platform_role, group_id: group.id})
+      |> TenantRole.changeset(%{name: "TENANT_ADMIN", kind: :platform_role, group_id: group.id})
       |> Repo.insert(prefix: schema_name)
 
     {:ok, %{member: _member, created: true}} =
@@ -128,7 +128,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
 
   # Binds a real, closed-set-recognized role name (Letflow.Api.Authorization's
   # role()) to a fresh group WITHOUT inserting any group_members row --
-  # unlike grant_platform_admin!/2 above, this deliberately leaves membership
+  # unlike grant_tenant_admin!/2 above, this deliberately leaves membership
   # unseeded so the first OIDC login below must go through
   # Identity.sync_role_claims_from_token/3 to populate it, not a
   # test-fixture shortcut.
@@ -151,7 +151,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
   end
 
   describe "REQ-378 AC1: role revocation takes effect on the user's very next request, same JWT, no sleep/refresh" do
-    test "an OIDC session with PLATFORM_ADMIN succeeds on a PLATFORM_ADMIN-only route; revoking group membership (no re-auth) makes the identical bearer token fail 403 on the very next identical request" do
+    test "an OIDC session with TENANT_ADMIN succeeds on a TENANT_ADMIN-only route; revoking group membership (no re-auth) makes the identical bearer token fail 403 on the very next identical request" do
       tenant = insert_bpm_default_tenant!()
       {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant.id)
 
@@ -164,7 +164,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
       user_id = setup_conn.assigns.auth_context.user_id
       assert is_binary(user_id)
 
-      group = grant_platform_admin!(user_id, schema_name)
+      group = grant_tenant_admin!(user_id, schema_name)
 
       # Same bearer token, same route: now succeeds, proving the live role
       # query (not the JWT's own claims) is what authenticate_oidc/2 hands to
@@ -172,7 +172,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
       granted_conn = oidc_request(:get, "/api/v1/identity/tokens") |> dispatch()
       assert granted_conn.status == 200
       assert granted_conn.assigns.auth_context.user_id == user_id
-      assert "PLATFORM_ADMIN" in granted_conn.assigns.auth_context.roles
+      assert "TENANT_ADMIN" in granted_conn.assigns.auth_context.roles
 
       # The tenant_admin action under test: revoke the membership via the
       # exact same Identity function the corrected web/ GUI path now calls
@@ -196,7 +196,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
       setup_conn = oidc_request(:get, "/api/v1/identity/tokens") |> dispatch()
       user_id = setup_conn.assigns.auth_context.user_id
 
-      group = grant_platform_admin!(user_id, schema_name)
+      group = grant_tenant_admin!(user_id, schema_name)
 
       granted_conn = oidc_request(:get, "/api/v1/identity/tokens") |> dispatch()
       assert granted_conn.status == 200

@@ -171,19 +171,50 @@ defmodule Letflow.Api.AuthorizationTenantAdminTest do
     end
   end
 
-  describe "legacy compatibility (PR 1: the C6 switch stays ON)" do
-    test "a PLATFORM_ADMIN of a non-platform tenant still holds tenant-scope powers and no platform-scope permission" do
-      assert Authorization.tenant_platform_admin_own_tenant_powers?()
+  describe "legacy honouring REMOVED (REQ-447 PR 2): PLATFORM_ADMIN outside the platform tenant is dropped, not honoured" do
+    test "the C6 switch function no longer exists" do
+      refute function_exported?(Authorization, :tenant_platform_admin_own_tenant_powers?, 0)
+    end
 
-      for key <- [:TenantSettingsManage, :PromotionsManage, :DefinitionsRollback] do
-        assert Authorization.evaluate_access(ctx([:PLATFORM_ADMIN], false), key).kind == :Allow,
-               inspect(key)
-      end
-
-      for key <- [:TenantsManage, :AdminServicesRead, :AdminServicesManage, :Unknown] do
+    test "a PLATFORM_ADMIN context of a non-platform tenant is denied tenant-scope keys AND platform-scope keys AND :Unknown" do
+      # Changed assertion: the three tenant-scope keys were :Allow under the PR 1 C6 switch.
+      for key <- [
+            :TenantSettingsManage,
+            :PromotionsManage,
+            :DefinitionsRollback,
+            :TenantsManage,
+            :AdminServicesRead,
+            :AdminServicesManage,
+            :Unknown
+          ] do
         assert Authorization.evaluate_access(ctx([:PLATFORM_ADMIN], false), key).kind == :Deny403,
                inspect(key)
       end
+    end
+
+    test "effective_roles/2 drops PLATFORM_ADMIN unless platform_tenant? is exactly true" do
+      assert Authorization.effective_roles(["PLATFORM_ADMIN", "TASK_WORKER"], true) ==
+               [:PLATFORM_ADMIN, :TASK_WORKER]
+
+      assert Authorization.effective_roles(["PLATFORM_ADMIN", "TASK_WORKER"], false) ==
+               [:TASK_WORKER]
+
+      for not_true <- [nil, "true", 1, :true_ish, %{}] do
+        assert Authorization.effective_roles(["PLATFORM_ADMIN"], not_true) == [],
+               inspect(not_true)
+      end
+
+      # a TENANT_ADMIN is untouched in both
+      for flag <- [true, false] do
+        assert Authorization.effective_roles(["TENANT_ADMIN"], flag) == [:TENANT_ADMIN]
+      end
+
+      # non-list input and unknown strings
+      for bad <- [nil, "PLATFORM_ADMIN", %{}, :PLATFORM_ADMIN], flag <- [true, false] do
+        assert Authorization.effective_roles(bad, flag) == [], inspect(bad)
+      end
+
+      assert Authorization.effective_roles(["platform_admin", "bogus", ""], true) == []
     end
   end
 end

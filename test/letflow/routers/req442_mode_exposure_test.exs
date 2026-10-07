@@ -127,7 +127,7 @@ defmodule Letflow.Routers.Req442ModeExposureTest do
           |> assign(:auth_context, %{
             user_id: Ecto.UUID.generate(),
             tenant_id: t.tenant_id,
-            roles: ["PLATFORM_ADMIN"]
+            roles: ["TENANT_ADMIN"]
           })
           |> assign(:trace_id, "req442-exposure-trace")
           |> Letflow.Routers.TenantSettings.call(Letflow.Routers.TenantSettings.init([]))
@@ -168,7 +168,12 @@ defmodule Letflow.Routers.Req442ModeExposureTest do
                    tenant_id: tenant_id
                  )
 
-        for roles <- [["PROCESS_OPERATOR"], ["PLATFORM_ADMIN"], ["TASK_WORKER"]] do
+        for roles <- [
+              ["PROCESS_OPERATOR"],
+              ["TENANT_ADMIN"],
+              ["PLATFORM_ADMIN"],
+              ["TASK_WORKER"]
+            ] do
           resp =
             conn(:get, "/memberships")
             |> assign(:auth_context, %{user_id: user.id, tenant_id: tenant_id, roles: roles})

@@ -105,7 +105,7 @@ defmodule Letflow.Routers.DlqTest do
       tenant = provisioned_tenant("req178-shape")
       entry = enqueue!(tenant, %{entry_type: "event", reason: "boom"})
 
-      conn = build_conn(:get, "/", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      conn = build_conn(:get, "/", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
@@ -139,7 +139,7 @@ defmodule Letflow.Routers.DlqTest do
       {:ok, retrying} = Dlq.retry(retrying_source.id, prefix: tenant.schema_name)
 
       conn =
-        build_conn(:get, "/?status=pending", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/?status=pending", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       body = Jason.decode!(conn.resp_body)
       ids = Enum.map(body["items"], & &1["id"])
@@ -154,7 +154,7 @@ defmodule Letflow.Routers.DlqTest do
       _timer_entry = enqueue!(tenant, %{entry_type: "timer"})
 
       conn =
-        build_conn(:get, "/?source_type=event", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/?source_type=event", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       body = Jason.decode!(conn.resp_body)
       assert Enum.map(body["items"], & &1["id"]) == [event_entry.id]
@@ -166,7 +166,7 @@ defmodule Letflow.Routers.DlqTest do
       _other = enqueue!(tenant, %{reason: "unrelated"})
 
       conn =
-        build_conn(:get, "/?search=distinctive-needle", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/?search=distinctive-needle", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       body = Jason.decode!(conn.resp_body)
@@ -180,7 +180,7 @@ defmodule Letflow.Routers.DlqTest do
       _other = enqueue!(tenant, %{instance_id: Ecto.UUID.generate()})
 
       conn =
-        build_conn(:get, "/?instance_id=#{instance_id}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/?instance_id=#{instance_id}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       body = Jason.decode!(conn.resp_body)
@@ -193,7 +193,7 @@ defmodule Letflow.Routers.DlqTest do
       all_ids = MapSet.new(entries, & &1.id)
 
       conn1 =
-        build_conn(:get, "/?page_size=1", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:get, "/?page_size=1", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       body1 = Jason.decode!(conn1.resp_body)
       assert length(body1["items"]) == 1
@@ -202,7 +202,7 @@ defmodule Letflow.Routers.DlqTest do
       cursor = URI.encode_www_form(body1["next_cursor"])
 
       conn2 =
-        build_conn(:get, "/?page_size=1&cursor=#{cursor}", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/?page_size=1&cursor=#{cursor}", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       body2 = Jason.decode!(conn2.resp_body)
@@ -254,11 +254,11 @@ defmodule Letflow.Routers.DlqTest do
       tenant_b_entry = enqueue!(tenant_b)
 
       retry_conn =
-        build_conn(:post, "/#{tenant_b_entry.id}/retry", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{tenant_b_entry.id}/retry", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       discard_conn =
-        build_conn(:post, "/#{tenant_b_entry.id}/discard", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{tenant_b_entry.id}/discard", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert retry_conn.status == 404
@@ -266,7 +266,7 @@ defmodule Letflow.Routers.DlqTest do
 
       # Cross-tenant-404 identical to a genuinely-absent id (INV-5).
       never_existed_conn =
-        build_conn(:post, "/#{Ecto.UUID.generate()}/retry", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{Ecto.UUID.generate()}/retry", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert never_existed_conn.status == 404
@@ -287,7 +287,7 @@ defmodule Letflow.Routers.DlqTest do
       tenant = provisioned_tenant("req178-404-retry")
 
       conn =
-        build_conn(:post, "/#{Ecto.UUID.generate()}/retry", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{Ecto.UUID.generate()}/retry", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 404
@@ -297,7 +297,7 @@ defmodule Letflow.Routers.DlqTest do
       tenant = provisioned_tenant("req178-404-discard")
 
       conn =
-        build_conn(:post, "/#{Ecto.UUID.generate()}/discard", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{Ecto.UUID.generate()}/discard", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 404
@@ -311,7 +311,7 @@ defmodule Letflow.Routers.DlqTest do
       resolved = force_status!(tenant, entry, :resolved)
 
       conn =
-        build_conn(:post, "/#{entry.id}/retry", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+        build_conn(:post, "/#{entry.id}/retry", tenant, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       assert conn.status == 409
 
@@ -326,7 +326,7 @@ defmodule Letflow.Routers.DlqTest do
       {:ok, discarded} = Dlq.discard(entry.id, prefix: tenant.schema_name)
 
       conn =
-        build_conn(:post, "/#{entry.id}/discard", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:post, "/#{entry.id}/discard", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 409
@@ -348,8 +348,8 @@ defmodule Letflow.Routers.DlqTest do
 
       entry_a = enqueue!(tenant_a)
 
-      conn_a = build_conn(:get, "/", tenant_a, roles: ["PLATFORM_ADMIN"]) |> dispatch()
-      conn_b = build_conn(:get, "/", tenant_b, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      conn_a = build_conn(:get, "/", tenant_a, roles: ["TENANT_ADMIN"]) |> dispatch()
+      conn_b = build_conn(:get, "/", tenant_b, roles: ["TENANT_ADMIN"]) |> dispatch()
 
       body_a = Jason.decode!(conn_a.resp_body)
       body_b = Jason.decode!(conn_b.resp_body)

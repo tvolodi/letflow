@@ -102,7 +102,7 @@ defmodule Letflow.Routers.Req317RecordAttachmentsRoutesTest do
     |> Repo.insert!(prefix: tenant.schema_name)
   end
 
-  defp tenant_ctx(slug_prefix, roles \\ ["PLATFORM_ADMIN"]) do
+  defp tenant_ctx(slug_prefix, roles \\ ["TENANT_ADMIN"]) do
     tenant =
       TenantFixture.provisioned_tenant!(
         slug_prefix: slug_prefix,
@@ -400,7 +400,7 @@ defmodule Letflow.Routers.Req317RecordAttachmentsRoutesTest do
 
   describe "permission gating (:EntitiesAttachmentsManage / :EntitiesAttachmentsRead)" do
     test "create (Manage) -- TASK_WORKER (Read only) is denied, PROCESS_OPERATOR (Manage) is not" do
-      ctx = tenant_ctx("req317-authz-manage", ["PLATFORM_ADMIN"])
+      ctx = tenant_ctx("req317-authz-manage", ["TENANT_ADMIN"])
       seed_active_widget_definition!(ctx)
       record = seed_record!(ctx)
       boundary = "req317boundary4"
@@ -432,8 +432,8 @@ defmodule Letflow.Routers.Req317RecordAttachmentsRoutesTest do
       refute allowed.status == 403
     end
 
-    test "delete (Manage) -- AGENT_RUNNER (neither) is denied, PLATFORM_ADMIN (both) is not" do
-      ctx = tenant_ctx("req317-authz-delete", ["PLATFORM_ADMIN"])
+    test "delete (Manage) -- AGENT_RUNNER (neither) is denied, TENANT_ADMIN (both) is not" do
+      ctx = tenant_ctx("req317-authz-delete", ["TENANT_ADMIN"])
       seed_active_widget_definition!(ctx)
       record = seed_record!(ctx)
       attachment = upload!(ctx, "widget", record.record_id)
@@ -450,7 +450,7 @@ defmodule Letflow.Routers.Req317RecordAttachmentsRoutesTest do
     end
 
     test "list (Read) -- AGENT_RUNNER (neither) is denied, TASK_WORKER (Read only) is not" do
-      ctx = tenant_ctx("req317-authz-list", ["PLATFORM_ADMIN"])
+      ctx = tenant_ctx("req317-authz-list", ["TENANT_ADMIN"])
       seed_active_widget_definition!(ctx)
       record = seed_record!(ctx)
       _attachment = upload!(ctx, "widget", record.record_id)
@@ -466,7 +466,7 @@ defmodule Letflow.Routers.Req317RecordAttachmentsRoutesTest do
     end
 
     test "get-content (Read) -- AGENT_RUNNER (neither) is denied, PROCESS_DESIGNER (Read only) is not" do
-      ctx = tenant_ctx("req317-authz-content", ["PLATFORM_ADMIN"])
+      ctx = tenant_ctx("req317-authz-content", ["TENANT_ADMIN"])
       seed_active_widget_definition!(ctx)
       record = seed_record!(ctx)
       attachment = upload!(ctx, "widget", record.record_id)

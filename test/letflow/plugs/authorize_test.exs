@@ -178,7 +178,7 @@ defmodule Letflow.Plugs.AuthorizeTest do
 
     test "an invalid tenant_id in auth_context -> 500, never reaches the authorization decision" do
       conn =
-        build_conn(ctx(["PLATFORM_ADMIN"], %{tenant_id: "not-a-uuid"}), :UsersManage)
+        build_conn(ctx(["TENANT_ADMIN"], %{tenant_id: "not-a-uuid"}), :UsersManage)
         |> Authorize.call(@opts)
 
       assert conn.status == 500
@@ -189,17 +189,31 @@ defmodule Letflow.Plugs.AuthorizeTest do
   # ── Sufficient role on a real policy key still passes ──────────────────────
 
   describe "a sufficient role on a real policy key passes through" do
-    test "PLATFORM_ADMIN on :UsersManage is allowed, scoped_opts and access_decision assigned" do
+    test "TENANT_ADMIN on :UsersManage is allowed, scoped_opts and access_decision assigned" do
       tenant_id = Ecto.UUID.generate()
 
       conn =
-        build_conn(ctx(["PLATFORM_ADMIN"], %{tenant_id: tenant_id}), :UsersManage)
+        build_conn(ctx(["TENANT_ADMIN"], %{tenant_id: tenant_id}), :UsersManage)
         |> Authorize.call(@opts)
 
       refute conn.halted
       assert conn.status == nil
       assert conn.assigns.scoped_opts == [prefix: "tenant_" <> String.replace(tenant_id, "-", "")]
       assert conn.assigns.access_decision.kind == :Allow
+    end
+
+    # REQ-447 PR 2: the legacy own-tenant PLATFORM_ADMIN power is removed -- outside the platform
+    # tenant (here: no pin at all) a hand-assigned PLATFORM_ADMIN holds nothing.
+    test "a PLATFORM_ADMIN outside the platform tenant is denied on :UsersManage" do
+      tenant_id = Ecto.UUID.generate()
+
+      conn =
+        build_conn(ctx(["PLATFORM_ADMIN"], %{tenant_id: tenant_id}), :UsersManage)
+        |> Authorize.call(@opts)
+
+      assert conn.halted
+      assert conn.status == 403
+      refute Map.has_key?(conn.assigns, :scoped_opts)
     end
   end
 end

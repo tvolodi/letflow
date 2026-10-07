@@ -151,6 +151,16 @@ defmodule Letflow.Routers.AdminServicesTest do
       assert resp.status == 403
     end
 
+    test "REQ-447: a TENANT_ADMIN holds every tenant-scope permission but no platform-scope one, so it is denied on /admin/services" do
+      tenant = insert_tenant!()
+      entry = register!(%{scope: :global})
+
+      resp = build_conn(:get, "/", tenant.id, roles: ["TENANT_ADMIN"]) |> dispatch()
+
+      assert resp.status == 403
+      refute resp.resp_body =~ entry.service_id
+    end
+
     test "a caller with no roles at all (this codebase's proxy for 'unauthenticated', per Letflow.Plugs.Authorize's own moduledoc) is denied identically" do
       tenant = insert_tenant!()
 

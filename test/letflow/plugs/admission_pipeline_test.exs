@@ -63,11 +63,11 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
     |> put_req_header("x-tenant-slug", tenant_slug)
   end
 
-  defp platform_admin_token!(tenant) do
+  defp tenant_admin_token!(tenant) do
     user = insert_user!(tenant)
 
     {:ok, %{plaintext: plaintext}} =
-      Identity.create_token(user.id, %{roles: ["PLATFORM_ADMIN"], expires_at: nil},
+      Identity.create_token(user.id, %{roles: ["TENANT_ADMIN"], expires_at: nil},
         prefix: tenant.schema_name
       )
 
@@ -121,8 +121,8 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
       tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req217-ac2-a")
       tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req217-ac2-b")
 
-      {_user_a, plaintext_a} = platform_admin_token!(tenant_a)
-      {_user_b, plaintext_b} = platform_admin_token!(tenant_b)
+      {_user_a, plaintext_a} = tenant_admin_token!(tenant_a)
+      {_user_b, plaintext_b} = tenant_admin_token!(tenant_b)
 
       # Track tenant B first (one attempt, released immediately) so both
       # tenants are counted in the fair-share divisor before tenant A's own
@@ -154,12 +154,13 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
         api_token_request(:get, "/api/v1/identity/anything", plaintext_b, tenant_b.tenant.slug)
         |> dispatch()
 
-      # PLATFORM_ADMIN reaches Letflow.Routers.Identity's own catch-all (404),
-      # per Letflow.Api.Authorization's :UnmatchedRoute marker allowance
+      # REQ-447 PR 2: only the platform tenant's PLATFORM_ADMIN reaches
+      # Letflow.Routers.Identity's own catch-all (404), per Letflow.Api.Authorization's
+      # :UnmatchedRoute marker; a TENANT_ADMIN of an ordinary tenant gets the 403
       # -- any non-503 status here proves tenant B's own request
       # passed BOTH admission gates.
       refute conn_b.status == 503
-      assert conn_b.status == 404
+      assert conn_b.status == 403
     end
   end
 
@@ -179,21 +180,21 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
       # tenant's own per-tenant cap is max(div(1,1),1) == 1, at least as
       # large as the global cap, so it never independently constrains this.
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req217-ac3")
-      {_user, plaintext} = platform_admin_token!(tenant)
+      {_user, plaintext} = tenant_admin_token!(tenant)
 
       conn1 =
         api_token_request(:get, "/api/v1/identity/anything", plaintext, tenant.tenant.slug)
         |> dispatch()
 
       refute conn1.status == 503
-      assert conn1.status == 404
+      assert conn1.status == 403
 
       conn2 =
         api_token_request(:get, "/api/v1/identity/anything", plaintext, tenant.tenant.slug)
         |> dispatch()
 
       refute conn2.status == 503
-      assert conn2.status == 404
+      assert conn2.status == 403
     end
   end
 
@@ -206,7 +207,7 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
       # global_cap == 1 is the smallest value that admits one request.
       AdmissionTestHelpers.restart_admission!(pool_size: 2, reserved_headroom: 1)
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req217-ac4-mecha")
-      {user, plaintext} = platform_admin_token!(tenant)
+      {user, plaintext} = tenant_admin_token!(tenant)
 
       crashing_conn =
         api_token_request(
@@ -283,14 +284,14 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
       # before the tenant gate's call runs, so global_cap == 1 is sufficient.
       AdmissionTestHelpers.restart_admission!(pool_size: 1, reserved_headroom: 0)
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req217-fix-cap1")
-      {_user, plaintext} = platform_admin_token!(tenant)
+      {_user, plaintext} = tenant_admin_token!(tenant)
 
       conn =
         api_token_request(:get, "/api/v1/identity/anything", plaintext, tenant.tenant.slug)
         |> dispatch()
 
       refute conn.status == 503
-      assert conn.status == 404
+      assert conn.status == 403
     end
 
     test "at no instant during a single request's lifetime are two global units held simultaneously" do
@@ -307,14 +308,14 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
       # concurrently).
       AdmissionTestHelpers.restart_admission!(pool_size: 1, reserved_headroom: 0)
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req217-fix-instant")
-      {_user, plaintext} = platform_admin_token!(tenant)
+      {_user, plaintext} = tenant_admin_token!(tenant)
 
       conn =
         api_token_request(:get, "/api/v1/identity/anything", plaintext, tenant.tenant.slug)
         |> dispatch()
 
       refute conn.status == 503
-      assert conn.status == 404
+      assert conn.status == 403
 
       # After the response has been sent, Mechanism A has released the
       # tenant gate's ref (the global gate's own ref was already released

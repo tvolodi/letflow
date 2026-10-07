@@ -848,3 +848,30 @@ history:
       MAJOR finding is either filed as ISS-1000..ISS-1017 (Q-982..Q-999, GH #2269..#2286)
       or recorded in the run report as covered by REQ-457 (Q-974, GH #2246) or
       REQ-454/REQ-447 (Q-971, GH #2243). No audited file modified (AC3).
+
+  - req: REQ-447
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-07T04:23:52Z"
+    note: >
+      TENANT_ADMIN role and PLATFORM_ADMIN confined to the platform tenant
+      (queue task 964, GH#2235; decisions D4, D5, D8 of REQ-445). PR 1 merged
+      as b78f0252 (#2320); PR 2 (legacy removal, branch
+      feat/REQ-447-pr2-legacy-removal, local commits): PLATFORM_ADMIN refused
+      on role upsert and token creation outside the platform tenant, stored or
+      claimed PLATFORM_ADMIN dropped on resolution, the C6
+      tenant_platform_admin_own_tenant_powers switch deleted, the unmatched
+      path gated on the platform tenant. No migration. Gates:
+      SECURITY-REVIEWER final PASS, REVIEWER PASS, TEST-DESIGN-VALIDATOR
+      round 2 PASS (entities operator-404 control fixed in 1f09ac95),
+      RELEASE-VALIDATOR VERIFIED (report
+      test/reports/report-2026-10-07-WF02-REQ447-PR2.yaml). Gate G2 (the
+      24 h soak) was closed early by ORCH/supervisor at 2026-10-07T04:02Z on
+      evidence: infra T-0173 R4+R5 negative controls, Bilimbaga UAT after R4,
+      three vertical seed passes TENANT_ADMIN-only. Caveats: about 6.7 h
+      elapsed, not 24 h; no tenant-admin GUI run; no cross-tenant-by-object-id
+      UAT. Also not done: full suite left to CI; keycloak integration test
+      keycloak_auth_pipeline_test.exs:241 not converted (tagged :keycloak,
+      needs live Keycloak, fails where bpm-default is not the pinned tenant).
+      TRACKED follow-ups: Q-1012 / GH #2312 / ISS-1030, Q-1014 / GH #2317 /
+      ISS-1032, Q-1015 / GH #2318 / ISS-1033.

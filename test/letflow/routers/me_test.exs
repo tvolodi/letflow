@@ -171,7 +171,9 @@ defmodule Letflow.Routers.MeTest do
       %{tenant_id: tenant_id, schema_name: prefix} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req403-ac4-#{suffix}")
 
-      for role <- Authorization.roles() do
+      # REQ-447 PR 2: an ordinary tenant's PLATFORM_ADMIN holds nothing (legacy removed), so it is
+      # outside the 200 matrix (asserted 403 below); TENANT_ADMIN stays in it.
+      for role <- Authorization.roles(), role != :PLATFORM_ADMIN do
         conn = list_modules(Ecto.UUID.generate(), tenant_id, [Atom.to_string(role)])
 
         assert conn.status == 200,
@@ -180,10 +182,12 @@ defmodule Letflow.Routers.MeTest do
         assert json(conn) == %{"installed_modules" => []}
       end
 
+      assert list_modules(Ecto.UUID.generate(), tenant_id, ["PLATFORM_ADMIN"]).status == 403
+
       assert {:ok, _tenant_module} =
                Installs.install("fixture", Ecto.UUID.generate(), prefix: prefix)
 
-      for role <- Authorization.roles() do
+      for role <- Authorization.roles(), role != :PLATFORM_ADMIN do
         conn = list_modules(Ecto.UUID.generate(), tenant_id, [Atom.to_string(role)])
 
         assert conn.status == 200
@@ -214,13 +218,13 @@ defmodule Letflow.Routers.MeTest do
                Installs.install("fixture", Ecto.UUID.generate(), prefix: prefix_a)
 
       # Plain request, no spoofing attempt.
-      conn = list_modules(Ecto.UUID.generate(), tenant_id_b, ["PLATFORM_ADMIN"])
+      conn = list_modules(Ecto.UUID.generate(), tenant_id_b, ["TENANT_ADMIN"])
       assert conn.status == 200
       assert json(conn) == %{"installed_modules" => []}
 
       # Spoofing attempt via a tenant_id query parameter naming tenant A.
       conn =
-        list_modules(Ecto.UUID.generate(), tenant_id_b, ["PLATFORM_ADMIN"],
+        list_modules(Ecto.UUID.generate(), tenant_id_b, ["TENANT_ADMIN"],
           query_string: "tenant_id=#{tenant_id_a}"
         )
 
@@ -229,7 +233,7 @@ defmodule Letflow.Routers.MeTest do
 
       # Spoofing attempt via an x-tenant-id header naming tenant A.
       conn =
-        list_modules(Ecto.UUID.generate(), tenant_id_b, ["PLATFORM_ADMIN"],
+        list_modules(Ecto.UUID.generate(), tenant_id_b, ["TENANT_ADMIN"],
           x_tenant_id_header: tenant_id_a
         )
 
@@ -238,7 +242,7 @@ defmodule Letflow.Routers.MeTest do
 
       # Spoofing attempt via both at once.
       conn =
-        list_modules(Ecto.UUID.generate(), tenant_id_b, ["PLATFORM_ADMIN"],
+        list_modules(Ecto.UUID.generate(), tenant_id_b, ["TENANT_ADMIN"],
           query_string: "tenant_id=#{tenant_id_a}",
           x_tenant_id_header: tenant_id_a
         )

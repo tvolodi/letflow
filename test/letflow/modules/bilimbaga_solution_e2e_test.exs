@@ -4,7 +4,8 @@ defmodule Letflow.Modules.BilimbagaSolutionE2ETest do
   and exercises the full exam-tenant path end-to-end (steps 1-7 in order):
 
     1. Provision a brand-new tenant via `TenantFixture.provisioned_tenant!`.
-    2. As PLATFORM_ADMIN, `POST /api/v1/tenant/solutions` → 201.
+    2. As the tenant's TENANT_ADMIN (REQ-447 PR 2: an ordinary tenant has no PLATFORM_ADMIN),
+       `POST /api/v1/tenant/solutions` → 201.
     3. Assert `GET /api/v1/me/modules` lists `exam`, entity definitions are
        present, and answer-key field restrictions from `on_install/2` exist.
     4. Seed a category, questions, and one active exam via the same
@@ -179,8 +180,10 @@ defmodule Letflow.Modules.BilimbagaSolutionE2ETest do
 
       {:ok, _seeded} = EventTypes.seed!(schema_name)
 
-      # ── Step 2: POST /api/v1/tenant/solutions as PLATFORM_ADMIN → 201 ────
-      admin_ctx = user_ctx(schema_name, slug, ["PLATFORM_ADMIN"], "admin")
+      # ── Step 2: POST /api/v1/tenant/solutions as TENANT_ADMIN → 201 ──────
+      # REQ-447 PR 2: a PLATFORM_ADMIN token cannot be minted for (nor honoured in) an
+      # ordinary tenant; the tenant administrator is TENANT_ADMIN.
+      admin_ctx = user_ctx(schema_name, slug, ["TENANT_ADMIN"], "admin")
 
       install_conn =
         request(:post, "/api/v1/tenant/solutions", admin_ctx, %{"solution_id" => "bilimbaga"})
@@ -396,7 +399,10 @@ defmodule Letflow.Modules.BilimbagaSolutionE2ETest do
 
       {:ok, _} = EventTypes.seed!(schema_name2)
 
-      for role <- Letflow.Api.Authorization.roles() do
+      # REQ-447 PR 2: PLATFORM_ADMIN is not issuable for an ordinary tenant any more
+      # (`create_token/3` -> {:error, :invalid_role_set}), so it is not in this loop; the
+      # tenant's own administrator, TENANT_ADMIN, is (and stays covered).
+      for role <- Letflow.Api.Authorization.roles() -- [:PLATFORM_ADMIN] do
         role_str = Atom.to_string(role)
         role_user = insert_user!(schema_name2, "role-#{role_str}")
 

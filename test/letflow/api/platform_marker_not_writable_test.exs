@@ -17,7 +17,8 @@ defmodule Letflow.Api.PlatformMarkerNotWritableTest do
       `login_disclosure_mode`;
     * (c) as the platform tenant's `PLATFORM_ADMIN`, `PATCH /tenants/<A slug>` with platform-like
       extra keys has the normal outcome and tenant A still is not the platform tenant;
-    * (d) as A's `PLATFORM_ADMIN`, `PATCH /tenant/settings` with the same keys leaves A
+    * (d) as A's `TENANT_ADMIN` (REQ-447 PR 2: an ordinary tenant's `PLATFORM_ADMIN` is dropped, so the
+      ordinary administrator is `TENANT_ADMIN`), `PATCH /tenant/settings` with the same keys leaves A
       non-platform and stores none of them;
     * (e) `POST /tenants` and `Identity.create_tenant/1` with a body `id` equal to the configured
       pin create a tenant with a DIFFERENT id, and the pin is unchanged;
@@ -193,6 +194,15 @@ defmodule Letflow.Api.PlatformMarkerNotWritableTest do
         )
 
       assert followup.status == 403
+
+      # REQ-447 PR 2: the same for A's TENANT_ADMIN (never platform scope) ...
+      tenant_admin_followup =
+        Letflow.Routers.Tenants.call(
+          Fixture.router_conn(:get, "/", ctx.a, ["TENANT_ADMIN"], nil),
+          Letflow.Routers.Tenants.init([])
+        )
+
+      assert tenant_admin_followup.status == 403
     end
   end
 
@@ -200,11 +210,21 @@ defmodule Letflow.Api.PlatformMarkerNotWritableTest do
     test "they are not stored and tenant A stays non-platform", ctx do
       resp =
         Letflow.Routers.TenantSettings.call(
-          Fixture.router_conn(:patch, "/", ctx.a, ["PLATFORM_ADMIN"], @platform_like),
+          Fixture.router_conn(:patch, "/", ctx.a, ["TENANT_ADMIN"], @platform_like),
           Letflow.Routers.TenantSettings.init([])
         )
 
       assert resp.status == 200
+
+      # REQ-447 PR 2 (changed assertion): A's legacy PLATFORM_ADMIN is dropped, so the
+      # same request is 403 and writes nothing.
+      legacy =
+        Letflow.Routers.TenantSettings.call(
+          Fixture.router_conn(:patch, "/", ctx.a, ["PLATFORM_ADMIN"], @platform_like),
+          Letflow.Routers.TenantSettings.init([])
+        )
+
+      assert legacy.status == 403
 
       settings = Repo.get!(Tenant, ctx.a.tenant_id).settings || %{}
 

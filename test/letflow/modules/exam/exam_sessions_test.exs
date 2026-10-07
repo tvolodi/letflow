@@ -548,7 +548,7 @@ defmodule Letflow.Modules.Exam.RouterTest do
   # ── Permission matrix ────────────────────────────────────────────────────
 
   describe "role gating" do
-    test "PROCESS_DESIGNER (no CANDIDATE, no PLATFORM_ADMIN) is forbidden from starting a session" do
+    test "PROCESS_DESIGNER (no CANDIDATE, no TENANT_ADMIN) is forbidden from starting a session" do
       tenant = tenant("req335-role-designer")
       %{exam: exam} = build_minimal_exam!(tenant.schema_name)
       ctx = user_ctx(tenant, ["PROCESS_DESIGNER"])
@@ -1287,7 +1287,8 @@ defmodule Letflow.Modules.Exam.RouterTest do
       %{tenant_id: tid, schema_name: schema_name, slug: slug}
     end
 
-    for role <- ["CANDIDATE", "TASK_WORKER", "PROCESS_DESIGNER", "PLATFORM_ADMIN"] do
+    # REQ-447 PR 2: TENANT_ADMIN replaces PLATFORM_ADMIN (not mintable in an ordinary tenant).
+    for role <- ["CANDIDATE", "TASK_WORKER", "PROCESS_DESIGNER", "TENANT_ADMIN"] do
       @role role
 
       test "POST /api/v1/modules/exam/exam-sessions returns 404 for #{role} (no module row)" do

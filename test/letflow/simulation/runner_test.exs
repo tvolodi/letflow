@@ -65,7 +65,7 @@ defmodule Letflow.Simulation.RunnerTest do
     {:ok, definition} = Seed.seed_process(process_fixture, tenant, operator.id)
 
     {:ok, %{token: _token, plaintext: plaintext}} =
-      Identity.create_token(operator.id, %{roles: ["PLATFORM_ADMIN"]}, prefix: schema_name)
+      Identity.create_token(operator.id, %{roles: ["TENANT_ADMIN"]}, prefix: schema_name)
 
     on_exit(fn -> teardown(unique) end)
 

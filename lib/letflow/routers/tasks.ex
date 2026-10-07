@@ -253,7 +253,12 @@ defmodule Letflow.Routers.Tasks do
   # (main.zig's inbox branch never populates them either, for the same
   # reason).
   defp build_inbox_assignee_scope(conn, user_id, opts) do
-    roles = Authorization.roles_from_strings(conn.assigns.auth_context.roles)
+    # REQ-447 PR 2 (design 3.5): without the drop, a non-platform context carrying
+    # PLATFORM_ADMIN + TASK_WORKER would get an UNFILTERED inbox.
+    platform_tenant? =
+      Letflow.PlatformTenant.platform_tenant?(Map.get(conn.assigns.auth_context, :tenant_id))
+
+    roles = Authorization.effective_roles(conn.assigns.auth_context.roles, platform_tenant?)
 
     if Authorization.is_task_worker_only?(roles) do
       {:principal, Tasks.resolve_principal_scope(user_id, opts)}

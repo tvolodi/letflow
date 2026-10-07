@@ -3,10 +3,10 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
   Tests for `PUT /api/v1/tenant/modules/:module_id/settings` (REQ-414).
 
   Covers all acceptance criteria:
-    AC1  200 for PLATFORM_ADMIN with valid body; list_installed shows updated settings.
+    AC1  200 for TENANT_ADMIN with valid body; list_installed shows updated settings.
     AC2  422 on wrong type for a declared key; settings unchanged.
     AC3  422 on undeclared key (fixture schema has additionalProperties:false); unchanged.
-    AC4  403 for every non-PLATFORM_ADMIN role; 404 when module not installed.
+    AC4  403 for every role without :ModulesManage (incl. a non-platform PLATFORM_ADMIN); 404 when module not installed.
     AC5  Two-tenant isolation — tenant A's PUT changes only tenant A's row.
     AC6  Covered in `Letflow.Modules.InstallsPutSettingsTest`.
 
@@ -47,11 +47,11 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
   defp json(conn), do: Jason.decode!(conn.resp_body)
 
   # ═══════════════════════════════════════════════════════════════════════
-  # AC1 — 200 for PLATFORM_ADMIN with valid body; list_installed shows
+  # AC1 — 200 for TENANT_ADMIN with valid body; list_installed shows
   #        updated settings
   # ═══════════════════════════════════════════════════════════════════════
 
-  describe "AC1 -- 200 for PLATFORM_ADMIN with valid body" do
+  describe "AC1 -- 200 for TENANT_ADMIN with valid body" do
     test "PUT valid settings → 200, response contains settings, list_installed shows update" do
       %{tenant_id: tenant_id, schema_name: prefix} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req414-ac1")
@@ -59,7 +59,7 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
       actor_id = Ecto.UUID.generate()
       {:ok, _} = Installs.install("fixture", actor_id, prefix: prefix)
 
-      conn = put_settings(tenant_id, ["PLATFORM_ADMIN"], "fixture", %{"greeting" => "hello"})
+      conn = put_settings(tenant_id, ["TENANT_ADMIN"], "fixture", %{"greeting" => "hello"})
 
       assert conn.status == 200
       assert json(conn)["settings"] == %{"greeting" => "hello"}
@@ -75,7 +75,7 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
       actor_id = Ecto.UUID.generate()
       {:ok, _} = Installs.install("fixture", actor_id, prefix: prefix)
 
-      conn = put_settings(tenant_id, ["PLATFORM_ADMIN"], "fixture", %{})
+      conn = put_settings(tenant_id, ["TENANT_ADMIN"], "fixture", %{})
 
       assert conn.status == 200
       assert json(conn)["settings"] == %{}
@@ -95,9 +95,9 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
       {:ok, _} = Installs.install("fixture", actor_id, prefix: prefix)
 
       # Set a known-good value first
-      put_settings(tenant_id, ["PLATFORM_ADMIN"], "fixture", %{"greeting" => "original"})
+      put_settings(tenant_id, ["TENANT_ADMIN"], "fixture", %{"greeting" => "original"})
 
-      conn = put_settings(tenant_id, ["PLATFORM_ADMIN"], "fixture", %{"greeting" => 123})
+      conn = put_settings(tenant_id, ["TENANT_ADMIN"], "fixture", %{"greeting" => 123})
 
       assert conn.status == 422
 
@@ -118,10 +118,10 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
       actor_id = Ecto.UUID.generate()
       {:ok, _} = Installs.install("fixture", actor_id, prefix: prefix)
 
-      put_settings(tenant_id, ["PLATFORM_ADMIN"], "fixture", %{"greeting" => "original"})
+      put_settings(tenant_id, ["TENANT_ADMIN"], "fixture", %{"greeting" => "original"})
 
       conn =
-        put_settings(tenant_id, ["PLATFORM_ADMIN"], "fixture", %{
+        put_settings(tenant_id, ["TENANT_ADMIN"], "fixture", %{
           "greeting" => "hi",
           "extra_field" => "should be rejected"
         })
@@ -134,11 +134,11 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════════
-  # AC4 — 403 for every non-PLATFORM_ADMIN role; 404 when not installed
+  # AC4 — 403 for every role without :ModulesManage; 404 when not installed
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC4 -- role gate and 404 when not installed" do
-    test "403 for every role other than PLATFORM_ADMIN" do
+    test "403 for every role other than TENANT_ADMIN (a non-platform-tenant PLATFORM_ADMIN holds nothing)" do
       %{tenant_id: tenant_id, schema_name: prefix} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req414-ac4-roles")
 
@@ -146,7 +146,9 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
       {:ok, _} = Installs.install("fixture", actor_id, prefix: prefix)
 
       # REQ-447: TENANT_ADMIN holds :ModulesManage (tenant scope); its 200 is the next test.
-      for role <- Authorization.roles(), role not in [:PLATFORM_ADMIN, :TENANT_ADMIN] do
+      # PR 2: PLATFORM_ADMIN is NOT excluded any more: outside the platform tenant it is dropped
+      # at resolution and holds nothing (the legacy own-tenant power is removed), so it is 403.
+      for role <- Authorization.roles(), role != :TENANT_ADMIN do
         conn =
           put_settings(tenant_id, [Atom.to_string(role)], "fixture", %{"greeting" => "hi"})
 
@@ -174,7 +176,7 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
         TenantFixture.provisioned_tenant!(slug_prefix: "req414-ac4-404")
 
       # fixture not installed — expect 404
-      conn = put_settings(tenant_id, ["PLATFORM_ADMIN"], "fixture", %{"greeting" => "hi"})
+      conn = put_settings(tenant_id, ["TENANT_ADMIN"], "fixture", %{"greeting" => "hi"})
 
       assert conn.status == 404
     end
@@ -185,7 +187,7 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC5 -- two-tenant isolation" do
-    test "PLATFORM_ADMIN of tenant A changes only tenant A's row, tenant B's settings unchanged" do
+    test "TENANT_ADMIN of tenant A changes only tenant A's row, tenant B's settings unchanged" do
       %{tenant_id: tenant_id_a, schema_name: prefix_a} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req414-ac5-a")
 
@@ -199,7 +201,7 @@ defmodule Letflow.Routers.TenantModulesSettingsTest do
       # Only authenticate as tenant A — the prefix derives server-side from
       # tenant_id_a, never from anything in the body (INV-1).
       conn =
-        put_settings(tenant_id_a, ["PLATFORM_ADMIN"], "fixture", %{
+        put_settings(tenant_id_a, ["TENANT_ADMIN"], "fixture", %{
           "greeting" => "tenant_a_update"
         })
 

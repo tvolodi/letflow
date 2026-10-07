@@ -938,6 +938,13 @@ defmodule Letflow.Identity do
   defp resolve_group_ids_for_role_names(role_names, opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
+    # REQ-447 PR 2 (design section 3.4): a claimed `PLATFORM_ADMIN` confers
+    # nothing outside the platform tenant, even if a legacy binding still exists.
+    role_names =
+      if Letflow.PlatformTenant.platform_prefix?(prefix),
+        do: role_names,
+        else: Enum.reject(role_names, &(&1 == "PLATFORM_ADMIN"))
+
     query =
       from(t in TenantRole,
         where: t.name in ^role_names and t.kind == :platform_role,
@@ -1361,6 +1368,9 @@ defmodule Letflow.Identity do
        claims, wrong here — an explicit request for an unrecognized role must be
        rejected loudly, not silently narrowed). Any entry outside that set
        (including an empty/missing list) → `{:error, :invalid_role_set}`.
+       REQ-447 PR 2: `"PLATFORM_ADMIN"` is also `{:error, :invalid_role_set}`
+       unless `opts[:prefix]` is the platform tenant's schema
+       (`Letflow.PlatformTenant.platform_prefix?/1`).
     3. `attrs.expires_at`, if given, must be strictly after `DateTime.utc_now/0`
        at the moment of the check, or this returns `{:error, :expires_at_in_past}`.
     4. The plaintext token value is generated:
@@ -1399,6 +1409,7 @@ defmodule Letflow.Identity do
 
       %User{} ->
         with :ok <- validate_issuable_roles(Map.get(attrs, :roles)),
+             :ok <- reject_platform_admin_outside_platform_tenant(Map.get(attrs, :roles), prefix),
              :ok <- validate_expires_at(Map.get(attrs, :expires_at)) do
           insert_token(user_id, attrs, prefix)
         end
@@ -1414,6 +1425,14 @@ defmodule Letflow.Identity do
   end
 
   defp validate_issuable_roles(_roles), do: {:error, :invalid_role_set}
+
+  # REQ-447 PR 2 (design section 3.4): `PLATFORM_ADMIN` is issuable only from the
+  # platform tenant's schema. The router's platform-scope 403 (PR 1) runs first.
+  defp reject_platform_admin_outside_platform_tenant(roles, prefix) do
+    if "PLATFORM_ADMIN" in roles and not Letflow.PlatformTenant.platform_prefix?(prefix),
+      do: {:error, :invalid_role_set},
+      else: :ok
+  end
 
   defp validate_expires_at(nil), do: :ok
 

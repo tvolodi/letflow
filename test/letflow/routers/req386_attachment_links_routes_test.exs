@@ -131,7 +131,7 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
       instance_id = Ecto.UUID.generate()
       attachment = upload!(tenant, instance_id)
 
-      conn = issue_link_conn(tenant, instance_id, attachment.id, ["PLATFORM_ADMIN"])
+      conn = issue_link_conn(tenant, instance_id, attachment.id, ["TENANT_ADMIN"])
 
       assert conn.status == 200
       resp = Jason.decode!(conn.resp_body)
@@ -160,12 +160,12 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
           content_type: "text/plain"
         )
 
-      issue_conn = issue_link_conn(tenant, instance_id, attachment.id, ["PLATFORM_ADMIN"])
+      issue_conn = issue_link_conn(tenant, instance_id, attachment.id, ["TENANT_ADMIN"])
       assert issue_conn.status == 200
       token = Jason.decode!(issue_conn.resp_body)["token"]
 
       content_conn =
-        get_link_content_conn(tenant, instance_id, attachment.id, token, ["PLATFORM_ADMIN"])
+        get_link_content_conn(tenant, instance_id, attachment.id, token, ["TENANT_ADMIN"])
 
       assert content_conn.status == 200
       assert content_conn.resp_body == "before-expiry bytes"
@@ -180,7 +180,7 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
       tenant = provisioned_tenant("req386-issue-404")
       instance_id = Ecto.UUID.generate()
 
-      conn = issue_link_conn(tenant, instance_id, Ecto.UUID.generate(), ["PLATFORM_ADMIN"])
+      conn = issue_link_conn(tenant, instance_id, Ecto.UUID.generate(), ["TENANT_ADMIN"])
 
       assert conn.status == 404
     end
@@ -199,7 +199,7 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
 
       token = expired_token_for(attachment.id, tenant)
 
-      conn = get_link_content_conn(tenant, instance_id, attachment.id, token, ["PLATFORM_ADMIN"])
+      conn = get_link_content_conn(tenant, instance_id, attachment.id, token, ["TENANT_ADMIN"])
 
       assert conn.status == 410
       assert get_resp_header(conn, "content-type") == ["application/problem+json; charset=utf-8"]
@@ -223,7 +223,7 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
 
       conn =
         get_link_content_conn(tenant, instance_id, attachment.id, "not-a-real-token", [
-          "PLATFORM_ADMIN"
+          "TENANT_ADMIN"
         ])
 
       assert conn.status == 410
@@ -239,7 +239,7 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
           :get,
           "/#{instance_id}/attachments/#{attachment.id}/link-content",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -269,14 +269,14 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
 
       stale_conn =
         get_link_content_conn(tenant, instance_id, attachment.id, stale_token, [
-          "PLATFORM_ADMIN"
+          "TENANT_ADMIN"
         ])
 
       assert stale_conn.status == 410
 
       # 2. A fresh link, issued now (real POST route, real time) for the SAME
       # attachment_id.
-      fresh_issue_conn = issue_link_conn(tenant, instance_id, attachment.id, ["PLATFORM_ADMIN"])
+      fresh_issue_conn = issue_link_conn(tenant, instance_id, attachment.id, ["TENANT_ADMIN"])
       assert fresh_issue_conn.status == 200
       fresh_token = Jason.decode!(fresh_issue_conn.resp_body)["token"]
       assert fresh_token != stale_token
@@ -284,7 +284,7 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
       # 3. The fresh link works and serves the document normally.
       fresh_content_conn =
         get_link_content_conn(tenant, instance_id, attachment.id, fresh_token, [
-          "PLATFORM_ADMIN"
+          "TENANT_ADMIN"
         ])
 
       assert fresh_content_conn.status == 200
@@ -325,7 +325,7 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
           instance_id,
           tenant_2_attachment.id,
           tenant_1_token,
-          ["PLATFORM_ADMIN"]
+          ["TENANT_ADMIN"]
         )
 
       # Response B: the exact same tenant-1-issued token, presented by the
@@ -337,7 +337,7 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
           instance_id,
           Ecto.UUID.generate(),
           tenant_1_token,
-          ["PLATFORM_ADMIN"]
+          ["TENANT_ADMIN"]
         )
 
       # Both fail verification identically: AttachmentLinks.verify/2 resolves
@@ -374,12 +374,12 @@ defmodule Letflow.Routers.Req386AttachmentLinksRoutesTest do
 
       expired_conn =
         get_link_content_conn(tenant, instance_id, attachment.id, expired_token, [
-          "PLATFORM_ADMIN"
+          "TENANT_ADMIN"
         ])
 
       garbage_conn =
         get_link_content_conn(tenant, instance_id, Ecto.UUID.generate(), "totally-fabricated", [
-          "PLATFORM_ADMIN"
+          "TENANT_ADMIN"
         ])
 
       assert expired_conn.status == 410

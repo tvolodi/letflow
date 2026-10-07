@@ -50,7 +50,7 @@ defmodule Letflow.Routers.Req196AuditRouteTest do
   # ── Shared helpers ─────────────────────────────────────────────────────────
 
   defp build_conn(tenant_fixture, fields) do
-    roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
+    roles = Keyword.get(fields, :roles, ["TENANT_ADMIN"])
     query_string = Keyword.get(fields, :query_string, "")
 
     path = if query_string == "", do: "/", else: "/?" <> query_string
@@ -285,11 +285,11 @@ defmodule Letflow.Routers.Req196AuditRouteTest do
   # ---------------------------------------------------------------------------
 
   describe "AC5 -- :AuditRead permission still enforced" do
-    test "PLATFORM_ADMIN (holds :AuditRead) gets 200" do
+    test "TENANT_ADMIN (holds :AuditRead) gets 200" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req196-ac5-allow")
       seed_audit_entry!(tenant.schema_name)
 
-      resp = get_audit(tenant, roles: ["PLATFORM_ADMIN"])
+      resp = get_audit(tenant, roles: ["TENANT_ADMIN"])
 
       assert resp.status == 200
     end

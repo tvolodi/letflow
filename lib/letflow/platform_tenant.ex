@@ -23,7 +23,10 @@ defmodule Letflow.PlatformTenant do
   ## Open decision points (one line each; a ruling changes a line)
 
     * `cross_tenant_promotion_operator_only?/0` -- OQ-2
-    * `Letflow.Api.Authorization.tenant_platform_admin_own_tenant_powers?/0` -- C6
+
+  (The C6 own-tenant-powers switch was deleted by REQ-447 PR 2: `PLATFORM_ADMIN`
+  is dropped when resolving roles outside the platform tenant, see
+  `effective_role_strings/2` and `Letflow.Api.Authorization.effective_roles/2`.)
   """
 
   alias Letflow.Api.Authorization
@@ -119,6 +122,24 @@ defmodule Letflow.PlatformTenant do
   end
 
   def platform_prefix?(_other), do: false
+
+  @doc """
+  REQ-447 PR 2 (design section 3.5): the string variant of
+  `Letflow.Api.Authorization.effective_roles/2`. Returns `role_strings` with every
+  entry that parses to `:PLATFORM_ADMIN` removed unless `tenant_id` is the
+  platform tenant, so `auth_context.roles`, `/me/memberships`, audit and logging
+  see the dropped list. A non-list input is `[]`.
+  """
+  @spec effective_role_strings(String.t() | nil, [String.t()] | term()) :: [String.t()]
+  def effective_role_strings(tenant_id, role_strings) when is_list(role_strings) do
+    if platform_tenant?(tenant_id) do
+      role_strings
+    else
+      Enum.reject(role_strings, &(Authorization.roles_from_strings([&1]) == [:PLATFORM_ADMIN]))
+    end
+  end
+
+  def effective_role_strings(_tenant_id, _other), do: []
 
   @doc """
   Both scope facts from a tenant id and the raw role strings. `platform_scope?`

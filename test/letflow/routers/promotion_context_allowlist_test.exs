@@ -23,21 +23,26 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
 
   @allowlisted ~w(process_key base_version source_tenant_id target_tenant_id source_definition_id target_definition_id entries)
 
+  # REQ-447 PR 2: the non-operator reader is a TENANT_ADMIN (a PLATFORM_ADMIN outside the pinned
+  # platform tenant holds nothing); the operator is the PLATFORM_ADMIN of the pinned platform tenant.
+  @reader ["TENANT_ADMIN"]
+  @operator ["PLATFORM_ADMIN"]
+
   setup do
     tenants = Fixture.three_tenants!()
     Fixture.pin!(tenants.p.tenant_id)
     {:ok, tenants}
   end
 
-  defp context_resp(fixture, review_id) do
+  defp context_resp(fixture, review_id, roles) do
     Letflow.Routers.Promotions.call(
-      Fixture.router_conn(:get, "/#{review_id}/context", fixture, ["PLATFORM_ADMIN"], nil),
+      Fixture.router_conn(:get, "/#{review_id}/context", fixture, roles, nil),
       Letflow.Routers.Promotions.init([])
     )
   end
 
-  defp read_plan!(fixture, review_id) do
-    resp = context_resp(fixture, review_id)
+  defp read_plan!(fixture, review_id, roles \\ @reader) do
+    resp = context_resp(fixture, review_id, roles)
     assert resp.status == 200
     {resp.resp_body, Jason.decode!(resp.resp_body)["serialised_plan"]}
   end
@@ -227,7 +232,7 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
         assert plan == %{"entries" => []}, "non-operator, #{shape}"
 
         op_review = seed_and_overwrite!(ctx.p, json)
-        {_raw, op_plan} = read_plan!(ctx.p, op_review.id)
+        {_raw, op_plan} = read_plan!(ctx.p, op_review.id, @operator)
         assert op_plan == operator_value, "operator, #{shape}"
       end
     end
@@ -244,7 +249,7 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
       refute raw =~ b
 
       op_review = seed_and_overwrite!(ctx.p, no_entries)
-      {_raw, op_plan} = read_plan!(ctx.p, op_review.id)
+      {_raw, op_plan} = read_plan!(ctx.p, op_review.id, @operator)
       assert op_plan == %{"process_key" => "legacy-key", "tenant_ids" => [b]}
 
       review = seed_and_overwrite!(ctx.a, only_entries)
@@ -253,7 +258,7 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
       refute raw =~ b
 
       op_review = seed_and_overwrite!(ctx.p, only_entries)
-      {_raw, op_plan} = read_plan!(ctx.p, op_review.id)
+      {_raw, op_plan} = read_plan!(ctx.p, op_review.id, @operator)
       assert op_plan == %{"entries" => [], "legacy_tenant" => b}
     end
 
@@ -273,11 +278,11 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
 
       conn =
         :get
-        |> Fixture.router_conn("/#{review.id}/context", ctx.a, ["PLATFORM_ADMIN"], nil)
+        |> Fixture.router_conn("/#{review.id}/context", ctx.a, @reader, nil)
         |> Plug.Conn.assign(:auth_context, %{
           user_id: Ecto.UUID.generate(),
           tenant_id: nil,
-          roles: ["PLATFORM_ADMIN"]
+          roles: @reader
         })
 
       resp = Letflow.Routers.Promotions.call(conn, Letflow.Routers.Promotions.init([]))
@@ -306,7 +311,7 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
           meta: %{origin_tenant_id: b, own: a}
         })
 
-      {raw, plan} = read_plan!(ctx.p, review.id)
+      {raw, plan} = read_plan!(ctx.p, review.id, @operator)
 
       assert raw =~ b
       assert raw =~ a
@@ -321,7 +326,8 @@ defmodule Letflow.Routers.PromotionContextAllowlistTest do
 
       for fixture <- [ctx.a, ctx.p] do
         %{review: review} = Scope.seed_review!(fixture, ctx.b.tenant_id, fixture.tenant_id)
-        resp = context_resp(fixture, review.id)
+        roles = if fixture == ctx.p, do: @operator, else: @reader
+        resp = context_resp(fixture, review.id, roles)
         assert resp.status == 200
         assert resp.resp_body |> Jason.decode!() |> Map.keys() |> Enum.sort() == expected
       end

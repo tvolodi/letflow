@@ -25,9 +25,17 @@ defmodule Letflow.Routers.PromotionContextShapingTest do
     {:ok, tenants}
   end
 
+  # REQ-447 PR 2: the platform tenant's administrator is PLATFORM_ADMIN (the operator); an
+  # ordinary tenant's is TENANT_ADMIN (its PLATFORM_ADMIN would hold nothing).
+  defp admin_roles(fixture) do
+    if Letflow.PlatformTenant.platform_tenant?(fixture.tenant_id),
+      do: ["PLATFORM_ADMIN"],
+      else: ["TENANT_ADMIN"]
+  end
+
   defp get(fixture, path) do
     Letflow.Routers.Promotions.call(
-      Fixture.router_conn(:get, path, fixture, ["PLATFORM_ADMIN"], nil),
+      Fixture.router_conn(:get, path, fixture, admin_roles(fixture), nil),
       Letflow.Routers.Promotions.init([])
     )
   end

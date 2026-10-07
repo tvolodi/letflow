@@ -282,7 +282,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
       _attachment_y = upload!(tenant, instance_y, file_name: "y.txt")
 
       conn =
-        build_conn(:get, "/#{instance_x}/attachments", tenant, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{instance_x}/attachments", tenant, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -317,7 +317,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
           :get,
           "/#{instance_id}/attachments/#{attachment.id}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -352,7 +352,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
           :get,
           "/#{instance_id}/attachments/#{tenant_b_attachment.id}",
           tenant_a,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -361,7 +361,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
           :delete,
           "/#{instance_id}/attachments/#{tenant_b_attachment.id}",
           tenant_a,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -374,7 +374,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
           :get,
           "/#{instance_id}/attachments/#{Ecto.UUID.generate()}",
           tenant_a,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -394,7 +394,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
       _tenant_b_attachment = upload!(tenant_b, instance_id)
 
       conn =
-        build_conn(:get, "/#{instance_id}/attachments", tenant_a, roles: ["PLATFORM_ADMIN"])
+        build_conn(:get, "/#{instance_id}/attachments", tenant_a, roles: ["TENANT_ADMIN"])
         |> dispatch()
 
       assert conn.status == 200
@@ -419,7 +419,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
           :get,
           "/#{instance_y}/attachments/#{attachment.id}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -428,7 +428,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
           :delete,
           "/#{instance_y}/attachments/#{attachment.id}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -444,7 +444,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
           :get,
           "/#{instance_x}/attachments/#{attachment.id}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 
@@ -879,7 +879,7 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
           :get,
           "/#{instance_id}/attachments/#{pending_attachment.id}",
           tenant,
-          roles: ["PLATFORM_ADMIN"]
+          roles: ["TENANT_ADMIN"]
         )
         |> dispatch()
 

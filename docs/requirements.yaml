@@ -33780,7 +33780,7 @@ requirements:
   - id: REQ-447
     title: "Add the TENANT_ADMIN role, stop seeding and honouring PLATFORM_ADMIN outside the platform tenant, and migrate existing tenant admins and API tokens"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 964  # letflow-queue task id, GH#2235. Registered 2026-10-05 by ORCH (role-system audit AUDIT-ROLES-20261005, model ratified by the user). Queue depends_on: Q-962, Q-963, Q-961.
     description: >

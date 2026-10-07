@@ -1,0 +1,66 @@
+run_id: WF02-REQ447-PR2-20261007
+step: "WF-02 Step 5 (PR 2 only)"
+agent: RELEASE-VALIDATOR
+branch: feat/REQ-447-pr2-legacy-removal
+head: 1f09ac95
+base: origin/main 98dd5115
+requirement: REQ-447 PR 2 (Q-964 / GH #2235)
+verdict: VERIFIED_PENDING_FULL_SUITE_CI_AND_TEST_DESIGN_REVALIDATION
+criteria:
+  ac4_non_platform_upsert_role_rejects_platform_admin: VERIFIED   # role_registry.ex reject_platform_admin_outside_platform_tenant before any Repo call; platform_admin_outside_platform_test.exs (exact tag, no Repo query, fail closed with no pin; platform tenant control passes)
+  ac4_post_tokens_platform_admin_refused: VERIFIED   # HTTP 403 from the router (PR 1 check, unchanged) in an ordinary tenant, token count unchanged; direct Identity.create_token/3 returns {:error, :invalid_role_set} (identity.ex reject_platform_admin_outside_platform_tenant), per design 3.4; platform operator control 201
+  ac4_stored_or_claimed_platform_admin_not_held: VERIFIED   # dropped in AuthPipeline.attach_auth_context (effective_role_strings), Authorize plug and evaluate_access (effective_roles / List.delete), claim sync strip, tasks inbox, entities unredacted export, identity users_groups_roles_manage?; tests: 5 platform routes + 6 tenant routes + unmatched path all 403 for a legacy row, raw API token, and claim
+  builds_item_2: VERIFIED   # not seeded (PR 1), not accepted by upsert_role, not issuable by create_token, dropped on resolution; platform tenant unchanged
+  design_3_4_3_5_pr2_scope: VERIFIED   # lib diff matches 3.4 (write rejection, claim-sync filter, no add_group_member check) and 3.5 (effective_roles/2, effective_role_strings/2, C6 deleted, :UnmatchedRoute gated on platform_tenant?)
+  c6_switch_deleted: VERIFIED   # no occurrence of tenant_platform_admin_own_tenant_powers in lib/ or config/; remaining hits are tests asserting function_exported? false / old config key has no effect
+  platform_tenant_platform_admin_unchanged_inv10: VERIFIED   # control tests: operator in pinned tenant 200 on /tenants, POST /roles, POST /tokens, 404 pass-through on unmatched path; claim sync honoured in platform schema
+  pr1_guards_intact: VERIFIED   # routers/identity.ex diff only adds a 422 arm and passes the recomputed platform flag; no PR 1 guard line removed
+  no_new_tables_or_migrations: VERIFIED   # git diff origin/main...HEAD -- priv config docs: empty
+  requirements_yaml_unchanged: VERIFIED   # git diff origin/main...HEAD -- docs/requirements.yaml: empty; REQ-447 still pending
+  decision_records_untouched: VERIFIED   # git diff origin/main...HEAD -- docs/migration/decisions: empty
+  behaviour_change_list_matches_spec: VERIFIED   # test/specs/REQ-447-PR2.md items 1-7 each correspond to a lib change or a converted test; R3 (stale authorized_router docstring) fixed in 40629f70
+  compile_format_boundaries_etc: VERIFIED
+  full_suite_mix_test: NOT_RUN   # instructed not to run
+  mix_letflow_check_test: NOT_RUN   # instructed not to run; ISS-0069 substring grep run on every captured output instead (0 matches), NOT a substitute
+real_output:
+  compile_warnings_as_errors_force: "MIX_ENV=test --force: Compiling 353 files (.ex), Generated letflow app, exit 0"
+  format_check: "mix format --check-formatted: exit 0"
+  check_boundaries: "OK -- 1080 edges checked, 0 violations"
+  check_issue_refs: "OK -- every cross-reference is prefixed and well-formed. (622 file(s) under docs/issues/)"
+  check_requirements_registration: "425 entries = 425 registered + 0 deferred + 0 neither + 0 unclassified, exit 0"
+  check_uat_scenario_schema: "38 file(s) checked, 0 violation(s)"
+  check_req_id_collision: "OK -- no REQ-NNN id collision with origin/main"
+  check_deferral_staleness: "0 deferred of 425 entries; 0 stale"
+  check_async_sandbox_reachability: "OK -- 136 async:true test file(s) scanned, 0 new violations"
+  lint_handoffs: "OK -- 0 new violations across 3396 handoff files (25 pre-existing grandfathered)"
+  mix_test_85_file_audit_set: >
+    MIX_ENV=test MIX_TEST_PARTITION=3 --timeout 300000, 9 batches (85 files = PR changed test files union grep PLATFORM_ADMIN):
+    326 passed, 145 passed, 146 passed (7 excluded), 237 passed, 145 passed, 172 passed, 186 passed, 133 passed, 79 passed; every exit 0, 0 failures
+  mix_test_directories: >
+    test/letflow/api: "Finished in 333.0 seconds, Result: 552 passed"; test/letflow/plugs + test/letflow/identity: "Result: 456 passed";
+    tasks_test, entities_test, test/docs, no_smtp_secret_guard_test, login_directory/no_secret_in_repo_test: "Result: 211 passed"
+  mix_test_extra_found_by_grep: "test/letflow/modules/exam/pack_install_test.exs + test/letflow/routers/tenant_admin_routes_test.exs (mint_token!/roles() users not mentioning the literal): Result: 20 passed"
+  issue_0069_grep: "grep 'default values for the optional arguments' over all 14 captured mix test outputs: 0 matches"
+  other_tests_calling_create_token_upsert_role_or_c6: "git grep over test/: every hit (platform_escalation_guard, platform_scope_authorization, platform_scope_not_conferred, role_registry, authorization_tenant_admin, platform_admin_outside_platform) is in a file in the audited set and passed"
+gates:
+  security_reviewer: "PASS (first lib review; final re-review incl. no existence-oracle on the unmatched-path 403) -- reported by the caller, not independently recorded in a repo artifact I could verify"
+  reviewer: "PASS (doc fixes applied: ccc4ea92, 40629f70)"
+  test_design_validator: "round 1 FAIL (missing operator-404 control in entities_test) fixed in 1f09ac95; RE-VALIDATION PENDING"
+  security_reviewer_final: "PASS (final re-review, recorded by DOC-UPDATER from the ORCH handoff; includes no existence-oracle on the unmatched-path 403)"
+  test_design_validator_round_2: "PASS on 1f09ac95 (entities operator-404 control fixed in 1f09ac95); supersedes the RE-VALIDATION PENDING wording above. RELEASE-VALIDATOR's own verdicts are unchanged."
+  caveats_recorded_at_close:
+    - "Full suite (mix test) and mix letflow.check.test left to CI; not run by any local gate."
+    - "test/letflow/integration/keycloak_auth_pipeline_test.exs:241 not converted (tagged :keycloak, needs live Keycloak); it will fail where bpm-default is not the pinned platform tenant."
+  mutants: "11 measured by TEST-DESIGNER (9 killed, 2 equivalent: M8, M10 documented in test/specs/REQ-447-PR2.md), 2 more by the validator killed -- not re-measured by RELEASE-VALIDATOR"
+notes:
+  - "Risk (not run, excluded by @moduletag :keycloak): test/letflow/integration/keycloak_auth_pipeline_test.exs:241 asserts 'PLATFORM_ADMIN' in roles for realm user admin-user of bpm-default. Per the spec (not-converted item 1) bpm-default is not the pinned platform tenant, so with this change the assertion fails if that suite is run against live Keycloak. Not part of default CI; flag to ORCH for a follow-up issue or fix before any Keycloak run. File untouched by the PR."
+  - "Spec item 2 (identity/tenant_admin_migration_test later describes) is in test/letflow/identity and passed in the 456-test run."
+  - "Passed counts differ slightly from the author's (326 vs 325 in batch 1); no failures anywhere."
+  - "Nothing edited, committed or pushed in the worktree other than this report; main checkout untouched; no status flipped."
+gap:
+  full_suite_and_ci: "Full suite and mix letflow.check.test not run (instructed). CI must be green before merge."
+  test_design_validator_revalidation: "Round-2 TEST-DESIGN-VALIDATOR pass on 1f09ac95 still pending."
+  keycloak_integration_test: "see notes; must be handled before the next live-Keycloak run."
+lockout_and_migration_note:
+  lockout: "After PR 2 a PLATFORM_ADMIN role row, API token or identity claim in any tenant other than the pinned platform tenant is no longer honoured (dropped on resolution; refused on write: upsert_role, POST /tokens 403, Identity.create_token {:error, :invalid_role_set}). A tenant whose only administrator held PLATFORM_ADMIN is locked out of admin routes until a TENANT_ADMIN is granted."
+  migration: "No schema migration and no new table (git diff origin/main...HEAD -- priv config docs is empty). PR 1 (b78f0252, #2320) added TENANT_ADMIN and stopped seeding PLATFORM_ADMIN; the three vertical seed passes were TENANT_ADMIN-only. Remediation for a tenant still relying on a legacy PLATFORM_ADMIN holder: grant TENANT_ADMIN from the platform tenant. The platform tenant keeps PLATFORM_ADMIN unchanged (INV-10)."

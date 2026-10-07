@@ -134,8 +134,11 @@ defmodule Letflow.Api.AuthorizedRouter do
       `/tenants`, `/onboarding`, `/platform-migrations`, `/event-retention`,
       `/admin/services`): only a platform-tenant `PLATFORM_ADMIN` reaches the 404;
       every other caller gets the same 403 as a matched platform route (OQ-4).
-    * `:ordinary` -> marker `:UnmatchedRoute` (every other router): `PLATFORM_ADMIN`
-      reaches the 404, other roles get 403, exactly the pre-fix outcome.
+    * `:ordinary` -> marker `:UnmatchedRoute` (every other router): only the
+      PLATFORM-TENANT operator (`platform_tenant?` true and `PLATFORM_ADMIN`) reaches
+      the router's own 404; every other caller, a tenant admin included, gets the
+      uniform 403. A tenant `PLATFORM_ADMIN` no longer exists outside the platform
+      tenant (REQ-447 PR 2).
 
   A catch-all is not a route, so it is not recorded in `__authz_routes__/0`.
   """

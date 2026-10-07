@@ -33,6 +33,7 @@ defmodule Letflow.Identity.RoleRegistry do
           | :invalid_group_id
           | :group_not_found
           | :name_not_a_recognized_platform_role
+          | :platform_admin_outside_platform_tenant
           | Ecto.Changeset.t()
 
   @type coverage_gap :: %{
@@ -89,7 +90,10 @@ defmodule Letflow.Identity.RoleRegistry do
   `Letflow.Api.Authorization.roles/0`'s seven recognized literals — any other value
   returns `{:error, :name_not_a_recognized_platform_role}` before any `Repo` call,
   loudly rejecting a typo'd platform-role grant instead of silently creating a dead
-  role binding nothing ever resolves. `kind == :process_routing_role` gets no such
+  role binding nothing ever resolves. REQ-447 PR 2: a `:platform_role` binding named
+  `PLATFORM_ADMIN` outside the platform tenant's schema returns
+  `{:error, :platform_admin_outside_platform_tenant}` (also before any `Repo` call).
+  `kind == :process_routing_role` gets no such
   literal-set check — that domain is open-ended by design (any
   process-definition-chosen string), only `validate_role_name/1`'s existing format
   checks apply.
@@ -105,6 +109,7 @@ defmodule Letflow.Identity.RoleRegistry do
       when kind in [:platform_role, :process_routing_role] do
     with :ok <- validate_role_name(name),
          :ok <- validate_platform_role_name(kind, name),
+         :ok <- reject_platform_admin_outside_platform_tenant(kind, name, opts),
          {:ok, normalized_group_id} <- Ecto.UUID.cast(group_id) do
       do_upsert_role(name, kind, normalized_group_id, opts)
     else
@@ -112,6 +117,19 @@ defmodule Letflow.Identity.RoleRegistry do
       {:error, reason} -> {:error, reason}
     end
   end
+
+  # REQ-447 PR 2 (design section 3.4): the `PLATFORM_ADMIN` binding exists only in
+  # the platform tenant. Decided purely from the schema name, before any `Repo`
+  # call; a `:process_routing_role` row is a different domain and is not touched.
+  @spec reject_platform_admin_outside_platform_tenant(kind(), String.t(), keyword()) ::
+          :ok | {:error, :platform_admin_outside_platform_tenant}
+  defp reject_platform_admin_outside_platform_tenant(:platform_role, "PLATFORM_ADMIN", opts) do
+    if Letflow.PlatformTenant.platform_prefix?(Keyword.get(opts, :prefix)),
+      do: :ok,
+      else: {:error, :platform_admin_outside_platform_tenant}
+  end
+
+  defp reject_platform_admin_outside_platform_tenant(_kind, _name, _opts), do: :ok
 
   @spec validate_platform_role_name(kind(), String.t()) ::
           :ok | {:error, :name_not_a_recognized_platform_role}

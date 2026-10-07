@@ -11,7 +11,7 @@ defmodule Letflow.Routers.TenantModules do
   `forward("/tenant/settings", to: Letflow.Routers.TenantSettings)` line.
 
   One route: `POST /` (full path `POST /api/v1/tenant/modules`), gated by
-  `:ModulesManage` (tenant scope: `PLATFORM_ADMIN` (legacy tenant) and `TENANT_ADMIN`, per the roles matrix).
+  `:ModulesManage` (tenant scope: `TENANT_ADMIN`, and the platform tenant's `PLATFORM_ADMIN`, per the roles matrix).
 
   Deliberately mounted at `/tenant/modules`, NOT under `/api/v1/modules/`
   (REQ-404's future per-module mount) — so this route can never collide

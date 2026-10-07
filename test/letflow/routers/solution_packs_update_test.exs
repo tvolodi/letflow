@@ -62,7 +62,7 @@ defmodule Letflow.Routers.SolutionPacksUpdateTest do
     do: prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
 
   defp build_conn(method, path, tenant_fixture, fields) do
-    roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
+    roles = Keyword.get(fields, :roles, ["TENANT_ADMIN"])
     body = Keyword.get(fields, :body, nil)
     user_id = Keyword.get(fields, :user_id, Ecto.UUID.generate())
 

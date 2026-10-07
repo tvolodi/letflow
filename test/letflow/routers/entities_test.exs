@@ -97,12 +97,16 @@ defmodule Letflow.Routers.EntitiesTest do
   # A provisioned tenant plus a real API token carrying `roles`. Every role
   # string below is one of Letflow.Api.Authorization's own five closed roles,
   # so the 403/non-403 assertions are driven by that module's real matrix.
-  defp tenant_ctx(slug_prefix, roles \\ ["PLATFORM_ADMIN"]) do
+  defp tenant_ctx(slug_prefix, roles \\ ["TENANT_ADMIN"]) do
     tenant =
       TenantFixture.provisioned_tenant!(
         slug_prefix: slug_prefix,
         display_name: "REQ-310 Entities Router Test Tenant"
       )
+
+    # REQ-447 PR 2: a PLATFORM_ADMIN token can only be minted in the pinned platform tenant
+    if "PLATFORM_ADMIN" in roles,
+      do: Letflow.Support.PlatformTenantFixture.pin!(tenant.tenant_id)
 
     {:ok, _seeded} = EventTypes.seed!(tenant.schema_name)
     user = insert_user!(tenant)
@@ -128,7 +132,7 @@ defmodule Letflow.Routers.EntitiesTest do
   # DIFFERENT user in the same schema. REQ-311's INV-1 two-user test needs
   # two callers whose `user_entity_grants` rows differ while every other
   # input -- the request body included -- is byte-identical.
-  defp second_user_ctx(ctx, roles \\ ["PLATFORM_ADMIN"]) do
+  defp second_user_ctx(ctx, roles \\ ["TENANT_ADMIN"]) do
     user =
       %User{}
       |> Ecto.Changeset.change(%{
@@ -732,11 +736,20 @@ defmodule Letflow.Routers.EntitiesTest do
       assert Map.has_key?(body_of(conn), "items")
     end
 
-    test "an unrecognised path UNDER /entities reaches the ROUTER's own catch-all, still a 404" do
+    test "an unrecognised path UNDER /entities is refused with 403 for a tenant admin (REQ-447 PR 2)" do
+      # Mount is live: the request is answered by the ApiPipeline's Authorize plug on the
+      # :UnmatchedRoute marker. Only a platform-tenant operator reaches the router's own 404
+      # catch-all (the legacy tenant PLATFORM_ADMIN that used to get the 404 pass-through no
+      # longer exists outside the platform tenant).
       ctx = tenant_ctx("req310-mount-catchall")
 
       conn = request(:get, "/api/v1/entities/no-such-thing", ctx)
-      assert conn.status == 404
+      assert conn.status == 403
+
+      # control: the platform operator (pinned tenant, PLATFORM_ADMIN) reaches the router's own 404
+      op = tenant_ctx("req310-mount-catchall-op", ["PLATFORM_ADMIN"])
+      op_conn = request(:get, "/api/v1/entities/no-such-thing", op)
+      assert op_conn.status == 404
     end
   end
 
@@ -2789,8 +2802,8 @@ defmodule Letflow.Routers.EntitiesTest do
       assert Repo.aggregate("entity_type_restrictions", :count, prefix: ctx.schema_name) == 0
     end
 
-    test "a PLATFORM_ADMIN caller (holds every permission) succeeds against the same body" do
-      ctx = tenant_ctx("iss0935-restrictions-403-control", ["PLATFORM_ADMIN"])
+    test "a TENANT_ADMIN caller (holds every tenant permission) succeeds against the same body" do
+      ctx = tenant_ctx("iss0935-restrictions-403-control", ["TENANT_ADMIN"])
 
       conn =
         import_restrictions(ctx, %{

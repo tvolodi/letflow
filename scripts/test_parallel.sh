@@ -44,6 +44,26 @@
 # Overridable knob: TEST_PARALLEL_N=<positive integer> to force the
 # partition count instead of deriving it from nproc/getconf.
 #
+# Q-1037 / GH #2364 observability + diagnostic hooks (all default-off or
+# log-only; with nothing set the partitions' mix commands are unchanged):
+#   TEST_PARALLEL_EXTRA_ARGS   (default empty) whitespace-split words appended
+#       to every partition's `mix test` command AFTER "$@" (no glob expansion).
+#       Intended throwaway setting for timing investigations:
+#         TEST_PARALLEL_EXTRA_ARGS="--slowest 40 --slowest-modules 25"
+#   TEST_PARALLEL_PRINT_SLOWEST (default 0) when 1, Step 4 echoes each
+#       partition log's ExUnit "slowest" blocks to the job log, every line
+#       prefixed `test_parallel: partition N slowest: ` (needs --slowest /
+#       --slowest-modules in the extra args to have anything to print).
+#   Always printed (stdout): one `test_parallel: runner nproc=.. cpu=..
+#       memtotal_kb=.. loadavg=..` line, one `test_parallel: partition N
+#       elapsed=<s>s start=<utc> end=<utc>` line per partition, and one
+#       `test_parallel: phase elapsed=<s>s` line. CAVEAT: partitions are
+#       waited in index order, so `end` is stamped when this script's own
+#       `wait` for that partition returns; `wait` on an already-finished
+#       child returns immediately, so a later partition's end/elapsed is an
+#       upper bound (>= its true end) whenever an earlier partition finished
+#       after it.
+#
 # Overridable knob: TEST_PARALLEL_KEEP_LOGS=<any non-empty value> to keep the
 # per-partition tmp_dir (create/migrate + test logs) even after a fully clean
 # (exit 0) run -- see ISS-0699 below. Unset by default, meaning a clean run's
@@ -130,6 +150,17 @@ fi
 echo "test_parallel: N=$N (source: $n_source)"
 
 # --- Step 1: pre-compile MIX_ENV=test exactly once (AC5) -----------------
+
+_tp_cpu="unknown"; _tp_mem="unknown"; _tp_load="unknown"
+[ -r /proc/cpuinfo ] && _tp_cpu=$(grep -m1 -E '^model name' /proc/cpuinfo 2>/dev/null | sed 's/^[^:]*: *//')
+[ -n "$_tp_cpu" ] || _tp_cpu="unknown"
+[ -r /proc/meminfo ] && _tp_mem=$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null)
+[ -n "$_tp_mem" ] || _tp_mem="unknown"
+if [ -r /proc/loadavg ]; then _tp_load=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)
+elif command -v uptime >/dev/null 2>&1; then _tp_load=$(uptime 2>/dev/null | sed 's/.*load average[s]*: *//')
+fi
+[ -n "$_tp_load" ] || _tp_load="unknown"
+echo "test_parallel: runner nproc=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo unknown) partitions=$N cpu=\"$_tp_cpu\" memtotal_kb=$_tp_mem loadavg=\"$_tp_load\""
 
 echo "test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)"
 MIX_ENV=test mix compile
@@ -618,6 +649,12 @@ if [ -n "${TEST_PARALLEL_SAMPLE_CONNECTIONS:-}" ]; then
   fi
 fi
 
+# Q-1037: TEST_PARALLEL_EXTRA_ARGS -> array (read -a does not glob-expand).
+declare -a extra_args=()
+read -r -a extra_args <<< "${TEST_PARALLEL_EXTRA_ARGS:-}"
+declare -a part_start_epoch part_end_epoch
+phase_start_epoch=$(date +%s)
+
 i=1
 while [ "$i" -le "$N" ]; do
   # ISS-0917 §1.3 step 3: admission control -- blocks here (bounded, never
@@ -637,9 +674,10 @@ while [ "$i" -le "$N" ]; do
   # the watchdog below (and the EXIT trap) able to signal the WHOLE tree
   # (mix + erl.exe/beam.smp), not just this immediate child.
   MIX_TEST_PARTITION="$i" MIX_BUILD_PATH="_build/test-partition-$i" LETFLOW_SKIP_ECTO_SETUP=1 \
-    mix test --partitions "$N" --no-color $high_pool_demand_exclude "$@" \
+    mix test --partitions "$N" --no-color $high_pool_demand_exclude "$@" ${extra_args[@]+"${extra_args[@]}"} \
     > "$tmp_dir/partition-$i.log" 2>&1 &
   pids[$i]=$!
+  part_start_epoch[$i]=$(date +%s)
   building_partition_pid[$i]=$!
   in_flight_builders=$((in_flight_builders + 1))
 
@@ -676,6 +714,7 @@ i=1
 while [ "$i" -le "$N" ]; do
   wait "${pids[$i]}"
   exits[$i]=$?
+  part_end_epoch[$i]=$(date +%s)
   # This partition is done (one way or another) -- its own watchdog is no
   # longer needed. Kill it now rather than letting it sleep uselessly for
   # the rest of partition_timeout_s (ISS-0917 §3.2).
@@ -691,6 +730,9 @@ while [ "$i" -le "$N" ]; do
   fi
   i=$((i + 1))
 done
+
+phase_end_epoch=$(date +%s)
+echo "test_parallel: phase elapsed=$((phase_end_epoch - phase_start_epoch))s"
 
 # ISS-0287 §4.3: stop the sampler (if started above) now that every
 # partition has finished, so its log file reflects the run's full duration.
@@ -821,6 +863,19 @@ while [ "$i" -le "$N" ]; do
   plural_p="properties"
   [ "$p" -eq 1 ] && plural_p="property"
   echo "partition $i: $t tests, $p $plural_p, $f failures, exit $ex"
+  _ps="${part_start_epoch[$i]:-}"; _pe="${part_end_epoch[$i]:-}"
+  if [ -n "$_ps" ] && [ -n "$_pe" ]; then
+    echo "test_parallel: partition $i elapsed=$((_pe - _ps))s start=$(date -u -d "@$_ps" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown) end=$(date -u -d "@$_pe" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
+  fi
+  if [ "${TEST_PARALLEL_PRINT_SLOWEST:-0}" = "1" ]; then
+    awk -v p="$i" '
+      # Real ExUnit shape: header, a blank line, content lines, blank line
+      # (the tests block and the modules block share the same header text).
+      /^Top [0-9]+ slowest/ { on=1; seen=0; print "test_parallel: partition " p " slowest: " $0; next }
+      on && /^[[:space:]]*$/ { if (seen) on=0; next }
+      on { seen=1; print "test_parallel: partition " p " slowest: " $0 }
+    ' "$log"
+  fi
 
   i=$((i + 1))
 done

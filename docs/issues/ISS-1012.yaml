@@ -34,4 +34,30 @@ affected_files:
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-994
 github_ref: GH-2281
-status: open
+status: resolved
+resolved_in_run: WF03-ISS1012-Q994
+resolved_at: "2026-10-07T00:00:00Z"
+resolution: >
+  Verification and record only, no definition or code change. The BA ruling D-ESC (GH #2281, comment
+  of 2026-10-06) amended this issue's acceptance: the pattern is "written into each definition's
+  description (one line: 'Escalation follows D-ESC: timer -> higher role -> fail closed'), deviations
+  (if any) are documented there". That is already the case on main after the timer work
+  (ISS-1013 / Q-995 meridian, ISS-1002 / Q-984 vortex, ISS-1007 / Q-989 swiftroute): every QA
+  definition that has a HUMAN_TASK carries the D-ESC line in its description together with its chain,
+  its durations and its documented deviations - meridian_loan_origination (v1.12),
+  meridian_regulatory_compliance_review (v1.9), vortex_production_order_release (v1.5),
+  vortex_supplier_quality_deviation (v1.6), vortex_8d_corrective_action (v1.1, the E6 waiver citing
+  ISS-1035 / Q-1017), swiftroute shipment approval (v1.4) and swiftroute Driver Incident Report (v1.0).
+  The line is pinned per vertical by meridian_d_esc_escalation_fixture_test.exs,
+  vortex_d_esc_escalation_fixture_test.exs and swiftroute_d_esc_escalation_fixture_test.exs
+  (assert d["description"] =~ "Escalation follows D-ESC: timer -> higher role -> fail closed"), and
+  the same tests assert the structural pattern (timer pair XOR "Waiver: <reason>", the timeout walk
+  ends at a higher role or an allowlisted fail-closed END). The ruling's own text lives in GH #2281.
+  The audit F1 check for swiftroute (same approval-nobody-answers idea handled the same way across
+  the three companies, with deviations stated) therefore answers YES by inspection of those
+  descriptions; a fresh PROCESS-AUDITOR run was not made.
+  No separate docs note was added: the ruling amended the acceptance to name the
+  per-definition description as the place, and a second prose copy would drift from the tests.
+follow_ups:
+  - "BA / PROCESS-AUDITOR: the next audit baseline for swiftroute should re-run checklist F1 against the current fixtures to confirm PA-SWIFTROUTE-011 closed (not re-run here)."
+regression_test: test/letflow/scripts/swiftroute_d_esc_escalation_fixture_test.exs

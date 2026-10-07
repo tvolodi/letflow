@@ -38,8 +38,7 @@ defmodule Letflow.Scripts.SeedSwiftroutePersonaActorsTest do
       |> String.split("\n")
       |> Enum.filter(fn line ->
         String.contains?(line, "lena") and
-          (String.contains?(line, "OPS_MGR_GROUP_ID") or
-             String.contains?(line, "CEO_GROUP_ID") or
+          (String.contains?(line, "actor-swiftroute-lena|role") or
              String.contains?(line, "role-ops-manager") or
              String.contains?(line, "role-ceo"))
       end)
@@ -54,8 +53,8 @@ defmodule Letflow.Scripts.SeedSwiftroutePersonaActorsTest do
   # ---------------------------------------------------------------------------
 
   test "TC-0761-02: marco is added to role-ops-manager group", %{script: script} do
-    assert String.contains?(script, ~s[add_group_member "${OPS_MGR_GROUP_ID}"     "${MARCO_ID}"]),
-           "Expected script to add marco to OPS_MGR_GROUP_ID (role-ops-manager), but the call was not found"
+    assert String.contains?(script, ~s["actor-swiftroute-marco|role-ops-manager"]),
+           "Expected PERSONAS to map marco to role-ops-manager, but the line was not found"
   end
 
   # ---------------------------------------------------------------------------
@@ -63,8 +62,8 @@ defmodule Letflow.Scripts.SeedSwiftroutePersonaActorsTest do
   # ---------------------------------------------------------------------------
 
   test "TC-0761-03: alice is added to role-ceo group", %{script: script} do
-    assert String.contains?(script, ~s[add_group_member "${CEO_GROUP_ID}"         "${ALICE_ID}"]),
-           "Expected script to add alice to CEO_GROUP_ID (role-ceo), but the call was not found"
+    assert String.contains?(script, ~s["actor-swiftroute-alice|role-ceo"]),
+           "Expected PERSONAS to map alice to role-ceo, but the line was not found"
   end
 
   # ---------------------------------------------------------------------------
@@ -81,8 +80,12 @@ defmodule Letflow.Scripts.SeedSwiftroutePersonaActorsTest do
              "but neither 'Part A' + 'Keycloak' were both found"
 
     # Guard must cause an exit on missing user (not silently continue)
-    assert String.contains?(script, "exit 1"),
-           "Expected script to call 'exit 1' on Part A failure, but it was not found"
+    # the guard itself (abort/non-zero on a missing account) lives in the shared base lib the script sources
+    base = File.read!(Path.expand("../../../scripts/lib/seed_persona_actors_base.sh", __DIR__))
+
+    assert String.contains?(script, "lib/seed_persona_actors_base.sh") and
+             String.contains?(base, "Complete Part A") and String.contains?(base, "return 1"),
+           "Expected the script to source the base lib whose Part A guard exits non-zero"
   end
 
   # ---------------------------------------------------------------------------
@@ -94,5 +97,15 @@ defmodule Letflow.Scripts.SeedSwiftroutePersonaActorsTest do
     assert String.contains?(uat_runner, "seed_swiftroute_persona_actors"),
            "Expected .claude/agents/uat-runner.md to reference 'seed_swiftroute_persona_actors', " <>
              "but it was not found — SwiftRoute credentials / provisioning section may be missing"
+  end
+
+  test "script checks the env guard and then runs the swiftroute tenant", %{script: script} do
+    assert script =~ ~r/^persona_require_env$/m
+    assert script =~ ~r/^persona_run swiftroute$/m
+
+    {guard, _} = :binary.match(script, "persona_require_env
+")
+    {run, _} = :binary.match(script, "persona_run swiftroute")
+    assert guard < run
   end
 end

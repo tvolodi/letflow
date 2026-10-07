@@ -7,9 +7,9 @@
 # DEPENDENCIES (not resolved by this scenario):
 #  - No QA seed script deploys the Driver Incident Report definition yet; preflight reports a GAP
 #    on the definitions check until one exists (see the alias sidecar).
-#  - finance-estimate routes to role-accountant and no actor in the roster holds it (ISS-1011 / Q-993).
-#    The accountant below, actor-swiftroute-hans (Hans Richter, Finance, per the swiftroute org structure),
-#    is recorded under `unresolved:` in actors.yaml, so a run is BLOCKED at step 3 until Q-993 seeds him.
+#  - finance-estimate routes to role-accountant; actor-swiftroute-hans (Hans Richter, Finance, per the swiftroute
+#    org structure) holds it in actors.yaml since ISS-1011 / Q-993, once scripts/seed_swiftroute_persona_actors.sh
+#    is re-run on QA (his Keycloak account must exist first).
 ---
 id: swiftroute-driver-incident-assess-and-estimate
 company_id: swiftroute

@@ -1,0 +1,95 @@
+# TEST-RUNNER report, WF-02 step 04, REQ-462 (Q-1025 / GH #2340)
+run_id: WF02-REQ462-20261007
+branch: feat/REQ-462-adopt-required-outputs-Q-1025
+date: 2026-10-07
+verdict: PASS
+full_suite:
+  status: NOT RUN / UNVERIFIED
+  reason: scripts/test_parallel.sh cannot run here (free RAM 0.52-0.91 GB, harness kills at critical memory). RELEASE-VALIDATOR must re-run it independently.
+db: .env LETFLOW_DB_PORT=5472 (letflow-2-postgres container), test DB partitions 3 and 14
+pr_2334_check: "git log --oneline -1 3eb72f99 -> 3eb72f99 fix(swiftroute): ... decision forms v1.5 [Q-990 / GH #2277, partial] ... (#2334); git merge-base --is-ancestor 3eb72f99 HEAD -> ancestor of HEAD (merged)"
+known_limitation_grep: "grep -rn 'KNOWN LIMITATION' test -> only test/specs/REQ-462.md:54,56 (spec prose recording their removal); no test file matches. Former text (diff of swiftroute_decision_forms_fixture_test.exs): 'KNOWN LIMITATION (ISS-1008 AC3 unmet): ops-review completed with the decision key OMITTED is accepted and escalates to ceo-approval' and 'KNOWN LIMITATION (ISS-1008 AC3 unmet): ceo-approval completed with the decision key OMITTED is accepted and fails closed to auto-reject, never release-shipment'"
+scoped_test_runs:
+  method: one file per mix test invocation, sequential, MIX_TEST_PARTITION=3 (14 for req462/required_outputs/definitions_write/tasks_test files), free RAM logged per run
+  files_run: 46
+  all_exit_code_0: true
+  total_failed: 0
+  per_file:
+    - {file: test/fixtures/simulation/fixture_shape_test.exs, partition: 3, free_gb: "0,66", result: "10 passed, 0 failed"}
+    - {file: test/letflow/definitions/req462_shipped_required_outputs_adoption_test.exs, partition: 14, free_gb: "0,69", result: "34 passed, 0 failed"}
+    - {file: test/letflow/definitions/required_outputs_shipped_definitions_test.exs, partition: 14, free_gb: "0,73", result: "2 passed, 0 failed"}
+    - {file: test/letflow/definitions/required_outputs_surfaces_test.exs, partition: 14, free_gb: "0,72", result: "21 passed, 0 failed"}
+    - {file: test/letflow/definitions/required_outputs_validation_test.exs, partition: 14, free_gb: "0,72", result: "33 passed, 0 failed"}
+    - {file: test/letflow/definitions/shipped_definitions_default_edge_scrutiny_test.exs, partition: 3, free_gb: "0,68", result: "14 passed, 0 failed"}
+    - {file: test/letflow/definitions/vortex_production_order_release_fixture_test.exs, partition: 3, free_gb: "0,71", result: "10 passed, 0 failed"}
+    - {file: test/letflow/engine/meridian_loan_escalation_timer_test.exs, partition: 3, free_gb: "0,71", result: "7 passed, 0 failed"}
+    - {file: test/letflow/engine/req462_meridian_required_outputs_test.exs, partition: 14, free_gb: "0,69", result: "4 passed, 0 failed"}
+    - {file: test/letflow/engine/req462_vortex_deviation_required_outputs_test.exs, partition: 14, free_gb: "0,71", result: "2 passed, 0 failed"}
+    - {file: test/letflow/engine/req462_vortex_release_required_outputs_test.exs, partition: 14, free_gb: "0,69", result: "4 passed, 0 failed"}
+    - {file: test/letflow/engine/required_outputs_test.exs, partition: 14, free_gb: "0,73", result: "19 passed, 0 failed"}
+    - {file: test/letflow/engine/shipped_definition_variable_schemas_engine_test.exs, partition: 3, free_gb: "0,72", result: "10 passed, 0 failed"}
+    - {file: test/letflow/engine/sub_process_service_task_after_test.exs, partition: 3, free_gb: "0,66", result: "8 passed, 0 failed"}
+    - {file: test/letflow/engine/swiftroute_escalation_timer_test.exs, partition: 3, free_gb: "0,73", result: "10 passed, 0 failed"}
+    - {file: test/letflow/engine/vortex_escalation_timer_test.exs, partition: 3, free_gb: "0,71", result: "10 passed, 0 failed"}
+    - {file: test/letflow/engine_required_outputs_test.exs, partition: 14, free_gb: "0,67", result: "25 passed, 0 failed"}
+    - {file: test/letflow/engine_variable_schema_merge_test.exs, partition: 3, free_gb: "0,69", result: "5 passed, 0 failed"}
+    - {file: test/letflow/routers/definitions_required_outputs_test.exs, partition: 14, free_gb: "0,68", result: "14 passed, 0 failed"}
+    - {file: test/letflow/routers/definitions_write_test.exs, partition: 14, free_gb: "0,68", result: "39 passed, 0 failed"}
+    - {file: test/letflow/routers/tasks_required_outputs_test.exs, partition: 14, free_gb: "0,59", result: "9 passed, 0 failed"}
+    - {file: test/letflow/routers/tasks_test.exs, partition: 14, free_gb: "0,61", result: "77 passed, 0 failed"}
+    - {file: test/letflow/scripts/meridian_committee_distinct_voters_fixture_test.exs, partition: 3, free_gb: "0,52", result: "5 passed, 0 failed"}
+    - {file: test/letflow/scripts/meridian_d_esc_escalation_fixture_test.exs, partition: 3, free_gb: "0,71", result: "34 passed, 0 failed"}
+    - {file: test/letflow/scripts/meridian_l1_distinct_from_memo_review_fixture_test.exs, partition: 3, free_gb: "0,66", result: "7 passed, 0 failed"}
+    - {file: test/letflow/scripts/meridian_loan_kyc_fail_closed_fixture_test.exs, partition: 3, free_gb: "0,67", result: "16 passed, 0 failed"}
+    - {file: test/letflow/scripts/meridian_loan_origination_fixture_test.exs, partition: 3, free_gb: "0,68", result: "10 passed, 0 failed"}
+    - {file: test/letflow/scripts/meridian_regulatory_remediation_fixture_test.exs, partition: 3, free_gb: "0,72", result: "25 passed, 0 failed"}
+    - {file: test/letflow/scripts/meridian_timeout_review_and_forms_fixture_test.exs, partition: 3, free_gb: "0,72", result: "20 passed, 0 failed"}
+    - {file: test/letflow/scripts/qa_fixture_service_task_endpoints_test.exs, partition: 3, free_gb: "0,68", result: "37 passed, 0 failed"}
+    - {file: test/letflow/scripts/seed_scripts_no_argv_payload_test.exs, partition: 3, free_gb: "0,68", result: "37 passed, 0 failed"}
+    - {file: test/letflow/scripts/seed_swiftroute_definition_test.exs, partition: 3, free_gb: "0,64", result: "5 passed, 0 failed"}
+    - {file: test/letflow/scripts/seed_variable_schemas_payload_test.exs, partition: 3, free_gb: "0,61", result: "10 passed, 0 failed"}
+    - {file: test/letflow/scripts/shipped_definitions_variable_schemas_test.exs, partition: 3, free_gb: "0,66", result: "33 passed, 0 failed"}
+    - {file: test/letflow/scripts/swiftroute_d_esc_escalation_fixture_test.exs, partition: 3, free_gb: "0,66", result: "35 passed, 0 failed"}
+    - {file: test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs, partition: 3, free_gb: "0,75", result: "12 passed, 0 failed"}
+    - {file: test/letflow/scripts/swiftroute_incident_qa_fixture_test.exs, partition: 3, free_gb: "0,73", result: "12 passed, 0 failed"}
+    - {file: test/letflow/scripts/swiftroute_roster_accountant_test.exs, partition: 3, free_gb: "0,73", result: "5 passed, 0 failed"}
+    - {file: test/letflow/scripts/vortex_8d_subprocess_fixture_test.exs, partition: 3, free_gb: "0,78", result: "15 passed, 0 failed"}
+    - {file: test/letflow/scripts/vortex_d_esc_escalation_fixture_test.exs, partition: 3, free_gb: "0,84", result: "41 passed, 0 failed"}
+    - {file: test/letflow/scripts/vortex_roster_ceo_test.exs, partition: 3, free_gb: "0,83", result: "5 passed, 0 failed"}
+    - {file: test/letflow/scripts/vortex_severity_timeout_default_critical_test.exs, partition: 3, free_gb: "0,79", result: "8 passed, 0 failed"}
+    - {file: test/letflow/simulation/req206_swiftroute_test.exs, partition: 3, free_gb: "0,82", result: "5 passed, 0 failed"}
+    - {file: test/letflow/simulation/req207_vortex_test.exs, partition: 3, free_gb: "0,91", result: "4 passed, 0 failed"}
+    - {file: test/letflow/simulation/req208_meridian_test.exs, partition: 3, free_gb: "0,87", result: "4 passed, 0 failed"}
+    - {file: test/scripts/persona_actor_seed_drift_test.exs, partition: 3, free_gb: "0,89", result: "16 passed, 0 failed"}
+  note: "46 = union of the grep file list plus fixture_shape_test, definitions_write_test and the REQ-460/461 files (all of them also matched the grep). Result: lines are the project's own summary line."
+twelve_test_names:
+  - "swiftroute_decision_forms_fixture_test: ops-review: a completion omitting ops_decision is refused (422 output_refused, missing_keys [ops_decision]); a retry with a valid decision completes and routes"
+  - "swiftroute_decision_forms_fixture_test: ceo-approval: a completion omitting ceo_decision is refused (422 output_refused, missing_keys [ceo_decision]); a retry with a valid decision completes and routes"
+  - "req462_meridian_required_outputs_test: l1-approval / l2-approval / escalate-l2-approval-to-ceo / kyc-manual-review (4 tests)"
+  - "req462_vortex_release_required_outputs_test: capacity-review / escalate-to-ceo / budget-approval / escalate-budget-approval-to-ceo (4 tests)"
+  - "req462_vortex_deviation_required_outputs_test: severity-classification / escalate-severity-classification-to-ceo (2 tests)"
+check3_warnings_per_definition:
+  method: SemanticValidation.decision_key_warnings/2 run on each fixture graph (mix run, test env)
+  swiftroute v1.6: 0
+  meridian_loan_origination v1.13: 12 (credit_decision x3 edges e15,e15-kyc-cleared,e16 ... risk_rating x3, committee_vote_cro/director/ceo x2 edges e39,e40); all deliberately unadopted keys
+  vortex_production_order_release v1.6: 0
+  vortex_supplier_quality_deviation v1.7: 0
+  adopted_key_warnings: none for any of the twelve adopted nodes
+tooling_ci_shaped:
+  # MIX_TEST_PARTITION unset, each run separately, all exit 0
+  - "mix compile --warnings-as-errors: exit 0"
+  - "mix format --check-formatted: exit 0"
+  - "mix letflow.check_issue_refs: OK -- every cross-reference is prefixed and well-formed (625 files)"
+  - "mix letflow.lint_handoffs: OK -- 0 new violations across 3430 handoff files (25 pre-existing grandfathered)"
+  - "mix letflow.check_uat_scenario_schema: 38 file(s) checked, 0 violation(s)"
+  - "mix letflow.check_boundaries: OK -- 963 edges checked, 0 violations"
+  - "mix letflow.check_requirements_registration: 433 entries = 433 registered + 0 deferred + 0 neither + 0 unclassified"
+  - "mix letflow.check_req_id_collision: OK -- no REQ-NNN id collision with origin/main"
+  - "mix letflow.check_deferral_staleness: 0 deferred of 433 entries; 0 stale"
+  - "mix letflow.check_async_sandbox_reachability: OK -- 147 async:true test file(s) scanned, 0 new violations"
+diff_stat: "24 files changed, 1219 insertions(+), 65 deletions(-) vs origin/main (excluding handoffs): 3 seed scripts, 4 QA fixtures (swiftroute, meridian, vortex release, vortex deviation), tests, test/support/req462_adoption.ex, test/specs/REQ-462.md. No definition outside the three verticals."
+failures: none
+open_for_orch:
+  - "ISS-1008 'declared value is a required start field' stays unmet (start-form variables out of scope, REQ-460 open_questions)."
+  - "meridian unadopted keys still warn (12 check-3 warnings listed above): credit_decision, risk_rating, committee votes; regulatory review not seen in check 3 output."
+  - "Full suite unverified here."

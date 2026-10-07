@@ -1,14 +1,14 @@
 {
-  "handoff_id": "2b7a3980-fb96-4670-968d-830c476ccc61",
+  "handoff_id": "2e69ff9c-adab-46b4-96d8-776084f18417",
   "run_id": "WF02-REQ462-20261007",
   "workflow_id": "WF-02",
-  "step": "04",
+  "step": "05",
   "from_agent": "ORCH",
-  "to_agent": "TEST-RUNNER",
-  "file": "handoffs/WF02-REQ462-20261007/step-04-test-runner.json",
-  "created_at": "2026-10-07T12:34:59Z",
-  "started_at": "2026-10-07T12:34:59Z",
-  "status": "COMPLETED",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ462-20261007/step-05-release-validator.json",
+  "created_at": "2026-10-07T12:43:15Z",
+  "started_at": "2026-10-07T12:43:15Z",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -42,17 +42,7 @@
     ]
   },
   "task": {
-    "description": "You are TEST-RUNNER, step 04. The full suite (scripts/test_parallel.sh) CANNOT be run in this environment (RAM 0.4-2 GB; harness kills at critical memory): state that explicitly in the report as unverified, and instead run the scoped set below, each as a SEPARATE sequential invocation with MIX_TEST_PARTITION=3 (14 for the REQ-462 files), checking free RAM before each, one BEAM at a time:\n1. `grep -rln` over test/ for: swiftroute_process_definition, meridian_loan_origination_process_definition, vortex_production_order_release_process_definition, vortex_supplier_quality_deviation_process_definition, required_outputs, req462, the four seed scripts' names (seed_swiftroute_definition, seed_meridian_definition, seed_vortex_definition), 'ops-review', 'capacity-review', 'severity-classification', 'l1-approval', 'kyc-manual-review', 'shipped_definitions'. Union the file lists (dedupe; include test/fixtures/simulation/fixture_shape_test.exs if it is a runnable test, the simulation req206/207/208 tests, test/letflow/scripts/*d_esc*fixture_test.exs, the argv-payload lint test for scripts) and run EVERY file in the union. Report the file list and per-file result (N passed/failed).\n2. The REQ-460/461 files: test/letflow/engine_required_outputs_test.exs, test/letflow/routers/tasks_required_outputs_test.exs, test/letflow/engine/required_outputs_test.exs, test/letflow/definitions/required_outputs_*_test.exs, test/letflow/routers/definitions_required_outputs_test.exs, test/letflow/routers/definitions_write_test.exs, test/letflow/routers/tasks_test.exs.\n3. CI-shaped tooling (unset MIX_TEST_PARTITION, each separately, quote output): mix compile --warnings-as-errors; mix format --check-formatted; mix letflow.check_issue_refs; mix letflow.lint_handoffs; mix letflow.check_uat_scenario_schema; mix letflow.check_boundaries; mix letflow.check_requirements_registration; mix letflow.check_req_id_collision; mix letflow.check_deferral_staleness; mix letflow.check_async_sandbox_reachability.\nFailure attribution must be structural (core-directives.md: never by count-matching): a failure outside the diff is pre-existing only if you name the evidence (module not in `git diff --name-only origin/main..HEAD`, or reproduced at the merge-base via a git worktree-free method such as reasoning + reading; do NOT git checkout/stash). Do not edit files except test/reports/report-2026-10-07-WF02-REQ462-20261007.yaml (write the structured report there with real output). A killed run: report, do not loop.\n",
+    "description": "You are RELEASE-VALIDATOR, step 05. Independently re-verify EVERY acceptance criterion of REQ-462 (context.requirement_acceptance_criteria) from the code and by re-running yourself (do not trust TEST-RUNNER's report test/reports/report-2026-10-07-WF02-REQ462-20261007.yaml). The full suite cannot be run here (RAM): re-run instead a meaningful independent subset, each file separately, sequentially, RAM rules in task.extra: the 5 REQ-462 test files, plus at least meridian_loan_origination_fixture_test, vortex_production_order_release_fixture_test, shipped_definitions_validation_test, seed_swiftroute_definition_test (or the argv-payload lint test), engine_required_outputs_test, and mix compile --warnings-as-errors, mix format --check-formatted, mix letflow.check_boundaries. Independently: (a) re-derive from git (git show origin/main:<fixture> vs HEAD) that exactly twelve nodes gained required_outputs, versions are +1 minor, and nothing else on the nodes changed; (b) run the four fixtures through the validator yourself (mix run or a test helper in the scratchpad) and report per-definition violations and warnings with the remaining warning list; (c) confirm `grep -rn \"KNOWN LIMITATION\" test` shows no test file; (d) confirm the 12 test names exist by node id and list them; (e) git diff --stat origin/main..HEAD quoted; no definition outside the three verticals; (f) docs/requirements.yaml and docs/status are NOT yet updated (DOC-UPDATER does that next): note staleness only. Also verify docs/anti-patterns.md rule: grep -rln required_outputs test and confirm each file that activates hand-built definitions was run. Do not edit files except your handoff. Verdict PASS/FAIL naming any blocking agent.\n",
     "extra": "ENVIRONMENT RULES (binding): checkout C:\\Users\\tvolo\\dev\\ai-dala\\letflow-3, branch feat/REQ-462-adopt-required-outputs-Q-1025 (verify with git branch --show-current first; STOP if different). Do NOT push, open a PR or merge; do NOT touch the letflow-queue; do NOT touch branch test/authz-deny-log-deterministic-capture; leave untracked letflow-3.code-workspace untouched and uncommitted. RAM is VERY tight (0.4-2 GB free; the harness KILLS runs at critical memory): mix commands strictly sequential, ONE BEAM at a time, check free RAM before each mix test (powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\"), scoped single test FILES only (never a directory or the full suite), export MIX_TEST_PARTITION=3 ONLY for tests (unset for tooling tasks; use a unique number such as 14 for files that mutate shared state). If a run is killed, report it; do NOT loop. Do NOT commit; ORCH commits after your step. Never git checkout/stash/reset anything (uncommitted work is unrecoverable). Quote real output, never claim. Claim the handoff by setting status to IN_PROGRESS only; on finishing set status COMPLETED/FAILED and fill result {status: PASS|FAIL, summary, files_changed, verification, issues, next_action}.\nContext: the design is lib/letflow/design/req459-required-outputs-and-distinct-person.md (section 9: an escalation task inherits nothing, declares its own required_outputs). REQ-460 (engine, b8899b24: completing a HUMAN_TASK without a declared required_outputs key gives 422 code output_refused with missing_keys, task stays open, instance unchanged) and REQ-461 (validator, 508163d0: check 2 required_output_without_variable_schema is a VIOLATION at validate/activate; check 3 decision_key_not_required: is a WARNING) are merged. docs/anti-patterns.md newest entry: a validator refusing at activate must be checked against EVERY test that activates hand-built definitions (grep the whole test/ tree).\n"
-  },
-  "result": {
-    "status": "PASS",
-    "summary": "46 scoped test files each run singly (partitions 3/14): all exit 0, 0 failures. 10 CI-shaped mix tooling tasks all exit 0. Full suite NOT run (RAM), unverified. PR #2334 merge 3eb72f99 is ancestor of HEAD. No KNOWN LIMITATION tests remain. Check 3 warnings: 0 for swiftroute/vortex x2, 12 for meridian (unadopted keys only).",
-    "files_changed": [
-      "test/reports/report-2026-10-07-WF02-REQ462-20261007.yaml"
-    ],
-    "verification": "see report file",
-    "issues": [],
-    "next_action": "ORCH commit report; RELEASE-VALIDATOR re-run incl. full suite"
   }
 }

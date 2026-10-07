@@ -104,6 +104,10 @@ defmodule Letflow.Routers.EntitiesTest do
         display_name: "REQ-310 Entities Router Test Tenant"
       )
 
+    # REQ-447 PR 2: a PLATFORM_ADMIN token can only be minted in the pinned platform tenant
+    if "PLATFORM_ADMIN" in roles,
+      do: Letflow.Support.PlatformTenantFixture.pin!(tenant.tenant_id)
+
     {:ok, _seeded} = EventTypes.seed!(tenant.schema_name)
     user = insert_user!(tenant)
 
@@ -741,6 +745,11 @@ defmodule Letflow.Routers.EntitiesTest do
 
       conn = request(:get, "/api/v1/entities/no-such-thing", ctx)
       assert conn.status == 403
+
+      # control: the platform operator (pinned tenant, PLATFORM_ADMIN) reaches the router's own 404
+      op = tenant_ctx("req310-mount-catchall-op", ["PLATFORM_ADMIN"])
+      op_conn = request(:get, "/api/v1/entities/no-such-thing", op)
+      assert op_conn.status == 404
     end
   end
 

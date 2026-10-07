@@ -1,14 +1,14 @@
 {
-  "handoff_id": "2e69ff9c-adab-46b4-96d8-776084f18417",
+  "handoff_id": "ca7d2976-9afe-4bd4-91ab-62de4194099e",
   "run_id": "WF02-REQ462-20261007",
   "workflow_id": "WF-02",
-  "step": "05",
+  "step": "06",
   "from_agent": "ORCH",
-  "to_agent": "RELEASE-VALIDATOR",
-  "file": "handoffs/WF02-REQ462-20261007/step-05-release-validator.json",
-  "created_at": "2026-10-07T12:43:15Z",
-  "started_at": "2026-10-07T12:43:15Z",
-  "status": "COMPLETED",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ462-20261007/step-06-doc-updater.json",
+  "created_at": "2026-10-07T12:51:19Z",
+  "started_at": "2026-10-07T12:51:19Z",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -42,21 +42,7 @@
     ]
   },
   "task": {
-    "description": "You are RELEASE-VALIDATOR, step 05. Independently re-verify EVERY acceptance criterion of REQ-462 (context.requirement_acceptance_criteria) from the code and by re-running yourself (do not trust TEST-RUNNER's report test/reports/report-2026-10-07-WF02-REQ462-20261007.yaml). The full suite cannot be run here (RAM): re-run instead a meaningful independent subset, each file separately, sequentially, RAM rules in task.extra: the 5 REQ-462 test files, plus at least meridian_loan_origination_fixture_test, vortex_production_order_release_fixture_test, shipped_definitions_validation_test, seed_swiftroute_definition_test (or the argv-payload lint test), engine_required_outputs_test, and mix compile --warnings-as-errors, mix format --check-formatted, mix letflow.check_boundaries. Independently: (a) re-derive from git (git show origin/main:<fixture> vs HEAD) that exactly twelve nodes gained required_outputs, versions are +1 minor, and nothing else on the nodes changed; (b) run the four fixtures through the validator yourself (mix run or a test helper in the scratchpad) and report per-definition violations and warnings with the remaining warning list; (c) confirm `grep -rn \"KNOWN LIMITATION\" test` shows no test file; (d) confirm the 12 test names exist by node id and list them; (e) git diff --stat origin/main..HEAD quoted; no definition outside the three verticals; (f) docs/requirements.yaml and docs/status are NOT yet updated (DOC-UPDATER does that next): note staleness only. Also verify docs/anti-patterns.md rule: grep -rln required_outputs test and confirm each file that activates hand-built definitions was run. Do not edit files except your handoff. Verdict PASS/FAIL naming any blocking agent.\n",
+    "description": "You are DOC-UPDATER, step 06. REQ-462: flip status pending -> done in docs/requirements.yaml (this one line only; do not touch other requirements; the open_questions stay), append ONE `done` event to the current run-history volume (find it via docs/status/requirement_status.index.yaml; follow exactly the REQ-460/REQ-461 runs: see handoffs/WF02-REQ461-20261007/step-06-doc-updater.json result and the event they appended near the end of docs/status/requirement_status.v26.yaml) with a REAL UTC timestamp from `date -u +%Y-%m-%dT%H:%M:%SZ` taken now, and update the status-index counter/count note as they did (index entries count must equal on-disk `grep -c '^  - req:'`; check roll thresholds). The event summary should state: 12 HUMAN_TASK nodes adopted required_outputs, versions swiftroute 1.6 / meridian loan 1.13 / vortex release 1.6 / vortex deviation 1.7, two KNOWN LIMITATION tests replaced, 12 node-named tests + adoption validator test, remaining 12 meridian decision_key_not_required warnings (credit_decision, risk_rating, committee votes) for unadopted keys, vortex false-positive classification now must also supply severity, SECURITY-REVIEWER/REVIEWER/TEST-DESIGN-VALIDATOR (all mutants killed)/RELEASE-VALIDATOR PASS, full suite not run. Update README.md/docs only if documented current behaviour changed (grep docs/ and README.md for the four definitions' versions, swiftroute 1.5, KNOWN LIMITATION, 'fails closed' decision-form prose, e.g. docs describing the omitted-decision behaviour of swiftroute/meridian/vortex, and docs/uat or qa roster docs that quote these versions) and name every file you actually touched. Then run: mix letflow.check_requirements_registration, mix letflow.lint_handoffs, and the requirement_status invariants test (MIX_TEST_PARTITION=3, single file, test/letflow/**/requirement_status_invariants_test.exs wherever it lives), quote results. Do not commit.\n",
     "extra": "ENVIRONMENT RULES (binding): checkout C:\\Users\\tvolo\\dev\\ai-dala\\letflow-3, branch feat/REQ-462-adopt-required-outputs-Q-1025 (verify with git branch --show-current first; STOP if different). Do NOT push, open a PR or merge; do NOT touch the letflow-queue; do NOT touch branch test/authz-deny-log-deterministic-capture; leave untracked letflow-3.code-workspace untouched and uncommitted. RAM is VERY tight (0.4-2 GB free; the harness KILLS runs at critical memory): mix commands strictly sequential, ONE BEAM at a time, check free RAM before each mix test (powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\"), scoped single test FILES only (never a directory or the full suite), export MIX_TEST_PARTITION=3 ONLY for tests (unset for tooling tasks; use a unique number such as 14 for files that mutate shared state). If a run is killed, report it; do NOT loop. Do NOT commit; ORCH commits after your step. Never git checkout/stash/reset anything (uncommitted work is unrecoverable). Quote real output, never claim. Claim the handoff by setting status to IN_PROGRESS only; on finishing set status COMPLETED/FAILED and fill result {status: PASS|FAIL, summary, files_changed, verification, issues, next_action}.\nContext: the design is lib/letflow/design/req459-required-outputs-and-distinct-person.md (section 9: an escalation task inherits nothing, declares its own required_outputs). REQ-460 (engine, b8899b24: completing a HUMAN_TASK without a declared required_outputs key gives 422 code output_refused with missing_keys, task stays open, instance unchanged) and REQ-461 (validator, 508163d0: check 2 required_output_without_variable_schema is a VIOLATION at validate/activate; check 3 decision_key_not_required: is a WARNING) are merged. docs/anti-patterns.md newest entry: a validator refusing at activate must be checked against EVERY test that activates hand-built definitions (grep the whole test/ tree).\n"
-  },
-  "result": {
-    "status": "PASS",
-    "summary": "All 7 ACs independently re-verified. Exactly 12 nodes gained required_outputs (derived from git show origin/main vs HEAD; only attributes.required_outputs added, edges and variable_schemas unchanged), versions +1 minor (swiftroute 1.5->1.6, meridian 1.12->1.13, vortex release 1.5->1.6, vortex deviation 1.6->1.7). 12 per-node tests exist and pass. grep KNOWN LIMITATION test shows only prose in test/specs/REQ-462.md and the report. check3 run by me: swiftroute 0, vortex release 0, vortex deviation 0, meridian 12 (credit_decision, risk_rating, committee votes; deliberately unadopted). No lib/config/priv diff. Security PASS 02c, Reviewer PASS 02d, PR #2334 ancestor of HEAD (3eb72f99).",
-    "files_changed": [
-      "handoffs/WF02-REQ462-20261007/step-05-release-validator.json"
-    ],
-    "verification": "mix compile --warnings-as-errors exit 0; mix format --check-formatted exit 0; mix letflow.check_boundaries OK 963 edges 0 violations. mix test single files, partition 3, sequential, all exit 0: req462 adoption 34 passed; req462 meridian 4; req462 vortex deviation 2; req462 vortex release 4; swiftroute_decision_forms 12; meridian_loan_origination 10; vortex_production_order_release_fixture 10; shipped_definitions_validation 3; required_outputs_shipped_definitions 2; seed_swiftroute_definition 5; seed_scripts_no_argv_payload 37; engine_required_outputs 25; plus 23 further files that load the four fixtures (all pass). No dead-default warnings in changed test files. NOT run: mix letflow.check.test (runs the full parallel suite, infeasible at 0.7 GB free RAM) - CI must run it.",
-    "issues": [
-      "mix letflow.check.test not run locally (RAM); equivalent substring grep on the changed files found 0 hits and test/support/req462_adoption.ex plus new tests contain no default arguments",
-      "docs/requirements.yaml and docs/status not yet updated (expected, DOC-UPDATER next)",
-      "Remaining warnings: meridian 12 (credit_decision x3 edges, risk_rating x3, committee_vote_cro/director/ceo x2 each); to report to ORCH. Declared_value start-form required field stays unmet (out of scope)."
-    ],
-    "next_action": "ORCH commit, DOC-UPDATER, then push/PR; CI runs mix letflow.check"
   }
 }

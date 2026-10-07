@@ -58,8 +58,8 @@ defmodule Letflow.Definitions.VortexProductionOrderReleaseFixtureTest do
     Enum.filter(ids, &(by_id[&1]["node_type"] == "END"))
   end
 
-  test "fixture version is 1.5 (1.4 = ISS-1027 variable_schemas; 1.5 = ISS-1002 D-ESC timers; forces QA re-seed)" do
-    assert qa_doc()["version"] == "1.5"
+  test "fixture version is 1.6 (1.6 = REQ-462 required_outputs; 1.4 = ISS-1027 variable_schemas; 1.5 = ISS-1002 D-ESC timers; forces QA re-seed)" do
+    assert qa_doc()["version"] == "1.6"
   end
 
   for {label, key} <- [{"qa fixture", :qa}, {"simulation copy", :sim}] do
@@ -168,6 +168,12 @@ defmodule Letflow.Definitions.VortexProductionOrderReleaseFixtureTest do
     assert ends_of.(fixtures["vortex"]) == ["end-rejected"]
   end
 
+  # REQ-462: check 2 (required_output_without_variable_schema) needs the definition's own
+  # registered variable_schemas, as at validate/activate.
+  defp declared_fields(doc) do
+    Map.new(doc["variable_schemas"] || [], &{&1["variable_key"], &1["json_schema"]})
+  end
+
   test "the validators report zero violations for both copies" do
     for {label, doc} <- docs() do
       assert {:ok, graph} = Graph.from_map(doc["graph"])
@@ -177,7 +183,7 @@ defmodule Letflow.Definitions.VortexProductionOrderReleaseFixtureTest do
           Graph.validate_node_attributes(graph).violations ++
           Graph.validate_edge_conditions(graph).violations ++
           Graph.validate_flow(graph).violations ++
-          SemanticValidation.validate(graph, %{}).violations
+          SemanticValidation.validate(graph, declared_fields(doc)).violations
 
       assert violations == [], "#{label}: #{inspect(violations)}"
     end

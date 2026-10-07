@@ -2734,3 +2734,20 @@
 2026-10-06T05:22:49Z | PASS | WF-02 | WF02-REQ456-20261006 | REVIEWER → ORCH | Step 08b PASS (roster edit c4f93684)
 2026-10-06T05:29:34Z | RUN_START | WF-03 | WF03-Q976-20261006 | ORCH | ISS-0995 / Q-976 / GH#2257 started on fix/ISS-0995-deny-attribution-Q976 (local branch from origin/main 72c81b6d, not pushed)
 2026-10-06T07:05:00Z | RUN_DONE | WF-03 | WF03-Q976-20261006 | ORCH | gates green (design after 1 rework, security PASS, idiom PASS, test-design PASS w/ 8 independently applied mutants, release); scoped runs only (653 passed); local commit, NOT pushed (CI-slot rule); queue lock 976 and GH#2257 left to parent.
+2026-10-07T12:04:25Z | RUN_START | WF-02 | WF02-REQ462-20261007 | ORCH | REQ-462 / Q-1025 / GH#2340 on feat/REQ-462-adopt-required-outputs-Q-1025 (local branch from origin/main 508163d0, not pushed); design = req459 (no new design: data-only change)
+2026-10-07T12:04:25Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → ELIXIR-DEV | Step 02a
+2026-10-07T12:13:11Z | PASS | WF-02 | WF02-REQ462-20261007 | ELIXIR-DEV → ORCH | Step 02a PASS, committed 77793100
+2026-10-07T12:13:11Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → SECURITY-REVIEWER | Step 02c
+2026-10-07T12:14:06Z | PASS | WF-02 | WF02-REQ462-20261007 | SECURITY-REVIEWER → ORCH | Step 02c PASS (no lib/config/priv change; minor: KNOWN LIMITATION tests + 12 tests pending TEST-DESIGNER)
+2026-10-07T12:14:06Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → REVIEWER | Step 02d
+2026-10-07T12:15:32Z | PASS | WF-02 | WF02-REQ462-20261007 | REVIEWER → ORCH | Step 02d PASS (note: severity-classification false-positive path now must carry severity; accepted per requirement item k)
+2026-10-07T12:15:32Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → TEST-DESIGNER | Step 03
+2026-10-07T12:22:30Z | PASS | WF-02 | WF02-REQ462-20261007 | TEST-DESIGNER → ORCH | Step 03 PASS, committed 85e7c248
+2026-10-07T12:22:30Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → TEST-DESIGN-VALIDATOR | Step 03b
+2026-10-07T12:34:59Z | PASS | WF-02 | WF02-REQ462-20261007 | TEST-DESIGN-VALIDATOR → ORCH | Step 03b PASS, all 12 node mutants + M-a..M-h killed (56 tests across 5 files)
+2026-10-07T12:34:59Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → TEST-RUNNER | Step 04
+2026-10-07T12:43:15Z | PASS | WF-02 | WF02-REQ462-20261007 | TEST-RUNNER → ORCH | Step 04 PASS (46 scoped files green, 10 tooling checks green; full suite not run)
+2026-10-07T12:43:15Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → RELEASE-VALIDATOR | Step 05
+2026-10-07T12:51:19Z | PASS | WF-02 | WF02-REQ462-20261007 | RELEASE-VALIDATOR → ORCH | Step 05 PASS (all 7 ACs re-verified; full suite not run)
+2026-10-07T12:51:19Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → DOC-UPDATER | Step 06
+2026-10-07T12:53:21Z | RUN_DONE | WF-02 | WF02-REQ462-20261007 | ORCH | gates green (security PASS, idiom PASS, test-design PASS w/ all 12 node mutants + 8 extra killed, test-run scoped 46 files, release PASS, doc-update verified by ORCH from disk); local commits, NOT pushed; queue lock 1025 and GH#2340 left to parent

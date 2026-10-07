@@ -128,6 +128,30 @@ defmodule Letflow.Engine.SubProcessServiceTaskAfterTest do
     active
   end
 
+  # REQ-462: a fixture whose HUMAN_TASKs declare required_outputs is only activatable with the
+  # definition's own variable_schemas registered (check 2), as the seed scripts do.
+  defp create_active_with_schemas!(schema, doc) do
+    entries =
+      Enum.map(doc["variable_schemas"], fn e ->
+        %{variable_key: e["variable_key"], json_schema: e["json_schema"], description: nil}
+      end)
+
+    assert {:ok, definition} =
+             Definitions.create_with_variable_schemas(
+               %{
+                 name: doc["name"],
+                 version: doc["version"],
+                 graph: doc["graph"],
+                 created_by: Ecto.UUID.generate()
+               },
+               entries,
+               prefix: schema
+             )
+
+    assert {:ok, %{definition: active}} = Definitions.activate(definition.id, prefix: schema)
+    active
+  end
+
   defp start!(schema, definition, variables) do
     assert {:ok, result} =
              Engine.create(
@@ -411,8 +435,7 @@ defmodule Letflow.Engine.SubProcessServiceTaskAfterTest do
 
     create_active!(schema, child_doc["name"], child_doc["version"], child_doc["graph"])
 
-    parent =
-      create_active!(schema, parent_doc["name"], parent_doc["version"], parent_doc["graph"])
+    parent = create_active_with_schemas!(schema, parent_doc)
 
     parent_id = start!(schema, parent, %{"batch_ref" => "b-1", "deviation_id" => "dev-9"})
 

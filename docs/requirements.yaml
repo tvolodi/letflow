@@ -34821,7 +34821,7 @@ requirements:
   - id: REQ-462
     title: "Adopt required_outputs in the shipped decision forms of swiftroute, meridian and vortex, and replace Q-990's two KNOWN LIMITATION tests with real assertions"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     # ORDERING: PR #2334 (Q-990 / GH #2277, the home of the two KNOWN LIMITATION tests) merged as 3eb72f99 on 2026-10-07: that precondition is SATISFIED; the entry stays blocked only by its depends_on (REQ-460/461).
     impl_order: 1025  # letflow-queue task id, GH#2340. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-461 -- the shipped definitions can adopt only after the engine check (REQ-460) and the validator (REQ-461) exist; REQ-460 is reached through REQ-461

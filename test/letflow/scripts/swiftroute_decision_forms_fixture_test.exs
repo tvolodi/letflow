@@ -10,15 +10,15 @@ defmodule Letflow.Scripts.SwiftrouteDecisionFormsFixtureTest do
       kept in step, graph/semantic validation clean;
     * (b) engine level, through the real registration path (`create_with_variable_schemas/3`),
       `activate/2`, `Engine.create/2` and `Engine.complete_task/3`:
-        - an out-of-enum value or an explicit null decision is REJECTED server-side by
-          `variable_schemas`; REQ-459/REQ-460: the completion is REFUSED (retryable 422, no state change, instance stays `:active`, no EXECUTION_ERROR) instead of flipping the instance to `:error`;
+        - an out-of-enum value is REFUSED (retryable 422 `output_refused`, `rejected_keys` naming the
+          key) and an explicit null decision is REFUSED the same way with `missing_keys` naming it
+          (REQ-459/REQ-460): no state change, instance stays `:active`, no EXECUTION_ERROR;
         - approve / reject route as before;
-        - KNOWN LIMITATION (ISS-1008 AC3 is NOT met): a completion that OMITS the decision key is
-          NOT rejected. `VariableSchema.variable_validations/5` validates only submitted keys and
-          `form_schema` `required` is UI-only (REQ-273), so the process takes the fail-closed
-          route (ops-review -> ceo-approval; ceo-approval -> auto-reject; never release-shipment).
-          The tests named "KNOWN LIMITATION" pin today's behaviour: when a completion-time
-          required-output check lands in `Letflow.Engine.run_complete_task` they must flip.
+        - REQ-462 (ISS-1008 AC3, now met): ops-review and ceo-approval declare `required_outputs`
+          for the key their edges read, so a completion that OMITS the decision key is refused
+          (`missing_keys: [key]`), the task stays open, the instance is unchanged, and a retry with a
+          valid decision completes and routes. The two tests named by node id below replace the two
+          former tests that pinned the old accepted-and-fail-closed behaviour.
         - the start form: the node model has no start form (`form_schema` is read only from
           HUMAN_TASK nodes), so `declared_value` is a required-by-convention initial variable,
           typed by `variable_schemas` (number); the limitation is stated in the description.
@@ -37,6 +37,7 @@ defmodule Letflow.Scripts.SwiftrouteDecisionFormsFixtureTest do
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
+  alias Letflow.Req462Adoption
   alias Letflow.TenantFixture
 
   @qa Path.expand("../../fixtures/qa/swiftroute_process_definition.json", __DIR__)
@@ -91,9 +92,9 @@ defmodule Letflow.Scripts.SwiftrouteDecisionFormsFixtureTest do
       assert doc["description"] =~ "required"
     end
 
-    test "version 1.5, the D-ESC line is kept verbatim and a v1.5 sentence is added" do
+    test "version 1.6, the D-ESC line is kept verbatim and the v1.5 and v1.6 sentences are present" do
       doc = qa()
-      assert doc["version"] == "1.5"
+      assert doc["version"] == "1.6"
       assert doc["description"] =~ "Escalation follows D-ESC: timer -> higher role -> fail closed"
       assert doc["description"] =~ "v1.5"
     end
@@ -170,32 +171,79 @@ defmodule Letflow.Scripts.SwiftrouteDecisionFormsFixtureTest do
       assert projection(schema, rejected).current_nodes == ["auto-reject"]
     end
 
-    test "KNOWN LIMITATION (ISS-1008 AC3 unmet): ops-review completed with the decision key OMITTED is accepted and escalates to ceo-approval" do
+    # REQ-462 (a). Replaces the former pin of the old limitation (ops-review completed with the
+    # decision key omitted was accepted and escalated to ceo-approval).
+    test "ops-review: a completion omitting ops_decision is refused (422 output_refused, missing_keys [ops_decision]); a retry with a valid decision completes and routes" do
       schema = tenant_schema!()
       id = start!(schema, %{"shipment_id" => "shp-1008", "declared_value" => 100})
 
-      # NOT rejected: variable_schemas validates only submitted keys; form_schema required is UI-only.
-      complete!(schema, task!(schema, id, "ops-review"), %{})
+      Req462Adoption.assert_omitted_refused!(
+        schema,
+        id,
+        "ops-review",
+        "ops_decision",
+        %{"unrelated_note" => "x"}
+      )
 
       proj = projection(schema, id)
-      assert proj.status == :active
-      assert proj.current_nodes == ["ceo-approval"]
+      assert proj.current_nodes == ["ops-review"]
       refute Map.has_key?(proj.variables, "ops_decision")
+
+      # the old fail-closed route (ceo-approval) is NOT taken; the retry decides the route
+      complete!(schema, task!(schema, id, "ops-review"), %{"ops_decision" => "approve"})
+      assert projection(schema, id).current_nodes == ["release-shipment"]
       assert event_count(schema, id, "EXECUTION_ERROR") == 0
+
+      # same omission on a high-value shipment: refused, then approve -> the CEO co-sign task
+      high = start!(schema, %{"shipment_id" => "shp-1008", "declared_value" => 900})
+
+      Req462Adoption.assert_omitted_refused!(
+        schema,
+        high,
+        "ops-review",
+        "ops_decision",
+        %{"unrelated_note" => "x"}
+      )
+
+      complete!(schema, task!(schema, high, "ops-review"), %{"ops_decision" => "approve"})
+      assert projection(schema, high).current_nodes == ["ceo-approval"]
     end
 
-    test "KNOWN LIMITATION (ISS-1008 AC3 unmet): ceo-approval completed with the decision key OMITTED is accepted and fails closed to auto-reject, never release-shipment" do
+    # REQ-462 (b). Replaces the former pin of the old limitation (ceo-approval completed with the
+    # decision key omitted was accepted and failed closed to auto-reject).
+    test "ceo-approval: a completion omitting ceo_decision is refused (422 output_refused, missing_keys [ceo_decision]); a retry with a valid decision completes and routes" do
       schema = tenant_schema!()
-      id = at_ceo_approval!(schema, %{"shipment_id" => "shp-1008", "declared_value" => 900})
+      vars = %{"shipment_id" => "shp-1008", "declared_value" => 900}
+      id = at_ceo_approval!(schema, vars)
 
-      complete!(schema, task!(schema, id, "ceo-approval"), %{})
+      Req462Adoption.assert_omitted_refused!(
+        schema,
+        id,
+        "ceo-approval",
+        "ceo_decision",
+        %{"unrelated_note" => "x"}
+      )
 
       proj = projection(schema, id)
-      assert proj.status == :active
-      assert proj.current_nodes == ["auto-reject"]
-      refute "release-shipment" in proj.current_nodes
+      assert proj.current_nodes == ["ceo-approval"]
       refute Map.has_key?(proj.variables, "ceo_decision")
-      assert event_count(schema, id, "EXECUTION_ERROR") == 0
+
+      complete!(schema, task!(schema, id, "ceo-approval"), %{"ceo_decision" => "approve"})
+      assert projection(schema, id).current_nodes == ["release-shipment"]
+
+      rejected = at_ceo_approval!(schema, vars)
+
+      Req462Adoption.assert_omitted_refused!(
+        schema,
+        rejected,
+        "ceo-approval",
+        "ceo_decision",
+        %{"unrelated_note" => "x"}
+      )
+
+      complete!(schema, task!(schema, rejected, "ceo-approval"), %{"ceo_decision" => "reject"})
+      assert projection(schema, rejected).current_nodes == ["auto-reject"]
+      assert event_count(schema, rejected, "EXECUTION_ERROR") == 0
     end
   end
 
@@ -291,8 +339,15 @@ defmodule Letflow.Scripts.SwiftrouteDecisionFormsFixtureTest do
 
     # REQ-459/REQ-460 amendment: a HUMAN_TASK completion with a schema-rejected value is now
     # REFUSED (retryable 422 at the router) before any state change; the instance is NOT put into
-    # ERROR and no EXECUTION_ERROR event is written. The rejected key is named (in-form key).
-    assert {:error, {:output_refused, %{missing_keys: [], rejected_keys: [^key]}}} =
+    # ERROR and no EXECUTION_ERROR event is written. The key is named (in-form key).
+    # A null decision is MISSING (BA ruling 2026-10-07: absent or null); any other bad value
+    # (out-of-enum, wrong case, empty string) is REJECTED by the key's variable_schema enum.
+    {expected_missing, expected_rejected} =
+      if is_nil(output[key]), do: {[key], []}, else: {[], [key]}
+
+    assert {:error,
+            {:output_refused,
+             %{missing_keys: ^expected_missing, rejected_keys: ^expected_rejected}}} =
              complete(schema, task, output)
 
     proj = projection(schema, instance_id)

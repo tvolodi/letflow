@@ -110,11 +110,11 @@ seed_definition() {
   payload=$(rewrite_service_task_base "$(cat "${SCRIPT_DIR}/../${fixture_path}")")
 
   local create_response
-  create_response=$(curl -sf \
+  create_response=$(printf '%s' "${payload}" | curl -sf \
     -X POST \
     -H "${AUTH_HEADER}" \
     -H "Content-Type: application/json" \
-    -d "${payload}" \
+    --data-binary @- \
     "${API}/definitions") || {
     echo "ERROR: POST /api/v1/definitions failed for '${display_name}'." >&2
     echo "       A 409 means '${display_name}' v${fixture_version} already exists as DRAFT, DEPRECATED or ARCHIVED; bump the fixture \"version\" (do not delete)." >&2

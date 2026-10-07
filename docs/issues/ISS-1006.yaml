@@ -34,4 +34,18 @@ affected_files:
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-988
 github_ref: GH-2275
-status: open
+status: resolved
+resolved_in_run: WF03-ISS1006-Q988-20261007
+resolved_at: "2026-10-07T00:00:00Z"
+resolution: >
+  The roster and seed halves had already landed on main in b65110b5 (Q-988 partial): test/fixtures/uat/actors.yaml
+  holds actor-vortex-dirk (TASK_WORKER + role-ceo) and scripts/seed_vortex_persona_actors.sh seeds
+  "actor-vortex-dirk|role-ceo" with role-ceo in ROLES. This run adds the missing regression guard,
+  test/letflow/scripts/vortex_roster_ceo_test.exs, which walks every vortex QA process definition
+  (production order release, supplier quality deviation, 8D corrective action) and asserts every HUMAN_TASK
+  role and escalation_role is held by a vortex roster actor and listed in the seed ROLES. Roles checked and
+  holders: role-ceo = actor-vortex-dirk; role-production-manager = actor-vortex-sabine; role-controller =
+  actor-vortex-stefan; role-quality-manager = actor-vortex-karl; role-procurement-manager = actor-vortex-felix.
+  No unheld role. No definition change, so no QA definition re-seed; the persona seed
+  (scripts/seed_vortex_persona_actors.sh) must have been run with actor-vortex-dirk provisioned. Keycloak
+  account needed (Part A, ai-dala-infra qa-login.sh): actor-vortex-dirk in the vortex realm.

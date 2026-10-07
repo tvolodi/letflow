@@ -2751,3 +2751,4 @@
 2026-10-07T12:51:19Z | PASS | WF-02 | WF02-REQ462-20261007 | RELEASE-VALIDATOR → ORCH | Step 05 PASS (all 7 ACs re-verified; full suite not run)
 2026-10-07T12:51:19Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → DOC-UPDATER | Step 06
 2026-10-07T12:53:21Z | RUN_DONE | WF-02 | WF02-REQ462-20261007 | ORCH | gates green (security PASS, idiom PASS, test-design PASS w/ all 12 node mutants + 8 extra killed, test-run scoped 46 files, release PASS, doc-update verified by ORCH from disk); local commits, NOT pushed; queue lock 1025 and GH#2340 left to parent
+2026-10-07T14:26:06Z | RUN_DONE | WF-02 | WF02-REQ463-20261007 | ORCH | gates green (security PASS+recheck, idiom PASS+recheck, test-design PASS 24 mutants killed, release PASS after BOM fix); 1 rework; scoped runs only; local commits, NOT pushed; queue lock 1026 left to parent.

@@ -2,7 +2,8 @@ defmodule Letflow.Scripts.SwiftrouteDEscEscalationFixtureTest do
   @moduledoc """
   ISS-1007 / Q-989 (GH #2276) -- the BA ruling "D-ESC" (GH #2281) applied to the SwiftRoute
   definitions: "Shipment Approval" (QA JSON v1.4 + its simulation YAML copy) and "Driver Incident
-  Report" (simulation YAML only: no QA fixture / seed exists for it yet, ISS-1004 / Q-1004).
+  Report" (QA JSON v1.0 + its simulation YAML copy; the QA fixture and seed were added by
+  ISS-1022 / Q-1004, GH #2294).
   Timer -> higher role -> fail closed.
 
   The engine contract this test leans on (`lib/letflow/design/req396-human-task-escalation-timer.md`
@@ -61,6 +62,14 @@ defmodule Letflow.Scripts.SwiftrouteDEscEscalationFixtureTest do
       ends: ["end-rejected"],
       forbidden: @approval_forbidden,
       direct: @approval_direct
+    },
+    %{
+      label: "driver incident report (QA JSON)",
+      kind: :json,
+      path: Path.join(@fixtures, "qa/swiftroute_incident_process_definition.json"),
+      ends: ["end"],
+      forbidden: @incident_forbidden,
+      direct: @incident_direct
     },
     %{
       label: "driver incident report (simulation YAML)",

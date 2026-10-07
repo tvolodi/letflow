@@ -43,8 +43,9 @@
 # whose own timer fails closed to the existing *-auto-close notice service task. Because each
 # human task now arms its own timer, `POST /instances/:id/advance-timer` is ambiguous for this
 # definition without a `timer_id`; the simulation Runner resolves `timer_node_id` to it
-# (scenarios/shipment-ops-timeout-escalation.yaml). No QA fixture / seed for this definition exists
-# yet (ISS-1004 / Q-1004); this file is its only copy.
+# (scenarios/shipment-ops-timeout-escalation.yaml). The QA copy is test/fixtures/qa/swiftroute_incident_process_definition.json
+# (seed: scripts/seed_swiftroute_incident_definition.sh; ISS-1022 / Q-1004, GH #2294); the two are kept in
+# step by test/letflow/scripts/swiftroute_incident_qa_fixture_test.exs.
 name: Driver Incident Report
 version: "1.0"
 description: >

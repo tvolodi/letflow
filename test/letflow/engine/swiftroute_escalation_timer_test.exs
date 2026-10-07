@@ -2,7 +2,7 @@ defmodule Letflow.Engine.SwiftrouteEscalationTimerTest do
   @moduledoc """
   ISS-1007 / Q-989 (GH #2276) -- engine-level proof of the D-ESC escalation chains (BA ruling
   GH #2281) on the REAL SwiftRoute fixtures: "Shipment Approval" (QA JSON, v1.4) and "Driver
-  Incident Report" (simulation YAML; no QA fixture exists yet, ISS-1004 / Q-1004), through the real
+  Incident Report" (simulation YAML; the QA fixture is test/fixtures/qa/swiftroute_incident_process_definition.json, ISS-1022 / Q-1004), through the real
   `Definitions` registration/activation, `Engine.create/2`, `Engine.complete_task/3` and the real
   timer path the advance-timer route uses (`Scheduler.resolve_advance_target/3` +
   `Scheduler.fire_timer/2`).

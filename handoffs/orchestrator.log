@@ -2734,3 +2734,5 @@
 2026-10-06T05:22:49Z | PASS | WF-02 | WF02-REQ456-20261006 | REVIEWER → ORCH | Step 08b PASS (roster edit c4f93684)
 2026-10-06T05:29:34Z | RUN_START | WF-03 | WF03-Q976-20261006 | ORCH | ISS-0995 / Q-976 / GH#2257 started on fix/ISS-0995-deny-attribution-Q976 (local branch from origin/main 72c81b6d, not pushed)
 2026-10-06T07:05:00Z | RUN_DONE | WF-03 | WF03-Q976-20261006 | ORCH | gates green (design after 1 rework, security PASS, idiom PASS, test-design PASS w/ 8 independently applied mutants, release); scoped runs only (653 passed); local commit, NOT pushed (CI-slot rule); queue lock 976 and GH#2257 left to parent.
+2026-10-07T12:04:25Z | RUN_START | WF-02 | WF02-REQ462-20261007 | ORCH | REQ-462 / Q-1025 / GH#2340 on feat/REQ-462-adopt-required-outputs-Q-1025 (local branch from origin/main 508163d0, not pushed); design = req459 (no new design: data-only change)
+2026-10-07T12:04:25Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → ELIXIR-DEV | Step 02a

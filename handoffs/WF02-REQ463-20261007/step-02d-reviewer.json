@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ463-20261007/step-02d-reviewer.json",
   "created_at": "2026-10-07T13:05:28Z",
   "started_at": "2026-10-07T13:05:28Z",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -52,5 +52,40 @@
     "description": "STEP 02d - IDIOM REVIEW (REVIEWER), hard gate. Read-only on lib/ and test/. Review `git diff origin/main...HEAD -- lib/` (ELIXIR-DEV commit 78e182a6) per .claude/agents/reviewer.md's four questions: (1) idiomatic OTP/Ecto vs crutch (e.g. the claim-path `mode: :savepoint`, rescue/catch breadth in check_for_claim/3, with/else shapes, Logger usage), (2) supervision/process integrity (no new process; decision 0003/REQ-045 'plain transactional context module, row locks' consistent), (3) type-safety gaps (@spec on every new public function, dialyzer-plausible types, completion_refusal() type extended), (4) scope creep (anything beyond REQ-463: no validator change, no migration, no .claude/agents edits, assign/reassign untouched). Also check docs/anti-patterns.md (newest entries and any entries about audit-write rescue hardening, ISS-0946/0969/0980: the record_completion_refusal_audit/6 path), decision-record consistency (docs/migration/decisions/), and design conformance to lib/letflow/design/req459-required-outputs-and-distinct-person.md rule A (design wins over requirement text; list divergences). Also read the SECURITY-REVIEWER result in handoffs/WF02-REQ463-20261007/step-02c-security-reviewer.json and note anything you disagree with. FAIL only on a genuine crutch, broken supervision, type-safety gap or scope creep; otherwise PASS with non-blocking notes recorded in result.issues. Do not run mix test suites. Next_action: 'Route to TEST-DESIGNER (3)' on PASS, 'Rework ELIXIR-DEV' on FAIL.\nRUN CONSTRAINTS (every agent in this run):\n- Branch feat/REQ-463-distinct-from-Q-1026 (from origin/main 508163d0). Verify with `git branch --show-current` first; STOP and report if different. Do NOT push, open a PR, merge, touch the letflow-queue (lock 1026 is held by tvolodi-orch), touch branches feat/REQ-462-adopt-required-outputs-Q-1025 or test/authz-deny-log-deterministic-capture, or the untracked letflow-3.code-workspace. Stage files by explicit path only; never git add -A / git add . .\n- Design: lib/letflow/design/req459-required-outputs-and-distinct-person.md governs rule A (distinct_from): sections 1.1, 2 (step 4b before 4c in the :completion_guards step), 4, 5, 6, 7, 8, 9, 10, 12.2 rule A plan, traceability A1-A11, 'Adjustments for REQ-460..466' for REQ-463. Where the requirement text and the design differ on a detail the DESIGN WINS; list every difference in result.design_vs_requirement_differences. REQ-464 (validator for distinct_from) is NOT this entry.\n- RAM is VERY tight (0.4-2 GB free; the harness KILLS runs at critical memory). mix commands strictly sequential, ONE BEAM at a time; before each mix test check free RAM: powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\". Scoped single test FILES only (never a directory or the full suite). `export MIX_TEST_PARTITION=3` ONLY for tests (unset for tooling tasks like compile/format/check_*); use a unique number (e.g. 15) for files that mutate shared state or run concurrency tests. If a run is killed, report it and do NOT loop.\n- Real Postgres only. Never report 'should pass'; quote real Result: lines.\n- docs/anti-patterns.md newest entry: a validator refusing at activate must be checked against EVERY test that activates hand-built definitions; grep the WHOLE test/ tree for the attribute, not only the changed area. REQ-461 check 2 applies: any test definition declaring required_outputs must declare a variable_schema for each key (register schema rows BEFORE activation); distinct_from needs no schema.\n- Commit titles: feat|fix|test|docs|chore(REQ-463/Q-1026): ... [Q-1026 / GH #2341], ending with the trailer line: Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>. Do not commit your own handoff-file edits unless this handoff says so: ORCH commits after you return.\n- Claim the handoff by setting top-level status to IN_PROGRESS only; at the end set status COMPLETED (or FAILED) and fill result (summary, verdict PASS/FAIL, issues, artifacts_out, evidence with quoted real output, next_action). Do not touch started_at/created_at. Do not edit handoffs/registry.json or handoffs/orchestrator.log.\n- Scratch files go in the scratchpad dir C:\\Users\\tvolo\\AppData\\Local\\Temp\\claude\\C--Users-tvolo-dev-ai-dala-letflow-3\\def1f47a-501c-4830-b7ce-a68038cf3791\\scratchpad\\r463\\ (never in the repo, never /tmp). That dir also holds files of earlier runs: use only r463/.\n",
     "extra": ""
   },
-  "result": null
+  "result": {
+    "summary": "REVIEWER gate PASS for REQ-463 rule A on commit 78e182a6 (diff origin/main...HEAD -- lib/: 5 files, +246/-30 net of handoffs). (1) Idiom: no crutch; check_for_claim/3 total via with/else + rescue + catch is the design-mandated shape; mode: :savepoint is correct (query runs inside claim_task's Multi transaction, so a failed statement would otherwise poison it) and is precedented (req434 design). (2) Supervision: no process added; plain transactional module + row locks, consistent with REQ-045/Process-vs-row decision; InstanceSupervisor untouched. (3) Types: @spec on every public fn, completion_refusal() extended, complete_error/claim_error extended; no dialyzer in mix.exs. (4) Scope: no validator, migration, .claude, priv or assign/reassign change; audit path stays inside the ISS-0946/0969/0980 hardened shape. Non-blocking notes only.",
+    "verdict": "PASS",
+    "status": "PASS",
+    "issues": {
+      "BLOCKER": [],
+      "MAJOR": [],
+      "MINOR": [
+        "separation_of_duties.ex: second clause `def check_for_claim(_task, _actor_id, _prefix), do: :ok` is a catch-all for a function whose @spec says Task.t(); it hides caller misuse and a Dialyzer-style 'clause never matches' warning is plausible if dialyzer is ever adopted (not in mix.exs today). Optional cleanup.",
+        "engine.ex check_completion_guards: find_node/2 is now evaluated up to 3x per completion (SeparationOfDuties.check/5, required_outputs, guards_passed_or_none) and guards_passed_or_none/2 exists only to fill a payload no later step reads (design 2.2 step 4 says the payload is not read). Cosmetic; could collapse to one lookup. Also a ~3-line comment at the top of check_completion_guards exceeds the file's usual width conventions (mix format passes is the ORCH-run gate, not checked here).",
+        "Design 2.2 orders 4a (pure no_guards early return) before 4b; implementation runs check/5 first, which itself returns :ok with zero queries for a node without distinct_from. Behaviourally and query-count identical, so not a divergence, but the code no longer reads as 4a/4b/4c. TEST-DESIGNER must still cover the default-off query-count AC."
+      ],
+      "NOTES": [
+        "Type-safety (observation, not filed): distinct_from is read from a string-keyed attributes map and normalised defensively (non-binary/empty entries dropped, uniq). A malformed or dangling node id silently imposes no constraint at runtime; that is exactly what REQ-464's validator is for, so no new type-safety issue was filed under docs/issues/ (would duplicate REQ-464).",
+        "Disagreement with SECURITY-REVIEWER: none. Its claim that the diff is '5 files, 294 insertions' vs git stat 540 total includes handoff JSON; lib-only is consistent. Its note that there are no tests in the diff is correct (TEST-DESIGNER next).",
+        "anti-patterns.md ISS-0946/0969/0980 arc: record_completion_refusal_audit/6 keeps own Repo.transaction, direct Audit.insert_entry/3, function-level rescue, log-and-swallow, always :ok; the new completion_refusal_after_state/3 helper is called inside the rescue-covered body, so a raise there is also swallowed. Conforms.",
+        "Newest anti-pattern (validator refusing at activate): n/a, no validator change in this entry; TEST-DESIGNER should still grep the whole test/ tree for distinct_from."
+      ]
+    },
+    "design_vs_requirement_differences": [
+      "Requirement text point 5 says the claim clauses call the check 'immediately before the write'; design section 6 step 5 same: conforms.",
+      "Requirement text lists owned module lib/letflow/api/routers/tasks.ex and lib/letflow/api/error.ex; actual router is lib/letflow/routers/tasks.ex and error.ex is intentionally untouched because the 403 body bypasses send_problem (design section 4.2). Not a behavioural difference.",
+      "Design section 8.2 describes private blocking_nodes/5; implementation has blocking_nodes/6 (extra query_opts keyword for the claim-path savepoint). Private, justified, design-consistent in intent (design section 6 savepoint rationale)."
+    ],
+    "artifacts_out": [
+      "handoffs/WF02-REQ463-20261007/step-02d-reviewer.json"
+    ],
+    "evidence": [
+      "git branch --show-current: feat/REQ-463-distinct-from-Q-1026",
+      "git diff origin/main...HEAD --name-only (non-handoff): lib/letflow/api/response.ex, lib/letflow/engine.ex, lib/letflow/engine/separation_of_duties.ex, lib/letflow/routers/tasks.ex, lib/letflow/tasks.ex (nothing under priv/, .claude/, docs/, no validator)",
+      "grep mix.exs for dialyxir/dialyzer: no match",
+      "lib/letflow/engine/task.ex: field(:completed_by, Ecto.UUID); field(:completed_at, :utc_datetime_usec); status Ecto.Enum (query uses t.status == :completed)",
+      "No mix commands or test suites run (read-only static review per run constraints)."
+    ],
+    "next_action": "Route to TEST-DESIGNER (3)"
+  }
 }

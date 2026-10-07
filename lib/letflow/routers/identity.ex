@@ -24,7 +24,7 @@ defmodule Letflow.Routers.Identity do
   * POST   /users/:id/status             -> Identity.get_user/2, then Identity.update_user_status/3
   * POST   /groups                       -> Identity.create_group/2
   * GET    /groups                       -> Identity.list_groups/1
-  * DELETE /groups/:id                   -> Identity.delete_group/2
+  * DELETE /groups/:id                   -> Identity.delete_group/2 (409 `group is bound to a role` for a memberless role-bound group, ISS-1032)
   * POST   /groups/:id/members           -> Identity.add_group_member/3
   * GET    /groups/:id/members           -> Identity.list_group_members/3 (cursor-paginated — see "Group member listing" below)
   * DELETE /groups/:id/members/:user_id  -> Identity.remove_group_member/3
@@ -33,6 +33,14 @@ defmodule Letflow.Routers.Identity do
   * DELETE /tokens/:id                   -> Identity.revoke_token/2 (REQ-076)
   * GET    /roles                        -> Letflow.Identity.RoleRegistry.list_roles/1 (REQ-076, ISS-0768)
   * POST   /roles                        -> Letflow.Identity.RoleRegistry.upsert_role/4 (REQ-076, ISS-0768, ISS-0774)
+
+  ## Id handling order (ISS-1033)
+
+  Every route taking an id runs: permission gate -> `Identity.cast_id/1` (uncastable ->
+  the plain zero-detail 404) -> tenant-scoped fetch -> guards -> body validation ->
+  mutation, using the canonical id text throughout. The role-NAME guards on `POST /tokens`
+  and `POST /roles` are target-independent and stay first. Body ids (`POST /groups/:id/members`
+  `user_id`, `POST /tokens` `user_id`) are cast AFTER the guard and body validation.
 
   ## API tokens (REQ-076, INV-4)
 
@@ -353,10 +361,22 @@ defmodule Letflow.Routers.Identity do
 
   # ── GET /users/:id (design §2.3) ────────────────────────────────────────
 
-  defp handle_get(conn, id, opts) do
-    case Identity.get_user(id, opts) do
-      {:ok, user} -> Response.ok(conn, user_map(user))
-      {:error, :not_found} -> Response.not_found(conn)
+  defp handle_get(conn, raw_id, opts) do
+    with_cast_id(conn, raw_id, fn id ->
+      case Identity.get_user(id, opts) do
+        {:ok, user} -> Response.ok(conn, user_map(user))
+        {:error, :not_found} -> Response.not_found(conn)
+      end
+    end)
+  end
+
+  # ISS-1033: every route that takes an id casts it FIRST (after the permission gate), with
+  # the same function the guards and lookups use (INV-10). A malformed id answers the same
+  # zero-detail 404 as an unknown id (INV-5); everything after uses the canonical text.
+  defp with_cast_id(conn, raw_id, fun) do
+    case Identity.cast_id(raw_id) do
+      {:ok, id} -> fun.(id)
+      :error -> Response.not_found(conn)
     end
   end
 
@@ -387,16 +407,18 @@ defmodule Letflow.Routers.Identity do
     }
   ]
 
-  defp handle_patch(conn, id, opts) do
-    case Identity.get_user(id, opts) do
-      {:error, :not_found} ->
-        Response.not_found(conn)
+  defp handle_patch(conn, raw_id, opts) do
+    with_cast_id(conn, raw_id, fn id ->
+      case Identity.get_user(id, opts) do
+        {:error, :not_found} ->
+          Response.not_found(conn)
 
-      {:ok, _existing} ->
-        with_platform_admin_member_guard(conn, id, opts, fn ->
-          do_patch(conn, id, opts)
-        end)
-    end
+        {:ok, _existing} ->
+          with_platform_admin_member_guard(conn, id, opts, fn ->
+            do_patch(conn, id, opts)
+          end)
+      end
+    end)
   end
 
   defp do_patch(conn, id, opts) do
@@ -429,16 +451,18 @@ defmodule Letflow.Routers.Identity do
     }
   ]
 
-  defp handle_status_update(conn, id, opts) do
-    case Identity.get_user(id, opts) do
-      {:error, :not_found} ->
-        Response.not_found(conn)
+  defp handle_status_update(conn, raw_id, opts) do
+    with_cast_id(conn, raw_id, fn id ->
+      case Identity.get_user(id, opts) do
+        {:error, :not_found} ->
+          Response.not_found(conn)
 
-      {:ok, _existing} ->
-        with_platform_admin_member_guard(conn, id, opts, fn ->
-          do_status_update(conn, id, opts)
-        end)
-    end
+        {:ok, _existing} ->
+          with_platform_admin_member_guard(conn, id, opts, fn ->
+            do_status_update(conn, id, opts)
+          end)
+      end
+    end)
   end
 
   defp do_status_update(conn, id, opts) do
@@ -514,12 +538,16 @@ defmodule Letflow.Routers.Identity do
 
   # ── DELETE /groups/:id (design §3.4) ────────────────────────────────────
 
-  defp handle_delete_group(conn, id, opts) do
-    with_platform_admin_group_guard(conn, id, opts, fn ->
-      case Identity.delete_group(id, opts) do
-        :ok -> Response.no_content(conn)
-        {:error, :not_found_or_has_members} -> Response.not_found(conn)
-      end
+  defp handle_delete_group(conn, raw_id, opts) do
+    with_cast_id(conn, raw_id, fn id ->
+      with_platform_admin_group_guard(conn, id, opts, fn ->
+        case Identity.delete_group(id, opts) do
+          :ok -> Response.no_content(conn)
+          {:error, :not_found_or_has_members} -> Response.not_found(conn)
+          # ISS-1032: fixed detail, no id / role name / constraint text (INV-4).
+          {:error, :bound_to_role} -> Response.conflict(conn, "group is bound to a role")
+        end
+      end)
     end)
   end
 
@@ -557,13 +585,13 @@ defmodule Letflow.Routers.Identity do
     end
   end
 
-  # Compared after Ecto.UUID.cast/1 on BOTH sides: Repo.get(Group, id) casts through the
+  # Compared after Identity.cast_id/1 on BOTH sides: Repo.get(Group, id) casts through the
   # same function, which also accepts a raw 16-byte binary, so a string compare could miss
   # an id the downstream lookup resolves to the bound group (INV-10). Fail closed.
   defp platform_admin_group?(group_id, opts) do
-    with {:ok, requested} <- Ecto.UUID.cast(group_id),
+    with {:ok, requested} <- Identity.cast_id(group_id),
          {:ok, bound_id} <- RoleRegistry.platform_admin_group_id(opts),
-         {:ok, bound} <- Ecto.UUID.cast(bound_id) do
+         {:ok, bound} <- Identity.cast_id(bound_id) do
       requested == bound
     else
       _no_match -> false
@@ -592,9 +620,11 @@ defmodule Letflow.Routers.Identity do
     %FieldConstraint{name: "user_ids", required: false, type: :array}
   ]
 
-  defp handle_add_member(conn, group_id, opts) do
-    with_platform_admin_group_guard(conn, group_id, opts, fn ->
-      do_add_member(conn, group_id, opts)
+  defp handle_add_member(conn, raw_group_id, opts) do
+    with_cast_id(conn, raw_group_id, fn group_id ->
+      with_platform_admin_group_guard(conn, group_id, opts, fn ->
+        do_add_member(conn, group_id, opts)
+      end)
     end)
   end
 
@@ -611,18 +641,22 @@ defmodule Letflow.Routers.Identity do
           {:error, :user_id_invalid} ->
             Response.unprocessable(conn, "user_id_invalid")
 
-          {:ok, user_id} ->
-            case Identity.add_group_member(group_id, user_id, opts) do
-              {:ok, %{member: _member, created: created?}} ->
-                status = if created?, do: 201, else: 200
-                Response.send_json(conn, status, member_result_map(group_id, user_id, created?))
+          {:ok, raw_user_id} ->
+            # Body user id is cast here (after the guard and validation, so 403/422 still
+            # win); an uncastable one is the same 404 as an unknown user.
+            with_cast_id(conn, raw_user_id, fn user_id ->
+              case Identity.add_group_member(group_id, user_id, opts) do
+                {:ok, %{member: _member, created: created?}} ->
+                  status = if created?, do: 201, else: 200
+                  Response.send_json(conn, status, member_result_map(group_id, user_id, created?))
 
-              {:error, :group_not_found} ->
-                Response.not_found(conn)
+                {:error, :group_not_found} ->
+                  Response.not_found(conn)
 
-              {:error, :user_not_found} ->
-                Response.not_found(conn)
-            end
+                {:error, :user_not_found} ->
+                  Response.not_found(conn)
+              end
+            end)
         end
     end
   end
@@ -645,7 +679,13 @@ defmodule Letflow.Routers.Identity do
 
   @group_members_cursor_prefix "G:"
 
-  defp handle_list_group_members(conn, group_id, opts) do
+  defp handle_list_group_members(conn, raw_group_id, opts) do
+    with_cast_id(conn, raw_group_id, fn group_id ->
+      do_list_group_members(conn, group_id, opts)
+    end)
+  end
+
+  defp do_list_group_members(conn, group_id, opts) do
     conn = fetch_query_params(conn)
     query = conn.query_params
 
@@ -690,12 +730,16 @@ defmodule Letflow.Routers.Identity do
 
   # ── DELETE /groups/:id/members/:user_id (design §3.6) ───────────────────
 
-  defp handle_remove_member(conn, group_id, user_id, opts) do
-    with_platform_admin_group_guard(conn, group_id, opts, fn ->
-      case Identity.remove_group_member(group_id, user_id, opts) do
-        :ok -> Response.no_content(conn)
-        {:error, :group_not_found} -> Response.not_found(conn)
-      end
+  defp handle_remove_member(conn, raw_group_id, raw_user_id, opts) do
+    with_cast_id(conn, raw_group_id, fn group_id ->
+      with_cast_id(conn, raw_user_id, fn user_id ->
+        with_platform_admin_group_guard(conn, group_id, opts, fn ->
+          case Identity.remove_group_member(group_id, user_id, opts) do
+            :ok -> Response.no_content(conn)
+            {:error, :group_not_found} -> Response.not_found(conn)
+          end
+        end)
+      end)
     end)
   end
 
@@ -724,35 +768,38 @@ defmodule Letflow.Routers.Identity do
     end
   end
 
-  defp do_create_token(conn, %{"user_id" => user_id, "roles" => roles} = attrs, opts) do
+  defp do_create_token(conn, %{"user_id" => raw_user_id, "roles" => roles} = attrs, opts) do
     case parse_expires_at(Map.get(attrs, "expires_at")) do
       {:error, :expires_at_invalid} ->
         Response.unprocessable(conn, "expires_at_invalid")
 
       {:ok, parsed_expires_at} ->
-        case Identity.create_token(
-               user_id,
-               %{roles: roles, expires_at: parsed_expires_at},
-               opts
-             ) do
-          {:ok, %{token: token, plaintext: plaintext}} ->
-            Response.created(conn, token_created_map(token, plaintext))
+        # ISS-1033: uncastable body user_id is the same 404 as an unknown user.
+        with_cast_id(conn, raw_user_id, fn user_id ->
+          case Identity.create_token(
+                 user_id,
+                 %{roles: roles, expires_at: parsed_expires_at},
+                 opts
+               ) do
+            {:ok, %{token: token, plaintext: plaintext}} ->
+              Response.created(conn, token_created_map(token, plaintext))
 
-          {:error, :user_not_found} ->
-            Response.not_found(conn)
+            {:error, :user_not_found} ->
+              Response.not_found(conn)
 
-          {:error, :invalid_role_set} ->
-            Response.unprocessable(conn, "roles_invalid")
+            {:error, :invalid_role_set} ->
+              Response.unprocessable(conn, "roles_invalid")
 
-          {:error, :expires_at_in_past} ->
-            Response.unprocessable(conn, "expires_at_in_past")
+            {:error, :expires_at_in_past} ->
+              Response.unprocessable(conn, "expires_at_in_past")
 
-          {:error, %Ecto.Changeset{}} ->
-            Response.unprocessable(conn, "validation failed")
+            {:error, %Ecto.Changeset{}} ->
+              Response.unprocessable(conn, "validation failed")
 
-          {:error, {:transaction_failed, _exception}} ->
-            Response.internal_error(conn)
-        end
+            {:error, {:transaction_failed, _exception}} ->
+              Response.internal_error(conn)
+          end
+        end)
     end
   end
 
@@ -775,18 +822,20 @@ defmodule Letflow.Routers.Identity do
 
   # ── DELETE /tokens/:id (design §6.1, AC4) ────────────────────────────────
 
-  defp handle_revoke_token(conn, id, opts) do
-    # REQ-447 design section 3.6b (M1): revoking a token that carries
-    # PLATFORM_ADMIN needs recomputed platform scope; checked before any write.
-    if not platform_scope?(conn) and Identity.token_carries_platform_admin?(id, opts) do
-      forbid_insufficient(conn)
-    else
-      case Identity.revoke_token(id, opts) do
-        {:ok, token} -> Response.ok(conn, token_map(token))
-        {:error, :not_found} -> Response.not_found(conn)
-        {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
+  defp handle_revoke_token(conn, raw_id, opts) do
+    with_cast_id(conn, raw_id, fn id ->
+      # REQ-447 design section 3.6b (M1): revoking a token that carries
+      # PLATFORM_ADMIN needs recomputed platform scope; checked before any write.
+      if not platform_scope?(conn) and Identity.token_carries_platform_admin?(id, opts) do
+        forbid_insufficient(conn)
+      else
+        case Identity.revoke_token(id, opts) do
+          {:ok, token} -> Response.ok(conn, token_map(token))
+          {:error, :not_found} -> Response.not_found(conn)
+          {:error, {:transaction_failed, _exception}} -> Response.internal_error(conn)
+        end
       end
-    end
+    end)
   end
 
   # ── GET /roles (design §6.1, AC6) ────────────────────────────────────────

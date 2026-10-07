@@ -1,0 +1,51 @@
+id: ISS-1032
+title: "DELETE /groups/:id of a memberless group that a tenant_role row points to answers 500 (tenant_role_group_id_fkey violation is unhandled)"
+discovered_by: SECURITY-REVIEWER (REQ-447 PR 1 residual)
+discovered_in_run: REQ-447-PR1-SECURITY-REVIEW
+discovered_at: "2026-10-06T00:00:00Z"
+severity: LOW
+priority: P4
+failure_class: defect
+occurrence: 1
+owner: ELIXIR-DEV
+description: >
+  Business consequence: an administrator who tries to delete a group that still carries a role
+  binding (the PLATFORM_ADMIN or TENANT_ADMIN group, or any process routing role's group) gets an
+  opaque 500 instead of a clear refusal, and every such attempt is an unhandled database error in
+  the logs.
+
+  Identity.delete_group/2 is one guarded DELETE (... AND NOT EXISTS (member)). tenant_role.group_id
+  references groups(id) with no on_delete (NO ACTION), so deleting a memberless group that any
+  tenant_role row points to (kind platform_role or process_routing_role) raised Postgrex.Error
+  (foreign_key_violation, tenant_role_group_id_fkey). Nothing rescued it and the router answered 500.
+  The REQ-447 PR 1 guard test even asserted the raise as a "reported defect".
+fix_direction: >
+  Identity.delete_group/2 maps exactly that one named foreign-key violation to
+  {:error, :bound_to_role} (the FK is the only race-safe authority; any other Postgrex error is
+  re-raised unchanged). The router answers 409 Conflict with the fixed detail
+  "group is bound to a role" (no id, role name, kind, constraint or database text). The platform
+  group guard still runs first, so a non-platform caller gets the fixed 403 on the PLATFORM_ADMIN
+  group, never the 409. A group WITH members stays the unified 404 (REQ-074 AC5); an unbound group
+  deletes as before. No refusal audit: the identity router audits no refusals and delete_group is
+  not audited even on success (residual R3).
+acceptance_criteria:
+  - "Deleting a role-bound memberless group is a clean 409 with a stable body and never a 500; the group and the binding are not deleted"
+  - "Deleting an unbound group behaves as before (204; has-members stays the unified 404)"
+  - "Tests cover bound and unbound deletes; the body carries no internal detail (INV-2 / INV-4)"
+affected_files:
+  - lib/letflow/identity.ex
+  - lib/letflow/routers/identity.ex
+  - test/letflow/api/identity_id_hardening_test.exs
+  - test/letflow/api/platform_escalation_guard_test.exs
+queue_ref: Q-1014  # the queue allocated issue_ref ISS-1014, which collides with an existing local file (ISS-1014 is an unrelated issue); local filename ISS-1032 (next free on origin/main)
+github_ref: GH-2317
+status: resolved
+resolved_in_run: WF03-ISS1032-Q1014
+resolved_at: "2026-10-07T06:00:00Z"
+resolution: >
+  A memberless role-bound group delete answers 409 "group is bound to a role" (stable body, any role
+  kind; the FK violation is mapped in Identity.delete_group/2). The platform guard runs first;
+  unbound and has-members behaviour is unchanged; no refusal audit (the router audits no refusals).
+  Residuals: R3 (group deletes and refusals are not audited), R4 (web/ does not yet render the 409),
+  R5 (a bound group WITH members is still the unified 404).
+regression_test: test/letflow/api/identity_id_hardening_test.exs

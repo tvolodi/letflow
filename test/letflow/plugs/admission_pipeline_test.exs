@@ -199,7 +199,7 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
   end
 
   describe "AC4 (Mechanism A): a raise inside the matched route handler still releases both refs" do
-    test "a malformed :id inside Letflow.Routers.Identity's GET /users/:id raises Plug.Conn.WrapperError; a subsequent request still succeeds" do
+    test "a database error inside Letflow.Routers.Identity's GET /groups/:id/members raises Plug.Conn.WrapperError; a subsequent request still succeeds" do
       # global_cap == 1 -- see AC3's test above: under the REQ-217 rework,
       # :release_global_admission frees the global gate's ref before the
       # tenant gate's own try_acquire({:tenant, schema}) call runs, so a
@@ -209,17 +209,28 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req217-ac4-mecha")
       {user, plaintext} = tenant_admin_token!(tenant)
 
+      # The crash trigger is a WELL-FORMED request whose handler hits a missing
+      # table: the tenant's `groups` table is dropped (CASCADE), so
+      # Identity.list_group_members/3's Repo.get(Group, ...) raises
+      # Postgrex.Error (undefined_table). Deliberately NOT a malformed id: since
+      # ISS-1033 every identity route casts its id first and answers a malformed
+      # id with a plain 404, and any future id hardening would likewise stop a
+      # malformed-id trigger from raising. A missing table is a raise no input
+      # validation can pre-empt. The authenticated request itself (api_tokens,
+      # users) and the follow-up GET /users/:id never touch `groups`.
+      Repo.query!(~s|DROP TABLE "#{tenant.schema_name}".groups CASCADE|)
+
       crashing_conn =
         api_token_request(
           :get,
-          "/api/v1/identity/users/not-a-uuid",
+          "/api/v1/identity/groups/#{Ecto.UUID.generate()}/members",
           plaintext,
           tenant.tenant.slug
         )
 
-      # Repo.get(User, "not-a-uuid", ...) inside Letflow.Routers.Identity's own
-      # handle_get/3 (matched route handler, i.e. AFTER :match/:dispatch)
-      # raises Ecto.Query.CastError. Plug.Router's own dispatch/2 wraps that in
+      # Repo.get(Group, ...) inside Letflow.Routers.Identity's own
+      # handle_list_group_members/3 (matched route handler, i.e. AFTER
+      # :match/:dispatch) raises Postgrex.Error. Plug.Router's own dispatch/2 wraps that in
       # Plug.Conn.WrapperError (design doc §0), which Letflow.Plugs.ApiPipeline's
       # `use Plug.ErrorHandler` catches via its `rescue e in Plug.Conn.WrapperError`
       # clause (e.conn IS the fully-downstream conn here, carrying both

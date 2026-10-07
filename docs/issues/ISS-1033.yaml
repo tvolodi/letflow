@@ -1,0 +1,53 @@
+id: ISS-1033
+title: "Identity routes use a request id before validating it: malformed or raw-byte ids reach Repo lookups (500) and the guard/lookup spelling gap is only closed per guard"
+discovered_by: SECURITY-REVIEWER (REQ-447 PR 1 residual)
+discovered_in_run: REQ-447-PR1-SECURITY-REVIEW
+discovered_at: "2026-10-06T00:00:00Z"
+severity: LOW
+priority: P4
+failure_class: defect
+occurrence: 1
+owner: ELIXIR-DEV
+description: >
+  Business consequence: a malformed id on any identity route answers 500 instead of the plain 404,
+  and the 500-versus-404 difference tells a caller whether an id is castable at all (INV-5). The
+  REQ-447 PR 1 guards also had to be written to tolerate Ecto.Query.CastError.
+
+  Ecto.UUID.cast/1 accepts canonical, upper-case, mixed-case and the raw 16-byte binary, but
+  Repo.get/3 and where: id == ^id raise Ecto.Query.CastError on a raw or malformed id. The user
+  routes already fetched the user before the guard (verified, PATCH /users/:id and
+  POST /users/:id/status), so the ordering the issue feared did not occur, but the fetch itself
+  raised before any guard for raw and malformed ids on users, groups, group members, tokens and the
+  body user_id of POST /groups/:id/members and POST /tokens.
+fix_direction: >
+  Identity.cast_id/1 (a thin wrapper over Ecto.UUID.cast/1, the same function the guards use,
+  INV-10) returns the canonical lower-case text or :error. Every identity route that takes an id
+  runs: permission gate, cast (:error is the plain zero-detail 404), tenant-scoped fetch, guards,
+  body validation, mutation, all on the canonical id. Body ids are cast after the guard and the body
+  validation (403 and 422 still win). The role-NAME guards on POST /tokens and POST /roles are
+  target-independent and stay first (identical 403 for existing, unknown and malformed targets).
+  POST /roles keeps its own 422 invalid_group_id / 404 group_not_found.
+acceptance_criteria:
+  - "In every guarded id route the id cast (and tenant-scoped fetch) precedes the guard; a nonexistent id gives the zero-detail 404"
+  - "Per guarded route: a guard-triggering request for a nonexistent or malformed id answers the same bytes as a plain unknown id, with no audit row or other side effect"
+  - "Guards behave as before for existing users, groups and tokens (every spelling of a real guarded id is still the fixed 403)"
+affected_files:
+  - lib/letflow/identity.ex
+  - lib/letflow/routers/identity.ex
+  - test/letflow/api/identity_id_hardening_test.exs
+  - test/letflow/api/platform_escalation_guard_test.exs
+queue_ref: Q-1015  # the queue allocated issue_ref ISS-1015, which collides with an existing local file (ISS-1015 is an unrelated issue); local filename ISS-1033 (next free on origin/main)
+github_ref: GH-2318
+status: resolved
+resolved_in_run: WF03-ISS1033-Q1015
+resolved_at: "2026-10-07T06:00:00Z"
+resolution: >
+  Every identity route that takes an id casts it first (Identity.cast_id/1); a malformed or unknown id
+  is the one zero-detail 404, and guards, fetches, mutations and response echoes use the canonical id.
+  Raw-byte and upper-case spellings of a REAL unguarded id now resolve like the canonical one (was
+  500), while every spelling of a real guarded id is still the fixed 403. The user routes were already
+  fetch-before-guard (verified) and are now pinned by tests; the target-independent name guards are
+  documented and pinned. Residuals: R1 (domain functions still raise on uncastable ids when called
+  outside the router), R2 (422-vs-404 on POST /groups/:id/members with an unknown group and an invalid
+  body stays 422).
+regression_test: test/letflow/api/identity_id_hardening_test.exs

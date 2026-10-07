@@ -24,13 +24,14 @@ description: >
   completed within 21 days. The timer boundary event on the risk evaluation
   node fires, triggering an automatic regulatory escalation. The system
   files a BaFin regulatory notice with reason 'sla_breach_30_days' and the
-  process completes on the regulatory escalation terminal path. This scenario
+  review is closed on the end-closed terminal path. No person acts after the
+  timer fires: under the BA ruling (GH #2281) a regulatory timeout that closes
+  the review after filing the BaFin notice counts as the escalation. This scenario
   verifies the timer boundary event, regulatory notification mechanism, and
   automatic escalation path work correctly for BaFin-mandated compliance.
 
 actors:
   compliance_officer: actor-meridian-claudia
-  ceo: actor-meridian-eva
 
 preconditions:
   - description: Regulatory compliance review process definition is active
@@ -69,12 +70,13 @@ steps:
       expected_within_hours: 168
 
   - step: 3
-    actor: ceo
+    actor: compliance_officer
     action: >
-      The risk evaluation was not completed within 21 days. The timer
-      boundary fires and the system automatically files a BaFin regulatory
-      notice and escalates the matter to the CEO. The process completes
-      on the regulatory escalation path.
+      Takes no action on the open risk evaluation. The risk evaluation was
+      not completed within 21 days, so the timer boundary fires and the
+      system automatically files a BaFin regulatory notice (reason
+      'sla_breach_30_days') and closes the review on the end-closed path.
+      No CEO task is created and no person acts after the timer.
     via: api
     note: >
       UAT-RUNNER advances the timer boundary on the risk-evaluation node
@@ -124,8 +126,10 @@ expected_outcomes:
 
   - id: EO-003
     description: >
-      The process completes on the regulatory escalation terminal path
-      (end-closed), not through the normal sign-off path
+      After the BaFin notice is filed the review is closed on the end-closed
+      terminal path with no CEO or other human task created (the definition's
+      timeout-risk-evaluation edge goes regulatory-auto-escalation -> end-closed),
+      not through the normal sign-off path
     verification:
       method: instance_state
       detail: >

@@ -1,0 +1,36 @@
+{
+  "handoff_id": "ciwd-step04b-tdv-0001",
+  "run_id": "WF03-CI-WATCHDOG-20261007",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-CI-WATCHDOG-20261007/step-04b-test-design-validator.json",
+  "created_at": "2026-10-07T18:00:00Z",
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "diagnosis": "scripts/test_parallel.sh killed the per-partition watchdog subshell by pid only; its sleep child survived holding the stdout pipe (reader stalls up to 1800 s). Fix: kill the watchdog's process group at the Step 3 site and in the EXIT trap."
+    },
+    "artifacts_in": [
+      "handoffs/WF03-CI-WATCHDOG-20261007/step-01-orch-diagnosis.json",
+      "test/scripts/test_parallel_watchdog_orphan_test.exs"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt",
+    "branch_name": "fix/test-parallel-orphan-watchdog"
+  },
+  "task": {
+    "description": "Validate test/scripts/test_parallel_watchdog_orphan_test.exs with mutation testing against scripts/test_parallel.sh. Mutants: M1 revert the fix at the Step 3 post-wait site only (kill subshell pid only) -> a test must fail; M2 revert at the EXIT-trap site only -> a test must fail; M3 remove the watchdog TERM/KILL of the hung partition (e.g. delete the kill -TERM line) -> the hung-partition test must fail; M4 make the script exit 0 when a partition fails (e.g. final exit 0) -> the failing-partition test must fail.",
+    "acceptance_criteria": [
+      "Each of M1-M4 reported killed or survived with the failing test name quoted",
+      "git diff empty (scripts/ and test/) and HEAD unchanged after each mutant; restore from a backup copy outside the repo, never git checkout of uncommitted work",
+      "Verdict on coverage of: success path, failing partition, EXIT-trap path, hung partition",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": null
+}

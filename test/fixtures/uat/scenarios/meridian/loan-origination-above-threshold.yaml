@@ -33,7 +33,7 @@ description: >
   it simply does not change the already-reached 2-of-3 outcome.
 
 actors:
-  analyst: actor-meridian-lars
+  analyst: actor-meridian-sophie
   credit_manager: actor-meridian-ben
   risk_manager: actor-meridian-miriam
   committee_member_cro: actor-meridian-thomas
@@ -60,7 +60,7 @@ steps:
       requested_amount_eur: 750000
       product_type: term_loan
       tenor_months: 60
-      analyst_actor_id: actor-meridian-lars
+      analyst_actor_id: actor-meridian-sophie
       purpose: "Working capital expansion for new production facility"
     produces:
       instance_id: "the process instance ID for this loan application"

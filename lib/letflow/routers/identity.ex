@@ -39,7 +39,8 @@ defmodule Letflow.Routers.Identity do
   Every route taking an id runs: permission gate -> `Identity.cast_id/1` (uncastable ->
   the plain zero-detail 404) -> tenant-scoped fetch -> guards -> body validation ->
   mutation, using the canonical id text throughout. The role-NAME guards on `POST /tokens`
-  and `POST /roles` are target-independent and stay first.
+  and `POST /roles` are target-independent and stay first. Body ids (`POST /groups/:id/members`
+  `user_id`, `POST /tokens` `user_id`) are cast AFTER the guard and body validation.
 
   ## API tokens (REQ-076, INV-4)
 
@@ -584,13 +585,13 @@ defmodule Letflow.Routers.Identity do
     end
   end
 
-  # Compared after Ecto.UUID.cast/1 on BOTH sides: Repo.get(Group, id) casts through the
+  # Compared after Identity.cast_id/1 on BOTH sides: Repo.get(Group, id) casts through the
   # same function, which also accepts a raw 16-byte binary, so a string compare could miss
   # an id the downstream lookup resolves to the bound group (INV-10). Fail closed.
   defp platform_admin_group?(group_id, opts) do
-    with {:ok, requested} <- Ecto.UUID.cast(group_id),
+    with {:ok, requested} <- Identity.cast_id(group_id),
          {:ok, bound_id} <- RoleRegistry.platform_admin_group_id(opts),
-         {:ok, bound} <- Ecto.UUID.cast(bound_id) do
+         {:ok, bound} <- Identity.cast_id(bound_id) do
       requested == bound
     else
       _no_match -> false

@@ -659,6 +659,10 @@ defmodule Letflow.Identity do
   `{:error, :not_found_or_has_members}` — one unified error atom,
   deliberately, so a caller cannot branch on that distinction either (§5).
 
+  A memberless group that any role binding (`tenant_role`, any `kind`) points to returns
+  `{:error, :bound_to_role}` (ISS-1032), mapped from the FK violation. Precondition: do not
+  call inside a caller's open transaction (the failed statement would abort it).
+
   Uses `Ecto.Query`'s `not exists/1` (OQ-6, ELIXIR-DEV's choice over raw
   SQL) — empirically verified that a single `prefix:` option passed to
   `Repo.delete_all/2` propagates uniformly to both the outer query and the
@@ -666,7 +670,7 @@ defmodule Letflow.Identity do
   stays inside `Ecto.Query` without a raw-SQL escape hatch.
   """
   @spec delete_group(id :: Ecto.UUID.t() | String.t(), opts :: opts()) ::
-          :ok | {:error, :not_found_or_has_members}
+          :ok | {:error, :not_found_or_has_members} | {:error, :bound_to_role}
   def delete_group(id, opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
@@ -681,7 +685,29 @@ defmodule Letflow.Identity do
       {1, _} -> :ok
       {0, _} -> {:error, :not_found_or_has_members}
     end
+  rescue
+    # ISS-1032: a memberless group that a `tenant_role` row points to hits the
+    # `tenant_role.group_id` FK (NO ACTION). The FK is the only race-safe authority, so the
+    # one named violation is mapped; any other Postgrex error is re-raised unchanged.
+    error in Postgrex.Error ->
+      case error do
+        %Postgrex.Error{
+          postgres: %{code: :foreign_key_violation, constraint: "tenant_role_group_id_fkey"}
+        } ->
+          {:error, :bound_to_role}
+
+        _other ->
+          reraise error, __STACKTRACE__
+      end
   end
+
+  @doc """
+  Casts an id exactly as the identity route guards and lookups do (`Ecto.UUID.cast/1`,
+  INV-10) and returns the canonical lower-case hyphenated text, or `:error` for anything
+  that is not a UUID (ISS-1033). Accepts canonical, upper/mixed-case and raw 16-byte input.
+  """
+  @spec cast_id(term()) :: {:ok, String.t()} | :error
+  def cast_id(id), do: Ecto.UUID.cast(id)
 
   @doc """
   Lists a group's members, cursor-paginated (design §8 gap 5/§1/§3.5 — the

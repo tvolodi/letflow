@@ -34454,9 +34454,13 @@ requirements:
   #                            (depends_on 460, so C lands first)
   #   REQ-464 ELIXIR-DEV      A validator: nodes exist and precede, WARNING
   #                            for a same single-member role
-  #   REQ-465 ELIXIR-DEV      A adoption: shipped definitions that gate money,
-  #                            compliance or release
-  # Chain: 447 -> 459 -> 460 -> 461 -> 462, and 460 -> 463 -> 464 -> 465.
+  #   REQ-465 ELIXIR-DEV      A adoption, part 1: meridian loan origination and
+  #                            meridian regulatory sign-off chain
+  #   REQ-466 ELIXIR-DEV      A adoption, part 2: vortex production order
+  #                            release and swiftroute shipment approval
+  # Chain: 447 -> 459 -> 460 -> 461 -> 462, and 460 -> 463 -> 464 -> 465 -> 466
+  # (465 and 466 also wait for 462: all three edit the same fixtures, seeds and
+  # version numbers).
   # A and C both land before REQ-457 (Q-974): its refusal scenario
   # 'requester approves own request' needs REQ-463. REQ-457's entry is
   # deliberately NOT edited here; ORCH reports the ordering.
@@ -34728,17 +34732,41 @@ requirements:
       recreate the v1.5 forms itself.
 
       BUILDS:
-      1. Each shipped decision task declares required_outputs for the key
-         its outgoing edges read, matching its form_schema `required`
-         list: swiftroute Shipment Approval (ops-review: ops_decision;
-         ceo-approval: ceo_decision), meridian loan origination (l1-approval:
-         l1_decision; l2-approval and the CEO approval node: their decision
-         keys; kyc-manual-review: kyc_outcome), vortex production order
-         release (capacity-review: capacity decision; budget-approval:
-         budget decision) and vortex supplier quality deviation
-         (severity-classification: severity). Exact key names are read from
-         each definition's edge conditions, not guessed; the run report lists
-         node, key and the edge that reads it.
+      1. Each of the following ELEVEN HUMAN_TASK nodes declares
+         required_outputs naming the key its outgoing edges read (ids and
+         keys verified against the fixtures on 2026-10-07; ELIXIR-DEV
+         re-verifies them on the working branch):
+         swiftroute (test/fixtures/qa/swiftroute_process_definition.json,
+         keys as on PR #2334's v1.5 forms):
+           a. ops-review: ops_decision
+           b. ceo-approval: ceo_decision
+         meridian loan origination
+         (test/fixtures/qa/meridian_loan_origination_process_definition.json):
+           c. l1-approval: l1_decision
+           d. l2-approval: l2_decision
+           e. escalate-l2-approval-to-ceo: l2_decision (the D-ESC task for
+              l2-approval, role role-ceo; meridian has no node named
+              ceo-approval)
+           f. kyc-manual-review: kyc_outcome (read by the eligibility-gate
+              edge e15-kyc-cleared)
+         vortex production order release
+         (test/fixtures/qa/vortex_production_order_release_process_definition.json):
+           g. capacity-review: capacity_decision
+           h. escalate-to-ceo: capacity_decision
+           i. budget-approval: budget_decision
+           j. escalate-budget-approval-to-ceo: budget_decision
+         vortex supplier quality deviation
+         (test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json):
+           k. severity-classification: severity (read by the severity-routing
+              edges)
+         Deliberately NOT in this list (see open_questions): meridian
+         credit-memo-review / credit-memo-escalation-review (credit_decision),
+         risk-assessment / risk-assessment-escalation-review (risk_rating),
+         committee-vote-cro / -director / -ceo, the regulatory review, the
+         swiftroute incident definition, and
+         escalate-severity-classification-to-ceo (its outgoing edge is
+         unconditional). If the run finds an edge reading a key of any of
+         these it reports it to ORCH.
       2. Every adopted key has a variable_schema (REQ-461 check 2) in the
          definition and in the seed scripts under scripts/, so the
          fixture, the seed and the definition agree.
@@ -34748,15 +34776,21 @@ requirements:
          retry with a valid decision completes and routes. Where
          REQ-461's check 3 was shipped as a warning, it is switched to the
          severity the REQ-459 design states.
-      4. Each changed definition's version is incremented and its description
-         says why, as the v1.5 swiftroute line does.
+      4. Each changed definition's version is incremented by one minor step
+         from the version found on the working branch at the start (not a
+         number written in this entry; swiftroute is v1.4 on main and v1.5
+         on PR #2334) and its description says why, as the v1.5 swiftroute
+         line does. REQ-465 and REQ-466 then increment again from whatever
+         this entry leaves, so numbering is sequential and read, never
+         assumed.
     open_questions:
       - "Escalation tasks of D-ESC (for example escalate-l2-approval-to-ceo, escalate-to-ceo) are HUMAN_TASKs that take the same decision. Default: they declare the same required_outputs as the task they replace, because an omitted decision on an escalation task has the same silent fail-closed effect; REQ-459 section 9 is the authority."
       - "Start-form required instance-start variables (declared_value) are out of scope (see REQ-460 open_questions). The ISS-1008 acceptance line 'The declared value is a required start field' stays unmet by this entry and is reported to ORCH."
-      - "Sizing: three verticals and several definitions in one entry. If ELIXIR-DEV finds the work exceeds one turn it adopts swiftroute and replaces the KNOWN LIMITATION tests first and reports the remaining verticals to ORCH for a split, not a partial silent pass."
+      - "Sizing: eleven nodes across four definitions in one entry. If ELIXIR-DEV finds the work exceeds one turn it adopts swiftroute and replaces the KNOWN LIMITATION tests first and reports the remaining verticals to ORCH for a split, not a partial silent pass."
+      - "Out-of-list decision keys (meridian credit_decision, risk_rating and the three committee votes; regulatory review). They are read by edges but are not named in GH #2335's adoption list. Default: not adopted here; ORCH decides whether a follow-up entry adopts them."
     acceptance_criteria:
       - "the run report quotes the check of PR #2334 (merged or not); if not merged the entry reports blocked and changes nothing (git diff empty)"
-      - "for each adopted decision task a test completes it with the decision key omitted and asserts 422 naming that key, task still open, instance unchanged, then completes it with a valid value and asserts the route taken; one such test per node listed in BUILDS item 1"
+      - "for each of the eleven nodes a through k in BUILDS item 1 a test completes it with the decision key omitted and asserts 422 naming that key, task still open, instance unchanged, then completes it with a valid value and asserts the route taken: eleven tests, named by node id, and the run report lists the eleven test names"
       - "the two former KNOWN LIMITATION tests no longer exist (grep 'KNOWN LIMITATION' test returns nothing for them) and their replacements assert 422, not the former fail-closed route; the former assertion text is quoted in the run report"
       - "every shipped definition changed by this entry passes the validator with status OK, and the REQ-461 check 3 finds no unadopted decision key in any of them (counts quoted per definition)"
       - "no definition outside the three verticals and no decision node whose key is not read by an outgoing edge is changed (git diff --stat quoted)"
@@ -34872,46 +34906,107 @@ requirements:
     depends_on: [REQ-463]
 
   - id: REQ-465
-    title: "Adopt distinct_from in the shipped definitions that gate money, compliance or release: meridian loan, regulatory sign-off chain, vortex and swiftroute approvals"
+    title: "Adopt distinct_from in the meridian loan origination and meridian regulatory sign-off definitions (approvals that pay, release or commit)"
     owner: ELIXIR-DEV
     status: pending
     stage: S3
-    # impl_order: UNREGISTERED -- blocked-by: REQ-464 -- shipped definitions can adopt only after the engine rule (REQ-463) and the validator (REQ-464) exist; REQ-463 is reached through REQ-464
+    # impl_order: UNREGISTERED -- blocked-by: REQ-464 -- shipped definitions can adopt only after the engine rule (REQ-463) and the validator (REQ-464) exist; REQ-463 is reached through REQ-464 and REQ-462 (same fixtures) precedes through depends_on
     description: >
-      Source: GH #2323 (ISS-1034, Q-1016) adoption scope: 'shipped
-      definitions (meridian loan: l1/l2/committee/ceo/disburse; regulatory:
-      sign-off chain; vortex/swiftroute approvals) adopt it'. Adds
-      distinct_from to the HUMAN_TASK nodes of
+      Source: GH #2323 (ISS-1034, Q-1016) adoption scope, part 1 of 2
+      (part 2 is REQ-466). Adds distinct_from to HUMAN_TASK nodes of
       test/fixtures/qa/meridian_loan_origination_process_definition.json
-      (l1-approval, l2-approval, committee-vote-cro, -director, -ceo,
-      disburse-loan and their D-ESC escalation tasks
-      escalate-l2-approval-to-ceo and
-      escalate-disburse-loan-to-credit-director),
-      test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
-      (evidence-collection, findings-sign-off, ceo-override),
-      test/fixtures/qa/vortex_production_order_release_process_definition.json
-      (capacity-review, budget-approval and escalations) and
-      test/fixtures/qa/swiftroute_process_definition.json (ops-review,
-      ceo-approval). Which node names which earlier node (the approver of
-      level N differs from the requester and from the approvers of levels
-      below N) is read from each graph, listed in the run report as a table
-      (node, distinct_from, business reason), and limited to approvals that
-      pay, release or commit; ordinary data-entry steps are not touched.
+      and test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json.
+      This entry edits the same fixtures, seed scripts and version numbers
+      as REQ-462, so it depends on REQ-462 and rebases on it.
+
+      CANDIDATE NODES (ids verified against the fixtures on 2026-10-07;
+      ELIXIR-DEV re-verifies and the run report lists the final table of
+      node, distinct_from, business reason):
+      meridian loan origination:
+        - l2-approval (role-credit-director): distinct_from [l1-approval]
+        - escalate-l2-approval-to-ceo (role-ceo, D-ESC task for l2-approval):
+          distinct_from [l1-approval]
+        - disburse-loan (role-loan-ops) and
+          escalate-disburse-loan-to-credit-director (role-credit-director):
+          distinct_from the approval nodes that precede them in the graph
+          (l1-approval, l2-approval, escalate-l2-approval-to-ceo,
+          committee-vote-cro, committee-vote-director, committee-vote-ceo),
+          so the person who pays does not also approve
+        - committee-vote-cro, committee-vote-director, committee-vote-ceo:
+          no approval node precedes them on their path, so no distinct_from
+          is added to them (see open_questions)
+      meridian regulatory sign-off chain:
+        - findings-sign-off (role-cro): distinct_from [evidence-collection,
+          risk-evaluation, remediation-subprocess] as they precede it
+        - ceo-override (role-ceo): the same list, plus findings-sign-off
+          where the graph gives a path, as REQ-464 check 3 decides
+      Only nodes that approve, pay, release or commit get the attribute;
+      ordinary data-entry nodes (credit-memo-review, risk-assessment,
+      kyc-manual-review and similar) are not touched. A node id that the
+      REQ-464 validator rejects (not existing, not preceding) is dropped
+      from the list and reported, never forced.
+
       Seed scripts under scripts/ and the QA copies stay in agreement with
-      the definitions; each changed definition's version is incremented.
-      Residuals the rule cannot express (parallel committee votes, see
-      REQ-464 open_questions) are listed in the run report and reported to
-      ORCH.
+      the definitions. Each changed definition's version is incremented by
+      one minor step from the version found on the branch after REQ-462 (a
+      read value, not a number written here); the description says why.
     open_questions:
-      - "The REQ-463 distinct-person rule needs enough distinct users in the shipped rosters (test/fixtures/uat/actors.yaml, scripts/seed_*_persona_actors.sh) to complete each path; a roster with one holder of a role makes a path uncompletable and REQ-464 check 4 warns. Default: this entry reports each such role and adds roster actors only where the BA role approves; it does not add roster actors itself. Existing UAT scenarios whose single actor performs two gated steps will start failing; those are reported to ORCH as scenario issues (BA lane), not edited here."
+      - "Parallel committee votes: two votes by one multi-role person are not covered by the rule (see REQ-464 open_questions). Default: listed in the run report and reported to ORCH as a follow-up, not silently dropped."
+      - "The REQ-463 rule needs enough distinct users in the shipped rosters (test/fixtures/uat/actors.yaml, scripts/seed_*_persona_actors.sh) to complete each path; a role with one holder makes a path uncompletable and REQ-464 check 4 warns. Default: this entry reports each such role and adds no roster actor itself (BA lane). Existing UAT scenarios whose single actor performs two gated steps will start failing; they are reported to ORCH as scenario issues, not edited here."
       - "Whether D-ESC escalation tasks inherit the distinct_from of the task they replace. Default: as decided in REQ-459 section 9."
+      - "Sizing: if the work exceeds one turn, ELIXIR-DEV adopts the meridian loan first and reports the regulatory chain to ORCH for a split, not a partial silent pass."
       - "PROCESS-AUDITOR re-audit (checklist B1 answer text) is a separate follow-up recorded in REQ-463."
     acceptance_criteria:
-      - "the run report lists every node that received distinct_from with the listed node ids and a one-line business reason; every listed id exists and precedes (the REQ-464 validator reports status OK, no violation, for every changed definition)"
-      - "for the meridian loan definition a router or engine test shows one user holding both role-credit-approver-l1 and the l2 role refused at l2-approval after completing l1-approval, and a second user accepted; the same two-roles-one-user test exists for the swiftroute ceo-approval and the vortex budget-approval"
-      - "the regulatory sign-off chain: the user who completed evidence-collection is refused at findings-sign-off, tested"
-      - "no node outside the approval, release or payment set is changed (git diff --stat quoted), and definitions not listed above are untouched"
-      - "every UAT scenario file under test/fixtures/uat/scenarios and simulation scenario that would now be refused is listed in the run report with the actor and step; none is edited"
-      - "SECURITY-REVIEWER verdict recorded (mandatory: adoption changes who may act in gated money, compliance and release processes)"
-      - "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the definition fixture tests and the engine tests naming the changed definitions, and mix letflow.check_boundaries pass, real output quoted"
-    depends_on: [REQ-463, REQ-464]
+      - "the run report lists every node that received distinct_from with the listed node ids and a one-line business reason; every listed id exists and precedes (the REQ-464 validator reports status OK, no violation, for both changed definitions)"
+      - "meridian loan: one user holding both role-credit-approver-l1 and role-credit-director is refused at l2-approval after completing l1-approval, and a second user is accepted; the same user holding role-ceo is refused at escalate-l2-approval-to-ceo after completing l1-approval; a user who completed l2-approval is refused at disburse-loan (three tests, real Postgres)"
+      - "regulatory chain: the user who completed evidence-collection is refused at findings-sign-off, tested; a different user completes it"
+      - "committee-vote-cro, committee-vote-director and committee-vote-ceo carry no distinct_from after this entry (grep quoted), and the residual is stated in the run report"
+      - "no node outside the approval, release or payment set is changed and no definition other than the two named is changed (git diff --stat quoted)"
+      - "every UAT scenario file under test/fixtures/uat/scenarios/meridian and simulation scenario that would now be refused is listed in the run report with actor and step; none is edited"
+      - "SECURITY-REVIEWER verdict recorded (mandatory: adoption changes who may act in gated money and compliance processes)"
+      - "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the meridian definition fixture tests and the engine tests naming the changed definitions, and mix letflow.check_boundaries pass, real output quoted"
+    depends_on: [REQ-462, REQ-463, REQ-464]
+
+  - id: REQ-466
+    title: "Adopt distinct_from in the vortex production order release and swiftroute shipment approval definitions (approvals that release or commit)"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    # impl_order: UNREGISTERED -- blocked-by: REQ-465 -- part 2 of the adoption split, chained after part 1 so each turn edits one pair of definitions; REQ-465 itself waits for REQ-462 and the engine rule
+    description: >
+      Source: GH #2323 (ISS-1034, Q-1016) adoption scope, part 2 of 2
+      (part 1 is REQ-465). Adds distinct_from to HUMAN_TASK nodes of
+      test/fixtures/qa/vortex_production_order_release_process_definition.json
+      and test/fixtures/qa/swiftroute_process_definition.json. Edits the
+      same files as REQ-462, which it therefore follows.
+
+      CANDIDATE NODES (ids verified against the fixtures on 2026-10-07;
+      ELIXIR-DEV re-verifies and the run report lists the final table):
+        - vortex budget-approval (role-controller): distinct_from
+          [capacity-review, escalate-to-ceo]
+        - vortex escalate-budget-approval-to-ceo (role-ceo, D-ESC task for
+          budget-approval): distinct_from [capacity-review, escalate-to-ceo]
+        - swiftroute ceo-approval (role-ceo): distinct_from [ops-review]
+      capacity-review, escalate-to-ceo and ops-review are first-level nodes
+      and get none. A node id that the REQ-464 validator rejects is dropped
+      and reported. Not touched: vortex_supplier_quality_deviation (a
+      classification, not an approval, see open_questions) and
+      swiftroute_incident (no approval gate).
+
+      Seed scripts under scripts/ and the QA copies stay in agreement with
+      the definitions. Each changed definition's version is incremented by
+      one minor step from the version found on the branch after REQ-462 (and
+      REQ-465); a read value, not a number written here.
+    open_questions:
+      - "vortex supplier quality deviation: severity-classification and its D-ESC task do not approve or pay; the issue lists 'vortex/swiftroute approvals'. Default: not changed; ORCH decides whether a compliance reading calls for it."
+      - "Roster size: see REQ-465 open_questions; same default."
+      - "Whether D-ESC escalation tasks inherit distinct_from: as REQ-459 section 9."
+    acceptance_criteria:
+      - "the run report lists every node that received distinct_from with listed ids and a one-line business reason; the REQ-464 validator reports status OK for both changed definitions"
+      - "swiftroute: one user holding role-ops-manager and role-ceo is refused at ceo-approval after completing ops-review, and a second user holding role-ceo is accepted (two-roles-one-user test, real Postgres)"
+      - "vortex: one user holding role-production-manager and role-controller is refused at budget-approval after completing capacity-review; the same user holding role-ceo is refused at escalate-budget-approval-to-ceo after completing capacity-review; a different user is accepted in both"
+      - "capacity-review, escalate-to-ceo and ops-review carry no distinct_from; no other definition is changed (git diff --stat quoted)"
+      - "every UAT or simulation scenario under swiftroute and vortex that would now be refused is listed in the run report with actor and step; none is edited"
+      - "SECURITY-REVIEWER verdict recorded (mandatory)"
+      - "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the vortex and swiftroute definition fixture tests and engine tests, and mix letflow.check_boundaries pass, real output quoted"
+    depends_on: [REQ-462, REQ-463, REQ-464, REQ-465]

@@ -379,6 +379,7 @@ defmodule Letflow.Engine do
   alias Letflow.Engine.PinResolver
   alias Letflow.Engine.Reconstruction
   alias Letflow.Engine.RequiredOutputs
+  alias Letflow.Engine.SeparationOfDuties
   alias Letflow.Engine.SnapshotWriter
   alias Letflow.Engine.ServiceTask
   alias Letflow.Engine.ServiceTaskDispatcher
@@ -2177,16 +2178,19 @@ defmodule Letflow.Engine do
               affected :: ExecutionError.affected()}}
           | {:error,
              {:output_refused, %{missing_keys: [String.t()], rejected_keys: [String.t()]}}}
+          | {:error, :separation_of_duties}
           | {:error, Ecto.Changeset.t()}
           | {:error, term()}
 
   # REQ-460 (design req459 §2.4): the INTERNAL refusal a completion guard returns
   # from its Multi step as {:error, {:completion_refused, refusal}}. It never leaves
   # this module: interpret_complete_result/3 audits it and maps it to the public
-  # {:error, {:output_refused, %{...}}} member of complete_error/0. REQ-463 adds a
-  # {:separation_of_duties, blocking_node_ids} member.
+  # {:error, {:output_refused, %{...}}} member of complete_error/0. REQ-463 adds the
+  # {:separation_of_duties, blocking_node_ids} member, which maps to the
+  # detail-free public {:error, :separation_of_duties}.
   @typep completion_refusal ::
-           {:output_refused, missing_keys :: [String.t()], rejected_keys :: [String.t()]}
+           {:separation_of_duties, blocking_node_ids :: [String.t()]}
+           | {:output_refused, missing_keys :: [String.t()], rejected_keys :: [String.t()]}
 
   @typep refusal_context :: %{required: [String.t()], allowed: [String.t()]}
 
@@ -2308,12 +2312,12 @@ defmodule Letflow.Engine do
       end)
       # REQ-460 (design req459 §2.2 step 4): caller-error guards, after BOTH row
       # locks and the snapshot read, before any step that can commit. Pure.
-      |> Multi.run(:completion_guards, fn _repo,
+      |> Multi.run(:completion_guards, fn repo,
                                           %{
                                             task: task,
                                             snapshot_and_state: %{graph: graph}
                                           } ->
-        check_completion_guards(graph, task, output_variables)
+        check_completion_guards(repo, graph, task, output_variables, actor_id, prefix)
       end)
       |> Multi.run(:form_expression_reevaluation, fn _repo,
                                                      %{
@@ -3974,24 +3978,48 @@ defmodule Letflow.Engine do
     end
   end
 
-  # REQ-460 (design req459 §2.2 step 4, halves 4a and 4c; REQ-463 adds 4b between
-  # them). Pure -- no query. Judges the SUBMITTED map, before form-expression
+  # REQ-460 (design req459 §2.2 step 4, halves 4a and 4c) plus REQ-463's 4b between
+  # them (rule A, SeparationOfDuties.check/5: one query only when the node names a
+  # distinct_from, none otherwise; 4c stays pure). 4b runs first: an authorization
+  # decision (403) precedes input validation (422). Judges the SUBMITTED map, before form-expression
   # correction, so a caller error is refused before step 5's domain error could
   # commit an instance ERROR. Only the submitted map counts: a value the instance
   # already holds from an earlier pass never satisfies a required key.
-  @spec check_completion_guards(Graph.t(), Task.t(), map()) ::
+  @spec check_completion_guards(
+          module(),
+          Graph.t(),
+          Task.t(),
+          map(),
+          Ecto.UUID.t() | nil,
+          String.t()
+        ) ::
           {:ok, :guards_passed | :no_guards}
           | {:error, {:completion_refused, completion_refusal()}}
-  defp check_completion_guards(graph, %Task{} = task, output_variables) do
-    case RequiredOutputs.required_outputs(find_node(graph, task.node_id)) do
-      [] ->
-        {:ok, :no_guards}
+  defp check_completion_guards(repo, graph, %Task{} = task, output_variables, actor_id, prefix) do
+    case SeparationOfDuties.check(repo, graph, task, actor_id, prefix) do
+      {:error, {:separation_of_duties, _blocking_node_ids} = refusal} ->
+        {:error, {:completion_refused, refusal}}
 
-      required ->
-        case RequiredOutputs.missing_keys(required, output_variables) do
-          [] -> {:ok, :guards_passed}
-          missing -> {:error, {:completion_refused, {:output_refused, missing, []}}}
+      :ok ->
+        case RequiredOutputs.required_outputs(find_node(graph, task.node_id)) do
+          [] ->
+            guards_passed_or_none(graph, task)
+
+          required ->
+            case RequiredOutputs.missing_keys(required, output_variables) do
+              [] -> {:ok, :guards_passed}
+              missing -> {:error, {:completion_refused, {:output_refused, missing, []}}}
+            end
         end
+    end
+  end
+
+  # Payload only (no later step reads it): :guards_passed when the node carries a
+  # distinct_from that passed, :no_guards when it carries neither attribute.
+  defp guards_passed_or_none(graph, %Task{} = task) do
+    case find_node(graph, task.node_id) do
+      %{attributes: %{"distinct_from" => [_ | _]}} -> {:ok, :guards_passed}
+      _ -> {:ok, :no_guards}
     end
   end
 
@@ -5148,21 +5176,13 @@ defmodule Letflow.Engine do
           prefix :: String.t()
         ) :: :ok
   def record_completion_refusal_audit(instance_id, task_id, node_id, actor_id, refusal, prefix) do
-    {:output_refused, missing_keys, rejected_keys} = refusal
-
     attrs = %{
       actor_id: actor_id,
       action: "task.completion_refused",
       resource_type: "task",
       resource_id: task_id,
       before_state: nil,
-      after_state: %{
-        "rule" => "output_refused",
-        "instance_id" => instance_id,
-        "node_id" => node_id,
-        "missing_keys" => missing_keys,
-        "rejected_keys" => rejected_keys
-      },
+      after_state: completion_refusal_after_state(refusal, instance_id, node_id),
       trace_id: nil
     }
 
@@ -5194,6 +5214,35 @@ defmodule Letflow.Engine do
       )
 
       :ok
+  end
+
+  # Rule A (REQ-463) records the sorted blocking node ids (the earlier completer is
+  # the actor, so no other user id is repeated); rule C records key names only.
+  defp completion_refusal_after_state(
+         {:separation_of_duties, blocking_node_ids},
+         instance_id,
+         node_id
+       ) do
+    %{
+      "rule" => "separation_of_duties",
+      "instance_id" => instance_id,
+      "node_id" => node_id,
+      "blocking_node_ids" => Enum.sort(blocking_node_ids)
+    }
+  end
+
+  defp completion_refusal_after_state(
+         {:output_refused, missing_keys, rejected_keys},
+         instance_id,
+         node_id
+       ) do
+    %{
+      "rule" => "output_refused",
+      "instance_id" => instance_id,
+      "node_id" => node_id,
+      "missing_keys" => missing_keys,
+      "rejected_keys" => rejected_keys
+    }
   end
 
   # ISS-0928 -- best-effort audit for a SERVICE_TASK re-entry failure that is
@@ -5484,6 +5533,29 @@ defmodule Letflow.Engine do
     )
 
     {:error, {:output_refused, %{missing_keys: missing, rejected_keys: rejected}}}
+  end
+
+  # REQ-463 (design req459 §2.4): rule A refused the completion. Same post-rollback
+  # audit as above; the public error is detail-free (the blocking node ids reach
+  # only the audit record).
+  defp interpret_complete_result(
+         {:error, _failed_step, {:completion_refused, {:separation_of_duties, _ids} = refusal},
+          changes},
+         actor_id,
+         prefix
+       ) do
+    task = Map.fetch!(changes, :task)
+
+    record_completion_refusal_audit(
+      task.instance_id,
+      task.id,
+      task.node_id,
+      actor_id,
+      refusal,
+      prefix
+    )
+
+    {:error, :separation_of_duties}
   end
 
   # Catch-all -- every Multi step's own callback above already maps its

@@ -145,6 +145,7 @@ defmodule Letflow.Tasks do
   alias Letflow.Audit
   alias Letflow.Api.Pagination
   alias Letflow.Definitions.InstanceDefinitionSnapshot
+  alias Letflow.Engine.SeparationOfDuties
   alias Letflow.Engine.Task
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity.GroupMember
@@ -400,6 +401,7 @@ defmodule Letflow.Tasks do
           | {:error, :assignee_group_not_member}
           | {:error, :assignee_role_not_held}
           | {:error, :not_claimable}
+          | {:error, :separation_of_duties}
           | {:error, Ecto.Changeset.t()}
           | {:error, term()}
 
@@ -446,7 +448,9 @@ defmodule Letflow.Tasks do
   end
 
   defp apply_claim(_repo, %Task{assignee_type: nil} = task, actor_id, _scope, prefix) do
-    write_assignment(task, "USER", actor_id, prefix)
+    with :ok <- SeparationOfDuties.check_for_claim(task, actor_id, prefix) do
+      write_assignment(task, "USER", actor_id, prefix)
+    end
   end
 
   defp apply_claim(
@@ -454,10 +458,12 @@ defmodule Letflow.Tasks do
          %Task{assignee_type: "USER", assignee_ref: ref} = task,
          actor_id,
          _scope,
-         _prefix
+         prefix
        )
        when ref == actor_id do
-    {:ok, task}
+    with :ok <- SeparationOfDuties.check_for_claim(task, actor_id, prefix) do
+      {:ok, task}
+    end
   end
 
   defp apply_claim(_repo, %Task{assignee_type: "USER"}, _actor_id, _scope, _prefix) do
@@ -472,7 +478,9 @@ defmodule Letflow.Tasks do
          prefix
        ) do
     if ref in scope.group_ids do
-      write_assignment(task, "USER", actor_id, prefix)
+      with :ok <- SeparationOfDuties.check_for_claim(task, actor_id, prefix) do
+        write_assignment(task, "USER", actor_id, prefix)
+      end
     else
       {:error, :assignee_group_not_member}
     end
@@ -486,7 +494,9 @@ defmodule Letflow.Tasks do
          prefix
        ) do
     if ref in scope.role_names do
-      write_assignment(task, "USER", actor_id, prefix)
+      with :ok <- SeparationOfDuties.check_for_claim(task, actor_id, prefix) do
+        write_assignment(task, "USER", actor_id, prefix)
+      end
     else
       {:error, :assignee_role_not_held}
     end

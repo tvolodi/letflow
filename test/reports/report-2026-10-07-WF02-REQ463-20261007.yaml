@@ -1,0 +1,115 @@
+# Test run report -- WF-02 Step 4 (SCOPED run per ORCH decision; full suite NOT run)
+
+req_id: REQ-463
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ463-20261007
+date_utc: 2026-10-07
+
+git:
+  branch: feat/REQ-463-distinct-from-Q-1026
+  commit: 0fedac07
+  worktree: clean except this report (untracked letflow-3.code-workspace not touched)
+
+verdict: PASS (scoped)
+
+declared_deviation: >
+  scripts/test_parallel.sh and the full suite were NOT run (ORCH decision: RAM 0.4-2 GB free,
+  harness kills runs at critical memory). UNVERIFIED: full suite -- CI will run it. Every
+  command ran strictly sequentially, one BEAM at a time, free RAM recorded before each
+  (0.65-0.84 GB). Test files ran as separate single-file `mix test <file>` invocations with
+  MIX_TEST_PARTITION=3 (15 for the concurrency file); tooling ran with MIX_TEST_PARTITION unset.
+  No run was killed. Total: 61 single-file test invocations, 61 exit 0, 0 failures.
+  This is a scoped result, NOT a full-suite result.
+
+tests:
+  # real "Result:" line of each invocation, exit code 0 for every entry
+  - {file: test/letflow/engine_distinct_from_concurrency_test.exs, partition: 15, result: "Result: 2 passed", exit: 0}
+  - {file: test/letflow/engine_distinct_from_test.exs, partition: 3, result: "Result: 40 passed", exit: 0}
+  - {file: test/letflow/routers/tasks_distinct_from_test.exs, partition: 3, result: "Result: 13 passed", exit: 0}
+  - {file: test/letflow/engine_required_outputs_test.exs, partition: 3, result: "Result: 19 passed", exit: 0}
+  - {file: test/letflow/routers/tasks_required_outputs_test.exs, partition: 3, result: "Result: 9 passed", exit: 0}
+  - {file: test/letflow/routers/tasks_test.exs, partition: 3, result: "Result: 77 passed", exit: 0}
+  - {file: test/letflow/engine_complete_task_test.exs, partition: 3, result: "Result: 11 passed", exit: 0}
+  - {file: test/letflow/api/output_refused_test.exs, partition: 3, result: "Result: 4 passed", exit: 0}
+  - {file: test/letflow/engine_variable_schema_merge_test.exs, partition: 3, result: "Result: 5 passed", exit: 0}
+  - {file: test/letflow/engine/timer_wiring_test.exs, partition: 3, result: "Result: 23 passed", exit: 0}
+  - {file: test/letflow/engine/shipped_definition_variable_schemas_engine_test.exs, partition: 3, result: "Result: 10 passed", exit: 0}
+  - {file: test/letflow/api/authorization_test.exs, partition: 3, result: "Result: 120 passed", exit: 0}
+  - {file: test/letflow/audit_capture_test.exs, partition: 3, result: "Result: 6 passed", exit: 0}
+  - {file: test/letflow/identity_test.exs, partition: 3, result: "Result: 64 passed", exit: 0}
+  - {file: test/letflow/scheduler_test.exs, partition: 3, result: "Result: 28 passed", exit: 0}
+  - {file: test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs, partition: 3, result: "Result: 12 passed", exit: 0}
+  - {file: test/letflow/engine/required_outputs_test.exs, partition: 3, result: "Result: 19 passed", exit: 0}
+  - {file: test/letflow/routers/definitions_required_outputs_test.exs, partition: 3, result: "Result: 14 passed", exit: 0}
+  - {file: test/letflow/definitions/required_outputs_shipped_definitions_test.exs, partition: 3, result: "Result: 2 passed", exit: 0}
+  - {file: test/letflow/definitions/required_outputs_surfaces_test.exs, partition: 3, result: "Result: 21 passed", exit: 0}
+  - {file: test/letflow/definitions/required_outputs_validation_test.exs, partition: 3, result: "Result: 33 passed", exit: 0}
+  - {file: test/letflow/scripts/meridian_committee_distinct_voters_fixture_test.exs, partition: 3, result: "Result: 5 passed", exit: 0}
+  - {file: test/letflow/scripts/meridian_d_esc_escalation_fixture_test.exs, partition: 3, result: "Result: 34 passed", exit: 0}
+  - {file: test/letflow/scripts/meridian_l1_distinct_from_memo_review_fixture_test.exs, partition: 3, result: "Result: 7 passed", exit: 0}
+  - {file: test/letflow/scripts/meridian_regulatory_remediation_fixture_test.exs, partition: 3, result: "Result: 25 passed", exit: 0}
+  - {file: test/letflow/scripts/meridian_timeout_review_and_forms_fixture_test.exs, partition: 3, result: "Result: 20 passed", exit: 0}
+  - {file: test/letflow/scripts/regulatory_review_timer_path_fixture_test.exs, partition: 3, result: "Result: 29 passed", exit: 0}
+  - {file: test/letflow/engine/human_task_escalation_test.exs, partition: 3, result: "Result: 3 passed", exit: 0}
+  - {file: test/letflow/engine/parallel_gateway_test.exs, partition: 3, result: "Result: 18 passed", exit: 0}
+  - {file: test/letflow/engine/reconstruction_test.exs, partition: 3, result: "Result: 14 passed", exit: 0}
+  - {file: test/letflow/engine/service_task_wiring_test.exs, partition: 3, result: "Result: 37 passed", exit: 0}
+  - {file: test/letflow/engine/snapshot_writer_test.exs, partition: 3, result: "Result: 12 passed", exit: 0}
+  - {file: test/letflow/engine/sub_process_service_task_after_test.exs, partition: 3, result: "Result: 8 passed", exit: 0}
+  - {file: test/letflow/engine/sub_process_test.exs, partition: 3, result: "Result: 16 passed", exit: 0}
+  - {file: test/letflow/engine/task_activation_test.exs, partition: 3, result: "Result: 31 passed", exit: 0}
+  - {file: test/letflow/engine/transition_test.exs, partition: 3, result: "Result: 29 passed (1 property, 28 tests)", exit: 0}
+  - {file: test/letflow/engine/variable_schema_test.exs, partition: 3, result: "Result: 20 passed", exit: 0}
+  - {file: test/letflow/engine_cancel_instance_test.exs, partition: 3, result: "Result: 10 passed", exit: 0}
+  - {file: test/letflow/engine_catalog_service_task_test.exs, partition: 3, result: "Result: 25 passed", exit: 0}
+  - {file: test/letflow/engine_concurrency_test.exs, partition: 3, result: "Result: 3 passed", exit: 0}
+  - {file: test/letflow/engine_execution_error_test.exs, partition: 3, result: "Result: 10 passed", exit: 0}
+  - {file: test/letflow/engine_form_expression_reevaluation_test.exs, partition: 3, result: "Result: 10 passed", exit: 0}
+  - {file: test/letflow/engine_sub_process_test.exs, partition: 3, result: "Result: 16 passed", exit: 0}
+  - {file: test/letflow/iss0397_join_counters_test.exs, partition: 3, result: "Result: 2 passed", exit: 0}
+  - {file: test/letflow/iss0408_join_token_record_test.exs, partition: 3, result: "Result: 2 passed", exit: 0}
+  - {file: test/letflow/iss0974_join_dispatch_id_map_test.exs, partition: 3, result: "Result: 5 passed", exit: 0}
+  - {file: test/letflow/role_registry_test.exs, partition: 3, result: "Result: 26 passed", exit: 0}
+  - {file: test/letflow/routers/metrics_exposition_test.exs, partition: 3, result: "Result: 9 passed", exit: 0}
+  - {file: test/letflow/scheduler/poller_test.exs, partition: 3, result: "Result: 21 passed", exit: 0}
+  - {file: test/letflow/service_catalog_test.exs, partition: 3, result: "Result: 44 passed", exit: 0}
+  - {file: test/letflow/simulation/req206_swiftroute_test.exs, partition: 3, result: "Result: 5 passed", exit: 0}
+  - {file: test/letflow/simulation/req207_vortex_test.exs, partition: 3, result: "Result: 4 passed", exit: 0}
+  - {file: test/letflow/simulation/req208_meridian_test.exs, partition: 3, result: "Result: 4 passed", exit: 0}
+  - {file: test/letflow/tenant_provisioning/task_completed_backfill_test.exs, partition: 3, result: "Result: 2 passed", exit: 0}
+  - {file: test/letflow/definitions/graph_flow_test.exs, partition: 3, result: "Result: 18 passed", exit: 0}
+  - {file: test/letflow/definitions/graph_test.exs, partition: 3, result: "Result: 76 passed", exit: 0}
+  - {file: test/letflow/definitions/promotion_plan_test.exs, partition: 3, result: "Result: 9 passed", exit: 0}
+  - {file: test/letflow/definitions/solution_pack_test.exs, partition: 3, result: "Result: 21 passed", exit: 0}
+  - {file: test/letflow/definitions/store_test.exs, partition: 3, result: "Result: 38 passed", exit: 0}
+  - {file: test/letflow/no_smtp_secret_guard_test.exs, partition: 3, result: "Result: 6 passed", exit: 0}
+  - {file: test/letflow/req441_source_guards_test.exs, partition: 3, result: "Result: 12 passed", exit: 0}
+
+tooling:
+  - {cmd: mix letflow.check_issue_refs, exit: 0, output: "625 file(s) under docs/issues/ / OK -- every cross-reference is prefixed and well-formed."}
+  - {cmd: mix letflow.lint_handoffs, exit: 0, output: "letflow.lint_handoffs: OK -- 0 new violations across 3433 handoff files under \"handoffs\" (25 pre-existing grandfathered, traced to ISS-0190)."}
+  - {cmd: mix letflow.check_uat_scenario_schema, exit: 0, output: "38 file(s) checked, 0 violation(s) across 0 file(s)"}
+  - {cmd: mix letflow.check_boundaries, exit: 0, output: "mix letflow.check_boundaries: OK -- 970 edges checked, 0 violations"}
+  - {cmd: mix letflow.check_requirements_registration, exit: 0, output: "433 entries = 433 registered + 0 deferred + 0 neither + 0 unclassified"}
+  - {cmd: mix letflow.check_req_id_collision, exit: 0, output: "mix letflow.check_req_id_collision: OK -- no REQ-NNN id collision with origin/main."}
+  - {cmd: mix letflow.check_deferral_staleness, exit: 0, output: "0 deferred of 433 entries; 0 stale"}
+  - {cmd: mix letflow.check_async_sandbox_reachability, exit: 0, output: "OK -- 147 async:true test file(s) scanned under \"test\", 0 reach Sandbox.mode/2 (0 permitted, verified exceptions), 0 new violations."}
+  - {cmd: mix format --check-formatted, exit: 0, output: "(no output)"}
+  - {cmd: "mix compile --warnings-as-errors (dev, --force; also MIX_ENV=test)", exit: 0, output: "Compiling 312 files (.ex) / Generated letflow app (no warnings)"}
+
+sweep_method: >
+  Grepped the whole test/ tree for claim_task, /claim, Tasks.claim, run_complete_task,
+  completion_refused, output_refused, required_outputs, distinct_from, and for every .exs/.ex
+  containing HUMAN_TASK plus complete_task|Engine.complete|claim|/complete (50 files). Every
+  file found was run; pure graph/definition unit files (graph_test, graph_flow_test,
+  promotion_plan_test, solution_pack_test, store_test, role_registry_test,
+  metrics_exposition_test) were run too since a run is cheap and a validator refusing at
+  activate could trip any of them (anti-patterns). test/support/sod_support.ex is a helper,
+  exercised via the three new files. Pepper guard located by grep: req441_source_guards_test.exs.
+skipped: none (test/specs, test/reports, test/uat-reports are non-test docs).
+
+failures: none
+attribution: not applicable (no failing run)
+next_action: Route to RELEASE-VALIDATOR (5)

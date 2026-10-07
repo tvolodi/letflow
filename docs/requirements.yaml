@@ -34925,7 +34925,7 @@ requirements:
   - id: REQ-463
     title: "Engine: optional distinct_from on a HUMAN_TASK, enforced at completion and at claim by user id, with a zero-detail 'separation of duties' refusal"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 1026  # letflow-queue task id, GH#2341. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-460 -- both rules edit run_complete_task, so C lands first and this entry builds on REQ-460's check order; REQ-459 is reached through REQ-460
     description: >

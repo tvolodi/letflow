@@ -45,7 +45,10 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBootTest do
             # this whole supervised child would take down Letflow.Supervisor.Infrastructure
             # on every boot.
             assert :ignore = MigrationReplayBoot.start_link(nil)
-          end, attribute_to: self(), raw: true)
+          end,
+          attribute_to: self(),
+          raw: true
+        )
 
       log = LoggerCollector.text(entries)
 
@@ -75,7 +78,10 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBootTest do
         LoggerCollector.capture(
           fn ->
             assert :ignore = MigrationReplayBoot.start_link(nil)
-          end, attribute_to: self(), raw: true)
+          end,
+          attribute_to: self(),
+          raw: true
+        )
 
       log = LoggerCollector.text(entries)
 

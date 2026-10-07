@@ -400,6 +400,7 @@ cleanup_tmp_dir() {
     _pid="${pids[$_idx]}"
     if kill -0 "$_pid" 2>/dev/null; then
       echo "test_parallel: EXIT trap reaping still-alive partition $_idx (pid=$_pid) -- sending TERM to its process group" >&2
+      test_parallel_watchdog_diag "$i" || true
       kill -TERM -- "-$_pid" 2>/dev/null
       _reap_pgid=1
     fi
@@ -654,6 +655,49 @@ declare -a extra_args=()
 read -r -a extra_args <<< "${TEST_PARALLEL_EXTRA_ARGS:-}"
 declare -a part_start_epoch part_end_epoch
 phase_start_epoch=$(date +%s)
+
+# Q-1037 / GH #2364: diagnostics printed ONLY on the watchdog-fired path,
+# just before the TERM, so a timed-out job log says where each partition was.
+# Best-effort throughout: every command is guarded and bounded, nothing here
+# can change an exit code or block the TERM/KILL logic.
+test_parallel_diag_run() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 5 "$@" 2>&1 || true
+  else
+    "$@" 2>&1 || true
+  fi
+}
+
+test_parallel_watchdog_diag() {
+  local idx="$1" log="$tmp_dir/partition-$1.log" pfx k now start
+  pfx="test_parallel: DIAG partition $idx: "
+  {
+    echo "${pfx}last 40 lines of $log:"
+    tail -n 40 "$log" 2>/dev/null | cut -c1-300 | sed "s/^/${pfx}  /"
+    k=$(grep -E '^[.F*]+$' "$log" 2>/dev/null | tr -d '
+' | wc -c | tr -d '[:space:]')
+    echo "${pfx}approx tests finished: ${k:-0}"
+    now=$(date +%s)
+    start="${part_start_epoch[$idx]:-$now}"
+    echo "${pfx}running for $((now - start))s of TEST_PARALLEL_PARTITION_TIMEOUT_S=${partition_timeout_s}s"
+  } >&2 || true
+  if mkdir "$tmp_dir/diag-host.lock" 2>/dev/null; then
+    {
+      local h="test_parallel: DIAG host: "
+      {
+        test_parallel_diag_run uptime
+        [ -r /proc/loadavg ] && test_parallel_diag_run cat /proc/loadavg
+        command -v free >/dev/null 2>&1 && test_parallel_diag_run free -m
+        test_parallel_diag_run df -h /tmp .
+        if command -v ps >/dev/null 2>&1; then
+          ( ps -eo pid,ppid,pcpu,pmem,etimes,comm --sort=-pcpu 2>/dev/null || ps 2>&1 ) | head -9
+        fi
+        command -v nproc >/dev/null 2>&1 && test_parallel_diag_run nproc
+      } | cut -c1-300 | sed "s/^/${h}/"
+    } >&2 || true
+  fi
+  return 0
+}
 
 i=1
 while [ "$i" -le "$N" ]; do

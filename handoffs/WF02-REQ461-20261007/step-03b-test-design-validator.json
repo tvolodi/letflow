@@ -1,0 +1,90 @@
+{
+  "handoff_id": "1d21cb4f-42bd-469c-b4b5-2cbd2b400f3e",
+  "run_id": "WF02-REQ461-20261007",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ461-20261007/step-03b-test-design-validator.json",
+  "created_at": "2026-10-07T09:58:05Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-461"
+    ],
+    "queue_task": 1024,
+    "gh_issue": 2339,
+    "branch_name": "feat/REQ-461-validator-required-outputs-Q-1024",
+    "design": "lib/letflow/design/req459-required-outputs-and-distinct-person.md",
+    "requirement_text": "Source: GH #2335 (ISS-1039, Q-1021) scope item (1) and the\ndesign-intent constraint 'the validator also flags a decision reading\na key no upstream task declares in required_outputs'. Adds\ndeterministic checks beside the existing node-attribute checks in\nlib/letflow/definitions/graph.ex (CHK-20 form schema, CHK-21\nescalation pair) and the data-flow checks in\nlib/letflow/definitions/semantic_validation.ex (REQ-455), using the\nviolation code names reserved in the REQ-459 design.\n\nBUILDS:\n1. Shape check: `required_outputs` on a HUMAN_TASK is a list of\n   non-empty strings without duplicates; on any other node type the\n   attribute is a violation.\n2. Every key in required_outputs has a variable_schema in the\n   definition's variable_schemas, or the check reports the node and the\n   key (the enum or type is what keeps the value valid, REQ-109).\n3. Decision reads: for a conditional outgoing edge of an\n   EXCLUSIVE_GATEWAY or HUMAN_TASK that reads a variable key, report\n   it when the key IS the output of a HUMAN_TASK on the path\n   (appears in that task's form_schema.properties) and NO upstream\n   HUMAN_TASK (ancestors_or_self of the edge source) declares it in\n   required_outputs. This check is a WARNING, permanently, never a\n   violation or error (REQ-459 design section 1.4, D-4): it is\n   produced as the string prefix `decision_key_not_required:` by\n   SemanticValidation.decision_key_warnings/2 and surfaces in the\n   `warnings` list. There is no later severity switch.\n4. Surfaces (design sections 1.2-1.4, Adjustments REQ-461): shape\n   violations (check 1) at validate, create, update, import and pack\n   install (they run inside Graph.validate_node_attributes/1);\n   check 2 at validate and activate only (variable_schemas rows exist\n   only after the definition row), called from BOTH clauses of\n   SemanticValidation.validate/2 so the empty-declared_fields early\n   return does not hide it; check 3 WARNING in the validate 200 body\n   and the pack-install result, not in the activate response.\n   Creates Letflow.Definitions.ValidationWarnings.for_definitions/2\n   (concatenates RoleBinding warnings, decision_key warnings; REQ-464\n   adds the third source) and switches the two call sites\n   (Definitions.validate_definition_graph/2 and\n   SolutionPack.unbound_role_warnings/2). Warnings type stays\n   [String.t()].\n\nRESERVED CODES (copy exactly from REQ-459 design section 1.2):\nCHK-25 check_required_outputs/1 in lib/letflow/definitions/graph.ex\nproduces only the two shape codes: `:invalid_required_outputs`\n(not a list, non-string/empty entry, duplicate; one violation per\ndefect) and `:required_outputs_on_non_human_task`. Produced in\nlib/letflow/definitions/semantic_validation.ex, not in CHK-25:\n`:required_output_without_variable_schema` (check 2, VIOLATION,\nSemanticValidation.required_output_schema_violations/2) and\n`decision_key_not_required:` (check 3, WARNING string prefix,\nSemanticValidation.decision_key_warnings/2).",
+    "requirement_acceptance_criteria": [
+      "one test per check with a minimal definition that violates only that check, asserting the new code (check 1: :invalid_required_outputs, :required_outputs_on_non_human_task; check 2: :required_output_without_variable_schema; check 3: the decision_key_not_required: warning prefix) and the offending node id and key; one test per check with a valid neighbour that passes (required_outputs naming a key that has a variable_schema)",
+      "surfaces: a definition whose HUMAN_TASK has a non-list required_outputs is rejected by Definitions.create/2 and by update (code :invalid_required_outputs); a definition with required_outputs naming a key without a variable_schema is reported by POST /definitions/:id/validate and refused by activate (:required_output_without_variable_schema), and is NOT rejected at create; the decision_key_not_required: warning appears in the validate 200 body and in the pack-install result and not in the activate response",
+      "check 2 is reported for a definition that declares required_outputs and has declared_fields == %{} (no variable_schemas at all): the empty-declared_fields early return of SemanticValidation.validate/2 does not hide it",
+      "a required_outputs key without a variable_schema is reported with the node id and the key name; a duplicate key and a non-list value are each reported (negative tests)",
+      "an edge condition reading decision where an upstream HUMAN_TASK has decision in its form_schema but no required_outputs yields a decision_key_not_required: WARNING (in the validate response `warnings`, validation still valid, never a violation) from check 3; the same definition with required_outputs: [decision] on that task yields no such warning; a key that no HUMAN_TASK produces (service response, start variable) yields none",
+      "required_outputs on a node that is not a HUMAN_TASK is reported",
+      "every definition shipped in the repository (test/fixtures/qa/*process_definition.json, test/fixtures/simulation/**, priv/) is run through the validator in a test and the count of new findings (violations and warnings separately) per definition is quoted; none is weakened to make a definition pass",
+      "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over test/letflow/definitions, and mix letflow.check_boundaries pass, real output quoted",
+      "SECURITY-REVIEWER is not required for this entry (validator over definition data, no tenant-data path); CODE-DESIGN-VALIDATOR confirms code names match the REQ-459 design"
+    ]
+  },
+  "task": {
+    "description": "Gate tests + run mutants",
+    "extra": ""
+  },
+  "result": {
+    "completed_by": "TEST-DESIGN-VALIDATOR",
+    "head": "d0539adb",
+    "verdict": "PASS",
+    "coverage": "Every AC1-AC7 has at least one runnable, non-skipped test (grep for @tag/skip/TODO/secrets/connection strings in the four files: no hits). Fixtures: unit file pure/async; DB and router files one provisioned tenant per test with unique names. AC8/AC9 are not executable surface. Baseline: 68 passed (unit 33 + surfaces 21 + router 14); all four files 70 passed.",
+    "shipped_definitions": {
+      "verdict": "counts are genuine, not a test defect",
+      "findings": [
+        "The six simulation YAML files are R-Co ports of the SAME named processes as the QA JSON files under misleading legacy filenames (header comment: 'Filename kept as process_claim_intake.yaml'). process_claim_intake.yaml = 'Loan Origination' (QA meridian_loan_origination), process_policy_binding.yaml = 'Regulatory Compliance Review', process_route_approval.yaml = 'Shipment Approval' (QA swiftroute_process), process_shipment_dispatch.yaml = 'Driver Incident Report', process_quality_check.yaml = 'Production Order Release', process_work_order.yaml = 'Supplier Quality Deviation'. Same names, so identical counts 19 / 8 / 4 / 0 / 0 / 0 are expected (md5 differs and graph dicts are not byte-equal, so they are parallel copies, not the same file).",
+        "Independent recount of the non-trivial ones from the definitions: swiftroute Shipment Approval = 4 = edges e1,e2 (ops_decision, form of ops-review) + e5,e6 (ceo_decision, form of ceo-approval), none with required_outputs. Regulatory Compliance Review = 8 = highest_severity (e6,e7) + remediation_status (e9,e10) + cro_decision (e11,e12) + ceo_decision (e14,e15). Both match exactly.",
+        "Zero-warning definitions are genuine: in vortex production_order_release, vortex supplier_quality_deviation and swiftroute incident every HUMAN_TASK has NO form_schema.properties at all (printed list: capacity-review [], budget-approval [], severity-classification [], ops-assessment [] ...), so the key is not 'produced by a HUMAN_TASK on the path' and check 3 correctly stays silent; the gateway-read keys there (order_value_eur, false_positive, severity, injury_involved) come from start variables/service responses. vortex_8d has 3 nodes, 2 edges, no conditions. No definition has required_outputs yet, so violations are trivially 0 (by design of AC7).",
+        "All 13 graph-bearing definitions are loaded (13 'REQ-461 shipped-definition findings' lines printed in my own run); vortex entity/records JSON are not graphs and are correctly excluded.",
+        "Minor observation (not a FAIL): the discovery guard (>=12 total, >=6 QA, >=6 simulation) tolerates silently dropping one QA definition (7 present) or one overall (13 present); dropping a simulation file (exactly 6) would fail. AC7 asks for counts to be quoted, not asserted, so warnings are deliberately not pinned."
+      ]
+    },
+    "mutants": [
+      {"id": "M01", "mutation": "never emit :required_outputs_on_non_human_task (graph.ex)", "result": "KILLED 64/68", "killed_by": "check 1 -- non_human_task SERVICE_TASK / EXCLUSIVE_GATEWAY unit tests; router 'gateway is a 422'; surfaces 'create/2 rejects required_outputs on a non-HUMAN_TASK'"},
+      {"id": "M02", "mutation": "accept a duplicate key", "result": "KILLED 64/68", "killed_by": "unit 'a duplicate key is ONE violation', 'two different duplicated keys'; router duplicate/empty POST; surfaces create duplicate"},
+      {"id": "M03a", "mutation": "accept a non-string entry", "result": "KILLED 67/68", "killed_by": "unit 'a non-string entry is one violation per bad entry'"},
+      {"id": "M03b", "mutation": "accept an empty/blank string entry", "result": "KILLED 64/68", "killed_by": "unit 'an empty-string and a whitespace-only entry'; unit per-node; router; surfaces"},
+      {"id": "M04", "mutation": "skip check 2 when declared_fields is empty (empty-schema trap)", "result": "KILLED 60/68", "killed_by": "unit 'declared_fields == %{} with a required_outputs key is reported', 'one violation per key and node', 'ONLY check 2'; router /validate and /activate"},
+      {"id": "M05", "mutation": "check 2 at create/update (reject create when key has no variable_schema)", "result": "KILLED 49/68", "killed_by": "router POST / valid neighbour, /validate, /activate, PUT/PATCH; surfaces 'create/2 does NOT reject a key with no variable_schema'"},
+      {"id": "M06", "mutation": "check 3 made a violation in validate/2", "result": "KILLED 61/68", "killed_by": "unit 'the warning is never a violation'; router validate 200 / activate; check 2 tests asserting exact violation lists"},
+      {"id": "M07", "mutation": "emit warning even when upstream declares the key", "result": "KILLED 60/68", "killed_by": "unit 'valid neighbour: required_outputs: [decision]', 'declared upstream does not', 'ANY upstream HUMAN_TASK'"},
+      {"id": "M08", "mutation": "emit for a key no HUMAN_TASK produces", "result": "KILLED 65/68", "killed_by": "unit 'a key no HUMAN_TASK produces', 'producer DOWNSTREAM does not count'; surfaces 'a key no HUMAN_TASK produces yields no warning'"},
+      {"id": "M09a", "mutation": "drop node id from check 2 message", "result": "KILLED 62/68", "killed_by": "unit check 2 message tests; router /validate; surfaces activate"},
+      {"id": "M09b", "mutation": "drop node ids (edge source, producers) from check 3 message", "result": "KILLED 63/68", "killed_by": "unit check 3 producer/edge/source assertions (5 tests)"},
+      {"id": "M09c", "mutation": "drop node id from check 1 duplicate message", "result": "KILLED 67/68", "killed_by": "unit 'a duplicate key is ONE violation naming the node and the key' (single killer)"},
+      {"id": "M10a", "mutation": "drop key from check 2 message", "result": "KILLED 59/68", "killed_by": "unit check 2 tests, empty-schema test, router /validate and /activate"},
+      {"id": "M10b", "mutation": "drop key from check 3 message", "result": "KILLED 67/68", "killed_by": "unit 'one warning per (edge, key) ...' (single killer)"},
+      {"id": "M10c", "mutation": "drop key from check 1 duplicate message", "result": "KILLED 66/68", "killed_by": "unit duplicate tests (2)"},
+      {"id": "M11", "mutation": "swap order of RoleBinding vs decision-key warnings in ValidationWarnings", "result": "KILLED 34/35", "killed_by": "surfaces 'ValidationWarnings.for_definitions/2 concatenates RoleBinding warnings first...'"},
+      {"id": "M12", "mutation": "pack-install surface reverted to RoleBinding-only", "result": "KILLED 20/21", "killed_by": "surfaces 'SolutionPack.install/3 the install result carries the decision_key_not_required: warning'"},
+      {"id": "M13a", "mutation": "leak warnings into Definitions.activate/2 result", "result": "KILLED 34/35", "killed_by": "surfaces 'activate succeeds for a definition that WOULD warn, and its result carries no warning'"},
+      {"id": "M13b", "mutation": "leak warnings key into the activate HTTP body", "result": "KILLED 34/35", "killed_by": "router 'POST /:id/activate of a definition that WOULD warn is 200 and its body carries no warnings'"},
+      {"id": "M14", "mutation": "required_outputs LIST on a non-HUMAN_TASK treated as ok", "result": "KILLED 64/68", "killed_by": "unit gateway/service-task tests; router; surfaces create"},
+      {"id": "M15a", "mutation": "check 3 upstream excludes the source node itself", "result": "KILLED 60/68", "killed_by": "unit 'a HUMAN_TASK edge reading a key its own form collects', 'one warning per', 'never a violation', 'NOT an ancestor'; router /validate; SolutionPack.install"},
+      {"id": "M15b", "mutation": "check 3 upstream = source + direct predecessors only", "result": "KILLED 67/68", "killed_by": "unit 'a producer list is sorted when several upstream HUMAN_TASKs collect the key' (single, incidental killer: transitive ancestry is not asserted by a dedicated test)"},
+      {"id": "M16", "mutation": "check 3 only for EXCLUSIVE_GATEWAY edges", "result": "KILLED 58/68", "killed_by": "unit 'a HUMAN_TASK edge reading a key its own form collects' and 5 more"}
+    ],
+    "mutant_summary": "23 mutants (requested 16, split into sub-variants a/b/c), 23 KILLED, 0 SURVIVED. Each run: unit + surfaces + router files (M11/M12/M13: surfaces and/or router), MIX_TEST_PARTITION=12, one BEAM at a time; unmutated baseline 68 passed.",
+    "observations_non_blocking": [
+      "M15b is killed by one incidental test only; a dedicated multi-hop (grandparent) producer test would make transitive ancestry explicit.",
+      "M09c, M10b, M03a each have a single killer test."
+    ],
+    "restore_proof": {
+      "git_status_porcelain_lib_test": "(empty)",
+      "git_status_short": "?? handoffs/WF02-REQ461-20261007/step-03b-test-design-validator.json\n?? letflow-3.code-workspace",
+      "git_diff_stat": "(empty)",
+      "rerun_after_restore": "mix test (4 REQ-461 files) Result: 70 passed"
+    }
+  }
+}

@@ -178,9 +178,9 @@ defmodule Letflow.Definitions.SolutionPack do
   alias Letflow.Definitions.JsonSchemaShape
   alias Letflow.Definitions.PackUpdateResolution
   alias Letflow.Definitions.ProcessDefinition
-  alias Letflow.Definitions.RoleBinding
   alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Definitions.SolutionPackInstall
+  alias Letflow.Definitions.ValidationWarnings
   alias Letflow.Engine.VariableSchema
   alias Letflow.Entities.EntityDefinition
   alias Letflow.Repo
@@ -1407,7 +1407,7 @@ defmodule Letflow.Definitions.SolutionPack do
         end
       end)
 
-    RoleBinding.warnings_for_definitions(definitions, opts)
+    ValidationWarnings.for_definitions(definitions, opts)
   end
 
   defp insert_install_row(parsed, tenant_id, captured_at) do

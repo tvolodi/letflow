@@ -258,6 +258,9 @@ defmodule Letflow.Definitions.Graph do
             | :no_path_to_end
             | :no_default_route
             | :variable_never_collected
+            | :invalid_required_outputs
+            | :required_outputs_on_non_human_task
+            | :required_output_without_variable_schema
 
     @type t :: %__MODULE__{
             code: code(),
@@ -426,6 +429,9 @@ defmodule Letflow.Definitions.Graph do
   `Letflow.Definitions.FormSchemaExpressions`)
   plus CHK-21 (`check_human_task_escalation/1`, REQ-396 — HUMAN_TASK's
   optional co-required `escalation_timer_duration`/`escalation_role` pair)
+  plus CHK-25 (`check_required_outputs/1`, REQ-461 — the optional
+  `required_outputs` attribute is a duplicate-free list of non-empty strings,
+  and only on a HUMAN_TASK)
   against every node in `graph`
   and returns every violation found — never short-circuits, same
   unconditional-concatenation construction as `validate_graph/1`. Does not
@@ -442,7 +448,8 @@ defmodule Letflow.Definitions.Graph do
         &check_timer_duration/1,
         &check_sub_process_interface/1,
         &check_form_schema_expressions/1,
-        &check_human_task_escalation/1
+        &check_human_task_escalation/1,
+        &check_required_outputs/1
       ]
       |> Enum.flat_map(& &1.(graph))
 
@@ -1110,6 +1117,73 @@ defmodule Letflow.Definitions.Graph do
   end
 
   defp human_task_escalation_violations(_node, _attrs), do: []
+
+  # CHK-25 (REQ-461 check 1, REQ-459 design section 1.2): the optional
+  # "required_outputs" attribute is a list of non-empty strings without
+  # duplicates, and is only legal on a HUMAN_TASK. One violation per defect;
+  # a `null` value is treated as absent (same as CHK-21). Shape only -- that
+  # each key has a variable_schema is SemanticValidation's check 2.
+  @spec check_required_outputs(t()) :: [Violation.t()]
+  defp check_required_outputs(%__MODULE__{nodes: nodes}) do
+    Enum.flat_map(nodes, fn node ->
+      raw = if is_map(node.attributes), do: Map.get(node.attributes, "required_outputs")
+      required_outputs_violations(node, raw)
+    end)
+  end
+
+  @spec required_outputs_violations(Node.t(), term()) :: [Violation.t()]
+  defp required_outputs_violations(_node, nil), do: []
+
+  defp required_outputs_violations(%Node{node_type: :HUMAN_TASK} = node, raw)
+       when is_list(raw) do
+    entry_violations =
+      raw
+      |> Enum.reject(&(is_binary(&1) and String.trim(&1) != ""))
+      |> Enum.map(fn entry ->
+        %Violation{
+          code: :invalid_required_outputs,
+          message:
+            "Node '#{node.id}' (HUMAN_TASK) has an invalid 'required_outputs' entry (#{inspect(entry)}); every entry must be a non-empty string"
+        }
+      end)
+
+    duplicate_violations =
+      raw
+      |> Enum.filter(&is_binary/1)
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_key, count} -> count > 1 end)
+      |> Enum.map(&elem(&1, 0))
+      |> Enum.sort()
+      |> Enum.map(fn key ->
+        %Violation{
+          code: :invalid_required_outputs,
+          message:
+            "Node '#{node.id}' (HUMAN_TASK) lists duplicate 'required_outputs' key '#{key}'"
+        }
+      end)
+
+    entry_violations ++ duplicate_violations
+  end
+
+  defp required_outputs_violations(%Node{node_type: :HUMAN_TASK} = node, raw) do
+    [
+      %Violation{
+        code: :invalid_required_outputs,
+        message:
+          "Node '#{node.id}' (HUMAN_TASK) has an invalid 'required_outputs' attribute (#{inspect(raw)}); must be a list of non-empty strings"
+      }
+    ]
+  end
+
+  defp required_outputs_violations(%Node{} = node, _raw) do
+    [
+      %Violation{
+        code: :required_outputs_on_non_human_task,
+        message:
+          "Node '#{node.id}' (#{node.node_type}) has a 'required_outputs' attribute; it is only allowed on a HUMAN_TASK"
+      }
+    ]
+  end
 
   # `attributes` is documented as `map() | nil` with string keys (design doc
   # §2) -- the `is_map/1` guard is a defensive belt-and-suspenders check so

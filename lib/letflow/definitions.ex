@@ -136,9 +136,9 @@ defmodule Letflow.Definitions do
   alias Letflow.Definitions.PromotionAssertionRun
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.PromotionReviewStore
-  alias Letflow.Definitions.RoleBinding
   alias Letflow.Definitions.SemanticValidation
   alias Letflow.Definitions.SolutionPackArtefactBase
+  alias Letflow.Definitions.ValidationWarnings
   alias Letflow.Engine.VariableSchema
   alias Letflow.Repo
   alias Letflow.SandboxPool
@@ -1284,7 +1284,7 @@ defmodule Letflow.Definitions do
           SemanticValidation.validate(graph, declared_fields).violations
 
       warnings =
-        RoleBinding.warnings_for_definitions([{definition.name, graph}], prefix: prefix)
+        ValidationWarnings.for_definitions([{definition.name, graph}], prefix: prefix)
 
       {:ok,
        %{

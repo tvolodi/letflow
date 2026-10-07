@@ -1,0 +1,50 @@
+{
+  "handoff_id": "7c1d2e9a-4b5f-4a7e-9c11-0a2b3c4d5e61",
+  "run_id": "WF01-REQ-ENGINE-AC-20261007",
+  "workflow_id": "WF-01",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-ANALYST",
+  "file": "handoffs/WF01-REQ-ENGINE-AC-20261007/step-01-req-analyst.json",
+  "created_at": "2026-10-07T00:00:00Z",
+  "started_at": "2026-10-07T00:00:00Z",
+  "completed_at": "2026-10-07T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [],
+    "requirement_text": {
+      "GH#2335": "ISS-1039 / Q-1021: required decision outputs - see task.description",
+      "GH#2323": "ISS-1034 / Q-1016: distinct person - see task.description",
+      "REQ-447": "depends_on target (Q-964): TENANT_ADMIN role"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/anti-patterns.md",
+      "docs/migration/decisions/0007-variable-merge-validates-new-keys.md",
+      "lib/letflow/engine.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Draft SEVEN new requirements in docs/requirements.yaml (append after REQ-458; next free ids start at REQ-459; verify with mix letflow.check_req_id_collision, MIX_DEPS_PATH=C:\\Users\\tvolo\\dev\\ai-dala\\letflow-2\\deps) for two engine rules that share ONE design pass because both edit Letflow.Engine.run_complete_task (lib/letflow/engine.ex ~line 2263; merge step uses merge_output_variables/7 and VariableMerge/VariableSchema). Entries stay status: pending and carry the deferred marker form `# impl_order: UNREGISTERED -- <rationale>` as a comment line (precedent: the REQ-434.. series comment block near line 32343 of requirements.yaml; mix letflow.check_requirements_registration must pass). Do NOT register in the queue. Follow the conventions of REQ-434..458 entries (description with BUILDS list, open_questions, acceptance_criteria as quoted strings, depends_on). Each entry sized to ONE agent turn.\n\nSOURCES (read in full): GH issue #2335 (ISS-1039, Q-1021, requirement C) and GH #2323 (ISS-1034, Q-1016, requirement A): use `gh issue view <n> -R tvolodi/letflow --comments`. Gist of #2335: required outputs of a HUMAN_TASK (node attribute required_outputs: [keys]); completion-time check in run_complete_task answering retryable 422 naming missing keys, task stays open, no instance state change; out-of-enum value also retryable 422 instead of whole instance ERROR (REQ-061); adoption by shipped decision forms (swiftroute Shipment Approval ops_decision/ceo_decision; meridian l1/l2/ceo/kyc_outcome; vortex capacity/budget/severity) and replacement of Q-990's two KNOWN LIMITATION tests; start-form required instance-start variables (no start-form node exists: treat as OUT OF SCOPE here and record it as an open_question). Gist of #2323: optional node attribute distinct_from: [node ids] checked at completion and claim, clean 4xx with zero detail beyond 'separation of duties', validator checks referenced nodes exist and precede, shipped definitions adopt (meridian loan l1/l2/committee/ceo/disburse; regulatory sign-off chain; vortex/swiftroute approvals), tests with two roles held by one user; out of scope org-chart/delegation. Precedent: self_approval_forbidden in PromotionReviewStore.approve_review.\n\nBINDING CONSTRAINTS from the design-intent owner (letflow-9a). Do not re-decide them.\nA (distinct person): identity = USER ID, never the role; also holds for an API-token request (the token's user); enforce at COMPLETION as the authority and at CLAIM as early feedback; NO role exempt, TENANT_ADMIN included (TENANT_ADMIN exists after REQ-447); compare against the MOST RECENT completion of each named node in the same instance (rework loops work); the attribute is OPTIONAL and OFF by default (existing definitions unchanged); the REQ-455 validator WARNS (not a violation) when distinct_from names a node that routes to the same single-member role (could never complete); PROCESS-AUDITOR checklist item B1 (.claude/agents/process-auditor.md and its docs) may answer YES when the attribute is present: record that text change as a dependency/follow-up in open_questions, not part of the engine change.\nC (required decision): the check runs on the SERVER BEFORE any state change; a form's `required` flag stays a UI hint, never the control; the validator also flags a decision (edge condition/gateway) reading a key that no upstream task declares in required_outputs; C ALSO folds in: out-of-enum value = retryable 422 and NO instance ERROR (today any task worker can put a whole instance into ERROR with one bad value); the refusal happens before anything is written (task stays open and claimable); the change of accepted behaviour is EXPLICIT: the C engine requirement's description must state the amendment of REQ-061's text (REQ-061, done, lists 'REQ-049's schema-violation-on-merge case' among callers of the ERROR sink) and DOC-UPDATER leaves a dated amendment pointer on REQ-061 as an acceptance criterion. Decision record docs/migration/decisions/0007-variable-merge-validates-new-keys.md: do NOT edit it. ORCH's finding for you to put in the C engine requirement's open_questions (verbatim passage plus proposed dated note, for REVIEWER sign-off per the decision-record rule): 0007 does not contradict validating every key, but its 'whole-batch-abort-on-rejection semantics (\u00a73.2)' line (Implementation section, merge/3 bullet) and its open-question text 'validation errors surface only via `EXECUTION_ERROR` events today' become stale for the task-completion path. Proposed dated note: '2026-10 note (REQ-<C engine id>): on the HUMAN_TASK completion path a rejected output is now refused with a retryable 422 before any state change and no EXECUTION_ERROR is raised; merge/3 itself and its whole-batch semantics are unchanged; the EXECUTION_ERROR path remains for service-task and other engine-internal merges. REVIEWER sign-off: pending'. Quote the exact passages by reading the file.\nORDER: all after REQ-447 PR2 (depends_on REQ-447; in a YAML comment on the entry that depends on it directly write 'REQ-447 = letflow-queue task Q-964, map when registering'); A and C before REQ-457 (Q-974; its refusal scenario 'requester approves own request' needs A; do NOT edit REQ-457's entry, ORCH reports it); both edit run_complete_task so C lands first and A depends on C's engine requirement.\n\nSUGGESTED SPLIT (adjust only if sizing demands, and justify): (1) ONE CODE-DESIGNER requirement for the shared design (owner CODE-DESIGNER; a design artefact under lib/letflow/design/ covering both rules: where required_outputs / distinct_from live in the definition schema, the single check ordering in run_complete_task before any write, the claim path for A, the 422 error-contract bodies, audit of a refusal without PII, how D-ESC escalation tasks and timer cancellation interact with distinct_from, API-token identity, rework-loop most-recent-completion semantics); depends_on REQ-447 and REQ-455. (2) C engine: required_outputs attribute + completion-time check + out-of-enum 422, ELIXIR-DEV, depends_on the design. (3) C validator: node-attribute checks (each key has a variable_schema; a decision reading a key no upstream task declares), ELIXIR-DEV, depends_on (2). (4) C adoption: shipped decision forms in swiftroute/meridian/vortex declare required_outputs, and Q-990's KNOWN LIMITATION tests are replaced by real assertions (find those tests; PR #2334 may not be merged yet: say so and make it a precondition note), depends_on (2),(3). (5) A engine: distinct_from at completion and claim, ELIXIR-DEV, depends_on (2). (6) A validator: nodes exist and precede, WARNING for same single-member role, depends_on (5). (7) A adoption: shipped definitions gating money/compliance/release adopt, depends_on (5),(6).\nEvery engine/adoption entry: SECURITY-REVIEWER mandatory (lib/ and authorization-adjacent) as an acceptance criterion; acceptance criteria testable with NEGATIVE tests, the API-token case, the rework-loop case, TENANT_ADMIN not exempt, the default-off case (a definition without the attribute behaves identically), 422 body names keys only and no internals, a refusal leaves the task open and claimable and writes nothing but an audited refusal event without PII (A's refusal body: zero detail beyond 'separation of duties'), and mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test, mix letflow.check_boundaries with real output quoted. No vague words. Do not prescribe implementation beyond what is given; CODE-DESIGNER owns the how. Check docs/anti-patterns.md. Work only in the worktree C:\\Users\\tvolo\\AppData\\Local\\Temp\\wt-req-ac (branch docs/WF01-REQ-engine-distinct-person-and-required-outputs-20261007). LOCAL ONLY: no push, no PR, no queue calls, no full test suites (memory is tight). After editing run mix letflow.check_requirements_registration, mix letflow.check_req_id_collision and a YAML parse to verify. Do not commit (ORCH commits). Spawn no further agents. Report: ids, titles, owners, sizing notes, and any issues.\n",
+    "acceptance_criteria": [
+      "Every new entry has id,title,owner,status pending,stage,description,>=2 testable acceptance_criteria,depends_on and an impl_order UNREGISTERED marker",
+      "No orphaned depends_on",
+      "check_requirements_registration and check_req_id_collision pass",
+      "No contradiction with a done requirement or decision record; REQ-061 amendment and 0007 passage handled as briefed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Drafted REQ-459..466 (466 from rework split)",
+    "artifacts_out": [
+      "docs/requirements.yaml"
+    ],
+    "next_action": "Route to REQ-VALIDATOR"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -1,0 +1,52 @@
+{
+  "handoff_id": "7c1d2e9a-4b5f-4a7e-9c11-0a2b3c4d5e62",
+  "run_id": "WF01-REQ-ENGINE-AC-20261007",
+  "workflow_id": "WF-01",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-VALIDATOR",
+  "file": "handoffs/WF01-REQ-ENGINE-AC-20261007/step-02-req-validator.json",
+  "created_at": "2026-10-07T00:00:00Z",
+  "started_at": "2026-10-07T00:00:00Z",
+  "completed_at": "2026-10-07T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-459",
+      "REQ-460",
+      "REQ-461",
+      "REQ-462",
+      "REQ-463",
+      "REQ-464",
+      "REQ-465"
+    ],
+    "requirement_text": {
+      "all": "The seven new entries REQ-459..465 in docs/requirements.yaml are the text under validation; sources GH#2335, GH#2323 and the design-intent constraints are in step-01-req-analyst.json task.description"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/anti-patterns.md",
+      "docs/migration/decisions/0007-variable-merge-validates-new-keys.md",
+      "lib/letflow/engine.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run WF-01 Step 2 (checks a-e, plus the binding constraints in handoffs/WF01-REQ-ENGINE-AC-20261007/step-01-req-analyst.json task.description: user-id identity, API-token, no role exempt, most-recent completion, optional/off by default, warn on same single-member role, server check before any state change, out-of-enum 422 with no ERROR, REQ-061 amendment, decision 0007 handled in open_questions not edited, ordering after REQ-447, C before A). Also check the registration/collision gates run clean. Edit nothing; write your verdict PASS or FAIL per requirement in your final report.",
+    "acceptance_criteria": [
+      "Each of checks a-e actually run per requirement",
+      "FAIL cites id and check letter"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Round 1 FAIL on REQ-462/465 (checks a,c,e); round 2 PASS on 459-466",
+    "artifacts_out": [],
+    "next_action": "requirements ready; registration deferred by ORCH instruction"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

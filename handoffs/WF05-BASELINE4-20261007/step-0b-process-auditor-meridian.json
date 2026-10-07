@@ -169,31 +169,35 @@
         "digest": "ba7a52bc4e6b3e1bd45356259c405e94ab97168168cfd4370a6da9942ecc6175"
       }
     ],
-    "requirement_text": "n/a (process audit of an existing scope; no requirement)"
+    "requirement_text": "n/a (process audit of an existing scope; no requirement)",
+    "artifacts_in": [
+      "docs/roles.md",
+      "scripts/seed_meridian_definition.sh",
+      "scripts/seed_meridian_persona_actors.sh",
+      "test/fixtures/qa/meridian_loan_origination_process_definition.json",
+      "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json",
+      "test/fixtures/simulation/meridian/org_structure.yaml",
+      "test/fixtures/simulation/meridian/process_claim_intake.yaml",
+      "test/fixtures/simulation/meridian/process_policy_binding.yaml",
+      "test/fixtures/uat/actors.yaml",
+      "test/fixtures/uat/process-definition-aliases/proc-meridian-loan-origination.yaml",
+      "test/fixtures/uat/process-definition-aliases/proc-meridian-regulatory-compliance-review.yaml",
+      "test/fixtures/uat/scenarios/meridian/loan-origination-above-threshold.yaml",
+      "test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml",
+      "test/fixtures/uat/scenarios/meridian/loan-origination-kyc-manual-review.yaml",
+      "test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml",
+      "test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-ceo-override.yaml",
+      "test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-cro-signoff.yaml"
+    ]
   },
-  "task": "Fresh process audit of scope meridian per .claude/agents/process-auditor.md. Read all input_digests files in the worktree C:/Users/tvolo/AppData/Local/Temp/wt-reaudit4 (use absolute paths under it). Do NOT read any existing process-audit-*.yaml report, any file under handoffs/ other than your own, or any UAT/sign-off report. Write your report to test/uat-reports/process-audit-meridian-WF05-BASELINE4-20261007.yaml in that worktree, and complete your own handoff result block.",
-  "artifacts_in": [
-    "docs/roles.md",
-    "scripts/seed_meridian_definition.sh",
-    "scripts/seed_meridian_persona_actors.sh",
-    "test/fixtures/qa/meridian_loan_origination_process_definition.json",
-    "test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json",
-    "test/fixtures/simulation/meridian/org_structure.yaml",
-    "test/fixtures/simulation/meridian/process_claim_intake.yaml",
-    "test/fixtures/simulation/meridian/process_policy_binding.yaml",
-    "test/fixtures/uat/actors.yaml",
-    "test/fixtures/uat/process-definition-aliases/proc-meridian-loan-origination.yaml",
-    "test/fixtures/uat/process-definition-aliases/proc-meridian-regulatory-compliance-review.yaml",
-    "test/fixtures/uat/scenarios/meridian/loan-origination-above-threshold.yaml",
-    "test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml",
-    "test/fixtures/uat/scenarios/meridian/loan-origination-kyc-manual-review.yaml",
-    "test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml",
-    "test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-ceo-override.yaml",
-    "test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-cro-signoff.yaml"
-  ],
-  "artifacts_out": [
-    "test/uat-reports/process-audit-meridian-WF05-BASELINE4-20261007.yaml"
-  ],
+  "task": {
+    "description": "Fresh process audit of scope meridian per .claude/agents/process-auditor.md. Read all input_digests files in the worktree C:/Users/tvolo/AppData/Local/Temp/wt-reaudit4 (use absolute paths under it). Do NOT read any existing process-audit-*.yaml report, any file under handoffs/ other than your own, or any UAT/sign-off report. Write your report to test/uat-reports/process-audit-meridian-WF05-BASELINE4-20261007.yaml in that worktree, and complete your own handoff result block.",
+    "acceptance_criteria": [
+      "Report has all checklist items answered with evidence",
+      "Digests copied unchanged",
+      "Verdict derived by the rule"
+    ]
+  },
   "result": {
     "status": "COMPLETED",
     "summary": "Process audit of scope meridian: verdict FAIL. 6 findings: 1 BLOCKER, 5 MAJOR, 0 MINOR.",

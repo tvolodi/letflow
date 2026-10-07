@@ -180,34 +180,38 @@
         "digest": "65f00eb8a62fa8a5f28ee5369065ea5b004def8fe229c746ebd995c09ecbc641"
       }
     ],
-    "requirement_text": "n/a (process audit of an existing scope; no requirement)"
+    "requirement_text": "n/a (process audit of an existing scope; no requirement)",
+    "artifacts_in": [
+      "docs/roles.md",
+      "scripts/seed_vortex_definition.sh",
+      "scripts/seed_vortex_entities.sh",
+      "scripts/seed_vortex_persona_actors.sh",
+      "test/fixtures/qa/vortex_8d_corrective_action_definition.json",
+      "test/fixtures/qa/vortex_production_order_release_process_definition.json",
+      "test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json",
+      "test/fixtures/simulation/vortex/org_structure.yaml",
+      "test/fixtures/simulation/vortex/process_quality_check.yaml",
+      "test/fixtures/simulation/vortex/process_work_order.yaml",
+      "test/fixtures/uat/actors.yaml",
+      "test/fixtures/uat/process-definition-aliases/proc-vortex-8d-corrective-action.yaml",
+      "test/fixtures/uat/process-definition-aliases/proc-vortex-production-order-release.yaml",
+      "test/fixtures/uat/process-definition-aliases/proc-vortex-supplier-quality-deviation.yaml",
+      "test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml",
+      "test/fixtures/uat/scenarios/vortex/production-order-above-threshold.yaml",
+      "test/fixtures/uat/scenarios/vortex/production-order-ceo-escalation-approved.yaml",
+      "test/fixtures/uat/scenarios/vortex/production-order-ceo-escalation-rejected.yaml",
+      "test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-critical.yaml",
+      "test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-false-positive.yaml"
+    ]
   },
-  "task": "Fresh process audit of scope vortex per .claude/agents/process-auditor.md. Read all input_digests files in the worktree C:/Users/tvolo/AppData/Local/Temp/wt-reaudit4 (use absolute paths under it). Do NOT read any existing process-audit-*.yaml report, any file under handoffs/ other than your own, or any UAT/sign-off report. Write your report to test/uat-reports/process-audit-vortex-WF05-BASELINE4-20261007.yaml in that worktree, and complete your own handoff result block.",
-  "artifacts_in": [
-    "docs/roles.md",
-    "scripts/seed_vortex_definition.sh",
-    "scripts/seed_vortex_entities.sh",
-    "scripts/seed_vortex_persona_actors.sh",
-    "test/fixtures/qa/vortex_8d_corrective_action_definition.json",
-    "test/fixtures/qa/vortex_production_order_release_process_definition.json",
-    "test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json",
-    "test/fixtures/simulation/vortex/org_structure.yaml",
-    "test/fixtures/simulation/vortex/process_quality_check.yaml",
-    "test/fixtures/simulation/vortex/process_work_order.yaml",
-    "test/fixtures/uat/actors.yaml",
-    "test/fixtures/uat/process-definition-aliases/proc-vortex-8d-corrective-action.yaml",
-    "test/fixtures/uat/process-definition-aliases/proc-vortex-production-order-release.yaml",
-    "test/fixtures/uat/process-definition-aliases/proc-vortex-supplier-quality-deviation.yaml",
-    "test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml",
-    "test/fixtures/uat/scenarios/vortex/production-order-above-threshold.yaml",
-    "test/fixtures/uat/scenarios/vortex/production-order-ceo-escalation-approved.yaml",
-    "test/fixtures/uat/scenarios/vortex/production-order-ceo-escalation-rejected.yaml",
-    "test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-critical.yaml",
-    "test/fixtures/uat/scenarios/vortex/supplier-quality-deviation-false-positive.yaml"
-  ],
-  "artifacts_out": [
-    "test/uat-reports/process-audit-vortex-WF05-BASELINE4-20261007.yaml"
-  ],
+  "task": {
+    "description": "Fresh process audit of scope vortex per .claude/agents/process-auditor.md. Read all input_digests files in the worktree C:/Users/tvolo/AppData/Local/Temp/wt-reaudit4 (use absolute paths under it). Do NOT read any existing process-audit-*.yaml report, any file under handoffs/ other than your own, or any UAT/sign-off report. Write your report to test/uat-reports/process-audit-vortex-WF05-BASELINE4-20261007.yaml in that worktree, and complete your own handoff result block.",
+    "acceptance_criteria": [
+      "Report has all checklist items answered with evidence",
+      "Digests copied unchanged",
+      "Verdict derived by the rule"
+    ]
+  },
   "result": {
     "status": "COMPLETED",
     "summary": "Process audit of scope vortex: verdict PASS_WITH_FINDINGS. 0 BLOCKER, 3 MAJOR, 0 MINOR findings (D2, D4, E1).",

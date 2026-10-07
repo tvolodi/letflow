@@ -87,6 +87,32 @@ defmodule Letflow.Test.LoggerCollector do
     end
   end
 
+  @doc """
+  Attaches (with `opts`, defaulting to `sasl: false, raw: false`; pass `attribute_to: self()` for
+  an attributed sink), runs `fun`, asserts the handler survived, detaches in an `after`, and
+  returns `{fun_result, entries}` where `entries` is `[%{level:, text:}]` (see `collected/1`).
+  Use `text/1` to join the entries into one string for `=~` assertions.
+  """
+  @spec capture((-> result), keyword()) :: {result, [%{level: atom(), text: String.t()}]}
+        when result: term()
+  def capture(fun, opts \\ []) when is_function(fun, 0) do
+    collector = attach!(Keyword.merge([sasl: false, raw: false], opts))
+
+    try do
+      result = fun.()
+
+      # a crashed handler is removed by :logger; fail loudly rather than pass "logs nothing" vacuously
+      assert_alive!(collector)
+      {result, collected(collector)}
+    after
+      detach(collector)
+    end
+  end
+
+  @doc "Joins the `text` of `entries` with newlines (empty list gives the empty string)."
+  @spec text([%{text: String.t()}]) :: String.t()
+  def text(entries), do: Enum.map_join(entries, "\n", & &1.text)
+
   @doc "Everything the handler has forwarded to the calling process so far."
   @spec collected(handle() | {nil, reference(), nil}) :: [%{level: atom(), text: String.t()}]
   def collected({_id, ref, _original}) do

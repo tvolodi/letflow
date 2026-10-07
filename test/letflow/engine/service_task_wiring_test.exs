@@ -1878,17 +1878,24 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
         |> where([t], t.instance_id == ^instance_id)
         |> Repo.delete_all(prefix: schema_name)
 
-      log =
-        ExUnit.CaptureLog.capture_log(fn ->
-          # re-entry fails -> folded as {:error, _}: counted in neither :advanced nor
-          # :given_up (contract unchanged by ISS-0928), and poll_and_dispatch/1 does not raise.
-          assert %{claimed: 1, advanced: 0, retried: 0, given_up: 0} =
-                   ServiceTaskDispatcher.poll_and_dispatch(schema_name)
-        end)
+      # ISS-1038: an attributed sink (events emitted by this process or its Task children), not
+      # the global capture_log, so "exactly one line" cannot be broken by another test's event.
+      {_, entries} =
+        Letflow.Test.LoggerCollector.capture(
+          fn ->
+            # re-entry fails -> folded as {:error, _}: counted in neither :advanced nor
+            # :given_up (contract unchanged by ISS-0928), and poll_and_dispatch/1 does not raise.
+            assert %{claimed: 1, advanced: 0, retried: 0, given_up: 0} =
+                     ServiceTaskDispatcher.poll_and_dispatch(schema_name)
+          end,
+          attribute_to: self()
+        )
+
+      log = Letflow.Test.LoggerCollector.text(entries)
 
       error_lines =
-        log
-        |> String.split("\n")
+        entries
+        |> Enum.map(& &1.text)
         |> Enum.filter(&(&1 =~ "service_task advance failed"))
 
       assert [line] = error_lines

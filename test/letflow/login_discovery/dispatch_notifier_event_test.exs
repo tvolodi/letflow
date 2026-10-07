@@ -31,6 +31,7 @@ defmodule Letflow.LoginDiscovery.DispatchNotifierEventTest do
   alias Letflow.Test.LoginDiscoveryHelpers, as: H
   alias Letflow.Test.SmtpHelpers, as: S
   alias Letflow.Test.SmtpSink
+  alias Letflow.Test.LoggerCollector
 
   @notifier Letflow.LoginDiscovery.Notifier
   @supervisor Letflow.LoginDiscovery.TaskSupervisor
@@ -154,12 +155,17 @@ defmodule Letflow.LoginDiscovery.DispatchNotifierEventTest do
         events = S.attach_notifier!()
         to = recipient()
 
-        log =
-          capture_log([level: :debug], fn ->
-            submit(to)
-            assert_event(events, unquote(outcome))
-            H.await_idle()
-          end)
+        {_, entries} =
+          LoggerCollector.capture(
+            fn ->
+              submit(to)
+              assert_event(events, unquote(outcome))
+              H.await_idle()
+            end,
+            attribute_to: self()
+          )
+
+        log = LoggerCollector.text(entries)
 
         assert S.drain_events(events) == []
 

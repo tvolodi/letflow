@@ -178,6 +178,63 @@ defmodule Letflow.Test.LoggerCollectorTest do
     LoggerCollector.detach(collector)
   end
 
+  describe "capture/2" do
+    test "returns {fun result, entries}; attributed, so the unrelated event is excluded", %{
+      sup: sup
+    } do
+      assert {:the_result, [%{level: :error, text: @own}]} =
+               LoggerCollector.capture(
+                 fn ->
+                   inject(sup)
+                   :the_result
+                 end,
+                 attribute_to: self()
+               )
+    end
+
+    test "default options: bare message text, translator filter untouched, all events kept" do
+      before_filter = translator_filter()
+
+      {:ok, entries} =
+        LoggerCollector.capture(fn ->
+          assert translator_filter() == before_filter
+          Logger.error("capture-default-line")
+          :ok
+        end)
+
+      assert translator_filter() == before_filter
+      assert %{text: "capture-default-line"} = Enum.find(entries, &(&1.text =~ "capture-default"))
+    end
+
+    test "opts are forwarded: raw: true appends the event term" do
+      {_, entries} =
+        LoggerCollector.capture(fn -> Logger.error("capture-raw-line") end, raw: true)
+
+      assert %{text: text} = Enum.find(entries, &(&1.text =~ "capture-raw-line"))
+      assert text =~ "level: :error"
+    end
+
+    test "detaches (and re-raises) when fun raises" do
+      handlers_before = :logger.get_handler_ids()
+      assert_raise RuntimeError, "boom", fn -> LoggerCollector.capture(fn -> raise "boom" end) end
+      assert :logger.get_handler_ids() == handlers_before
+    end
+
+    test "raises when the handler was removed during fun (no vacuous empty result)" do
+      assert_raise RuntimeError, ~r/was removed/, fn ->
+        LoggerCollector.capture(fn ->
+          [id] = Enum.filter(:logger.get_handler_ids(), &(to_string(&1) =~ "req441_collector_"))
+          :ok = :logger.remove_handler(id)
+        end)
+      end
+    end
+
+    test "text/1 joins entry texts with newlines; empty is the empty string" do
+      assert LoggerCollector.text([%{text: "a"}, %{text: "b"}]) == "a\nb"
+      assert LoggerCollector.text([]) == ""
+    end
+  end
+
   defp translator_filter do
     :logger.get_primary_config().filters |> List.keyfind(:logger_translator, 0)
   end

@@ -23,6 +23,7 @@ defmodule Letflow.Obs.AlertsTest do
   alias Letflow.Obs.AlertHookEmissionState
   alias Letflow.Obs.AlertTriggerState
   alias Letflow.Obs.Alerts
+  alias Letflow.Test.LoggerCollector
   alias Letflow.TenantFixture
   alias Letflow.WebhookTestServer
 
@@ -407,15 +408,25 @@ defmodule Letflow.Obs.AlertsTest do
       # messages are captured only if the capture is still active when they're
       # logged), so `fun` must stay alive past dispatch. 200ms comfortably covers the
       # tiny 1ms/10ms-capped backoff configured above plus two real HTTP round trips.
-      log =
-        capture_log(fn ->
-          Alerts.run_detection(schema_name, ctx)
-          Process.sleep(200)
-        end)
+      # ISS-1038: attributed sink instead of the global capture_log. The delivery Task is started
+      # by Task.Supervisor.start_child from this process, so its events carry this process in
+      # $callers and are attributed; another test's "alert delivery exhausted" cannot be counted.
+      # raw: true so the event metadata (hook_id) is in the text.
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            Alerts.run_detection(schema_name, ctx)
+            Process.sleep(200)
+          end,
+          attribute_to: self(),
+          raw: true
+        )
+
+      log = LoggerCollector.text(entries)
 
       # 2 attempts should have been made (max_attempts: 2).
       # Exhaustion must log exactly ONE error entry (not one per attempt).
-      exhaustion_count = length(Regex.scan(~r/alert delivery exhausted/, log))
+      exhaustion_count = Enum.count(entries, &(&1.text =~ "alert delivery exhausted"))
       assert exhaustion_count == 1, "expected exactly 1 exhaustion log, got #{exhaustion_count}"
       assert log =~ "ac8-hook"
 

@@ -1,0 +1,32 @@
+{
+  "handoff_id": "ciwd-step01-orch-0001",
+  "run_id": "WF03-CI-WATCHDOG-20261007",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-CI-WATCHDOG-20261007/step-01-orch-diagnosis.json",
+  "created_at": "2026-10-07T17:30:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "supervisor": "USER-PRIORITY: backend tests run 30+ minutes, must be 10. Fix the 8-minute post-test gap in the backend CI gate (run 37641894774: partitions done 15:27:29, 'mix letflow.check.test: OK' 15:35:36). No queue task, no GH issue; commit locally only, no push/PR/merge."
+    },
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt",
+    "branch_name": "fix/test-parallel-orphan-watchdog"
+  },
+  "task": {
+    "description": "Root-cause verification of the watchdog orphan in scripts/test_parallel.sh.",
+    "acceptance_criteria": ["Root cause confirmed in code", "Before/after reproduction"]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Confirmed in code: each partition gets a background watchdog subshell (sleep $partition_timeout_s, then TERM/KILL the partition group). Step 3 and the EXIT trap only did kill <subshell pid>, which leaves the subshell's sleep child alive; it inherits the script's stdout/stderr, so any reader of that pipe waits until the sleep exits. Reproduced on Windows git-bash: bash -c 'set -m; (sleep 6; ...) & kill $w; ...' | cat returns after 6168 ms with kill-subshell-only and 367 ms with kill -- -pid. Under the old script the new tests fail 3 of 4 (pipe not released within 40 s); under the fix all 4 pass in ~1-4 s each. Other background jobs: partition mix test jobs and the create/migrate subshells redirect to log files (do not hold the pipe) and are reaped by group in the trap; the opt-in connection sampler subshell is killed by pid only and could leave a 'sleep 1' alive for at most 1 s (bounded, opt-in, left unchanged).",
+    "artifacts_out": ["scripts/test_parallel.sh", "test/scripts/test_parallel_watchdog_orphan_test.exs"],
+    "issues": []
+  }
+}

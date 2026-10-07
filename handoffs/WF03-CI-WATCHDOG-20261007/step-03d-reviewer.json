@@ -1,0 +1,34 @@
+{
+  "handoff_id": "ciwd-step03d-reviewer-0001",
+  "run_id": "WF03-CI-WATCHDOG-20261007",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-CI-WATCHDOG-20261007/step-03d-reviewer.json",
+  "created_at": "2026-10-07T17:45:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "diagnosis": "scripts/test_parallel.sh kills the per-partition watchdog subshell by pid only; its sleep child survives holding the stdout pipe, stalling the pipe reader (mix letflow.check.test) until TEST_PARALLEL_PARTITION_TIMEOUT_S (1800 s) expires."
+    },
+    "artifacts_in": ["handoffs/WF03-CI-WATCHDOG-20261007/step-01-orch-diagnosis.json"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt",
+    "branch_name": "fix/test-parallel-orphan-watchdog"
+  },
+  "task": {
+    "description": "Review `git diff origin/main -- scripts/test_parallel.sh` (commit 41329522) in the worktree. READ-ONLY: do not run mix, do not edit.",
+    "acceptance_criteria": [
+      "Only the two kill sites changed (Step 3 post-wait, EXIT trap); watchdog TERM/KILL behaviour for a hung partition, exit codes and log preservation untouched",
+      "kill -- -pid is valid because set -m makes each background job its own process group (pgid == pid); fallback to plain kill is correct and an already-exited watchdog is harmless",
+      "No other background job that holds the inherited pipe after success is missed; list them",
+      "No scope creep, no decision-record conflict",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {"status": "PASS", "summary": "REVIEWER PASS, no MAJOR. Only the two kill sites changed (Step 3 post-wait, EXIT trap); group kill valid under set -m, fallback and already-exited watchdog harmless; hung-partition TERM/KILL untouched. Background jobs audited: create/migrate subshells (waited, log-redirected), partitions (waited / group-reaped by trap), watchdogs (fixed), opt-in sampler (pid-only kill; can leave a sleep 1 for at most 1 s, not changed). MINOR: sampler group kill as follow-up; test skips when bash missing; hung case lacks orphan assertion; failing-test cleanup leaves process tree.", "artifacts_out": [], "issues": [{"severity": "MINOR", "description": "sampler kill by pid only (bounded 1 s, opt-in)", "affected_requirement": null}]}
+}

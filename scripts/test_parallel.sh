@@ -386,9 +386,15 @@ cleanup_tmp_dir() {
 
   # Per-partition watchdogs (Step 2) are no longer needed once we're
   # tearing down -- kill any still-sleeping ones so they don't linger past
-  # this script's own exit.
+  # this script's own exit. Kill the watchdog's whole PROCESS GROUP (its
+  # pgid == its pid under `set -m`), not just the subshell: the subshell's
+  # `sleep "$partition_timeout_s"` child would otherwise survive as an
+  # orphan that keeps this script's inherited stdout/stderr pipe open for
+  # up to partition_timeout_s, and a reader of that pipe (the Elixir
+  # `mix letflow.check.test` Port) does not see EOF / the exit status
+  # until the orphan exits. Falls back to a plain pid kill.
   for _idx in "${!watchdog_pids[@]}"; do
-    kill "${watchdog_pids[$_idx]}" 2>/dev/null
+    kill -- "-${watchdog_pids[$_idx]}" 2>/dev/null || kill "${watchdog_pids[$_idx]}" 2>/dev/null
   done
 
   if [ "$exit_code" -eq 0 ] && [ -z "${TEST_PARALLEL_KEEP_LOGS:-}" ]; then
@@ -673,8 +679,14 @@ while [ "$i" -le "$N" ]; do
   # This partition is done (one way or another) -- its own watchdog is no
   # longer needed. Kill it now rather than letting it sleep uselessly for
   # the rest of partition_timeout_s (ISS-0917 §3.2).
+  # Kill the watchdog's whole process group (pgid == pid under `set -m`),
+  # not just its subshell: the subshell's `sleep` child would otherwise
+  # outlive it, holding this script's stdout/stderr pipe open for the rest
+  # of partition_timeout_s (a pipe reader sees no EOF until then -- an
+  # ~8-minute stall of the CI gate after the partitions finish). The plain
+  # pid kill is the fallback if the group signal is unavailable.
   if [ -n "${watchdog_pids[$i]:-}" ]; then
-    kill "${watchdog_pids[$i]}" 2>/dev/null
+    kill -- "-${watchdog_pids[$i]}" 2>/dev/null || kill "${watchdog_pids[$i]}" 2>/dev/null
     wait "${watchdog_pids[$i]}" 2>/dev/null
   fi
   i=$((i + 1))

@@ -50,6 +50,7 @@ defmodule Letflow.Scripts.ShippedDefinitionsVariableSchemasTest do
     {"meridian_loan_origination_process_definition.json", "meridian"},
     {"meridian_regulatory_compliance_review_process_definition.json", "meridian"},
     {"swiftroute_process_definition.json", "swiftroute"},
+    {"swiftroute_incident_process_definition.json", "swiftroute"},
     {"vortex_production_order_release_process_definition.json", "vortex"},
     {"vortex_supplier_quality_deviation_process_definition.json", "vortex"}
   ]
@@ -57,6 +58,11 @@ defmodule Letflow.Scripts.ShippedDefinitionsVariableSchemasTest do
   # Fixtures whose shipped UAT scenario submits no declared variable (the BaFin scenario rides the
   # 21-day timer path), so V2 would be vacuous for them -- named, not silently skipped.
   @no_scenario_inputs ["meridian_regulatory_compliance_review_process_definition.json"]
+
+  # Decision fixtures whose conditions compare no variable to a string literal (the incident gate
+  # reads a boolean), so the D1 string-enum rule is vacuous for them; D2 still requires the
+  # boolean to be declared.
+  @no_string_literal_fixtures ["swiftroute_incident_process_definition.json"]
 
   # Process definitions with NO conditioned edge, hence no decision variable to constrain.
   @no_decision_fixtures ["vortex_8d_corrective_action_definition.json"]
@@ -133,7 +139,8 @@ defmodule Letflow.Scripts.ShippedDefinitionsVariableSchemasTest do
         declared = declared(document)
         literals = compared_literals(document)
 
-        assert literals != %{}, "fixture compares no variable to a string literal?"
+        if unquote(file) not in @no_string_literal_fixtures,
+          do: assert(literals != %{}, "fixture compares no variable to a string literal?")
 
         for {var, lits} <- literals do
           schema = Map.get(declared, var)

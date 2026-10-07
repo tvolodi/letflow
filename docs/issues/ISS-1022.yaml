@@ -1,0 +1,39 @@
+id: ISS-1022
+title: "SwiftRoute Driver Incident Report: no QA definition fixture or seed script deploys it, so its scenario cannot run on QA"
+discovered_by: PROCESS-AUDITOR (PA-SWIFTROUTE-004) via ISS-1010 / Q-992 scenario work
+discovered_in_run: WF03-ISS1010-Q992
+discovered_at: "2026-10-07T00:00:00Z"
+severity: MINOR
+failure_class: defect
+occurrence: 1
+owner: "ELIXIR-DEV (fixture + seed script); no lib/ change"
+scope: swiftroute
+description: >
+  The UAT scenario test/fixtures/uat/scenarios/swiftroute/driver-incident-assess-and-estimate.yaml walks
+  the human tasks ops-assessment (role-ops-manager) and finance-estimate (role-accountant) of the
+  Driver Incident Report process. Only Shipment Approval had a QA fixture and seed script, so
+  scripts/uat_preflight.sh reported a definitions GAP and the scenario could not run on QA.
+  Related: ISS-1011 / Q-993 (no accountant actor seeded, step 3 stays BLOCKED), ISS-1010 / Q-992 (the scenario).
+acceptance_criteria:
+  - "A validator-clean QA fixture for the Driver Incident Report definition exists with a version number and default routes toward more scrutiny"
+  - "A seed script deploys and activates it idempotently, run with the swiftroute tenant admin account, without printing secrets"
+  - "scripts/uat_preflight.sh looks up the active definition by the alias sidecar's definition_name; the fixture name matches it (pinned by test)"
+  - "The scenario's remaining blocker (accountant actor, Q-993) is referenced, not duplicated"
+affected_files:
+  - test/fixtures/qa/swiftroute_incident_process_definition.json
+  - scripts/seed_swiftroute_incident_definition.sh
+# Ref clash: ISS-1007 and ISS-1010 text call this work "ISS-1004 / Q-1004", but docs/issues/ISS-1004.yaml
+# is an unrelated Vortex issue (queue_ref Q-986). GH #2294's title names it ISS-1022; no local
+# ISS-1022 existed on origin/main, so this file takes that number.
+queue_ref: Q-1004
+github_ref: GH-2294
+status: resolved
+resolved_in_run: WF03-ISS1022-Q1004
+resolved_at: "2026-10-07T00:00:00Z"
+resolution: >
+  Added test/fixtures/qa/swiftroute_incident_process_definition.json (Driver Incident Report v1.0, the
+  Q-989 D-ESC graph mirrored from the simulation YAML) and scripts/seed_swiftroute_incident_definition.sh
+  (idempotent, stdin payload). New test swiftroute_incident_qa_fixture_test.exs keeps the QA JSON and
+  simulation YAML in step. Live preflight not run offline (needs live QA); the GAP logic keys on the
+  fixture name, which a test pins to the alias sidecar. Re-seed QA after merge:
+  scripts/seed_swiftroute_incident_definition.sh.

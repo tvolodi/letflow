@@ -95,6 +95,7 @@ defmodule Letflow.Scripts.SeedScriptsNoArgvPayloadTest do
     seed_meridian_definition.sh
     seed_meridian_persona_actors.sh
     seed_swiftroute_definition.sh
+    seed_swiftroute_incident_definition.sh
     seed_swiftroute_persona_actors.sh
     seed_vortex_definition.sh
     seed_vortex_entities.sh
@@ -386,7 +387,7 @@ defmodule Letflow.Scripts.SeedScriptsNoArgvPayloadTest do
 
   describe "positive check: every body-bearing curl call sends its body via stdin/file" do
     for script <-
-          ~w(seed_meridian_definition.sh seed_swiftroute_definition.sh seed_vortex_definition.sh) do
+          ~w(seed_meridian_definition.sh seed_swiftroute_definition.sh seed_swiftroute_incident_definition.sh seed_vortex_definition.sh) do
       test "#{script}: exactly one body call, and it is --data-binary @-" do
         modes = body_modes(File.read!(Path.join(@root, "scripts/#{unquote(script)}")))
         assert Enum.map(modes, & &1.mode) == [:stdin], inspect(modes)
@@ -549,7 +550,9 @@ defmodule Letflow.Scripts.SeedScriptsNoArgvPayloadTest do
          "test/fixtures/qa/vortex_8d_corrective_action_definition.json",
          "test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json"
        ]},
-      {"seed_swiftroute_definition.sh", ["test/fixtures/qa/swiftroute_process_definition.json"]}
+      {"seed_swiftroute_definition.sh", ["test/fixtures/qa/swiftroute_process_definition.json"]},
+      {"seed_swiftroute_incident_definition.sh",
+       ["test/fixtures/qa/swiftroute_incident_process_definition.json"]}
     ]
 
     # Stub curl: records, per invocation N, the argv byte length, the last argument (URL),

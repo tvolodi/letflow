@@ -31,7 +31,7 @@ defmodule Letflow.Scripts.QaFixtureServiceTaskEndpointsTest do
   # than every JSON file in the directory.
   @fixture_glob Path.expand("../../fixtures/qa/*_process_definition.json", __DIR__)
   @scripts_dir Path.expand("../../../scripts", __DIR__)
-  @seed_scripts ~w(seed_meridian_definition.sh seed_vortex_definition.sh seed_swiftroute_definition.sh)
+  @seed_scripts ~w(seed_meridian_definition.sh seed_vortex_definition.sh seed_swiftroute_definition.sh seed_swiftroute_incident_definition.sh)
   @valid_methods ~w(GET POST PUT PATCH DELETE)
   @placeholder_regex ~r/\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}/
   @valid_placeholder_regex ~r/\{\{\s*variables\.[a-zA-Z0-9_]+\s*\}\}/

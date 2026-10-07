@@ -46,6 +46,11 @@ gates:
   security_reviewer: "PASS (first lib review; final re-review incl. no existence-oracle on the unmatched-path 403) -- reported by the caller, not independently recorded in a repo artifact I could verify"
   reviewer: "PASS (doc fixes applied: ccc4ea92, 40629f70)"
   test_design_validator: "round 1 FAIL (missing operator-404 control in entities_test) fixed in 1f09ac95; RE-VALIDATION PENDING"
+  security_reviewer_final: "PASS (final re-review, recorded by DOC-UPDATER from the ORCH handoff; includes no existence-oracle on the unmatched-path 403)"
+  test_design_validator_round_2: "PASS on 1f09ac95 (entities operator-404 control fixed in 1f09ac95); supersedes the RE-VALIDATION PENDING wording above. RELEASE-VALIDATOR's own verdicts are unchanged."
+  caveats_recorded_at_close:
+    - "Full suite (mix test) and mix letflow.check.test left to CI; not run by any local gate."
+    - "test/letflow/integration/keycloak_auth_pipeline_test.exs:241 not converted (tagged :keycloak, needs live Keycloak); it will fail where bpm-default is not the pinned platform tenant."
   mutants: "11 measured by TEST-DESIGNER (9 killed, 2 equivalent: M8, M10 documented in test/specs/REQ-447-PR2.md), 2 more by the validator killed -- not re-measured by RELEASE-VALIDATOR"
 notes:
   - "Risk (not run, excluded by @moduletag :keycloak): test/letflow/integration/keycloak_auth_pipeline_test.exs:241 asserts 'PLATFORM_ADMIN' in roles for realm user admin-user of bpm-default. Per the spec (not-converted item 1) bpm-default is not the pinned platform tenant, so with this change the assertion fails if that suite is run against live Keycloak. Not part of default CI; flag to ORCH for a follow-up issue or fix before any Keycloak run. File untouched by the PR."
@@ -56,3 +61,6 @@ gap:
   full_suite_and_ci: "Full suite and mix letflow.check.test not run (instructed). CI must be green before merge."
   test_design_validator_revalidation: "Round-2 TEST-DESIGN-VALIDATOR pass on 1f09ac95 still pending."
   keycloak_integration_test: "see notes; must be handled before the next live-Keycloak run."
+lockout_and_migration_note:
+  lockout: "After PR 2 a PLATFORM_ADMIN role row, API token or identity claim in any tenant other than the pinned platform tenant is no longer honoured (dropped on resolution; refused on write: upsert_role, POST /tokens 403, Identity.create_token {:error, :invalid_role_set}). A tenant whose only administrator held PLATFORM_ADMIN is locked out of admin routes until a TENANT_ADMIN is granted."
+  migration: "No schema migration and no new table (git diff origin/main...HEAD -- priv config docs is empty). PR 1 (b78f0252, #2320) added TENANT_ADMIN and stopped seeding PLATFORM_ADMIN; the three vertical seed passes were TENANT_ADMIN-only. Remediation for a tenant still relying on a legacy PLATFORM_ADMIN holder: grant TENANT_ADMIN from the platform tenant. The platform tenant keeps PLATFORM_ADMIN unchanged (INV-10)."

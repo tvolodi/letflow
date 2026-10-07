@@ -875,3 +875,21 @@ history:
       needs live Keycloak, fails where bpm-default is not the pinned tenant).
       TRACKED follow-ups: Q-1012 / GH #2312 / ISS-1030, Q-1014 / GH #2317 /
       ISS-1032, Q-1015 / GH #2318 / ISS-1033.
+
+  - req: REQ-459
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-07T06:54:33Z"
+    note: >
+      Design-only requirement (queue task 1022, GH#2337): required decision
+      outputs (rule C, required_outputs) and distinct person (rule A,
+      distinct_from) for Letflow.Engine.run_complete_task. Design artefact
+      lib/letflow/design/req459-required-outputs-and-distinct-person.md on
+      branch design/REQ-459-required-outputs-distinct-person, local, not
+      pushed or merged. Gates: CODE-DESIGN-VALIDATOR round 4 PASS (ce7b587d),
+      SECURITY-REVIEWER round 2 PASS (efd74ae6), REVIEWER PASS (35bc40c9),
+      RELEASE-VALIDATOR PASS (43b3ab79; all five acceptance criteria
+      re-verified, no code or tests changed, suite not run as not
+      applicable). Still open, belonging to REQ-460's build and deliberately
+      not done here: the REQ-061 pointer and the decision 0007 note
+      (design sections 11.2 and 11.3).

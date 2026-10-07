@@ -721,6 +721,25 @@ defmodule Letflow.EngineRequiredOutputsTest do
 
       assert_refused_untouched!(ctx, before, result, ["decision"], [])
     end
+
+    test "C-3/C-11 combined: a decision HELD by the instance does not satisfy the guard, so the refusal still precedes the cross-field EXECUTION_ERROR" do
+      ctx =
+        setup_case!(
+          task_attrs: %{"required_outputs" => ["decision"], "form_schema" => cross_field_form()},
+          initial_variables: %{"seed" => "value", "decision" => "approved"}
+        )
+
+      before = rows(ctx)
+
+      result =
+        Engine.complete_task(
+          ctx.task.id,
+          complete_attrs(%{"amount" => -5, "confirm" => true}),
+          prefix: ctx.schema_name
+        )
+
+      assert_refused_untouched!(ctx, before, result, ["decision"], [])
+    end
   end
 
   # ---------------------------------------------------------------------------------

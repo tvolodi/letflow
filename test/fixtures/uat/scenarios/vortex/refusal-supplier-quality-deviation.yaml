@@ -1,0 +1,145 @@
+# Refusal scenario for the Vortex supplier quality deviation (BA-VORTEX, REQ-457 item 1).
+# New file; no Ported verbatim file is touched.
+#
+# Sensitive actions covered: approving (the quality manager's severity classification, the
+# procurement manager's corrective action) and releasing (declaring a deviation a false
+# alarm releases the quarantined batch back to production).
+---
+id: vortex-refusal-supplier-quality-deviation
+scope: vortex
+process_id: proc-vortex-supplier-quality-deviation
+title: "Supplier quality deviation: the wrong person tries to classify severity, release a quarantined batch or close the corrective action"
+version: "1.0"
+tags: [refusal, access, approval]
+
+description: >
+  A Quality Engineer logs a deviation for defective parts, and the affected batch is
+  quarantined. Only the Quality Manager rules on how severe it is and whether it is a
+  false alarm. The Quality Engineer who found the problem and the Production Manager
+  (who wants the batch back on the line) both try to rule on it and must be turned away.
+  After the Quality Manager classifies it as critical, the corrective action belongs to
+  Procurement; the Quality Manager must not be able to complete it in their place.
+
+actors:
+  quality_engineer: actor-vortex-nina
+  production_manager: actor-vortex-sabine
+  quality_manager: actor-vortex-karl
+  procurement_manager: actor-vortex-felix
+
+preconditions:
+  - description: Supplier quality deviation process definition is active
+    check: process_definition_active
+  - description: No open deviation instances for Vortex
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: quality_engineer
+    action: >
+      Logs a quality deviation for defective parts from supplier VX-442, part number
+      PN-8831, batch B-2026-05, quantity affected 150 units, defect described as
+      "surface cracks exceeding tolerance on 12% of sampled units"
+    via: api
+    input:
+      deviation_id: sim-dev-refusal-001
+      supplier_id: VX-442
+      part_number: PN-8831
+      batch_ref: B-2026-05
+      quantity_affected: 150
+      defect_description: "Surface cracks exceeding tolerance on 12% of sampled units"
+      reporter_actor_id: actor-vortex-nina
+    produces:
+      instance_id: "the process instance ID for this deviation"
+    sla_context:
+      expected_within_hours: 1
+
+  - step: 2
+    actor: quality_engineer
+    action: >
+      The quality engineer who found the defect tries to classify the deviation as
+      critical herself, instead of waiting for the Quality Manager.
+    expect_refusal: true
+    via: api
+    input:
+      severity: critical
+      false_positive: false
+
+  - step: 3
+    actor: production_manager
+    action: >
+      The Production Manager, who needs the batch back on the line, tries to declare
+      the deviation a false alarm so that the quarantined batch is released.
+    expect_refusal: true
+    via: api
+    input:
+      severity: low
+      false_positive: true
+
+  - step: 4
+    actor: quality_manager
+    action: >
+      Reviews the deviation report, classifies it as critical severity because of the
+      structural risk, and confirms it is a genuine quality issue.
+    via: api
+    input:
+      severity: critical
+      classification_notes: "Surface cracks on 12% of batch present structural integrity risk."
+      false_positive: false
+
+  - step: 5
+    actor: quality_manager
+    action: >
+      The Quality Manager tries to complete the corrective action on the supplier's
+      behalf, although the corrective action is Procurement's task.
+    expect_refusal: true
+    via: api
+    input:
+      corrective_action_complete: true
+
+  - step: 6
+    actor: procurement_manager
+    action: >
+      Completes the corrective action with the supplier and records the root cause.
+    via: api
+    input:
+      corrective_action_complete: true
+      root_cause: "Supplier tooling wear; replacement tooling agreed."
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      The quality engineer is turned away when she tries to classify severity, and the
+      Production Manager is turned away when she tries to declare a false alarm. The
+      batch stays quarantined and the classification stays open for the Quality Manager.
+    verification:
+      method: task_assigned
+      detail: >
+        After steps 2 and 3 the severity classification is still open for the Quality
+        Manager and the batch has not been released from quarantine.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Someone other than the Quality Manager can downgrade a deviation or release a
+        quarantined batch, so suspect material can reach production and a customer.
+      suggested_action: route_to_security_review
+
+  - id: EO-002
+    description: >
+      The Quality Manager is turned away when he tries to complete the corrective
+      action, which stays open for Procurement until the procurement manager completes
+      it, after which the deviation is closed.
+    verification:
+      method: instance_state
+      detail: >
+        After step 5 the corrective action is still open for the Procurement Manager;
+        after step 6 the deviation is closed.
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        The corrective action can be closed by someone who does not own the supplier
+        relationship, so the supplier may never be asked to fix the cause.
+      suggested_action: route_to_security_review
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel the sim-dev-refusal-001 instance if not already completed

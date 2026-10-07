@@ -1,0 +1,248 @@
+# REQ-457 (BA-PLATFORM): refusal scenario for the platform scope. Authored new; not a port.
+# Sensitive actions of this scope and where they are covered:
+#   - seeing commercially sensitive data of another customer: steps 1, 3, 4, 5
+#   - changing another customer's settings or users: steps 2, 9, 10
+#   - opening the platform operator's own screens: steps 6, 7, 8
+#   - approving, paying or releasing: the platform scope has none of its own
+#     (customer money flows belong to the customer verticals).
+# Not covered here, by design: a customer's own administrator reaching into another
+# customer (needs a customer administrator on the roster, which does not exist yet),
+# and the read-only auditor (the role is not built yet). ORCH adds those steps later.
+# Every step below is expected to be REFUSED. A step the product lets through is a
+# finding, not a reason to rewrite the step.
+---
+id: platform-refusal-customer-user-boundaries
+scope: platform
+title: Ordinary customer staff cannot look into another customer, run the platform, or change who has access
+version: "1.0"
+tags: [isolation, access, refusal, regression]
+
+description: >
+  The platform is shared by several customers, and one organisation runs it. Ordinary
+  staff of a customer do their own tasks and nothing else. This scenario has such
+  people try, one after another, the things that are not part of their job: a Vortex
+  quality manager looks into SwiftRoute's customer record, users, process designs
+  and activity history, and tries to change SwiftRoute's settings; a SwiftRoute
+  dispatcher and a SwiftRoute operations manager try to open the screens the platform
+  operator uses to run the platform, and try to add a user or change a colleague's
+  access. Every attempt must be turned down plainly, and the person must learn
+  nothing about what lies behind the refusal.
+
+actors:
+  foreign_staff:      actor-vortex-karl
+  dispatcher:         actor-swiftroute-lena
+  operations_manager: actor-swiftroute-marco
+
+preconditions:
+  - description: Both SwiftRoute and Vortex are set up with their own users, process designs and activity history
+    check: system_seeded
+  - description: SwiftRoute has at least one user besides the dispatcher and the operations manager, and at least one recorded activity
+    check: custom
+    detail: >
+      The refusals only mean something if there is something real to be refused
+      access to, so the other company must visibly have users and history.
+
+steps:
+  - step: 1
+    actor: foreign_staff
+    action: >
+      The Vortex quality manager tries to open the list of all companies using the
+      platform, to see who else is a customer and how each is set up.
+    expect_refusal: true
+    via: gui
+    sla_context:
+      expected_within_hours: null
+
+  - step: 2
+    actor: foreign_staff
+    action: >
+      The Vortex quality manager tries to change SwiftRoute's company settings, for
+      example to switch SwiftRoute's account off.
+    expect_refusal: true
+    via: gui
+    input:
+      company: SwiftRoute
+      change: switch the account off
+    sla_context:
+      expected_within_hours: null
+
+  - step: 3
+    actor: foreign_staff
+    action: >
+      The Vortex quality manager tries to open the list of SwiftRoute's users, to see
+      who works there and what each person is allowed to do.
+    expect_refusal: true
+    via: gui
+    input:
+      company: SwiftRoute
+    sla_context:
+      expected_within_hours: null
+
+  - step: 4
+    actor: foreign_staff
+    action: >
+      The Vortex quality manager tries to open SwiftRoute's process designs, to read
+      how SwiftRoute runs its shipments.
+    expect_refusal: true
+    via: gui
+    input:
+      company: SwiftRoute
+    sla_context:
+      expected_within_hours: null
+
+  - step: 5
+    actor: foreign_staff
+    action: >
+      The Vortex quality manager tries to open SwiftRoute's activity history, to see
+      who did what and when.
+    expect_refusal: true
+    via: gui
+    input:
+      company: SwiftRoute
+    sla_context:
+      expected_within_hours: null
+
+  - step: 6
+    actor: dispatcher
+    action: >
+      The SwiftRoute dispatcher tries to open the platform operator's services
+      screen, which shows how the platform itself is running.
+    expect_refusal: true
+    via: gui
+    sla_context:
+      expected_within_hours: null
+
+  - step: 7
+    actor: dispatcher
+    action: >
+      The SwiftRoute dispatcher tries to open the platform operator's screen for
+      moving the platform's stored data to a new version.
+    expect_refusal: true
+    via: gui
+    sla_context:
+      expected_within_hours: null
+
+  - step: 8
+    actor: operations_manager
+    action: >
+      The SwiftRoute operations manager tries to open the platform operator's screen
+      that decides how long the platform keeps old activity records, and tries to
+      shorten that period.
+    expect_refusal: true
+    via: gui
+    sla_context:
+      expected_within_hours: null
+
+  - step: 9
+    actor: dispatcher
+    action: >
+      The SwiftRoute dispatcher tries to add a new person to SwiftRoute's users and
+      give that person access.
+    expect_refusal: true
+    via: gui
+    input:
+      company: SwiftRoute
+      change: add a new user
+    sla_context:
+      expected_within_hours: null
+
+  - step: 10
+    actor: operations_manager
+    action: >
+      The SwiftRoute operations manager tries to widen his own access, and the
+      dispatcher's access, so that both can manage other people.
+    expect_refusal: true
+    via: gui
+    input:
+      company: SwiftRoute
+      change: give more access to himself and to a colleague
+    sla_context:
+      expected_within_hours: null
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      The Vortex quality manager is turned down at every attempt to see or change
+      anything of SwiftRoute's, and is shown no list of customers, no names, no
+      settings and no counts.
+    verification:
+      method: gui_screen
+      detail: >
+        Steps 1 to 5 each end in a plain refusal screen. None shows any part of
+        SwiftRoute's customer record, users, process designs or activity history.
+      evidence: >
+        Screenshots of the screens after steps 1 to 5, reviewed for any trace of
+        SwiftRoute information.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A customer could study who else uses the platform, who works for them and
+        how they run their business, or even switch a competitor's account off.
+        This is the failure most likely to end a customer relationship.
+      suggested_action: route_to_security_review
+
+  - id: EO-002
+    description: >
+      SwiftRoute's own staff are turned down when they try the screens that belong
+      to the platform operator, and their attempt changes nothing about how the
+      platform is run.
+    verification:
+      method: gui_screen
+      detail: >
+        Steps 6 to 8 each end in a plain refusal screen, and the platform's
+        retention period is the same afterwards as before step 8.
+      evidence: >
+        Screenshots of the screens after steps 6 to 8, and the retention period as
+        shown to the platform operator before and after.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Staff of one customer could see or change how the platform serves every
+        customer, for example by shortening how long records are kept.
+      suggested_action: route_to_security_review
+
+  - id: EO-003
+    description: >
+      People who are not administrators of their company cannot add users or
+      widen anyone's access, and SwiftRoute's list of users and their access is
+      the same afterwards as before.
+    verification:
+      method: gui_screen
+      detail: >
+        Steps 9 and 10 each end in a plain refusal screen, and no new user and no
+        changed access appears for SwiftRoute.
+      evidence: >
+        Screenshots of the screens after steps 9 and 10, and SwiftRoute's users
+        and their access as shown to the platform operator before and after.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Anyone could hand out access to themselves or outsiders, so every
+        protection that depends on who is allowed to do what would be worthless.
+      suggested_action: route_to_security_review
+
+  - id: EO-004
+    description: >
+      The refusal looks the same whether the thing asked for exists or not, so a
+      refused person cannot work out what lies behind it.
+    verification:
+      method: gui_screen
+      detail: >
+        The refusal at step 3 carries no more information than the refusal for
+        a company that does not exist would carry, and no refusal in this scenario
+        names a user, a process, or a person.
+      evidence: >
+        Screenshots of the refusal screens, compared.
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        Different answers for existing and non-existing things let an outsider map
+        out another customer by trial and error.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: false
+  description: >
+    Nothing was created if every refusal held. If any step was not refused, undo
+    exactly what it did (switched-off account, added user, changed access,
+    retention period) and record it as a finding before anything else is run.

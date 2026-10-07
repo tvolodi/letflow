@@ -1,0 +1,117 @@
+# Authored by BA-SWIFTROUTE (REQ-457, refusal scenarios). Sensitive actions covered here:
+# approving/costing (the finance estimate and the operations assessment each belong to one job)
+# and seeing personal data (a driver's incident report). Not covered here: paying (no SwiftRoute
+# process pays), changing users (refusal-user-administration.yaml).
+#
+# DEPENDENCIES: as for driver-incident-assess-and-estimate.yaml, no QA seed script deploys the
+# Driver Incident Report definition yet; the preflight definitions check reports a gap until
+# one does.
+---
+id: swiftroute-refusal-driver-incident-confidential
+company_id: swiftroute
+process_id: proc-swiftroute-driver-incident
+title: A driver's incident is assessed only by Operations, costed only by Finance, and not shown to other staff
+version: "1.0"
+tags: [refusal, approval, confidentiality]
+
+description: >
+  A driver reports cargo damage. Operations assesses what happened and Finance estimates the
+  cost, side by side. Each of the two jobs belongs to one person, and a driver's incident
+  report is personal. This scenario checks that the Accountant cannot do the operations
+  assessment, the Operations Manager cannot do the finance estimate, and that a dispatcher who
+  is not handling the incident cannot open the driver's report.
+
+actors:
+  dispatcher:       actor-swiftroute-lena
+  other_dispatcher: actor-swiftroute-tobias
+  ops_manager:      actor-swiftroute-marco
+  accountant:       actor-swiftroute-hans
+
+preconditions:
+  - description: Driver incident report process definition is active
+    check: process_definition_active
+  - description: No open incident instances for SwiftRoute
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: dispatcher
+    action: >
+      Records an incident reported by a driver: cargo damaged in transit, no injury, with a
+      short description naming the driver and what happened.
+    via: api
+    input:
+      incident_id: sim-incident-refusal-001
+      incident_type: cargo damage
+      injury_involved: false
+      description: "Two pallets damaged when the load shifted on the way to Hamburg; driver Jonas Weber reported it."
+    produces:
+      instance_id: "the process instance ID for this incident"
+
+  - step: 2
+    actor: accountant
+    action: >
+      Tries to record the operations assessment of the incident, the judgement of what went
+      wrong and what must be done, which belongs to the Operations Manager.
+    expect_refusal: true
+    via: api
+    input:
+      assessment_notes: "Looks like the driver's fault."
+
+  - step: 3
+    actor: ops_manager
+    action: >
+      Tries to record the finance estimate of the incident, the cost of the damage, which
+      belongs to the Accountant.
+    expect_refusal: true
+    via: api
+    input:
+      estimated_cost_eur: 100
+
+  - step: 4
+    actor: other_dispatcher
+    action: >
+      Tries to open the driver's incident report, with the driver's name and account of what
+      happened, although he has no part in handling this incident.
+    expect_refusal: true
+    via: gui
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      The Accountant and the Operations Manager are each refused when they try the other's
+      task, and both tasks are still waiting for their own person.
+    verification:
+      method: task_assigned
+      detail: >
+        After steps 2 and 3: the operations assessment is still open for the Operations Manager,
+        the finance estimate is still open for the Accountant, and neither contains the notes or
+        the cost the refused person tried to enter.
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        Incident costs or assessments could be entered by the wrong department, so claims and
+        corrective actions would rest on figures nobody responsible has checked.
+      suggested_action: route_to_wf03
+
+  - id: EO-002
+    description: >
+      The dispatcher who is not handling the incident is refused when he tries to open the
+      driver's report, and sees no part of it.
+    verification:
+      method: gui_screen
+      detail: >
+        The screen at step 4 shows none of the driver's name, the description or the cost
+        figures.
+      evidence: >
+        Screenshot of the step 4 screen, reviewed for any trace of the driver's details.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A driver's personal incident details would be open to staff with no part in the case,
+        which is a data protection problem for SwiftRoute and its drivers.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel the incident instance, which is left waiting on both tasks on purpose.

@@ -1,0 +1,141 @@
+# Refusal scenario for Vortex data and user access (BA-VORTEX, REQ-457 item 1).
+# New file; no Ported verbatim file is touched. Like the entity-list scenario this is not a
+# process scenario (process_id: n/a) and counts as coverage of no process definition.
+#
+# Sensitive actions covered: seeing commercially sensitive data (batch cost figures,
+# shipment manifests, a full copy of batch records) and changing users (who may approve
+# what). Vortex has no personal data of employees or customers in these records.
+---
+id: vortex-refusal-data-and-people-access
+scope: vortex
+process_id: n/a
+title: "Vortex data and people: the wrong person tries to see cost figures, shipment manifests or change who may approve"
+version: "1.0"
+tags: [refusal, access, data]
+
+description: >
+  Purchase costs and shipment manifests are commercially sensitive at Vortex, and the
+  authority to approve orders belongs to named jobs. The Quality Manager, who is not
+  cleared for batch cost figures, tries to read them. The cost approver, who is cleared
+  for cost figures but not for shipment manifests, tries to open the manifests and to
+  take a full copy of all batch records. The Production Manager and the cost approver
+  try to give approval authority to a colleague or to herself. Every attempt must be
+  turned away and nothing may change.
+
+actors:
+  quality_manager: actor-vortex-karl
+  cost_approver: actor-vortex-anna
+  production_manager: actor-vortex-sabine
+
+preconditions:
+  - description: Vortex is seeded with production batches and shipment manifests
+    check: system_seeded
+  - description: >
+      Cost figures on batches are restricted to the cost approver, and shipment
+      manifests are restricted for everyone except people explicitly cleared
+    check: custom
+    detail: >
+      The quality manager has no clearance for batch costs or shipment manifests, and
+      nobody in this scenario has clearance for shipment manifests.
+
+steps:
+  - step: 1
+    actor: quality_manager
+    action: >
+      The Quality Manager opens a quarantined batch and tries to read its cost figure.
+    expect_refusal: true
+    via: gui
+    input:
+      record_type: production batch
+      detail_requested: cost figure
+
+  - step: 2
+    actor: cost_approver
+    action: >
+      The cost approver tries to open the list of shipment manifests, which nobody in
+      her job is cleared to see.
+    expect_refusal: true
+    via: gui
+    input:
+      record_type: shipment manifest
+
+  - step: 3
+    actor: cost_approver
+    action: >
+      The cost approver tries to take a full copy of all batch records, including the
+      cost figures, out of the system.
+    expect_refusal: true
+    via: gui
+    input:
+      record_type: production batch
+      export: complete copy with cost figures
+
+  - step: 4
+    actor: production_manager
+    action: >
+      The Production Manager tries to give the cost approver the authority to approve
+      capacity for production orders.
+    expect_refusal: true
+    via: gui
+    input:
+      change: add the cost approver to the capacity approvers
+
+  - step: 5
+    actor: cost_approver
+    action: >
+      The cost approver tries to add herself to the people who approve budgets.
+    expect_refusal: true
+    via: gui
+    input:
+      change: add herself to the budget approvers
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      The Quality Manager is not shown the cost figure of the batch, and the cost
+      approver is not shown any shipment manifest.
+    verification:
+      method: gui_screen
+      detail: >
+        At step 1 no cost figure is delivered to the Quality Manager's screen; at step
+        2 no manifest content is shown to the cost approver. The screen says plainly
+        that she may not see it, or shows nothing to go on.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Supplier pricing or shipment contents are visible to staff who are deliberately
+        not cleared for them, which can breach confidentiality terms with suppliers.
+      suggested_action: route_to_security_review
+
+  - id: EO-002
+    description: >
+      The cost approver cannot take a full copy of the batch records out of the system.
+    verification:
+      method: gui_screen
+      detail: >
+        At step 3 no file with cost figures is produced for the cost approver.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Cost figures can leave Vortex in bulk through a person whose job only needs to
+        view them one batch at a time.
+      suggested_action: route_to_security_review
+
+  - id: EO-003
+    description: >
+      Nobody in these jobs can change who may approve; the approval authority of every
+      person is the same after steps 4 and 5 as before.
+    verification:
+      method: gui_screen
+      detail: >
+        At steps 4 and 5 the change is turned away, and afterwards the capacity
+        approvers and budget approvers are the same people as before.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        An employee can give herself or a colleague approval authority, which defeats
+        every approval control in production order release.
+      suggested_action: route_to_security_review
+
+cleanup:
+  description: Nothing was created; confirm the capacity and budget approvers are unchanged.

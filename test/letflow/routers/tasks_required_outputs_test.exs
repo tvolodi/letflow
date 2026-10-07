@@ -25,7 +25,6 @@ defmodule Letflow.Routers.TasksRequiredOutputsTest do
   alias Letflow.Engine
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Engine.TokenRecord
-  alias Letflow.Engine.VariableSchema
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Identity
@@ -107,21 +106,22 @@ defmodule Letflow.Routers.TasksRequiredOutputsTest do
                prefix: schema_name
              )
 
+    # REQ-461 check 2: every required_outputs key needs a variable_schema BEFORE activation.
+    assert {:ok, 2} =
+             Definitions.register_variable_schemas(
+               definition.id,
+               [
+                 %{
+                   variable_key: "decision",
+                   json_schema: %{"type" => "string", "enum" => ["approved", "rejected"]}
+                 },
+                 %{variable_key: "zz_probe_key", json_schema: %{"type" => "number"}}
+               ],
+               prefix: schema_name
+             )
+
     assert {:ok, %{definition: definition}} =
              Definitions.activate(definition.id, prefix: schema_name)
-
-    for {key, json_schema} <- [
-          {"decision", %{"type" => "string", "enum" => ["approved", "rejected"]}},
-          {"zz_probe_key", %{"type" => "number"}}
-        ] do
-      %VariableSchema{}
-      |> VariableSchema.changeset(%{
-        definition_id: definition.id,
-        variable_key: key,
-        json_schema: json_schema
-      })
-      |> Repo.insert!(prefix: schema_name)
-    end
 
     assert {:ok, created} =
              Engine.create(

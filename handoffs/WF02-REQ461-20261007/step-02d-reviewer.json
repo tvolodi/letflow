@@ -1,0 +1,84 @@
+{
+  "handoff_id": "1c77ad7b-3568-4d1b-9924-a2b709413c1a",
+  "run_id": "WF02-REQ461-20261007",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ461-20261007/step-02d-reviewer.json",
+  "created_at": "2026-10-07T09:48:53Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-461"
+    ],
+    "queue_task": 1024,
+    "gh_issue": 2339,
+    "branch_name": "feat/REQ-461-validator-required-outputs-Q-1024",
+    "design": "lib/letflow/design/req459-required-outputs-and-distinct-person.md",
+    "requirement_text": "Source: GH #2335 (ISS-1039, Q-1021) scope item (1) and the\ndesign-intent constraint 'the validator also flags a decision reading\na key no upstream task declares in required_outputs'. Adds\ndeterministic checks beside the existing node-attribute checks in\nlib/letflow/definitions/graph.ex (CHK-20 form schema, CHK-21\nescalation pair) and the data-flow checks in\nlib/letflow/definitions/semantic_validation.ex (REQ-455), using the\nviolation code names reserved in the REQ-459 design.\n\nBUILDS:\n1. Shape check: `required_outputs` on a HUMAN_TASK is a list of\n   non-empty strings without duplicates; on any other node type the\n   attribute is a violation.\n2. Every key in required_outputs has a variable_schema in the\n   definition's variable_schemas, or the check reports the node and the\n   key (the enum or type is what keeps the value valid, REQ-109).\n3. Decision reads: for a conditional outgoing edge of an\n   EXCLUSIVE_GATEWAY or HUMAN_TASK that reads a variable key, report\n   it when the key IS the output of a HUMAN_TASK on the path\n   (appears in that task's form_schema.properties) and NO upstream\n   HUMAN_TASK (ancestors_or_self of the edge source) declares it in\n   required_outputs. This check is a WARNING, permanently, never a\n   violation or error (REQ-459 design section 1.4, D-4): it is\n   produced as the string prefix `decision_key_not_required:` by\n   SemanticValidation.decision_key_warnings/2 and surfaces in the\n   `warnings` list. There is no later severity switch.\n4. Surfaces (design sections 1.2-1.4, Adjustments REQ-461): shape\n   violations (check 1) at validate, create, update, import and pack\n   install (they run inside Graph.validate_node_attributes/1);\n   check 2 at validate and activate only (variable_schemas rows exist\n   only after the definition row), called from BOTH clauses of\n   SemanticValidation.validate/2 so the empty-declared_fields early\n   return does not hide it; check 3 WARNING in the validate 200 body\n   and the pack-install result, not in the activate response.\n   Creates Letflow.Definitions.ValidationWarnings.for_definitions/2\n   (concatenates RoleBinding warnings, decision_key warnings; REQ-464\n   adds the third source) and switches the two call sites\n   (Definitions.validate_definition_graph/2 and\n   SolutionPack.unbound_role_warnings/2). Warnings type stays\n   [String.t()].\n\nRESERVED CODES (copy exactly from REQ-459 design section 1.2):\nCHK-25 check_required_outputs/1 in lib/letflow/definitions/graph.ex\nproduces only the two shape codes: `:invalid_required_outputs`\n(not a list, non-string/empty entry, duplicate; one violation per\ndefect) and `:required_outputs_on_non_human_task`. Produced in\nlib/letflow/definitions/semantic_validation.ex, not in CHK-25:\n`:required_output_without_variable_schema` (check 2, VIOLATION,\nSemanticValidation.required_output_schema_violations/2) and\n`decision_key_not_required:` (check 3, WARNING string prefix,\nSemanticValidation.decision_key_warnings/2).",
+    "requirement_acceptance_criteria": [
+      "one test per check with a minimal definition that violates only that check, asserting the new code (check 1: :invalid_required_outputs, :required_outputs_on_non_human_task; check 2: :required_output_without_variable_schema; check 3: the decision_key_not_required: warning prefix) and the offending node id and key; one test per check with a valid neighbour that passes (required_outputs naming a key that has a variable_schema)",
+      "surfaces: a definition whose HUMAN_TASK has a non-list required_outputs is rejected by Definitions.create/2 and by update (code :invalid_required_outputs); a definition with required_outputs naming a key without a variable_schema is reported by POST /definitions/:id/validate and refused by activate (:required_output_without_variable_schema), and is NOT rejected at create; the decision_key_not_required: warning appears in the validate 200 body and in the pack-install result and not in the activate response",
+      "check 2 is reported for a definition that declares required_outputs and has declared_fields == %{} (no variable_schemas at all): the empty-declared_fields early return of SemanticValidation.validate/2 does not hide it",
+      "a required_outputs key without a variable_schema is reported with the node id and the key name; a duplicate key and a non-list value are each reported (negative tests)",
+      "an edge condition reading decision where an upstream HUMAN_TASK has decision in its form_schema but no required_outputs yields a decision_key_not_required: WARNING (in the validate response `warnings`, validation still valid, never a violation) from check 3; the same definition with required_outputs: [decision] on that task yields no such warning; a key that no HUMAN_TASK produces (service response, start variable) yields none",
+      "required_outputs on a node that is not a HUMAN_TASK is reported",
+      "every definition shipped in the repository (test/fixtures/qa/*process_definition.json, test/fixtures/simulation/**, priv/) is run through the validator in a test and the count of new findings (violations and warnings separately) per definition is quoted; none is weakened to make a definition pass",
+      "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over test/letflow/definitions, and mix letflow.check_boundaries pass, real output quoted",
+      "SECURITY-REVIEWER is not required for this entry (validator over definition data, no tenant-data path); CODE-DESIGN-VALIDATOR confirms code names match the REQ-459 design"
+    ]
+  },
+  "task": {
+    "description": "Idiom/scope/decision-record review, INV concerns, 0007 addendum verdict",
+    "extra": ""
+  },
+  "result": {
+    "verdict": "PASS",
+    "status": "PASS",
+    "implementation_verdict": "VERIFIED",
+    "decision_0007_addendum_verdict": "VERIFIED",
+    "reviewed": "git show d233b9a6 (graph.ex, semantic_validation.ex, validation_warnings.ex, definitions.ex, solution_pack.ex); read-only, no mix run (ELIXIR-DEV quoted gates in step-02a). Merged REQ-460 code checked at b8899b24 (an ancestor of HEAD, tip of main).",
+    "idiom": "Idiomatic. CHK-25 is a private total check wired into the existing flat_map list, one violation per defect, nil treated as absent (same as CHK-21); fallback clauses for malformed attributes; with/else in decision_key_warnings; pure functions; every new def/defp has @spec, public ones have @doc. No GenServer or process machinery.",
+    "supervision": "N/A and unchanged (REQ-045: engine is a transactional context, InstanceSupervisor deliberately empty). No process, spawn or shared state added.",
+    "scope_creep": "None. distinct_from/SeparationOfDuties appear in graph.ex, semantic_validation.ex, validation_warnings.ex only as a moduledoc forward-reference to REQ-464's future third source. No fixture adoption; the commit touches 5 lib files plus one handoff, no queue/docs/requirements edits. ValidationWarnings is a plain 2-source aggregator required by the requirement text, not a behaviour or macro.",
+    "determinism": "Check 1 duplicates sorted; check 2 in graph node order, declared key order, Enum.uniq; check 3 edges in graph order, keys in first-appearance order, producer ids sorted; aggregator concatenates RoleBinding then decision_key in fixed order.",
+    "decision_records": "Consistent with REQ-459 design D-4 (permanent warning, string prefix, [String.t()] type) and the reserved codes; touches no decision record. Violation.code union extended with the three codes.",
+    "type_safety": "No gap warranting an issue: warnings stay [String.t()] by design decision. No issue filed.",
+    "inv_concerns": {
+      "cross_tenant_leak": "VERIFIED none. decision_key_warnings/2 and required_output_schema_violations/2 are pure functions of the already-loaded graph and already-loaded declared_fields map; no Repo reference in the new code. Output strings contain only node/edge ids, key names and the definition name from that same tenant's own graph; no row data.",
+      "new_tenant_reads": "VERIFIED none new. The only tenant-row read is the existing VariableSchema.fetch_schemas(Repo, definition.id, prefix: prefix) (lib/letflow/definitions.ex:1277-1278 for validate; run_semantic_validation ~:2370 for activate), unchanged by this diff. Tenant scope: prefix comes from opts[:prefix], validated by get_by_id/2 via TenantProvisioning.tenant_id_for_schema_name(prefix) (definitions.ex:~574-578) and applied as repo.all(prefix: prefix) at lib/letflow/engine/variable_schema.ex:344, with where definition_id at :341. The pre-existing RoleBinding read inside ValidationWarnings.for_definitions gets the same prefix opts (definitions.ex:1287; solution_pack.ex:1410) and goes through prefix-scoped RoleRegistry.list_roles/1 (role_binding.ex:48). Check 2's empty-map clause takes no read at all.",
+      "note": "SECURITY-REVIEWER not required for this entry; reviewer-level verification only."
+    },
+    "findings": [
+      {
+        "id": "R-1",
+        "severity": "INFO",
+        "location": "semantic_validation.ex required_outputs/1 vs engine/required_outputs.ex required_outputs/1",
+        "note": "Two independent total readers of the same attribute. Equivalent for valid input; the validator additionally treats whitespace-only strings as invalid while the engine rejects only the empty string. Harmless, not blocking; watch if a third reader appears."
+      },
+      {
+        "id": "R-2",
+        "severity": "INFO",
+        "location": "decision_key_warnings/2",
+        "note": "One warning per (edge, key): two conditional edges reading the same key give two warnings. Deterministic, acceptable for an advisory list."
+      }
+    ],
+    "anti_patterns": "Checked docs/anti-patterns.md; no repeat.",
+    "decision_0007_addendum": {
+      "git_state": "0007 not yet appended (grep -c '2026-10 note' = 0; last commits to the file c5ec3fbc, cbdecc45). REQ-460's own 02d note said DOC-UPDATER would append it in the REQ-460 PR but b8899b24 did not, so ORCH's append here is the first.",
+      "claim_1_refused_before_state_change_retryable_422": "VERIFIED. engine.ex at b8899b24: :completion_guards Multi step (after both row locks and the snapshot read) returns {:error,{:completion_refused,{:output_refused,missing,[]}}}; merge_output_variables/8 returns the same tuple before apply_variable_merge when missing/rejected non-empty or RequiredOutputs.any_rejected?(validations). The Multi had only taken locks and read, so rollback leaves state untouched; interpret_complete_result/3 audits then yields public {:error,{:output_refused,%{missing_keys,rejected_keys}}}, mapped to 422 in api/error.ex and routers/tasks.ex. Retryable: task stays open.",
+      "claim_2_no_execution_error_raised": "VERIFIED. apply_variable_merge/6's {:rejected,_} -> {:execution_error,_} clause is documented unreachable from merge_output_variables/8 (last-resort guard only). Caveat that does not contradict the text: form-expression re-evaluation domain errors on this path still raise EXECUTION_ERROR; the note is scoped to 'a rejected output', which is correct.",
+      "claim_3_merge3_and_whole_batch_unchanged": "VERIFIED. b8899b24 changes lib/letflow/engine/variable_merge.ex by 12 moduledoc lines only, no code; the amended moduledoc itself says merge/3 and its whole-batch semantics are unchanged.",
+      "claim_4_execution_error_remains_for_subprocess_and_internal": "VERIFIED. lib/letflow/engine/sub_process.ex:838-847 (variable_validations + VariableMerge.merge) and :933-942 ({:rejected,_,[{:execution_error,...:variable_schema_rejected...}]} -> error_args, routed through ExecutionError.append_multi at :508 and :1163); the file is not modified by b8899b24 and no later commit touches lib/letflow/engine*.",
+      "mismatch": "none",
+      "formatting_recommendation": "0007 has no prior dated addendum; it ends after '## Open questions this record does not resolve' (112 lines; lines 79 and 108 are untouched by an append). Neighbouring records use an H2 heading at end of file with date and attribution in the heading, then plain prose (no blockquote, no bullet wrapper): '## Addendum — 2026-09-18 (REQ-370, REVIEWER sign-off)' (0002-oidc-integration.md:152); '## Addendum (2026-08-20) — Plug/Bandit stands; the Decision above is reversed' (0001:169); '## Addendum (2026-09-16, REQ-359) — BO-*-equivalent deferral actioned' (0004:106); '## Addendum (2026-08-23, ISS-0287) — ...' (0009:112); '## REVIEWER sign-off — 2026-08-21 (REQ-114, WF-02 Step 2d, run WF02-REQ114-20260821)' (0008:83). Recommend appending after one blank line: '## Addendum (2026-10-07, REQ-460) — HUMAN_TASK completion refuses a rejected output instead of raising EXECUTION_ERROR', a blank line, then the approved text verbatim as one plain paragraph.",
+      "approved_text": "2026-10 note (REQ-460): on the HUMAN_TASK completion path a rejected output is now refused with a retryable 422 before any state change and no EXECUTION_ERROR is raised; merge/3 itself and its whole-batch semantics are unchanged; the EXECUTION_ERROR path remains for the SUB_PROCESS completion merge and other engine-internal failures. REVIEWER sign-off: 2026-10-07 (REQ-460, WF02-REQ460-20261007 step 02d)."
+    },
+    "artifacts_out": [],
+    "route_back": null,
+    "blockers": []
+  }
+}

@@ -4632,3 +4632,13 @@ run the matching guard test too (`mix test test/letflow/no_smtp_secret_guard_tes
 pepper guard), and build such names/values at runtime (for example `"LETFLOW_SMTP_" <> "USERNAME"`,
 `String.duplicate/2`, random bytes) instead of writing a literal assignment. Never whitelist the guard.
 This was the second failure of the same class: classified as a defect, not a flake.
+
+## A validator that began refusing at activate broke two already-merged test files its own run never touched (2026-10-07, ORCH, Q-1024 / GH #2339)
+
+REQ-461's check 2 (`:required_output_without_variable_schema`) is a VIOLATION at `Definitions.activate/2`. Two
+REQ-460 test files (`engine_required_outputs_test.exs`, `routers/tasks_required_outputs_test.exs`) hand-build
+definitions with `required_outputs` and activate them in setup, seeding the variable_schema rows only AFTER
+activation, so 30 tests failed in CI (Backend gate) while the REQ-461 local run, scoped to the validator's own
+directories, passed. Rule: before pushing a validator that starts refusing at activate (or create), grep the
+WHOLE `test/` tree for the attribute it checks (`grep -rln "required_outputs" test/`) and run every file that
+activates hand-built definitions, not only the validator's own tests. Register the schema rows before activation.

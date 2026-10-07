@@ -912,3 +912,25 @@ history:
       deliberately NOT edited (supervisor instruction; the approved note
       text stays recorded in step-02d), so design 11.3 remains open for
       REVIEWER.
+
+  - req: REQ-461
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-07T10:30:32Z"
+    note: >
+      Validator build (queue task 1024, GH#2339, run WF02-REQ461-20261007):
+      required_outputs checks on process definitions per the REQ-459 design.
+      CHK-25 shape violations (invalid_required_outputs,
+      required_outputs_on_non_human_task) inside Graph.validate_node_attributes/1;
+      required_output_without_variable_schema violation at validate and activate
+      from both clauses of SemanticValidation.validate/2; the permanent
+      decision_key_not_required: WARNING in the validate 200 body and the
+      pack-install result, via the new
+      Letflow.Definitions.ValidationWarnings.for_definitions/2. Branch
+      feat/REQ-461-validator-required-outputs-Q-1024, local, not pushed or
+      merged. Gates recorded in the run handoffs: CODE-DESIGN-VALIDATOR,
+      REVIEWER (with the decision 0007 addendum for the REQ-460 refusal),
+      TEST-DESIGN-VALIDATOR (23 mutants killed), TEST-RUNNER (static gates
+      green; one environmental grep :enoent failure under PowerShell, passes
+      under Git Bash), RELEASE-VALIDATOR (step 05); SECURITY-REVIEWER not
+      required (validator over definition data). Full suite left to CI.

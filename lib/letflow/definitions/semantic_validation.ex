@@ -140,6 +140,21 @@ defmodule Letflow.Definitions.SemanticValidation do
   get it uniformly with no per-caller special-casing. For any `declared_fields` with at
   least one entry, behavior is exactly as specified above, unchanged.
 
+  **Exception (REQ-461, REQ-459 design section 1.3):** the required-output check
+  (`required_output_schema_violations/2`, `:required_output_without_variable_schema`)
+  still runs when `declared_fields == %{}`; a definition that declares
+  `required_outputs` and registers no `variable_schemas` at all is exactly the defect
+  it reports. It is the only class the empty-schema clause can return.
+
+  ## Required-output classes (REQ-461)
+
+  `required_output_schema_violations/2` (a violation, see above) and
+  `decision_key_warnings/2` (a permanent WARNING string prefixed
+  `decision_key_not_required:`, never a violation: a conditional edge of an
+  EXCLUSIVE_GATEWAY or HUMAN_TASK reads a key some upstream HUMAN_TASK's form collects
+  while no upstream HUMAN_TASK lists it in `required_outputs`). The warnings are
+  aggregated by `Letflow.Definitions.ValidationWarnings`, not returned by `validate/2`.
+
   ## Nested variable references
 
   `VariableSchema.variable_key` is a single flat string with no
@@ -187,11 +202,15 @@ defmodule Letflow.Definitions.SemanticValidation do
   exemption" section.
   """
   @spec validate(graph :: Graph.t(), declared_fields :: declared_fields()) :: Graph.result()
-  def validate(%Graph{}, declared_fields) when declared_fields == %{} do
-    %{valid: true, violations: []}
+  def validate(%Graph{} = graph, declared_fields) when declared_fields == %{} do
+    # Check 2 (REQ-461) is the one class the empty-declared_fields exemption
+    # must NOT hide: a definition with required_outputs and no variable_schemas
+    # at all is exactly the defect it reports.
+    violations = required_output_schema_violations(graph, declared_fields)
+    %{valid: violations == [], violations: violations}
   end
 
-  def validate(%Graph{nodes: nodes, edges: edges}, declared_fields)
+  def validate(%Graph{nodes: nodes, edges: edges} = graph, declared_fields)
       when is_map(declared_fields) do
     node_index = build_node_index(nodes)
 
@@ -201,10 +220,114 @@ defmodule Letflow.Definitions.SemanticValidation do
       |> Enum.flat_map(&edge_violations(&1, declared_fields))
 
     violations =
-      violations ++ data_flow_violations(nodes, edges, node_index, declared_fields)
+      violations ++
+        data_flow_violations(nodes, edges, node_index, declared_fields) ++
+        required_output_schema_violations(graph, declared_fields)
 
     %{valid: violations == [], violations: violations}
   end
+
+  # ---------------------------------------------------------------------------------
+  # Required-output classes (REQ-461, REQ-459 design sections 1.2-1.4)
+  # ---------------------------------------------------------------------------------
+
+  @doc """
+  Check 2 (REQ-461): one `:required_output_without_variable_schema` violation per
+  (HUMAN_TASK node, `required_outputs` key) whose key is not a key of
+  `declared_fields`. Runs in both clauses of `validate/2`, so the
+  empty-`declared_fields` exemption does not hide it. Reads `required_outputs`
+  totally: a non-list value or a non-string entry (CHK-25's to report) is
+  ignored here. Nodes in graph order, keys in declared order.
+  """
+  @spec required_output_schema_violations(Graph.t(), declared_fields()) :: [Violation.t()]
+  def required_output_schema_violations(%Graph{nodes: nodes}, declared_fields)
+      when is_map(declared_fields) do
+    Enum.flat_map(nodes, fn %Graph.Node{} = node ->
+      node
+      |> required_outputs()
+      |> Enum.uniq()
+      |> Enum.reject(&Map.has_key?(declared_fields, &1))
+      |> Enum.map(fn key ->
+        %Violation{
+          code: :required_output_without_variable_schema,
+          message:
+            "Node '#{node.id}' (HUMAN_TASK) has required_outputs key '#{key}' with no variable_schema"
+        }
+      end)
+    end)
+  end
+
+  @doc """
+  Check 3 (REQ-461), a permanent WARNING (design section 1.4): for every
+  conditional outgoing edge of an EXCLUSIVE_GATEWAY or HUMAN_TASK, each variable
+  root the condition reads that some HUMAN_TASK in `ancestors_or_self(source)`
+  collects in its `form_schema.properties` but no such HUMAN_TASK lists in
+  `required_outputs` yields one `decision_key_not_required: ...` string. A key no
+  HUMAN_TASK produces yields none. Pure; edges in graph order, keys in order of
+  first appearance in the condition, producer ids sorted.
+  """
+  @spec decision_key_warnings(Graph.t(), definition_name :: String.t()) :: [String.t()]
+  def decision_key_warnings(%Graph{nodes: nodes, edges: edges}, definition_name)
+      when is_binary(definition_name) do
+    node_index = build_node_index(nodes)
+
+    Enum.flat_map(edges, fn %Graph.Edge{} = edge ->
+      with {:ok, index} <- Map.fetch(node_index, edge.source),
+           %Graph.Node{node_type: type} when type in [:EXCLUSIVE_GATEWAY, :HUMAN_TASK] <-
+             Enum.at(nodes, index),
+           false <- blank_condition?(edge.condition),
+           {:ok, ast} <- parse_condition(edge.condition) do
+        keys = ast |> collect_var_paths() |> Enum.map(&hd/1) |> Enum.uniq()
+        upstream = ancestors_or_self(edge.source, nodes, edges, node_index)
+
+        Enum.flat_map(keys, &decision_key_warning(&1, edge, upstream, definition_name))
+      else
+        _ -> []
+      end
+    end)
+  end
+
+  @spec decision_key_warning(String.t(), Graph.Edge.t(), [Graph.Node.t()], String.t()) ::
+          [String.t()]
+  defp decision_key_warning(key, %Graph.Edge{} = edge, upstream, definition_name) do
+    human_tasks = Enum.filter(upstream, &(&1.node_type == :HUMAN_TASK))
+    producers = Enum.filter(human_tasks, &form_collects?(&1, key))
+    declared? = Enum.any?(human_tasks, &(key in required_outputs(&1)))
+
+    if producers != [] and not declared? do
+      ids = producers |> Enum.map(& &1.id) |> Enum.sort() |> Enum.join(", ")
+
+      [
+        "decision_key_not_required: #{key} (definition '#{definition_name}', edge '#{edge.id}' " <>
+          "from node '#{edge.source}' reads it; produced by: #{ids})"
+      ]
+    else
+      []
+    end
+  end
+
+  @spec form_collects?(Graph.Node.t(), String.t()) :: boolean()
+  defp form_collects?(%Graph.Node{attributes: attributes}, key) when is_map(attributes) do
+    case Map.get(attributes, "form_schema") do
+      %{"properties" => properties} when is_map(properties) -> Map.has_key?(properties, key)
+      _ -> false
+    end
+  end
+
+  defp form_collects?(%Graph.Node{}, _key), do: false
+
+  # Total read of a HUMAN_TASK's `required_outputs`: only string entries of a
+  # list; anything else (absent, null, malformed, other node type) reads as [].
+  @spec required_outputs(Graph.Node.t()) :: [String.t()]
+  defp required_outputs(%Graph.Node{node_type: :HUMAN_TASK, attributes: attributes})
+       when is_map(attributes) do
+    case Map.get(attributes, "required_outputs") do
+      list when is_list(list) -> Enum.filter(list, &(is_binary(&1) and String.trim(&1) != ""))
+      _ -> []
+    end
+  end
+
+  defp required_outputs(%Graph.Node{}), do: []
 
   # ---------------------------------------------------------------------------------
   # Data-flow class (REQ-455, `:variable_never_collected`)

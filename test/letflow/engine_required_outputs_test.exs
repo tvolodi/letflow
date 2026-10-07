@@ -102,7 +102,10 @@ defmodule Letflow.EngineRequiredOutputsTest do
 
   defp decision_enum, do: %{"type" => "string", "enum" => ["approved", "rejected"]}
 
-  defp active_definition!(schema_name, graph) do
+  # REQ-461 check 2 refuses to activate a definition whose HUMAN_TASK `required_outputs`
+  # names a key with no variable_schema, so the schema rows are registered BEFORE
+  # activation (`schemas` is `%{key => json_schema}`).
+  defp active_definition!(schema_name, graph, schemas \\ %{}) do
     attrs = %{
       name: unique("req460-def"),
       version: "1.0.0",
@@ -111,6 +114,14 @@ defmodule Letflow.EngineRequiredOutputsTest do
     }
 
     assert {:ok, definition} = Definitions.create(attrs, prefix: schema_name)
+
+    if schemas != %{} do
+      entries =
+        for {key, json_schema} <- schemas, do: %{variable_key: key, json_schema: json_schema}
+
+      assert {:ok, _count} =
+               Definitions.register_variable_schemas(definition.id, entries, prefix: schema_name)
+    end
 
     assert {:ok, %{definition: activated}} =
              Definitions.activate(definition.id, prefix: schema_name)
@@ -139,10 +150,30 @@ defmodule Letflow.EngineRequiredOutputsTest do
 
     %{schema_name: schema_name} = provisioned_tenant()
     assignee = Ecto.UUID.generate()
-    definition = active_definition!(schema_name, graph_fun.(assignee, task_attrs))
 
-    for {key, json_schema} <- schemas,
-        do: seed_schema_row!(schema_name, definition.id, key, json_schema)
+    # The default graph's gateway edge reads `variables.decision`, and REQ-461 check 2
+    # refuses to activate a `required_outputs` key without a variable_schema, so `decision`
+    # plus every listed required key gets a plain string schema unless the test supplies
+    # its own. A non-list `required_outputs` has no keys to declare.
+    required_keys =
+      case Map.get(task_attrs, "required_outputs") do
+        keys when is_list(keys) -> ["decision" | keys]
+        _not_a_list -> ["decision"]
+      end
+
+    schemas = Map.merge(Map.new(required_keys, &{&1, %{"type" => "string"}}), schemas)
+    definition = active_definition!(schema_name, graph_fun.(assignee, task_attrs), schemas)
+
+    # A malformed `required_outputs` is refused by Definitions.create/2 (graph shape
+    # check), so the engine's tolerance of one is exercised by rewriting the stored graph
+    # of an already-activated definition before any instance starts.
+    with poisoned when is_map(poisoned) <- Keyword.get(opts, :stored_graph_attrs) do
+      Repo.update_all(
+        from(d in Definitions.ProcessDefinition, where: d.id == ^definition.id),
+        [set: [graph: graph_fun.(assignee, poisoned)]],
+        prefix: schema_name
+      )
+    end
 
     assert {:ok, created} =
              Engine.create(
@@ -644,7 +675,7 @@ defmodule Letflow.EngineRequiredOutputsTest do
     end
 
     test "a malformed required_outputs attribute reads as off (logged), it never crashes a completion" do
-      ctx = setup_case!(task_attrs: %{"required_outputs" => "decision"})
+      ctx = setup_case!(stored_graph_attrs: %{"required_outputs" => "decision"})
 
       log =
         capture_log(fn ->

@@ -34748,7 +34748,7 @@ requirements:
   - id: REQ-461
     title: "Process definition validator: required_outputs checks (every key has a variable_schema; no decision reads a key that no upstream task declares as required)"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 1024  # letflow-queue task id, GH#2339. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-460 -- the validator checks the attribute REQ-460 introduces and uses the code names reserved in the REQ-459 design
     description: >

@@ -1,0 +1,75 @@
+{
+  "handoff_id": "238af678-3313-4629-b750-8a43bf61389a",
+  "run_id": "WF02-REQ461-20261007",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ461-20261007/step-05-release-validator.json",
+  "created_at": "2026-10-07T10:24:18Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-461"
+    ],
+    "queue_task": 1024,
+    "gh_issue": 2339,
+    "branch_name": "feat/REQ-461-validator-required-outputs-Q-1024",
+    "design": "lib/letflow/design/req459-required-outputs-and-distinct-person.md",
+    "requirement_text": "Source: GH #2335 (ISS-1039, Q-1021) scope item (1) and the\ndesign-intent constraint 'the validator also flags a decision reading\na key no upstream task declares in required_outputs'. Adds\ndeterministic checks beside the existing node-attribute checks in\nlib/letflow/definitions/graph.ex (CHK-20 form schema, CHK-21\nescalation pair) and the data-flow checks in\nlib/letflow/definitions/semantic_validation.ex (REQ-455), using the\nviolation code names reserved in the REQ-459 design.\n\nBUILDS:\n1. Shape check: `required_outputs` on a HUMAN_TASK is a list of\n   non-empty strings without duplicates; on any other node type the\n   attribute is a violation.\n2. Every key in required_outputs has a variable_schema in the\n   definition's variable_schemas, or the check reports the node and the\n   key (the enum or type is what keeps the value valid, REQ-109).\n3. Decision reads: for a conditional outgoing edge of an\n   EXCLUSIVE_GATEWAY or HUMAN_TASK that reads a variable key, report\n   it when the key IS the output of a HUMAN_TASK on the path\n   (appears in that task's form_schema.properties) and NO upstream\n   HUMAN_TASK (ancestors_or_self of the edge source) declares it in\n   required_outputs. This check is a WARNING, permanently, never a\n   violation or error (REQ-459 design section 1.4, D-4): it is\n   produced as the string prefix `decision_key_not_required:` by\n   SemanticValidation.decision_key_warnings/2 and surfaces in the\n   `warnings` list. There is no later severity switch.\n4. Surfaces (design sections 1.2-1.4, Adjustments REQ-461): shape\n   violations (check 1) at validate, create, update, import and pack\n   install (they run inside Graph.validate_node_attributes/1);\n   check 2 at validate and activate only (variable_schemas rows exist\n   only after the definition row), called from BOTH clauses of\n   SemanticValidation.validate/2 so the empty-declared_fields early\n   return does not hide it; check 3 WARNING in the validate 200 body\n   and the pack-install result, not in the activate response.\n   Creates Letflow.Definitions.ValidationWarnings.for_definitions/2\n   (concatenates RoleBinding warnings, decision_key warnings; REQ-464\n   adds the third source) and switches the two call sites\n   (Definitions.validate_definition_graph/2 and\n   SolutionPack.unbound_role_warnings/2). Warnings type stays\n   [String.t()].\n\nRESERVED CODES (copy exactly from REQ-459 design section 1.2):\nCHK-25 check_required_outputs/1 in lib/letflow/definitions/graph.ex\nproduces only the two shape codes: `:invalid_required_outputs`\n(not a list, non-string/empty entry, duplicate; one violation per\ndefect) and `:required_outputs_on_non_human_task`. Produced in\nlib/letflow/definitions/semantic_validation.ex, not in CHK-25:\n`:required_output_without_variable_schema` (check 2, VIOLATION,\nSemanticValidation.required_output_schema_violations/2) and\n`decision_key_not_required:` (check 3, WARNING string prefix,\nSemanticValidation.decision_key_warnings/2).",
+    "requirement_acceptance_criteria": [
+      "one test per check with a minimal definition that violates only that check, asserting the new code (check 1: :invalid_required_outputs, :required_outputs_on_non_human_task; check 2: :required_output_without_variable_schema; check 3: the decision_key_not_required: warning prefix) and the offending node id and key; one test per check with a valid neighbour that passes (required_outputs naming a key that has a variable_schema)",
+      "surfaces: a definition whose HUMAN_TASK has a non-list required_outputs is rejected by Definitions.create/2 and by update (code :invalid_required_outputs); a definition with required_outputs naming a key without a variable_schema is reported by POST /definitions/:id/validate and refused by activate (:required_output_without_variable_schema), and is NOT rejected at create; the decision_key_not_required: warning appears in the validate 200 body and in the pack-install result and not in the activate response",
+      "check 2 is reported for a definition that declares required_outputs and has declared_fields == %{} (no variable_schemas at all): the empty-declared_fields early return of SemanticValidation.validate/2 does not hide it",
+      "a required_outputs key without a variable_schema is reported with the node id and the key name; a duplicate key and a non-list value are each reported (negative tests)",
+      "an edge condition reading decision where an upstream HUMAN_TASK has decision in its form_schema but no required_outputs yields a decision_key_not_required: WARNING (in the validate response `warnings`, validation still valid, never a violation) from check 3; the same definition with required_outputs: [decision] on that task yields no such warning; a key that no HUMAN_TASK produces (service response, start variable) yields none",
+      "required_outputs on a node that is not a HUMAN_TASK is reported",
+      "every definition shipped in the repository (test/fixtures/qa/*process_definition.json, test/fixtures/simulation/**, priv/) is run through the validator in a test and the count of new findings (violations and warnings separately) per definition is quoted; none is weakened to make a definition pass",
+      "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over test/letflow/definitions, and mix letflow.check_boundaries pass, real output quoted",
+      "SECURITY-REVIEWER is not required for this entry (validator over definition data, no tenant-data path); CODE-DESIGN-VALIDATOR confirms code names match the REQ-459 design"
+    ]
+  },
+  "task": {
+    "description": "verify",
+    "extra": ""
+  }
+  ,
+  "result": {
+    "agent": "RELEASE-VALIDATOR",
+    "verdict": "PASS",
+    "head": "257a6c79",
+    "gates": {
+      "compile": "mix compile --warnings-as-errors exit=0 (dev) and MIX_ENV=test exit 0",
+      "format": "mix format --check-formatted exit=0",
+      "boundaries": "mix letflow.check_boundaries: OK -- 963 edges checked, 0 violations",
+      "new_tests_separate_invocations": "required_outputs_validation_test Result: 33 passed; required_outputs_surfaces_test Result: 21 passed; required_outputs_shipped_definitions_test Result: 2 passed; definitions_required_outputs_test (router) Result: 14 passed; combined re-run after restore Result: 70 passed, 0 'default values for the optional arguments' hits",
+      "regression": "semantic_validation_activation_test Result: 3 passed; semantic_validation_data_flow_test Result: 13 passed; graph_test Result: 76 passed (Git Bash)",
+      "mix_letflow_check_test": "NOT run (shells a full-suite mix test; infeasible at 0.4-1 GB free RAM per ORCH instruction). Substituted: touched the 4 new test files, forced recompile, grep for the dead-default warning substring = 0 hits. CI / ORCH must run the full task."
+    },
+    "red_before_green_after": {
+      "check2_empty_schema_trap": "temporarily replaced the empty-declared_fields clause body of SemanticValidation.validate/2 with `violations = []`; validation+surfaces+router files: Result: 60/68 passed (8 failed, incl. 'declared_fields == %{} with a required_outputs key is reported by validate/2', 'validate reports it ... with NO variable_schemas at all', 'activate refuses it'). Restored with git checkout HEAD -- semantic_validation.ex.",
+      "pack_install_warning_surface": "temporarily pointed SolutionPack.unbound_role_warnings at RoleBinding.warnings_for_definitions directly; surfaces file Result: 20/21 passed, failing test 'SolutionPack.install/3 the install result carries the decision_key_not_required: warning...'. Restored with git checkout HEAD -- solution_pack.ex.",
+      "tree_clean_after": "git status --short shows only the untracked handoff and letflow-3.code-workspace"
+    },
+    "per_ac": [
+      "AC1 PASS: one-violation-per-check tests plus valid neighbours in required_outputs_validation_test (33 passed)",
+      "AC2 PASS: surfaces create/update/validate/activate/pack install tests (21) and HTTP tests (14); check 2 not rejected at create; warning not in activate response",
+      "AC3 PASS: empty-declared_fields trap tests fail when the clause is reverted (red demonstrated)",
+      "AC4 PASS: node id and key asserted; duplicate and non-list negatives",
+      "AC5 PASS: warning prefix decision_key_not_required:, validate stays valid; declared neighbour and non-HUMAN_TASK producers yield none",
+      "AC6 PASS: required_outputs_on_non_human_task",
+      "AC7 PASS: shipped test quoted per definition, all violations=0; warnings meridian_loan_origination 19, meridian_regulatory_compliance_review 8, swiftroute_process 4, swiftroute_incident 0, vortex x4 0; simulation yaml meridian 19/8, swiftroute 4/0, vortex 0/0; no fixture or scripts diff (git diff --stat b8899b24..HEAD -- test/fixtures scripts is empty)",
+      "AC8 PASS except mix letflow.check.test not run (see gates)",
+      "AC9 PASS: step-02b CODE-DESIGN-VALIDATOR verdict PASS, step-02d REVIEWER PASS; codes in graph.ex and semantic_validation.ex match the reserved names; no SECURITY-REVIEWER needed"
+    ],
+    "addendum_0007": "git diff b8899b24..HEAD shows 4 added lines only (blank, H2 heading, blank, paragraph); no existing lines (79/108) touched; paragraph byte-matches approved_text in step-02d",
+    "scope": "no distinct_from/SeparationOfDuties code; only a moduledoc sentence in validation_warnings.ex mentions REQ-464's future distinct_from_single_member_role: source",
+    "design_vs_requirement_differences": [
+      "Requirement scope phrase 'validate, activate, import' (as asked in ORCH task): check 1 runs at create/update/validate/import/pack install, check 2 only at validate and activate (not import or install, because variable_schemas rows do not exist yet) -- consistent with requirement BUILDS item 4 and the design; tested (install with a key lacking a schema succeeds)",
+      "Check 3 never appears in activate and has no severity switch (permanent warning), per D-4",
+      "SemanticValidation.validate/2 empty clause now returns only check-2 violations instead of a hard valid:true (documented exception in moduledoc)"
+    ]
+  }
+}

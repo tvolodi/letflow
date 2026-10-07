@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ460-20261007/step-03-test-designer.json",
   "created_at": "2026-10-07T08:27:18Z",
   "started_at": "2026-10-07T08:27:18Z",
-  "completed_at": "2026-10-07T08:39:44Z",
+  "completed_at": "2026-10-07T08:51:43Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
@@ -82,7 +82,16 @@
       "Design-vs-requirement differences followed per REVIEWER (rejected names only for in-form/required keys; SUB_PROCESS is the regression).",
       "Combined 'missing key + other rejected key' returns rejected_keys [] (4c precedes merge); not asserted.",
       "C-7 'recomputed to null' variant not separately tested (same corrected-map check as visible_when)."
-    ]
+    ],
+    "rework_1": {
+      "finding": "F-1 mutant C (guard 4c counts instance-held value)",
+      "test_added": "engine_required_outputs_test.exs C-3/C-11 combined",
+      "commit": "2b95d10e",
+      "real_code": "Result: 25 passed (run twice)",
+      "mutant_C": "Result: 24/25 passed; the new test fails",
+      "revert": "restored by file copy; git diff -- lib empty",
+      "format": "rc=0"
+    }
   },
-  "rework_count": 0
+  "rework_count": 1
 }

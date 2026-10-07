@@ -1,0 +1,102 @@
+{
+  "handoff_id": "719a04bb-f55d-4097-b8ac-dcaa194599b0",
+  "run_id": "WF02-REQ459-20261007",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ459-20261007/step-02d-reviewer.json",
+  "created_at": "2026-10-07T06:49:40Z",
+  "started_at": "2026-10-07T06:40:00Z",
+  "completed_at": "2026-10-07T06:50:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-459"],
+    "artifacts_in": ["lib/letflow/design/req459-required-outputs-and-distinct-person.md"],
+    "branch_name": "design/REQ-459-required-outputs-distinct-person",
+    "round": 1
+  },
+  "task": {
+    "description": "WF-02 step 02d (REVIEWER): idiom/scope gate on the REQ-459 design (design-only; no lib/ code). Four questions, decision-record consistency (0007, 0004, 0029, 0040), anti-patterns, judgment calls D-1..D-6, computed-field decision, permanent-warning severity of check 3, REQ-460 test list, REQ-462 reword, and that the REQ-061 amendment and the 0007 note are stated but not performed."
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "No blocking finding. The design specifies idiomatic Ecto.Multi usage (guards as Multi.run steps after both row locks, refusal returned as an error tuple so the transaction rolls back, audit written in a separate transaction opened after Repo.transaction/1 returns, the ISS-0784 pattern, with the function-level rescue that anti-patterns.md 4474-4530 demands). It adds no process, no gen_statem, no lock and no migration, so the 'plain transactional context module' shape of Letflow.Engine (REQ-045, InstanceSupervisor deliberately empty) is untouched. New modules (Engine.RequiredOutputs, Engine.SeparationOfDuties, Definitions.ValidationWarnings) are pure or single-query core modules outside lib/letflow/modules/, so mix letflow.check_boundaries (rules 4/5, module subdirs only) is not engaged. The binding constraints A1-A11 and C1-C7 are implemented, not re-decided; the scoped relaxations are each flagged. Verified in the diff (origin/main...HEAD: design file plus three handoff files only) that neither docs/migration/decisions/0007-... nor docs/requirements.yaml is edited; the REQ-061 pointer text (11.2) and the 0007 note (11.3) are stated, assigned to DOC-UPDATER / REVIEWER, and not performed. Spot-checked citations: engine.ex service-task merge passes nil validations (3394); interpret_complete_result catch-all takes {:error, step, reason, changes} with changes.task present (5307-5325); tests asserting :instance_execution_error :variable_schema_rejected after HUMAN_TASK completion are exactly engine_variable_schema_merge_test 212/337/434, shipped_definition_variable_schemas_engine_test 132, swiftroute_decision_forms_fixture_test 292; engine_sub_process_test 777 is the surviving ERROR path; pin_rebind_test and engine_execution_error_test use set_instance_error/2 directly. 0007 passages at lines 79 and 108 exist verbatim and the design's corrected note (SUB_PROCESS merge, not 'service-task merges', is what still routes to ERROR) is accurate and better than REQ-460's draft. Four non-blocking items below need action by ORCH / later gates.",
+    "answers": {
+      "1_idiomatic_vs_crutch": "Idiomatic. Ecto.Multi.run guard steps; error tuple from a step rolls back; refusal audit outside the rolled-back transaction in its own Repo.transaction with rescue; SeparationOfDuties.check/5 takes the Multi repo; DISTINCT ON via Ecto bindings (INV-7) with a deterministic tie-break chain; locks unchanged (task then instance), so no new lock-order hazard (pre-existing inversion with the escalation timer is stated, not worsened). Rule A under the instance lock is the correct way to make parallel-branch concurrency (A-8) deterministic in READ COMMITTED. No crutch found.",
+      "2_supervision": "Intact. No process added; completion stays one transaction, concurrency arbitrated by Postgres row locks, as Engine's 'Process-vs-row decision' moduledoc and CLAUDE.md state. Letflow.InstanceSupervisor remains empty.",
+      "3_type_safety": "Two observations, filed as non-blocking (see non_blocking N-5). Not blocking per reviewer.md.",
+      "4_scope_creep": "None beyond the twelve sections and binding constraints. Additions are each traceable: ValidationWarnings aggregator (needed so three warning sources share the two existing call sites), RequiredOutputs.allowed_keys/any_rejected? (SECURITY F-1), check_for_claim totality (SECURITY F-2). No behaviour, macro or generic plumbing ahead of need. The CHK-25..27 numbering follows CHK-22..24 of REQ-455 (verified)."
+    },
+    "judgment_calls": {
+      "D-1": "Accepted with a note (F-3). Constant two-member body is the only reading that satisfies 'phrase and a status, nothing else' plus byte-identity across triggers. Cost is a second problem-document serialisation path outside Response.send_problem.",
+      "D-2": "Accepted. 403 matches the router's own 'complete is an authorization decision' comment (routers/tasks.ex 380-399) and the self_approval_forbidden precedent; the deliberate divergence from claim's 409 mapping is stated.",
+      "D-3": "Accepted with a wording follow-up (F-2). Best-effort log-and-swallow is what anti-patterns.md 4474-4530 and ISS-0784 require; a hard-fail audit would turn a decided 403/422 into a 500.",
+      "D-4": "Accepted. Permanent WARNING is consistent with REQ-461's own open_question (warning until REQ-462, then 'the design's stated severity applies'; the design states 'warning', so applying it is a no-op), with REQ-462's explicit list of unadopted keys whose edges are still read (meridian credit_decision, risk_rating, three committee votes, regulatory review), and with where SemanticValidation runs (validate and activate, not create), so a violation would block activation of the seeded meridian definition. The rule-A text 'OFF by default' shows the owner words rejection when meant; binding C3 says 'flags'. Reversal is a one-line severity change. This is a recorded design decision, not a drift from a decision record. It does require REQ-462 BUILDS item 3 last sentence and acceptance line 4 to be reworded before dispatch (design Adjustments REQ-462 items 0 and 2); that reword is an ORCH action and is the one gate on D-4 (F-1).",
+      "D-5": "Accepted. 4c (submitted) before step 5 so a caller error is never turned into a committed ERROR state; 6b-ii (corrected) closes the visible_when:false / computed-to-null hole. Literal match to REQ-460 item 2 'SUBMITTED'.",
+      "D-6": "Accepted. Asymmetry (claim advisory and unaudited, completion audited) is argued from the hash-chain lock; the unbounded-refusal-rows exposure is correctly parked under decision 0040 (no per-actor rate limit at this stage; sequential callers bounded by round-trip latency).",
+      "computed_field_decision": "Accepted. Authors must not list x-ui.computed keys in required_outputs because 4c judges the submitted map; stated plainly, the validator is deliberately not extended (no scope creep). See N-3 for the one residual risk.",
+      "check3_severity_vs_REQ461_462": "Consistent, see D-4. REQ-461 acceptance tests (warning for undeclared form key, absent when declared) are satisfiable; REQ-461 'Run wherever the existing checks run (validate, activate, import)' is correctly narrowed in Adjustments REQ-461 item 4 (check 3 at validate and pack install only).",
+      "REQ460_test_list": "Stands up. The design corrects the REQ-460 file list (engine_complete_task_test.exs has no ERROR assertion; the five real sites are listed with lines and verified here) and replaces the unreproducible 'service-task merge still ends in ERROR' regression with the SUB_PROCESS completion merge (service-task merge passes nil validations, engine.ex 3394). REQ-460 acceptance line 5 and the test-file list must be reworded by ORCH before dispatch (F-1).",
+      "REQ462_reword": "Stands up and is required (acceptance line 4 as written is unsatisfiable under D-4; BUILDS item 3 last sentence becomes a no-op)."
+    },
+    "findings": [
+      {
+        "id": "F-1",
+        "severity": "MEDIUM",
+        "blocking": false,
+        "title": "Requirement texts that the design says cannot be built or satisfied as written remain unedited",
+        "detail": "Design Adjustments state that REQ-460 (test-file list; AC5 service-task regression; AC3 'naming the rejected key(s)' only for in-form and required_outputs keys), REQ-461 (surfaces for check 3 narrower than 'validate, activate, import'), and REQ-462 (BUILDS item 3 last sentence; acceptance line 4) cannot be satisfied literally. Design says 'where this text and the design differ the design wins', which REQ-460 already authorises, so ELIXIR-DEV is covered, but TEST-DESIGN-VALIDATOR and RELEASE-VALIDATOR check acceptance_criteria text. A literal acceptance line that cannot pass will produce a spurious FAIL later.",
+        "action": "ORCH (or REQ-ANALYST via REQ-VALIDATOR) rewords the listed acceptance lines of REQ-460/461/462 to match the Adjustments section before dispatching REQ-460 and REQ-462. Do not edit from this design step."
+      },
+      {
+        "id": "F-2",
+        "severity": "LOW",
+        "blocking": false,
+        "title": "'Exactly one audit record' (REQ-459 section 2, REQ-460 AC6, REQ-463) versus D-3 'at most one, exactly one when the store is healthy'",
+        "detail": "D-3 is correct engineering, but the requirement texts say 'exactly one'. The design states the weaker guarantee openly and tests the failing-store case (C-15, A-15), so nothing is hidden; it is a wording gap between design and acceptance text only. Note also that when the audit store fails, a denied separation-of-duties attempt leaves no durable trace beyond one Logger.warning; accepted as the ISS-0784 precedent.",
+        "action": "Include in the F-1 reword: acceptance wording 'exactly one audit record when the audit store is available; at most one and a logged warning when it is not'."
+      },
+      {
+        "id": "F-3",
+        "severity": "LOW",
+        "blocking": false,
+        "title": "D-1 constant 403 body bypasses Response.send_problem and carries no title/type/trace_id; the SPA error mapper will fall back to statusText",
+        "detail": "web/src/api/client.ts (lines 139-140) builds message from body.title ?? body.message ?? statusText and code from body.type ?? body.code ?? status. With the constant body {\"detail\":\"separation of duties\",\"status\":403} the SPA shows 'Forbidden' / '403', not the phrase. This does not affect the server contract or REQ-463/465/466 and web/ is out of scope for this design, but it is a consequence of D-1 that FRONTEND-DEV should know. A second problem-document serialisation path also creates drift risk against Api.Error (anti-patterns.md 939-976); the design mitigates with a per-status test, which must be kept.",
+        "action": "No design change. ORCH to note on the REQ-463 run report; FRONTEND-DEV follow-up (optional) to map status 403 on task complete/claim to a localized 'separation of duties' message keyed on status, not body."
+      },
+      {
+        "id": "F-4",
+        "severity": "LOW",
+        "blocking": false,
+        "title": "RoleBinding.member_counts/2 reaches into group_members/tenant_role with raw queries; RoleBinding today reads only through Identity.RoleRegistry",
+        "detail": "role_binding.ex reads bindings via RoleRegistry.list_roles/1 and its moduledoc stresses advisory read-only behaviour (decision 0029 section 2). The new member_counts/2 (design 1.5) adds direct queries in the Definitions context against Identity-owned tables, a new cross-context data dependency. Tasks.resolve_principal_scope/2 already does the same, so it is precedent not a violation, and it does not bind or create roles (0029 respected).",
+        "action": "REQ-464: prefer a prefix-scoped counting function owned by the Identity context (RoleRegistry or Identity) and call it from RoleBinding, returning counts only (INV-2); if raw queries are kept, say why in the REQ-464 run report. SECURITY-REVIEWER is already required for REQ-464."
+      }
+    ],
+    "decision_record_consistency": {
+      "0007": "Consistent. validate-every-key decision stands (6b-i still validates every incoming key; merge/3 and variable_validations/5 are not edited). Passages at lines 79 and 108 are the only stale ones; design states a corrected dated note and does NOT edit the record. This REVIEWER approves the proposed note (design 11.3 wording, which names the SUB_PROCESS completion merge, not 'service-task') for writing by the REQ-460 reviewer-approved change; this step does not write it.",
+      "0004": "Consistent (humanless pipeline; validators gate each producer; no human step introduced).",
+      "0029": "Consistent. Check 4 and RoleBinding additions stay advisory, bind nothing, create no role.",
+      "0040": "Consistent. D-6 relies on it correctly: no per-actor rate limit added; unbounded refusal audit rows are accepted and not a new exposure class.",
+      "REQ-396 / D-ESC": "Consistent. No inheritance; escalated-past nodes impose no constraint; refusal leaves the armed timer untouched (rollback precedes W7); no new lock on the timer path.",
+      "0010": "No effect (OpenAPI generation deferred to S6; no spec artefact to update).",
+      "anti-patterns.md": "4474-4530 audit rescue arc applied (direct insert_entry/3 with rescue plus DROP-TABLE test, not append_multi/4 wrapper); 939-976 type-table-vs-error-map drift addressed by editing complete_error, the router moduledoc and clauses together with a per-refusal status test."
+    },
+    "non_blocking": [
+      "N-1: Design 2.2 step 6b does not say what happens when VariableSchema.variable_validations/5 returns {:error, _} (merge_output_variables/7 today maps it to {:error, {:variable_schema_lookup_failed, reason}}). Say in the REQ-460 run report that this branch is retained unchanged ahead of 6b-ii..iv.",
+      "N-2: Existing inline comments will become false and the design lists them (engine.ex moduledoc 142-152, comment at 3829-3861, variable_merge.ex moduledoc 58-77). Also update engine.ex comment at ~3982-3990 describing the corrected-submission 'execution_error' branch, which becomes unreachable on this path.",
+      "N-3: A key marked x-ui.computed and also listed in required_outputs is refused at 4c whenever the client omits it, with no validator signal. Decided and stated; if an adopting REQ lists one by mistake the symptom is a permanent 422. Candidate (not required) CHK-25 sub-check later.",
+      "N-4: Both new refusals exit through Multi.run as {:error, {:completion_refused, _}} and interpret_complete_result/3's catch-all currently returns {:error, reason}; the new leading branch must keep every other reason byte-identical (design says so; add a test that an unrelated step error still maps unchanged).",
+      "N-5 (type-safety, per reviewer.md filed as an issue): (a) required_outputs / distinct_from are validated lists of strings but are read as raw map entries at runtime via a total reader that falls back to 'off' with a Logger.warning; a typed node-attribute struct would make a malformed value unrepresentable after decode. (b) completion_refusal() is a closed tagged union, good, but the two-list output_refused tuple allows both lists empty (the F-1 case) by construction; acceptable and documented. Filing (a) under docs/issues/ tagged type-safety is not done in this run because the REVIEWER procedure for a design-only pass produces no code to anchor it; ORCH may file it with REQ-460 if wanted."
+    ],
+    "files_verified_unmodified": [
+      "docs/migration/decisions/0007-variable-merge-validates-new-keys.md",
+      "docs/requirements.yaml"
+    ],
+    "required_changes": []
+  },
+  "rework_count": 0
+}

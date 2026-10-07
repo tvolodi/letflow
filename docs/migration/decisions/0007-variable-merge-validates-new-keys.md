@@ -110,3 +110,7 @@ and exceptions need justification this one never had.
 - The registration (INSERT) path for `variable_schemas` rows is still unbuilt (REQ-078/
   REQ-082, per `variable_schema.ex`'s own moduledoc) — this decision does not change that
   scope boundary.
+
+## Addendum (2026-10-07, REQ-460) — HUMAN_TASK completion refuses a rejected output instead of raising EXECUTION_ERROR
+
+2026-10 note (REQ-460): on the HUMAN_TASK completion path a rejected output is now refused with a retryable 422 before any state change and no EXECUTION_ERROR is raised; merge/3 itself and its whole-batch semantics are unchanged; the EXECUTION_ERROR path remains for the SUB_PROCESS completion merge and other engine-internal failures. REVIEWER sign-off: 2026-10-07 (REQ-460, WF02-REQ460-20261007 step 02d).

@@ -80,6 +80,16 @@ actors:
     builtin_roles: [PLATFORM_ADMIN, TASK_WORKER]
     routing_roles: [role-ceo]
     note: "seed_swiftroute_persona_actors.sh: CEO, TASK_WORKER + role-ceo. Scenario swiftroute/tenant-onboarding-happy.yaml names her alias tenant_admin, but no seed grants her an admin role (no TENANT_ADMIN until REQ-447)"
+  actor-swiftroute-tobias:
+    tenant: swiftroute
+    builtin_roles: [TASK_WORKER]
+    routing_roles: []
+    note: "seed_swiftroute_persona_actors.sh PERSONAS line (actor-swiftroute-tobias|, no routing role): Dispatcher, TASK_WORKER only, same as lena. Evidence: test/fixtures/simulation/swiftroute/org_structure.yaml puts him in dept-dispatch with lena; scenario swiftroute/shipment-ops-timeout-escalation.yaml has him only submit a shipment request, never claim a role task, so no routing role is granted (least privilege). Process-audit PA-SWIFTROUTE-008 / ISS-1011 / Q-993: moved out of unresolved. Whether a plain TASK_WORKER may start shipment instances is the separate PA-SWIFTROUTE-006, not decided here"
+  actor-swiftroute-hans:
+    tenant: swiftroute
+    builtin_roles: [TASK_WORKER]
+    routing_roles: [role-accountant]
+    note: "seed_swiftroute_persona_actors.sh PERSONAS line (actor-swiftroute-hans|role-accountant): Accountant, TASK_WORKER + role-accountant. Evidence: org_structure.yaml has Hans Richter alone in dept-finance; the finance-estimate task of the Driver Incident Report (test/fixtures/qa/swiftroute_incident_process_definition.json) routes to role-accountant; scenario swiftroute/driver-incident-assess-and-estimate.yaml uses him as the accountant. Process-audit PA-SWIFTROUTE-005 / ISS-1011 / Q-993 (D3): moved out of unresolved"
 
   actor-vortex-sabine:
     tenant: vortex
@@ -135,17 +145,8 @@ actors:
     note: "seed_vortex_persona_actors.sh PERSONAS line (actor-vortex-claudia|, no routing role); TASK_WORKER implicit per script header. Process-audit WF05-BASELINE3 PA-VORTEX-008 / ISS-1006 / Q-988: seeded account now recorded in the roster"
 
 # Actors whose built-in role could not be established. A recorded gap, not a pass for SCHEMA-8..10.
-unresolved:
-  actor-swiftroute-hans:
-    searched:
-      - "scripts/seed_swiftroute_persona_actors.sh: persona list is lena, marco, alice only; hans absent, and no role-accountant group is seeded"
-      - "test/fixtures/simulation/swiftroute/org_structure.yaml: actor-swiftroute-hans (Hans Richter) is in dept-finance, the person the finance-estimate task (role-accountant) is meant for"
-      - "used only in swiftroute/driver-incident-assess-and-estimate.yaml; resolving it is ISS-1011 / Q-993 (swiftroute D3)"
-  actor-swiftroute-tobias:
-    searched:
-      - "scripts/seed_swiftroute_persona_actors.sh: persona list is lena, marco, alice only; tobias absent"
-      - "priv/keycloak/realms/bpm-default.json: no such user"
-      - "grep -r actor-swiftroute-tobias scripts priv: no seed or realm hit; used only in swiftroute/shipment-ops-timeout-escalation.yaml"
+# Empty since ISS-1011 / Q-993 resolved actor-swiftroute-hans and actor-swiftroute-tobias.
+unresolved: {}
 
 # Scenario id -> reason a platform-tenant actor may appear outside scope platform.
 platform_actor_allowed:

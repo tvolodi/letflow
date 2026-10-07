@@ -112,15 +112,8 @@ defmodule Letflow.Scripts.SeedScriptsNoArgvPayloadTest do
     # definition name (a short slug such as "ProductionBatch").
     {"seed_vortex_entities.sh",
      ~S|"{\"rationale\":\"UAT seed: activate ${name} entity definition (seed_vortex_entities.sh)\"}"|},
-    # seed_swiftroute_persona_actors.sh: one actor/role/membership body built from short
-    # persona names and UUIDs (name, display_name, description / group_id / user_id).
-    {"seed_swiftroute_persona_actors.sh",
-     ~S|"{\"name\":\"${name}\",\"display_name\":\"${display_name}\",\"description\":\"${description}\"}"|},
-    {"seed_swiftroute_persona_actors.sh",
-     ~S|"{\"name\":\"${name}\",\"kind\":\"process_routing_role\",\"group_id\":\"${group_id}\"}"|},
-    {"seed_swiftroute_persona_actors.sh", ~S|"{\"user_id\":\"${user_id}\"}"|},
-    # scripts/lib/seed_persona_actors_base.sh: shared helper sourced by the meridian and
-    # vortex persona scripts; same three small bodies (short persona names + UUIDs),
+    # scripts/lib/seed_persona_actors_base.sh: shared helper sourced by the swiftroute, meridian and
+    # vortex persona scripts (swiftroute migrated by ISS-1011); same three small bodies (short persona names + UUIDs),
     # sent with --data-ascii. Bounded, so the argv limit cannot be reached.
     {"seed_persona_actors_base.sh",
      ~S|"{\"name\":\"${name}\",\"display_name\":\"${display_name}\",\"description\":\"${description}\"}"|},

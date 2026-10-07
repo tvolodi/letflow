@@ -33,4 +33,26 @@ affected_files:
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-993
 github_ref: GH-2280
-status: open
+status: resolved
+resolved_in_run: WF03-ISS1011-Q993
+resolved_at: "2026-10-07T00:00:00Z"
+resolution: >
+  test/fixtures/uat/actors.yaml now records actor-swiftroute-hans (Accountant, TASK_WORKER + role-accountant;
+  dept-finance in org_structure.yaml, the finance-estimate person) and actor-swiftroute-tobias (Dispatcher,
+  TASK_WORKER only, no routing role: the timeout scenario only has him submit a shipment and org_structure.yaml
+  puts him in dept-dispatch with lena) as resolved entries; `unresolved:` is now empty. role-accountant is the exact
+  role string of the finance-estimate task in test/fixtures/qa/swiftroute_incident_process_definition.json and the
+  simulation YAML. scripts/seed_swiftroute_persona_actors.sh was migrated to the shared
+  scripts/lib/seed_persona_actors_base.sh (ROLES + PERSONAS, persona_run swiftroute, as meridian and vortex do):
+  it provisions the role-accountant group + tenant_role and the hans and tobias personas; its three
+  allow-list entries in seed_scripts_no_argv_payload_test.exs were removed (the base lib's entries cover the
+  payloads). New test swiftroute_roster_accountant_test.exs pins the roster, the seed data and the D3 check
+  (every role routed by a swiftroute QA human task is held by a swiftroute actor); seed_swiftroute_persona_actors_test.exs
+  was updated to the PERSONAS shape. The other audit findings (e.g. PA-SWIFTROUTE-006, dispatcher start
+  permission) are untouched. Live QA not verified: nothing was run against a QA instance.
+follow_ups:
+  - >
+    QA re-seed after merge: scripts/seed_swiftroute_persona_actors.sh must be re-run on QA. BEFORE it, Part A
+    must have created the Keycloak accounts actor-swiftroute-hans and actor-swiftroute-tobias in the swiftroute
+    realm (ai-dala-infra qa-login); without them the script seeds every other persona, skips the missing ones
+    with a warning, and exits non-zero naming the missing actor(s). Live QA not verified.

@@ -146,9 +146,10 @@ because its own completion writes before its edges are read).
 **Severity decided here: WARNING, permanently, not a violation.** Reasons, each checkable:
 1. REQ-462 explicitly leaves decision keys of meridian `credit_decision`, `risk_rating`, the three committee votes and
    the regulatory review UNADOPTED (REQ-462 BUILDS "Deliberately NOT in this list"), yet edges of those same definitions read
-   them. A violation would make `Definitions.create/2` reject `meridian_loan_origination` and the regulatory definition
-   (violations block create: `definitions.ex:557-561`), breaking the seed scripts and the QA suites in the same change that
-   adopts the eleven listed nodes.
+   them. A violation would make `validate_definition_graph/2` report those definitions invalid and `activate/2` refuse them
+   (`SemanticValidation` runs there, `definitions.ex:1284`, `2372-2385`; it does NOT run in `create/2`, `definitions.ex:557-561`),
+   so the seeded meridian definitions could no longer be activated, breaking the seed scripts and the QA suites in the same
+   change that adopts the eleven listed nodes.
 2. A violation would reject every tenant-authored definition that reads a form-sourced key without declaring it, with no BA
    ruling authorising that breaking change; the binding text says "flags", and the rule-A text that says "OFF by default"
    shows the owner knows how to say "reject".
@@ -246,15 +247,24 @@ P4. `actor_id`, `idempotency_key` read with `Map.get/2`; `completed_at` clock re
    `:form_expression_reevaluation` (2280)). It finds the node `task.node_id` in `graph.nodes`, reads its two attributes
    (section 1.1) and runs, in this order:
    4a. `[pure]` if the node has neither a non-empty `distinct_from` nor a non-empty `required_outputs`: return `{:ok, :no_guards}`.
-       No query is issued. This is the default-off path and is byte-identical in behaviour and query count to today.
+       No query is issued. For THIS step the default-off path is byte-identical in behaviour and query count to today. It is NOT
+       true of the whole completion: step 6b-iv refuses a schema-rejected value on EVERY HUMAN_TASK completion, including nodes
+       with neither attribute (that is why the five existing ERROR-on-rejection tests must change).
+       On the pass path the step returns `{:ok, :guards_passed}` (any guard present and satisfied) or `{:ok, :no_guards}`; the
+       payload is not read by any later step.
    4b. **Rule A** `[read]` (only if `distinct_from` is non-empty AND `actor_id` is a binary; a nil actor never equals a
-       completer and the existing event-append requirement still rejects it later): ONE query
-       `SeparationOfDuties.blocking_nodes/5` (section 8.2) -> if non-empty, **`[REFUSE-A]`** return
+       completer and the existing event-append requirement still rejects it later): ONE query inside the single entry point
+       `SeparationOfDuties.check/5` (section 8.2; the private `blocking_nodes/5` it uses is not called by the engine step) -> on
+       `{:error, {:separation_of_duties, blocking_node_ids}}`, **`[REFUSE-A]`** return
        `{:error, {:completion_refused, {:separation_of_duties, blocking_node_ids}}}`.
    4c. **Rule C, submitted check** `[pure]` (only if `required_outputs` is non-empty):
-       `RequiredOutputs.missing_keys/2` over the SUBMITTED `output_variables` (the map handed to `run_complete_task/6`,
-       before correction). -> if non-empty, **`[REFUSE-C1]`** return
+       `RequiredOutputs.missing_keys(required, output_variables)` with `required` = `RequiredOutputs.required_outputs(node)` and
+       `output_variables` = the SUBMITTED map handed to `run_complete_task/6`, before correction. -> if non-empty, **`[REFUSE-C1]`** return
        `{:error, {:completion_refused, {:output_refused, missing_keys, []}}}`.
+   Decision on COMPUTED fields: a key that a form field marks `x-ui.computed` MAY NOT usefully be named in `required_outputs`.
+   Step 4c judges the submitted map, and step 5 recomputes computed fields server-side afterwards, so a client that omits a computed
+   key is refused at 4c even though the server would have computed it (REQ-460 item 2 says SUBMITTED, literally). Authors must not list
+   computed fields; the validator does not flag it (no check added); the corrected-map check 6b-ii applies to them as to any key.
    Why A before C: authorization-type decisions precede input validation (403 before 422), and a caller who can never
    complete the task is not told what a valid body would look like. Why both before step 5: see 2.5.
 5. `:form_expression_reevaluation` `[pure]` `FormExpressionReevaluation.reevaluate/3` (`engine.ex:2280-2299`;
@@ -301,6 +311,10 @@ P4. `actor_id`, `idempotency_key` read with `Map.get/2`; `completed_at` clock re
    W11 sub-process children creation `[write]` (4491-4497; 4513-4532);
    W12 sub-process completion cascade `[write]` (4498-4504; 4542-4592);
    W13 `:complete_task_outcome` marker (4505).
+8z. Exit path outside the order: `run_complete_task/6` is wrapped in a function-level `rescue` (`engine.ex:2362-2364`) that turns any
+    raised exception in ANY step above (including the new step 4 and step 6b) into `{:error, {:transaction_failed, exception}}`,
+    i.e. a 500 at the router (`routers/tasks.ex:425`); the transaction has rolled back, no refusal audit row is written for it,
+    and no refusal body is produced.
 9. COMMIT. Then, outside the transaction and still inside `run_complete_task/6`: `maybe_snapshot_after_complete_task/2` (2418-2454),
    `emit_task_completed_telemetry/2` (2384-2405), `interpret_complete_result/3` (5258-5325).
 
@@ -355,7 +369,7 @@ without a rescue", and its fifth round warns that the helper `append_multi/4` hi
 direct `insert_entry/3` shape and adds a DROP-TABLE regression test, section 12); it is called from exactly one clause, so
 one refused request writes at most one record; it returns `:ok` whether the insert succeeded or not (a failed audit write
 logs one warning and the refusal response is unchanged; with a healthy audit store the count is exactly one, with a
-failing one it is zero and a warning is logged, never two). The public result is built from `reason` (the `completion_refused` tuple), not from the audit
+failing one it is zero and a warning is logged, never two). **The guarantee is therefore "at most one audit record per refused request, exactly one when the audit store is healthy"; it is NOT "exactly one always"** (D-3). The public result is built from `reason` (the `completion_refused` tuple), not from the audit
 outcome.
 
 Invariant the design adds: `Engine.complete_task/3` must not be called inside an enclosing `Repo.transaction`, or the audit
@@ -610,7 +624,7 @@ The identity compared is `actor_id`, which for every request is the authenticate
 
 Statement: the rule A comparison uses exactly this `actor_id`; for a token request it is the TOKEN OWNER's user id, never the
 token id, never a role. Roles never enter the engine: `run_complete_task/6` and `claim_task/3` take no roles argument, so no
-role (TENANT_ADMIN, which holds every tenant-scope permission per `authorization.ex:1347-1352`, included) can be special-cased
+role (TENANT_ADMIN, which holds every tenant-scope permission per `lib/letflow/api/authorization.ex:1347-1352` (`core_role_allows?(:TENANT_ADMIN, ...)` at 1352), included) can be special-cased
 without changing those signatures. Comparison is on canonical lowercase UUID strings: `tasks.completed_by` loads through
 `Ecto.UUID` (`task.ex:72`), and `auth_context.user_id` is a database-sourced UUID; implementation compares after
 `Ecto.UUID.cast/1` of both sides, and a nil or non-binary actor never matches.
@@ -630,15 +644,51 @@ of node N with the greatest `completed_at`. The `TASK_COMPLETED` event payload a
 
 ### 8.2 The query (one per guarded completion or claim, never more)
 
+The module `Letflow.Engine.SeparationOfDuties` has exactly two PUBLIC entry points; the query function is private.
+
 ```elixir
-@spec Letflow.Engine.SeparationOfDuties.blocking_nodes(
+# Called by the engine step :completion_guards (step 4b), inside the open transaction; `repo` is the Multi.run repo.
+@spec check(
         repo :: module(),
-        instance_id :: Ecto.UUID.t(),
-        named_node_ids :: [String.t()],
-        actor_id :: String.t(),
+        graph :: Letflow.Definitions.Graph.t(),
+        task :: Letflow.Engine.Task.t(),
+        actor_id :: Ecto.UUID.t() | String.t() | nil,
         prefix :: String.t()
-      ) :: [String.t()]
+      ) :: :ok | {:error, {:separation_of_duties, blocking_node_ids :: [String.t()]}}
+
+# Called by Letflow.Tasks.claim_task/3 (section 6, step 5); loads the snapshot graph itself, then delegates to check/5 with Letflow.Repo.
+@spec check_for_claim(task :: Letflow.Engine.Task.t(), actor_id :: Ecto.UUID.t() | String.t() | nil, prefix :: String.t()) ::
+        :ok | {:error, :separation_of_duties}
+
+# private, the single read: returns the named node ids (sorted) whose most recent completer equals actor_id
+@spec blocking_nodes(repo :: module(), instance_id :: Ecto.UUID.t(), named_node_ids :: [String.t()], actor_id :: String.t(), prefix :: String.t()) ::
+        [String.t()]
 ```
+
+`check/5` returns `:ok` without any query when the node has no non-empty `distinct_from` or `actor_id` is not a binary; otherwise
+it calls `blocking_nodes/5` once. The claim path maps `{:error, {:separation_of_duties, _}}` to the detail-free
+`{:error, :separation_of_duties}`.
+
+New module `Letflow.Engine.RequiredOutputs` (all pure, total):
+
+```elixir
+@spec required_outputs(node :: Letflow.Definitions.Graph.Node.t()) :: [String.t()]          # [] when absent/null/malformed
+@spec missing_keys(required :: [String.t()], output_variables :: map()) :: [String.t()]       # sorted; keys absent from the map or with a nil value
+@spec rejected_keys(validations :: Letflow.Engine.VariableMerge.variable_validations(), exclude :: [String.t()]) :: [String.t()]  # sorted keys with {:rejected, _}, minus `exclude`
+```
+
+and in `Letflow.Definitions.SemanticValidation` (also added to its moduledoc):
+
+```elixir
+@spec required_output_schema_violations(graph :: Letflow.Definitions.Graph.t(), declared_fields :: declared_fields()) ::
+        [Letflow.Definitions.Graph.Violation.t()]
+@spec decision_key_warnings(graph :: Letflow.Definitions.Graph.t(), definition_name :: String.t()) :: [String.t()]
+```
+
+`decision_key_warnings/2` takes the definition name as its SECOND argument because the wire text embeds it; the caller is
+`ValidationWarnings.for_definitions/2`, which already holds `{definition_name, graph}` pairs.
+
+The `:completion_guards` step's own type: `@spec completion_guards_result() :: {:ok, :guards_passed | :no_guards} | {:error, {:completion_refused, completion_refusal()}}`.
 
 Description of the single read: from `tasks` in the tenant schema (`prefix` explicit), `WHERE instance_id = ^instance_id AND
 status = 'COMPLETED' AND node_id IN ^named_node_ids`, `DISTINCT ON (node_id)` ordered by `node_id ASC, completed_at DESC,
@@ -901,15 +951,17 @@ Acceptance-criteria map for REQ-459 itself:
 1. Codes and checks exactly as 1.2: CHK-25 in `graph.ex`; check 2 as `SemanticValidation.required_output_schema_violations/2` called from both clauses of `validate/2` (the empty-schema early return at `semantic_validation.ex:189-192` must not hide it); check 3 as `SemanticValidation.decision_key_warnings/2`.
 2. **Check 3 is a WARNING and stays one** (1.4). The "severity switch" REQ-461 open_questions and REQ-462 BUILDS item 3 mention is not performed. REQ-461 creates `Letflow.Definitions.ValidationWarnings` and switches the two call sites (`definitions.ex:1286-1287`, `solution_pack.ex:1397-1411`).
 3. Update the moduledoc of `SemanticValidation` (its "Empty-declared_fields exemption" and class list) and of `Graph` (check list, `validate_node_attributes/1` doc "plus CHK-21", `graph.ex:420-434`) and extend the `Violation.code()` union (`graph.ex:222-260`).
-4. Tests per 12.1 C-17; run every definition under `test/fixtures/qa/*.json`, `test/fixtures/simulation/**` and `priv/` through the validator and quote the counts (REQ-455 precedent, `shipped_definitions_validation_test.exs`).
+4. REQ-461 item 4 / acceptance say checks run at "validate, activate, import"; actual surfaces are: shape violations at validate/create/update/import/install; check 2 violation at validate and activate; check 3 WARNING at validate and pack install only (not activate, not import response).
+5. Tests per 12.1 C-17; run every definition under `test/fixtures/qa/*.json`, `test/fixtures/simulation/**` and `priv/` through the validator and quote the counts (REQ-455 precedent, `shipped_definitions_validation_test.exs`).
 
 **REQ-462 (adoption, rule C)**
+0. Because check 3 is a permanent warning, REQ-462 BUILDS item 3 ("switch severity") and acceptance line 4 MUST be reworded by ORCH before dispatch (see item 2 below); they cannot be built or satisfied as written.
 1. Escalation tasks declare `required_outputs` explicitly (section 9 decision 1); no inheritance exists.
 2. **Acceptance line 4 conflicts with the design:** it asks that "REQ-461 check 3 finds no unadopted decision key in any of" the changed definitions, but REQ-462 itself leaves meridian `credit_decision`, `risk_rating`, committee votes (and the regulatory review) unadopted while their edges read them, so check 3 WILL emit `decision_key_not_required:` warnings for those keys. Reword to: no warning for any of the eleven adopted keys; remaining warnings are listed per definition in the run report and reported to ORCH. BUILDS item 3's "switched to the severity the REQ-459 design states" is a no-op (warning remains).
 3. The eleven nodes' keys must each have a `variable_schema` in the definition and the seed scripts (REQ-461 check 2 is a violation at activate/validate).
 
 **REQ-463 (engine, rule A)**
-1. Add step 4b and `{:separation_of_duties, ...}` to `completion_refusal()`; new module `Letflow.Engine.SeparationOfDuties` with `blocking_nodes/5`, `check/5` (for step 4b, returns the `completion_refusal` tuple) and `check_for_claim/3` (section 6). Slot 4b before 4c, after `:snapshot_and_state`.
+1. Add step 4b and `{:separation_of_duties, ...}` to `completion_refusal()`; new module `Letflow.Engine.SeparationOfDuties` with the two public entry points `check/5` (the ONLY one the engine step 4b calls; it wraps the private `blocking_nodes/5` and the engine maps its error to `{:completion_refused, {:separation_of_duties, ids}}`) and `check_for_claim/3` (called by `claim_task/3`, section 6); specs in 8.2. Slot 4b before 4c, after `:snapshot_and_state`.
 2. Add the claim step 5 in `tasks.ex`, the `claim_error` member, the router clauses for complete and claim, and `Response.separation_of_duties/1`.
 3. Acceptance "replay is not refused" is satisfied by section 10: the replay gets the existing 409, so assert 409 and "not the separation body", not a 200.
 4. Acceptance "TENANT_ADMIN is not exempt" depends on REQ-447 PR2, merged as `ff944312`.
@@ -918,7 +970,7 @@ Acceptance-criteria map for REQ-459 itself:
 
 **REQ-464 (validator, rule A)**
 1. Codes and checks exactly as 1.2 (CHK-26 shape/existence/type, CHK-27 position) plus section 1.5 inputs. The BA parallel ruling is implemented as the relation table in 1.5.
-2. Check 4: add `single_member_pairs/1`, `member_counts/2`, `format_single_member_warning/2` to `RoleBinding` and the third source to `ValidationWarnings.for_definitions/2`; surfaces are the validate 200 body and the pack-install `warnings` (activate response is record-shaped and carries none; the AC "activation with only a warning succeeds" is satisfied because warnings never block).
+2. Check 4 warnings likewise surface at validate and pack install only, not in the activate response. Add `single_member_pairs/1`, `member_counts/2`, `format_single_member_warning/2` to `RoleBinding` and the third source to `ValidationWarnings.for_definitions/2`; surfaces are the validate 200 body and the pack-install `warnings` (activate response is record-shaped and carries none; the AC "activation with only a warning succeeds" is satisfied because warnings never block).
 3. REQ-464's SECURITY-REVIEWER condition ("only if check 4 reads tenant role membership through a new query") IS met: `member_counts/2` is a new query over `group_members` and `tenant_role` and needs SECURITY-REVIEWER (INV-1, prefix explicit; INV-2, only counts leave the function).
 4. Members counted: distinct `group_members.user_id` of the role's bound group, regardless of user status (OQ-2).
 
@@ -963,10 +1015,10 @@ Acceptance-criteria map for REQ-459 itself:
 ## Citations verified (re-grep these)
 
 `lib/letflow/engine.ex`: `complete_task/3` 2212; `cast_task_id` 2245; `fetch_output_variables` 2252; `run_complete_task` 2263; `:task` 2273; `:instance_projection` 2274; `:snapshot_and_state` 2277; `:form_expression_reevaluation` 2280; `:merge` 2300; `:transition` 2332; `Multi.merge` 2348; `Repo.transaction` 2358; `maybe_snapshot_after_complete_task` 2418; `emit_task_completed_telemetry` 2384; `fetch_and_lock_task` 2458; `fetch_and_lock_instance_projection` 2473; `build_snapshot_and_state` 2490; `fetch_graph` 2512; `load_active_tokens` 2525; `find_token_for_task` 2549; `load_pending_task_tokens` 2572; `build_instance_state` 2591; `advance_after_escalation_timer_fired` 2916; `persist_escalation_timer_fired_advance` 2983; `merge_output_variables` 3875; `apply_variable_merge` 3916; `build_reevaluation_execution_error_args` 3960; `prepend_form_expression_events` 3992; `dispatch_task_completion_hop_chain` 4020; `build_complete_task_tail_multi` 4328 / 4343; `record_task_complete_audit` 4911; `record_task_activation_rejection_audit` 4979; `complete_task_row` 5102; `append_task_completed_event` 5127; `reconcile_projection` 5222; `interpret_complete_result` 5258 / 5266 / 5307; `complete_error` type 2141; `build_graph` 1538; service-task merge call 3394.
-`lib/letflow/tasks.ex`: `resolve_principal_scope` 353; `claim_task` 428; `apply_claim` 448-495; `authorize_completion` 539; `assign_task` 606; `reassign_task` 676; `fetch_and_lock_task` 703; `write_assignment` 715; `claim_error` 395.
+`lib/letflow/tasks.ex`: `resolve_principal_scope` 353; `claim_task` def 430 (spec 428); `apply_claim` 448-495; `authorize_completion` def 539; `assign_task` def 608; `reassign_task` def 678; `fetch_and_lock_task` 703; `write_assignment` 715; `claim_error` 395.
 `lib/letflow/routers/tasks.ex`: `handle_complete` 325; `handle_complete_result` 348-427; `handle_claim` 431; `handle_claim_result` 439-473; idempotency key 331; actor 326.
-`lib/letflow/api/error.ex`: `serialise` 121-151; `forbidden` 182; `conflict` 233; `unprocessable` 293; `promotion_conflict` 404. `lib/letflow/api/response.ex`: `send_problem` 115; `forbidden` 136; `unprocessable` 178.
+`lib/letflow/api/error.ex` and `lib/letflow/api/authorization.ex` (1347-1352): `serialise` 121-151; `forbidden` 182; `conflict` 233; `unprocessable` 293; `promotion_conflict` 404. `lib/letflow/api/response.ex`: `send_problem` 115; `forbidden` 136; `unprocessable` 178.
 `lib/letflow/plugs/auth_pipeline.ex`: 107-114, 141-150, 196, 227-234, 370-388. `lib/letflow/identity.ex`: `verify_api_token` 1648, 1686.
-`lib/letflow/engine/variable_merge.ex`: `merge` 205. `lib/letflow/engine/variable_schema.ex`: `variable_validations` 279-301; `fetch_schemas` 336; `validations_for` 407; `outcome_for` 440. `lib/letflow/engine/form_expression_reevaluation.ex`: `reevaluate` 154. `lib/letflow/engine/task.ex`: 57-77, 107. `lib/letflow/engine/task_activation.ex`: `append_multi_from_existing_records` 358; `cancel_pending_escalation_timers` 533. `lib/letflow/engine/sub_process.ex`: 824-847. `lib/letflow/scheduler.ex`: `do_fire` 297. `lib/letflow/event_store.ex`: `append` 218; `claim_idempotency` 649; `resolve_duplicate` 678. `lib/letflow/audit.ex`: `insert_entry` 231; `entry_attrs` 121.
+`lib/letflow/engine/variable_merge.ex`: `merge` def 210 (spec 205). `lib/letflow/engine/variable_schema.ex`: `variable_validations` 279-301; `fetch_schemas` 336; `validations_for` 407; `outcome_for` 440. `lib/letflow/engine/form_expression_reevaluation.ex`: `reevaluate` def 161 (spec 154). `lib/letflow/engine/task.ex`: 57-77, 107. `lib/letflow/engine/task_activation.ex`: `append_multi_from_existing_records` 358; `cancel_pending_escalation_timers` 533. `lib/letflow/engine/sub_process.ex`: 824-847. `lib/letflow/scheduler.ex`: `do_fire` 297 (escalation arm at 312). `lib/letflow/event_store.ex`: `append` 218; `claim_idempotency` 649; `resolve_duplicate` 678. `lib/letflow/audit.ex`: `insert_entry` 231; `entry_attrs` 121.
 `lib/letflow/definitions/graph.ex`: `Node` 171; `Violation.code` 222-260; `validate_node_attributes` 436; `validate_flow` 487; `check_reachable_from_start` 698; `build_adjacency` 856; `check_form_schema_expressions` 1041; `check_human_task_escalation` 1059. `lib/letflow/definitions/semantic_validation.ex`: `validate` 189-207; `ancestors_or_self` 266; `may_write?` 299-318; `parse_condition` 440; `collect_var_paths` 486. `lib/letflow/definitions/role_binding.ex`: 23-74. `lib/letflow/definitions.ex`: create phases 557-561; `validate_definition_graph` 1272-1297; `validate_update_graph` 1675-1682; `run_semantic_validation` 2372. `lib/letflow/definitions/solution_pack.ex`: 1389, 1397-1411. `lib/letflow/definitions/promotion_review_store.ex`: 429-436. `lib/letflow/routers/promotions.ex`: 603-604.
 `priv/repo/migrations/20260818110003_create_tasks.exs`: 87-88. `docs/requirements.yaml`: REQ-061 at 3463 (caller list 3485-3490); REQ-459..466 at 34475-35044. `docs/migration/decisions/0007-variable-merge-validates-new-keys.md`: 79, 108. `docs/anti-patterns.md`: 939-976, 4474-4530. `lib/letflow/design/req396-human-task-escalation-timer.md`, `req455-definition-validator-gaps.md`, `iss0784-task-activation-rollback-audit-signal.md`.

@@ -35,4 +35,28 @@ affected_files:
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-990
 github_ref: GH-2277
-status: open
+status: in_progress
+resolved_in_run: WF03-ISS1008-Q990
+resolved_at: "2026-10-07T00:00:00Z"
+resolution: >
+  PARTIAL (AC3 not met, see residual). SwiftRoute Shipment Approval QA fixture v1.4 -> v1.5
+  (simulation copy test/fixtures/simulation/swiftroute/process_route_approval.yaml mirrored; it
+  keeps its own "1.0" version): ops-review and ceo-approval now carry a form_schema with a required
+  string decision field, enum [approve, reject], named exactly as the outgoing edges read it
+  (ops_decision, ceo_decision). The shipped variable_schemas (ISS-1027) already enforce those enums
+  server-side: a null or out-of-enum decision is rejected through the real engine path
+  (:variable_schema_rejected, instance to :error). declared_value, read by the value gateway, is
+  typed number by variable_schemas and documented as a required start input in the description. The
+  node model has no start form (form_schema is read only from HUMAN_TASK nodes), so there is no
+  start-form field to add; stated as a limitation in the v1.5 description. No lib/ change.
+residual: >
+  AC3 (completion without a decision is rejected) is not achievable fixture-only: variable_schemas
+  validates only submitted keys (lib/letflow/engine/variable_schema.ex variable_validations/5),
+  form_schema required is UI-only (REQ-273). A completion that omits the decision key is accepted
+  and fails closed (ops-review -> ceo-approval, ceo-approval -> auto-reject, never
+  release-shipment); pinned by the KNOWN LIMITATION tests.
+follow_ups:
+  - "QA re-seed needed after merge: scripts/seed_swiftroute_definition.sh (Shipment Approval v1.5)"
+  - "AC3 (completion without a decision is rejected) is not achievable fixture-only: variable_schemas validates only submitted keys (lib/letflow/engine/variable_schema.ex variable_validations/5), form_schema required is UI-only (REQ-273); needs a lib change - completion-time required-output check in Letflow.Engine.run_complete_task - via CODE-DESIGNER + SECURITY-REVIEWER; not done here. When it lands, the two KNOWN LIMITATION tests in swiftroute_decision_forms_fixture_test.exs must flip."
+  - "No start-form node model: a required declared_value at instance start would need a start-form capability (or the same completion-time/required-input check at Engine.create); not done here."
+regression_test: test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs

@@ -1,0 +1,101 @@
+{
+  "handoff_id": "0367b0e8-fba6-444b-8c21-04ed1dfce184",
+  "run_id": "WF02-REQ460-20261007",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ460-20261007/step-02d-reviewer.json",
+  "created_at": "2026-10-07T08:25:36Z",
+  "started_at": "2026-10-07T08:25:36Z",
+  "completed_at": "2026-10-07T08:27:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-460"
+    ],
+    "queue_task": 1023,
+    "gh_issue": 2338,
+    "branch_name": "feat/REQ-460-required-outputs-Q-1023",
+    "owned_modules": [
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/",
+      "lib/letflow/api/",
+      "lib/letflow/routers/tasks.ex"
+    ],
+    "design": "lib/letflow/design/req459-required-outputs-and-distinct-person.md",
+    "artifacts_in": [
+      "lib/letflow/design/req459-required-outputs-and-distinct-person.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md",
+      "docs/agents/instructions/core-directives.md",
+      "artifacts"
+    ],
+    "requirement_text": "Source: GH #2335 (ISS-1039, Q-1021). Today a HUMAN_TASK can be\ncompleted without its decision key: variable_schemas (REQ-109)\nvalidate only the keys that ARE submitted and the form_schema\n`required` list is a UI hint (REQ-273), so an omitted decision\nfollows the fail-closed route silently and the operator's intent is\nlost. Also today any value a variable_schema rejects (for example an\nout-of-enum decision) puts the WHOLE instance into ERROR through the\nmerge path (REQ-061), so one bad value from any task worker halts a\nbusiness case. Implement exactly the design of REQ-459 (read it\nfirst; where this text and the design differ on a detail the design\nwins and the difference is reported).\n\nBUILDS (what, not how; the design owns the how):\n1. HUMAN_TASK node attribute `required_outputs: [keys]`, read by\n   Letflow.Engine.run_complete_task (lib/letflow/engine.ex).\n2. A completion-time check on the SERVER, before any state change: a\n   completion whose SUBMITTED output_variables lack a required key\n   (absent or null; a value already held by the instance from an\n   earlier pass does not count) is refused with a retryable 422 whose\n   body names the missing keys. The task stays open and claimable,\n   the instance, tokens, variables and events are unchanged, and the\n   only write is at most one audited refusal record without PII\n   (exactly one when the audit store is healthy).\n3. A value that a variable_schema rejects on the HUMAN_TASK\n   completion path (out-of-enum, wrong type) is refused the same way:\n   retryable 422 naming the rejected keys, no instance ERROR, nothing\n   written. A form's `required` flag stays a UI hint.\nDECIDED (BA, 2026-10-07): a required key whose submitted value is\nnull counts as missing; an empty string is judged by the\nvariable_schema's own type and enum rules. DECIDED: form-expression\nre-evaluation errors are unchanged (still EXECUTION_ERROR).\n\n4. Engine-internal merges keep going through the EXECUTION_ERROR /\n   REQ-061 path unchanged: the surviving schema-rejection-to-ERROR\n   path is the SUB_PROCESS completion merge\n   (lib/letflow/engine/sub_process.ex, build_completion_multi_from_merge,\n   ~L838-847; REQ-062). The service-task merge passes nil\n   validations (lib/letflow/engine.ex ~L3394), so it is never\n   schema-rejected and is NOT a regression case (REQ-459 design\n   section 11.1). merge/3 and its whole-batch semantics are unchanged.\n\nDESIGN FACTS (REQ-459 design; copy, do not re-decide):\n5. One new step `:completion_guards` in run_complete_task, between\n   :snapshot_and_state and :form_expression_reevaluation (design\n   section 2.2 step 4), after BOTH row locks (task, then instance\n   projection). REQ-460 introduces it with the rule C half (step 4c:\n   RequiredOutputs.missing_keys/2 over the SUBMITTED map); REQ-463\n   adds the rule A half (4b) before it. A second rule C check (6b-ii,\n   missing_keys over the CORRECTED map, catching a key dropped by\n   visible_when false or recomputed to null) and the schema\n   rejection check (6b-i..iv) live inside merge_output_variables/7\n   and reuse its single variable_schemas read; the reevaluation\n   domain error (6a) is unchanged and 6b does not run for it.\n6. New module Letflow.Engine.RequiredOutputs (pure, total:\n   required_outputs/1, missing_keys/2, rejected_keys/3,\n   any_rejected?/1, allowed_keys/2). Public refusal:\n   {:error, {:output_refused, %{missing_keys: [...], rejected_keys: [...]}}}.\n   The refusal body is HTTP 422, application/problem+json, `code`\n   = \"output_refused\", members `missing_keys` and `rejected_keys`\n   (both sorted ascending, deduplicated, NAMES ONLY, never a value,\n   enum or schema text), built by Api.Error.output_refused/2 and\n   Api.Response.output_refused/3 (design section 3.2).\n7. Rejected-key names are restricted to the ALLOWED set (the task's\n   own pinned form_schema.properties union required_outputs). A\n   rejection on any other key is still a refusal (whole batch,\n   nothing merged) but the 422 carries BOTH lists empty and the key\n   name appears nowhere (body or audit): this relaxes \"naming the\n   rejected key\" for out-of-form keys so a task worker cannot probe\n   which variable keys have a variable_schema (INV-2; design\n   section 3.2, Adjustments REQ-460 item 0, test C-4a).\n8. The refusal audit record is written by a new\n   record_completion_refusal_audit/6, called from\n   interpret_complete_result/3 strictly after Repo.transaction/1 has\n   returned (a separate transaction, direct Audit.insert_entry/3,\n   function-level rescue, log-and-swallow). Guarantee: AT MOST ONE\n   audit record per refused request, EXACTLY ONE when the audit\n   store is healthy; a failing audit store yields the same 422 and\n   one logged warning (design section 2.4, D-3).\n\nEXPLICIT AMENDMENT OF ACCEPTED BEHAVIOUR. REQ-061 (status done)\nlists among the callers of the shared ERROR sink 'REQ-049's\nschema-violation-on-merge case'. After this entry that case still\nroutes to ERROR for the SUB_PROCESS completion merge (REQ-062) and\nother engine-internal EXECUTION_ERROR callers, but NOT for a\nHUMAN_TASK completion: there a rejected output is a retryable 422\nwith no state change and no EXECUTION_ERROR event.\nREQ-061's text is therefore amended, not contradicted, and DOC-UPDATER\nleaves a dated amendment pointer on REQ-061 (see acceptance\ncriteria). Tests that today assert instance ERROR after a HUMAN_TASK\ncompletion with a rejected output are changed to the new behaviour,\neach with a comment citing REQ-459/REQ-460. The real files (verified\nby the REQ-459 design, section 12.1):\ntest/letflow/engine_variable_schema_merge_test.exs (lines ~212, 337,\n434), test/letflow/engine/shipped_definition_variable_schemas_engine_test.exs\n(~132) and test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs\n(~292; header comment ~14). test/letflow/engine_complete_task_test.exs\nhas no such assertion and test/letflow/engine/variable_schema_test.exs\nis a unit test of the lookup and does not change.\ntest/letflow/engine_sub_process_test.exs (~777) is the SUB_PROCESS\npath and must stay green. The code comments that would become false\nare amended in the same change: the engine.ex moduledoc section\n'Output-variable schema validation at the merge call site (REQ-109)'\n(~L142-152), the comment above merge_output_variables/7\n(~L3829-3861) and the 'Dependency ordering' paragraph of\nlib/letflow/engine/variable_merge.ex (~L58-77).\n\nDECISION RECORD 0007 (docs/migration/decisions/0007-variable-merge-validates-new-keys.md)\nis NOT edited by this entry. It is flagged below for REVIEWER\nsign-off, per the decision-record rule.",
+    "ci_constraints": "RAM very tight (0.4-1 GB free): mix strictly sequential, ONE BEAM at a time, check free RAM first (powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\"), scoped test files only, never full suite, MIX_TEST_PARTITION=3 exported only for tests (use 11 if a test mutates the shared bpm-default row). NO push, NO PR, NO merge, do NOT touch the queue. Stage files by explicit path only; never touch branch test/authz-deny-log-deterministic-capture or untracked letflow-3.code-workspace. COMMIT your work locally (explicit paths) before returning; mutation testers must restore via git stash/checkout only on files they themselves mutated and never lose uncommitted work."
+  },
+  "task": {
+    "description": "WF-02 Step 2d (REVIEWER, hard gate): review git diff 553ae161..HEAD lib/ for OTP/idiom/supervision/scope creep (rule A, validator, fixture adoption must NOT be present), consistency with the REQ-459 design (design wins; check ELIXIR-DEV's two reported differences), docs/anti-patterns.md, and decision records. ALSO record an explicit REVIEWER verdict/sign-off on the two 0007 passages (design 11.3; docs/migration/decisions/0007-variable-merge-validates-new-keys.md lines ~79 and ~108) and on the proposed dated note text from requirement open_questions: state whether the note is to be appended and when. Do NOT edit 0007 (git diff of that path must stay empty). Read-only on lib/test; record verdict in the handoff result; commit only the handoff file by explicit path.",
+    "acceptance_criteria": [
+      "a HUMAN_TASK with required_outputs [decision] completed with output_variables lacking decision (key absent) returns 422 (application/problem+json, code output_refused, missing_keys [decision], rejected_keys []) whose body names decision and carries no submitted value; afterwards the task is still open and claimable, the instance status, tokens, variables and event count are unchanged (asserted by reading the rows before and after), real Postgres",
+      "the same task completed with decision: null returns the same 422; completed with decision omitted while the instance already holds a decision value from an earlier pass (rework loop) is STILL refused, because only submitted output counts",
+      "a HUMAN_TASK whose variable_schema enum rejects the submitted value returns a retryable 422 with rejected_keys naming the rejected key (an in-form or required_outputs key) and NOT its value or the enum, the instance is NOT in ERROR, no EXECUTION_ERROR event exists, and an immediate retry of the same task with a valid value completes and routes correctly",
+      "negative cases: a completion carrying every required key with valid values behaves as before (existing completion tests pass unchanged except the amended ERROR assertions); a definition with no required_outputs behaves identically to today for omitted keys (default-off test)",
+      "a value rejected by a variable_schema on a key that is neither in the task's form_schema.properties nor in required_outputs still refuses the completion with 422 and BOTH lists empty, nothing merged, instance not in ERROR, and the key's name appears in neither the body nor the audit record (test C-4a)",
+      "a SUB_PROCESS completion whose output the parent's variable_schema rejects still ends the parent in ERROR with an EXECUTION_ERROR event (regression test, test C-12; test/letflow/engine_sub_process_test.exs ~777 stays green): REQ-061's path is intact for engine-internal merges. A unit test keeps asserting VariableMerge.merge/3 returns {:rejected, ...} for non-nil validations. (A service-task merge passes nil validations and cannot be schema-rejected, so it is not the regression case.)",
+      "a form-expression re-evaluation domain error with all required keys present still ends in EXECUTION_ERROR (test C-10); a submission with a missing required key AND a failing cross-field validation gets the 422, not EXECUTION_ERROR (test C-11); a required key dropped by visible_when false or recomputed to null is refused with missing_keys (test C-7)",
+      "the refusal writes at most one audit record per refused request, and exactly one when the audit store is healthy; the record (action task.completion_refused) contains no submitted value, no user name and no email (test greps the stored record for the submitted value and the caller's email and finds neither); the 422 body contains key names only, no stack, module or SQL text; with audit_entries unavailable (DROP-TABLE regression, test C-15) the refusal still returns the same 422, does not raise, and one warning is logged",
+      "the same refusals hold when the completing request is authenticated with an API token, and for a caller holding TENANT_ADMIN (no role is exempt from the server-side check); both asserted in router tests",
+      "DOC-UPDATER leaves a dated amendment pointer on REQ-061 in docs/requirements.yaml naming this entry and the date; docs/migration/decisions/0007-variable-merge-validates-new-keys.md is unchanged by this entry (git diff of that path quoted empty)",
+      "SECURITY-REVIEWER verdict recorded (mandatory: lib/ change on a tenant-data path); REVIEWER verdict recorded on the 0007 note",
+      "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the changed and new test files named above (plus test/letflow/routers/tasks_test.exs), and mix letflow.check_boundaries pass, real output quoted"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "status": "PASS",
+    "reviewed": "git diff 553ae161..HEAD over lib/ (error.ex, response.ex, engine.ex, required_outputs.ex, variable_merge.ex, routers/tasks.ex), design req459 sections 2, 3.2, 11, anti-patterns, decision 0007, step-02a and 02c handoffs. Read-only; no mix run (RAM tight; ELIXIR-DEV quoted compile/format/boundaries/scoped tests green).",
+    "idiom": "Idiomatic: pure total RequiredOutputs module with fallback clauses; guard is a Multi.run step returning tagged tuples (no raise); refusal rolls back a lock-only transaction; audit written after Repo.transaction/1 returns in its own transaction, mirroring the decided ISS-0784 pattern (record_task_activation_rejection_audit/5). No GenServer/case-state crutch.",
+    "supervision": "Unchanged and N/A: per CLAUDE.md REQ-045 the engine is a transactional context (Postgres row locks), InstanceSupervisor deliberately empty. No process, spawn, singleton or shared state introduced.",
+    "scope_creep": "None. Grep of the diff: no rule A / SeparationOfDuties code (one comment mention of REQ-463), no validator change, no fixture adoption, no behaviour/macro. completion_refusal @typep has a single member, justified by the design (REQ-463 adds the second).",
+    "design_consistency": "Matches design: :completion_guards between :snapshot_and_state and :form_expression_reevaluation after both locks; 6b checks reuse the single variable_schemas read; rejected_keys restricted to allowed set while any_rejected?/1 still refuses; Error.output_refused/2 takes names only; audit action task.completion_refused with ids and key names only; SUB_PROCESS merge and merge/3 untouched. ELIXIR-DEV reported differences both verified as correct application of design-wins: (1) rejected_keys named only for in-form/required_outputs keys (design 3.2, C-4a) vs requirement AC3 wording; (2) service-task regression unreproducible (nil validations, engine.ex ~L3394), SUB_PROCESS path is the regression case (design 11.1). Both are accepted; the requirement AC wording (AC3 unqualified naming, AC6 service-task) should be read as design-qualified by TEST-DESIGNER.",
+    "type_safety": "No gap that blocks. The public {:output_refused, %{missing_keys, rejected_keys}} is in complete_error/0 and the internal refusal is a @typep. No issue filed.",
+    "findings": [
+      {
+        "id": "R-1",
+        "severity": "LOW",
+        "location": "lib/letflow/engine.ex interpret_complete_result/3",
+        "note": "The new leading clause was inserted between the existing explanatory comment block (the ISS-0784 \"any other reason shape is byte-identical\" paragraph) and the clause it documents, orphaning that comment from its clause. Cosmetic; ELIXIR-DEV may move the new clause above the comment at any later touch. Not blocking."
+      },
+      {
+        "id": "R-2",
+        "severity": "INFO",
+        "location": "lib/letflow/engine.ex",
+        "note": "required_outputs/1 is evaluated twice per completion (guard step and refusal_context), so a malformed attribute logs two warnings; acknowledged by ELIXIR-DEV, harmless, unreachable for validated definitions."
+      },
+      {
+        "id": "R-3",
+        "severity": "INFO",
+        "location": "lib/letflow/engine.ex moduledoc",
+        "note": "Amended moduledoc refers to merge_output_variables/8 (private); acceptable, matches code."
+      }
+    ],
+    "anti_patterns": "Checked docs/anti-patterns.md (4634 lines) against the diff: no repeat found (no catch-all error clause dropping errors, audit failure is logged not swallowed silently, no stale-comment left on amended paths).",
+    "tests_note_for_next_gates": "New tests C-1..C-15, API-token and TENANT_ADMIN router tests, DROP-TABLE audit test (C-15) and C-4a are not yet written; TEST-DESIGNER must add them and TEST-DESIGN-VALIDATOR must confirm.",
+    "decision_0007_signoff": {
+      "git_diff_0007_553ae161_to_HEAD": "empty (verified: git diff 553ae161..HEAD --stat -- docs/migration/decisions/0007-variable-merge-validates-new-keys.md prints nothing; 0007 not edited)",
+      "consistency": "The decision itself STANDS: validate every incoming key. Step 6b-i still validates every key via variable_validations/5; merge/3 whole-batch semantics unchanged. REQ-460 does not contradict or silently re-decide 0007; it changes only what the HUMAN_TASK caller does with a rejection.",
+      "passage_1_line_79": "\"same whole-batch-abort-on-rejection semantics (3.2) apply regardless of which key rejected\": still TRUE of merge/3; stale only as to the caller outcome on the HUMAN_TASK path (now 422 refusal, whole batch still not merged). Signed off: no text change needed beyond the dated note.",
+      "passage_2_line_108": "\"validation errors surface only via EXECUTION_ERROR events today\": now FALSE for HUMAN_TASK completion (surfaces as 422 output_refused). Signed off: needs the dated note. Note this also partly answers that open question (an API-level surface now exists).",
+      "proposed_note_review": "Proposed text (design 11.3) is accurate against the code. APPROVED with one change: end with \"REVIEWER sign-off: 2026-10-07 (REQ-460, WF02-REQ460-20261007 step 02d).\" in place of the requirement variant's \"REVIEWER sign-off: pending\".",
+      "approved_note_text": "2026-10 note (REQ-460): on the HUMAN_TASK completion path a rejected output is now refused with a retryable 422 before any state change and no EXECUTION_ERROR is raised; merge/3 itself and its whole-batch semantics are unchanged; the EXECUTION_ERROR path remains for the SUB_PROCESS completion merge and other engine-internal failures. REVIEWER sign-off: 2026-10-07 (REQ-460, WF02-REQ460-20261007 step 02d).",
+      "append_decision": "YES, the note is to be appended as a dated addendum (append only, do not rewrite lines 79 or 108). WHEN: by DOC-UPDATER in the same doc step that leaves the REQ-061 amendment pointer, after TEST-RUNNER green and RELEASE-VALIDATOR pass, in the REQ-460 PR (not before, so the record never describes behaviour that did not ship). 0007 stays untouched at this gate."
+    },
+    "artifacts_out": [],
+    "route_back": null,
+    "blockers": []
+  },
+  "rework_count": 0
+}

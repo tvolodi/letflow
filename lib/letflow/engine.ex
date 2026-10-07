@@ -143,10 +143,26 @@ defmodule Letflow.Engine do
 
   `merge_output_variables/7` builds a real `variable_validations` map via
   `Letflow.Engine.VariableSchema.variable_validations/5` and passes it to
-  `Letflow.Engine.VariableMerge.merge/3`, which makes REQ-061's
+  `Letflow.Engine.VariableMerge.merge/3`, which made REQ-061's
   `{:rejected, …}` → `Letflow.Engine.ExecutionError.append_multi/3` branch
   reachable through the real completion path for the first time (ISS-0063 /
-  GH#212). Storage-side rationale — the table, the three R-Co "schema"
+  GH#212).
+
+  > **Amended by REQ-459 / REQ-460 (2026-10):** that branch is NO LONGER reachable
+  > from a HUMAN_TASK completion. `merge_output_variables/8` checks the very same
+  > validations first and refuses the completion with a retryable 422
+  > (`{:error, {:output_refused, %{missing_keys: _, rejected_keys: _}}}`) before
+  > anything is written: the instance is not put into ERROR and no
+  > `EXECUTION_ERROR` event is raised. Rule C of the same change adds the HUMAN_TASK
+  > attribute `required_outputs` (`Letflow.Engine.RequiredOutputs`), checked in the
+  > `:completion_guards` Multi step against the SUBMITTED output only. The
+  > `{:rejected, …}` → ERROR path survives for the SUB_PROCESS completion merge
+  > (REQ-062, `Letflow.Engine.SubProcess`) and the other engine-internal
+  > `EXECUTION_ERROR` callers; form-expression re-evaluation errors are unchanged
+  > (still `EXECUTION_ERROR`). See
+  > `lib/letflow/design/req459-required-outputs-and-distinct-person.md`.
+
+  Storage-side rationale — the table, the three R-Co "schema"
   concepts, the deferred registration path — lives in
   `Letflow.Engine.VariableSchema`'s own moduledoc; what follows is the
   engine-side half.
@@ -362,6 +378,7 @@ defmodule Letflow.Engine do
   alias Letflow.Engine.InstanceState
   alias Letflow.Engine.PinResolver
   alias Letflow.Engine.Reconstruction
+  alias Letflow.Engine.RequiredOutputs
   alias Letflow.Engine.SnapshotWriter
   alias Letflow.Engine.ServiceTask
   alias Letflow.Engine.ServiceTaskDispatcher
@@ -2158,8 +2175,20 @@ defmodule Letflow.Engine do
           | {:error,
              {:instance_execution_error, error_type :: ExecutionError.error_type(),
               affected :: ExecutionError.affected()}}
+          | {:error,
+             {:output_refused, %{missing_keys: [String.t()], rejected_keys: [String.t()]}}}
           | {:error, Ecto.Changeset.t()}
           | {:error, term()}
+
+  # REQ-460 (design req459 §2.4): the INTERNAL refusal a completion guard returns
+  # from its Multi step as {:error, {:completion_refused, refusal}}. It never leaves
+  # this module: interpret_complete_result/3 audits it and maps it to the public
+  # {:error, {:output_refused, %{...}}} member of complete_error/0. REQ-463 adds a
+  # {:separation_of_duties, blocking_node_ids} member.
+  @typep completion_refusal ::
+           {:output_refused, missing_keys :: [String.t()], rejected_keys :: [String.t()]}
+
+  @typep refusal_context :: %{required: [String.t()], allowed: [String.t()]}
 
   @type complete_result :: %{
           task_id: Ecto.UUID.t(),
@@ -2277,6 +2306,15 @@ defmodule Letflow.Engine do
       |> Multi.run(:snapshot_and_state, fn repo, %{task: task, instance_projection: projection} ->
         build_snapshot_and_state(repo, task, projection, prefix)
       end)
+      # REQ-460 (design req459 §2.2 step 4): caller-error guards, after BOTH row
+      # locks and the snapshot read, before any step that can commit. Pure.
+      |> Multi.run(:completion_guards, fn _repo,
+                                          %{
+                                            task: task,
+                                            snapshot_and_state: %{graph: graph}
+                                          } ->
+        check_completion_guards(graph, task, output_variables)
+      end)
       |> Multi.run(:form_expression_reevaluation, fn _repo,
                                                      %{
                                                        task: task,
@@ -2299,7 +2337,11 @@ defmodule Letflow.Engine do
       end)
       |> Multi.run(:merge, fn repo,
                               %{
-                                snapshot_and_state: %{seed_instance_state: seed_state},
+                                task: task,
+                                snapshot_and_state: %{
+                                  graph: graph,
+                                  seed_instance_state: seed_state
+                                },
                                 instance_projection: projection,
                                 form_expression_reevaluation: reevaluation_result
                               } ->
@@ -2324,7 +2366,8 @@ defmodule Letflow.Engine do
               seed_state.variables,
               corrected_output_variables,
               repo,
-              prefix
+              prefix,
+              refusal_context(graph, task)
             )
             |> prepend_form_expression_events(form_events)
         end
@@ -3826,8 +3869,25 @@ defmodule Letflow.Engine do
     end
   end
 
+  # REQ-459/REQ-460 AMENDMENT (supersedes the "rejection -> ERROR" wording of the
+  # M4 paragraph below FOR THIS HUMAN_TASK COMPLETION PATH ONLY): a value that a
+  # variable_schema rejects, and a `required_outputs` key that is absent or null in
+  # the CORRECTED output, no longer reach VariableMerge.merge/3 at all. Both are
+  # caller errors, so this step returns
+  # {:error, {:completion_refused, {:output_refused, missing, rejected}}} BEFORE
+  # any write; the enclosing Multi rolls back (it had only taken row locks and read),
+  # interpret_complete_result/3 writes one best-effort audit record and the router
+  # answers a retryable 422. The instance is NOT put into ERROR and no
+  # EXECUTION_ERROR event is raised (design req459 §2.2 step 6b). The checks reuse the
+  # ONE variable_schemas read below. apply_variable_merge/6's {:rejected, _} ->
+  # {:execution_error, _} clause is therefore unreachable here and survives only as a
+  # last-resort guard. The SUB_PROCESS completion merge (REQ-062,
+  # Letflow.Engine.SubProcess) and the other engine-internal EXECUTION_ERROR callers
+  # are NOT changed and still route a schema rejection to instance ERROR.
+  #
   # M4 -- EE-09 variable merge (design doc §7 / req061 §5.1). A
-  # VariableMerge.merge/3 rejection is routed into an
+  # VariableMerge.merge/3 rejection WAS routed (see the amendment above: not any
+  # more on this path) into an
   # ExecutionError.error_args() tagged {:execution_error, _} instead of
   # aborting this Multi.run/3 step, so the enclosing Ecto.Multi can still
   # commit an ERROR-transition tail (req061 §5.3) rather than rolling back
@@ -3866,12 +3926,14 @@ defmodule Letflow.Engine do
           current_variables :: map(),
           output_variables :: map(),
           repo :: module(),
-          prefix :: String.t() | nil
+          prefix :: String.t() | nil,
+          refusal_context()
         ) ::
           {:ok,
            {:merged, %{new_variables: map(), merge_events: [VariableMerge.merge_event()]}}
            | {:execution_error, ExecutionError.error_args()}}
           | {:error, {:variable_schema_lookup_failed, VariableSchema.error_reason()}}
+          | {:error, {:completion_refused, completion_refusal()}}
   defp merge_output_variables(
          projection,
          actor_id,
@@ -3879,7 +3941,8 @@ defmodule Letflow.Engine do
          current_variables,
          output_variables,
          repo,
-         prefix
+         prefix,
+         %{required: required, allowed: allowed}
        ) do
     with {:ok, variable_validations} <-
            VariableSchema.variable_validations(
@@ -3889,17 +3952,58 @@ defmodule Letflow.Engine do
              output_variables,
              prefix: prefix
            ) do
-      apply_variable_merge(
-        projection,
-        actor_id,
-        idempotency_key,
-        current_variables,
-        output_variables,
-        variable_validations
-      )
+      # REQ-460 steps 6b-ii..iv (design req459 §2.2): required keys over the
+      # CORRECTED map, then schema rejections restricted to the allowed names.
+      missing = RequiredOutputs.missing_keys(required, output_variables)
+      rejected = RequiredOutputs.rejected_keys(variable_validations, missing, allowed)
+
+      if missing != [] or rejected != [] or RequiredOutputs.any_rejected?(variable_validations) do
+        {:error, {:completion_refused, {:output_refused, missing, rejected}}}
+      else
+        apply_variable_merge(
+          projection,
+          actor_id,
+          idempotency_key,
+          current_variables,
+          output_variables,
+          variable_validations
+        )
+      end
     else
       {:error, reason} -> {:error, {:variable_schema_lookup_failed, reason}}
     end
+  end
+
+  # REQ-460 (design req459 §2.2 step 4, halves 4a and 4c; REQ-463 adds 4b between
+  # them). Pure -- no query. Judges the SUBMITTED map, before form-expression
+  # correction, so a caller error is refused before step 5's domain error could
+  # commit an instance ERROR. Only the submitted map counts: a value the instance
+  # already holds from an earlier pass never satisfies a required key.
+  @spec check_completion_guards(Graph.t(), Task.t(), map()) ::
+          {:ok, :guards_passed | :no_guards}
+          | {:error, {:completion_refused, completion_refusal()}}
+  defp check_completion_guards(graph, %Task{} = task, output_variables) do
+    case RequiredOutputs.required_outputs(find_node(graph, task.node_id)) do
+      [] ->
+        {:ok, :no_guards}
+
+      required ->
+        case RequiredOutputs.missing_keys(required, output_variables) do
+          [] -> {:ok, :guards_passed}
+          missing -> {:error, {:completion_refused, {:output_refused, missing, []}}}
+        end
+    end
+  end
+
+  defp find_node(%Graph{nodes: nodes}, node_id), do: Enum.find(nodes, &(&1.id == node_id))
+
+  # The per-task data merge_output_variables/8 needs for rule C: the node's
+  # required keys and the names a refusal may report (task's own pinned
+  # form_schema.properties union required_outputs; INV-2).
+  @spec refusal_context(Graph.t(), Task.t()) :: refusal_context()
+  defp refusal_context(graph, %Task{} = task) do
+    required = RequiredOutputs.required_outputs(find_node(graph, task.node_id))
+    %{required: required, allowed: RequiredOutputs.allowed_keys(task.form_schema, required)}
   end
 
   @spec apply_variable_merge(
@@ -3925,6 +4029,10 @@ defmodule Letflow.Engine do
       {:ok, new_variables, merge_events} ->
         {:ok, {:merged, %{new_variables: new_variables, merge_events: merge_events}}}
 
+      # REQ-460: unreachable from merge_output_variables/8, which refuses every
+      # schema rejection (422, no state change) before calling this function with
+      # the very same validations. Retained as a last-resort guard so a future
+      # caller of this helper can never silently drop a rejection.
       {:rejected, unchanged_variables,
        [{:execution_error, key, rejected_value, :variable_schema_rejected, failures}]} ->
         error_args = %{
@@ -5020,6 +5128,74 @@ defmodule Letflow.Engine do
       :ok
   end
 
+  # REQ-460 (design req459 §2.4, §5) -- one `task.completion_refused` audit record
+  # for a refused HUMAN_TASK completion. Same shape and rules as
+  # record_task_activation_rejection_audit/5 above: its own synchronous
+  # Repo.transaction/1, direct Audit.insert_entry/3 (never append_multi/4, which hides
+  # the same call), opened only after the refused transaction has returned, function-
+  # level rescue, log-and-swallow, always :ok. Guarantee: AT MOST ONE record per
+  # refused request, exactly one when the audit store is healthy. Carries ids and
+  # key NAMES only -- never a submitted value, name or email. Must not be called
+  # inside an enclosing transaction (it would roll back with it); the one caller is
+  # interpret_complete_result/3.
+  @doc false
+  @spec record_completion_refusal_audit(
+          instance_id :: Ecto.UUID.t(),
+          task_id :: Ecto.UUID.t(),
+          node_id :: String.t(),
+          actor_id :: Ecto.UUID.t() | nil,
+          refusal :: completion_refusal(),
+          prefix :: String.t()
+        ) :: :ok
+  def record_completion_refusal_audit(instance_id, task_id, node_id, actor_id, refusal, prefix) do
+    {:output_refused, missing_keys, rejected_keys} = refusal
+
+    attrs = %{
+      actor_id: actor_id,
+      action: "task.completion_refused",
+      resource_type: "task",
+      resource_id: task_id,
+      before_state: nil,
+      after_state: %{
+        "rule" => "output_refused",
+        "instance_id" => instance_id,
+        "node_id" => node_id,
+        "missing_keys" => missing_keys,
+        "rejected_keys" => rejected_keys
+      },
+      trace_id: nil
+    }
+
+    case Repo.transaction(fn -> Audit.insert_entry(Repo, attrs, prefix) end) do
+      {:ok, {:ok, _entry}} ->
+        :ok
+
+      {:ok, {:error, insert_reason}} ->
+        Logger.warning(
+          "Letflow.Audit.insert_entry/3 failed recording task.completion_refused for task " <>
+            "#{task_id}: #{inspect(insert_reason)}"
+        )
+
+        :ok
+
+      {:error, rollback_reason} ->
+        Logger.warning(
+          "Repo.transaction/1 failed recording task.completion_refused for task " <>
+            "#{task_id}: #{inspect(rollback_reason)}"
+        )
+
+        :ok
+    end
+  rescue
+    exception ->
+      Logger.warning(
+        "Repo.transaction/1 raised recording task.completion_refused for task " <>
+          "#{task_id}: #{inspect(exception)}"
+      )
+
+      :ok
+  end
+
   # ISS-0928 -- best-effort audit for a SERVICE_TASK re-entry failure that is
   # NOT routed to an ExecutionError (hop limit, unknown token, variable-merge
   # rejection, DB failure ...). Called by
@@ -5285,6 +5461,29 @@ defmodule Letflow.Engine do
        variables: final_instance_state.variables,
        completed_at: completed_task.completed_at
      }}
+  end
+
+  # REQ-460 (design req459 §2.4): a completion guard refused the request. The
+  # transaction has already rolled back (only locks and SELECTs preceded the
+  # refusal), so the one audit record is written NOW, in its own transaction.
+  defp interpret_complete_result(
+         {:error, _failed_step,
+          {:completion_refused, {:output_refused, missing, rejected} = refusal}, changes},
+         actor_id,
+         prefix
+       ) do
+    task = Map.fetch!(changes, :task)
+
+    record_completion_refusal_audit(
+      task.instance_id,
+      task.id,
+      task.node_id,
+      actor_id,
+      refusal,
+      prefix
+    )
+
+    {:error, {:output_refused, %{missing_keys: missing, rejected_keys: rejected}}}
   end
 
   # Catch-all -- every Multi step's own callback above already maps its

@@ -893,3 +893,22 @@ history:
       applicable). Still open, belonging to REQ-460's build and deliberately
       not done here: the REQ-061 pointer and the decision 0007 note
       (design sections 11.2 and 11.3).
+
+  - req: REQ-460
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-07T09:05:38Z"
+    note: >
+      Engine build (queue task 1023, GH#2338): required_outputs on a
+      HUMAN_TASK, completion-time refusal (retryable 422 output_refused,
+      names only) for missing required keys and variable_schema-rejected
+      values on the HUMAN_TASK completion path, per the REQ-459 design.
+      Branch feat/REQ-460-required-outputs-Q-1023, local, not pushed or
+      merged. Gates: SECURITY-REVIEWER and REVIEWER recorded in their
+      handoffs, TEST-RUNNER scoped report all green (3a553a48),
+      RELEASE-VALIDATOR PASS scoped (60bbd845). Also done here: dated
+      amendment pointer on REQ-061 in docs/requirements.yaml (design 11.2,
+      text copied exactly; body and status untouched). Decision record 0007
+      deliberately NOT edited (supervisor instruction; the approved note
+      text stays recorded in step-02d), so design 11.3 remains open for
+      REVIEWER.

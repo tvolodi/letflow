@@ -1,0 +1,69 @@
+# Test run report -- WF-02 Step 4 (SCOPED run per supervisor RAM constraint)
+
+req_id: REQ-460
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ460-20261007
+date_utc: 2026-10-07T08:59:38Z
+
+git:
+  branch: feat/REQ-460-required-outputs-Q-1023
+  commit: 613677d4
+  worktree: clean (only untracked letflow-3.code-workspace, not touched)
+
+scope_note: >
+  Per the handoff task.description, scripts/test_parallel.sh and the full suite were NOT run
+  (RAM 0.6-0.7 GB free). Every command below ran strictly sequentially, one BEAM at a time,
+  free RAM checked before each. Tooling commands ran with MIX_TEST_PARTITION unset; test files
+  ran as separate invocations with MIX_TEST_PARTITION=3. Postgres: letflow-4-postgres-1 healthy.
+  This report is a scoped result, NOT a full-suite result.
+
+verdict: PASS (scoped)
+
+tooling:
+  - {cmd: mix letflow.check_issue_refs, exit: 0, output: "625 file(s) under docs/issues/ / OK -- every cross-reference is prefixed and well-formed."}
+  - {cmd: mix letflow.lint_handoffs, exit: 0, output: "letflow.lint_handoffs: OK -- 0 new violations across 3414 handoff files under \"handoffs\" (25 pre-existing grandfathered, traced to ISS-0190)."}
+  - {cmd: mix letflow.check_uat_scenario_schema, exit: 0, output: "38 file(s) checked, 0 violation(s) across 0 file(s)"}
+  - {cmd: mix letflow.check_boundaries, exit: 0, output: "mix letflow.check_boundaries: OK -- 960 edges checked, 0 violations"}
+  - {cmd: mix letflow.check_requirements_registration, exit: 0, output: "433 entries = 433 registered + 0 deferred + 0 neither + 0 unclassified"}
+  - {cmd: mix letflow.check_req_id_collision, exit: 0, output: "mix letflow.check_req_id_collision: OK -- no REQ-NNN id collision with origin/main."}
+  - {cmd: mix letflow.check_deferral_staleness, exit: 0, output: "0 deferred of 433 entries; 0 stale"}
+  - {cmd: mix letflow.check_async_sandbox_reachability, exit: 0, output: "OK -- 145 async:true test file(s) scanned under \"test\", 0 reach Sandbox.mode/2 (0 permitted, verified exceptions), 0 new violations."}
+  - {cmd: mix format --check-formatted, exit: 0, output: "(no output)"}
+  - {cmd: mix compile --warnings-as-errors, exit: 0, output: "(no output)"}
+
+tests:
+  # each entry is one `mix test <file>` invocation; result is the real "Result:" line
+  - {file: test/letflow/engine_variable_schema_merge_test.exs, run: 1, result: "Result: 5 passed", exit: 0}
+  - {file: test/letflow/engine/shipped_definition_variable_schemas_engine_test.exs, run: 1, result: "Result: 10 passed", exit: 0}
+  - {file: test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs, run: 1, result: "Result: 12 passed", exit: 0}
+  - {file: test/letflow/engine/required_outputs_test.exs, run: 1, result: "Result: 19 passed", exit: 0}
+  - {file: test/letflow/engine/required_outputs_test.exs, run: 2, result: "Result: 19 passed", exit: 0}
+  - {file: test/letflow/api/output_refused_test.exs, run: 1, result: "Result: 4 passed", exit: 0}
+  - {file: test/letflow/api/output_refused_test.exs, run: 2, result: "Result: 4 passed", exit: 0}
+  - {file: test/letflow/engine_required_outputs_test.exs, run: 1, result: "Result: 25 passed", exit: 0}
+  - {file: test/letflow/engine_required_outputs_test.exs, run: 2, result: "Result: 25 passed", exit: 0}
+  - {file: test/letflow/routers/tasks_required_outputs_test.exs, run: 1, result: "Result: 9 passed", exit: 0}
+  - {file: test/letflow/routers/tasks_required_outputs_test.exs, run: 2, result: "Result: 9 passed", exit: 0}
+  - {file: test/letflow/routers/tasks_test.exs, run: 1, result: "Result: 77 passed", exit: 0}
+  - {file: test/letflow/engine_complete_task_test.exs, run: 1, result: "Result: 11 passed", exit: 0}
+  - {file: test/letflow/engine_sub_process_test.exs, run: 1, result: "Result: 16 passed", exit: 0}
+  - {file: test/letflow/engine/variable_merge_test.exs, run: 1, result: "Result: 17 passed", exit: 0}
+  - {file: test/letflow/engine/variable_schema_test.exs, run: 1, result: "Result: 20 passed", exit: 0}
+  - {file: test/letflow/api/error_test.exs, run: 1, result: "Result: 14 passed", exit: 0}
+  - {file: test/letflow/api/response_test.exs, run: 1, result: "Result: 21 passed", exit: 0}
+  - {file: test/letflow/api/context_test.exs, run: 1, result: "Result: 11 passed", exit: 0}
+  - {file: test/letflow/api/validation_test.exs, run: 1, result: "Result: 39 passed", exit: 0}
+  - {file: test/letflow/api/authz_deny_log_test.exs, run: 1, result: "Result: 36 passed", exit: 0}
+  - {file: test/docs/requirement_status_invariants_test.exs, run: 1, result: "Result: 25 passed", exit: 0}
+
+totals:
+  invocations: 22
+  failed: 0
+  note: "No Failed: line and no numbered failure block appeared in any invocation. Repeat runs of the four new files gave identical counts (no flake observed)."
+
+notes:
+  - "api/ files touching Api.Error/Api.Response found by grep: authz_deny_log, context, error, output_refused, response, validation (all run)."
+  - "engine/ files matching variable_merge|variable_schema: variable_merge_test, variable_schema_test, shipped_definition_variable_schemas_engine_test (all run); test/letflow/engine_variable_schema_merge_test.exs run per the explicit list."
+  - "Not run (by instruction): full suite, scripts/test_parallel.sh. RELEASE-VALIDATOR must re-run independently."

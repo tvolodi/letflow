@@ -1,0 +1,173 @@
+{
+  "handoff_id": "f93b538c-3e2a-4d07-8a65-377104ba5233",
+  "run_id": "WF02-REQ460-20261007",
+  "workflow_id": "WF-02",
+  "step": "3b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ460-20261007/step-03b-test-design-validator.json",
+  "created_at": "2026-10-07T08:40:01Z",
+  "started_at": "2026-10-07T08:40:01Z",
+  "completed_at": "2026-10-07T08:53:13Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-460"
+    ],
+    "queue_task": 1023,
+    "gh_issue": 2338,
+    "branch_name": "feat/REQ-460-required-outputs-Q-1023",
+    "owned_modules": [
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/",
+      "lib/letflow/api/",
+      "lib/letflow/routers/tasks.ex"
+    ],
+    "design": "lib/letflow/design/req459-required-outputs-and-distinct-person.md",
+    "artifacts_in": [
+      "lib/letflow/design/req459-required-outputs-and-distinct-person.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/anti-patterns.md",
+      "docs/agents/instructions/core-directives.md",
+      "artifacts"
+    ],
+    "requirement_text": "Source: GH #2335 (ISS-1039, Q-1021). Today a HUMAN_TASK can be\ncompleted without its decision key: variable_schemas (REQ-109)\nvalidate only the keys that ARE submitted and the form_schema\n`required` list is a UI hint (REQ-273), so an omitted decision\nfollows the fail-closed route silently and the operator's intent is\nlost. Also today any value a variable_schema rejects (for example an\nout-of-enum decision) puts the WHOLE instance into ERROR through the\nmerge path (REQ-061), so one bad value from any task worker halts a\nbusiness case. Implement exactly the design of REQ-459 (read it\nfirst; where this text and the design differ on a detail the design\nwins and the difference is reported).\n\nBUILDS (what, not how; the design owns the how):\n1. HUMAN_TASK node attribute `required_outputs: [keys]`, read by\n   Letflow.Engine.run_complete_task (lib/letflow/engine.ex).\n2. A completion-time check on the SERVER, before any state change: a\n   completion whose SUBMITTED output_variables lack a required key\n   (absent or null; a value already held by the instance from an\n   earlier pass does not count) is refused with a retryable 422 whose\n   body names the missing keys. The task stays open and claimable,\n   the instance, tokens, variables and events are unchanged, and the\n   only write is at most one audited refusal record without PII\n   (exactly one when the audit store is healthy).\n3. A value that a variable_schema rejects on the HUMAN_TASK\n   completion path (out-of-enum, wrong type) is refused the same way:\n   retryable 422 naming the rejected keys, no instance ERROR, nothing\n   written. A form's `required` flag stays a UI hint.\nDECIDED (BA, 2026-10-07): a required key whose submitted value is\nnull counts as missing; an empty string is judged by the\nvariable_schema's own type and enum rules. DECIDED: form-expression\nre-evaluation errors are unchanged (still EXECUTION_ERROR).\n\n4. Engine-internal merges keep going through the EXECUTION_ERROR /\n   REQ-061 path unchanged: the surviving schema-rejection-to-ERROR\n   path is the SUB_PROCESS completion merge\n   (lib/letflow/engine/sub_process.ex, build_completion_multi_from_merge,\n   ~L838-847; REQ-062). The service-task merge passes nil\n   validations (lib/letflow/engine.ex ~L3394), so it is never\n   schema-rejected and is NOT a regression case (REQ-459 design\n   section 11.1). merge/3 and its whole-batch semantics are unchanged.\n\nDESIGN FACTS (REQ-459 design; copy, do not re-decide):\n5. One new step `:completion_guards` in run_complete_task, between\n   :snapshot_and_state and :form_expression_reevaluation (design\n   section 2.2 step 4), after BOTH row locks (task, then instance\n   projection). REQ-460 introduces it with the rule C half (step 4c:\n   RequiredOutputs.missing_keys/2 over the SUBMITTED map); REQ-463\n   adds the rule A half (4b) before it. A second rule C check (6b-ii,\n   missing_keys over the CORRECTED map, catching a key dropped by\n   visible_when false or recomputed to null) and the schema\n   rejection check (6b-i..iv) live inside merge_output_variables/7\n   and reuse its single variable_schemas read; the reevaluation\n   domain error (6a) is unchanged and 6b does not run for it.\n6. New module Letflow.Engine.RequiredOutputs (pure, total:\n   required_outputs/1, missing_keys/2, rejected_keys/3,\n   any_rejected?/1, allowed_keys/2). Public refusal:\n   {:error, {:output_refused, %{missing_keys: [...], rejected_keys: [...]}}}.\n   The refusal body is HTTP 422, application/problem+json, `code`\n   = \"output_refused\", members `missing_keys` and `rejected_keys`\n   (both sorted ascending, deduplicated, NAMES ONLY, never a value,\n   enum or schema text), built by Api.Error.output_refused/2 and\n   Api.Response.output_refused/3 (design section 3.2).\n7. Rejected-key names are restricted to the ALLOWED set (the task's\n   own pinned form_schema.properties union required_outputs). A\n   rejection on any other key is still a refusal (whole batch,\n   nothing merged) but the 422 carries BOTH lists empty and the key\n   name appears nowhere (body or audit): this relaxes \"naming the\n   rejected key\" for out-of-form keys so a task worker cannot probe\n   which variable keys have a variable_schema (INV-2; design\n   section 3.2, Adjustments REQ-460 item 0, test C-4a).\n8. The refusal audit record is written by a new\n   record_completion_refusal_audit/6, called from\n   interpret_complete_result/3 strictly after Repo.transaction/1 has\n   returned (a separate transaction, direct Audit.insert_entry/3,\n   function-level rescue, log-and-swallow). Guarantee: AT MOST ONE\n   audit record per refused request, EXACTLY ONE when the audit\n   store is healthy; a failing audit store yields the same 422 and\n   one logged warning (design section 2.4, D-3).\n\nEXPLICIT AMENDMENT OF ACCEPTED BEHAVIOUR. REQ-061 (status done)\nlists among the callers of the shared ERROR sink 'REQ-049's\nschema-violation-on-merge case'. After this entry that case still\nroutes to ERROR for the SUB_PROCESS completion merge (REQ-062) and\nother engine-internal EXECUTION_ERROR callers, but NOT for a\nHUMAN_TASK completion: there a rejected output is a retryable 422\nwith no state change and no EXECUTION_ERROR event.\nREQ-061's text is therefore amended, not contradicted, and DOC-UPDATER\nleaves a dated amendment pointer on REQ-061 (see acceptance\ncriteria). Tests that today assert instance ERROR after a HUMAN_TASK\ncompletion with a rejected output are changed to the new behaviour,\neach with a comment citing REQ-459/REQ-460. The real files (verified\nby the REQ-459 design, section 12.1):\ntest/letflow/engine_variable_schema_merge_test.exs (lines ~212, 337,\n434), test/letflow/engine/shipped_definition_variable_schemas_engine_test.exs\n(~132) and test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs\n(~292; header comment ~14). test/letflow/engine_complete_task_test.exs\nhas no such assertion and test/letflow/engine/variable_schema_test.exs\nis a unit test of the lookup and does not change.\ntest/letflow/engine_sub_process_test.exs (~777) is the SUB_PROCESS\npath and must stay green. The code comments that would become false\nare amended in the same change: the engine.ex moduledoc section\n'Output-variable schema validation at the merge call site (REQ-109)'\n(~L142-152), the comment above merge_output_variables/7\n(~L3829-3861) and the 'Dependency ordering' paragraph of\nlib/letflow/engine/variable_merge.ex (~L58-77).\n\nDECISION RECORD 0007 (docs/migration/decisions/0007-variable-merge-validates-new-keys.md)\nis NOT edited by this entry. It is flagged below for REVIEWER\nsign-off, per the decision-record rule.",
+    "ci_constraints": "RAM very tight (0.4-1 GB free): mix strictly sequential, ONE BEAM at a time, check free RAM first (powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\"), scoped test files only, never full suite, MIX_TEST_PARTITION=3 exported only for tests (use 11 if a test mutates the shared bpm-default row). NO push, NO PR, NO merge, do NOT touch the queue. Stage files by explicit path only; never touch branch test/authz-deny-log-deterministic-capture or untracked letflow-3.code-workspace. COMMIT your work locally (explicit paths) before returning; mutation testers must restore via git stash/checkout only on files they themselves mutated and never lose uncommitted work."
+  },
+  "task": {
+    "description": "WF-02 Step 3b (TEST-DESIGN-VALIDATOR, hard gate): independently verify every acceptance criterion of REQ-460 has a runnable test and design 12.1 C-1..C-15 coverage (incl. C-4a, C-7 both variants, C-10, C-11, C-12, C-15, API-token and TENANT_ADMIN router tests, body-names-only, audit greps, default-off, rework loop, absent/null, retry-after-422). Note TEST-DESIGNER reports the 'recomputed to null' C-7 variant and the missing-key+other-rejected-key combination untested; judge whether that is acceptable or require tests. RUN MUTANTS yourself (independent of TEST-DESIGNER's M1,M3-M7), at least: drop the required-key check; treat null as present; count the instance's existing value; leak a submitted value or the enum into the 422 body; name an out-of-form key in rejected_keys or the audit record; write the audit record inside the rolled-back transaction (or not at all); instance still goes to ERROR on HUMAN_TASK rejection; SUB_PROCESS path accidentally changed to refuse; missing 422 mapping in the tasks router; audit failure raising. Procedure: BEFORE each mutant, ensure lib is clean (git status) and copy the file to the scratchpad; mutate only the one lib file; run only the relevant scoped test files (sequential, RAM tight, MIX_TEST_PARTITION=3); record killed/survived; RESTORE by copying the saved file back (NOT git checkout of anything uncommitted) and confirm git diff -- lib is empty after every mutant. Surviving mutants: write them as findings and route to TEST-DESIGNER; you may NOT edit tests yourself. Commit only the handoff by explicit path. Check checks: no skipped tests, no hardcoded secrets, self-sufficient unique fixtures; run the 4 new test files once for green.",
+    "acceptance_criteria": [
+      "a HUMAN_TASK with required_outputs [decision] completed with output_variables lacking decision (key absent) returns 422 (application/problem+json, code output_refused, missing_keys [decision], rejected_keys []) whose body names decision and carries no submitted value; afterwards the task is still open and claimable, the instance status, tokens, variables and event count are unchanged (asserted by reading the rows before and after), real Postgres",
+      "the same task completed with decision: null returns the same 422; completed with decision omitted while the instance already holds a decision value from an earlier pass (rework loop) is STILL refused, because only submitted output counts",
+      "a HUMAN_TASK whose variable_schema enum rejects the submitted value returns a retryable 422 with rejected_keys naming the rejected key (an in-form or required_outputs key) and NOT its value or the enum, the instance is NOT in ERROR, no EXECUTION_ERROR event exists, and an immediate retry of the same task with a valid value completes and routes correctly",
+      "negative cases: a completion carrying every required key with valid values behaves as before (existing completion tests pass unchanged except the amended ERROR assertions); a definition with no required_outputs behaves identically to today for omitted keys (default-off test)",
+      "a value rejected by a variable_schema on a key that is neither in the task's form_schema.properties nor in required_outputs still refuses the completion with 422 and BOTH lists empty, nothing merged, instance not in ERROR, and the key's name appears in neither the body nor the audit record (test C-4a)",
+      "a SUB_PROCESS completion whose output the parent's variable_schema rejects still ends the parent in ERROR with an EXECUTION_ERROR event (regression test, test C-12; test/letflow/engine_sub_process_test.exs ~777 stays green): REQ-061's path is intact for engine-internal merges. A unit test keeps asserting VariableMerge.merge/3 returns {:rejected, ...} for non-nil validations. (A service-task merge passes nil validations and cannot be schema-rejected, so it is not the regression case.)",
+      "a form-expression re-evaluation domain error with all required keys present still ends in EXECUTION_ERROR (test C-10); a submission with a missing required key AND a failing cross-field validation gets the 422, not EXECUTION_ERROR (test C-11); a required key dropped by visible_when false or recomputed to null is refused with missing_keys (test C-7)",
+      "the refusal writes at most one audit record per refused request, and exactly one when the audit store is healthy; the record (action task.completion_refused) contains no submitted value, no user name and no email (test greps the stored record for the submitted value and the caller's email and finds neither); the 422 body contains key names only, no stack, module or SQL text; with audit_entries unavailable (DROP-TABLE regression, test C-15) the refusal still returns the same 422, does not raise, and one warning is logged",
+      "the same refusals hold when the completing request is authenticated with an API token, and for a caller holding TENANT_ADMIN (no role is exempt from the server-side check); both asserted in router tests",
+      "DOC-UPDATER leaves a dated amendment pointer on REQ-061 in docs/requirements.yaml naming this entry and the date; docs/migration/decisions/0007-variable-merge-validates-new-keys.md is unchanged by this entry (git diff of that path quoted empty)",
+      "SECURITY-REVIEWER verdict recorded (mandatory: lib/ change on a tenant-data path); REVIEWER verdict recorded on the 0007 note",
+      "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the changed and new test files named above (plus test/letflow/routers/tasks_test.exs), and mix letflow.check_boundaries pass, real output quoted"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "Re-validation after TEST-DESIGNER rework 1 (commit 2b95d10e): mutant C is now killed. All 13 mutants killed; no other finding open.",
+    "checks": {
+      "every_ac_has_runnable_test": "AC1-AC9 mapped to tests and design 12.1 C-1..C-15 present (C-4a, C-7 visible_when variant, C-10, C-11, C-12, C-13, C-14, C-15, absent/null, rework, retry-after-422, default-off, body-names-only, audit PII greps); AC10/AC11 are non-test gates",
+      "no_skips_todos_secrets": "grep of the 4 files for @tag :skip, TODO, FIXME, postgres:// found none; only hits are the literal \"secret_key\" probe name and password_hash \"__NO_PASSWORD_SET__\" placeholder (not credentials)",
+      "self_sufficient_fixtures": "each test provisions its own tenant, unique names via System.unique_integer/Ecto.UUID; async false; C-15 recreates dropped table in on_exit",
+      "baseline": "MIX_TEST_PARTITION=3, 4 new files: Result: 56 passed (run before mutants and again after all reverts)"
+    },
+    "mutants": [
+      {
+        "id": "A",
+        "change": "missing_keys/2 never reports a key (required-key check dropped)",
+        "result": "KILLED",
+        "measured": "37/56 passed (19 failed)"
+      },
+      {
+        "id": "B",
+        "change": "null treated as present (Map.has_key?)",
+        "result": "KILLED",
+        "measured": "53/56 (unit null, engine C-2, router null)"
+      },
+      {
+        "id": "C",
+        "change": "guard 4c judges Map.merge(instance variables, submitted) i.e. counts the held value",
+        "result": "SURVIVED",
+        "measured": "56/56 passed (no failure)"
+      },
+      {
+        "id": "D",
+        "change": "rejected_keys emits key plus inspect(failures) and drops the allowed filter (value/enum leak into body)",
+        "result": "KILLED",
+        "measured": "41/56"
+      },
+      {
+        "id": "E",
+        "change": "drop allowed-set filter (out-of-form key named)",
+        "result": "KILLED",
+        "measured": "51/56 (C-4a x3, 2 unit)"
+      },
+      {
+        "id": "F",
+        "change": "refusal audit record not written",
+        "result": "KILLED",
+        "measured": "46/56"
+      },
+      {
+        "id": "G",
+        "change": "only missing keys refuse; schema rejection falls through to merge so instance goes to ERROR",
+        "result": "KILLED",
+        "measured": "45/56"
+      },
+      {
+        "id": "H",
+        "change": "SUB_PROCESS completion merge passes nil validations (parent no longer errors)",
+        "result": "KILLED",
+        "measured": "55/56 (C-12)"
+      },
+      {
+        "id": "I",
+        "change": "tasks router: output_refused clause answers a generic 422 instead of Response.output_refused",
+        "result": "KILLED",
+        "measured": "47/56"
+      },
+      {
+        "id": "J",
+        "change": "function-level rescue removed from record_completion_refusal_audit (audit failure raises)",
+        "result": "KILLED",
+        "measured": "55/56 (C-15)"
+      },
+      {
+        "id": "K",
+        "change": "audit write wrapped in a transaction that rolls back",
+        "result": "KILLED",
+        "measured": "47/56"
+      },
+      {
+        "id": "L",
+        "change": "audit written twice per refusal",
+        "result": "KILLED",
+        "measured": "46/56"
+      },
+      {
+        "id": "M",
+        "change": "submitted-map guard 4c disabled (relies on 6b-ii only)",
+        "result": "KILLED",
+        "measured": "55/56 (C-11)"
+      }
+    ],
+    "findings": [
+      {
+        "id": "F-1",
+        "severity": "MUST",
+        "mutant": "C",
+        "route_to": "TEST-DESIGNER",
+        "gap": "Nothing pins that guard 4c (check_completion_guards, SUBMITTED map) is what refuses before form-expression re-evaluation when the instance ALREADY HOLDS the required key. C-3 (rework) passes via the later corrected-map check 6b-ii, and C-11 starts with an instance that does not hold decision, so a guard that counts the held value is invisible. Real behavioural difference, not an equivalent mutant.",
+        "required_test": "In test/letflow/engine_required_outputs_test.exs add a case: cross_field_form + required_outputs [decision] + initial_variables including \"decision\" => \"approved\"; submit %{\"amount\" => -5, \"confirm\" => true} (decision omitted, cross-field fails). Expect {:error, {:output_refused, %{missing_keys: [\"decision\"], rejected_keys: []}}}, projection still :active, no EXECUTION_ERROR event, rows unchanged (assert_refused_untouched!). Must fail against mutant C (guard counts held value -> EXECUTION_ERROR).",
+        "status": "RESOLVED by 2b95d10e"
+      }
+    ],
+    "judgement_on_reported_untested_items": {
+      "recomputed_to_null_C7_variant": "ACCEPTABLE. visible_when false and computed-null both reach the same corrected-map RequiredOutputs.missing_keys call; mutant A and TEST-DESIGNER M6 prove that call is exercised. No separate test required.",
+      "missing_key_plus_other_rejected_key": "ACCEPTABLE. Per design, 4c refuses on the submitted map with rejected_keys [] before merge runs; unit test \"excludes keys already reported as missing\" pins the corrected-path exclusion. Asserting the combined body would pin an incidental choice."
+    },
+    "restoration": "Originals of engine.ex, engine/required_outputs.ex, engine/sub_process.ex, routers/tasks.ex saved in the scratchpad before mutating; restored by file copy after every mutant; git diff -- lib empty after every mutant; final: git status --porcelain lists only \"?? letflow-3.code-workspace\", cmp of the four lib files against saved originals identical, 4 test files re-run Result: 56 passed.",
+    "files_not_edited": "no test or lib file edited by this step",
+    "initial_verdict": "FAIL (mutant C survived)",
+    "revalidation": {
+      "test": "engine_required_outputs_test.exs \"C-3/C-11 combined\" read: instance holds decision, submits amount -5 and confirm true without decision, asserts output_refused missing [decision] with rows untouched",
+      "lib_unchanged_by_rework": "git diff 2b95d10e~1 2b95d10e -- lib is empty",
+      "baseline": "engine_required_outputs_test.exs: Result: 25 passed",
+      "mutant_C": "KILLED, 24/25 (only the new combined test fails)",
+      "mutant_M": "KILLED, 23/25 (C-11 and the new combined test fail), no regression",
+      "restore": "engine.ex restored by file copy from scratchpad; git diff -- lib empty after each mutant; git status --porcelain shows only letflow-3.code-workspace"
+    }
+  },
+  "rework_count": 0
+}

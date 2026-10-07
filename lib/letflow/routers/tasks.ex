@@ -388,6 +388,13 @@ defmodule Letflow.Routers.Tasks do
     Response.output_refused(conn, missing, rejected)
   end
 
+  # REQ-463 (design req459 §4): separation of duties -- the caller most recently
+  # completed a node this one names in distinct_from. 403 with ONE constant body
+  # (Response.separation_of_duties/1), identical on complete and claim.
+  defp handle_complete_result({:error, :separation_of_duties}, conn) do
+    Response.separation_of_duties(conn)
+  end
+
   # ISS-0942: Tasks.authorize_completion/3's three assignee-mismatch atoms.
   # Deliberately 403 (Response.forbidden/2), NOT 409 -- a divergence from
   # handle_claim_result/3's own mapping of these exact same atoms to 409
@@ -477,6 +484,13 @@ defmodule Letflow.Routers.Tasks do
 
   defp handle_claim_result({:error, :not_claimable}, conn, _opts) do
     Response.conflict(conn, "task cannot be claimed")
+  end
+
+  # REQ-463 (design req459 §4, §6, D-2): deliberately 403 with the constant body,
+  # unlike the 409 of the eligibility refusals above, so both endpoints answer
+  # byte-identically.
+  defp handle_claim_result({:error, :separation_of_duties}, conn, _opts) do
+    Response.separation_of_duties(conn)
   end
 
   defp handle_claim_result({:error, _reason}, conn, _opts) do

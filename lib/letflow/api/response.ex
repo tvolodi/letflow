@@ -58,6 +58,7 @@ defmodule Letflow.Api.Response do
 
   @json_content_type "application/json"
   @problem_content_type "application/problem+json"
+  @separation_of_duties_body ~s({"detail":"separation of duties","status":403})
 
   # ── Success helpers ────────────────────────────────────────────────────────
 
@@ -184,6 +185,19 @@ defmodule Letflow.Api.Response do
   @spec output_refused(Plug.Conn.t(), [String.t()], [String.t()]) :: Plug.Conn.t()
   def output_refused(conn, missing_keys, rejected_keys),
     do: send_problem(conn, Error.output_refused(missing_keys, rejected_keys))
+
+  @doc """
+  HTTP 403 — Separation of Duties (REQ-463). A constant two-member body
+  (`{"detail":"separation of duties","status":403}`): no trace_id, type, title,
+  node id, user id or name, so every cause answers byte-identically (design
+  req459 section 4.2). Deliberately bypasses `send_problem/2`.
+  """
+  @spec separation_of_duties(Plug.Conn.t()) :: Plug.Conn.t()
+  def separation_of_duties(conn) do
+    conn
+    |> put_resp_content_type(@problem_content_type)
+    |> send_resp(403, @separation_of_duties_body)
+  end
 
   @doc """
   HTTP 429 — Too Many Requests. Set `Retry-After` on the conn yourself before

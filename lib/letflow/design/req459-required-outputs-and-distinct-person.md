@@ -281,10 +281,14 @@ P4. `actor_id`, `idempotency_key` read with `Map.get/2`; `completed_at` clock re
                (`corrected_output_variables` from step 5; computed fields forcibly recomputed, `visible_when: false` values
                dropped) for the same `required_outputs`. Catches a required key that step 5 dropped or computed to null, which 4c
                could not see.
-       6b-iii. `[pure]` `RequiredOutputs.rejected_keys/2`: every key whose validation outcome is `{:rejected, _}`, excluding
-               keys already in `missing_keys` (a null value on a required key is "missing", not "rejected", BA 2026-10-07).
-               Sorted ascending.
-       6b-iv.  if `missing_keys` or `rejected_keys` is non-empty: **`[REFUSE-C2]`** return
+       6b-iii. `[pure]` `RequiredOutputs.rejected_keys/3`: every key whose validation outcome is `{:rejected, _}`, excluding
+               keys already in `missing_keys` (a null value on a required key is "missing", not "rejected", BA 2026-10-07), and
+               RESTRICTED to the ALLOWED set = (keys of the task's own pinned `form_schema.properties`, `task.form_schema`) UNION
+               (`required_outputs`). Sorted ascending. A rejected key outside the allowed set is still a rejection (the batch is
+               refused, nothing is merged, whole-batch semantics preserved) but its NAME is not reported anywhere (body or audit):
+               otherwise any task worker could probe which variable keys have a `variable_schema` in the definition (INV-2). Let
+               `any_rejected?` = whether at least one key had `{:rejected, _}` (computed before restriction).
+       6b-iv.  if `missing_keys` is non-empty, `rejected_keys` is non-empty, or `any_rejected?`: **`[REFUSE-C2]`** return
                `{:error, {:completion_refused, {:output_refused, missing_keys, rejected_keys}}}` from the step.
        6b-v.   else `apply_variable_merge/6` (`engine.ex:3916-3943`) -> `VariableMerge.merge/3` `[pure]` -> `{:merged, ...}`.
                Its `{:rejected, ...}` -> `{:execution_error, ...}` clause (3928-3941) becomes unreachable on this path (the
@@ -467,11 +471,16 @@ Second example (a value rejected by the key's `variable_schema`; the value and t
 
 Rules: `code` is the constant `"output_refused"`; `missing_keys` = required keys that are absent or null in the submitted (4c) or
 corrected (6b-ii) map; `rejected_keys` = keys with a rejecting `variable_schema` outcome (6b-iii); both lists are sorted
-ascending, deduplicated, and either may be empty (never both). Key names come only from the definition (`required_outputs`) and
-from keys that have a registered schema, so no caller-chosen string is echoed (INV-2). The body contains no submitted value, no
+ascending and deduplicated. Both lists may be empty only in one case: every rejected key lies outside the allowed set (the task's
+own `form_schema.properties` plus `required_outputs`); the 422 is then returned with `"missing_keys": []` and `"rejected_keys": []`
+and the same `detail`, so the response confirms a refusal but names nothing (decision F-1: refuse rather than drop, because silently
+dropping a submitted value would merge a different output than the caller sent, and refusing keeps the existing whole-batch rule). Key
+names come only from the task's own form and `required_outputs`, never from the caller's input or other keys' schemas, so no
+caller-chosen string is echoed and no other key's schema existence is revealed (INV-2). The body contains no submitted value, no
 enum or schema text, no `ValidationFailure.field_path`/`message`, no instance id, no task id, no other-task data, no module
 or SQL text (INV-4 style: the constructor has no parameter that could carry them). An empty-string value of a required key is "present": the schema's type and enum decide, so it appears under `rejected_keys` when the schema refuses it.
 
+Retry note for the empty-lists case: the client cannot tell which key failed; it resends output limited to the task's own form fields.
 A refusal reports every key of the check that failed: C1 (4c) can only report `missing_keys`; C2 (6b-iv) reports both lists in one
 response. A client can therefore need two round trips (first missing, then rejected); this is stated, not hidden, because
 validating schemas before reevaluation would compute them against uncorrected values.
@@ -551,7 +560,7 @@ One `audit_entries` row per refused COMPLETION, written by `record_completion_re
 | `resource_id` | the task id (the row exists, unlike ISS-0784) |
 | `before_state` | `nil` |
 | `after_state` (rule A) | `%{"rule" => "separation_of_duties", "instance_id" => ..., "node_id" => <the task's node>, "blocking_node_ids" => [<named node ids whose most recent completer is the actor>, sorted]}` |
-| `after_state` (rule C) | `%{"rule" => "output_refused", "instance_id" => ..., "node_id" => <the task's node>, "missing_keys" => [...], "rejected_keys" => [...]}` |
+| `after_state` (rule C) | `%{"rule" => "output_refused", "instance_id" => ..., "node_id" => <the task's node>, "missing_keys" => [...], "rejected_keys" => [...]}`; both lists carry only allowed-set keys (3.2, F-1), so a rejection on any other key leaves no trace of its name or of its schema |
 | `trace_id` | `nil` (no trace id reaches `Engine.complete_task/3`; same as `task.complete`, `engine.ex:4924`) |
 
 No submitted value, no enum or schema text, no `ValidationFailure` content, no user name, no email, no other user's id (for rule
@@ -586,9 +595,15 @@ Numbered order in `claim_task/3` (`tasks.ex:428-446`), the new steps marked:
 6. Otherwise the existing write (`tasks.ex:715`) or no-op success.
 
 ```elixir
-@spec Letflow.Engine.SeparationOfDuties.check_for_claim(Letflow.Engine.Task.t(), actor_id :: String.t(), prefix :: String.t()) ::
+@spec Letflow.Engine.SeparationOfDuties.check_for_claim(Letflow.Engine.Task.t(), actor_id :: Ecto.UUID.t() | String.t() | nil, prefix :: String.t()) ::
         :ok | {:error, :separation_of_duties}
 ```
+
+`check_for_claim/3` is TOTAL (INV-8, decision F-2): any failure to obtain the graph (`{:error, :snapshot_not_found}`, a failing
+`build_graph/1`, a raised exception, a DB error) is caught inside the function, logged with `Logger.warning` naming only the task id
+and the failure tag, and the function returns `:ok`. Completion is the authority and re-checks under the locks, so failing open at
+the advisory claim is safe; it also guarantees a definition without `distinct_from` never gains a new claim failure mode. Only a
+successfully loaded graph whose node has a non-empty `distinct_from`, and a successful query, can produce `{:error, :separation_of_duties}`.
 
 and `claim_error` (`tasks.ex:395-404`) gains `{:error, :separation_of_duties}`. Router: `handle_claim_result/3` clause -> section 4.
 This DIVERGES from that handler's own mapping of eligibility refusals to 409 (`routers/tasks.ex:455-465`); it is deliberate:
@@ -674,7 +689,9 @@ New module `Letflow.Engine.RequiredOutputs` (all pure, total):
 ```elixir
 @spec required_outputs(node :: Letflow.Definitions.Graph.Node.t()) :: [String.t()]          # [] when absent/null/malformed
 @spec missing_keys(required :: [String.t()], output_variables :: map()) :: [String.t()]       # sorted; keys absent from the map or with a nil value
-@spec rejected_keys(validations :: Letflow.Engine.VariableMerge.variable_validations(), exclude :: [String.t()]) :: [String.t()]  # sorted keys with {:rejected, _}, minus `exclude`
+@spec rejected_keys(validations :: Letflow.Engine.VariableMerge.variable_validations(), exclude :: [String.t()], allowed :: [String.t()]) :: [String.t()]  # sorted keys with {:rejected, _}, minus `exclude`, intersected with `allowed`
+@spec any_rejected?(validations :: Letflow.Engine.VariableMerge.variable_validations()) :: boolean()
+@spec allowed_keys(form_schema :: map() | nil, required :: [String.t()]) :: [String.t()]   # form_schema["properties"] keys union required
 ```
 
 and in `Letflow.Definitions.SemanticValidation` (also added to its moduledoc):
@@ -858,6 +875,7 @@ Refusal tests also assert the response through the router (`test/letflow/routers
 | C-1 | `required_outputs ["decision"]`, key absent | 422, body = section 3 example with `missing_keys ["decision"]`, no submitted value; task PENDING and claimable; instance, tokens, variables, event count unchanged; exactly one `task.completion_refused` audit row |
 | C-2 | key present with `null` | same 422 (null counts as missing) |
 | C-3 | rework loop: instance already holds `decision`, resubmission omits it | still 422 (existing value does not count) |
+| C-4a | a value rejected on a key that is NOT in the task's `form_schema.properties` nor `required_outputs` (but has a `variable_schema`) | 422 with BOTH lists empty, nothing merged, instance not in ERROR; the key's name never appears in the body or in the audit row (grep both) |
 | C-4 | enum-rejected value (`"maybe"`) | 422 `rejected_keys ["decision"]`; no value and no enum in body; instance NOT in ERROR; no EXECUTION_ERROR event; immediate retry with a valid value completes and routes correctly |
 | C-5 | wrong-type value on a typed key | same as C-4 |
 | C-6 | empty string on a required key whose schema is an enum without `""` | 422 `rejected_keys` (empty string is judged by the schema, not "missing"); and with a schema that allows `""` it is accepted |
@@ -972,7 +990,8 @@ Acceptance-criteria map for REQ-459 itself:
 1. Codes and checks exactly as 1.2 (CHK-26 shape/existence/type, CHK-27 position) plus section 1.5 inputs. The BA parallel ruling is implemented as the relation table in 1.5.
 2. Check 4 warnings likewise surface at validate and pack install only, not in the activate response. Add `single_member_pairs/1`, `member_counts/2`, `format_single_member_warning/2` to `RoleBinding` and the third source to `ValidationWarnings.for_definitions/2`; surfaces are the validate 200 body and the pack-install `warnings` (activate response is record-shaped and carries none; the AC "activation with only a warning succeeds" is satisfied because warnings never block).
 3. REQ-464's SECURITY-REVIEWER condition ("only if check 4 reads tenant role membership through a new query") IS met: `member_counts/2` is a new query over `group_members` and `tenant_role` and needs SECURITY-REVIEWER (INV-1, prefix explicit; INV-2, only counts leave the function).
-4. Members counted: distinct `group_members.user_id` of the role's bound group, regardless of user status (OQ-2).
+4. `member_counts/2` stays prefix-scoped (explicit `prefix`, INV-1) and returns counts only (never user ids, names or emails, INV-2).
+5. Members counted: distinct `group_members.user_id` of the role's bound group, regardless of user status (OQ-2).
 
 **REQ-465 / REQ-466 (adoption, rule A)**
 1. Escalation nodes carry their own `distinct_from` (section 9); a later approver names BOTH a node and its escalation node when either may have been the decider.
@@ -988,7 +1007,7 @@ Acceptance-criteria map for REQ-459 itself:
 * **D-3 Audit write is best-effort** (log and swallow, never raises), following the ISS-0784 / ISS-0928 precedent; a failing audit store yields a refusal with no audit row and one warning, not a 500.
 * **D-4 Check 3 is a permanent warning** (1.4).
 * **D-5 Two required-key checks (4c on submitted, 6b-ii on corrected)** instead of one (2.5).
-* **D-6 Claim refusals are not audited**, completion refusals are (section 6).
+* **D-6 Claim refusals are not audited, completion refusals are** (section 6). Claim is advisory and on a UI-driven path. Completion refusals can be repeated by one authenticated caller without bound, writing one hash-chained audit row each; this is accepted under decision 0040 (`docs/migration/decisions/0040-authenticated-route-rate-limiting.md`: no per-actor rate limit is added at this stage; authenticated, tenant-scoped callers are bounded by round-trip latency), and is not a new class of exposure (`task.complete` and `task.assign` rows are likewise caller-triggered). A refusal-specific limit, if ever wanted, belongs to that decision's follow-up, not here.
 
 ## Open questions (genuinely open; each has the default this design builds)
 
@@ -1001,7 +1020,7 @@ Acceptance-criteria map for REQ-459 itself:
 ## Security invariants assessment (INV-1..INV-10, `docs/agents/instructions/security-invariants.md`)
 
 * **INV-1 (tenant isolation):** every new read (`tasks`, `instance_definition_snapshots`, `variable_schemas`, `group_members`/`tenant_role` for check 4) and the audit insert pass an explicit `prefix` derived from the authenticated tenant; no new table, no `public`-schema fallback.
-* **INV-2 (server-side field authorisation):** the 422 body carries definition-owned key names only; the 403 body is a constant; the task-detail allowlist is not extended; the audit row holds ids and key names, no values, names or emails.
+* **INV-2 (server-side field authorisation):** the 422 body carries definition-owned key names only; the 403 body is a constant; the task-detail allowlist is not extended; the audit row holds ids and key names, no values, names or emails. Rejected-key names (body and audit) are restricted to the task's own `form_schema.properties` plus `required_outputs` (F-1), so a task worker cannot probe which other variable keys have a `variable_schema`; an out-of-form rejection still refuses but names nothing.
 * **INV-4 (no secrets/exception text in responses):** both new constructors take no free-text parameter; no stack, module or SQL text can reach a body.
 * **INV-5:** unchanged; the 403 reveals only that a separation rule applied to a task the caller already sees.
 * **INV-6:** this document is the scoping statement for the new data-access paths (sections 6, 8, 1.5).

@@ -1,14 +1,14 @@
 {
-  "handoff_id": "ad424786-9349-4173-9a22-363d2a057e53",
+  "handoff_id": "7c3aafbe-450d-4ad0-bc70-24d06392fa3c",
   "run_id": "WF02-REQ462-20261007",
   "workflow_id": "WF-02",
-  "step": "02c",
+  "step": "02d",
   "from_agent": "ORCH",
-  "to_agent": "SECURITY-REVIEWER",
-  "file": "handoffs/WF02-REQ462-20261007/step-02c-security-reviewer.json",
-  "created_at": "2026-10-07T12:13:11Z",
-  "started_at": "2026-10-07T12:13:11Z",
-  "status": "COMPLETED",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ462-20261007/step-02d-reviewer.json",
+  "created_at": "2026-10-07T12:14:06Z",
+  "started_at": "2026-10-07T12:14:06Z",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -42,18 +42,7 @@
     ]
   },
   "task": {
-    "description": "You are SECURITY-REVIEWER, step 02c (MANDATORY per the requirement). Review `git diff main...HEAD` (origin/main..HEAD; commit 77793100 is the data change) against docs/agents/instructions/security-invariants.md INV-1..INV-8. Focus: adoption changes what a HUMAN_TASK completion may omit on a tenant-data path (a completion without the declared key is now refused 422 output_refused, task stays open, instance unchanged); check that nothing weakens an authorization/role/tenant check, that the refusal leaks no cross-tenant or value detail (missing_keys names only declared keys), that fail-closed routing (auto-reject on omitted decision) is replaced by refusal and not by a silent pass, that the escalation (D-ESC) nodes declare their own required_outputs so no bypass path remains, that the test edits (shipped_definitions_validation_test, sub_process_service_task_after_test, vortex_escalation_timer_test adding severity to the false-positive CEO completion) do not weaken coverage, and that no secret literal is added. Read-only: do not edit files, do not run mix. Verdict PASS/FAIL with findings by severity in result.\n",
+    "description": "You are REVIEWER, step 02d. Review `git diff origin/main..HEAD` (data commit 77793100). Check per .claude/agents/reviewer.md: scope creep (only the twelve nodes a..l changed; none of the unadopted nodes: meridian credit-memo/risk-assessment/escalation reviews, committee votes, regulatory, vortex false-positive, swiftroute incident; no definition outside the three verticals), version bumps exactly one minor step from main (read origin/main's fixtures: swiftroute 1.5->1.6, meridian loan 1.12->1.13, vortex release 1.5->1.6, vortex deviation 1.6->1.7) with a description saying why, seed-script header-only edits (payload via stdin unchanged), decision-record consistency (docs/migration/decisions/, REQ-459 design section 9: escalation nodes declare their own required_outputs; required_outputs key must have a variable_schema), the extra test edits ELIXIR-DEV made beyond version pins (shipped_definitions_validation_test, vortex_production_order_release_fixture_test, sub_process_service_task_after_test, vortex_escalation_timer_test) are justified and do not weaken coverage, simulation/uat copies deliberately untouched (verify no test requires them to mirror: grep tests that compare QA JSON with simulation YAML), and docs/anti-patterns.md. Also confirm every other test file in test/ that activates hand-built or fixture definitions with these four definitions is not left broken (grep, read-only). Read-only: no edits, no mix. Verdict PASS/FAIL with findings.\n",
     "extra": "ENVIRONMENT RULES (binding): checkout C:\\Users\\tvolo\\dev\\ai-dala\\letflow-3, branch feat/REQ-462-adopt-required-outputs-Q-1025 (verify with git branch --show-current first; STOP if different). Do NOT push, open a PR or merge; do NOT touch the letflow-queue; do NOT touch branch test/authz-deny-log-deterministic-capture; leave untracked letflow-3.code-workspace untouched and uncommitted. RAM is VERY tight (0.4-2 GB free; the harness KILLS runs at critical memory): mix commands strictly sequential, ONE BEAM at a time, check free RAM before each mix test (powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\"), scoped single test FILES only (never a directory or the full suite), export MIX_TEST_PARTITION=3 ONLY for tests (unset for tooling tasks; use a unique number such as 14 for files that mutate shared state). If a run is killed, report it; do NOT loop. Do NOT commit; ORCH commits after your step. Never git checkout/stash/reset anything (uncommitted work is unrecoverable). Quote real output, never claim. Claim the handoff by setting status to IN_PROGRESS only; on finishing set status COMPLETED/FAILED and fill result {status: PASS|FAIL, summary, files_changed, verification, issues, next_action}.\nContext: the design is lib/letflow/design/req459-required-outputs-and-distinct-person.md (section 9: an escalation task inherits nothing, declares its own required_outputs). REQ-460 (engine, b8899b24: completing a HUMAN_TASK without a declared required_outputs key gives 422 code output_refused with missing_keys, task stays open, instance unchanged) and REQ-461 (validator, 508163d0: check 2 required_output_without_variable_schema is a VIOLATION at validate/activate; check 3 decision_key_not_required: is a WARNING) are merged. docs/anti-patterns.md newest entry: a validator refusing at activate must be checked against EVERY test that activates hand-built definitions (grep the whole test/ tree).\n"
-  },
-  "result": {
-    "status": "PASS",
-    "summary": "Scope: in scope (adoption changes what a HUMAN_TASK completion may omit on a tenant-data path). Diff vs origin/main has zero changes under lib/, config/, priv/ - only 4 QA fixture JSONs, 3 seed-script comment lines, tests. Exactly 12 required_outputs declarations verified by parsing fixtures: swiftroute ops-review[ops_decision], ceo-approval[ceo_decision]; meridian l1-approval, l2-approval, escalate-l2-approval-to-ceo, kyc-manual-review; vortex release capacity-review, escalate-to-ceo, budget-approval, escalate-budget-approval-to-ceo; vortex deviation severity-classification, escalate-severity-classification-to-ceo[severity]. Each key has a variable_schema in its definition. Role/escalation_role attributes unchanged (no authz weakening). D-ESC nodes each declare own keys (no bypass). Fail-closed fall-through (auto-reject / default-to-critical on omitted key) is replaced by engine refusal (REQ-460 code, unchanged here), not a silent pass. No secret literals added (INV-4 grep clean). INV-1 N/A (no schema/migration/query), INV-2 N/A (no response shaping changed; refusal body from merged REQ-460 names only declared keys - verify in TEST step), INV-3/9 N/A, INV-5 N/A (no ID lookup), INV-6 satisfied by this record, INV-7 N/A (no SQL), INV-8 N/A (no lib code), INV-10 N/A (no route/permission touched). Test edits: shipped_definitions_validation_test, vortex_production_order_release_fixture_test and sub_process_service_task_after_test now pass real variable_schemas into validate/activate (strengthens check 2, does not weaken); vortex_escalation_timer_test adds severity=minor to false-positive CEO completion (needed by the new required key; routing assertion unchanged).",
-    "files_changed": [],
-    "verification": "git branch --show-current = feat/REQ-462-adopt-required-outputs-Q-1025; git diff --stat origin/main..HEAD (21 files, none in lib/config/priv); python parse of fixtures listing the 12 nodes/roles; grep for hardcoded secrets in added lines: no hits. No mix run (read-only).",
-    "issues": [
-      "MINOR (not a security fail, for TEST step): the two 'KNOWN LIMITATION (ISS-1008 AC3 unmet)' tests still exist at test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs:173 and :187 and assert the old accept/fail-closed behaviour; they will fail against the adopted definition. The twelve 422 tests named by node id are not in the diff yet. Both must land before merge (AC2/AC3 of REQ-462).",
-      "INFO: false_positive on the vortex deviation, meridian credit_decision/risk_rating/committee votes remain unadopted by design; omission there still falls through silently (known, reported to ORCH per requirement)."
-    ],
-    "next_action": "Proceed to REVIEWER (step 02d); then TEST-DESIGNER must replace the two KNOWN LIMITATION tests and add the twelve node-named 422 tests."
   }
 }

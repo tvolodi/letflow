@@ -1390,6 +1390,11 @@ hard violation. This is no longer a MAY: every validator role and ORCH enforce t
 protocol every time they run the standard check alias, not merely as an option they can
 reach for by hand.
 
+**Malformed shapes are reported, not crashed on (H7, ISS-1037 / Q-1020).** A handoff
+whose `task`/`context` is not an object, or whose nested fields have the wrong type, is a
+never-grandfathered hard violation naming the field (H7) rather than a crash of the whole
+scan; a non-null, non-object `result` is only a WARN (H7-RESULT). See the moduledoc.
+
 **Pre-existing violations are individually grandfathered, not suppressed.** As of this
 task's own first run against the corpus (626 files), 30 files carry a pre-existing hard
 violation traced to ISS-0190 (still open at the time this landed) — 15 illegal

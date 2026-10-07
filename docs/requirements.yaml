@@ -34365,6 +34365,7 @@ requirements:
     owner: "BA-<VERTICAL>"
     status: pending
     stage: S7
+    # ORDERING NOTE (2026-10-07): requires REQ-463 (distinct person) and REQ-460 (required outputs) for its refusal scenario 'requester approves own request'; ordering enforced by assignment (queue depends_on cannot be edited).
     impl_order: 974  # letflow-queue task id, GH#2246. Registered 2026-10-06 by ORCH (role-system audit follow-up, approved by the user). Queue depends_on: Q-964, Q-965, Q-969, Q-970.
     description: >
       Approved by the user on 2026-10-06. After REQ-452 the scenario checker
@@ -34452,8 +34453,8 @@ requirements:
   #                            LIMITATION tests
   #   REQ-463 ELIXIR-DEV      A engine: distinct_from at completion and claim
   #                            (depends_on 460, so C lands first)
-  #   REQ-464 ELIXIR-DEV      A validator: nodes exist and precede, WARNING
-  #                            for a same single-member role
+  #   REQ-464 ELIXIR-DEV      A validator: named nodes exist (parallel branches
+  #                            allowed), WARNING for a same single-member role
   #   REQ-465 ELIXIR-DEV      A adoption, part 1: meridian loan origination and
   #                            meridian regulatory sign-off chain
   #   REQ-466 ELIXIR-DEV      A adoption, part 2: vortex production order
@@ -34557,15 +34558,23 @@ requirements:
          (no submitted values, no names, no emails), and where it is
          written.
       6. Claim path for rule A (Letflow.Tasks.claim_task/3): the same
-         comparison as early feedback; whether assign_task/4 and
-         reassign_task/4 also check (default in open_questions below).
+         comparison as early feedback. DECIDED (BA, 2026-10-07):
+         assign_task/4 and reassign_task/4 do NOT check distinct_from;
+         completion is the authority, so an administrator may assign a task
+         to anyone and the completion check still refuses a person who
+         already completed a named node.
       7. API-token identity: which value reaches run_complete_task as
          actor_id for a token request, shown by a file and line, and a
          statement that the comparison uses it.
       8. Rework semantics: how 'most recent completion of a named node in
          this instance' is read from stored data (which table or events),
-         the behaviour when the named node has not completed in this
-         instance, and the read cost.
+         and the read cost. DECIDED (BA, 2026-10-07): a named node that has
+         not completed in this instance (the path skipped it, or a timer
+         escalated past it) imposes no constraint. DECIDED: the named nodes
+         may lie on PARALLEL branches with no path between them; the check
+         compares the actor with the completions that exist AT THE TIME of
+         the check, in any order, so whichever of two parallel nodes
+         completes later must differ from the earlier completer.
       9. Interaction with D-ESC escalation tasks (REQ-396: a timer on a
          HUMAN_TASK creates an escalation task and cancels or supersedes
          the original) and with timer cancellation: whether an escalation
@@ -34582,10 +34591,12 @@ requirements:
       12. Test plan skeleton per rule: the negative cases, the API-token
          case, the rework-loop case, TENANT_ADMIN not exempt, the
          default-off case.
+      DECIDED (BA, 2026-10-07), not open: FormExpressionReevaluation
+      errors (build_reevaluation_execution_error_args in engine.ex) are
+      unchanged on this path and still end in EXECUTION_ERROR, because they
+      are definition defects and not caller input.
     open_questions:
-      - "Whether assign_task/4 and reassign_task/4 also check distinct_from. Default: no; completion is the authority and claim is early feedback, so an administrator may assign a task to anyone and the completion check still refuses a person who already completed a named node."
       - "Whether an unclaimed task is visible in a user's inbox when the user would be refused at claim. Default: unchanged visibility; refusal only on claim and completion, so the rule does not leak who completed a named node."
-      - "Whether FormExpressionReevaluation errors (build_reevaluation_execution_error_args in engine.ex) also become retryable 422 on this path. Default: unchanged, still EXECUTION_ERROR, because they are definition defects and not caller input; flagged for REVIEWER."
     acceptance_criteria:
       - "a design file under lib/letflow/design/ exists with the twelve numbered sections above, each answering its question in writing and naming the file and function it concerns; it contains no implementation code beyond @spec-level signatures and a numbered check order"
       - "section 2 gives one total order of every check and write in run_complete_task for both rules and states, for each refusal path, that nothing is written before the refusal except the one audit record; CODE-DESIGN-VALIDATOR re-derives the order from lib/letflow/engine.ex independently"
@@ -34627,6 +34638,11 @@ requirements:
          completion path (out-of-enum, wrong type) is refused the same way:
          retryable 422 naming the rejected keys, no instance ERROR, nothing
          written. A form's `required` flag stays a UI hint.
+      DECIDED (BA, 2026-10-07): a required key whose submitted value is
+      null counts as missing; an empty string is judged by the
+      variable_schema's own type and enum rules. DECIDED: form-expression
+      re-evaluation errors are unchanged (still EXECUTION_ERROR).
+
       4. Engine-internal merges (service-task outputs, REQ-056 and
          others) keep going through the EXECUTION_ERROR / REQ-061 path
          unchanged; merge/3 and its whole-batch semantics are unchanged.
@@ -34652,7 +34668,6 @@ requirements:
     open_questions:
       - "DECISION RECORD 0007, finding by ORCH, for REVIEWER sign-off. 0007 does not contradict validating every key, but two passages become stale for the task-completion path. Passage 1 (Implementation section, merge/3 bullet): 'the same whole-batch-abort-on-rejection semantics (§3.2) apply regardless of which key rejected.' Passage 2 (Open questions section): 'validation errors surface only via `EXECUTION_ERROR` events today'. Proposed dated note to append to 0007 by the reviewer-approved change: '2026-10 note (REQ-460): on the HUMAN_TASK completion path a rejected output is now refused with a retryable 422 before any state change and no EXECUTION_ERROR is raised; merge/3 itself and its whole-batch semantics are unchanged; the EXECUTION_ERROR path remains for service-task and other engine-internal merges. REVIEWER sign-off: pending'. This entry does not edit 0007; REVIEWER decides whether and when the note is written."
       - "Start-form: GH #2335 point 4 asks for required instance-start variables (for example declared_value) validated at POST /instances. No start-form node exists in a definition today, so this is OUT OF SCOPE here and needs its own requirement and design. Default: ORCH files a follow-up issue referencing GH #2335 when registering this series; this entry builds nothing for it."
-      - "Whether a null value for a required key counts as missing. Default: yes (absent or null is missing); an empty string is handled by the variable_schema's own type and enum rules."
       - "The 422 status versus the existing error-contract of Letflow.Routers.Tasks. Default: 422, as stated in GH #2335; the design (REQ-459 section 3) may report a conflict."
     acceptance_criteria:
       - "a HUMAN_TASK with required_outputs [decision] completed with output_variables lacking decision (key absent) returns 422 whose body names decision and carries no submitted value; afterwards the task is still open and claimable, the instance status, tokens, variables and event count are unchanged (asserted by reading the rows before and after), real Postgres"
@@ -34716,10 +34731,12 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    # ORDERING: stays blocked until PR #2334 (Q-990 / GH #2277, the home of the two KNOWN LIMITATION tests) is merged; ORCH does not dispatch it earlier.
     # impl_order: UNREGISTERED -- blocked-by: REQ-461 -- the shipped definitions can adopt only after the engine check (REQ-460) and the validator (REQ-461) exist; REQ-460 is reached through REQ-461
     description: >
       Source: GH #2335 (ISS-1039, Q-1021) adoption scope. PRECONDITION
-      TO CHECK FIRST: the two tests named 'KNOWN LIMITATION (ISS-1008 AC3
+      TO CHECK FIRST (ORDERING: this entry stays blocked until PR #2334 is
+      merged): the two tests named 'KNOWN LIMITATION (ISS-1008 AC3
       unmet)' are in test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs
       on PR #2334 (branch fix/swiftroute-lane-Q-993-990-994, Q-990 / GH
       #2277). When this entry was drafted (2026-10-07) PR #2334 was OPEN and
@@ -34824,6 +34841,12 @@ requirements:
       - NO role is exempt, TENANT_ADMIN included;
       - the completing user is compared against the MOST RECENT completion
         of each named node in the same instance, so rework loops work;
+      - BA decision 2026-10-07: a named node may lie on a PARALLEL branch
+        (no path between the nodes); the check compares with the
+        completions that exist at the time of the check, in any order, so
+        whichever parallel node completes later must differ from the
+        earlier completer; a named node that has not completed (path
+        skipped, timer escalated past it) imposes no constraint;
       - the attribute is OPTIONAL and OFF by default: definitions without it
         behave identically;
       - the refusal is a clean 4xx with zero detail beyond 'separation of
@@ -34839,18 +34862,21 @@ requirements:
       3. Claim check in Letflow.Tasks.claim_task/3 with the same comparison
          and the same refusal body.
       4. Out of scope: org-chart or delegation models, a tenant-wide
-         switch, assign and reassign checks (see open_questions).
+         switch. DECIDED (BA, 2026-10-07): assign_task/4 and
+         reassign_task/4 do not check distinct_from; the completion check
+         still refuses.
     open_questions:
       - "FOLLOW-UP, not part of this change: PROCESS-AUDITOR checklist item B1 (.claude/agents/process-auditor.md and the docs that restate it) may answer YES when distinct_from is present on the approval task. Dependency for ORCH: file a docs-only follow-up that edits that text after this entry is done. This entry changes no agent file."
       - "REQ-457's refusal scenario 'requester approves own request' needs this entry (Q-974 must not start before this is done). REQ-457's entry is NOT edited here; ORCH reports the ordering."
-      - "A named node that never completed in this instance (the path skipped it). Default (REQ-459 section 8 is the authority): nothing to compare, no refusal from that node."
-      - "Assign and reassign. Default (REQ-459 open_questions): not checked; the completion check still refuses."
     acceptance_criteria:
       - "two roles, one user: user U holds role-a and role-b, completes node N1 (role-a), then attempts node N2 (role-b, distinct_from [N1]): completion is refused with the REQ-459 4xx, the body is exactly the fixed separation-of-duties body, and the task is still open; a second user holding role-b completes N2 (real Postgres, engine and router tests)"
       - "the refusal body and status are byte-identical whichever node or user triggered it, and contain no node id, user id, user name or email (test compares bodies from two different triggers and greps for the ids)"
       - "claim: U attempting POST /tasks/:id/claim on N2 is refused with the same body; a different user claims successfully"
       - "API-token case: a request authenticated with U's API token to complete N2 is refused, a token of a different user is accepted"
       - "TENANT_ADMIN is not exempt: a TENANT_ADMIN user who completed N1 is refused on N2 (requires REQ-447 PR2; the test fails if TENANT_ADMIN is special-cased)"
+      - "parallel branches: nodes P1, P2 and P3 on parallel branches each name the other two in distinct_from; user U completes P1, then U attempting P2 is refused; three distinct users complete P1, P2 and P3 and all are accepted; the order of completion does not matter (U completing P2 first then attempting P1 is refused too)"
+      - "a named node that never completed: N2 names N1, the path skipped N1, so U completes N2 with no refusal (test)"
+      - "assign and reassign: assign_task and reassign_task to a user who completed a named node succeed (no check); the completion by that user is then refused"
       - "rework loop: U completes N1, a different user V completes N1 on a second pass, then U attempts N2: accepted because the most recent completion of N1 is V's; reversed order (V then U on the second pass) refuses U"
       - "default-off: a definition whose nodes carry no distinct_from lets the same user complete both steps, identical to today's behaviour (regression test on an existing shipped definition)"
       - "a refusal writes nothing except one audit record with no PII (rows before and after compared; the record is searched for the user's email and name and contains neither)"
@@ -34860,14 +34886,17 @@ requirements:
     depends_on: [REQ-459, REQ-460]
 
   - id: REQ-464
-    title: "Process definition validator: distinct_from names existing nodes that precede, and a WARNING when a named node routes to the same single-member role"
+    title: "Process definition validator: distinct_from names existing nodes of the same definition (parallel branches allowed), and a WARNING when a named node routes to the same single-member role"
     owner: ELIXIR-DEV
     status: pending
     stage: S3
     # impl_order: UNREGISTERED -- blocked-by: REQ-463 -- checks the attribute REQ-463 introduces, with the code names reserved in the REQ-459 design
     description: >
       Source: GH #2323 (ISS-1034, Q-1016): 'the process validator checks
-      that the referenced nodes exist and precede the node', plus the
+      that the referenced nodes exist and precede the node', AMENDED by BA
+      decision 2026-10-07: a named node may lie on a PARALLEL branch (no
+      path between the two nodes); strict precedence applies only when the
+      named node is on the same path as this node. Plus the
       design-intent constraint that the REQ-455 validator WARNS (not a
       violation) when distinct_from names a node that routes to the same
       single-member role (the node could never complete). Adds checks
@@ -34880,11 +34909,14 @@ requirements:
       1. Shape: `distinct_from` on a HUMAN_TASK is a list of non-empty node
          ids without duplicates and without the node's own id; on any other
          node type it is a violation.
-      2. Existence: every listed id is a node of the definition, a
+      2. Existence: every listed id is a node of the same definition and a
          HUMAN_TASK; a missing id is a violation naming node and id.
-      3. Precedence: every listed node has a path to this node in the
-         definition graph; a listed node that does not precede it is a
-         violation naming both.
+      3. Path position: a listed node must not be reachable only AFTER this
+         node (this node has a path to it and it has no path to this node):
+         a node downstream-only is a violation naming both, since it can
+         never have completed when this node is checked. A listed node
+         that precedes this node, is on a parallel branch (no path either
+         way) or is on a rework loop (a path both ways) passes.
       4. Same-role WARNING: when this node and a listed node route to the
          same role and that role has exactly one member in the installing
          tenant, the validation result carries a WARNING (not a violation)
@@ -34893,11 +34925,11 @@ requirements:
          membership is known (install or activate), as REQ-455 check 4 is;
          at pure definition validation without a tenant it is not evaluated.
     open_questions:
-      - "Parallel branches. The three meridian committee votes run in parallel after a fork (committee-vote-cro, committee-vote-director, committee-vote-ceo), so none 'precedes' another and mutual distinct_from between them cannot pass check 3. Default: precedence is strict path-precedence as GH #2323 states; each vote may name earlier nodes (l1-approval, l2-approval) but not a sibling vote. The residual (two committee votes by one multi-role person) is reported by REQ-465 to ORCH as a follow-up, not silently dropped. REVIEWER may instead widen 'precede' to 'precedes or is in a sibling branch of the same fork', which changes check 3 and the REQ-459 design."
       - "Whether the same-role warning also covers the case where the single member is the user's only role holder across escalation roles. Default: no; the warning compares only the role attributes of the two nodes."
     acceptance_criteria:
       - "one test per check 1 to 3 with a minimal definition that violates only that check, asserting the code, the node id and the listed id; one passing neighbour per check"
-      - "a distinct_from naming the node itself, a non-existent id, a service-task id, a duplicate, and a node that does not precede are each reported (five negative tests)"
+      - "a distinct_from naming the node itself, a non-existent id, a service-task id, a duplicate, and a node reachable only after this node are each reported (five negative tests)"
+      - "parallel branches: nodes P1, P2, P3 after a fork, each naming the other two, produce no violation; a listed node on the same path before this node passes; a listed node on a rework loop (path both ways) passes"
       - "check 4: a definition installed in a tenant where the shared role has one member returns a WARNING naming both nodes and the role, and the definition still installs (status unchanged); in a tenant where the role has two members no warning is returned"
       - "a distinct_from check never changes a definition (activation of a definition with only a warning succeeds); the warning appears in the install and validate response bodies"
       - "every shipped definition is run through the validator in a test; for each, the count of new findings is quoted; shipped definitions without distinct_from report none"
@@ -34928,13 +34960,14 @@ requirements:
           distinct_from [l1-approval]
         - disburse-loan (role-loan-ops) and
           escalate-disburse-loan-to-credit-director (role-credit-director):
-          distinct_from the approval nodes that precede them in the graph
-          (l1-approval, l2-approval, escalate-l2-approval-to-ceo,
-          committee-vote-cro, committee-vote-director, committee-vote-ceo),
-          so the person who pays does not also approve
-        - committee-vote-cro, committee-vote-director, committee-vote-ceo:
-          no approval node precedes them on their path, so no distinct_from
-          is added to them (see open_questions)
+          distinct_from the approval nodes of the loan (l1-approval,
+          l2-approval, escalate-l2-approval-to-ceo, committee-vote-cro,
+          committee-vote-director, committee-vote-ceo), so the person who
+          pays does not also approve
+        - committee-vote-cro, committee-vote-director, committee-vote-ceo
+          (parallel branches after committee-vote-fork, verified in the
+          fixture): each names the other two, BA decision 2026-10-07, so
+          one person cannot cast two votes of the same committee
       meridian regulatory sign-off chain:
         - findings-sign-off (role-cro): distinct_from [evidence-collection,
           risk-evaluation, remediation-subprocess] as they precede it
@@ -34943,7 +34976,7 @@ requirements:
       Only nodes that approve, pay, release or commit get the attribute;
       ordinary data-entry nodes (credit-memo-review, risk-assessment,
       kyc-manual-review and similar) are not touched. A node id that the
-      REQ-464 validator rejects (not existing, not preceding) is dropped
+      REQ-464 validator rejects (not existing, downstream-only) is dropped
       from the list and reported, never forced.
 
       Seed scripts under scripts/ and the QA copies stay in agreement with
@@ -34951,16 +34984,15 @@ requirements:
       one minor step from the version found on the branch after REQ-462 (a
       read value, not a number written here); the description says why.
     open_questions:
-      - "Parallel committee votes: two votes by one multi-role person are not covered by the rule (see REQ-464 open_questions). Default: listed in the run report and reported to ORCH as a follow-up, not silently dropped."
       - "The REQ-463 rule needs enough distinct users in the shipped rosters (test/fixtures/uat/actors.yaml, scripts/seed_*_persona_actors.sh) to complete each path; a role with one holder makes a path uncompletable and REQ-464 check 4 warns. Default: this entry reports each such role and adds no roster actor itself (BA lane). Existing UAT scenarios whose single actor performs two gated steps will start failing; they are reported to ORCH as scenario issues, not edited here."
       - "Whether D-ESC escalation tasks inherit the distinct_from of the task they replace. Default: as decided in REQ-459 section 9."
       - "Sizing: if the work exceeds one turn, ELIXIR-DEV adopts the meridian loan first and reports the regulatory chain to ORCH for a split, not a partial silent pass."
       - "PROCESS-AUDITOR re-audit (checklist B1 answer text) is a separate follow-up recorded in REQ-463."
     acceptance_criteria:
-      - "the run report lists every node that received distinct_from with the listed node ids and a one-line business reason; every listed id exists and precedes (the REQ-464 validator reports status OK, no violation, for both changed definitions)"
+      - "the run report lists every node that received distinct_from with the listed node ids and a one-line business reason; every listed id exists in the definition (the REQ-464 validator reports status OK, no violation, for both changed definitions)"
       - "meridian loan: one user holding both role-credit-approver-l1 and role-credit-director is refused at l2-approval after completing l1-approval, and a second user is accepted; the same user holding role-ceo is refused at escalate-l2-approval-to-ceo after completing l1-approval; a user who completed l2-approval is refused at disburse-loan (three tests, real Postgres)"
       - "regulatory chain: the user who completed evidence-collection is refused at findings-sign-off, tested; a different user completes it"
-      - "committee-vote-cro, committee-vote-director and committee-vote-ceo carry no distinct_from after this entry (grep quoted), and the residual is stated in the run report"
+      - "committee votes: committee-vote-cro names [committee-vote-director, committee-vote-ceo], committee-vote-director names [committee-vote-cro, committee-vote-ceo], committee-vote-ceo names [committee-vote-cro, committee-vote-director] (grep quoted); a test with one user holding role-cro and role-credit-director refuses the second vote and accepts three distinct users"
       - "no node outside the approval, release or payment set is changed and no definition other than the two named is changed (git diff --stat quoted)"
       - "every UAT scenario file under test/fixtures/uat/scenarios/meridian and simulation scenario that would now be refused is listed in the run report with actor and step; none is edited"
       - "SECURITY-REVIEWER verdict recorded (mandatory: adoption changes who may act in gated money and compliance processes)"

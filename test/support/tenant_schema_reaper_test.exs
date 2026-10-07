@@ -74,6 +74,25 @@ defmodule Letflow.TenantSchemaReaperTest do
     rows != []
   end
 
+  # Polls pg_stat_activity (bounded: 100 x 50 ms = 5 s) until no backend carries
+  # `application_name`. Returns true once it is gone, false on timeout.
+  defp wait_until_gone(application_name, attempts \\ 100) do
+    %{rows: rows} =
+      Repo.query!("SELECT 1 FROM pg_stat_activity WHERE application_name = $1", [application_name])
+
+    cond do
+      rows == [] ->
+        true
+
+      attempts <= 1 ->
+        false
+
+      true ->
+        Process.sleep(50)
+        wait_until_gone(application_name, attempts - 1)
+    end
+  end
+
   # Inserts a real tenant_schemas row directly via SQL (bypassing
   # Registration.create_changeset/2, exactly like ISSUE-FIXER's diagnosis names as
   # this issue's own leak-producing pattern -- "a raw Repo.insert into
@@ -340,6 +359,14 @@ defmodule Letflow.TenantSchemaReaperTest do
       # disappears from pg_stat_activity exactly as a genuinely dead invocation's
       # would (TCP-level, unconditional).
       GenServer.stop(other_conn)
+
+      # Q-1037 / GH #2364: stopping the client closes its socket, but the server-side
+      # backend leaves pg_stat_activity a moment LATER (it notices the closed socket
+      # on its next read). A sweep issued in that window still sees the tag and
+      # defers (reclaimed: 0). With a faster database (durability off in CI) that
+      # window is hit, so wait, bounded, until the tag is really gone before the
+      # second sweep -- the guard under test is unchanged.
+      assert wait_until_gone(fake_tag), "fake-tagged connection still in pg_stat_activity"
 
       assert {:ok, %{reclaimed: reclaimed, skipped_invalid_format: _}} =
                TenantSchemaReaper.sweep_orphans(Repo, 1)

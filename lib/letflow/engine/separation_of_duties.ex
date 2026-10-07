@@ -37,7 +37,7 @@ defmodule Letflow.Engine.SeparationOfDuties do
 
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.Graph.Node
-  alias Letflow.Definitions.SnapshotStore
+  alias Letflow.Definitions.InstanceDefinitionSnapshot
   alias Letflow.Engine
   alias Letflow.Engine.Task
   alias Letflow.Repo
@@ -67,11 +67,12 @@ defmodule Letflow.Engine.SeparationOfDuties do
           prefix :: String.t()
         ) :: :ok | {:error, :separation_of_duties}
   def check_for_claim(%Task{} = task, actor_id, prefix) do
-    with {:ok, snapshot} <- SnapshotStore.get_by_instance_id(task.instance_id, prefix: prefix),
+    # Every statement of the claim check (the snapshot read AND the completions
+    # query) runs under `savepoint_opts/0`, so a DB error is rolled back to its
+    # own savepoint and cannot poison claim_task/3's enclosing transaction.
+    with {:ok, snapshot} <- load_snapshot(task, prefix),
          {:ok, graph} <- Engine.build_graph(snapshot.graph) do
-      # mode: :savepoint keeps a failing query from poisoning the claim's own
-      # enclosing transaction (this runs inside claim_task/3's Multi).
-      case run_check(Repo, graph, task, actor_id, prefix, mode: :savepoint) do
+      case run_check(Repo, graph, task, actor_id, prefix, savepoint_opts()) do
         :ok -> :ok
         {:error, {:separation_of_duties, _ids}} -> {:error, :separation_of_duties}
       end
@@ -91,6 +92,22 @@ defmodule Letflow.Engine.SeparationOfDuties do
   end
 
   def check_for_claim(_task, _actor_id, _prefix), do: :ok
+
+  # The snapshot read of the claim path, inlined here (rather than through
+  # `SnapshotStore.get_by_instance_id/2`, which takes no per-query options) so
+  # it can carry the savepoint. `task.instance_id` is a UUID taken from a task
+  # row, so the store's id cast guard is not needed.
+  defp load_snapshot(%Task{instance_id: instance_id}, prefix) do
+    case Repo.get(InstanceDefinitionSnapshot, instance_id, [prefix: prefix] ++ savepoint_opts()) do
+      nil -> {:error, :snapshot_not_found}
+      %InstanceDefinitionSnapshot{} = snapshot -> {:ok, snapshot}
+    end
+  end
+
+  # `mode: :savepoint` is only valid inside a transaction (claim_task/3's
+  # Multi); called bare, it would itself error and fail open spuriously, so it
+  # is requested only when a transaction is open.
+  defp savepoint_opts, do: if(Repo.in_transaction?(), do: [mode: :savepoint], else: [])
 
   defp run_check(repo, graph, %Task{} = task, actor_id, prefix, query_opts) do
     named = distinct_from(find_node(graph, task.node_id))
@@ -143,8 +160,6 @@ defmodule Letflow.Engine.SeparationOfDuties do
 
   defp failure_tag(:snapshot_not_found), do: :snapshot_not_found
   defp failure_tag({:graph_structure_invalid, _}), do: :graph_structure_invalid
-  defp failure_tag(reason) when is_atom(reason), do: reason
-  defp failure_tag(_reason), do: :unknown
 
   defp warn_fail_open(%Task{id: task_id}, tag) do
     Logger.warning(

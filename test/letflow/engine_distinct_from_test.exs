@@ -815,6 +815,29 @@ defmodule Letflow.EngineDistinctFromTest do
       assert_one_fail_open_warning!(ctx, n2_task, log, ":raised")
     end
 
+    test "a DB error of the snapshot read INSIDE claim_task/3's transaction is confined by a savepoint: the eligible claim succeeds, one warning, the claim row is written (F-1)" do
+      ctx = seq_case!()
+      S.complete_node!(ctx, @n1, ctx.u.id, %{})
+      n2_task = S.pending_task!(ctx, @n2)
+
+      # DDL is transactional in Postgres: the rename is undone by the sandbox rollback.
+      Repo.query!(
+        ~s(ALTER TABLE "#{ctx.schema_name}".instance_definition_snapshots RENAME TO req463_snapshots_gone)
+      )
+
+      {claim, log} =
+        with_log([level: :warning], fn ->
+          Tasks.claim_task(n2_task.id, %{actor_id: ctx.u.id}, prefix: ctx.schema_name)
+        end)
+
+      assert {:ok, claimed} = claim
+      assert {claimed.assignee_type, claimed.assignee_ref} == {"USER", ctx.u.id}
+      assert_one_fail_open_warning!(ctx, n2_task, log, ":raised")
+
+      reloaded = S.reload_task!(ctx, n2_task)
+      assert {reloaded.assignee_type, reloaded.assignee_ref} == {"USER", ctx.u.id}
+    end
+
     test "a non-task first argument is :ok too (total, the catch-all clause)" do
       assert :ok == SeparationOfDuties.check_for_claim(nil, Ecto.UUID.generate(), "any_prefix")
     end

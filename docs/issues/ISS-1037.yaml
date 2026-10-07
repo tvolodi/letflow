@@ -1,0 +1,43 @@
+id: ISS-1037
+title: "mix letflow.lint_handoffs crashes with FunctionClauseError (Access.get/3) on a handoff whose task is a string, instead of reporting the malformed file"
+discovered_by: ORCH (dispatch handoff with a string task)
+discovered_in_run: WF03-ISS1037-Q1020
+discovered_at: "2026-10-07T00:00:00Z"
+severity: MINOR
+failure_class: defect
+occurrence: 1
+owner: "ELIXIR-DEV (lib/mix/tasks/letflow.lint_handoffs.ex); dev tooling, no tenant-data path"
+scope: tooling
+description: >
+  A dispatch handoff with a string `task` (instead of the object {description,
+  acceptance_criteria}) made `mix letflow.lint_handoffs` abort with `** (FunctionClauseError) no
+  function clause matching in Access.get/3` at check_advisory/2 (called from lint_file/2). The run
+  exited 1 without naming the file or the reason, which looked like an unrelated build failure.
+  The same class of crash existed for a top-level non-object (BadMapError in H1/H3 and --autofix),
+  non-string task.description / created_at, and non-list or non-string-element artifacts_in /
+  artifacts_out.
+acceptance_criteria:
+  - "lint_handoffs does not crash on a handoff whose task or context is a string, number, list or null, or whose top level is not an object; it reports a violation naming the file and field"
+  - "A unit test covers the malformed shapes (string task, null result, non-object context)"
+  - "Valid handoffs lint exactly as before: 0 new violations, same grandfathered count (25, ISS-0190) on the corpus"
+affected_files:
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+  - test/mix/tasks/letflow.lint_handoffs_test.exs
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+# Ref clash: the queue's issue_ref for Q-1020 is ISS-1020, but docs/issues/ISS-1020.yaml is an
+# unrelated Meridian KYC issue (queue_ref Q-1002). GH #2332's local number is therefore the next
+# free one: ISS-1037 (origin/main's highest was ISS-1036; checked against remote branches and PRs
+# on 2026-10-07).
+queue_ref: Q-1020
+github_ref: GH-2332
+status: resolved
+resolved_in_run: WF03-ISS1037-Q1020
+resolved_at: "2026-10-07T00:00:00Z"
+resolution: >
+  New hard rule H7 (shape, never grandfathered) reports a non-object top level, a non-object
+  task/context, and wrongly typed task.description, context.artifacts_in, result.artifacts_out and
+  created_at, naming file and field. check_advisory/2 no longer uses get_in and is shape-safe;
+  --autofix skips a non-object file; registry coverage tolerates a malformed runs list. Deviation
+  from the report's wording: `result: null` is NOT a violation (it is the legitimate pre-completion
+  state, 175 corpus handoffs); a non-null non-object result is an advisory WARN (H7-RESULT) because
+  historical handoffs carry a bare string. Corpus run unchanged: 0 new violations, 25 grandfathered.

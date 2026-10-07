@@ -54,7 +54,19 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   commit-boundary rule instead of a per-file list -- see above. Every other
   hard rule's grandfathering always means naming one exact path.
 
+    * **H7** -- shape (ISS-1037 / Q-1020). Reported instead of crashing the
+      scan, and **never grandfathered**. Violations name the file and the
+      field: top-level value not a JSON object; `task` / `context` present
+      but not an object; `task.description` present but not a string;
+      `context.artifacts_in` / `result.artifacts_out` present but not a list
+      of strings; `created_at` present but not a string. Absent keys and
+      `null` values (e.g. `result: null` before completion) are legitimate.
+
   ### Advisory (WARN or INFO; never change the exit code)
+
+    * **H7-RESULT** -- WARN when `result` is present, non-null and not an
+      object (a few historical handoffs carry a bare string). Not a hard
+      failure.
 
     * **H-SIZE-1/2/3** -- specified in `HANDOFF_PROTOCOL.md`'s Enforcement
       note ("Specified but NOT YET RUNNING" section, added by ISS-0198, the
@@ -490,7 +502,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # lint pass that runs afterward still evaluates it normally).
   defp autofix_file(path) do
     with {:ok, raw} <- File.read(path),
-         {:ok, data} <- Jason.decode(raw) do
+         {:ok, data} when is_map(data) <- Jason.decode(raw) do
       case Map.get(data, "status") do
         status when is_map_key(@autofix_map, status) ->
           to = Map.fetch!(@autofix_map, status)
@@ -888,8 +900,9 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
         # see strip_bom/1's own comment for why this is not generalized.
         with {:ok, raw0} <- File.read(path),
              raw = if(path == @registry_file, do: strip_bom(raw0), else: raw0),
-             {:ok, data} <- Jason.decode(raw) do
-          hard = []
+             {:ok, data} <- Jason.decode(raw),
+             {:ok, data} <- ensure_object(path, data) do
+          hard = check_h7_shape(path, data)
 
           hard = hard ++ check_h1_status(path, data)
           hard = hard ++ check_h2_timestamps(path, data)
@@ -908,6 +921,15 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
             parse_error: nil
           }
         else
+          {:not_object, v} ->
+            %{
+              path: path,
+              hard_new: [v],
+              hard_grandfathered: [],
+              advisory: %{path: path, warnings: [], size_info: %{desc_len: 0, summary_len: 0}},
+              parse_error: nil
+            }
+
           {:error, reason} ->
             %{
               path: path,
@@ -929,6 +951,86 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
   defp violation(path, rule, message, grandfathered? \\ false) do
     %{path: path, rule: rule, message: message, grandfathered: grandfathered?}
+  end
+
+  # H7 -------------------------------------------------------------------
+  #
+  # ISS-1037 / Q-1020 -- shape guard. Every later check (and the advisory
+  # pass) assumes a decoded map with maps/lists/strings in the documented
+  # places; a malformed handoff used to crash the whole corpus scan with a
+  # FunctionClauseError/BadMapError. H7 reports the malformed field instead.
+  # Never grandfathered. Absent keys and `null` (e.g. `result: null` before
+  # completion) are legitimate and are not violations.
+
+  @spec ensure_object(String.t(), term()) :: {:ok, map()} | {:not_object, map()}
+  defp ensure_object(_path, data) when is_map(data), do: {:ok, data}
+
+  defp ensure_object(path, data) do
+    {:not_object,
+     violation(
+       path,
+       "H7",
+       "top-level value is not a JSON object (got #{json_type(data)})"
+     )}
+  end
+
+  @spec json_type(term()) :: String.t()
+  defp json_type(v) when is_list(v), do: "array"
+  defp json_type(v) when is_binary(v), do: "string"
+  defp json_type(v) when is_number(v), do: "number"
+  defp json_type(v) when is_boolean(v), do: "boolean"
+  defp json_type(nil), do: "null"
+  defp json_type(v) when is_map(v), do: "object"
+
+  @spec check_h7_shape(String.t(), map()) :: [map()]
+  defp check_h7_shape(path, data) do
+    task = Map.get(data, "task")
+    context = Map.get(data, "context")
+    result = Map.get(data, "result")
+
+    top_level =
+      for key <- ["task", "context"],
+          Map.has_key?(data, key),
+          not is_map(Map.get(data, key)),
+          do: "#{key} must be an object (got #{json_type(Map.get(data, key))})"
+
+    nested =
+      [
+        if(is_map(task), do: string_field_problem(task, "description", "task.description")),
+        if(is_map(context),
+          do: string_list_problem(context, "artifacts_in", "context.artifacts_in")
+        ),
+        if(is_map(result),
+          do: string_list_problem(result, "artifacts_out", "result.artifacts_out")
+        ),
+        string_field_problem(data, "created_at", "created_at")
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    Enum.map(top_level ++ nested, &violation(path, "H7", "malformed shape: " <> &1))
+  end
+
+  defp string_field_problem(map, key, label) do
+    case Map.get(map, key) do
+      nil -> nil
+      v when is_binary(v) -> nil
+      v -> "#{label} must be a string (got #{json_type(v)})"
+    end
+  end
+
+  defp string_list_problem(map, key, label) do
+    case Map.get(map, key) do
+      nil ->
+        nil
+
+      list when is_list(list) ->
+        if Enum.all?(list, &is_binary/1),
+          do: nil,
+          else: "#{label} must be a list of strings (has non-string element)"
+
+      v ->
+        "#{label} must be a list of strings (got #{json_type(v)})"
+    end
   end
 
   # H1 -------------------------------------------------------------------
@@ -1064,17 +1166,32 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   @under_specified_threshold 400
 
   defp check_advisory(path, data) do
-    desc = get_in(data, ["task", "description"]) || ""
-    acs = get_in(data, ["task", "acceptance_criteria"]) || []
-    artifacts_in = get_in(data, ["context", "artifacts_in"]) || []
+    # ISS-1037 -- shape-safe extraction: never raises on a malformed handoff
+    # (H7 reports those); for well-formed handoffs the values are unchanged.
+    task = map_or_empty(Map.get(data, "task"))
+    context = map_or_empty(Map.get(data, "context"))
+    raw_result = Map.get(data, "result")
+    result_map = map_or_empty(raw_result)
 
-    result_map =
-      case Map.get(data, "result") do
-        r when is_map(r) -> r
-        _ -> %{}
+    desc =
+      case Map.get(task, "description") do
+        d when is_binary(d) -> d
+        _ -> ""
       end
 
-    artifacts_out = Map.get(result_map, "artifacts_out") || []
+    acs = Map.get(task, "acceptance_criteria") || []
+    artifacts_in = binary_elements(Map.get(context, "artifacts_in"))
+    artifacts_out = binary_elements(Map.get(result_map, "artifacts_out"))
+
+    result_warn =
+      if is_nil(raw_result) or is_map(raw_result) do
+        []
+      else
+        [
+          {:warn, "H7-RESULT",
+           "result is not an object (got #{json_type(raw_result)}); expected an object or null"}
+        ]
+      end
 
     summary =
       case Map.get(result_map, "summary") do
@@ -1082,7 +1199,11 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
         _ -> ""
       end
 
-    created_at = Map.get(data, "created_at")
+    created_at =
+      case Map.get(data, "created_at") do
+        c when is_binary(c) -> c
+        _ -> nil
+      end
 
     names = artifacts_in |> Enum.map(&Path.basename/1) |> MapSet.new()
 
@@ -1108,7 +1229,13 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     ac_len =
       case acs do
         list when is_list(list) ->
-          Enum.reduce(list, 0, fn ac, acc -> acc + String.length(to_string(ac)) end)
+          Enum.reduce(list, 0, fn ac, acc ->
+            # ISS-1037 -- only scalars have a meaningful length; a nested
+            # map/list element counts as 0 instead of raising in to_string/1.
+            if is_binary(ac) or is_number(ac) or is_atom(ac),
+              do: acc + String.length(to_string(ac)),
+              else: acc
+          end)
 
         _ ->
           0
@@ -1133,13 +1260,19 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
     %{
       path: path,
-      warnings: h_size_1 ++ h_size_2 ++ artifacts_out_self_ref,
+      warnings: h_size_1 ++ h_size_2 ++ artifacts_out_self_ref ++ result_warn,
       size_info: %{
         desc_len: String.length(desc),
         summary_len: String.length(summary)
       }
     }
   end
+
+  defp map_or_empty(v) when is_map(v), do: v
+  defp map_or_empty(_), do: %{}
+
+  defp binary_elements(list) when is_list(list), do: Enum.filter(list, &is_binary/1)
+  defp binary_elements(_), do: []
 
   defp self_referencing?(path, artifacts_out) do
     base = Path.basename(path)
@@ -1229,8 +1362,12 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
       case File.read(@registry_file) do
         {:ok, raw} ->
           case raw |> strip_bom() |> Jason.decode() do
-            {:ok, %{"runs" => runs}} ->
-              runs |> Enum.map(& &1["run_id"]) |> Enum.reject(&is_nil/1) |> MapSet.new()
+            {:ok, %{"runs" => runs}} when is_list(runs) ->
+              runs
+              |> Enum.filter(&is_map/1)
+              |> Enum.map(& &1["run_id"])
+              |> Enum.reject(&is_nil/1)
+              |> MapSet.new()
 
             _ ->
               MapSet.new()

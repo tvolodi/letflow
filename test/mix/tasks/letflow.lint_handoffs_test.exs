@@ -1297,4 +1297,212 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
       assert reason =~ "ambiguous"
     end
   end
+
+  # ==================================================================
+  # ISS-1037 / Q-1020 -- malformed handoff shapes are reported (H7),
+  # never crash the whole corpus scan
+  # ==================================================================
+
+  defp write_raw!(dir, name, json) do
+    path = Path.join(dir, name)
+    File.write!(path, json)
+    path
+  end
+
+  defp h7(result), do: Enum.filter(result.hard_new, &(&1.rule == "H7"))
+
+  describe "ISS-1037 -- malformed handoff shapes produce an H7 violation instead of crashing" do
+    setup do
+      dir =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss1037-shape-#{System.unique_integer([:positive])}")
+        |> Path.expand()
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+      %{dir: dir}
+    end
+
+    test "T-SHAPE-TASK-STRING -- a string `task` is an H7 naming the file and the field", %{
+      dir: dir
+    } do
+      path =
+        write_raw!(
+          dir,
+          "step-01-agent.json",
+          ~s({"status": "PENDING", "context": {}, "task": "do the thing", "result": null})
+        )
+
+      result = LintHandoffs.lint_file(path, @empty_schema)
+
+      assert [%{path: ^path, message: msg, grandfathered: false}] = h7(result)
+      assert msg =~ "task"
+      assert result.parse_error == nil
+    end
+
+    test "T-SHAPE-TASK-OTHER-TYPES -- number, list and null `task` are each an H7", %{dir: dir} do
+      for {label, value} <- [number: "42", list: ~s(["a"]), null: "null"] do
+        path =
+          write_raw!(
+            dir,
+            "step-#{label}.json",
+            ~s({"status": "PENDING", "context": {}, "task": #{value}})
+          )
+
+        result = LintHandoffs.lint_file(path, @empty_schema)
+        assert [%{message: msg}] = h7(result), "task=#{value} should be one H7"
+        assert msg =~ "task"
+      end
+    end
+
+    test "T-SHAPE-CONTEXT-NON-OBJECT -- a non-object `context` is an H7 naming `context`", %{
+      dir: dir
+    } do
+      for value <- [~s("ctx"), "7", "[]", "null"] do
+        path =
+          write_raw!(
+            dir,
+            "step-ctx.json",
+            ~s({"status": "PENDING", "context": #{value}, "task": {}})
+          )
+
+        result = LintHandoffs.lint_file(path, @empty_schema)
+        assert [%{message: msg}] = h7(result), "context=#{value} should be one H7"
+        assert msg =~ "context"
+      end
+    end
+
+    test "T-SHAPE-RESULT-NULL-NOT-CRASH -- `result: null` (legitimate pre-completion state) does not crash and is not a violation",
+         %{dir: dir} do
+      path =
+        write_raw!(
+          dir,
+          "step-01-agent.json",
+          ~s({"status": "PENDING", "context": {}, "task": {}, "result": null})
+        )
+
+      result = LintHandoffs.lint_file(path, @empty_schema)
+      assert result.hard_new == []
+      assert result.hard_grandfathered == []
+    end
+
+    test "T-SHAPE-RESULT-STRING-WARNS -- a non-null, non-object `result` is a WARN, not a hard failure",
+         %{dir: dir} do
+      path =
+        write_raw!(
+          dir,
+          "step-01-agent.json",
+          ~s({"status": "COMPLETED", "context": {}, "task": {}, "result": "PASS"})
+        )
+
+      result = LintHandoffs.lint_file(path, @empty_schema)
+      assert result.hard_new == []
+      assert Enum.any?(result.advisory.warnings, &match?({:warn, "H7-RESULT", _}, &1))
+    end
+
+    test "T-SHAPE-NESTED-FIELDS -- wrongly typed nested fields are H7s naming the field, no crash",
+         %{dir: dir} do
+      cases = [
+        {~s({"status": "PENDING", "task": {"description": 5}}), "task.description"},
+        {~s({"status": "PENDING", "context": {"artifacts_in": "a.md"}}), "context.artifacts_in"},
+        {~s({"status": "PENDING", "context": {"artifacts_in": [1]}}), "context.artifacts_in"},
+        {~s({"status": "COMPLETED", "result": {"artifacts_out": {"a": 1}}}),
+         "result.artifacts_out"},
+        {~s({"status": "COMPLETED", "result": {"artifacts_out": [null]}}),
+         "result.artifacts_out"},
+        {~s({"status": "PENDING", "created_at": 12}), "created_at"}
+      ]
+
+      for {{json, field}, i} <- Enum.with_index(cases) do
+        path = write_raw!(dir, "step-nested-#{i}.json", json)
+        result = LintHandoffs.lint_file(path, @empty_schema)
+        assert [%{message: msg}] = h7(result), "#{json} should be one H7"
+        assert msg =~ field
+      end
+    end
+
+    test "T-SHAPE-TOP-LEVEL-NON-OBJECT -- a top-level array/string/number/null is an H7, no crash",
+         %{dir: dir} do
+      for {value, i} <- Enum.with_index(["[]", ~s(["a"]), ~s("s"), "3", "null"]) do
+        path = write_raw!(dir, "step-top-#{i}.json", value)
+        result = LintHandoffs.lint_file(path, @empty_schema)
+        assert [%{path: ^path, message: msg}] = result.hard_new, "top-level #{value}"
+        assert msg =~ "top-level"
+        assert Enum.all?(result.hard_new, &(&1.rule == "H7"))
+        assert result.advisory.warnings == []
+      end
+    end
+
+    test "T-SHAPE-RUN-REPORTS-NOT-CRASHES -- run/1 raises Mix.Error naming the file for a string task, not FunctionClauseError",
+         %{dir: dir} do
+      path =
+        write_raw!(
+          dir,
+          "step-01-agent.json",
+          ~s({"status": "PENDING", "context": {}, "task": "oops"})
+        )
+
+      io =
+        capture_io(fn ->
+          assert_raise Mix.Error, ~r/new violation/, fn -> LintHandoffs.run(["--dir", dir]) end
+        end)
+
+      assert io =~ "[H7]"
+      assert io =~ path
+    end
+
+    test "T-SHAPE-RUN-CONTINUES -- a malformed file does not stop later files being linted", %{
+      dir: dir
+    } do
+      write_raw!(dir, "step-01-bad.json", ~s({"status": "PENDING", "task": "oops"}))
+      write_raw!(dir, "step-02-bad-status.json", ~s({"status": "NOPE"}))
+
+      io =
+        capture_io(fn ->
+          assert_raise Mix.Error, fn -> LintHandoffs.run(["--dir", dir]) end
+        end)
+
+      assert io =~ "[H7]"
+      assert io =~ "[H1]"
+    end
+
+    test "T-SHAPE-AUTOFIX-NON-OBJECT -- run_autofix/1 skips a top-level non-object file instead of crashing",
+         %{dir: dir} do
+      write_raw!(dir, "step-01-list.json", "[1, 2]")
+      files = LintHandoffs.handoff_files(dir)
+      assert %{fixed: [], refused: []} = LintHandoffs.run_autofix(files)
+    end
+
+    test "T-SHAPE-AC-NESTED-ELEMENT -- a non-scalar acceptance_criteria element does not crash the advisory pass",
+         %{dir: dir} do
+      path =
+        write_raw!(
+          dir,
+          "step-01-agent.json",
+          ~s({"status": "PENDING", "context": {}, "task": {"description": "d", "acceptance_criteria": [{"a": 1}, ["x"]]}})
+        )
+
+      result = LintHandoffs.lint_file(path, @empty_schema)
+      assert result.parse_error == nil
+      assert result.hard_new == []
+    end
+
+    test "T-SHAPE-VALID-UNCHANGED -- a valid, fully populated handoff still lints clean", %{
+      dir: dir
+    } do
+      path =
+        write_raw!(dir, "step-01-agent.json", ~s({
+          "status": "COMPLETED",
+          "created_at": "2026-08-22T07:00:00Z",
+          "context": {"artifacts_in": ["a/b.md"]},
+          "task": {"description": "d", "acceptance_criteria": ["x"]},
+          "result": {"summary": "s", "artifacts_out": ["c/d.md"]}
+        }))
+
+      result = LintHandoffs.lint_file(path, @empty_schema)
+      assert result.hard_new == []
+      assert result.hard_grandfathered == []
+      refute Enum.any?(result.advisory.warnings, &match?({:warn, "H7" <> _, _}, &1))
+    end
+  end
 end

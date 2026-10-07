@@ -1,0 +1,88 @@
+{
+  "handoff_id": "3b7e5a2c-6d41-4f0e-9a57-REQ459SEC0001",
+  "run_id": "WF02-REQ459-20261007",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ459-20261007/step-02c-security-reviewer.json",
+  "created_at": "2026-10-07T06:40:00Z",
+  "started_at": "2026-10-07T06:40:00Z",
+  "completed_at": "2026-10-07T06:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-459"],
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/design/req459-required-outputs-and-distinct-person.md"
+    ],
+    "branch_name": "design/REQ-459-required-outputs-distinct-person"
+  },
+  "task": {
+    "description": "WF-02 step 02c (SECURITY-REVIEWER): review the REQ-459 DESIGN (design-only requirement) for authorization-adjacent behaviour on HUMAN_TASK completion/claim: distinct-person rule A, required-outputs rule C, 403/422 bodies, refusal audit record, DISTINCT ON tasks read, concurrency, visibility oracles. Claims verified against lib/letflow/engine.ex, tasks.ex, routers/tasks.ex, variable_schema.ex, auth_pipeline.ex. No code, no commit."
+  },
+  "result": {
+    "verdict": "FAIL",
+    "invariants": {
+      "INV-1": "APPLIES - PASS (design): every new read (tasks DISTINCT ON, snapshot, variable_schemas, group_members/tenant_role for check 4) and the audit insert carry the explicit prefix derived from opts[:prefix]; tasks has no tenant_id column (migration 20260820000006) and no new table/migration is designed. Verified existing prefix use at engine.ex:2458-2483, 2512-2514, tasks.ex:355-369.",
+      "INV-2": "APPLIES - FAIL: see F-1. Section 3.2 / Security assessment assert 'no caller-chosen string is echoed' in the 422 body. That is false for rejected_keys: variable_validations/5 validates EVERY submitted key that has a registered variable_schema for the definition (variable_schema.ex:287-301, validations_for 407-436: keys with no schema are omitted, keys with a schema yield {:rejected,_}), and 6b-iii lists every such key. A task assignee can therefore submit an arbitrary key with a wrong-typed value and learn, from presence in rejected_keys, which variable names carry a registered schema in that definition (including internal/service-task variables not on the task's form), without holding any definitions-read permission. The missing_keys half, the constant 403 body, the audit after_state (ids and key names) and the unchanged task-detail allowlist are fine.",
+      "INV-3": "N-A: no Lua/WASM change",
+      "INV-4": "APPLIES - PASS: new constructors take no free-text parameter; refusal body cannot carry module/SQL/exception text; rescue in the router path stays on the generic 500 catch-all (routers/tasks.ex:425); the best-effort audit helper logs inspect(exception) like the ISS-0784 precedent (no secret material). No secret handled.",
+      "INV-5": "APPLIES - PASS: R2 authorize_completion (Repo.get with server-derived prefix, routers/tasks.ex:328, tasks.ex:549-553) and claim step 2 run before any new step, so cross-tenant and nonexistent tasks stay byte-identical 404 with unchanged round-trips; the new 403 is only reachable for a task that already resolved in the caller's own schema and for which the caller passed assignee eligibility. Eligible-vs-ineligible callers get different bodies (existing 403/409 vs the new constant 403) but that discloses nothing beyond the caller's own history.",
+      "INV-6": "APPLIES - satisfied by this review (design is the scoping statement for sections 6, 8, 1.5)",
+      "INV-7": "APPLIES - PASS (design): all new reads use Ecto query bindings; IN over named node ids is a bound list; no Repo.query.",
+      "INV-8": "APPLIES - PASS with note F-2: step 4 and 6b run inside run_complete_task's function-level rescue (engine.ex:2362-2364) so an exception fails closed (500, rolled back); audit helper has its own rescue; nil actor never matches. Claim step 5 failure handling is unspecified (F-2).",
+      "INV-9": "N-A: no outbound URL",
+      "INV-10": "N-A: no route, permission or tenant identifier touched; POST /tasks/:id/complete and /claim keep their existing permission classification; tenant comes from auth_context only. No cross-tenant negative test required by this design."
+    },
+    "findings": [
+      {
+        "id": "F-1",
+        "severity": "BLOCKER (INV-2)",
+        "location": "design sections 2.2 step 6b-iii, 3.2 ('Key names come only from the definition ... and from keys that have a registered schema, so no caller-chosen string is echoed'), Security assessment INV-2",
+        "issue": "rejected_keys echoes caller-chosen keys. Any submitted key with a registered variable_schema whose value is rejected appears in the 422 body, so rule C turns the completion endpoint into an oracle for the set of variable_schema keys of the definition (names only) for any task assignee, independent of definitions-read permission. The design's own sentence asserting otherwise is incorrect and is the stated INV-2 proof.",
+        "required_change": "Restrict rejected_keys (and the audit rejected_keys) to keys the caller is entitled to know: the intersection of {rejected keys} with ({properties of the task's own form_schema} union {the node's required_outputs}). Rejections on any other key (a key the form does not collect) must not be named in the 422 body; decide and state in section 2/3 whether such a rejection is refused with an empty-name 422 (output_refused with both lists empty is currently declared impossible), or ignored/dropped as before, and fix the 'never both empty' rule and the INV-2 sentence accordingly. Add a test: submit a non-form key with a schema-violating value and assert the key name is absent from the body.",
+        "route_to": "CODE-DESIGNER"
+      },
+      {
+        "id": "F-2",
+        "severity": "MINOR",
+        "location": "section 6 step 5, SeparationOfDuties.check_for_claim/3",
+        "issue": "Claim reads the instance snapshot for EVERY claim, including nodes with no distinct_from. The failure path (snapshot_not_found, graph_structure_invalid) maps to claim_error {:error, term()} and then to a 500 (routers/tasks.ex:471), a new failure mode for default-off definitions that the design says must behave exactly as before (A5).",
+        "required_change": "State that check_for_claim/3 is total: any snapshot/graph/query error logs one warning (no tenant data) and returns :ok, because claim is advisory and completion is the authority. Add a test."
+      },
+      {
+        "id": "F-3",
+        "severity": "MINOR (advisory, non-blocking by itself)",
+        "location": "sections 2.4, 5, 6 (D-6)",
+        "issue": "Every refused completion writes one hash-chained audit row in its own transaction, with no per-actor limit; an eligible assignee can generate unbounded audit rows and hash-chain lock traffic by resubmitting. Section 6 itself rejects auditing claim for the ChainLock reason, so the rationale is inconsistent. Authenticated routes have no rate limit by recorded decision 0040 (security-invariants.md, Rate limiting).",
+        "required_change": "Cite decision 0040 as the accepted position, or add dedupe (e.g. skip a second identical refusal row for the same actor/task within a window). Not required to pass if cited."
+      },
+      {
+        "id": "F-4",
+        "severity": "MINOR (advisory)",
+        "location": "section 1.5 item 4 (single-member-role warning)",
+        "issue": "The warning discloses that a named role has exactly one member in the tenant to any caller of validate/pack install. Same class as the REQ-455 unbound_task_role disclosure (accepted: names come from the caller's own definition, tenant-scoped, counts not identities). member_counts/2 must use the explicit prefix and return counts only (design states both).",
+        "required_change": "None beyond keeping the REQ-464 implementation to counts only and prefixed; SECURITY-REVIEWER re-checks at REQ-464 code review."
+      },
+      {
+        "id": "F-5",
+        "severity": "INFO",
+        "location": "section 2.5 lock-ordering proof, A-8",
+        "issue": "Verified: the only writer of tasks.status COMPLETED / completed_by is complete_task_row (engine.ex:5105, grep of lib/letflow); both parallel completions take the instance_projections FOR UPDATE (engine.ex:2473-2483) before the guard SELECT, and no isolation level is configured (grep config/ and lib/letflow/repo.ex empty), so READ COMMITTED gives the second completer a fresh snapshot. The proof holds provided deployments do not raise default_transaction_isolation; under REPEATABLE READ the failure mode would be a serialization error (fail closed), not a bypass.",
+        "required_change": "None. Keep test A-8 as written."
+      },
+      {
+        "id": "F-6",
+        "severity": "INFO",
+        "location": "sections 7, 4, 2.5 ordering, 10",
+        "issue": "Verified: actor_id is auth_context.user_id for both OIDC and API-token paths (auth_pipeline.ex:133, 146); roles never reach run_complete_task/claim_task, so no role can be exempt. Unassigned tasks are completable by any authenticated actor (tasks.ex:520-522 doc), so rule A is the only control there, and it applies. Error ordering A before C leaks nothing about other users: the check compares only the caller's own id and blocking_node_ids go only to the audit row. A replayed completion stops at step 1 (409) as designed. The constant 403 body, byte-identical across triggers and across complete/claim, plus audit without names/emails/values, satisfy the zero-detail requirement.",
+        "required_change": "None."
+      }
+    ],
+    "notes": "FAIL on a single finding (F-1, INV-2): the design's own proof that the 422 body echoes no caller-chosen string is contradicted by variable_schema.ex (keys without a schema are omitted, keys with one are reported), making rejected_keys a variable_schema-key existence oracle. Everything else in the design checks out against code. Route to CODE-DESIGNER for F-1 (and ideally F-2/F-3 in the same rework); re-review is a short delta on sections 2.2 6b-iii, 3.2, 5 and the INV-2 assessment line."
+  },
+  "rework_count": 0
+}

@@ -77,9 +77,9 @@ actors:
     note: "seed_swiftroute_persona_actors.sh: Ops Manager, TASK_WORKER + role-ops-manager"
   actor-swiftroute-alice:
     tenant: swiftroute
-    builtin_roles: [PLATFORM_ADMIN, TASK_WORKER]
+    builtin_roles: [TASK_WORKER, TENANT_ADMIN]
     routing_roles: [role-ceo]
-    note: "seed_swiftroute_persona_actors.sh: CEO, TASK_WORKER + role-ceo. Scenario swiftroute/tenant-onboarding-happy.yaml names her alias tenant_admin, but no seed grants her an admin role (no TENANT_ADMIN until REQ-447)"
+    note: "seed_swiftroute_persona_actors.sh: CEO, TASK_WORKER + role-ceo. Holds TENANT_ADMIN in realm swiftroute (ai-dala-infra T-0177 live re-check 2026-10-07: TASK_WORKER + TENANT_ADMIN, no PLATFORM_ADMIN). Scenario swiftroute/tenant-onboarding-happy.yaml names her alias tenant_admin"
   actor-swiftroute-tobias:
     tenant: swiftroute
     builtin_roles: [TASK_WORKER]
@@ -153,15 +153,11 @@ platform_actor_allowed:
   swiftroute-tenant-onboarding-happy: "tenant onboarding is performed by the platform operator"
 
 # Scopes with at least one scenario and no expect_refusal step on the day of landing (may only shrink).
-refusal_coverage_exempt: [bilimbaga, meridian, platform, swiftroute, vortex]
+refusal_coverage_exempt: []
 
 # Tenant actors seeded as PLATFORM_ADMIN, dated; REQ-454 empties this map. One entry today, proven by
 # ai-dala-infra T-0150 (run 2026-09-29-provision-letflow-qa-uat-corpus-001, step-04 account table row 2,
 # and landscape/secrets-inventory.md: realm swiftroute accounts created 2026-09-29). The per-realm
 # <slug>-admin-user and promo-proposer accounts are tooling accounts, not scenario actors, so they are
 # not listed here.
-legacy_platform_admin:
-  actor-swiftroute-alice:
-    since: "2026-09-29"
-    reason: "holds PLATFORM_ADMIN in realm swiftroute per T-0150 until REQ-447/454 remove it"
-    removed_by: REQ-454
+legacy_platform_admin: {}

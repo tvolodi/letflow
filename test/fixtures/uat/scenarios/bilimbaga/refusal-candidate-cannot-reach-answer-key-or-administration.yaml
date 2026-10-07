@@ -1,0 +1,123 @@
+# Authored by BA-BILIMBAGA (REQ-457 item 1), per docs/agents/ba-personas/bilimbaga.yaml.
+# Refusal scenario: what a person sitting a certification exam must NOT be able to do.
+# Closes process-audit finding PA-BILIMBAGA-001 / Q-1031 (nothing yet proved the
+# correct-answer marking stays hidden from a candidate).
+---
+id: bilimbaga-refusal-candidate-cannot-reach-answer-key-or-administration
+scope: bilimbaga
+title: A candidate cannot see the correct answers or open the administration and user management areas
+version: "1.0"
+tags: [refusal, access_control]
+
+description: >
+  A candidate is an outside person sitting a certification exam. They may take
+  their own exam and see their own score, and nothing more. This scenario
+  checks that a candidate is refused when they try to open the bank of
+  questions and answers where the correct answers are marked, the exam
+  settings where the pass mark is kept, the list of people and their roles,
+  or the controls that grant a role. It also checks that, while sitting their
+  own exam, the candidate is never shown which answer is the correct one.
+
+actors:
+  candidate: actor-bilimbaga-candidate
+
+preconditions:
+  - description: A bilimbaga tenant exists with the exam solution pack installed
+    check: process_definition_active
+  - description: At least one certification exam is configured and active for this tenant, with questions whose correct answers are marked
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: candidate
+    action: Signs in and starts a timed certification exam
+    via: gui
+    produces:
+      instance_id: "the exam session's own identifier"
+
+  - step: 2
+    actor: candidate
+    action: Looks at the questions and answer choices shown on the exam screen, hunting for any hint of which choice is the correct one
+    via: gui
+
+  - step: 3
+    actor: candidate
+    action: Tries to open the bank of questions and answer choices where the correct answers are marked
+    via: gui
+    expect_refusal: true
+
+  - step: 4
+    actor: candidate
+    action: Tries to open the exam settings where the pass mark and question rules are kept
+    via: gui
+    expect_refusal: true
+
+  - step: 5
+    actor: candidate
+    action: Tries to open the list of the organisation's users and their roles
+    via: gui
+    expect_refusal: true
+
+  - step: 6
+    actor: candidate
+    action: Tries to give their own account a more powerful role
+    via: gui
+    expect_refusal: true
+
+  - step: 7
+    actor: candidate
+    action: Tries to open the organisation's audit log of who did what
+    via: gui
+    expect_refusal: true
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      While sitting the exam, the candidate is shown the questions and the
+      answer choices only, with nothing marking which choice is correct
+    verification:
+      method: page_state
+      detail: "The exam screen and the saved exam state carry no marking of the correct answer on any choice"
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A candidate who can see the correct answers can pass a certification
+        exam without knowing the subject. Every certificate issued from then
+        on is in doubt.
+      suggested_action: route_to_backend_dev
+
+  - id: EO-002
+    description: >
+      Each attempt to open the answer bank, the exam settings, the user list,
+      the role controls or the audit log is turned away, and the candidate
+      sees none of the content behind it
+    verification:
+      method: system_state
+      detail: "Every one of the five attempts is refused and no question, answer marking, pass mark, user or role information is shown"
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        An outside candidate could read the answer key, change who may do what,
+        or see other people's details. That is a confidentiality and
+        certification-integrity failure, not a cosmetic one.
+      suggested_action: route_to_backend_dev
+
+  - id: EO-003
+    description: >
+      The candidate's own exam session is left unchanged by the refused
+      attempts and they can still finish and submit it
+    verification:
+      method: instance_state
+      detail: "The exam session started in step 1 is still open and unchanged after the refused attempts"
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        A refused attempt that still disturbs the candidate's own exam would
+        punish the candidate for a probe and could lose their answers.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: true
+  description: >
+    Cancel the exam session opened in step 1 if the run did not complete it,
+    so a re-run of this scenario always starts from a clean state.

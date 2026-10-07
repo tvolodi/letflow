@@ -1,0 +1,230 @@
+# Refusal scenario for Vortex production order release (BA-VORTEX, REQ-457 item 1).
+# New file; no Ported verbatim file is touched.
+#
+# Sensitive actions of this vertical covered here: approving (capacity approval, budget
+# approval, the CEO's decision on an escalated order) and releasing (the order only reaches
+# the production line after both approvals). Seeing sensitive data and changing users are
+# covered in refusal-data-and-people-access.yaml; supplier quality sign-offs in
+# refusal-supplier-quality-deviation.yaml.
+#
+# Every refusal step names the nearest person whose job does NOT include the action. No step
+# depends on a "different person" rule: each refusal is a matter of who holds which job.
+---
+id: vortex-refusal-production-order-release
+scope: vortex
+process_id: proc-vortex-production-order-release
+title: "Production order release: the wrong person tries to approve capacity, budget or the CEO's decision"
+version: "1.0"
+tags: [refusal, access, approval]
+
+description: >
+  A production order of EUR 15,000 is created by the Production Planner. Before the
+  right people have approved it, the people next to the decision try to approve it
+  themselves: the planner who raised the order, the Financial Controller (who is not
+  the capacity authority), and the Production Manager (who is not the budget authority).
+  Each attempt must be turned away, and the order must only move forward when the
+  responsible person acts. A second, smaller order then waits so long that it passes
+  up to the CEO; the Production Manager, whose own review has been taken away from her,
+  must not be able to rule on it any more.
+
+actors:
+  planner: actor-vortex-anna
+  production_manager: actor-vortex-sabine
+  controller: actor-vortex-stefan
+  ceo: actor-vortex-dirk
+
+preconditions:
+  - description: Production order release process definition is active
+    check: process_definition_active
+  - description: No open production order instances for Vortex
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: planner
+    action: >
+      Creates a production order for product code VX-TURBO-2000, quantity 50 units,
+      order value EUR 15,000, requested start date 2026-06-15
+    via: api
+    input:
+      order_id: sim-order-refusal-001
+      product_code: VX-TURBO-2000
+      quantity: 50
+      order_value_eur: 15000
+      requested_start: "2026-06-15"
+      planner_actor_id: actor-vortex-anna
+    produces:
+      instance_id: "the process instance ID for this production order"
+    sla_context:
+      expected_within_hours: 1
+
+  - step: 2
+    actor: planner
+    action: >
+      The production planner who raised the order tries to approve the line capacity
+      for her own order, so that it can move on without waiting for the Production
+      Manager.
+    expect_refusal: true
+    via: api
+    input:
+      capacity_decision: approve
+      assigned_line: Line-A
+
+  - step: 3
+    actor: controller
+    action: >
+      The Financial Controller tries to approve the line capacity for the order,
+      although capacity is the Production Manager's decision and not a finance one.
+    expect_refusal: true
+    via: api
+    input:
+      capacity_decision: approve
+      assigned_line: Line-A
+
+  - step: 4
+    actor: production_manager
+    action: >
+      Reviews the order, confirms capacity is available on Line-A from June 15, and
+      approves it.
+    via: api
+    input:
+      capacity_decision: approve
+      assigned_line: Line-A
+      revised_start: "2026-06-15"
+      pm_notes: "Line-A available, no scheduling conflicts."
+
+  - step: 5
+    actor: production_manager
+    action: >
+      The Production Manager, who has just approved the capacity, tries to approve the
+      EUR 15,000 budget as well, so that the order does not have to wait for finance.
+    expect_refusal: true
+    via: api
+    input:
+      budget_decision: approve
+      cost_centre: CC-PROD-2026
+
+  - step: 6
+    actor: planner
+    action: >
+      The production planner tries to approve the budget for her own order, which
+      would release it to the production line without any finance sign-off.
+    expect_refusal: true
+    via: api
+    input:
+      budget_decision: approve
+      cost_centre: CC-PROD-2026
+
+  - step: 7
+    actor: controller
+    action: >
+      Reviews the budget for the EUR 15,000 order against the production cost centre
+      and approves the expenditure.
+    via: api
+    input:
+      budget_decision: approve
+      cost_centre: CC-PROD-2026
+
+  - step: 8
+    actor: planner
+    action: >
+      Creates a second production order for product code VX-TURBO-2000, quantity 20
+      units, order value EUR 8,000, requested start date 2026-06-15
+    via: api
+    input:
+      order_id: sim-order-refusal-002
+      product_code: VX-TURBO-2000
+      quantity: 20
+      order_value_eur: 8000
+      requested_start: "2026-06-15"
+      planner_actor_id: actor-vortex-anna
+    produces:
+      instance_id_2: "the process instance ID for the second production order"
+
+  - step: 9
+    actor: system
+    action: >
+      The Production Manager does not review the second order and the review time
+      runs out. UAT-RUNNER advances the timer instead of waiting for real time.
+    via: api
+    input:
+      timer_node_id: capacity-review
+    note: >
+      If advancing the timer is not available, steps 9 to 11 are marked SKIP with
+      severity MINOR, as in the existing CEO escalation scenarios.
+
+  - step: 10
+    actor: production_manager
+    action: >
+      The Production Manager, whose review has passed up to the CEO, tries to approve
+      the capacity of the second order anyway.
+    expect_refusal: true
+    via: api
+    input:
+      capacity_decision: approve
+      assigned_line: Line-A
+
+  - step: 11
+    actor: ceo
+    action: >
+      Receives the escalated order and rejects it because there is no capacity this
+      period.
+    via: api
+    input:
+      capacity_decision: reject
+      ceo_notes: "Rejected on escalation, no capacity this period."
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      The planner and the Financial Controller are both turned away when they try to
+      approve the capacity, and the order still waits for the Production Manager.
+    verification:
+      method: task_assigned
+      detail: >
+        After steps 2 and 3 the capacity review of the first order is still open for
+        the Production Manager, and no budget approval exists yet.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Someone who is not responsible for line capacity can commit production lines.
+        A planner could approve her own orders and nobody responsible would ever
+        look at them.
+      suggested_action: route_to_security_review
+
+  - id: EO-002
+    description: >
+      The Production Manager and the planner are turned away when they try to approve
+      the budget, and the order only reaches the production line after the Financial
+      Controller approves it.
+    verification:
+      method: instance_state
+      detail: >
+        After steps 5 and 6 the budget approval is still open for the Financial
+        Controller; after step 7 the order is released to the production line.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        An order above EUR 10,000 can be released without the Financial Controller's
+        sign-off, which exposes the company to spending nobody in finance has seen.
+      suggested_action: route_to_security_review
+
+  - id: EO-003
+    description: >
+      Once the second order has passed up to the CEO, the Production Manager can no
+      longer rule on it, and only the CEO's decision closes it.
+    verification:
+      method: instance_state
+      detail: >
+        After step 10 the order is still waiting for the CEO; after step 11 it is
+        closed as rejected and no production line is assigned.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A manager can overrule the CEO's escalated decision, so the escalation to
+        the top of the chain has no force.
+      suggested_action: route_to_security_review
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel the sim-order-refusal-001 and sim-order-refusal-002 instances if not already completed

@@ -1,0 +1,137 @@
+# Authored by BA-SWIFTROUTE (REQ-457, refusal scenarios). Sensitive actions covered here:
+# approving (the two sign-offs of the shipment approval) and, as the stage that follows them,
+# releasing (the shipment must not reach the drivers without both sign-offs).
+# Sensitive actions of SwiftRoute NOT covered by this file: paying (no SwiftRoute process pays),
+# seeing personal data (refusal-driver-incident-confidential.yaml), changing users
+# (refusal-user-administration.yaml).
+#
+# No separate-person rule is claimed here: the refusal at step 2 rests only on the dispatcher
+# not being one of the Operations Managers.
+---
+id: swiftroute-refusal-shipment-approval
+company_id: swiftroute
+process_id: proc-swiftroute-shipment-approval
+title: Only the Operations Manager gives the first shipment approval and only the CEO gives the co-signature
+version: "1.0"
+tags: [refusal, approval]
+
+description: >
+  A dispatcher submits a high-value shipment. The approval chain is the company's financial
+  control: the Operations Manager reviews first, then the CEO co-signs shipments worth more than
+  500 euro, and only then is the shipment released to drivers. This scenario checks that the
+  people next to each sign-off cannot give it: the dispatcher who submitted the shipment cannot
+  approve it, and the Operations Manager cannot stand in for the CEO.
+
+actors:
+  dispatcher:  actor-swiftroute-lena
+  ops_manager: actor-swiftroute-marco
+
+preconditions:
+  - description: Shipment approval process definition is active
+    check: process_definition_active
+  - description: No open shipment approval instances for SwiftRoute
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: dispatcher
+    action: >
+      Submits a shipment request for 20 packages to Munich, declared value 750 euro,
+      standard cargo.
+    via: api
+    input:
+      shipment_id: sim-ship-refusal-001
+      destination: Munich
+      declared_value: 750
+      cargo_type: standard
+    produces:
+      instance_id: "the process instance ID for this shipment request"
+
+  - step: 2
+    actor: dispatcher
+    action: >
+      Tries to give the Operations Manager's approval for the shipment she has just submitted,
+      so that it moves on without anyone else looking at it.
+    expect_refusal: true
+    via: api
+    input:
+      ops_decision: approve
+
+  - step: 3
+    actor: ops_manager
+    action: Reviews the shipment request and approves it.
+    via: gui
+    input:
+      ops_decision: approve
+      ops_notes: "Capacity available, standard cargo, approved."
+
+  - step: 4
+    actor: ops_manager
+    action: >
+      Tries to give the CEO's co-signature on the high-value shipment he has just approved,
+      so that it is released to drivers without the CEO.
+    expect_refusal: true
+    via: api
+    input:
+      ceo_decision: approve
+
+  - step: 5
+    actor: dispatcher
+    action: >
+      Tries to give the CEO's co-signature on the shipment she submitted.
+    expect_refusal: true
+    via: api
+    input:
+      ceo_decision: approve
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      The dispatcher is refused when she tries to approve her own shipment, and the shipment
+      still waits for the Operations Manager.
+    verification:
+      method: instance_state
+      detail: >
+        After step 2: the dispatcher's attempt was refused, the operations review is still open
+        and assigned to the Operations Manager, and the shipment has not moved on.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A dispatcher could approve the shipments she raises herself, so the first control over
+        shipments would not exist.
+      suggested_action: route_to_wf03
+
+  - id: EO-002
+    description: >
+      The Operations Manager and the dispatcher are refused when they try to give the CEO's
+      co-signature, and the shipment is not released.
+    verification:
+      method: instance_state
+      detail: >
+        After steps 4 and 5: both attempts were refused, the CEO co-signature is still open and
+        assigned to the CEO, and the shipment has not been released to drivers.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        High-value shipments could be released without the CEO's co-signature, which breaks
+        the company's financial control policy.
+      suggested_action: route_to_wf03
+
+  - id: EO-003
+    description: >
+      No approval is recorded in the name of a person who was refused.
+    verification:
+      method: audit_event
+      detail: >
+        The history of the shipment shows only the Operations Manager's real approval; no
+        approval from the dispatcher and no co-signature from the Operations Manager.
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        The approval record could be wrong, so SwiftRoute could not show an auditor who
+        really approved a shipment.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel the shipment instance, which is left waiting for the CEO on purpose.

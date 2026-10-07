@@ -1,0 +1,230 @@
+# Authored by BA-MERIDIAN (REQ-457 item 1, refusal scenarios).
+# Written against test/fixtures/qa/meridian_loan_origination_process_definition.json on main.
+# Sensitive actions covered: approving (committee votes), paying or releasing (disbursement),
+# seeing personal or commercially sensitive data (another person's pending work, unredacted
+# borrower records). Every refusal step is attempted by the nearest person whose job does not
+# include the action. Steps 1-3, 9-11 and 14 are the normal path that brings the loan to the
+# points where the refused attempts can be made; they are not refusal steps.
+---
+id: meridian-loan-origination-refusal-wrong-person
+company_id: meridian
+process_id: proc-meridian-loan-origination
+title: Large loan (€750k) -- people outside the committee and loan operations are refused when they try to vote or release funds
+version: "1.0"
+tags: [refusal, committee, access]
+
+description: >
+  A loan application for €750,000 goes to the credit committee. While the three votes
+  are open, the analyst who submitted the application, the loan operations clerk and the
+  credit manager each try to cast a vote that belongs to someone else, and the bank must
+  refuse every attempt. After the committee has approved, the credit manager and the
+  analyst try to release the money, which only loan operations may do, and are refused.
+  The analyst also tries to look at the credit director's waiting approval work, and the
+  risk manager tries to export the full borrower records with personal details unmasked;
+  both are refused. Finally the real committee members vote and loan operations
+  disburses, so the loan still completes normally.
+
+actors:
+  analyst: actor-meridian-sophie
+  credit_manager: actor-meridian-ben
+  risk_manager: actor-meridian-miriam
+  committee_member_cro: actor-meridian-thomas
+  committee_member_director: actor-meridian-julia
+  committee_member_ceo: actor-meridian-eva
+  loan_ops: actor-meridian-marcus
+
+preconditions:
+  - description: Loan origination process definition is active
+    check: process_definition_active
+  - description: No pending loan origination instances for Meridian
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: analyst
+    action: >
+      Submits a loan application for €750,000 on behalf of a corporate borrower,
+      product type term loan with 60-month tenor
+    via: api
+    input:
+      application_id: sim-meridian-loan-refusal-001
+      applicant_id: borrower-corp-002
+      requested_amount_eur: 750000
+      product_type: term_loan
+      tenor_months: 60
+      analyst_actor_id: actor-meridian-sophie
+      purpose: "Equipment purchase for a new warehouse"
+    produces:
+      instance_id: "the process instance ID for this loan application"
+
+  - step: 2
+    actor: credit_manager
+    action: Reviews the credit memo and passes it with a recommended rate of 430 basis points
+    via: api
+    input:
+      credit_decision: pass
+      recommended_rate_bps: 430
+      credit_notes: "Strong collateral and stable cash flow."
+
+  - step: 3
+    actor: risk_manager
+    action: Completes the risk assessment, rating the borrower as low risk
+    via: api
+    input:
+      risk_rating: low
+      pd_percent: 1.4
+      risk_notes: "Acceptable risk."
+
+  - step: 4
+    actor: analyst
+    action: >
+      The analyst who submitted the application tries to cast the Chief Risk Officer's
+      committee vote and approve their own application
+    via: api
+    input:
+      committee_vote_cro: approve
+    expect_refusal: true
+
+  - step: 5
+    actor: loan_ops
+    action: >
+      The loan operations clerk tries to cast the credit director's committee vote
+      and approve the loan
+    via: api
+    input:
+      committee_vote_director: approve
+    expect_refusal: true
+
+  - step: 6
+    actor: credit_manager
+    action: >
+      The credit manager, who only reviewed the credit memo, tries to cast the CEO's
+      committee vote and approve the loan
+    via: api
+    input:
+      committee_vote_ceo: approve
+    expect_refusal: true
+
+  - step: 7
+    actor: analyst
+    action: >
+      The analyst tries to open the credit director's waiting approval work for this
+      loan, which holds the committee's commercial assessment of the borrower
+    via: api
+    expect_refusal: true
+
+  - step: 8
+    actor: risk_manager
+    action: >
+      The risk manager tries to export the full list of borrower records with the
+      personal details shown unmasked
+    via: api
+    expect_refusal: true
+
+  - step: 9
+    actor: committee_member_cro
+    action: As a credit committee member, reviews the committee pack and casts an 'approve' vote
+    via: api
+    input:
+      committee_vote_cro: approve
+      conditions: "Standard terms."
+
+  - step: 10
+    actor: committee_member_director
+    action: As a credit committee member, also casts an 'approve' vote, reaching quorum 2-of-3
+    via: api
+    input:
+      committee_vote_director: approve
+      conditions: "Subject to standard covenants."
+
+  - step: 11
+    actor: committee_member_ceo
+    action: As a credit committee member, casts an 'approve' vote
+    via: api
+    input:
+      committee_vote_ceo: approve
+      conditions: "No objection."
+
+  - step: 12
+    actor: credit_manager
+    action: >
+      The credit manager tries to release the approved €750,000 and record the
+      disbursement
+    via: api
+    input:
+      disbursement_reference: "DISB-MER-2026-REFUSAL-001"
+    expect_refusal: true
+
+  - step: 13
+    actor: analyst
+    action: >
+      The analyst who submitted the application tries to release the approved
+      €750,000 to the borrower
+    via: api
+    input:
+      disbursement_reference: "DISB-MER-2026-REFUSAL-002"
+    expect_refusal: true
+
+  - step: 14
+    actor: loan_ops
+    action: Disburses the approved €750,000 loan, recording the disbursement reference
+    via: api
+    input:
+      disbursement_reference: "DISB-MER-2026-REFUSAL-003"
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      Nobody outside the committee can cast a committee vote: the three refused
+      attempts leave the three votes open and the loan undecided until the
+      real members vote
+    verification:
+      method: instance_state
+      detail: >
+        after steps 4-6 the three committee vote tasks are still open and no vote
+        values are recorded
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A person who submitted or processed a loan could help approve it, so the
+        bank's credit authority policy and its separation between those who prepare
+        a loan and those who approve it are not protected.
+      suggested_action: route_to_security_review
+
+  - id: EO-002
+    description: >
+      Only loan operations can release the money: the refused attempts by the
+      credit manager and the analyst leave the disbursement waiting, and the
+      loan completes only after the clerk's own disbursement
+    verification:
+      method: instance_state
+      detail: >
+        after steps 12-13 the disbursement task is still open; after step 14 the
+        instance is completed and ends on the disbursed end
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Someone outside loan operations could release funds, which exposes the bank
+        to unauthorised payments.
+      suggested_action: route_to_security_review
+
+  - id: EO-003
+    description: >
+      Personal borrower details and other people's pending approval work are not
+      available to staff whose job does not need them
+    verification:
+      method: instance_state
+      detail: >
+        the analyst's attempt to open the credit director's waiting work and the
+        risk manager's attempt to export unmasked borrower records both returned
+        a refusal and no data
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Borrower personal and commercially sensitive information is visible to
+        staff who have no need for it.
+      suggested_action: route_to_security_review
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel instance sim-meridian-loan-refusal-001 if not already completed

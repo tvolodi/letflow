@@ -1,0 +1,166 @@
+# Authored by BA-MERIDIAN (REQ-457 item 1, refusal scenarios).
+# Written against test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json on main.
+# Sensitive actions covered: approving (CRO sign-off of findings), seeing personal or
+# commercially sensitive data (a review's findings), changing users (granting approval
+# authority, adding people). Paying or releasing money does not occur in this process; it is
+# covered in refusal-loan-approval-and-disbursement.yaml.
+# Steps 1, 2 and 9 are the normal path, not refusal steps.
+---
+id: meridian-regulatory-compliance-review-refusal-signoff
+company_id: meridian
+process_id: proc-meridian-regulatory-compliance-review
+title: A compliance review's findings can only be signed off by the CRO, and nobody else can hand out that authority
+version: "1.0"
+tags: [refusal, regulatory, access]
+
+description: >
+  A periodic compliance review reaches the point where the Chief Risk Officer must sign
+  off the findings. The risk manager who rated the findings, the compliance officer who
+  started the review and the credit manager each try to sign the findings off and are
+  refused. The credit manager also tries to read the review's findings, the loan
+  operations clerk tries to give themselves the Chief Risk Officer's job title in the
+  bank's user setup, and the compliance officer tries to create a new user account;
+  all are refused. The Chief Risk Officer then signs off and the review is archived.
+
+actors:
+  compliance_officer: actor-meridian-claudia
+  risk_manager: actor-meridian-miriam
+  credit_manager: actor-meridian-ben
+  loan_ops: actor-meridian-marcus
+  cro: actor-meridian-thomas
+
+preconditions:
+  - description: Regulatory compliance review process definition is active
+    check: process_definition_active
+  - description: No pending compliance review instances for Meridian
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: compliance_officer
+    action: Initiates a periodic compliance review for the 2026 Q3 loan portfolio and completes the evidence collection
+    via: api
+    input:
+      review_id: sim-meridian-review-refusal-001
+      review_type: periodic
+      portfolio_ref: "MER-PORTFOLIO-2026-Q3"
+      review_period: "2026-Q3"
+      initiator_actor_id: actor-meridian-claudia
+      documents_uploaded: true
+    produces:
+      instance_id: "the process instance ID for this compliance review"
+
+  - step: 2
+    actor: risk_manager
+    action: Completes the risk evaluation, rating the highest finding as medium
+    via: api
+    input:
+      highest_severity: medium
+      risk_notes: "Two files with outdated income proofs; no systemic issue."
+
+  - step: 3
+    actor: risk_manager
+    action: >
+      The risk manager who rated the findings tries to sign the findings off in place
+      of the Chief Risk Officer
+    via: api
+    input:
+      cro_decision: sign_off
+    expect_refusal: true
+
+  - step: 4
+    actor: compliance_officer
+    action: >
+      The compliance officer who started the review tries to sign off the findings of
+      their own review
+    via: api
+    input:
+      cro_decision: sign_off
+    expect_refusal: true
+
+  - step: 5
+    actor: credit_manager
+    action: The credit manager tries to sign off the findings of the compliance review
+    via: api
+    input:
+      cro_decision: sign_off
+    expect_refusal: true
+
+  - step: 6
+    actor: credit_manager
+    action: >
+      The credit manager tries to open the Chief Risk Officer's waiting sign-off work,
+      which lists the findings against the bank's loan files
+    via: api
+    expect_refusal: true
+
+  - step: 7
+    actor: loan_ops
+    action: >
+      The loan operations clerk tries to give themselves the Chief Risk Officer's job
+      title in the bank's user setup
+    via: api
+    expect_refusal: true
+
+  - step: 8
+    actor: compliance_officer
+    action: The compliance officer tries to create a new user account for a colleague
+    via: api
+    expect_refusal: true
+
+  - step: 9
+    actor: cro
+    action: Reviews the findings and signs them off
+    via: api
+    input:
+      cro_decision: sign_off
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      Only the Chief Risk Officer can sign off findings: the three refused attempts
+      leave the sign-off waiting, and the review closes only after the Chief Risk
+      Officer's own sign-off
+    verification:
+      method: instance_state
+      detail: >
+        after steps 3-5 the findings sign-off task is still open; after step 9 the
+        instance is completed and ends closed
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Someone other than the CRO could sign off findings, so the review record
+        shown to the regulator does not carry the required independent sign-off.
+      suggested_action: route_to_security_review
+
+  - id: EO-002
+    description: >
+      The findings of a review are not readable by staff whose job does not need them
+    verification:
+      method: instance_state
+      detail: the credit manager's attempt to open the CRO's waiting work returned a refusal and no data
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Commercially sensitive findings about the bank's loan files are visible to
+        staff outside the review.
+      suggested_action: route_to_security_review
+
+  - id: EO-003
+    description: >
+      Staff in ordinary jobs cannot change who holds approval authority or add people
+    verification:
+      method: instance_state
+      detail: >
+        the clerk's attempt to take the CRO job title and the compliance officer's
+        attempt to create a user both returned a refusal and nothing changed
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        An ordinary employee could grant themselves or others approval authority, which
+        defeats every approval control in the bank.
+      suggested_action: route_to_security_review
+
+cleanup:
+  cancel_open_instances: true
+  description: Cancel instance sim-meridian-review-refusal-001 if not already completed

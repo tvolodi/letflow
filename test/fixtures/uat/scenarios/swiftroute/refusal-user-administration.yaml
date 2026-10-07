@@ -1,0 +1,67 @@
+# Authored by BA-SWIFTROUTE (REQ-457, refusal scenarios). Sensitive action covered here:
+# changing users or roles. Not covered here: approving and seeing personal data
+# (refusal-shipment-approval.yaml, refusal-driver-incident-confidential.yaml), paying (no
+# SwiftRoute process pays).
+---
+id: swiftroute-refusal-user-administration
+company_id: swiftroute
+process_id: proc-swiftroute-shipment-approval
+title: Dispatchers and managers cannot change who works in SwiftRoute or what they may do
+version: "1.0"
+tags: [refusal, users]
+
+description: >
+  Who may approve shipments is decided by the responsibilities people hold. This scenario
+  checks that neither a dispatcher nor the Operations Manager can add a person, or give
+  themselves or anyone else a more powerful responsibility, which would let them go round
+  every approval in the company.
+
+actors:
+  dispatcher:  actor-swiftroute-lena
+  ops_manager: actor-swiftroute-marco
+
+preconditions:
+  - description: Shipment approval process definition is active
+    check: process_definition_active
+
+steps:
+  - step: 1
+    actor: dispatcher
+    action: >
+      Tries to give herself the Operations Manager's responsibilities, so that she can approve
+      the shipments she submits.
+    expect_refusal: true
+    via: api
+
+  - step: 2
+    actor: ops_manager
+    action: >
+      Tries to add a new employee to SwiftRoute and give that person the CEO's responsibilities.
+    expect_refusal: true
+    via: api
+
+  - step: 3
+    actor: ops_manager
+    action: Tries to deactivate the dispatcher's account.
+    expect_refusal: true
+    via: api
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      All three attempts are refused and nobody's access to the company has changed.
+    verification:
+      method: audit_event
+      detail: >
+        After step 3: the dispatcher still has only her own responsibilities, no new employee
+        exists, and the dispatcher's account is still active.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        A dispatcher or manager could give themselves or others any approval power, which makes
+        every approval limit in the company meaningless.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: false
+  description: Nothing was started by this scenario.

@@ -1,0 +1,248 @@
+# REQ-457 (BA-PLATFORM): refusal scenario for the platform scope, part 2. Authored new; not a port.
+# The case of a customer's OWN administrator reaching into ANOTHER customer (the ISS-0993 / ISS-0994
+# case). Part 1 (refusal-customer-user-boundaries.yaml) covers ordinary staff. Not covered here: the
+# read-only auditor (the role is not built yet); ORCH adds that step when it lands.
+# Every step below is expected to be REFUSED. A step the product lets through is a finding, not a
+# reason to rewrite the step.
+---
+id: platform-refusal-customer-administrator-boundaries
+scope: platform
+title: A customer's own administrator can run their own company and nothing of any other customer
+version: "1.0"
+tags: [isolation, access, refusal, regression, administrator]
+
+description: >
+  The platform is shared by several customers. Each customer has its own administrator,
+  who may manage that customer's people and settings. This scenario has SwiftRoute's
+  administrator try, one after another, the things that belong to somebody else: another
+  customer's record, users, process designs and activity history, switching another
+  customer's account off, and the screens the platform operator uses to run the platform.
+  Every attempt must be turned down plainly, and the administrator must learn nothing
+  about what lies behind the refusal. As a control, the administrator is first shown to be
+  able to see their own company's users, so a refusal is not just a broken screen.
+
+actors:
+  customer_administrator: actor-swiftroute-alice
+
+preconditions:
+  - description: Both SwiftRoute and Vortex are set up with their own users, process designs and activity history
+    check: system_seeded
+  - description: The SwiftRoute administrator holds the administrator role of SwiftRoute only, not any platform operator role
+    check: custom
+    detail: >
+      The refusals only mean something if the person really is an ordinary customer
+      administrator, so the access of this person is checked before the scenario starts.
+
+steps:
+  - step: 1
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator opens the list of SwiftRoute's own users, as part of
+      managing their own company. This is allowed and shows only SwiftRoute's people.
+    via: gui
+    sla_context:
+      expected_within_hours: null
+
+  - step: 2
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to open the list of all companies using the
+      platform, to see who else is a customer and how each is set up.
+    expect_refusal: true
+    via: gui
+    sla_context:
+      expected_within_hours: null
+
+  - step: 3
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to open Vortex's company record, to see how
+      Vortex is set up.
+    expect_refusal: true
+    via: gui
+    input:
+      company: Vortex
+    sla_context:
+      expected_within_hours: null
+
+  - step: 4
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to switch Vortex's account off.
+    expect_refusal: true
+    via: gui
+    input:
+      company: Vortex
+      change: switch the account off
+    sla_context:
+      expected_within_hours: null
+
+  - step: 5
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to change Vortex's company settings, for
+      example its look and its sign-in rules.
+    expect_refusal: true
+    via: gui
+    input:
+      company: Vortex
+      change: change company settings
+    sla_context:
+      expected_within_hours: null
+
+  - step: 6
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to open the list of Vortex's users, to see
+      who works there and what each person is allowed to do.
+    expect_refusal: true
+    via: gui
+    input:
+      company: Vortex
+    sla_context:
+      expected_within_hours: null
+
+  - step: 7
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to add a new person to Vortex's users and give
+      that person access.
+    expect_refusal: true
+    via: gui
+    input:
+      company: Vortex
+      change: add a new user
+    sla_context:
+      expected_within_hours: null
+
+  - step: 8
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to open Vortex's process designs, to read how
+      Vortex runs its production.
+    expect_refusal: true
+    via: gui
+    input:
+      company: Vortex
+    sla_context:
+      expected_within_hours: null
+
+  - step: 9
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to open Vortex's activity history, to see who
+      did what and when.
+    expect_refusal: true
+    via: gui
+    input:
+      company: Vortex
+    sla_context:
+      expected_within_hours: null
+
+  - step: 10
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to open the platform operator's services screen,
+      which shows how the platform itself is running.
+    expect_refusal: true
+    via: gui
+    sla_context:
+      expected_within_hours: null
+
+  - step: 11
+    actor: customer_administrator
+    action: >
+      The SwiftRoute administrator tries to open the platform operator's screen that
+      decides how long the platform keeps old activity records, and tries to shorten
+      that period.
+    expect_refusal: true
+    via: gui
+    sla_context:
+      expected_within_hours: null
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      The SwiftRoute administrator can manage their own company, and the same person
+      is turned down at every attempt to see or change anything of Vortex's, with no
+      list of customers, no names, no settings and no counts shown.
+    verification:
+      method: gui_screen
+      detail: >
+        Step 1 shows SwiftRoute's own users only. Steps 2 to 9 each end in a plain
+        refusal screen. None shows any part of Vortex's customer record, users, process
+        designs or activity history.
+      evidence: >
+        Screenshots of the screens after steps 1 to 9, reviewed for any trace of
+        Vortex information.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        The administrator of one customer could study, change or switch off another
+        customer, which is the failure most likely to end a customer relationship.
+      suggested_action: route_to_security_review
+
+  - id: EO-002
+    description: >
+      Vortex is exactly as it was before the scenario: its account is still on, its
+      settings, users and access are unchanged.
+    verification:
+      method: gui_screen
+      detail: >
+        As shown to the platform operator, Vortex's account status, settings and users
+        are the same after step 9 as before step 2.
+      evidence: >
+        Vortex's company record and users as shown to the platform operator, before and
+        after.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        One customer's administrator changed another customer's business without
+        permission.
+      suggested_action: route_to_security_review
+
+  - id: EO-003
+    description: >
+      The administrator of a customer is turned down when they try the screens that
+      belong to the platform operator, and the attempt changes nothing about how the
+      platform is run.
+    verification:
+      method: gui_screen
+      detail: >
+        Steps 10 and 11 each end in a plain refusal screen, and the platform's retention
+        period is the same afterwards as before step 11.
+      evidence: >
+        Screenshots of the screens after steps 10 and 11, and the retention period as
+        shown to the platform operator before and after.
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        An administrator of one customer could see or change how the platform serves
+        every customer.
+      suggested_action: route_to_security_review
+
+  - id: EO-004
+    description: >
+      The refusal looks the same whether the other company exists or not, so a refused
+      administrator cannot work out what lies behind it.
+    verification:
+      method: gui_screen
+      detail: >
+        The refusal at step 3 carries no more information than the refusal for a company
+        that does not exist would carry, and no refusal in this scenario names a user,
+        a process, or a person.
+      evidence: >
+        Screenshots of the refusal screens, compared.
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        Different answers for existing and non-existing companies let an outsider map
+        out the other customers by trial and error.
+      suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: false
+  description: >
+    Nothing was created if every refusal held. If any step was not refused, undo exactly
+    what it did (switched-off account, added user, changed settings, retention period)
+    and record it as a finding before anything else is run.

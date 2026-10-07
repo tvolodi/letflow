@@ -387,9 +387,6 @@ jobs:
         run: mix letflow.check
         env:
           WASMEX_BUILD: true
-          # TEMP (Q-1037 / GH #2364): one instrumented run; revert before merge.
-          TEST_PARALLEL_EXTRA_ARGS: "--slowest 40 --slowest-modules 25"
-          TEST_PARALLEL_PRINT_SLOWEST: "1"
 
   frontend:
     # This job's `name:` string is a required-status-check `context` on main's branch

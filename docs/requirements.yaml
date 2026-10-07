@@ -3509,6 +3509,10 @@ requirements:
       distinction explicitly in the moduledoc -- reading ERROR as terminal is
       the easy mistake, and REQ-023's status enum already carries all four
       values.
+      - AMENDED 2026-10-07 (REQ-459/REQ-460): the "REQ-049 schema-violation-on-merge" caller above no longer applies to a HUMAN_TASK
+      completion. A value that a `variable_schema` rejects on the task-completion path is refused with a retryable 422 before any
+      state change and raises no EXECUTION_ERROR. The case still routes to this sink for the SUB_PROCESS completion merge
+      (REQ-062). Other callers (REQ-050, REQ-056, REQ-057, REQ-062) are unchanged.
     acceptance_criteria:
       - "an EXECUTION_ERROR event carries error type, affected node or field, a human-readable reason, and the instance variable map as it stood at the moment of the error -- all four verified by reading the event payload back"
       - "the status flip to ERROR and the EXECUTION_ERROR append commit together: forcing the append to fail leaves the instance status unchanged, verified by reading both back"
@@ -34608,7 +34612,7 @@ requirements:
   - id: REQ-460
     title: "Engine: required_outputs on a HUMAN_TASK, a completion-time check answering a retryable 422, and a rejected output no longer puts the instance in ERROR (amends REQ-061)"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 1023  # letflow-queue task id, GH#2338. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-459 -- builds exactly what the REQ-459 design specifies; may not start before that design passes CODE-DESIGN-VALIDATOR
     description: >

@@ -400,28 +400,30 @@ defmodule Letflow.Obs.AlertsTest do
       # Use tiny backoff so test doesn't take long
       ctx = base_tick_context(%{dlq_count: 10})
 
-      # ISS-0429: delivery (including its own exhaustion Logger.error call) now runs
-      # in a detached Task dispatched off Letflow.Obs.Alerts.TaskSupervisor, not
-      # synchronously on this test process -- run_detection/2 itself returns as soon
-      # as dispatch happens. capture_log/1 only captures messages logged while its own
-      # `fun` is still running (see ExUnit.CaptureLog's moduledoc: cross-process log
-      # messages are captured only if the capture is still active when they're
-      # logged), so `fun` must stay alive past dispatch. 200ms comfortably covers the
-      # tiny 1ms/10ms-capped backoff configured above plus two real HTTP round trips.
-      # ISS-1038: attributed sink instead of the global capture_log. The delivery Task is started
-      # by Task.Supervisor.start_child from this process, so its events carry this process in
+      # ISS-0429: delivery (including its own exhaustion Logger.error call) runs in a detached
+      # Task dispatched off Letflow.Obs.Alerts.TaskSupervisor, not synchronously on this test
+      # process -- run_detection/2 returns as soon as dispatch happens.
+      # ISS-1038: attributed sink instead of the global capture_log. The Task is started by
+      # Task.Supervisor.start_child from this process, so its events carry this process in
       # $callers and are attributed; another test's "alert delivery exhausted" cannot be counted.
+      # Instead of a fixed sleep, wait (bounded, receive-based) for the exhaustion entry itself.
       # raw: true so the event metadata (hook_id) is in the text.
-      {_, entries} =
-        LoggerCollector.capture(
-          fn ->
-            Alerts.run_detection(schema_name, ctx)
-            Process.sleep(200)
-          end,
-          attribute_to: self(),
-          raw: true
-        )
+      collector = LoggerCollector.attach!(attribute_to: self(), sasl: false, raw: true)
 
+      {status, entries} =
+        try do
+          Alerts.run_detection(schema_name, ctx)
+
+          LoggerCollector.await(
+            collector,
+            fn entries -> Enum.any?(entries, &(&1.text =~ "alert delivery exhausted")) end,
+            10_000
+          )
+        after
+          LoggerCollector.detach(collector)
+        end
+
+      assert status == :ok, "no exhaustion log within 10 s: #{inspect(entries)}"
       log = LoggerCollector.text(entries)
 
       # 2 attempts should have been made (max_attempts: 2).

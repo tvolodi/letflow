@@ -16,8 +16,7 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBootTest do
 
   use Letflow.DataCase, async: false
 
-  import ExUnit.CaptureLog
-
+  alias Letflow.Test.LoggerCollector
   alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning.MigrationReplayBoot
 
@@ -36,26 +35,29 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBootTest do
       # required here to make them visible in captured output at all -- see
       # `Letflow.Secrets.LogFilterTest` for why this matters (LogFilter only
       # redacts `log_event.meta`, never `log_event.msg`).
-      log =
-        capture_log([metadata: :all], fn ->
-          # The core assertion this test exists for (design doc §2.2/§2.3, and the
-          # property mutant 2 in test/specs/ISS-0771.md directly targets): start_link/1
-          # must return :ignore -- never {:error, _}, never raise -- regardless of how
-          # many tenants' replay failed. If this returned {:error, _} or raised instead,
-          # this whole supervised child would take down Letflow.Supervisor.Infrastructure
-          # on every boot.
-          assert :ignore = MigrationReplayBoot.start_link(nil)
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            # The core assertion this test exists for (design doc §2.2/§2.3, and the
+            # property mutant 2 in test/specs/ISS-0771.md directly targets): start_link/1
+            # must return :ignore -- never {:error, _}, never raise -- regardless of how
+            # many tenants' replay failed. If this returned {:error, _} or raised instead,
+            # this whole supervised child would take down Letflow.Supervisor.Infrastructure
+            # on every boot.
+            assert :ignore = MigrationReplayBoot.start_link(nil)
+          end, attribute_to: self(), raw: true)
+
+      log = LoggerCollector.text(entries)
 
       assert log =~ "tenant migration replay failed"
-      assert log =~ "tenant_id=#{broken.tenant_id}"
-      assert log =~ "schema_name=#{broken.schema_name}"
+      assert log =~ "tenant_id: #{inspect(broken.tenant_id)}"
+      assert log =~ "schema_name: #{inspect(broken.schema_name)}"
 
       # The always-emitted summary line (design doc §2.2: "log one Logger.info/1
       # summary line ... after the loop completes, always") must show at least this
       # one failure.
       assert [[failed_count_str]] =
-               Regex.scan(~r/error_count=(\d+)/, log, capture: :all_but_first)
+               Regex.scan(~r/error_count: (\d+)/, log, capture: :all_but_first)
 
       assert String.to_integer(failed_count_str) >= 1
     end
@@ -69,12 +71,15 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBootTest do
       # list_registrations/0 result.
       TenantFixture.provisioned_tenant!(slug_prefix: "iss0771-boot-healthy")
 
-      log =
-        capture_log([metadata: :all], fn ->
-          assert :ignore = MigrationReplayBoot.start_link(nil)
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            assert :ignore = MigrationReplayBoot.start_link(nil)
+          end, attribute_to: self(), raw: true)
 
-      assert log =~ ~r/error_count=0/
+      log = LoggerCollector.text(entries)
+
+      assert log =~ ~r/error_count: 0/
       refute log =~ "tenant migration replay failed"
     end
   end

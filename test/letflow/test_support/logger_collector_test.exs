@@ -229,6 +229,44 @@ defmodule Letflow.Test.LoggerCollectorTest do
       end
     end
 
+    test "await/3 returns once a detached child logs the awaited event, ignoring unrelated ones",
+         %{sup: sup} do
+      collector = LoggerCollector.attach!(attribute_to: self(), sasl: false, raw: false)
+
+      try do
+        {:ok, gate} =
+          Task.Supervisor.start_child(sup, fn ->
+            receive do
+              :go -> Logger.error("awaited detached event")
+            end
+          end)
+
+        spawn(fn -> Logger.error("unrelated detached event") end)
+        send(gate, :go)
+
+        assert {:ok, entries} =
+                 LoggerCollector.await(
+                   collector,
+                   &Enum.any?(&1, fn e -> e.text =~ "awaited" end),
+                   5_000
+                 )
+
+        assert Enum.map(entries, & &1.text) == ["awaited detached event"]
+      after
+        LoggerCollector.detach(collector)
+      end
+    end
+
+    test "await/3 reports :timeout (bounded, not a hang) when the event never arrives" do
+      collector = LoggerCollector.attach!(attribute_to: self(), sasl: false, raw: false)
+
+      try do
+        assert {:timeout, []} = LoggerCollector.await(collector, &(&1 != []), 50)
+      after
+        LoggerCollector.detach(collector)
+      end
+    end
+
     test "text/1 joins entry texts with newlines; empty is the empty string" do
       assert LoggerCollector.text([%{text: "a"}, %{text: "b"}]) == "a\nb"
       assert LoggerCollector.text([]) == ""

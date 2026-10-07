@@ -28,10 +28,10 @@ defmodule Letflow.LoginDiscovery.DispatchNotifierEventTest do
   alias Letflow.LoginDiscovery.Dispatch
   alias Letflow.LoginDiscovery.Notifier.Noop
   alias Letflow.LoginDiscoveryNotifierDouble, as: Double
+  alias Letflow.Test.LoggerCollector
   alias Letflow.Test.LoginDiscoveryHelpers, as: H
   alias Letflow.Test.SmtpHelpers, as: S
   alias Letflow.Test.SmtpSink
-  alias Letflow.Test.LoggerCollector
 
   @notifier Letflow.LoginDiscovery.Notifier
   @supervisor Letflow.LoginDiscovery.TaskSupervisor

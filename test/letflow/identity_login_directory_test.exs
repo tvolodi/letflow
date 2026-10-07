@@ -11,7 +11,6 @@ defmodule Letflow.IdentityLoginDirectoryTest do
 
   use Letflow.DataCase, async: false
 
-  import ExUnit.CaptureLog
   import Ecto.Query, only: [from: 2]
 
   alias Letflow.Identity
@@ -19,6 +18,7 @@ defmodule Letflow.IdentityLoginDirectoryTest do
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
   alias Letflow.Oidc.JitProvisioningConfig
+  alias Letflow.Test.LoggerCollector
   alias Letflow.Test.LoginDirectoryFixture, as: Fx
 
   # ── helpers ─────────────────────────────────────────────────────────────
@@ -789,10 +789,15 @@ defmodule Letflow.IdentityLoginDirectoryTest do
     } do
       email = "control-logged@example.test"
 
-      log =
-        capture_log([level: :debug], fn ->
-          Repo.exists?(from(u in User, where: u.email == ^email), prefix: tenant.schema_name)
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            Repo.exists?(from(u in User, where: u.email == ^email), prefix: tenant.schema_name)
+          end,
+          attribute_to: self()
+        )
+
+      log = LoggerCollector.text(entries)
 
       assert log =~ email
     end
@@ -808,17 +813,22 @@ defmodule Letflow.IdentityLoginDirectoryTest do
       jit_ctx = identity_context(%{email: "jit-logged@example.test"})
       jit_key = Fx.key!("jit-logged@example.test")
 
-      log =
-        capture_log([level: :debug], fn ->
-          user = create!(tenant, email)
-          {:ok, _} = Identity.update_user_profile(user.id, %{"email" => changed}, opts(tenant))
-          {:ok, _} = Identity.update_user_status(user.id, :inactive, opts(tenant))
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            user = create!(tenant, email)
+            {:ok, _} = Identity.update_user_profile(user.id, %{"email" => changed}, opts(tenant))
+            {:ok, _} = Identity.update_user_status(user.id, :inactive, opts(tenant))
 
-          {:ok, _} =
-            Identity.provision_oidc_user(jit_ctx, tenant.tenant_id, jit_config(),
-              prefix: tenant.schema_name
-            )
-        end)
+            {:ok, _} =
+              Identity.provision_oidc_user(jit_ctx, tenant.tenant_id, jit_config(),
+                prefix: tenant.schema_name
+              )
+          end,
+          attribute_to: self()
+        )
+
+      log = LoggerCollector.text(entries)
 
       # The harness is capturing: the user write itself logs (pre-existing, not a directory query).
       assert log =~ "users"

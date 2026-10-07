@@ -27,7 +27,8 @@ defmodule Letflow.Test.LoggerCollector do
 
     * `attribute_to: pid | nil` -- (default `nil`: collect everything) an event counts iff the
       emitting process is `pid`, or `pid` is in its `$callers` (Task, `Task.Supervisor`) or
-      `$ancestors` (`:proc_lib`), or the emitting process is registered under one of
+      `$ancestors` (`:proc_lib`), or the emitting process is registered under a name
+      listed in `also_from`;
     * `also_from: [name]` -- (default `[]`) registered names whose own events also count (a
       supervisor's child-terminated report is emitted by the supervisor itself);
     * `sasl: boolean` -- (default `true`) force SASL-domain reports on (see above); `false`
@@ -39,7 +40,7 @@ defmodule Letflow.Test.LoggerCollector do
   assertion pass vacuously; `assert_alive!/1` fails loudly in that case.
   """
 
-  @type handle :: {atom(), reference(), {function(), map()} | nil}
+  @type handle :: {atom(), reference(), {atom(), {function(), map()}} | nil}
 
   @doc "Attaches the handler for the calling process; returns the handle."
   @spec attach!(keyword()) :: handle()
@@ -101,7 +102,7 @@ defmodule Letflow.Test.LoggerCollector do
     try do
       result = fun.()
 
-      # a crashed handler is removed by :logger; fail loudly rather than pass "logs nothing" vacuously
+      # a crashed handler is removed by :logger; fail loudly, not "logs nothing" vacuously
       assert_alive!(collector)
       {result, collected(collector)}
     after
@@ -112,6 +113,39 @@ defmodule Letflow.Test.LoggerCollector do
   @doc "Joins the `text` of `entries` with newlines (empty list gives the empty string)."
   @spec text([%{text: String.t()}]) :: String.t()
   def text(entries), do: Enum.map_join(entries, "\n", & &1.text)
+
+  @doc """
+  Waits (receive-based, bounded by `timeout_ms`, no sleeping) until `pred.(entries)` holds for
+  the entries received so far, then returns `{:ok | :timeout, entries}`. The returned list holds
+  EVERYTHING received (the mailbox messages are consumed), so use it instead of a later
+  `collected/1`. For events emitted by a detached process (e.g. a supervised Task) that outlive
+  the call under test.
+  """
+  @spec await(handle(), ([%{level: atom(), text: String.t()}] -> boolean()), non_neg_integer()) ::
+          {:ok | :timeout, [%{level: atom(), text: String.t()}]}
+  def await({_id, ref, _original} = handle, pred, timeout_ms) when is_function(pred, 1) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await(ref, pred, deadline, collected(handle))
+  end
+
+  defp do_await(ref, pred, deadline, acc) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    cond do
+      pred.(acc) ->
+        {:ok, acc}
+
+      remaining <= 0 ->
+        {:timeout, acc}
+
+      true ->
+        receive do
+          {:req441_log, ^ref, entry} -> do_await(ref, pred, deadline, acc ++ [entry])
+        after
+          remaining -> {:timeout, acc}
+        end
+    end
+  end
 
   @doc "Everything the handler has forwarded to the calling process so far."
   @spec collected(handle() | {nil, reference(), nil}) :: [%{level: atom(), text: String.t()}]

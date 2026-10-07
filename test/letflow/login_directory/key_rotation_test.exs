@@ -15,13 +15,13 @@ defmodule Letflow.LoginDirectory.KeyRotationTest do
   use Letflow.DataCase, async: false
 
   import Ecto.Query, only: [from: 2]
-  import ExUnit.CaptureLog
 
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
   alias Letflow.LoginDirectory
   alias Letflow.LoginDirectory.Backfill
   alias Letflow.LoginDirectory.KeyRotation
+  alias Letflow.Test.LoggerCollector
   alias Letflow.Test.LoginDirectoryFixture, as: Fx
 
   @id_a "rot443-a"
@@ -279,17 +279,22 @@ defmodule Letflow.LoginDirectory.KeyRotationTest do
       key = Fx.key_under(Fx.pepper(1), @alice)
       key_b = Fx.key_under(Fx.pepper(2), @alice)
 
-      {results, log} =
-        with_log([level: :debug], fn ->
-          [
-            KeyRotation.key_status(),
-            KeyRotation.retire_key(@id_a, dry_run: true),
-            KeyRotation.retire_key(@id_b),
-            KeyRotation.retire_key("rot443-absent"),
-            KeyRotation.retire_key("BAD"),
-            KeyRotation.retire_key(@id_a)
-          ]
-        end)
+      {results, entries} =
+        LoggerCollector.capture(
+          fn ->
+            [
+              KeyRotation.key_status(),
+              KeyRotation.retire_key(@id_a, dry_run: true),
+              KeyRotation.retire_key(@id_b),
+              KeyRotation.retire_key("rot443-absent"),
+              KeyRotation.retire_key("BAD"),
+              KeyRotation.retire_key(@id_a)
+            ]
+          end,
+          attribute_to: self()
+        )
+
+      log = LoggerCollector.text(entries)
 
       secrets = [key, key_b, Fx.pepper(1), Fx.pepper(2)]
       dumped = inspect(results, limit: :infinity)
@@ -324,10 +329,15 @@ defmodule Letflow.LoginDirectory.KeyRotationTest do
     end
 
     test "control: an ordinary Ecto query IS logged at :debug by this harness" do
-      log =
-        capture_log([level: :debug], fn ->
-          Repo.all(from(t in Tenant, where: t.slug == ^"control-slug-443", select: t.id))
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            Repo.all(from(t in Tenant, where: t.slug == ^"control-slug-443", select: t.id))
+          end,
+          attribute_to: self()
+        )
+
+      log = LoggerCollector.text(entries)
 
       assert log =~ "control-slug-443"
     end

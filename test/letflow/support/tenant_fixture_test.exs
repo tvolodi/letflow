@@ -64,10 +64,10 @@ defmodule Letflow.Support.TenantFixtureTest do
   use Letflow.DataCase, async: false
 
   import Ecto.Query
-  import ExUnit.CaptureLog
 
   alias Letflow.Identity.Tenant
   alias Letflow.Support.TenantFixtureTest.LogCollector
+  alias Letflow.Test.LoggerCollector
   alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
@@ -364,29 +364,34 @@ defmodule Letflow.Support.TenantFixtureTest do
       on_exit(fn -> install_collector(agent) end)
     end
 
-    test "logs a failure phase under CaptureLog and never phase=teardown" do
+    test "logs a failure phase and never phase=teardown" do
       %{tenant_id: tenant_id, schema_name: schema_name} = broken_state_tenant!("iss0109-c5b")
       drop_table!(schema_name, @failure_14_table)
 
-      log =
-        capture_log(fn ->
-          assert_raise ExUnit.AssertionError, fn ->
-            TenantFixture.assert_schema_complete!(tenant_id)
-          end
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            assert_raise ExUnit.AssertionError, fn ->
+              TenantFixture.assert_schema_complete!(tenant_id)
+            end
+          end,
+          attribute_to: self()
+        )
 
+      log = LoggerCollector.text(entries)
       assert log =~ "#{@marker} phase=incomplete_schema"
       refute log =~ "phase=teardown"
       assert log =~ @failure_14_table
     end
 
     test "emits no teardown line while the test body is still running" do
-      log =
-        capture_log(fn ->
-          TenantFixture.provisioned_tenant!(slug_prefix: "iss0109-c5c")
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn -> TenantFixture.provisioned_tenant!(slug_prefix: "iss0109-c5c") end,
+          attribute_to: self()
+        )
 
-      refute log =~ "phase=teardown"
+      refute LoggerCollector.text(entries) =~ "phase=teardown"
     end
   end
 
@@ -546,7 +551,12 @@ defmodule Letflow.Support.TenantFixtureTest do
     {tenant_id, schema_name} = :persistent_term.get({__MODULE__, :expected})
     lines = Agent.get(agent, & &1)
 
-    teardown_lines = Enum.filter(lines, &String.contains?(&1, "phase=teardown"))
+    # keyed by this test's own schema: the collector is a global handler (ISS-1038)
+    teardown_lines =
+      Enum.filter(
+        lines,
+        &(String.contains?(&1, "phase=teardown") and String.contains?(&1, "schema=#{schema_name}"))
+      )
 
     assert length(teardown_lines) == 1,
            "expected exactly one #{@marker} phase=teardown line, got: #{inspect(lines)}"

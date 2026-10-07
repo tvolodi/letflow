@@ -2,14 +2,24 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
   @moduledoc """
   REQ-441 AC5 (spec `test/specs/REQ-441.md`; design s6.2 AC5 row, s13 C-4 form): NO LEAK.
 
-  For the success case and EVERY failure case, the whole log output -- a synchronous
-  `:logger` handler (`Letflow.Test.LoggerCollector`) attached at all levels that records the
-  raw event terms (so a `:proc_lib` crash report that bypasses the Logger translator would
-  still be seen), restricted to events attributable to this test (its own process, its
-  `$callers`/`$ancestors`, and the notifier TaskSupervisor's own reports) -- contains none of: the typed address (any case), a tenant slug or display name,
-  the SMTP reply text (`SINKREPLYMARKER`), the compile-time-built username and password
-  markers, or any exception message text. The typed address is deliberately placed in the
-  exception / exit reason of the raising double, so a leak would be visible.
+  For the success case and EVERY failure case, the whole ATTRIBUTED log output contains none of:
+  the typed address (any case), a tenant slug or display name, the SMTP reply text
+  (`SINKREPLYMARKER`), the compile-time-built username and password markers, or any exception
+  message text. The typed address is deliberately placed in the exception / exit reason of the
+  raising double, so a leak would be visible.
+
+  The sink is a synchronous `:logger` handler (`Letflow.Test.LoggerCollector`) attached at all
+  levels that records the raw event terms (so a `:proc_lib` crash report that bypasses the
+  Logger translator would still be seen), restricted to events attributable to this test: its
+  own process, its `$callers` / `$ancestors`, and the notifier TaskSupervisor's own reports.
+
+  ATTRIBUTION NARROWING (ISS-1038, decided deliberately): events from processes NOT linked to
+  the test -- e.g. `:ssl` connection helpers or `gen_smtp` internals that were not started
+  through the test's call chain -- are not observed, so the unique-marker leak scan covers
+  attributed events only. A global (unattributed) scan was rejected: it is exactly the
+  hazard class being removed (another test's events making this one flake). Partial
+  mitigation: the M2b no-survivors check below proves the call leaves no process behind that
+  could log later.
 
   Why not `capture_log`: it is a GLOBAL capture, so under concurrent tests it also picked up
   an error-level "alert delivery exhausted" event logged by another test's alert deliverer
@@ -161,7 +171,8 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
   end
 
   # The TaskSupervisor itself emits the child-terminated report on a brutal kill, so its
-  # own events are attributed too (every test touching that supervisor is async: false).
+  # own events are attributed too. `also_from` is safe only because every other test touching
+  # LoginDiscovery.TaskSupervisor is async: false (nothing concurrent can emit from it).
   defp attach_collector do
     LoggerCollector.attach!(
       attribute_to: self(),
@@ -211,7 +222,7 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
   end
 
   # Named OTP singletons that are started lazily and live for the VM's lifetime: the logger's
-  # own handler processes (restarted by capture_log / Logger.configure) and OTP ssl's
+  # own handler processes (restarted by Logger.configure) and OTP ssl's
   # registered helpers (e.g. `:ssl_unknown_listener`, created on the first handshake that
   # meets an undecodable CA). A per-call WORKER leaked by the SMTP call is not one of these.
   defp logger_machinery?(info) do
@@ -254,7 +265,7 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
 
   # ── the tests ───────────────────────────────────────────────────────────
 
-  test "the sink is live and attributing: own and Task.Supervisor-child lines arrive, an unrelated process's do not" do
+  test "the sink is live and attributing: own and child lines arrive, unrelated ones do not" do
     {:ok, sup} = Task.Supervisor.start_link()
 
     {log, entries} =

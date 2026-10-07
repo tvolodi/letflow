@@ -8,9 +8,9 @@ defmodule Letflow.Api.AuthzDenyLogTest do
   hashes of the caller and tenant ids, sampled for repeated denials, carrying nothing INV-4 forbids,
   and never altering the 403 (INV-5 / INV-10).
 
-  `async: false`: the log sink handler (`sink_log/1`), Application env (window, clock, master key, platform-tenant pin)
-  and `:persistent_term` (sampler, one-time flags) are VM-global. `setup` zeroes the module's state
-  and every env key this file touches is restored on exit.
+  `async: false`: the log sink handler (`sink_log/1`), Application env (window, clock, master key,
+  platform-tenant pin) and `:persistent_term` (sampler, one-time flags) are VM-global. `setup`
+  zeroes the module's state and every env key this file touches is restored on exit.
   """
 
   use Letflow.DataCase, async: false
@@ -21,8 +21,8 @@ defmodule Letflow.Api.AuthzDenyLogTest do
   alias Letflow.Api.AuthzDenyLog
   alias Letflow.Identity.User
   alias Letflow.Plugs.Authorize
-  alias Letflow.Test.LoggerCollector
   alias Letflow.Support.PlatformTenantFixture, as: Fixture
+  alias Letflow.Test.LoggerCollector
 
   @label "letflow/authz-deny-log/v1"
   @env_keys [:authz_deny_log_window_s, :authz_deny_log_clock, :secrets_master_key]

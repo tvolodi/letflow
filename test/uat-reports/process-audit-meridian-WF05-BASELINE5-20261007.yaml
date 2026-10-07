@@ -1,0 +1,275 @@
+report_id: process-audit-meridian-WF05-BASELINE5-20261007
+run_id: WF05-BASELINE5-20261007
+generated_at: "2026-10-07T01:10:00Z"
+commit_sha: a4f235259d694e38c945b159b479ce218fc831db
+scope: meridian
+digest_algorithm: sha256-hex-of-file-bytes
+audited_inputs:
+  - path: test/fixtures/uat/scenarios/meridian/loan-origination-above-threshold.yaml
+    digest: 0d74853cdecab34305a154f0a191db030ea306cb74e813f11379731c7c6665d4
+  - path: test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml
+    digest: 368a08670188f603d9409c16fa8c03d2f78080302e1e2a5306ed3fdad24a8b86
+  - path: test/fixtures/uat/scenarios/meridian/loan-origination-kyc-manual-review.yaml
+    digest: 28733286321c87d96ac3c037155eedc918aa889d9bb813ca73849386f79d7592
+  - path: test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml
+    digest: b8a640b890780b5053ceb738ad217979c644d094a95e87f08a56cb47dae16490
+  - path: test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-ceo-override.yaml
+    digest: 9aa6a77baec3af19bd86e8caf6fa2d852c77fa375167be60e7d84b448933e704
+  - path: test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-cro-signoff.yaml
+    digest: 427f897fc6db3cc51c815fe2fa64e93f4e6f291e4df367afd671e9d144e62a76
+  - path: test/fixtures/uat/actors.yaml
+    digest: 246bbe3de987f5452d853a424cc752bdfe4b3dba27750a7c4286303bace469d4
+  - path: docs/roles.md
+    digest: 014866546eb7b96aa057319515f0d928ba9f02144408ec12c4c14c6e0835218f
+  - path: test/fixtures/uat/process-definition-aliases/proc-meridian-loan-origination.yaml
+    digest: 9feb9a617122461a3aade2f27ad0a78ecfc743e7f44ce495ebded1bdf950c513
+  - path: test/fixtures/qa/meridian_loan_origination_process_definition.json
+    digest: 034aeadf40ddf7df57363e13d1b71d1abb9b42b4fd1a8378133ad007552248e5
+  - path: scripts/seed_meridian_definition.sh
+    digest: d34e1ef7b2fd32af8fa42b50e294ea4d998b5d550ef090f86f3824d304b09ab2
+  - path: test/fixtures/uat/process-definition-aliases/proc-meridian-regulatory-compliance-review.yaml
+    digest: c4e1599a80c7779607347981230dce96774c523232b8ce5ff9d5a804812e0146
+  - path: test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+    digest: 80ff61eea4ed78de57b0d77ba643afa2acf3d1b0ba0f4b285ec00921bd2cbba9
+  - path: scripts/seed_meridian_persona_actors.sh
+    digest: 5a272097e2077aaddbf1c4cad560bb5c0826c758e77f75d3e73193c0e8b95370
+  - path: test/fixtures/simulation/meridian/org_structure.yaml
+    digest: ce1cde5a911787d08d9877bc60b36402a6cfe964dbb85056abaf62dd9b5560cd
+  - path: test/fixtures/simulation/meridian/process_claim_intake.yaml
+    digest: a2dc51082161131a794912bd62fbb8152d87eb6effba309bec02baa2d8656fe2
+  - path: test/fixtures/simulation/meridian/process_policy_binding.yaml
+    digest: cfa431752b69b1436a34eb434a7a56a9d346a6e8e25c006ff9158f5aedf394c0
+cross_scope_reads:
+  - path: test/fixtures/uat/process-definition-aliases/proc-swiftroute-driver-incident.yaml
+    digest: 10999e743dbd6137386e7f5269d10b2c4eff1d75faf2813c806230a34764fe12
+  - path: test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml
+    digest: f517bcd4d0603cbb7def94cf72fe70a171086e9611dbac7e9fbb251c000d1858
+  - path: test/fixtures/uat/process-definition-aliases/proc-swiftroute-shipment-approval.yaml
+    digest: 65f00eb8a62fa8a5f28ee5369065ea5b004def8fe229c746ebd995c09ecbc641
+  - path: scripts/seed_swiftroute_definition.sh
+    digest: c1da4d26e7d8ae3b28c15e2e192b899f8a59ee634408579ecd0d375de26661e9
+  - path: test/fixtures/qa/swiftroute_process_definition.json
+    digest: a421ff57ff25afd27172b8710effe904d3ba4fb3b45818e218c948d0991654e9
+  - path: test/fixtures/simulation/swiftroute/org_structure.yaml
+    digest: 4de99410dd76b1cc0e8d676c0ea567e4a9c51944c420f891eac19e49612a00ed
+  - path: test/fixtures/simulation/swiftroute/process_route_approval.yaml
+    digest: f840ef643f3f491999f11e7a8c67e43dbe9108e49df70695e3fd365e0ade26f3
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-8d-corrective-action.yaml
+    digest: 579bec82d421b02ec88909ecd7df1f30d29c227b022f8c302caeac95321ad026
+  - path: scripts/seed_vortex_definition.sh
+    digest: 8f19dda9188ea54dba9eb6d448c521847432bdc86bc43dcf253d87fff16244e7
+  - path: test/fixtures/qa/vortex_8d_corrective_action_definition.json
+    digest: 58ea2160e33eaf54296b71bbe1fbcd50f7f383795a8403833aceadc53c108a5b
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-production-order-release.yaml
+    digest: 8f59e4af6594ad8716e62703aeebd2c1ffd994445fd89f60e82c29a5d71edad3
+  - path: test/fixtures/qa/vortex_production_order_release_process_definition.json
+    digest: 4f7d8176b5605062cc04c20a20f86c4844e1148674a3095e43bd2763f24d8ce8
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-supplier-quality-deviation.yaml
+    digest: ba7a52bc4e6b3e1bd45356259c405e94ab97168168cfd4370a6da9942ecc6175
+  - path: test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+    digest: 40cd7e12fc6d185729b7b1454ba709a1d5a004f0e939346afaf3e02d1fc9d984
+  - path: test/fixtures/simulation/vortex/org_structure.yaml
+    digest: db4702e9feb06b8d52e3922019fb418da6d773519ce5f870498447aedb9d7e51
+  - path: test/fixtures/simulation/vortex/process_quality_check.yaml
+    digest: 6e93ac24f322ca61e0d472dcd817d6ee63aa0188e5a7920147570ad2eafbac3a
+  - path: test/fixtures/simulation/vortex/process_work_order.yaml
+    digest: 92d4f6c6e4ab20f627655ff0ee0521f186ee2e4578e68fd52564af261372eacd
+validator_outputs:
+  - definition_name: Loan Origination
+    definition_file: test/fixtures/qa/meridian_loan_origination_process_definition.json
+    status: OK
+    violation_codes: []
+    warnings: []
+  - definition_name: Regulatory Compliance Review
+    definition_file: test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+    status: OK
+    violation_codes: []
+    warnings: []
+
+checklist:
+  - item: A1
+    answer: YES
+    evidence: >
+      In the loan definition every decision has a decline outcome: the eligibility gate and the authority
+      routing default to decline-application, the first-level approval and second-level approval have a reject
+      edge, and the committee tally declines on two rejections or by default. In the compliance definition the
+      CRO's reject_and_reopen edge, the CEO's reject_and_reopen edge and the post-remediation check default all
+      end the matter without sign-off.
+  - item: A2
+    answer: NOT_APPLICABLE
+    evidence: >
+      A search of all six meridian scenarios found no mention of correction, resubmission, rework or return for
+      correction, and no node name in either definition suggests it; the only reversal is the compliance
+      review being reopened, which ends on end-reopened without a loop back.
+  - item: A3
+    answer: YES
+    evidence: >
+      The validator output for both definitions lists no unreachable_node, no_path_to_end or no_default_route.
+      Every rejection branch from A1 reaches an end node (decline-application to end-declined, reopen-review to
+      end-reopened, remediation-unresolved-escalation to end-closed).
+  - item: A4
+    answer: YES
+    evidence: >
+      All 13 human tasks in the loan definition (including the four escalation review tasks) and all 5 in the
+      compliance definition carry both an escalation timer duration and an escalation role, and each has a
+      timeout edge that ends in a fail-closed or higher-authority step.
+  - item: B1
+    answer: YES
+    evidence: >
+      The loan is submitted by the analyst (actor-meridian-sophie), who holds no routing role, while the
+      approvals route to the L1 approver, credit director, CRO and CEO roles held by other actors. The
+      compliance review is started by actor-meridian-claudia, who holds only the compliance officer role, and
+      its sign-offs route to the CRO and CEO roles; every approval task has a route.
+  - item: B2
+    answer: NO
+    evidence: >
+      On the escalated paths the person who records a value also takes the next decision on the same matter:
+      credit-memo-escalation-review and l2-approval and committee-vote-director all route to the credit
+      director role (actor-meridian-julia), and risk-assessment-escalation-review and committee-vote-cro both
+      route to the CRO role (actor-meridian-thomas). The normal path (credit manager, independent L1 approver)
+      is separated.
+  - item: C1
+    answer: YES
+    evidence: >
+      The validator lists no variable_never_collected for either definition. Values that some paths leave unset
+      (kyc_outcome on a clear screening, credit_decision or risk_rating after a stalled escalation review,
+      lapsed committee votes) are read only at gateways that carry an explicit default decline branch, and the
+      definition descriptions state this on purpose.
+  - item: D1
+    answer: YES
+    evidence: >
+      Every step in the six scenarios maps to a start or to a human task (for example credit-memo-review,
+      risk-assessment, l1-approval, l2-approval, the three committee votes, disburse-loan, kyc-manual-review,
+      evidence-collection, risk-evaluation, findings-sign-off, ceo-override), and both process ids resolve
+      through the sidecar files proc-meridian-loan-origination and proc-meridian-regulatory-compliance-review.
+  - item: D2
+    answer: NO
+    evidence: >
+      No scenario step exists for the loan tasks credit-memo-escalation-review, risk-assessment-escalation-review,
+      escalate-l2-approval-to-ceo and escalate-disburse-loan-to-credit-director, nor for the compliance task
+      remediation-subprocess; all other human tasks appear in at least one scenario.
+  - item: D3
+    answer: YES
+    evidence: >
+      Every role the human tasks route to (credit manager, L1 approver, credit director, risk manager, CRO,
+      CEO, compliance officer, loan operations) is held by a meridian actor in the roster (ben, lars, julia,
+      miriam, thomas, eva, claudia, marcus), the validator gave no unbound-role warning, and all nine scenario
+      actors exist under actors in the roster; none is under unresolved.
+  - item: D4
+    answer: NO
+    evidence: >
+      actor-meridian-sophie (loan submission, step 1 of three loan scenarios) and actor-meridian-claudia
+      (compliance review initiation, step 1 of three compliance scenarios) hold only the basic task-completion
+      access in the roster, which the role charter says cannot start instances. The seed script grants nothing
+      beyond the roster; the other actors only complete assigned tasks.
+  - item: E1
+    answer: NO
+    evidence: >
+      Meridian has approving (credit and committee decisions, CRO and CEO sign-off), paying or releasing
+      (disburse-loan) and seeing personal or commercially sensitive data (borrower KYC and loan files), yet none
+      of the six meridian scenarios contains a step with expect_refusal true; being listed as exempt in the
+      roster does not change this.
+  - item: E2
+    answer: NOT_APPLICABLE
+    evidence: >
+      No actor used by the meridian scenarios or listed for meridian in the roster holds the platform
+      administrator or tenant administrator role; all hold only the task-completion access.
+  - item: E3
+    answer: YES
+    evidence: >
+      Every meridian scenario step is a submission or a task completion inside the tenant; no step by a
+      meridian actor needs a platform-scope permission (the timer advance in the compliance scenarios is
+      performed by the test runner, not by the actor).
+  - item: F1
+    answer: YES
+    evidence: >
+      Compared with swiftroute's shipment approval and vortex's production order release: amount thresholds
+      route to higher authority with a fail-closed default, timers escalate to a higher role and then fail
+      closed, and the loan definition's own description documents its deviations (committee votes fail closed
+      directly, repeated escalation role at the top of a chain, durations aligned to the financial default).
+      The approach is consistent.
+
+findings:
+  - id: PA-MERIDIAN-001
+    severity: MAJOR
+    checklist_item: B2
+    business_description: >
+      When a credit memo or a risk assessment is not finished in time, the matter is escalated to the credit
+      director or the Chief Risk Officer, who then records the credit decision or risk rating themselves. The
+      same person can then also give the second-level approval or cast a committee vote on the same loan. For a
+      large loan there is no independent first-level check in between, so one person can both supply the
+      assessment and vote to approve the loan on it.
+    affected:
+      - path: test/fixtures/qa/meridian_loan_origination_process_definition.json
+        where: credit-memo-escalation-review, l2-approval and committee-vote-director (all the credit director's work); risk-assessment-escalation-review and committee-vote-cro (both the CRO's work)
+    suggested_owner: BA-MERIDIAN
+
+  - id: PA-MERIDIAN-002
+    severity: MAJOR
+    checklist_item: D2
+    business_description: >
+      Four escalation steps in the loan process (the credit director reviewing a late credit memo, the CRO
+      reviewing a late risk assessment, the CEO deciding a late second-level approval, and the credit director
+      completing a late disbursement) are never exercised by any acceptance scenario. If one of these steps is
+      mis-routed or does not produce the value the decline rule relies on, a loan could be stuck or wrongly
+      declined or held without anyone having noticed before go-live.
+    affected:
+      - path: test/fixtures/qa/meridian_loan_origination_process_definition.json
+        where: credit-memo-escalation-review, risk-assessment-escalation-review, escalate-l2-approval-to-ceo, escalate-disburse-loan-to-credit-director
+      - path: test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml
+        where: no escalation scenario exists for the loan process
+    suggested_owner: BA-MERIDIAN
+
+  - id: PA-MERIDIAN-003
+    severity: MAJOR
+    checklist_item: D2
+    business_description: >
+      The remediation of critical compliance findings, done by the compliance officer, is never exercised by any
+      scenario. The critical-findings path is the one that decides whether a bank files an unresolved-remediation
+      notice with the regulator or goes on to sign-off, and it has never been rehearsed end to end.
+    affected:
+      - path: test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+        where: remediation-subprocess (and its resolved and unresolved outcomes)
+      - path: test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-cro-signoff.yaml
+        where: only the medium-severity path is covered
+    suggested_owner: BA-MERIDIAN
+
+  - id: PA-MERIDIAN-004
+    severity: MAJOR
+    checklist_item: D4
+    business_description: >
+      The loan analyst who submits a loan application and the compliance officer who starts a compliance review
+      are set up with the basic access of an ordinary task worker, which the role charter says does not allow
+      starting a process. As written, the first step of three loan scenarios and three compliance scenarios
+      cannot be done by the person the scenario names, so those scenarios would be blocked or would hide a
+      wrong access setup.
+    affected:
+      - path: test/fixtures/uat/actors.yaml
+        where: actor-meridian-sophie and actor-meridian-claudia
+      - path: scripts/seed_meridian_persona_actors.sh
+        where: personas actor-meridian-sophie and actor-meridian-claudia
+      - path: test/fixtures/uat/scenarios/meridian/loan-origination-above-threshold.yaml
+        where: step 1 (analyst submits the loan)
+      - path: test/fixtures/uat/scenarios/meridian/regulatory-compliance-review-bafin.yaml
+        where: step 1 (compliance officer initiates the review)
+    suggested_owner: BA-MERIDIAN
+
+  - id: PA-MERIDIAN-005
+    severity: MAJOR
+    checklist_item: E1
+    business_description: >
+      None of the Meridian scenarios checks that a person who must not approve a loan, release a disbursement
+      or see a borrower's sensitive KYC details is actually turned away. The bank cannot show that, for example,
+      the loan analyst cannot approve a loan or that a non-compliance colleague cannot open a KYC review.
+    affected:
+      - path: test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml
+        where: no refusal step for approving or for releasing a disbursement
+      - path: test/fixtures/uat/scenarios/meridian/loan-origination-kyc-manual-review.yaml
+        where: no refusal step for seeing personal KYC data
+    suggested_owner: BA-MERIDIAN
+
+verdict: PASS_WITH_FINDINGS
+verdict_note: >
+  The Meridian process design ends every outcome and has no blocking gap, but it has five open weaknesses
+  (independence on escalated paths, unexercised escalation and remediation steps, the starting actors' access,
+  and no refusal checks), so it can run but should not be called fully verified.

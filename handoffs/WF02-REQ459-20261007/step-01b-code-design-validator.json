@@ -160,6 +160,44 @@
         "section 2 order unchanged by delta (only 6b-iii/iv content changed); engine.ex run_complete_task Multi order at 2263+ still matches",
         "no implementation code added; fences hold only @spec/JSON"
       ]
+    },
+    "round_4": {
+      "round": 4,
+      "scope": "delta cf4b9bc3..bc33e60a (design file only) plus full-file consistency scan",
+      "verdict": "PASS",
+      "failed_checks": [],
+      "findings": [
+        {
+          "n": 1,
+          "severity": "MAJOR",
+          "status": "RESOLVED",
+          "text": "Round-3 MAJOR 1: Adjustments REQ-460 item 1 now lists required_outputs/1, missing_keys/2, rejected_keys/3, any_rejected?/1, allowed_keys/2 and points to specs in 8.2. Grep of the whole file finds no remaining rejected_keys/2; arities in step 6b-iii/6b-iv, 8.2 specs (lines 689-694) and Adjustments agree."
+        },
+        {
+          "n": 2,
+          "severity": "MAJOR",
+          "status": "RESOLVED",
+          "text": "Round-3 MAJOR 2: new Adjustments REQ-460 item 0 states that REQ-460 BUILDS item 3 and acceptance criterion 3 apply to in-form and required_outputs keys only, that an out-of-form rejection returns 422 with both lists empty (test C-4a), that REQ-460 must not name every rejected key, and that this deliberately relaxes REQ-459 BUILDS wording (F-1, INV-2). Consistent with section 3.2, the section 5 audit row and the INV-2 assessment."
+        }
+      ],
+      "advisories_resolved": [
+        "Step 6b-iii now names RequiredOutputs.allowed_keys/2 and the source task.form_schema (field exists, lib/letflow/engine/task.ex:70).",
+        "F-1/F-2 labels are now attributed as SECURITY-REVIEWER findings (the verdict file is handoffs/WF02-REQ459-20261007/step-02c-security-reviewer.json); the design does not cite that path, which is acceptable.",
+        "Test A-3a (check_for_claim/3 fails open) added in section 12.2 beside A-3.",
+        "Residual R2-1 (guess-probe via 422-versus-accept) documented in section 3.2 and INV-2 as accepted."
+      ],
+      "advisory_non_blocking": [
+        "Cosmetic: A-3a is listed before A-3 in the 12.2 table; harmless.",
+        "ORCH must still reword REQ-462 BUILDS item 3 / acceptance line 4 and REQ-460 BUILDS item 3 / AC3 wording before dispatching those requirements (design Adjustments name both).",
+        "REVIEWER to confirm D-1..D-6 (D-3 best-effort audit, computed-field decision in step 4)."
+      ],
+      "verified": [
+        "Delta touches only wording in 6b-iii, section 3.2, section 5 row, section 6 totality paragraph, test A-3a, Adjustments REQ-460 items 0/1 and INV-2 bullet; no step order change.",
+        "Section 2 order still matches lib/letflow/engine.ex run_complete_task: Multi.run :task 2273, :instance_projection 2274, :snapshot_and_state 2277, :form_expression_reevaluation 2280, :merge 2300, :transition 2332, Multi.merge 2348, interpret_complete_result 2361; new :completion_guards step slots between 2277 and 2280 after both locks.",
+        "All twelve sections plus section 0, traceability, adjustments, decisions, open questions, INV assessment and citations present; section 3.2 literal 422 bodies and section 4.2 rule A body unchanged; no TBD/TODO/'never both' text; 28 fence markers, contents are JSON and @spec/@type only, no implementation code.",
+        "No new file/function citations were introduced in the delta (only task.ex:70 in my own check, grep-confirmed).",
+        "Design file unmodified by this validator; working tree has only untracked letflow-3.code-workspace."
+      ]
     }
   },
   "rework_count": 2

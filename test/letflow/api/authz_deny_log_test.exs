@@ -21,6 +21,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
   alias Letflow.Api.AuthzDenyLog
   alias Letflow.Identity.User
   alias Letflow.Plugs.Authorize
+  alias Letflow.Test.LoggerCollector
   alias Letflow.Support.PlatformTenantFixture, as: Fixture
 
   @label "letflow/authz-deny-log/v1"
@@ -37,63 +38,31 @@ defmodule Letflow.Api.AuthzDenyLogTest do
     def log(_event, _config), do: :ok
   end
 
-  # A synchronous `:logger` handler. `ExUnit.CaptureLog` reads through the Logger backend, which is
-  # suspected (UNPROVEN) of discarding events under overload: CI emits ~700k lines of Ecto debug
-  # output, and one first-seen-key denial line was once missing from a capture in main CI. A handler
-  # runs in the emitting process and `send/2`s before `Logger.warning/2` returns, so nothing can be
-  # dropped on the way to the test process.
-  defmodule Sink do
-    @moduledoc false
-    @doc false
-    def log(event, %{config: %{pid: pid, ref: ref}}) do
-      text =
-        try do
-          event
-          |> :logger_formatter.format(%{template: [:msg], single_line: false})
-          |> IO.chardata_to_string()
-        catch
-          _kind, _reason -> ""
-        end
-
-      if String.contains?(text, ["authz_deny", "authz deny log"]),
-        do: send(pid, {:authz_sink, ref, text})
-
-      :ok
-    end
-  end
-
-  # Runs `fun`, then returns the formatted text of every log event it emitted (from any process
-  # that had finished by then) that came from the authz deny log, one per line, in arrival order.
-  # Replaces `capture_log/1`: the same text shape for `deny_lines/1`, `one_line!/1` and the
-  # `refute log =~ secret` checks, but ONLY this module's events (a deliberate narrowing: the
-  # leak checks examine what AuthzDenyLog emitted, not other loggers' lines) and message text only
-  # (no level or metadata; the Forwarder test covers those), taken synchronously.
+  # Runs `fun`, then returns the formatted text of every log event it emitted that came from
+  # the authz deny log, one per line, in arrival order. Replaces `capture_log/1` (a GLOBAL
+  # capture that can lose or add lines under concurrent load) with the shared synchronous
+  # `Letflow.Test.LoggerCollector` handler: it runs in the emitting process and `send/2`s
+  # before the log call returns, and it only forwards events attributable to THIS test
+  # process (itself, its Tasks via `$callers`). A deliberate narrowing: the leak checks
+  # examine what AuthzDenyLog emitted, not other loggers' lines, and message text only (no
+  # level or metadata; the Forwarder test covers those).
   defp sink_log(fun) do
-    ref = make_ref()
-    id = :"authz_deny_sink_#{System.unique_integer([:positive])}"
-
-    :ok =
-      :logger.add_handler(id, Sink, %{level: :all, config: %{pid: self(), ref: ref}})
+    collector = LoggerCollector.attach!(attribute_to: self(), sasl: false, raw: false)
 
     try do
       fun.()
 
       # a crashed handler is removed by :logger; fail loudly rather than pass "logs nothing" vacuously
-      assert {:ok, _config} = :logger.get_handler_config(id)
+      LoggerCollector.assert_alive!(collector)
     after
-      :logger.remove_handler(id)
+      LoggerCollector.detach(collector)
     end
 
-    drain_sink(ref) |> Enum.join("
-")
-  end
-
-  defp drain_sink(ref) do
-    receive do
-      {:authz_sink, ^ref, text} -> [text | drain_sink(ref)]
-    after
-      0 -> []
-    end
+    collector
+    |> LoggerCollector.collected()
+    |> Enum.map(& &1.text)
+    |> Enum.filter(&String.contains?(&1, ["authz_deny", "authz deny log"]))
+    |> Enum.join("\n")
   end
 
   setup do

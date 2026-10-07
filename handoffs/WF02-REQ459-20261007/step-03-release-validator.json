@@ -1,0 +1,124 @@
+{
+  "handoff_id": "b3c1f0a2-7d54-4e8a-9a61-0f2d5c7e4b19",
+  "run_id": "WF02-REQ459-20261007",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ459-20261007/step-03-release-validator.json",
+  "created_at": "2026-10-07T07:00:00Z",
+  "started_at": "2026-10-07T07:00:00Z",
+  "completed_at": "2026-10-07T07:25:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-459"],
+    "artifacts_in": ["lib/letflow/design/req459-required-outputs-and-distinct-person.md"],
+    "branch_name": "design/REQ-459-required-outputs-distinct-person",
+    "requirement_text": "REQ-459 (docs/requirements.yaml ~34475, owner CODE-DESIGNER, stage S3, depends_on REQ-447, REQ-455): design-only entry. Writes a design artefact in lib/letflow/design/, no application code, for two refusals added to Letflow.Engine.run_complete_task: rule A (distinct person, distinct_from) and rule C (required decision outputs, required_outputs). Binding constraints Rule A: identity is the user id never the role (also for an API token); enforced at completion (authority) and claim (early feedback); no role exempt, TENANT_ADMIN included; compare against the MOST RECENT completion of each named node in the same instance; attribute optional and off by default; refusal is a clean 4xx with zero detail beyond 'separation of duties'; REQ-455 validator WARNS (REQ-464) on distinct_from naming a node routed to the same single-member role (design specifies inputs only); PROCESS-AUDITOR B1 follow-up recorded in REQ-463 open_questions. Rule C: check runs on the server before any state change; form 'required' stays a UI hint (REQ-273); validator also flags a decision reading a key no upstream task declares in required_outputs; out-of-enum value is a retryable 422, no instance ERROR, refusal before anything is written, task stays open and claimable. Twelve numbered sections required (1 schema+codes, 2 one check order, 3 422 body, 4 rule A body/status, 5 audit record, 6 claim path, 7 API-token identity, 8 rework semantics, 9 D-ESC, 10 idempotency/replay, 11 other merge paths + REQ-061/0007 amendment, 12 test plan). BA decisions 2026-10-07: assign/reassign do not check distinct_from; parallel branches compare against completions existing at check time; a never-completed named node imposes no constraint; FormExpressionReevaluation errors stay EXECUTION_ERROR."
+  },
+  "task": {
+    "description": "WF-02 step 03 (RELEASE-VALIDATOR): independent re-verification of REQ-459's five acceptance criteria against the design file itself and the code on the branch. Design-only requirement: no application code to run; mix test, scripts/test_parallel.sh and mix letflow.check.test were NOT run (design-only diff, and the dispatcher ruled out suite runs because of RAM; nothing under lib/ other than the design markdown, nothing under test/, changed).",
+    "acceptance_criteria": [
+      "AC1: a design file under lib/letflow/design/ exists with the twelve numbered sections, each answering its question and naming file and function; no implementation code beyond @spec-level signatures and a numbered check order",
+      "AC2: section 2 gives one total order of every check and write in run_complete_task for both rules and states, per refusal path, that nothing is written before the refusal except the one audit record; re-derived from lib/letflow/engine.ex independently",
+      "AC3: each binding constraint of rule A and rule C appears as a traceability row; none weakened or re-decided",
+      "AC4: sections 3 and 4 give literal example response bodies; the rule A body contains only 'separation of duties' and a status",
+      "AC5: checked by CODE-DESIGN-VALIDATOR and every cited file path and function exists on the branch, verified by grep and quoted"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "All five acceptance criteria hold on independent re-verification. Formed my own view from the design file and lib/letflow/engine.ex before reading any earlier handoff. Branch diff vs origin/main is the design file plus handoff JSONs only; docs/requirements.yaml and decision record 0007 are untouched. No blocking finding; four non-blocking observations.",
+    "tests_run": "none (design-only requirement; suite and mix letflow.check.test not applicable and not run; no .ex/.exs file changed on the branch)",
+    "diff_scope": {
+      "command": "git diff origin/main...HEAD --name-only",
+      "files": [
+        "handoffs/WF02-REQ459-20261007/step-01-code-designer.json",
+        "handoffs/WF02-REQ459-20261007/step-01b-code-design-validator.json",
+        "handoffs/WF02-REQ459-20261007/step-02c-security-reviewer.json",
+        "handoffs/WF02-REQ459-20261007/step-02d-reviewer.json",
+        "lib/letflow/design/req459-required-outputs-and-distinct-person.md"
+      ],
+      "docs_requirements_yaml_edited": false,
+      "decision_0007_edited": false,
+      "lib_or_test_code_changed": false
+    },
+    "criteria": {
+      "AC1": {
+        "result": "PASS",
+        "evidence": [
+          "grep '^## ' lists headings 0 (facts), 1 (Definition schema, line 35), 2 (ONE check order, 217), 3 (422 body, 421), 4 (rule A body/status, 503), 5 (audit record, 550), 6 (claim path, 574), 7 (API-token identity, 624), 8 (rework semantics, 649), 9 (D-ESC, 739), 10 (idempotency, 780), 11 (other merge paths, REQ-061/0007, 799), 12 (test plan, 864): twelve numbered sections plus a section 0 of code facts. Each question in the description is answered in order.",
+          "Each section names file and function, e.g. section 1 Graph.validate_node_attributes/1 (graph.ex:436) and SemanticValidation.required_output_schema_violations/2; section 6 Letflow.Tasks.claim_task/3 (tasks.ex:430) and SeparationOfDuties.check_for_claim/3; section 7 AuthPipeline.authenticate_api_token/2 -> Identity.verify_api_token/2 -> Routers.Tasks.handle_complete/3 -> Engine.complete_task/3.",
+          "Code-fence scan: all fences hold JSON wire examples or @spec/@type declarations (1.1 JSON, 1.4 @spec ValidationWarnings.for_definitions, 1.5 RoleBinding specs, 2.4 @type/@spec, 3.2 two JSON bodies, 4.2 JSON + @spec, 6 @spec, 8.2 specs). No def/defp/case/with/pipe bodies in any fence (awk scan for function-body keywords inside fences: 0 hits). Inline-prose mention of Repo.transaction(fn -> Audit.insert_entry(...) end) in 2.4 describes a property, not a body. Section 2 is a numbered order (R1-R3, P1-P4, steps 1-9, W1-W13)."
+        ]
+      },
+      "AC2": {
+        "result": "PASS",
+        "evidence": [
+          "Re-derived run_complete_task/6 (engine.ex:2263-2365) myself: Multi steps in order :task (2273, fetch_and_lock_task 2458-2468 FOR UPDATE), :instance_projection (2274; fetch_and_lock_instance_projection 2473-2483 FOR UPDATE), :snapshot_and_state (2277), :form_expression_reevaluation (2280, pure reevaluate/3 whose {:error,_} is carried inside {:ok,_}), :merge (2300; reevaluation error -> build_reevaluation_execution_error_args -> {:ok,{:execution_error,_}}; otherwise merge_output_variables/7 at 2321, prepend_form_expression_events), :transition (2332), Multi.merge tail (2348), Repo.transaction (2358), then maybe_snapshot_after_complete_task, emit_task_completed_telemetry, interpret_complete_result, all inside a function-level rescue (2362-2364). The design's 2.2 order is identical, with the NEW :completion_guards step correctly placed between :snapshot_and_state (2277) and :form_expression_reevaluation (2280), i.e. after both row locks.",
+          "merge_output_variables/7 (3875-3903): VariableSchema.variable_validations/5 then apply_variable_merge/6 (3916-3943), whose {:rejected,...} clause (3928-3941) builds the ERROR args; matches design 6b-i..6b-v, including the 'unreachable, retained as guard' disposition.",
+          "Tail write order re-derived from build_complete_task_tail_multi (4328-4506): first clause (4328-4341) ExecutionError.append_multi; second clause: build_task_activation_and_reconciliation_multi (4383; inside it {:hop_chain_token_records} 4637, task records via maybe_append_task_activation_multi -> TaskActivation.append_multi_from_existing_records, then reconcile_token_records -> :token_reconciliation 4838), timer arms 4413, service-task dispatch 4436, :task_complete 4448, :cancel_escalation_timers 4458, audit 4470, :event 4473, :projection 4482, sub-process children 4491, completion cascade 4498, :complete_task_outcome 4505 = design W1..W13 in the same order. Step 7 region (4020-4330) contains no repo/Repo insert/update/delete and no Multi.insert/update (awk scan: 0 hits), so 'no writes before the tail' holds.",
+          "Refusal path handling verified: a Multi.run returning {:error,_} yields {:error, step, reason, changes}, which skips every tail step; maybe_snapshot_after_complete_task has clauses only for {:ok,...} (2418, 2434) plus the pass-through at 2454, and emit_task_completed_telemetry only for {:ok,...} (2384) plus pass-through 2405, so neither writes or emits on a refusal. interpret_complete_result catch-all (5307) has changes.task available (step 1 ran). The design's 2.3 table states for REFUSE-A, REFUSE-C1 and REFUSE-C2 'NOTHING' written before the refusal, only locks and SELECTs, exactly one audit record written afterwards by a separate transaction (2.4, modelled on record_task_activation_rejection_audit at engine.ex:4979, the ISS-0784 precedent), and states the at-most-one-record guarantee honestly (D-3).",
+          "Step 8z (rescue -> {:transaction_failed, exception}, 500, no refusal audit) is stated, which matches engine.ex:2362-2364. Locks: only the two existing; no new lock. Precedence list (2.5) is coherent."
+        ]
+      },
+      "AC3": {
+        "result": "PASS",
+        "evidence": [
+          "Traceability table (lines 923-944) has rows A1-A11 and C1-C7. Compared against the requirement description bullets: Rule A bullets = user id (A1), completion+claim (A2), no role exempt (A3), most recent completion (A4), optional/off (A5), clean 4xx with zero detail (A6), REQ-455 warning inputs (A7), PROCESS-AUDITOR B1 follow-up (A8), plus the three BA rulings (A9 assign/reassign, A10 parallel, A11 never-completed). Rule C bullets = server before any state change (C1), form 'required' stays a hint (C2), validator flags undeclared decision key (C3), 422 and no ERROR (C4), plus BA rulings null=missing/empty string by schema (C5), reevaluation unchanged (C6), and REQ-460's submitted-only (C7). Every bullet has a row; none re-decided.",
+          "Scoped relaxations found (all stated in the design, none silent): (1) C4 / REQ-460 'naming the rejected key(s)': rejected-key names are restricted to the task's own form_schema.properties plus required_outputs; an out-of-form rejection still refuses but names nothing (section 3.2, Adjustments REQ-460 item 0, SECURITY-REVIEWER F-1). The refusal and no-state-change are not weakened; only name disclosure is narrowed. The C4 traceability row itself does not mention this narrowing (see finding F-1). (2) C3: the warning fires only when some upstream HUMAN_TASK form produces the key and none declares it (section 1.4), and is a permanent WARNING, not a violation (D-4). The binding text says 'flags', so this reads literally; it is flagged as D-4 and OQ-3, and requires an ORCH reword of REQ-462 acceptance line 4 (Adjustments REQ-462 item 0/2). (3) A5/C1 default-off: the design states the schema-rejection 422 applies on every HUMAN_TASK completion, including nodes with neither attribute (2.2 step 4a), which is the binding C4 text ('any value a variable_schema rejects on this path'). Not weakened.",
+          "Also flagged and consistent with the binding text: the rule A body is a constant two-member document (D-1); claim refusal uses 403 rather than the router's 409 for eligibility refusals (D-2)."
+        ]
+      },
+      "AC4": {
+        "result": "PASS",
+        "evidence": [
+          "Section 3.2 gives two literal application/problem+json 422 bodies (missing_keys [\"decision\"], and rejected_keys [\"decision\"]), no submitted value, no enum, no ids.",
+          "Section 4.2 gives the literal rule A body, exactly: {\"detail\":\"separation of duties\",\"status\":403}. Only the phrase and a status; no type, title, trace_id, ids, or node names. The design states why the standard five-member envelope is not used (trace_id would break byte-identity)."
+        ]
+      },
+      "AC5": {
+        "result": "PASS",
+        "evidence": [
+          "Re-grepped by reading the cited line and quoting it. Every citation in section 2 checked: engine.ex 2212, 2245, 2252, 2263, 2273-2283, 2300, 2321, 2332, 2348, 2358, 2362-2364, 2384, 2405, 2418, 2434, 2454, 2458-2468, 2473-2483, 2490, 2512-2518, 2525, 2549, 2572, 2591, 3875, 3916, 3928-3941, 3960, 3992, 4020, 4161, 4238, 4328, 4343, 4413, 4436, 4448, 4458-4469, 4470, 4473, 4482, 4491, 4498, 4505, 4637, 4755, 4838, 4911, 4979, 5102, 5127, 5222, 5258, 5307 (all match their named function at the stated line); task_activation.ex 358 (append_multi_from_existing_records) and 533 (cancel_pending_escalation_timers); tasks.ex 539 (authorize_completion); routers/tasks.ex 142, 325-346, 328, 331, 336, 340, 425.",
+          "Sampled outside section 2 (about 90 further cites, all matching): routers/tasks.ex 326, 356, 364, 372, 380, 408, 431, 432, 439, 471, 626; tasks.ex 353, 395, 428, 430, 436, 437, 448, 452, 606, 608, 676, 678, 703, 715, 728; engine/task.ex 57, 72, 107; audit.ex 121, 231; api/error.ex 121, 404; api/response.ex 115, 136, 178; auth_pipeline.ex 107, 133, 141, 146, 196, 227, 370, 382; identity.ex 1648, 1686 ({:ok, %{user_id: token.user_id, roles: token.roles}}); authorization.ex 1347, 1352 (core_role_allows?(:TENANT_ADMIN, ...)); promotions.ex 603-604 (self_approval_forbidden -> 403); promotion_review_store.ex 429; graph.ex 171, 222, 354, 436, 487, 698, 856, 1041, 1059, 1073 (CHK-22..24 present in moduledoc 57-63; grep for CHK-25..29 returns 0, so the reserved numbers are free); semantic_validation.ex 189, 266, 299, 440, 486; role_binding.ex 57, 66; definitions.ex 557, 561, 1272, 1284, 1286, 1675, 1682, 2372; solution_pack.ex 1389, 1397; variable_merge.ex 205, 210; variable_schema.ex 279, 287, 336, 407, 440; form_expression_reevaluation.ex 154, 161; sub_process.ex 824, 838; scheduler.ex 297, 312; event_store.ex 218, 649, 678; execution_error.ex 192; tenant_provisioning.ex 243; reconstruction.ex 594, 678 and transition.ex 1345 (VariableMerge.merge(..., nil)); engine.ex 3394 (VariableMerge.merge(seed_state.variables, decoded_body, nil), supporting the 11.1 finding that the service-task merge passes nil validations).",
+          "Migration 20260818110003_create_tasks.exs lines 87-88 create idx_task_instance and idx_task_token. docs/requirements.yaml 3463 (REQ-061), 3485-3487; decision 0007 lines 79 and 108 quote the passages the design says are stale. docs/anti-patterns.md 939 and 4474-4530 exist with the cited headings. Test cites: engine_variable_schema_merge_test.exs 212/337/434, shipped_definition_variable_schemas_engine_test.exs 132, swiftroute_decision_forms_fixture_test.exs 292 all assert {:error, {:instance_execution_error, :variable_schema_rejected, ...}}; engine_sub_process_test.exs 777 asserts error_type variable_schema_rejected (the surviving ERROR path). Files exist: tests/routers/tasks_test.exs, engine_complete_task_test.exs, identity tests, platform_tenant_fixture.ex:205 (x-tenant-slug), req396/req455/iss0784 design files, decision 0040, meridian fixture, process-auditor.md. Commit ff944312 exists ('REQ-447 PR2 ... TENANT_ADMIN', cited as the TENANT_ADMIN dependency).",
+          "New-module names the design proposes (SeparationOfDuties, RequiredOutputs, ValidationWarnings, completion_refused) correctly do not yet exist under lib/ (grep outside design files: 0 matches); they are described as NEW."
+        ]
+      }
+    },
+    "findings": [
+      {
+        "id": "F-1",
+        "severity": "LOW",
+        "blocking": false,
+        "detail": "Traceability row C4 does not itself mention the scoped relaxation that rejected-key NAMES are limited to the task's own form_schema.properties plus required_outputs (the 422 may carry empty lists for an out-of-form rejection). The relaxation is stated in 3.2, 5, 12.1 C-4a and Adjustments REQ-460 item 0, so it is not hidden, but a reader of the table alone would not see the narrowing of the REQ-459 BUILDS wording 'rejected key names'.",
+        "action": "Optional: add a clause to row C4 pointing at 3.2 and Adjustments REQ-460 item 0. No gate depends on it."
+      },
+      {
+        "id": "F-2",
+        "severity": "LOW",
+        "blocking": false,
+        "detail": "Design 2.2 step 6b-i says VariableSchema.variable_validations/5 runs and its result is reused, but does not state the error branch: merge_output_variables/7 today returns {:error, {:variable_schema_lookup_failed, reason}} when that call fails (engine.ex:3900-3902), which is a Multi step error with no refusal audit and falls to the generic router clause (500). Same observation as REVIEWER N-1; I derived it independently from engine.ex.",
+        "action": "REQ-460 should keep that branch unchanged and say so in its run report; no design change required."
+      },
+      {
+        "id": "F-3",
+        "severity": "INFO",
+        "blocking": false,
+        "detail": "The design header says evidence was read at HEAD b7fed67b; the branch HEAD is now 35bc40c9. Spot re-greps of every cited line (see AC5) show the cited code is unchanged by the later docs-only commits, so no citation is stale.",
+        "action": "None."
+      },
+      {
+        "id": "F-4",
+        "severity": "INFO",
+        "blocking": false,
+        "detail": "Gate conditions carried forward, not defects of this design: (a) REQ-462 BUILDS item 3 last sentence and acceptance line 4 must be reworded by ORCH before REQ-462 is dispatched (check 3 is a permanent warning, D-4); (b) REQ-460's regression line about a service-task merge ending in ERROR is not reproducible (service-task merge passes nil validations, engine.ex:3394), so REQ-460 must use the SUB_PROCESS path; (c) the REQ-061 amendment pointer and the dated 0007 note are stated but intentionally not written (DOC-UPDATER / REVIEWER); (d) the docs-only issue for PROCESS-AUDITOR B1 must be filed by ORCH after REQ-463. docs/requirements.yaml status flip for REQ-459 is correctly still pending, to be done by DOC-UPDATER after this verdict.",
+        "action": "ORCH to action (a) and (d); DOC-UPDATER to flip REQ-459 status and append the status event; REQ-460 to use the sub-process regression."
+      }
+    ]
+  },
+  "rework_count": 0
+}

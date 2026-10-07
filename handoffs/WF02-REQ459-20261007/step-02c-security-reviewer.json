@@ -1,0 +1,65 @@
+{
+  "handoff_id": "3b7e5a2c-6d41-4f0e-9a57-REQ459SEC0001",
+  "run_id": "WF02-REQ459-20261007",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ459-20261007/step-02c-security-reviewer.json",
+  "created_at": "2026-10-07T06:40:00Z",
+  "started_at": "2026-10-07T07:10:00Z",
+  "completed_at": "2026-10-07T07:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-459"],
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/design/req459-required-outputs-and-distinct-person.md"
+    ],
+    "branch_name": "design/REQ-459-required-outputs-distinct-person",
+    "design_commit": "cf4b9bc3",
+    "round": 2
+  },
+  "task": {
+    "description": "WF-02 step 02c round 2 (SECURITY-REVIEWER): re-review of the REQ-459 design after rework 2 against round-1 findings F-1..F-4, including the new 'both lists empty' 422 case as a possible oracle."
+  },
+  "result": {
+    "verdict": "PASS",
+    "invariants": {
+      "INV-1": "APPLIES - PASS (unchanged from round 1; explicit prefix on every new read and the audit insert, no new table).",
+      "INV-2": "APPLIES - PASS. F-1 closed (see F-1 below). One MINOR wording finding (R2-1) on the residual guess-confirm channel; not blocking.",
+      "INV-3": "N-A",
+      "INV-4": "APPLIES - PASS (constructors take no free-text parameter; unchanged).",
+      "INV-5": "APPLIES - PASS (unchanged; 403/404 ordering intact, claim check_for_claim runs only after existing eligibility refusals).",
+      "INV-6": "APPLIES - satisfied by this review.",
+      "INV-7": "APPLIES - PASS (Ecto bindings; bound IN list).",
+      "INV-8": "APPLIES - PASS. F-2 closed: check_for_claim/3 is declared total (section 6), audit helper has rescue, attribute reading total.",
+      "INV-9": "N-A",
+      "INV-10": "N-A (no route/permission/tenant identifier touched)."
+    },
+    "round1_findings_status": [
+      {
+        "id": "F-1",
+        "status": "CLOSED",
+        "evidence": "Section 2.2 step 6b-iii restricts rejected_keys to ALLOWED = task.form_schema.properties UNION required_outputs, computes any_rejected? before restriction, and 6b-iv refuses on any_rejected? (whole-batch semantics kept, name withheld). Section 3.2 states both-empty is the one legal empty case and that names come only from the task's own form and required_outputs. Section 5 after_state (rule C) says both lists carry allowed-set keys only. RequiredOutputs.rejected_keys/3 spec takes `allowed`, plus allowed_keys/2 and any_rejected?/1 (section 8.2). Tests: C-4a asserts 422 with both lists empty, nothing merged, instance not in ERROR, key name absent from body and audit row (grep both). INV-2 assessment line updated. Cross-check: a missing-key refusal combined with an out-of-form rejected key returns only missing_keys, identical to the response without the rejected key (the refusal already fires on missing), so no signal there."
+      },
+      { "id": "F-2", "status": "CLOSED", "evidence": "Section 6: check_for_claim/3 total, any snapshot/graph/query failure logged (task id and tag only) and returns :ok; default-off definitions gain no claim failure mode." },
+      { "id": "F-3", "status": "CLOSED", "evidence": "Decision D-6 cites decision 0040; docs/migration/decisions/0040-authenticated-route-rate-limiting.md exists (grep confirmed) and states no per-actor rate limit on authenticated routes at this stage; security-invariants.md lines 324-327 direct citing 0040." },
+      { "id": "F-4", "status": "CLOSED (advisory carried)", "evidence": "Section 1.5 and REQ-464 notes (lines 991-993): member_counts/2 prefixed, counts only, SECURITY-REVIEWER re-check at REQ-464 code review retained." }
+    ],
+    "findings": [
+      {
+        "id": "R2-1",
+        "severity": "MINOR (advisory, non-blocking)",
+        "location": "design section 3.2, sentence 'no other key's schema existence is revealed (INV-2)' and the Security assessment INV-2 line",
+        "issue": "Oracle analysis of the new both-lists-empty 422. Key names are no longer echoed, but the STATUS still differs: an assignee who submits a guessed key K outside the form with a schema-violating value gets 422 when K has a variable_schema that rejects it, and a normal completion (200) when K has no schema (omitted by validations_for, variable_schema.ex 407-436). So existence of a rejecting schema for a GUESSED name is still inferable from the status. Conclusions: (a) the both-empty body is indistinguishable by shape from any other refusal and carries no name, so the body itself leaks nothing; the leak is the 422-versus-accept status, which cannot be removed without dropping the whole-batch refusal (the design deliberately keeps it, rejecting silent dropping); (b) it is a confirm-a-guess channel, not an enumeration channel (no names returned), and a negative probe completes the task, so it is one-shot per task; (c) it is strictly narrower than today, where the same probe commits instance ERROR and answers 409 (design 3.1), a destructive and already-available oracle that this design removes the destructive half of; (d) variable-key names are definition data, not tenant business data. Hence not an INV-2 FAIL, but the sentence 'no other key's schema existence is revealed' overclaims.",
+        "required_change": "Reword the sentence in 3.2 and the INV-2 assessment line to: names of other keys are not revealed; a caller who guesses a key name can still observe from the 422-versus-accept status whether a rejecting schema exists for it, a residual accepted because it is no wider than today's behaviour (ERROR/409) and refusing it would require silently dropping values. Can be folded into the next doc touch; does not require a re-review round.",
+        "route_to": "CODE-DESIGNER"
+      }
+    ],
+    "notes": "PASS. F-1 (the sole blocker) is closed in the 422 body, the audit row, step 6b-iii/iv, section 3.2, section 5 and tests C-4a; F-2..F-4 closed; no regression found in sections 2, 4, 6, 7, 8. Read of the design was complete (lines 1-1044). Residual R2-1 is a documentation-accuracy item only. SECURITY-REVIEWER sign-off is still required at REQ-460, REQ-463 and REQ-464 code review as the design states."
+  },
+  "rework_count": 1
+}

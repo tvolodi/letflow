@@ -1,0 +1,204 @@
+{
+  "handoff_id": "8f4a7d09-ea93-4a22-b8bb-066b8b79ad9e",
+  "run_id": "WF02-REQ459-20261007",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ459-20261007/step-01b-code-design-validator.json",
+  "created_at": "2026-10-07T06:33:00Z",
+  "started_at": "2026-10-07T06:33:00Z",
+  "completed_at": "2026-10-07T07:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": [
+      "REQ-459"
+    ],
+    "related_handoff_ids": [
+      "91d5e12e-d198-41c2-bdb7-c6b0c9b98345"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req459-required-outputs-and-distinct-person.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/"
+    ],
+    "branch_name": "design/REQ-459-required-outputs-distinct-person"
+  },
+  "task": {
+    "description": "WF-02 step 01b (CODE-DESIGN-VALIDATOR), ROUND 2 after rework 1: hard gate on lib/letflow/design/req459-required-outputs-and-distinct-person.md.",
+    "acceptance_criteria": [
+      "twelve numbered sections, each answering its question, no implementation code beyond @spec",
+      "section 2 one total order; nothing written before a refusal except one audit record; independently re-derived",
+      "one traceability row per binding constraint of rule A and rule C, none weakened or re-decided",
+      "sections 3 and 4 literal bodies; rule A body is only the phrase and a status",
+      "every cited file path and function name exists, verified with grep"
+    ]
+  },
+  "result": {
+    "round": 3,
+    "verdict": "FAIL",
+    "summary": "All eight round-1 findings are resolved. The two MAJORs are fixed: every new public function now has a full @spec with argument names, element types and error shape (section 8.2 and the design's spec blocks for RequiredOutputs, SemanticValidation additions, SeparationOfDuties.check/5 and check_for_claim/3, the private blocking_nodes/5, completion_guards_result/0), and step 4b, section 8.2 and the REQ-463 adjustment now all name exactly one engine entry point, SeparationOfDuties.check/5. Section 2 was re-derived again from engine.ex run_complete_task (2263-2365) and still matches step for step, now including the function-level rescue as exit path 8z. No regression: twelve sections present, traceability A1-A11/C1-C7 intact, section 3/4 literal bodies intact (rule A body exactly {\"detail\":\"separation of duties\",\"status\":403}), code fences hold only JSON and @spec/@type, no TBD/deferral language. One cosmetic advisory remains (check_for_claim actor_id type is narrower in section 6 than in 8.2); it does not block.",
+    "failed_checks": [],
+    "findings": [
+      {
+        "n": 1,
+        "severity": "MAJOR",
+        "status": "RESOLVED",
+        "check": "signatures fully specified including error shape",
+        "text": "Verified fixed. Section 8.2 now specs RequiredOutputs.required_outputs/1 (Node.t() -> [String.t()]), missing_keys/2 (required :: [String.t()], output_variables :: map() -> sorted [String.t()]), rejected_keys/2 (validations :: VariableMerge.variable_validations(), exclude :: [String.t()] -> sorted [String.t()]); SemanticValidation.required_output_schema_violations/2 (graph, declared_fields) -> [Violation.t()] and decision_key_warnings/2 (graph, definition_name) -> [String.t()] with the reason the definition name is the second argument; SeparationOfDuties.check/5 (repo, graph, task, actor_id, prefix) -> :ok | {:error, {:separation_of_duties, [String.t()]}}; check_for_claim/3; private blocking_nodes/5; and completion_guards_result/0 = {:ok, :guards_passed | :no_guards} | {:error, {:completion_refused, completion_refusal()}}. Step 4a also states the pass payload. Referenced types exist in lib: VariableMerge.variable_validations (variable_merge.ex:170), SemanticValidation.declared_fields (semantic_validation.ex:169), Engine.Task.t (task.ex:79), Graph.t and Node.t (graph.ex)."
+      },
+      {
+        "n": 2,
+        "severity": "MAJOR",
+        "status": "RESOLVED",
+        "check": "internal consistency, unambiguous to build",
+        "text": "Verified fixed. Step 4b (section 2.2), section 8.2 header comment and the REQ-463 adjustment item 1 all say the engine step calls SeparationOfDuties.check/5 only; blocking_nodes/5 is private and not called by the engine; check_for_claim/3 is the claim path entry and delegates to check/5. grep of SeparationOfDuties/blocking_nodes in the design shows no remaining second entry point."
+      },
+      {
+        "n": 3,
+        "severity": "MINOR",
+        "status": "RESOLVED",
+        "check": "accuracy of claim",
+        "text": "Step 4a now limits the byte-identical claim to step 4 and states that step 6b-iv refuses a schema-rejected value on every HUMAN_TASK completion, which is why the five existing tests change."
+      },
+      {
+        "n": 4,
+        "severity": "MINOR",
+        "status": "RESOLVED",
+        "check": "accuracy of reasoning",
+        "text": "Section 1.4 reason 1 now says SemanticValidation runs at validate_definition_graph and activate and does NOT run in create/2 (definitions.ex:557-561). Correct."
+      },
+      {
+        "n": 5,
+        "severity": "MINOR",
+        "status": "RESOLVED",
+        "check": "citation precision",
+        "text": "Citations section now reads lib/letflow/api/authorization.ex (1347-1352, core_role_allows?(:TENANT_ADMIN) at 1352, grep-confirmed at line 1352), assign_task def 608, reassign_task def 678 (grep-confirmed), merge def 210 (spec 205), reevaluate def 161 (spec 154), scheduler escalation arm at 312 (grep-confirmed)."
+      },
+      {
+        "n": 6,
+        "severity": "MINOR",
+        "status": "RESOLVED",
+        "check": "section 2 completeness",
+        "text": "New item 8z documents the function-level rescue (engine.ex:2362-2364) as an exit path covering every step including new step 4 and 6b, yielding {:error, {:transaction_failed, exception}}, router 500 (routers/tasks.ex:425, grep-confirmed generic {:error, _reason} clause), no refusal audit row, no refusal body. Matches the code: the rescue wraps the whole pipeline through interpret_complete_result."
+      },
+      {
+        "n": 7,
+        "severity": "ADVISORY",
+        "status": "RESOLVED (carried to ORCH)",
+        "check": "downstream requirement text",
+        "text": "Design adds REQ-462 item 0 and item 2 saying ORCH must reword REQ-462 BUILDS item 3 and acceptance line 4 before dispatch, and REQ-461 item 4 states the actual surfaces (check 3 and 4 warnings at validate and pack install only). ORCH action still required: amend REQ-462 text before dispatching it."
+      },
+      {
+        "n": 8,
+        "severity": "ADVISORY",
+        "status": "RESOLVED",
+        "check": "requirement wording",
+        "text": "Section 2.4 now states the guarantee as at most one audit record per refused request, exactly one when the audit store is healthy (D-3). Section 2.2 step 4 now decides the computed-field question explicitly: authors must not list computed fields in required_outputs, step 4c judges the submitted map, no validator check added. REVIEWER should still confirm D-3 and this decision."
+      },
+      {
+        "n": 9,
+        "severity": "ADVISORY",
+        "status": "NEW, non-blocking",
+        "check": "spec consistency",
+        "text": "Section 6 spec for check_for_claim/3 types actor_id as String.t(), while section 8.2 types it Ecto.UUID.t() | String.t() | nil and says check/5 returns :ok for a non-binary actor. The two should read the same; ELIXIR-DEV should use the 8.2 union (the more permissive one). Does not change behaviour or ambiguity of any step."
+      }
+    ],
+    "verified": [
+      "Section 2 order re-derived again from lib/letflow/engine.ex run_complete_task (2263-2365): Multi steps :task, :instance_projection, :snapshot_and_state, :form_expression_reevaluation, :merge, :transition, Multi.merge tail, Repo.transaction, maybe_snapshot_after_complete_task, emit_task_completed_telemetry, interpret_complete_result, wrapped by function-level rescue returning {:error, {:transaction_failed, exception}}. The NEW :completion_guards step slots between :snapshot_and_state and :form_expression_reevaluation, after both row locks. interpret_complete_result error clause (5307) runs after the transaction returned and already hosts record_task_activation_rejection_audit (4979), so the single audit record is outside the rolled-back transaction. Refusal paths 4b, 4c, 6b-iv are Multi.run errors before the tail writes W1-W13.",
+      "No isolation setting configured (carried from round 1), so the instance-lock argument for parallel branches holds.",
+      "Twelve sections 1-12 plus section 0 present in order; traceability table has A1-A11 and C1-C7; adjustments REQ-460..466 present; decisions D-1..D-6 and OQ-1..3 present; no TBD/TODO/deferral wording.",
+      "Section 3.2 has two literal 422 bodies; section 4.2 rule A body is exactly {\"detail\":\"separation of duties\",\"status\":403}.",
+      "Code fences contain only JSON, @spec and @type lines (no function bodies); one inline comment-only spec set.",
+      "Newly added or changed citations grep-verified: tasks.ex 395/430/539/608/678/703/715; scheduler.ex 312; authorization.ex 1352; variable_merge.ex 210 and 170; form_expression_reevaluation.ex 161; semantic_validation.ex 169; task.ex 79; routers/tasks.ex 423-425; engine.ex 2263-2365, 5307, 4979.",
+      "Working tree: only untracked letflow-3.code-workspace; design file unmodified by this validator."
+    ],
+    "advisory_non_blocking": [
+      "Finding 9: align check_for_claim/3 actor_id type between section 6 and 8.2.",
+      "ORCH must reword REQ-462 BUILDS item 3 and acceptance line 4 before dispatching REQ-462 (check 3 is a permanent warning).",
+      "REVIEWER to confirm D-1..D-6, especially D-3 (best-effort audit) and the computed-field decision in step 4."
+    ],
+    "round_2_history": {
+      "round": 2,
+      "verdict": "PASS",
+      "summary": "All eight round-1 findings are resolved. The two MAJORs are fixed: every new public function now has a full @spec with argument names, element types and error shape (section 8.2 and the design's spec blocks for RequiredOutputs, SemanticValidation additions, SeparationOfDuties.check/5 and check_for_claim/3, the private blocking_nodes/5, completion_guards_result/0), and step 4b, section 8.2 and the REQ-463 adjustment now all name exactly one engine entry point, SeparationOfDuties.check/5. Section 2 was re-derived again from engine.ex run_complete_task (2263-2365) and still matches step for step, now including the function-level rescue as exit path 8z. No regression: twelve sections present, traceability A1-A11/C1-C7 intact, section 3/4 literal bodies intact (rule A body exactly {\"detail\":\"separation of duties\",\"status\":403}), code fences hold only JSON and @spec/@type, no TBD/deferral language. One cosmetic advisory remains (check_for_claim actor_id type is narrower in section 6 than in 8.2); it does not block."
+    },
+    "round_3": {
+      "round": 3,
+      "scope": "delta cf4b9bc3 vs a15de238, design file only",
+      "verdict": "FAIL",
+      "failed_checks": [
+        "design internally consistent / adjustments for downstream REQ complete"
+      ],
+      "findings": [
+        {
+          "n": 1,
+          "severity": "MAJOR",
+          "text": "Adjustments for REQ-460 item 1 (design line ~960) still lists `rejected_keys/2` and omits `any_rejected?/1` and `allowed_keys/2`. Section 8.2 and step 6b-iii now specify rejected_keys/3. ELIXIR-DEV reading the Adjustments would build the wrong arity. Fix: item 1 must name rejected_keys/3, any_rejected?/1, allowed_keys/2."
+        },
+        {
+          "n": 2,
+          "severity": "MAJOR",
+          "text": "The relaxed rule (both lists may be empty when every rejected key is outside the allowed set) conflicts with REQ-460 BUILDS item 3 and acceptance criterion 3 ('retryable 422 naming the rejected key') and REQ-459 BUILDS item 3 ('rejected key names'). The design makes the relaxation in section 3.2 and the audit row but Adjustments for REQ-460 do not list it, so REQ-460 wording stays unadjusted. Fix: add a REQ-460 adjustment stating AC3 holds for keys in the task's form_schema.properties or required_outputs, and that an out-of-form rejection returns 422 with both lists empty (test C-4a); REQ-460 must not be implemented to name every rejected key."
+        }
+      ],
+      "advisory_non_blocking": [
+        "Step 6b-iii says 'ALLOWED set' but never names allowed_keys/2 as the function computing it nor says where task.form_schema is read (task.form_schema exists, task.ex:70); name the call.",
+        "'decision F-1' and 'decision F-2' are cited in sections 3.2, 6, 11 but defined nowhere in the design (they are SECURITY-REVIEWER finding labels); cite the verdict file or define them in Decisions.",
+        "No section-12 test for check_for_claim/3 totality (snapshot missing or graph build failure at claim returns :ok, claim succeeds); add one beside A-3.",
+        "Section 3.2 'never both' wording was correctly removed; no other 'never both' text remains."
+      ],
+      "verified": [
+        "rejected_keys/3, any_rejected?/1, allowed_keys/2 have full @spec with arg names and types in 8.2 and are consistent with step 6b-iii/6b-iv, section 3.2 and the audit row table",
+        "6b-iv refuses when any_rejected? even if the reported lists are empty: whole-batch semantics preserved",
+        "test C-4a present in section 12.1 with grep of body and audit row",
+        "docs/migration/decisions/0040-authenticated-route-rate-limiting.md exists and states no per-actor limit at this stage, deferred to S4 (D-6 citation accurate)",
+        "check_for_claim/3 spec identical in section 6 (line 598) and 8.2 (line 675), actor_id type advisory from round 2 resolved; totality paragraph consistent with section 6 claim step order (advisory check, completion re-checks under locks)",
+        "section 2 order unchanged by delta (only 6b-iii/iv content changed); engine.ex run_complete_task Multi order at 2263+ still matches",
+        "no implementation code added; fences hold only @spec/JSON"
+      ]
+    },
+    "round_4": {
+      "round": 4,
+      "scope": "delta cf4b9bc3..bc33e60a (design file only) plus full-file consistency scan",
+      "verdict": "PASS",
+      "failed_checks": [],
+      "findings": [
+        {
+          "n": 1,
+          "severity": "MAJOR",
+          "status": "RESOLVED",
+          "text": "Round-3 MAJOR 1: Adjustments REQ-460 item 1 now lists required_outputs/1, missing_keys/2, rejected_keys/3, any_rejected?/1, allowed_keys/2 and points to specs in 8.2. Grep of the whole file finds no remaining rejected_keys/2; arities in step 6b-iii/6b-iv, 8.2 specs (lines 689-694) and Adjustments agree."
+        },
+        {
+          "n": 2,
+          "severity": "MAJOR",
+          "status": "RESOLVED",
+          "text": "Round-3 MAJOR 2: new Adjustments REQ-460 item 0 states that REQ-460 BUILDS item 3 and acceptance criterion 3 apply to in-form and required_outputs keys only, that an out-of-form rejection returns 422 with both lists empty (test C-4a), that REQ-460 must not name every rejected key, and that this deliberately relaxes REQ-459 BUILDS wording (F-1, INV-2). Consistent with section 3.2, the section 5 audit row and the INV-2 assessment."
+        }
+      ],
+      "advisories_resolved": [
+        "Step 6b-iii now names RequiredOutputs.allowed_keys/2 and the source task.form_schema (field exists, lib/letflow/engine/task.ex:70).",
+        "F-1/F-2 labels are now attributed as SECURITY-REVIEWER findings (the verdict file is handoffs/WF02-REQ459-20261007/step-02c-security-reviewer.json); the design does not cite that path, which is acceptable.",
+        "Test A-3a (check_for_claim/3 fails open) added in section 12.2 beside A-3.",
+        "Residual R2-1 (guess-probe via 422-versus-accept) documented in section 3.2 and INV-2 as accepted."
+      ],
+      "advisory_non_blocking": [
+        "Cosmetic: A-3a is listed before A-3 in the 12.2 table; harmless.",
+        "ORCH must still reword REQ-462 BUILDS item 3 / acceptance line 4 and REQ-460 BUILDS item 3 / AC3 wording before dispatching those requirements (design Adjustments name both).",
+        "REVIEWER to confirm D-1..D-6 (D-3 best-effort audit, computed-field decision in step 4)."
+      ],
+      "verified": [
+        "Delta touches only wording in 6b-iii, section 3.2, section 5 row, section 6 totality paragraph, test A-3a, Adjustments REQ-460 items 0/1 and INV-2 bullet; no step order change.",
+        "Section 2 order still matches lib/letflow/engine.ex run_complete_task: Multi.run :task 2273, :instance_projection 2274, :snapshot_and_state 2277, :form_expression_reevaluation 2280, :merge 2300, :transition 2332, Multi.merge 2348, interpret_complete_result 2361; new :completion_guards step slots between 2277 and 2280 after both locks.",
+        "All twelve sections plus section 0, traceability, adjustments, decisions, open questions, INV assessment and citations present; section 3.2 literal 422 bodies and section 4.2 rule A body unchanged; no TBD/TODO/'never both' text; 28 fence markers, contents are JSON and @spec/@type only, no implementation code.",
+        "No new file/function citations were introduced in the delta (only task.ex:70 in my own check, grep-confirmed).",
+        "Design file unmodified by this validator; working tree has only untracked letflow-3.code-workspace."
+      ]
+    }
+  },
+  "rework_count": 2
+}

@@ -34475,7 +34475,7 @@ requirements:
   - id: REQ-459
     title: "Design for required decision outputs and the distinct-person rule on HUMAN_TASK completion: one check order in run_complete_task, the definition-schema home of required_outputs and distinct_from, the 422 and separation-of-duties refusal contracts, claim path, D-ESC interaction"
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S3
     impl_order: 1022  # letflow-queue task id, GH#2337. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-447 -- REQ-447 = letflow-queue task Q-964, map when registering; the distinct-person rule must hold for TENANT_ADMIN, a role that exists only after REQ-447 PR2, so the design is written once that role is real
     description: >

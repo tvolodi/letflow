@@ -2,9 +2,8 @@
 # Written against test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json on main.
 # Covers the human task ceo-override (role-ceo): findings-sign-off -> timeout-findings-sign-off ->
 # cro-sign-off-timeout -> ceo-override -> archive-review.
-# DEPENDENCY: findings-sign-off carries only a timeout edge, no escalation_timer_duration, in the
-# fixture on main (ISS-0995 / Q-995 owns the missing timers). If the timer is not armed, step 3 cannot
-# be forced with advance-timer and the scenario is BLOCKED there, not passed.
+# DEPENDENCY: findings-sign-off must have its escalation timer armed (P3D, definition v1.9, ISS-1013 / Q-995)
+# for step 3 to be forced with advance-timer; if it is not armed the scenario is BLOCKED there, not passed.
 ---
 id: meridian-regulatory-compliance-review-ceo-override
 company_id: meridian

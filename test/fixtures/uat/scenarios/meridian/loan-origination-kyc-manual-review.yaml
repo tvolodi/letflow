@@ -66,6 +66,7 @@ steps:
       match
     via: gui
     input:
+      kyc_outcome: cleared
       kyc_review_notes: "Name match only; date of birth and registered address differ. Cleared."
     sla_context:
       expected_within_hours: 24
@@ -130,8 +131,10 @@ expected_outcomes:
 
   - id: EO-002
     description: >
-      Once the compliance officer has cleared the applicant, and the credit and risk
-      checks pass, the loan is approved at both levels, disbursed, and ends disbursed
+      Once the compliance officer records kyc_outcome 'cleared', the loan proceeds past
+      the eligibility check to the L1/L2 approval path (EUR 50,000 is below the committee
+      threshold); with the credit and risk checks passing, it is approved at both levels,
+      disbursed, and ends disbursed
     verification:
       method: instance_state
       detail: instance status == COMPLETED and end node is 'end-disbursed'

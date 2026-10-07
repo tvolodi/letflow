@@ -214,6 +214,29 @@ defmodule Letflow.Api.AuthorizationTest do
       assert decision.task_scope == :all
     end
 
+    test "TASK_WORKER + PLATFORM_ADMIN outside the platform tenant is row-filtered exactly like TASK_WORKER alone" do
+      # REQ-447 PR 2 (lib 0696b9eb): defence in depth inside evaluate_access/2 itself.
+      # A hand-built context (not via effective_roles/2) must not widen the task scope.
+      legacy = %AccessContext{
+        user_id: "worker-1",
+        roles: [:TASK_WORKER, :PLATFORM_ADMIN],
+        platform_tenant?: false
+      }
+
+      plain = %AccessContext{user_id: "worker-1", roles: [:TASK_WORKER], platform_tenant?: false}
+
+      decision = Authorization.evaluate_access(legacy, :TasksList)
+
+      assert decision.kind == :AllowWithRowFilter
+      assert decision.task_scope == {:own_user_and_groups, "worker-1"}
+      assert decision == Authorization.evaluate_access(plain, :TasksList)
+      refute decision.task_scope == :all
+
+      # default flag (unset) behaves as non-platform
+      default = %AccessContext{user_id: "worker-1", roles: [:TASK_WORKER, :PLATFORM_ADMIN]}
+      assert Authorization.evaluate_access(default, :TasksList) == decision
+    end
+
     test "TASK_WORKER + PROCESS_DESIGNER gets plain Allow with unrestricted scope" do
       ctx = %AccessContext{user_id: "worker-1", roles: [:TASK_WORKER, :PROCESS_DESIGNER]}
       decision = Authorization.evaluate_access(ctx, :TasksList)

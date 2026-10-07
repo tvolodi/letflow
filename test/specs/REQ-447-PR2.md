@@ -2,10 +2,11 @@
 
 Design: `lib/letflow/design/req447-tenant-admin-role.md` sections 2.2, 3.4, 3.5, 11 "PR 2". Conventions: `test/specs/REQ-447-PR1.md`.
 
-**NOT YET RUN.** The host was out of memory, so no `mix test`, `mix compile` or `mix letflow.check.test` was run for any file below. Only
-`mix format --check-formatted` was run (clean on every touched file). Every statement of the form "fails against X" below is a design
-intention to be verified by the TEST-RUNNER pass; the mutants listed are PLANNED, not measured. The code under test did not exist before
-PR 2's lib commits, so mutation (not a pre-fix failure) is the evidence; none has been measured yet.
+**RUN STATUS (2026-10-07).** Audit batches 1-9 over all 85 files that mention PLATFORM_ADMIN are green (run by the coordinator, partition 3).
+Re-run for this update: `platform_admin_outside_platform_test.exs` 25 passed; `authorization_test.exs` 120 passed (incl. the new 0696b9eb test).
+Mutation (below) was MEASURED against the 5 PR 2 files (272 tests, baseline all green). `mix letflow.check.test` (full suite plus the
+ISS-0069 grep) was NOT run by TEST-DESIGNER here; no test helper with a default argument was added in this update.
+The code under test did not exist before PR 2's lib commits, so mutation (not a pre-fix failure) is the evidence.
 
 ## New file
 
@@ -33,7 +34,7 @@ PR 2's lib commits, so mutation (not a pre-fix failure) is the evidence; none ha
 
 Every legacy-honouring assertion became a legacy-REMOVED assertion; none was deleted.
 
-* `test/letflow/api/authorization_test.exs`: every `evaluate_access` grid (REQ-309, 315, 317, 318, 401 loops) evaluates the `PLATFORM_ADMIN` row with `platform_tenant?: true`, every other role with false (previously false for all, relying on C6); "Allow is returned" (`:AuditRead`), "TASK_WORKER + PLATFORM_ADMIN gets plain Allow", the two REQ-318 AC5 PLATFORM_ADMIN tests now use `platform_tenant?: true`. NEW: a PLATFORM_ADMIN context with `platform_tenant?: false` is `Deny403` on `:AuditRead`.
+* `test/letflow/api/authorization_test.exs`: NEW (lib 0696b9eb): "TASK_WORKER + PLATFORM_ADMIN outside the platform tenant is row-filtered exactly like TASK_WORKER alone" (hand-built `[:TASK_WORKER, :PLATFORM_ADMIN]`, `platform_tenant?` false and default: `AllowWithRowFilter`, `{:own_user_and_groups, id}`, equal to the TASK_WORKER-only decision, never `:all`; the platform-tenant `Allow`/`:all` case is the pre-existing "TASK_WORKER + PLATFORM_ADMIN gets plain Allow" test). Also: every `evaluate_access` grid (REQ-309, 315, 317, 318, 401 loops) evaluates the `PLATFORM_ADMIN` row with `platform_tenant?: true`, every other role with false (previously false for all, relying on C6); "Allow is returned" (`:AuditRead`), "TASK_WORKER + PLATFORM_ADMIN gets plain Allow", the two REQ-318 AC5 PLATFORM_ADMIN tests now use `platform_tenant?: true`. NEW: a PLATFORM_ADMIN context with `platform_tenant?: false` is `Deny403` on `:AuditRead`.
 * `test/letflow/api_token_auth_pipeline_test.exs`: all tokens `PLATFORM_ADMIN` -> `TENANT_ADMIN` (ordinary tenant); `auth_context.roles == ["TENANT_ADMIN"]`.
 * `test/letflow/api/platform_scope_authorization_test.exs`: (1) "tenant scope follows the role matrix ... in and out of the platform tenant": PLATFORM_ADMIN was allowed for flag true and false; now allowed for true and REFUTED for false, with a TENANT_ADMIN allow for both; (2) the C6 switch test is replaced by "the C6 switch is gone, and a non-platform PLATFORM_ADMIN confers NOTHING": no function, the old config key set to true changes nothing, every `permissions/0` atom is denied to a lone PLATFORM_ADMIN with flag false and still granted with flag true, other roles keep their grants; (3) `evaluate_access` tenant keys: PLATFORM_ADMIN `Allow` only with flag true, `Deny403` with false; (4) `:UnmatchedRoute`: Allow for a PLATFORM_ADMIN of any tenant -> Allow only with flag true, `Deny403` with false.
 * `test/letflow/modules/bilimbaga_solution_e2e_test.exs`: the installer is TENANT_ADMIN; the "404 for every role" loop excludes `:PLATFORM_ADMIN` (not mintable in an ordinary tenant; TENANT_ADMIN stays covered).
@@ -46,6 +47,7 @@ Pattern: a non-platform tenant's PLATFORM_ADMIN used as the ordinary admin becom
 
 * Shared support: `test/support/platform_tenant_fixture.ex` (`mint_token!` inserts a raw legacy token when roles contain PLATFORM_ADMIN and the fixture is not the pinned platform tenant at call time), `test/support/tenant_admin_migration_fixture.ex` (`legacy!/2` raw binding).
 * `identity_test.exs` (routers; 58 identities, describe renamed), `identity_test.exs` (top level; 6 token mints, new `:invalid_role_set` test), `webhooks_test`, `dlq_test`, `req212_attachments_routes_test`, `req386_attachment_links_routes_test`, `req317_record_attachments_routes_test`, `req388_attachment_access_denial_audit_test`, `req078_supporting_routes_test`, `req196_audit_route_test`, `identity_login_directory_test`, `solution_packs_update_test`, `solution_packs_module_owned_pack_test`, `role_binding_install_test`, `exam_sessions_test`, `runner_test`, `runner_template_and_outcomes_test`, `tasks_test`, `entities_test`, `entities_aggregate_test`, `entities_export_test`, `tenant_settings_test`, `tenant_settings_scope_test`, `onboarding_scope_extension_test`, `iss0736_oidc_live_revocation_test`, `authz_deny_log_test`, `platform_scope_facts_test`, `me_test`, `modules_test`, `api_pipeline_integration_test` (comment), `admission_pipeline_test`, `req442_tenants_mode_test`, `req442_mode_exposure_test`: role swap, same expected statuses, except:
+  * `entities_test`, `tasks_test` (old-404 expectations fixed): an unmatched path under the mount is now 403 for a tenant admin (was the 404 pass-through for the legacy PLATFORM_ADMIN); the platform operator (pinned tenant) keeps 404 (`tasks_test` router unmatched-path test uses the pinned operator for the 404 catch-all).
   * `admission_pipeline_test`: unmatched path 404 -> 403 (5 assertions; still proves "not 503"); a TENANT_ADMIN gets 403 on an unmatched path.
   * `modules_test`, `me_test`: PLATFORM_ADMIN is out of the minting loops; `me_test` adds PLATFORM_ADMIN 403 on `GET /modules`.
   * `tenant_settings_scope_test`, `tenant_settings_test`: NEW deny: an ordinary tenant's PLATFORM_ADMIN `PATCH /tenant/settings` is 403, row unchanged.
@@ -60,12 +62,39 @@ Pattern: a non-platform tenant's PLATFORM_ADMIN used as the ordinary admin becom
 
 ## Residuals and risks
 
-* R1 `Authorization.evaluate_access/2` itself is not defence in depth for `:TasksList`: a hand-built context `[:TASK_WORKER, :PLATFORM_ADMIN]` with `platform_tenant?: false` yields `Allow` with `task_scope: :all` (PLATFORM_ADMIN is deleted only inside `has_permission_in_scope?`, while `is_task_worker_only?/1` sees the raw roles). Safe today because every caller drops through `effective_roles/2` first; reported, not asserted. LIB defect candidate for ELIXIR-DEV.
+* R1 (RESOLVED by lib 0696b9eb) `evaluate_access/2` now deletes PLATFORM_ADMIN before both the grant and the task scope; covered by the new `authorization_test` test, mutant M9.
 * R2 the router's 422 arm for `:platform_admin_outside_platform_tenant` and the 422 `roles_invalid` for tokens are unreachable over HTTP by design; covered at unit level only.
 * R3 `lib/letflow/api/authorized_router.ex` docstring for `:ordinary` still says "PLATFORM_ADMIN reaches the 404" without the platform-tenant qualifier (stale doc, not edited).
 
-## Planned mutants (NOT yet measured; to be run by TEST-RUNNER, one lib line each, checksum restored)
+## Measured mutants (one lib line each, 5 files: platform_admin_outside_platform, authorization, authorization_tenant_admin, platform_scope_authorization, routers/tasks; 272 tests, baseline 272 passed)
 
-M1 `routers/tasks.ex` inbox uses `roles_from_strings` (kills the inbox test); M2 `routers/entities.ex` drops `platform_tenant?:` from the AccessContext (kills OQ-10 test); M3 `identity.ex` claim strip removed (kills the claim-sync tests); M4 `role_registry.ex` rejection moved after the Repo call or removed (kills the zero-query and rejection tests); M5 `identity.ex` create_token check removed (kills the direct-call tests); M6 `authorization.ex` `:UnmatchedRoute` loses the platform flag (kills the unit test, the HTTP 403 test and `admission_pipeline_test`); M7 `auth_pipeline.ex` drops `effective_role_strings` (kills the raw-token `auth_context.roles == []` test; the `Authorize` drop alone would still deny); M8 `Authorize` uses `roles_from_strings` (kills the hand-assigned-context tests).
+Each mutant was applied, the 5 files run, and the file restored by SHA-256 checksum (verified `True` each time; `git status lib` clean afterwards).
 
-`mix letflow.check.test` (forces the fresh recompile and greps for "default values for the optional arguments") was NOT run. Hand-checked: the new optional arguments added by the sweep (`read_plan!`, `apply_review`) each have call sites that both pass and omit the argument; one dead default (`context_resp/3` in `promotion_context_allowlist_test.exs`) was found and removed.
+| # | Mutant (file) | Result | Killed by |
+|---|---|---|---|
+| M1 | inbox uses `roles_from_strings` instead of `effective_roles` (`routers/tasks.ex`; also the "effective_roles removed in tasks.ex" mutant) | 271/272, KILLED | AC4 hand-assigned PLATFORM_ADMIN + TASK_WORKER inbox test |
+| M2 | `platform_tenant?:` dropped from the AccessContext (`routers/entities.ex`) | 271/272, KILLED | OQ-10 unredacted-export test |
+| M3 | claim-sync strip removed, `if true` (`identity.ex`) | 270/272, KILLED (2) | claim sync: lone claim resolves no group; PLATFORM_ADMIN+TENANT_ADMIN grants only TENANT_ADMIN |
+| M4 | `upsert_role` rejection removed (`role_registry.ex`) | 269/272, KILLED (3) | rejection with exact tag; rejected before any Repo call; fails closed with no pin |
+| M5 | `create_token` rejection removed (`identity.ex`) | 270/272, KILLED (2) | direct-call `:invalid_role_set`; no-pin fail closed |
+| M6 | `:UnmatchedRoute` platform gate removed (`authorization.ex`) | 270/272, KILLED (2) | `platform_scope_authorization_test` UnmatchedRoute test; AC4 `:UnmatchedRoute` needs the flag |
+| M7 | PLATFORM_ADMIN drop removed in `attach_auth_context` only (`plugs/auth_pipeline.ex`) | 270/272, KILLED (2) | raw-token `auth_context.roles == []`; only the PLATFORM_ADMIN entry dropped |
+| M8 | `Authorize` plug uses `roles_from_strings` (`plugs/authorize.ex`) | 272/272, SURVIVED | EQUIVALENT, see below |
+| M9 | 0696b9eb task-scope change reverted: `is_task_worker_only?(ctx.roles)` (`authorization.ex`) | 271/272, KILLED | new `authorization_test` row-filter test |
+| M10 | 0696b9eb grant change reverted: `has_permission_in_scope?(ctx.roles, ...)` (`authorization.ex`) | 272/272, SURVIVED | EQUIVALENT, see below |
+| M11 | `effective_roles/2` never drops (`authorization.ex`) | 270/272, KILLED (2) | `effective_roles/2` truth table; inbox test |
+
+Survivors (both equivalent, not killable through observable behaviour):
+
+* M10: `has_permission_in_scope?/3` itself already deletes PLATFORM_ADMIN for tenant-scope permissions unless the flag is `true`, and requires the flag for platform-scope ones, so passing the raw or the filtered roles yields the same grant for every permission. The 0696b9eb grant-side change is redundant by design (the task-scope side, M9, is the load-bearing half).
+* M8: after `attach_auth_context` (M7) and with `evaluate_access/2` now dropping PLATFORM_ADMIN itself (M9/M10 analysis), the `Authorize` plug's own `effective_roles/2` call is a third, redundant layer: for every policy key the decision is identical, and the deny log does not record roles. It is defence in depth, kept per design 3.5; no test can distinguish it.
+
+## Behaviour changes for the PR body
+
+1. An unmatched path under a mount (`:UnmatchedRoute`) for a legacy tenant PLATFORM_ADMIN: 404 pass-through becomes 403 (the platform operator keeps the 404; `admission_pipeline_test`, `entities_test`, `tasks_test`, `platform_prefix_uniform_403_test`).
+2. A legacy PLATFORM_ADMIN token, OIDC claim or stored binding/membership in an ordinary tenant confers nothing (dropped at `attach_auth_context`, again at `Authorize` and `evaluate_access/2`; claim sync strips the claim; stored rows are untouched).
+3. `POST /tokens/roles` PLATFORM_ADMIN in an ordinary tenant is 403 (router check first; the 422 arms are unreachable over HTTP).
+4. `Identity.create_token/3` called directly with PLATFORM_ADMIN and a non-platform prefix (or no pin) returns `{:error, :invalid_role_set}`.
+5. `RoleRegistry.upsert_role/4` of PLATFORM_ADMIN outside the platform tenant returns `{:error, :platform_admin_outside_platform_tenant}`, before any Repo call.
+6. `evaluate_access/2` row-filters a hand-built `[:TASK_WORKER, :PLATFORM_ADMIN]` context outside the platform tenant exactly like TASK_WORKER alone (no `task_scope: :all`).
+7. The C6 own-tenant switch is deleted; ordinary-tenant admins are TENANT_ADMIN; `PATCH /tenant/settings`, `POST /roles`, promotions etc. now 403 for a non-platform PLATFORM_ADMIN (full list in the audit sweep above).

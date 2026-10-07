@@ -2736,3 +2736,5 @@
 2026-10-06T07:05:00Z | RUN_DONE | WF-03 | WF03-Q976-20261006 | ORCH | gates green (design after 1 rework, security PASS, idiom PASS, test-design PASS w/ 8 independently applied mutants, release); scoped runs only (653 passed); local commit, NOT pushed (CI-slot rule); queue lock 976 and GH#2257 left to parent.
 2026-10-07T12:04:25Z | RUN_START | WF-02 | WF02-REQ462-20261007 | ORCH | REQ-462 / Q-1025 / GH#2340 on feat/REQ-462-adopt-required-outputs-Q-1025 (local branch from origin/main 508163d0, not pushed); design = req459 (no new design: data-only change)
 2026-10-07T12:04:25Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → ELIXIR-DEV | Step 02a
+2026-10-07T12:13:11Z | PASS | WF-02 | WF02-REQ462-20261007 | ELIXIR-DEV → ORCH | Step 02a PASS, committed 77793100
+2026-10-07T12:13:11Z | DISPATCH | WF-02 | WF02-REQ462-20261007 | ORCH → SECURITY-REVIEWER | Step 02c

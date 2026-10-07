@@ -448,6 +448,42 @@ defmodule Letflow.Api.IdentityIdHardeningTest do
 
       assert constraint == "tenant_role_group_id_fkey"
     end
+
+    test "T-12b a foreign key violation from ANOTHER table is re-raised, not mapped to :bound_to_role",
+         ctx do
+      # a second table referencing groups, created inside the sandbox transaction (DDL rolls back)
+      schema = ctx.p.schema_name
+
+      Repo.query!(
+        ~s|CREATE TABLE "#{schema}".zz_probe (group_id uuid REFERENCES "#{schema}".groups(id))|
+      )
+
+      group = insert_group!(ctx.p)
+      {:ok, raw} = Ecto.UUID.dump(group.id)
+      Repo.query!(~s|INSERT INTO "#{schema}".zz_probe VALUES ($1)|, [raw])
+
+      error =
+        try do
+          Identity.delete_group(group.id, opts(ctx.p))
+          nil
+        rescue
+          e in Postgrex.Error -> e
+        end
+
+      assert %Postgrex.Error{postgres: %{code: :foreign_key_violation, constraint: constraint}} =
+               error
+
+      assert constraint == "zz_probe_group_id_fkey"
+    end
+
+    test "T-12c the probe table of T-12b never leaks out of the sandbox transaction" do
+      %{rows: rows} =
+        Repo.query!(
+          "SELECT table_schema FROM information_schema.tables WHERE table_name = 'zz_probe'"
+        )
+
+      assert rows == []
+    end
   end
 
   # --- ISS-1033: helper ----------------------------------------------------------------------------------
@@ -989,6 +1025,58 @@ defmodule Letflow.Api.IdentityIdHardeningTest do
       conn = ordinary.(group.id)
       assert conn.status == 200, conn.resp_body
       assert {"ROUTE_ORDINARY", :process_routing_role, group.id} in role_rows(ctx.p)
+    end
+  end
+
+  # --- ISS-1033: authorise BEFORE cast ----------------------------------------------------------------------
+
+  describe "ISS-1033: the permission gate runs before the id cast" do
+    test "T-35 an unauthorised caller sending a malformed id gets the gate's 403 on every id route, never the 404; an authorised caller gets the 404 (control)",
+         ctx do
+      %{operator: operator} = world!(ctx)
+      group = insert_group!(ctx.p)
+
+      routes = fn bad ->
+        [
+          {"GET /users/:id", :get, "/users/#{bad}", nil},
+          {"PATCH /users/:id", :patch, "/users/#{bad}", %{"display_name" => "x"}},
+          {"POST /users/:id/status", :post, "/users/#{bad}/status", %{"status" => "inactive"}},
+          {"DELETE /groups/:id", :delete, "/groups/#{bad}", nil},
+          {"GET /groups/:id/members", :get, "/groups/#{bad}/members", nil},
+          {"POST /groups/:id/members", :post, "/groups/#{bad}/members",
+           %{"user_id" => operator.id}},
+          {"DELETE member, group id", :delete, "/groups/#{bad}/members/#{operator.id}", nil},
+          {"DELETE member, user id", :delete, "/groups/#{group.id}/members/#{bad}", nil},
+          {"DELETE /tokens/:id", :delete, "/tokens/#{bad}", nil}
+        ]
+      end
+
+      # a TASK_WORKER holds none of :UsersManage, :GroupsManage, :TokensManage
+      for {_label, bad} <- malformed(@unknown), {name, method, path, body} <- routes.(bad) do
+        denied = call(method, path, ctx.p, ["TASK_WORKER"], body)
+        assert denied.status == 403, "#{name} #{bad}: #{denied.status} #{denied.resp_body}"
+
+        well_formed =
+          call(method, String.replace(path, bad, @unknown), ctx.p, ["TASK_WORKER"], body)
+
+        assert denied.resp_body == well_formed.resp_body, "#{name} #{bad}: gate body differs"
+
+        # control: the authorised caller gets the plain 404 for the same malformed id
+        allowed = call(method, path, ctx.p, @admin, body)
+
+        assert allowed.status == 404,
+               "control #{name} #{bad}: #{allowed.status} #{allowed.resp_body}"
+      end
+
+      # POST /tokens with a malformed body user_id
+      for {label, bad} <- malformed(@unknown) do
+        body = %{"user_id" => body_value(bad), "roles" => ["TASK_WORKER"]}
+        denied = call(:post, "/tokens", ctx.p, ["TASK_WORKER"], body)
+        assert denied.status == 403, "POST /tokens #{label}: #{denied.status} #{denied.resp_body}"
+
+        allowed = call(:post, "/tokens", ctx.p, @admin, body)
+        assert allowed.status == 404, "control POST /tokens #{label}: #{allowed.status}"
+      end
     end
   end
 end

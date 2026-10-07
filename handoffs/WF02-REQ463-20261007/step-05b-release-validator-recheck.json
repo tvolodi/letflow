@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ463-20261007/step-05b-release-validator-recheck.json",
   "created_at": "2026-10-07T14:22:49Z",
   "started_at": "2026-10-07T14:22:49Z",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -52,5 +52,21 @@
     "description": "STEP 05b RELEASE RE-CHECK (RELEASE-VALIDATOR), narrow. Your step-05 verdict FAIL had ONE blocker: step-04-test-runner.json carried a UTF-8 BOM (mix letflow.lint_handoffs PARSE failure). ORCH removed it mechanically (commit after 772344e7, message starting 'fix(REQ-463/Q-1026): strip UTF-8 BOM'; ORCH re-serialised the JSON, content unchanged). Re-verify: (1) git show --stat and a JSON-level comparison (python json.loads of the file at 772344e7 minus BOM vs HEAD) proves content is identical; (2) env -u MIX_TEST_PARTITION mix letflow.lint_handoffs ends with 'OK -- 0 new violations' (quote it); (3) git status --short lib/ test/ clean and git diff 772344e7 HEAD --stat touches only handoffs/WF02-REQ463-20261007/*; (4) check no handoff file in this run dir starts with a BOM (python). All other step-05 findings (16 AC PASS, tests green, mutants killed) stand and need not be re-run. Verdict PASS -> next_action 'Route to DOC-UPDATER (6)'. No mix test runs needed.\nRUN CONSTRAINTS (every agent in this run):\n- Branch feat/REQ-463-distinct-from-Q-1026 (from origin/main 508163d0). Verify with `git branch --show-current` first; STOP and report if different. Do NOT push, open a PR, merge, touch the letflow-queue (lock 1026 is held by tvolodi-orch), touch branches feat/REQ-462-adopt-required-outputs-Q-1025 or test/authz-deny-log-deterministic-capture, or the untracked letflow-3.code-workspace. Stage files by explicit path only; never git add -A / git add . .\n- Design: lib/letflow/design/req459-required-outputs-and-distinct-person.md governs rule A (distinct_from): sections 1.1, 2 (step 4b before 4c in the :completion_guards step), 4, 5, 6, 7, 8, 9, 10, 12.2 rule A plan, traceability A1-A11, 'Adjustments for REQ-460..466' for REQ-463. Where the requirement text and the design differ on a detail the DESIGN WINS; list every difference in result.design_vs_requirement_differences. REQ-464 (validator for distinct_from) is NOT this entry.\n- RAM is VERY tight (0.4-2 GB free; the harness KILLS runs at critical memory). mix commands strictly sequential, ONE BEAM at a time; before each mix test check free RAM: powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\". Scoped single test FILES only (never a directory or the full suite). `export MIX_TEST_PARTITION=3` ONLY for tests (unset for tooling tasks like compile/format/check_*); use a unique number (e.g. 15) for files that mutate shared state or run concurrency tests. If a run is killed, report it and do NOT loop.\n- Real Postgres only. Never report 'should pass'; quote real Result: lines.\n- docs/anti-patterns.md newest entry: a validator refusing at activate must be checked against EVERY test that activates hand-built definitions; grep the WHOLE test/ tree for the attribute, not only the changed area. REQ-461 check 2 applies: any test definition declaring required_outputs must declare a variable_schema for each key (register schema rows BEFORE activation); distinct_from needs no schema.\n- Commit titles: feat|fix|test|docs|chore(REQ-463/Q-1026): ... [Q-1026 / GH #2341], ending with the trailer line: Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>. Do not commit your own handoff-file edits unless this handoff says so: ORCH commits after you return.\n- Claim the handoff by setting top-level status to IN_PROGRESS only; at the end set status COMPLETED (or FAILED) and fill result (summary, verdict PASS/FAIL, issues, artifacts_out, evidence with quoted real output, next_action). Do not touch started_at/created_at. Do not edit handoffs/registry.json or handoffs/orchestrator.log.\n- Scratch files go in the scratchpad dir C:\\Users\\tvolo\\AppData\\Local\\Temp\\claude\\C--Users-tvolo-dev-ai-dala-letflow-3\\def1f47a-501c-4830-b7ce-a68038cf3791\\scratchpad\\r463\\ (never in the repo, never /tmp). That dir also holds files of earlier runs: use only r463/.\n",
     "extra": ""
   },
-  "result": null
+  "result": {
+    "summary": "BOM blocker resolved. step-04-test-runner.json at HEAD is JSON-identical to 772344e7 minus BOM; lint_handoffs OK; lib/ and test/ clean and untouched; no BOM in any run handoff file. All other step-05 findings stand.",
+    "verdict": "PASS",
+    "issues": [],
+    "artifacts_out": [
+      "handoffs/WF02-REQ463-20261007/step-05b-release-validator-recheck.json"
+    ],
+    "evidence": {
+      "branch": "feat/REQ-463-distinct-from-Q-1026",
+      "json_compare": "old (772344e7) had BOM: True; json.loads(old utf-8-sig) == json.loads(HEAD utf-8) -> IDENTICAL",
+      "diff_stat_772344e7_HEAD": "only step-04-test-runner.json, step-05-release-validator.json, step-05b-release-validator-recheck.json (all under handoffs/WF02-REQ463-20261007/)",
+      "lib_test_status": "git status --short lib/ test/ -> empty",
+      "lint_handoffs": "letflow.lint_handoffs: OK -- 0 new violations across 3435 handoff files under \"handoffs\" (25 pre-existing grandfathered, traced to ISS-0190).",
+      "bom_scan": "11 handoff files in run dir, all nobom"
+    },
+    "next_action": "Route to DOC-UPDATER (6)"
+  }
 }

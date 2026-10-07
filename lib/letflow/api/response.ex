@@ -179,6 +179,13 @@ defmodule Letflow.Api.Response do
   def unprocessable(conn, detail), do: send_problem(conn, Error.unprocessable(detail))
 
   @doc """
+  HTTP 422 — Output Refused (REQ-460). Key names only; see `Error.output_refused/2`.
+  """
+  @spec output_refused(Plug.Conn.t(), [String.t()], [String.t()]) :: Plug.Conn.t()
+  def output_refused(conn, missing_keys, rejected_keys),
+    do: send_problem(conn, Error.output_refused(missing_keys, rejected_keys))
+
+  @doc """
   HTTP 429 — Too Many Requests. Set `Retry-After` on the conn yourself before
   calling.
   """

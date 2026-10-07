@@ -197,7 +197,12 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
   # ---------------------------------------------------------------------------------
 
   describe "AC3 -- a violating overwrite through complete_task/3" do
-    test "instance lands in ERROR with one EXECUTION_ERROR naming the key, value unmerged" do
+    # REQ-459/REQ-460 amendment: this test used to assert instance ERROR plus one
+    # EXECUTION_ERROR event. A HUMAN_TASK completion whose output a variable_schema
+    # rejects is now REFUSED (retryable 422 at the router) before any state change:
+    # no ERROR, no EXECUTION_ERROR, nothing merged. "amount" is not in this task's
+    # form (it has none) nor in required_outputs, so the refusal names no key.
+    test "completion is refused (REQ-460), instance stays active, value unmerged" do
       %{schema_name: schema_name} = provisioned_tenant()
       definition = active_definition!(schema_name, graph_human_task_end())
 
@@ -209,7 +214,7 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
       instance_id = start_instance!(schema_name, definition, %{"amount" => 100})
       task = find_task(schema_name, instance_id, "task")
 
-      assert {:error, {:instance_execution_error, :variable_schema_rejected, {:field, "amount"}}} =
+      assert {:error, {:output_refused, %{missing_keys: [], rejected_keys: []}}} =
                Engine.complete_task(
                  task.id,
                  complete_attrs(%{"amount" => "not-a-number"}),
@@ -218,18 +223,12 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
 
       projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
 
-      # The rejected value is NOT in the variable map -- merge/3's validate-all-then-
-      # apply two-phase semantic (R-Co ISS-202), observable in production for the
-      # first time.
+      # The rejected value is NOT in the variable map and the instance is NOT in ERROR.
       assert projection.variables == %{"amount" => 100}
-      assert projection.status == :error
+      assert projection.status == :active
 
-      # EXACTLY one EXECUTION_ERROR, and its payload names the offending variable_key.
-      assert [event] = events_of_type(schema_name, instance_id, "EXECUTION_ERROR")
-      assert event.payload["error_type"] == "variable_schema_rejected"
-      assert event.payload["affected"] == %{"kind" => "field", "key" => "amount"}
-      assert event.payload["reason"] =~ "amount"
-      assert event.payload["variables"] == %{"amount" => 100}
+      # REQ-460: no EXECUTION_ERROR event at all on the HUMAN_TASK path.
+      assert events_of_type(schema_name, instance_id, "EXECUTION_ERROR") == []
 
       # The completion never happened: no TASK_COMPLETED, task still pending.
       assert events_of_type(schema_name, instance_id, "TASK_COMPLETED") == []
@@ -334,7 +333,12 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
       instance_id = start_instance!(schema_name, definition, %{"seed" => 1})
       task_a = find_task(schema_name, instance_id, "task_a")
 
-      assert {:error, {:instance_execution_error, :variable_schema_rejected, {:field, "amount"}}} =
+      # REQ-459/REQ-460 amendment: a HUMAN_TASK completion with a schema-rejected value
+      # is now REFUSED before any state change (no instance ERROR, no EXECUTION_ERROR
+      # event) instead of parking the instance in ERROR. The key is still validated
+      # even though it is brand-new (decision 0007's validate-every-key stands);
+      # "amount" is outside this task's form and required_outputs, so no key is named.
+      assert {:error, {:output_refused, %{missing_keys: [], rejected_keys: []}}} =
                Engine.complete_task(
                  task_a.id,
                  complete_attrs(%{"amount" => "not-a-number"}),
@@ -352,13 +356,8 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
       # above, the only difference being the key was brand-new, not an overwrite.
       projection = Repo.get!(InstanceProjection, instance_id, prefix: schema_name)
       assert projection.variables == %{"seed" => 1}
-      assert projection.status == :error
-
-      assert [event] = events_of_type(schema_name, instance_id, "EXECUTION_ERROR")
-      assert event.payload["error_type"] == "variable_schema_rejected"
-      assert event.payload["affected"] == %{"kind" => "field", "key" => "amount"}
-      assert event.payload["reason"] =~ "amount"
-      assert event.payload["variables"] == %{"seed" => 1}
+      assert projection.status == :active
+      assert events_of_type(schema_name, instance_id, "EXECUTION_ERROR") == []
 
       assert events_of_type(schema_name, instance_id, "TASK_COMPLETED") == []
       assert Repo.get!(EngineTask, task_a.id, prefix: schema_name).status == :pending
@@ -430,8 +429,8 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
       task_a = find_task(schema_a, instance_a, "task_a")
       task_b = find_task(schema_b, instance_b, "task_a")
 
-      # Tenant A: rejected.
-      assert {:error, {:instance_execution_error, :variable_schema_rejected, {:field, "amount"}}} =
+      # Tenant A: rejected. REQ-459/REQ-460 amendment: now a refusal (no ERROR).
+      assert {:error, {:output_refused, %{missing_keys: [], rejected_keys: []}}} =
                Engine.complete_task(
                  task_a.id,
                  complete_attrs(%{"amount" => "not-a-number"}),
@@ -447,9 +446,9 @@ defmodule Letflow.EngineVariableSchemaMergeTest do
                )
 
       projection_a = Repo.get!(InstanceProjection, instance_a, prefix: schema_a)
-      assert projection_a.status == :error
+      assert projection_a.status == :active
       assert projection_a.variables == %{"amount" => 100}
-      assert [_one] = events_of_type(schema_a, instance_a, "EXECUTION_ERROR")
+      assert events_of_type(schema_a, instance_a, "EXECUTION_ERROR") == []
 
       projection_b = Repo.get!(InstanceProjection, instance_b, prefix: schema_b)
       assert projection_b.status == :active

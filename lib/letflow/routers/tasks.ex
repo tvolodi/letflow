@@ -377,6 +377,17 @@ defmodule Letflow.Routers.Tasks do
     Response.unprocessable(conn, "validation failed")
   end
 
+  # REQ-460 (design req459 §3): the completion was refused before any state change
+  # (required_outputs key missing, or a variable_schema rejected a value). 422, not
+  # 409: the same caller can fix it by resending the whole corrected body. Names
+  # only; the body never carries a value.
+  defp handle_complete_result(
+         {:error, {:output_refused, %{missing_keys: missing, rejected_keys: rejected}}},
+         conn
+       ) do
+    Response.output_refused(conn, missing, rejected)
+  end
+
   # ISS-0942: Tasks.authorize_completion/3's three assignee-mismatch atoms.
   # Deliberately 403 (Response.forbidden/2), NOT 409 -- a divergence from
   # handle_claim_result/3's own mapping of these exact same atoms to 409

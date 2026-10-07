@@ -62,9 +62,15 @@ defmodule Letflow.Engine.VariableMerge do
   implemented,** REQ-061 (EE-10, execution error handling) was `status:
   pending` and unimplemented — this module's own `depends_on` is
   [REQ-044, REQ-024], not REQ-061. REQ-061 has since shipped (`done`), and
-  REQ-109 wired the caller so that its ERROR path is reachable through
-  `Letflow.Engine.complete_task/3`; **none of that changes this module, and
-  the reasoning below is exactly why** (ISS-0075 / GH#296 claim 1).
+  REQ-109 wired the caller so that its ERROR path was reachable through
+  `Letflow.Engine.complete_task/3`. **Amended by REQ-459 / REQ-460 (2026-10):**
+  on a HUMAN_TASK completion the engine now checks the same validations itself
+  and refuses a rejected output with a retryable 422 before anything is written,
+  so that ERROR path is no longer taken from `complete_task/3`; it remains for the
+  SUB_PROCESS completion merge (REQ-062) and other engine-internal callers.
+  `merge/3` and its whole-batch semantics are unchanged. **None of that changes
+  this module, and the reasoning below is exactly why** (ISS-0075 / GH#296
+  claim 1).
   `merge/3` is pure (see the purity section below): it never calls,
   aliases, or references any REQ-061 module. A rejected batch is signalled
   purely through `merge/3`'s own return value -- the `{:rejected,

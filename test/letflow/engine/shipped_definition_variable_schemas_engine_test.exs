@@ -7,9 +7,9 @@ defmodule Letflow.Engine.ShippedDefinitionVariableSchemasEngineTest do
   a definition declares schemas, also runs REQ-372's field-existence/type check against every
   gateway condition) and the real `Engine.complete_task/3`.
 
-  A completion with an out-of-enum value is REJECTED: `{:error, {:instance_execution_error,
-  :variable_schema_rejected, {:field, key}}}`, the instance flips to `:error` (REQ-061's behaviour --
-  the rejection is not a retryable 4xx on the task), the value is NOT merged, the task stays pending
+  A completion with an out-of-enum value is REFUSED (REQ-459/REQ-460 amended the original REQ-061 behaviour):
+  `{:error, {:output_refused, %{missing_keys: [], rejected_keys: [key]}}}`, a retryable 422 at the router. The
+  instance stays `:active` (no ERROR, no EXECUTION_ERROR event), the value is NOT merged, the task stays pending
   and no TASK_COMPLETED is written -- instead of the process silently taking a default edge. A valid
   value is merged and routes to the intended node.
 
@@ -129,14 +129,21 @@ defmodule Letflow.Engine.ShippedDefinitionVariableSchemasEngineTest do
     before_vars = projection(schema, instance_id).variables
     completed_before = event_count(schema, instance_id, "TASK_COMPLETED")
 
-    assert {:error, {:instance_execution_error, :variable_schema_rejected, {:field, ^key}}} =
+    # REQ-459/REQ-460 amendment: a HUMAN_TASK completion with a schema-rejected value is now
+    # REFUSED (retryable 422 at the router) before any state change; the instance is NOT put into
+    # ERROR and no EXECUTION_ERROR event is written. The rejected key is named only when it is in
+    # the task's own form (or required_outputs): a fixture task WITHOUT a form_schema (e.g. Vortex
+    # capacity-review) is refused with both lists empty (design req459 section 3.2, INV-2).
+    assert {:error, {:output_refused, %{missing_keys: [], rejected_keys: rejected}}} =
              complete(schema, task, output)
 
+    assert rejected in [[key], []]
+
     proj = projection(schema, instance_id)
-    assert proj.status == :error
+    assert proj.status == :active
     assert proj.variables == before_vars, "rejected value must not be merged"
     assert Repo.get!(EngineTask, task.id, prefix: schema).status == :pending
-    assert event_count(schema, instance_id, "EXECUTION_ERROR") == 1
+    assert event_count(schema, instance_id, "EXECUTION_ERROR") == 0
     assert event_count(schema, instance_id, "TASK_COMPLETED") == completed_before
   end
 

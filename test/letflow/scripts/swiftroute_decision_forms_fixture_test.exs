@@ -11,7 +11,7 @@ defmodule Letflow.Scripts.SwiftrouteDecisionFormsFixtureTest do
     * (b) engine level, through the real registration path (`create_with_variable_schemas/3`),
       `activate/2`, `Engine.create/2` and `Engine.complete_task/3`:
         - an out-of-enum value or an explicit null decision is REJECTED server-side by
-          `variable_schemas` (`:variable_schema_rejected`), instance flips to `:error`;
+          `variable_schemas`; REQ-459/REQ-460: the completion is REFUSED (retryable 422, no state change, instance stays `:active`, no EXECUTION_ERROR) instead of flipping the instance to `:error`;
         - approve / reject route as before;
         - KNOWN LIMITATION (ISS-1008 AC3 is NOT met): a completion that OMITS the decision key is
           NOT rejected. `VariableSchema.variable_validations/5` validates only submitted keys and
@@ -289,11 +289,14 @@ defmodule Letflow.Scripts.SwiftrouteDecisionFormsFixtureTest do
   defp assert_rejected!(schema, instance_id, task, output, key) do
     before_vars = projection(schema, instance_id).variables
 
-    assert {:error, {:instance_execution_error, :variable_schema_rejected, {:field, ^key}}} =
+    # REQ-459/REQ-460 amendment: a HUMAN_TASK completion with a schema-rejected value is now
+    # REFUSED (retryable 422 at the router) before any state change; the instance is NOT put into
+    # ERROR and no EXECUTION_ERROR event is written. The rejected key is named (in-form key).
+    assert {:error, {:output_refused, %{missing_keys: [], rejected_keys: [^key]}}} =
              complete(schema, task, output)
 
     proj = projection(schema, instance_id)
-    assert proj.status == :error
+    assert proj.status == :active
     assert proj.variables == before_vars, "rejected value must not be merged"
     assert Repo.get!(EngineTask, task.id, prefix: schema).status == :pending
   end

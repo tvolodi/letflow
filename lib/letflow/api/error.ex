@@ -300,6 +300,33 @@ defmodule Letflow.Api.Error do
   end
 
   @doc """
+  HTTP 422 — Output Refused (REQ-460, design req459 §3.2). A HUMAN_TASK
+  completion was refused before any state change because its submitted output
+  lacks a `required_outputs` key or carries a value a `variable_schema` rejects;
+  the same request, corrected, can be resent.
+
+  The body carries the constant `code` `"output_refused"` and two sorted,
+  deduplicated lists of key NAMES (RFC 9457 §3.2 extension members). The
+  constructor takes lists of names and nothing else, so no value, enum, schema
+  text, id, stack, module or SQL text can reach the body (INV-2, INV-4).
+  """
+  @spec output_refused(missing_keys :: [String.t()], rejected_keys :: [String.t()]) :: t()
+  def output_refused(missing_keys, rejected_keys)
+      when is_list(missing_keys) and is_list(rejected_keys) do
+    %__MODULE__{
+      type: @problems_base <> "output-refused",
+      title: "Output Refused",
+      status: 422,
+      detail: "the submitted output was refused; resend the complete output",
+      extensions: %{
+        "code" => "output_refused",
+        "missing_keys" => missing_keys |> Enum.uniq() |> Enum.sort(),
+        "rejected_keys" => rejected_keys |> Enum.uniq() |> Enum.sort()
+      }
+    }
+  end
+
+  @doc """
   HTTP 429 — Too Many Requests.
 
   The caller MUST set the `Retry-After` header separately; this constructor

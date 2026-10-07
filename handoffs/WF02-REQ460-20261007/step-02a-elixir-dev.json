@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ460-20261007/step-02a-elixir-dev.json",
   "created_at": "2026-10-07T08:16:17Z",
   "started_at": "2026-10-07T08:16:17Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-07T08:24:30Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -52,6 +52,40 @@
       "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the changed and new test files named above (plus test/letflow/routers/tasks_test.exs), and mix letflow.check_boundaries pass, real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS_PENDING_GATES",
+    "summary": "REQ-460 rule C implemented per the REQ-459 design. New Letflow.Engine.RequiredOutputs (pure/total: required_outputs/1, missing_keys/2, rejected_keys/3, any_rejected?/1, allowed_keys/2). engine.ex: new :completion_guards Multi step (4a/4c: submitted-map required check, no query) between :snapshot_and_state and :form_expression_reevaluation; merge_output_variables/7 -> /8 with 6b-ii..iv (corrected-map required check, schema rejection check reusing the single variable_schemas read, refusal before any write); record_completion_refusal_audit/6 (own transaction, direct Audit.insert_entry/3, function-level rescue, log-and-swallow) called from a new leading interpret_complete_result/3 clause; public {:error, {:output_refused, %{missing_keys, rejected_keys}}} added to complete_error. Api.Error.output_refused/2, Api.Response.output_refused/3, router clause -> 422 application/problem+json code output_refused. Comments amended: engine.ex moduledoc REQ-109 section, comment above merge_output_variables, variable_merge.ex Dependency ordering paragraph. Five existing-test ERROR assertions amended (engine_variable_schema_merge_test x3, shipped_definition_variable_schemas_engine_test x1 helper, swiftroute_decision_forms_fixture_test x1 helper) each citing REQ-459/REQ-460. Rule A (4b), SeparationOfDuties, validator, fixtures and docs/requirements.yaml, decision 0007 untouched.",
+    "artifacts_out": [
+      "lib/letflow/engine/required_outputs.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/variable_merge.ex",
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/routers/tasks.ex",
+      "test/letflow/engine_variable_schema_merge_test.exs",
+      "test/letflow/engine/shipped_definition_variable_schemas_engine_test.exs",
+      "test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs"
+    ],
+    "verification": {
+      "mix compile --warnings-as-errors": "Generated letflow app (0 warnings)",
+      "mix format --check-formatted": "rc=0",
+      "mix letflow.check_boundaries": "OK -- 960 edges checked, 0 violations",
+      "scoped test run 1 (engine_variable_schema_merge, shipped_definition_variable_schemas_engine, swiftroute_decision_forms_fixture)": "Result: 27 passed",
+      "scoped test run 2 (engine_complete_task, engine_sub_process, routers/tasks)": "Result: 104 passed",
+      "scoped test run 3 (engine_form_expression_reevaluation, meridian/swiftroute/vortex escalation timer, variable_merge, engine_execution_error)": "Result: 64 passed",
+      "throwaway smoke test (deleted, not committed)": "Result: 1 passed -- absent/null/enum-rejected each refused, 3 task.completion_refused audit rows, projection row byte-equal before/after, task still pending, retry with valid value completed"
+    },
+    "issues": [
+      "DESIGN vs REQUIREMENT TEXT: requirement item 3 / AC3 say rejected_keys name the rejected key; the design (Adjustments REQ-460 item 0, section 3.2, test C-4a) names it only when it is in the task's own form_schema.properties or required_outputs, otherwise both lists are empty. Built per the design. Visible effect on existing tests: a fixture task without a form_schema (Vortex capacity-review) is refused with rejected_keys [], so the shipped_definition_variable_schemas_engine_test helper asserts rejected in [[key], []]; engine_variable_schema_merge_test tasks have no form, so they assert both lists empty.",
+      "DESIGN vs REQUIREMENT TEXT: requirement item 4 / AC6 service-task regression line is unreproducible (service-task merge passes nil validations, engine.ex ~L3394); sub_process path (engine_sub_process_test ~777) stays green, as the design states. No test added for it (TEST-DESIGNER C-12).",
+      "Signature change: merge_output_variables/7 is now /8 (extra refusal_context map %{required, allowed}); private function, single caller.",
+      "required_outputs/1 is evaluated twice per completion (guard step and refusal_context) so a malformed attribute logs two warnings; harmless, unreachable for validated definitions.",
+      "completion_refusal() is a @typep with only the {:output_refused, ...} member (REQ-463 adds separation_of_duties). The public {:output_refused, ...} member was added to complete_error before the trailing {:error, term()}.",
+      "Router moduledoc has no status table to extend; the new clause carries an explanatory comment instead. README state diagram unchanged (no transition shape change).",
+      "check 'new tests C-1..C-15' not written (TEST-DESIGNER Step 3). No new test covers DROP-TABLE audit robustness, API-token or TENANT_ADMIN router cases yet.",
+      "For REVIEWER: decision record 0007 passages (line 79, line 108) are now stale for the HUMAN_TASK path; NOT edited per instruction. SECURITY-REVIEWER gate required (tenant-data path; INV-2 key-name restriction, INV-4 audit/body contents).",
+      "Environment: git add not used on letflow-3.code-workspace; MIX_TEST_PARTITION=3 exported for tests only (mix format with it set errors in dev env by design)."
+    ]
+  },
   "rework_count": 0
 }

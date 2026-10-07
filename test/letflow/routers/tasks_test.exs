@@ -1056,13 +1056,25 @@ defmodule Letflow.Routers.TasksTest do
 
   describe "unmatched route returns the RFC 9457 404 problem document" do
     test "an unknown sub-path 404s" do
+      # REQ-447 PR 2: only the platform operator reaches the router's own 404 catch-all
+      # (an ordinary tenant's admin gets the uniform 403 from the :UnmatchedRoute marker).
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req083-unmatched")
+      Letflow.Support.PlatformTenantFixture.pin!(tenant.tenant_id)
 
       conn =
-        build_conn(:get, "/bogus/nested/path", tenant, roles: ["TENANT_ADMIN"])
+        build_conn(:get, "/bogus/nested/path", tenant, roles: ["PLATFORM_ADMIN"])
         |> dispatch()
 
       assert conn.status == 404
+
+      # a tenant admin of the same tenant, with the pin cleared, is refused (403)
+      Letflow.Support.PlatformTenantFixture.unpin!()
+
+      denied =
+        build_conn(:get, "/bogus/nested/path", tenant, roles: ["TENANT_ADMIN"])
+        |> dispatch()
+
+      assert denied.status == 403
     end
   end
 

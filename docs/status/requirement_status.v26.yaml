@@ -934,3 +934,23 @@ history:
       green; one environmental grep :enoent failure under PowerShell, passes
       under Git Bash), RELEASE-VALIDATOR (step 05); SECURITY-REVIEWER not
       required (validator over definition data). Full suite left to CI.
+
+  - req: REQ-462
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-10-07T12:51:46Z"
+    note: >
+      Adoption of required_outputs (queue task 1025, GH#2340, run
+      WF02-REQ462-20261007, branch feat/REQ-462-adopt-required-outputs-Q-1025,
+      local, not pushed or merged): 12 HUMAN_TASK nodes across swiftroute,
+      meridian loan origination and the two vortex definitions now declare
+      required_outputs, with matching variable_schema. Versions: swiftroute 1.6,
+      meridian loan 1.13, vortex production order release 1.6, vortex supplier
+      quality deviation 1.7. The two KNOWN LIMITATION tests were replaced by
+      422 output_refused assertions; 12 node-named tests plus an adoption
+      validator test added. 12 decision_key_not_required warnings remain on
+      meridian for deliberately unadopted keys (credit_decision, risk_rating,
+      committee votes). Behaviour change: the vortex false-positive
+      classification now must also supply severity. Gates:
+      SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGN-VALIDATOR PASS (all
+      mutants killed), RELEASE-VALIDATOR PASS. Full suite not run (left to CI).

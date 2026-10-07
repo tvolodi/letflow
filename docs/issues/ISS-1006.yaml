@@ -30,13 +30,13 @@ affected_files:
   - scripts/seed_vortex_persona_actors.sh
   - test/fixtures/qa/vortex_production_order_release_process_definition.json
 # Ref clash: the queue's issue_ref for Q-988 came back ISS-0988, which is not the local number
-# (docs/issues/ISS-0988.yaml is a different issue); ISS-1006 was the next free local number
+# (no docs/issues/ISS-0988.yaml exists on main; the number is not this issue's); ISS-1006 was the next free local number
 # (origin/main, every open PR and remote branch checked).
 queue_ref: Q-988
 github_ref: GH-2275
 status: resolved
 resolved_in_run: WF03-ISS1006-Q988-20261007
-resolved_at: "2026-10-07T00:00:00Z"
+resolved_at: "2026-10-07T02:38:45Z"
 resolution: >
   The roster and seed halves had already landed on main in b65110b5 (Q-988 partial): test/fixtures/uat/actors.yaml
   holds actor-vortex-dirk (TASK_WORKER + role-ceo) and scripts/seed_vortex_persona_actors.sh seeds

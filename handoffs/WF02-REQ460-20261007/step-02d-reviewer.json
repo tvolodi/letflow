@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ460-20261007/step-02d-reviewer.json",
   "created_at": "2026-10-07T08:25:36Z",
   "started_at": "2026-10-07T08:25:36Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-10-07T08:27:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -53,6 +53,49 @@
       "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the changed and new test files named above (plus test/letflow/routers/tasks_test.exs), and mix letflow.check_boundaries pass, real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "status": "PASS",
+    "reviewed": "git diff 553ae161..HEAD over lib/ (error.ex, response.ex, engine.ex, required_outputs.ex, variable_merge.ex, routers/tasks.ex), design req459 sections 2, 3.2, 11, anti-patterns, decision 0007, step-02a and 02c handoffs. Read-only; no mix run (RAM tight; ELIXIR-DEV quoted compile/format/boundaries/scoped tests green).",
+    "idiom": "Idiomatic: pure total RequiredOutputs module with fallback clauses; guard is a Multi.run step returning tagged tuples (no raise); refusal rolls back a lock-only transaction; audit written after Repo.transaction/1 returns in its own transaction, mirroring the decided ISS-0784 pattern (record_task_activation_rejection_audit/5). No GenServer/case-state crutch.",
+    "supervision": "Unchanged and N/A: per CLAUDE.md REQ-045 the engine is a transactional context (Postgres row locks), InstanceSupervisor deliberately empty. No process, spawn, singleton or shared state introduced.",
+    "scope_creep": "None. Grep of the diff: no rule A / SeparationOfDuties code (one comment mention of REQ-463), no validator change, no fixture adoption, no behaviour/macro. completion_refusal @typep has a single member, justified by the design (REQ-463 adds the second).",
+    "design_consistency": "Matches design: :completion_guards between :snapshot_and_state and :form_expression_reevaluation after both locks; 6b checks reuse the single variable_schemas read; rejected_keys restricted to allowed set while any_rejected?/1 still refuses; Error.output_refused/2 takes names only; audit action task.completion_refused with ids and key names only; SUB_PROCESS merge and merge/3 untouched. ELIXIR-DEV reported differences both verified as correct application of design-wins: (1) rejected_keys named only for in-form/required_outputs keys (design 3.2, C-4a) vs requirement AC3 wording; (2) service-task regression unreproducible (nil validations, engine.ex ~L3394), SUB_PROCESS path is the regression case (design 11.1). Both are accepted; the requirement AC wording (AC3 unqualified naming, AC6 service-task) should be read as design-qualified by TEST-DESIGNER.",
+    "type_safety": "No gap that blocks. The public {:output_refused, %{missing_keys, rejected_keys}} is in complete_error/0 and the internal refusal is a @typep. No issue filed.",
+    "findings": [
+      {
+        "id": "R-1",
+        "severity": "LOW",
+        "location": "lib/letflow/engine.ex interpret_complete_result/3",
+        "note": "The new leading clause was inserted between the existing explanatory comment block (the ISS-0784 \"any other reason shape is byte-identical\" paragraph) and the clause it documents, orphaning that comment from its clause. Cosmetic; ELIXIR-DEV may move the new clause above the comment at any later touch. Not blocking."
+      },
+      {
+        "id": "R-2",
+        "severity": "INFO",
+        "location": "lib/letflow/engine.ex",
+        "note": "required_outputs/1 is evaluated twice per completion (guard step and refusal_context), so a malformed attribute logs two warnings; acknowledged by ELIXIR-DEV, harmless, unreachable for validated definitions."
+      },
+      {
+        "id": "R-3",
+        "severity": "INFO",
+        "location": "lib/letflow/engine.ex moduledoc",
+        "note": "Amended moduledoc refers to merge_output_variables/8 (private); acceptable, matches code."
+      }
+    ],
+    "anti_patterns": "Checked docs/anti-patterns.md (4634 lines) against the diff: no repeat found (no catch-all error clause dropping errors, audit failure is logged not swallowed silently, no stale-comment left on amended paths).",
+    "tests_note_for_next_gates": "New tests C-1..C-15, API-token and TENANT_ADMIN router tests, DROP-TABLE audit test (C-15) and C-4a are not yet written; TEST-DESIGNER must add them and TEST-DESIGN-VALIDATOR must confirm.",
+    "decision_0007_signoff": {
+      "git_diff_0007_553ae161_to_HEAD": "empty (verified: git diff 553ae161..HEAD --stat -- docs/migration/decisions/0007-variable-merge-validates-new-keys.md prints nothing; 0007 not edited)",
+      "consistency": "The decision itself STANDS: validate every incoming key. Step 6b-i still validates every key via variable_validations/5; merge/3 whole-batch semantics unchanged. REQ-460 does not contradict or silently re-decide 0007; it changes only what the HUMAN_TASK caller does with a rejection.",
+      "passage_1_line_79": "\"same whole-batch-abort-on-rejection semantics (3.2) apply regardless of which key rejected\": still TRUE of merge/3; stale only as to the caller outcome on the HUMAN_TASK path (now 422 refusal, whole batch still not merged). Signed off: no text change needed beyond the dated note.",
+      "passage_2_line_108": "\"validation errors surface only via EXECUTION_ERROR events today\": now FALSE for HUMAN_TASK completion (surfaces as 422 output_refused). Signed off: needs the dated note. Note this also partly answers that open question (an API-level surface now exists).",
+      "proposed_note_review": "Proposed text (design 11.3) is accurate against the code. APPROVED with one change: end with \"REVIEWER sign-off: 2026-10-07 (REQ-460, WF02-REQ460-20261007 step 02d).\" in place of the requirement variant's \"REVIEWER sign-off: pending\".",
+      "approved_note_text": "2026-10 note (REQ-460): on the HUMAN_TASK completion path a rejected output is now refused with a retryable 422 before any state change and no EXECUTION_ERROR is raised; merge/3 itself and its whole-batch semantics are unchanged; the EXECUTION_ERROR path remains for the SUB_PROCESS completion merge and other engine-internal failures. REVIEWER sign-off: 2026-10-07 (REQ-460, WF02-REQ460-20261007 step 02d).",
+      "append_decision": "YES, the note is to be appended as a dated addendum (append only, do not rewrite lines 79 or 108). WHEN: by DOC-UPDATER in the same doc step that leaves the REQ-061 amendment pointer, after TEST-RUNNER green and RELEASE-VALIDATOR pass, in the REQ-460 PR (not before, so the record never describes behaviour that did not ship). 0007 stays untouched at this gate."
+    },
+    "artifacts_out": [],
+    "route_back": null,
+    "blockers": []
+  },
   "rework_count": 0
 }

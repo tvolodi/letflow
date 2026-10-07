@@ -400,7 +400,6 @@ cleanup_tmp_dir() {
     _pid="${pids[$_idx]}"
     if kill -0 "$_pid" 2>/dev/null; then
       echo "test_parallel: EXIT trap reaping still-alive partition $_idx (pid=$_pid) -- sending TERM to its process group" >&2
-      test_parallel_watchdog_diag "$i" || true
       kill -TERM -- "-$_pid" 2>/dev/null
       _reap_pgid=1
     fi
@@ -674,8 +673,7 @@ test_parallel_watchdog_diag() {
   {
     echo "${pfx}last 40 lines of $log:"
     tail -n 40 "$log" 2>/dev/null | cut -c1-300 | sed "s/^/${pfx}  /"
-    k=$(grep -E '^[.F*]+$' "$log" 2>/dev/null | tr -d '
-' | wc -c | tr -d '[:space:]')
+    k=$(grep -E '^[.F*]+$' "$log" 2>/dev/null | tr -d '\n' | wc -c | tr -d '[:space:]')
     echo "${pfx}approx tests finished: ${k:-0}"
     now=$(date +%s)
     start="${part_start_epoch[$idx]:-$now}"
@@ -739,6 +737,7 @@ while [ "$i" -le "$N" ]; do
     sleep "$partition_timeout_s"
     if kill -0 "$_watchdog_pid" 2>/dev/null; then
       echo "test_parallel: WARNING partition $i exceeded TEST_PARALLEL_PARTITION_TIMEOUT_S=${partition_timeout_s}s -- sending TERM to its process group" >&2
+      test_parallel_watchdog_diag "$i" || true
       kill -TERM -- "-$_watchdog_pid" 2>/dev/null
       sleep "$partition_kill_grace_s"
       if kill -0 "$_watchdog_pid" 2>/dev/null; then

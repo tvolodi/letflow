@@ -38,8 +38,8 @@
     ]
   },
   "result": {
-    "round": 2,
-    "verdict": "PASS",
+    "round": 3,
+    "verdict": "FAIL",
     "summary": "All eight round-1 findings are resolved. The two MAJORs are fixed: every new public function now has a full @spec with argument names, element types and error shape (section 8.2 and the design's spec blocks for RequiredOutputs, SemanticValidation additions, SeparationOfDuties.check/5 and check_for_claim/3, the private blocking_nodes/5, completion_guards_result/0), and step 4b, section 8.2 and the REQ-463 adjustment now all name exactly one engine entry point, SeparationOfDuties.check/5. Section 2 was re-derived again from engine.ex run_complete_task (2263-2365) and still matches step for step, now including the function-level rescue as exit path 8z. No regression: twelve sections present, traceability A1-A11/C1-C7 intact, section 3/4 literal bodies intact (rule A body exactly {\"detail\":\"separation of duties\",\"status\":403}), code fences hold only JSON and @spec/@type, no TBD/deferral language. One cosmetic advisory remains (check_for_claim actor_id type is narrower in section 6 than in 8.2); it does not block.",
     "failed_checks": [],
     "findings": [
@@ -120,7 +120,47 @@
       "Finding 9: align check_for_claim/3 actor_id type between section 6 and 8.2.",
       "ORCH must reword REQ-462 BUILDS item 3 and acceptance line 4 before dispatching REQ-462 (check 3 is a permanent warning).",
       "REVIEWER to confirm D-1..D-6, especially D-3 (best-effort audit) and the computed-field decision in step 4."
-    ]
+    ],
+    "round_2_history": {
+      "round": 2,
+      "verdict": "PASS",
+      "summary": "All eight round-1 findings are resolved. The two MAJORs are fixed: every new public function now has a full @spec with argument names, element types and error shape (section 8.2 and the design's spec blocks for RequiredOutputs, SemanticValidation additions, SeparationOfDuties.check/5 and check_for_claim/3, the private blocking_nodes/5, completion_guards_result/0), and step 4b, section 8.2 and the REQ-463 adjustment now all name exactly one engine entry point, SeparationOfDuties.check/5. Section 2 was re-derived again from engine.ex run_complete_task (2263-2365) and still matches step for step, now including the function-level rescue as exit path 8z. No regression: twelve sections present, traceability A1-A11/C1-C7 intact, section 3/4 literal bodies intact (rule A body exactly {\"detail\":\"separation of duties\",\"status\":403}), code fences hold only JSON and @spec/@type, no TBD/deferral language. One cosmetic advisory remains (check_for_claim actor_id type is narrower in section 6 than in 8.2); it does not block."
+    },
+    "round_3": {
+      "round": 3,
+      "scope": "delta cf4b9bc3 vs a15de238, design file only",
+      "verdict": "FAIL",
+      "failed_checks": [
+        "design internally consistent / adjustments for downstream REQ complete"
+      ],
+      "findings": [
+        {
+          "n": 1,
+          "severity": "MAJOR",
+          "text": "Adjustments for REQ-460 item 1 (design line ~960) still lists `rejected_keys/2` and omits `any_rejected?/1` and `allowed_keys/2`. Section 8.2 and step 6b-iii now specify rejected_keys/3. ELIXIR-DEV reading the Adjustments would build the wrong arity. Fix: item 1 must name rejected_keys/3, any_rejected?/1, allowed_keys/2."
+        },
+        {
+          "n": 2,
+          "severity": "MAJOR",
+          "text": "The relaxed rule (both lists may be empty when every rejected key is outside the allowed set) conflicts with REQ-460 BUILDS item 3 and acceptance criterion 3 ('retryable 422 naming the rejected key') and REQ-459 BUILDS item 3 ('rejected key names'). The design makes the relaxation in section 3.2 and the audit row but Adjustments for REQ-460 do not list it, so REQ-460 wording stays unadjusted. Fix: add a REQ-460 adjustment stating AC3 holds for keys in the task's form_schema.properties or required_outputs, and that an out-of-form rejection returns 422 with both lists empty (test C-4a); REQ-460 must not be implemented to name every rejected key."
+        }
+      ],
+      "advisory_non_blocking": [
+        "Step 6b-iii says 'ALLOWED set' but never names allowed_keys/2 as the function computing it nor says where task.form_schema is read (task.form_schema exists, task.ex:70); name the call.",
+        "'decision F-1' and 'decision F-2' are cited in sections 3.2, 6, 11 but defined nowhere in the design (they are SECURITY-REVIEWER finding labels); cite the verdict file or define them in Decisions.",
+        "No section-12 test for check_for_claim/3 totality (snapshot missing or graph build failure at claim returns :ok, claim succeeds); add one beside A-3.",
+        "Section 3.2 'never both' wording was correctly removed; no other 'never both' text remains."
+      ],
+      "verified": [
+        "rejected_keys/3, any_rejected?/1, allowed_keys/2 have full @spec with arg names and types in 8.2 and are consistent with step 6b-iii/6b-iv, section 3.2 and the audit row table",
+        "6b-iv refuses when any_rejected? even if the reported lists are empty: whole-batch semantics preserved",
+        "test C-4a present in section 12.1 with grep of body and audit row",
+        "docs/migration/decisions/0040-authenticated-route-rate-limiting.md exists and states no per-actor limit at this stage, deferred to S4 (D-6 citation accurate)",
+        "check_for_claim/3 spec identical in section 6 (line 598) and 8.2 (line 675), actor_id type advisory from round 2 resolved; totality paragraph consistent with section 6 claim step order (advisory check, completion re-checks under locks)",
+        "section 2 order unchanged by delta (only 6b-iii/iv content changed); engine.ex run_complete_task Multi order at 2263+ still matches",
+        "no implementation code added; fences hold only @spec/JSON"
+      ]
+    }
   },
-  "rework_count": 1
+  "rework_count": 2
 }

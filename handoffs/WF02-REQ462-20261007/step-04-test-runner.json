@@ -1,14 +1,14 @@
 {
-  "handoff_id": "8303f58a-54cc-4126-b7d1-2a930b0e72a4",
+  "handoff_id": "2b7a3980-fb96-4670-968d-830c476ccc61",
   "run_id": "WF02-REQ462-20261007",
   "workflow_id": "WF-02",
-  "step": "03b",
+  "step": "04",
   "from_agent": "ORCH",
-  "to_agent": "TEST-DESIGN-VALIDATOR",
-  "file": "handoffs/WF02-REQ462-20261007/step-03b-test-design-validator.json",
-  "created_at": "2026-10-07T12:22:30Z",
-  "started_at": "2026-10-07T12:22:30Z",
-  "status": "COMPLETED",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ462-20261007/step-04-test-runner.json",
+  "created_at": "2026-10-07T12:34:59Z",
+  "started_at": "2026-10-07T12:34:59Z",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -42,43 +42,7 @@
     ]
   },
   "task": {
-    "description": "You are TEST-DESIGN-VALIDATOR, step 03b (hard gate). Everything is committed (HEAD 85e7c248); the tree is clean. Read test/specs/REQ-462.md, test/support/req462_adoption.ex, test/letflow/engine/req462_*_required_outputs_test.exs, test/letflow/definitions/req462_shipped_required_outputs_adoption_test.exs, test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs independently. Check each acceptance criterion (context) has a runnable test; fixtures use per-test unique data; no skips; self-sufficient; no hardcoded secrets.\nMUTANT TESTING (mandatory): apply each mutant to a working copy, run ONLY the relevant test file(s) (RAM rules in task.extra, one at a time), record red/green, then RESTORE by `git checkout -- <file>` ONLY for files you yourself mutated (the tree is committed so this is safe; ORCH committed everything first) and confirm `git status --short` shows only the untracked letflow-3.code-workspace before the next mutant. Each of the TWELVE nodes must be bitten by its OWN named test: for each node a..l remove (or set to []) its required_outputs in the fixture and show the node-named test goes red (you may do several nodes in one fixture edit only if you show per-test red lists identifying each node's own test; a single mutation per node is the standard). Additional mutants: (M-a) wrong key name on one node (e.g. l1-approval required_outputs [\"l2_decision\"]); (M-b) swap a key between two nodes; (M-c) revert a version bump in one fixture (each of 4); (M-d) remove one variable_schema (e.g. budget_decision) from a fixture -> check 2 must trip a test; (M-e) reintroduce the fail-closed omitted-key behaviour in lib/letflow/engine/required_outputs.ex or the engine call site (make omitted keys pass) -> every per-node 422 test red; (M-f) escalation node missing its own required_outputs while its source node keeps it (already covered by per-node removal but run explicitly for the four escalation nodes e, h, j, l); (M-g) add required_outputs to an unadopted node (e.g. meridian credit-memo-review: [\"credit_decision\"]) -> the exact-set/unadopted test must go red; (M-h) the swiftroute replaced tests: revert to accepting an omitted key. Report a table: mutant -> tests red (names) -> killed/survived. Any survivor = FAIL with rework instructions to TEST-DESIGNER. Never leave a mutation behind; if a run is killed, report it and restore. Verdict PASS/FAIL.\n",
+    "description": "You are TEST-RUNNER, step 04. The full suite (scripts/test_parallel.sh) CANNOT be run in this environment (RAM 0.4-2 GB; harness kills at critical memory): state that explicitly in the report as unverified, and instead run the scoped set below, each as a SEPARATE sequential invocation with MIX_TEST_PARTITION=3 (14 for the REQ-462 files), checking free RAM before each, one BEAM at a time:\n1. `grep -rln` over test/ for: swiftroute_process_definition, meridian_loan_origination_process_definition, vortex_production_order_release_process_definition, vortex_supplier_quality_deviation_process_definition, required_outputs, req462, the four seed scripts' names (seed_swiftroute_definition, seed_meridian_definition, seed_vortex_definition), 'ops-review', 'capacity-review', 'severity-classification', 'l1-approval', 'kyc-manual-review', 'shipped_definitions'. Union the file lists (dedupe; include test/fixtures/simulation/fixture_shape_test.exs if it is a runnable test, the simulation req206/207/208 tests, test/letflow/scripts/*d_esc*fixture_test.exs, the argv-payload lint test for scripts) and run EVERY file in the union. Report the file list and per-file result (N passed/failed).\n2. The REQ-460/461 files: test/letflow/engine_required_outputs_test.exs, test/letflow/routers/tasks_required_outputs_test.exs, test/letflow/engine/required_outputs_test.exs, test/letflow/definitions/required_outputs_*_test.exs, test/letflow/routers/definitions_required_outputs_test.exs, test/letflow/routers/definitions_write_test.exs, test/letflow/routers/tasks_test.exs.\n3. CI-shaped tooling (unset MIX_TEST_PARTITION, each separately, quote output): mix compile --warnings-as-errors; mix format --check-formatted; mix letflow.check_issue_refs; mix letflow.lint_handoffs; mix letflow.check_uat_scenario_schema; mix letflow.check_boundaries; mix letflow.check_requirements_registration; mix letflow.check_req_id_collision; mix letflow.check_deferral_staleness; mix letflow.check_async_sandbox_reachability.\nFailure attribution must be structural (core-directives.md: never by count-matching): a failure outside the diff is pre-existing only if you name the evidence (module not in `git diff --name-only origin/main..HEAD`, or reproduced at the merge-base via a git worktree-free method such as reasoning + reading; do NOT git checkout/stash). Do not edit files except test/reports/report-2026-10-07-WF02-REQ462-20261007.yaml (write the structured report there with real output). A killed run: report, do not loop.\n",
     "extra": "ENVIRONMENT RULES (binding): checkout C:\\Users\\tvolo\\dev\\ai-dala\\letflow-3, branch feat/REQ-462-adopt-required-outputs-Q-1025 (verify with git branch --show-current first; STOP if different). Do NOT push, open a PR or merge; do NOT touch the letflow-queue; do NOT touch branch test/authz-deny-log-deterministic-capture; leave untracked letflow-3.code-workspace untouched and uncommitted. RAM is VERY tight (0.4-2 GB free; the harness KILLS runs at critical memory): mix commands strictly sequential, ONE BEAM at a time, check free RAM before each mix test (powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\"), scoped single test FILES only (never a directory or the full suite), export MIX_TEST_PARTITION=3 ONLY for tests (unset for tooling tasks; use a unique number such as 14 for files that mutate shared state). If a run is killed, report it; do NOT loop. Do NOT commit; ORCH commits after your step. Never git checkout/stash/reset anything (uncommitted work is unrecoverable). Quote real output, never claim. Claim the handoff by setting status to IN_PROGRESS only; on finishing set status COMPLETED/FAILED and fill result {status: PASS|FAIL, summary, files_changed, verification, issues, next_action}.\nContext: the design is lib/letflow/design/req459-required-outputs-and-distinct-person.md (section 9: an escalation task inherits nothing, declares its own required_outputs). REQ-460 (engine, b8899b24: completing a HUMAN_TASK without a declared required_outputs key gives 422 code output_refused with missing_keys, task stays open, instance unchanged) and REQ-461 (validator, 508163d0: check 2 required_output_without_variable_schema is a VIOLATION at validate/activate; check 3 decision_key_not_required: is a WARNING) are merged. docs/anti-patterns.md newest entry: a validator refusing at activate must be checked against EVERY test that activates hand-built definitions (grep the whole test/ tree).\n"
-  },
-  "completed_at": "2026-10-07T12:50:00Z",
-  "result": {
-    "status": "PASS",
-    "summary": "All ACs have runnable tests; no skips/TODO/KNOWN LIMITATION; per-test unique tenants; no secrets. 29 mutants applied one at a time to a committed tree, each reverted with git checkout of only the mutated file; all killed, none survived. Baseline 56 passed; tree clean after.",
-    "files_changed": [],
-    "verification": {
-      "baseline": "5 files, Result: 56 passed",
-      "mutants": {
-        "a ops-review ro=[]": "50/56; ops-review omit test + ops-review null/enum test + check3 ops-review + adopted-exact + swiftroute 0-warnings + negative control: KILLED",
-        "b ceo-approval ro=[]": "51/56; ceo-approval omit test + null/enum test + check3 ceo + exact + 0-warn: KILLED",
-        "c l1-approval ro=[]": "52/56; l1-approval test + exact + meridian 12-warnings + check3: KILLED",
-        "d l2-approval ro=[]": "51/56; l2-approval test + check3 l2 and escalate-l2 + exact + 12-warn: KILLED",
-        "e escalate-l2-approval-to-ceo ro=[]": "54/56; escalate-l2-approval-to-ceo test + meridian exact: KILLED",
-        "f kyc-manual-review ro=[]": "52/56; kyc-manual-review test + check3 + exact + 12-warn: KILLED",
-        "g capacity-review ro=[]": "54/56; capacity-review test + vortex_release exact: KILLED",
-        "h escalate-to-ceo ro=[]": "54/56; escalate-to-ceo test + exact: KILLED",
-        "i budget-approval ro=[]": "54/56; budget-approval test + exact: KILLED",
-        "j escalate-budget-approval-to-ceo ro=[]": "54/56; escalate-budget-approval-to-ceo test + exact: KILLED",
-        "k severity-classification ro=[]": "53/56; severity-classification test + deviation exact (2): KILLED",
-        "l escalate-severity-classification-to-ceo ro=[]": "53/56; escalate-severity-classification-to-ceo test + deviation exact (2): KILLED",
-        "M-a l1-approval key->l2_decision": "50/56; l1-approval, l2-approval, escalate-l2 tests + exact + 12-warn + check3: KILLED",
-        "M-b swap ops/ceo keys": "49/56; 4 swiftroute engine tests + exact + 0-warn + check3: KILLED",
-        "M-c version revert x4": "swiftroute 54/56 (versions test + swiftroute fixture version test); meridian, release, deviation each 55/56 (versions test): all KILLED",
-        "M-d drop budget_decision variable_schema": "50/56; budget-approval + escalate-budget + capacity-review + escalate-to-ceo (activation fails) + vortex_release valid/activates + has-variable_schema: KILLED",
-        "M-e required_outputs.ex missing_keys always []": "42/56; all 12 per-node tests + 2 swiftroute null/enum tests red: KILLED",
-        "M-f escalation nodes e,h,j,l": "covered by per-node runs e,h,j,l above (source node kept its ro in each run): KILLED",
-        "M-g credit-memo-review ro=[credit_decision]": "53/56; meridian exact + unadopted-stay-unadopted + 12-warn: KILLED",
-        "M-h swiftroute omitted accepted": "covered by M-e (both swiftroute replaced tests red) and a,b: KILLED"
-      },
-      "after": "git status --porcelain lib/ test/ empty; 5 files re-run: Result: 56 passed; git status --short shows only the handoff (claim edit) and untracked letflow-3.code-workspace"
-    },
-    "issues": [
-      "Observation only: 422 rendering is asserted at the engine seam ({:error,{:output_refused,...}}), relying on routers/tasks_required_outputs_test.exs for the HTTP mapping; accepted by spec."
-    ],
-    "next_action": "ORCH commits and proceeds to step 04."
   }
 }

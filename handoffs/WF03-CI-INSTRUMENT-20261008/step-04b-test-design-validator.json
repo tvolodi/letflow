@@ -1,0 +1,28 @@
+{
+  "handoff_id": "ciinst-step04b-tdv-0001",
+  "run_id": "WF03-CI-INSTRUMENT-20261008",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-CI-INSTRUMENT-20261008/step-04b-test-design-validator.json",
+  "created_at": "2026-10-08T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "artifacts_in": [
+      "test/scripts/test_parallel_instrumentation_test.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt2",
+    "head_validated": "c187eec6"
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Baseline (MIX_TEST_PARTITION=19, one mix invocation under the mixlock mutex): 3 passed. Own mutation run, each mutant applied to scripts/test_parallel.sh, test file run once, restored from a scratchpad backup copy, git diff --quiet and git status --short empty after each. M1 drop extra-args expansion: KILLED (extra-args/instrumentation test). M2 extra args before \"$@\": KILLED (same test). M3 slowest read from partition-1 log always: KILLED (PRINT_SLOWEST=1 test). M4 slowest printed twice (awk reads log twice): KILLED (PRINT_SLOWEST test). M5 summary line exit=$ex: KILLED (PRINT_SLOWEST test and extra-args test). M6 slowest skipped when partition_failed: KILLED (PRINT_SLOWEST test, failing partition 1). M7 elapsed line before summary line: KILLED (extra-args/instrumentation test, ordering assertion). M8a runner line dropped: KILLED (extra-args test). M8b runner line printed twice: KILLED (extra-args test). M9 slowest printed regardless of env: KILLED (no-extra-args/PRINT_SLOWEST=0 test). 10 of 10 killed, 0 survivors. AC coverage: (a) args after \"$@\", no glob expansion, unset leaves argv byte-identical: covered. (b) runner once, phase once, per-partition elapsed once and well-formed, summary line byte-exact and ordered first: covered. (c) slowest blocks exact per own partition, once, incl. failing partition, absent for =0: covered. No skips, no TODOs, no hardcoded secrets, fixtures use tmp_dir, tests independent. Minor non-blocking gap (reasoned, not measured): PRINT_SLOWEST truly unset with STUB_SLOWEST=1 is not exercised (test 1 sets it to 0; test 2 leaves it unset but the stub emits no slowest blocks), so a mutant defaulting the variable to 1 would survive. Recommend adding STUB_SLOWEST=1 to the extra-args test and asserting no ' slowest: ' lines.",
+    "artifacts_out": [],
+    "issues": []
+  }
+}

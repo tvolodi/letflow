@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ463-20261007/step-02d2-reviewer-recheck.json",
   "created_at": "2026-10-07T13:27:31Z",
   "started_at": "2026-10-07T13:27:31Z",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -52,5 +52,29 @@
     "description": "STEP 02d RE-CHECK (REVIEWER), hard gate, delta only. Your earlier PASS covered 78e182a6. Review rework commit 87fab6cb (git show 87fab6cb): check_for_claim/3 inlines the snapshot read via Repo.get (instead of SnapshotStore.get_by_instance_id/2 which takes no options), savepoint_opts/0 helper (mode: :savepoint only when Repo.in_transaction?()), removed two unreachable failure_tag clauses, one new regression test. Check idiom (is bypassing SnapshotStore a crutch or a layering/boundary issue; mix letflow.check_boundaries was reported OK; is a store function with an opts argument the more idiomatic fix), whether your earlier MINOR notes are resolved, and that no scope creep occurred. Read-only; do not run mix suites. PASS with non-blocking notes unless a genuine crutch/boundary violation; next_action Route to TEST-DESIGN-VALIDATOR (3b) on PASS.\nRUN CONSTRAINTS (every agent in this run):\n- Branch feat/REQ-463-distinct-from-Q-1026 (from origin/main 508163d0). Verify with `git branch --show-current` first; STOP and report if different. Do NOT push, open a PR, merge, touch the letflow-queue (lock 1026 is held by tvolodi-orch), touch branches feat/REQ-462-adopt-required-outputs-Q-1025 or test/authz-deny-log-deterministic-capture, or the untracked letflow-3.code-workspace. Stage files by explicit path only; never git add -A / git add . .\n- Design: lib/letflow/design/req459-required-outputs-and-distinct-person.md governs rule A (distinct_from): sections 1.1, 2 (step 4b before 4c in the :completion_guards step), 4, 5, 6, 7, 8, 9, 10, 12.2 rule A plan, traceability A1-A11, 'Adjustments for REQ-460..466' for REQ-463. Where the requirement text and the design differ on a detail the DESIGN WINS; list every difference in result.design_vs_requirement_differences. REQ-464 (validator for distinct_from) is NOT this entry.\n- RAM is VERY tight (0.4-2 GB free; the harness KILLS runs at critical memory). mix commands strictly sequential, ONE BEAM at a time; before each mix test check free RAM: powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\". Scoped single test FILES only (never a directory or the full suite). `export MIX_TEST_PARTITION=3` ONLY for tests (unset for tooling tasks like compile/format/check_*); use a unique number (e.g. 15) for files that mutate shared state or run concurrency tests. If a run is killed, report it and do NOT loop.\n- Real Postgres only. Never report 'should pass'; quote real Result: lines.\n- docs/anti-patterns.md newest entry: a validator refusing at activate must be checked against EVERY test that activates hand-built definitions; grep the WHOLE test/ tree for the attribute, not only the changed area. REQ-461 check 2 applies: any test definition declaring required_outputs must declare a variable_schema for each key (register schema rows BEFORE activation); distinct_from needs no schema.\n- Commit titles: feat|fix|test|docs|chore(REQ-463/Q-1026): ... [Q-1026 / GH #2341], ending with the trailer line: Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>. Do not commit your own handoff-file edits unless this handoff says so: ORCH commits after you return.\n- Claim the handoff by setting top-level status to IN_PROGRESS only; at the end set status COMPLETED (or FAILED) and fill result (summary, verdict PASS/FAIL, issues, artifacts_out, evidence with quoted real output, next_action). Do not touch started_at/created_at. Do not edit handoffs/registry.json or handoffs/orchestrator.log.\n- Scratch files go in the scratchpad dir C:\\Users\\tvolo\\AppData\\Local\\Temp\\claude\\C--Users-tvolo-dev-ai-dala-letflow-3\\def1f47a-501c-4830-b7ce-a68038cf3791\\scratchpad\\r463\\ (never in the repo, never /tmp). That dir also holds files of earlier runs: use only r463/.\n",
     "extra": ""
   },
-  "result": null
+  "result": {
+    "verdict": "PASS",
+    "summary": "Delta re-check of 87fab6cb (only lib change: lib/letflow/engine/separation_of_duties.ex, plus one test). PASS with non-blocking notes. Inlining the snapshot read via Repo.get(InstanceDefinitionSnapshot, id, [prefix: prefix] ++ savepoint_opts()) is not a crutch or boundary violation: other lib modules (tasks.ex, service_catalog.ex, tenant_provisioning.ex) already read the schema directly, the engine module stays on the same side of check_boundaries, and the rationale (savepoint must cover the snapshot read too, store fn takes no per-query opts) is commented. savepoint_opts/0 guarded by Repo.in_transaction?() is correct and idiomatic. Removed failure_tag clauses were unreachable; anything unexpected still fails open via rescue (:raised). No scope creep: no new behaviours/abstractions, delta is 1 lib file + 1 test.",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "blocking": false,
+        "note": "Optional follow-up: a SnapshotStore.get_by_instance_id/3 with passthrough repo opts would keep snapshot access single-sourced and drop the duplicated nil->:snapshot_not_found mapping; the id cast guard is also skipped (safe: UUID from a task row). Not required."
+      },
+      {
+        "severity": "MINOR",
+        "blocking": false,
+        "note": "failure_tag/1 is now a closed 2-clause function; a future new build_graph error shape would raise FunctionClauseError inside the else, caught by the rescue and logged as :raised. Still fail-open, only tag precision lost."
+      },
+      {
+        "severity": "INFO",
+        "note": "Earlier MINOR notes: savepoint coverage of the snapshot read and dead failure_tag clauses are resolved by this commit."
+      }
+    ],
+    "artifacts_out": [
+      "lib/letflow/engine/separation_of_duties.ex"
+    ],
+    "evidence": "git branch --show-current -> feat/REQ-463-distinct-from-Q-1026; git show 87fab6cb --stat -> separation_of_duties.ex (+22/-7), engine_distinct_from_test.exs (+23). Read-only review; no mix suites run per instructions.",
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (3b)"
+  }
 }

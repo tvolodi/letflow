@@ -47,10 +47,10 @@ defmodule Letflow.Definitions.ShippedDefinitionsValidationTest do
         %{"definitions" => defs} when is_list(defs) ->
           for {entry, i} <- Enum.with_index(defs),
               graph?(entry),
-              do: {rel, "#{rel}[#{i}]", entry["graph"]}
+              do: {rel, "#{rel}[#{i}]", entry["graph"], declared_of(doc)}
 
         doc when is_map(doc) ->
-          if graph?(doc), do: [{rel, rel, doc["graph"]}], else: []
+          if graph?(doc), do: [{rel, rel, doc["graph"], declared_of(doc)}], else: []
 
         _ ->
           []
@@ -58,20 +58,32 @@ defmodule Letflow.Definitions.ShippedDefinitionsValidationTest do
     end)
   end
 
+  # REQ-462: check 2 (required_output_without_variable_schema) needs the definition's own
+  # registered variable_schemas (QA shape: top-level `variable_schemas` with a `variable_key`),
+  # as at validate/activate. Solution-pack shaped entries register none here (%{}).
+  defp declared_of(%{"variable_schemas" => entries}) when is_list(entries) do
+    for %{"variable_key" => key} = entry <- entries,
+        is_binary(key),
+        into: %{},
+        do: {key, Map.get(entry, "json_schema", %{})}
+  end
+
+  defp declared_of(_doc), do: %{}
+
   defp graph?(%{"graph" => %{"nodes" => nodes, "edges" => edges}})
        when is_list(nodes) and is_list(edges),
        do: true
 
   defp graph?(_), do: false
 
-  defp violations_for(graph_map) do
+  defp violations_for(graph_map, declared) do
     assert {:ok, graph} = Graph.from_map(graph_map)
 
     Graph.validate_graph(graph).violations ++
       Graph.validate_node_attributes(graph).violations ++
       Graph.validate_edge_conditions(graph).violations ++
       Graph.validate_flow(graph).violations ++
-      SemanticValidation.validate(graph, %{}).violations
+      SemanticValidation.validate(graph, declared).violations
   end
 
   # fixture paths named by the seed scripts
@@ -115,8 +127,8 @@ defmodule Letflow.Definitions.ShippedDefinitionsValidationTest do
   describe "every shipped definition passes every validator" do
     test "zero violations from structural, attribute, edge-condition, flow and semantic validation" do
       failures =
-        for {_source, label, graph_map} <- discover(),
-            violations = violations_for(graph_map),
+        for {_source, label, graph_map, declared} <- discover(),
+            violations = violations_for(graph_map, declared),
             violations != [] do
           {label, Enum.map(violations, &{&1.code, &1.message})}
         end

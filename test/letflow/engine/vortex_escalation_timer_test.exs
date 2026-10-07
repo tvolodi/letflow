@@ -323,8 +323,11 @@ defmodule Letflow.Engine.VortexEscalationTimerTest do
     {schema2, id2} = at_severity_classification!()
     fire_escalation!(schema2, id2)
 
+    # REQ-462: the escalation task declares required_outputs [severity], so even a false
+    # positive must carry a severity (the routing still releases by the false_positive decision).
     complete!(schema2, task!(schema2, id2, "escalate-severity-classification-to-ceo"), %{
-      "false_positive" => true
+      "false_positive" => true,
+      "severity" => "minor"
     })
 
     assert projection(schema2, id2).current_nodes == ["release-quarantine"]

@@ -1,0 +1,40 @@
+id: ISS-1038
+title: "Tests that assert on globally captured logs flake under concurrent tests: AuthzDenyLogTest (lost line) and NotifierNoLeakTest 'no leak: untrusted_implicit' (another test's error leaked into the capture)"
+discovered_by: CI (main, runs 37571670867 and 37668219153 attempt 1)
+discovered_in_run: WF03-LOGCAPTURE-20261008
+discovered_at: "2026-10-07T00:00:00Z"
+severity: MEDIUM
+failure_class: defect
+occurrence: 2
+owner: "TEST-DESIGNER (test-only: test/support/logger_collector.ex and the converted tests); CI/test lane, no tenant-data path"
+scope: tooling
+description: >
+  ExUnit capture_log is a GLOBAL Logger capture. Under concurrent tests it both loses lines
+  (AuthzDenyLogTest '(h) sampling with an injected clock', CI run 37571670867) and picks up lines
+  from unrelated tests (NotifierNoLeakTest 'no leak: untrusted_implicit' failed because the capture
+  held an error-level 'alert delivery exhausted' event logged by ANOTHER test from
+  lib/letflow/obs/alerts.ex:569, CI run 37668219153 attempt 1). Neither is a product bug. A second
+  failure of the same class within a day is a defect (S7/P4 rule).
+acceptance_criteria:
+  - "AuthzDenyLogTest and NotifierNoLeakTest use a private synchronous :logger handler sink filtered on the test's own process attribution, not capture_log"
+  - "No global Logger level is changed by the fix"
+  - "Every capture_log user that asserts absence or an exact count is listed, each converted or justified in the PR"
+  - "Mutation proof: a leaking / line-dropping mutant fails each converted test; a concurrent unrelated error log does not"
+  - "The converted tests pass 50 consecutive local runs under max_cases concurrency"
+affected_files:
+  - test/support/logger_collector.ex
+  - test/letflow/api/authz_deny_log_test.exs
+  - test/letflow/login_discovery/notifier_no_leak_test.exs
+# Ref clash: the queue's issue_ref for Q-1039 is ISS-1039 (GH #2367's title), but ISS-1039 is already
+# cited in docs/requirements.yaml for an unrelated issue (GH #2335 / Q-1021). The local number is
+# therefore the next free one: ISS-1038 (origin/main's highest docs/issues file was ISS-1037;
+# checked against remote branches and open PRs on 2026-10-08).
+queue_ref: Q-1039
+github_ref: GH-2367
+status: resolved
+resolved_in_run: WF03-LOGCAPTURE-20261008
+resolved_at: "2026-10-08T00:00:00Z"
+resolution: >
+  Deterministic capture through a private synchronous :logger handler (Letflow.Test.LoggerCollector,
+  opt-in attribution to the owning test process via self/$callers/$ancestors), replacing capture_log
+  in the two flaking tests and the other absence/exact-count users listed in the PR. See the PR body.

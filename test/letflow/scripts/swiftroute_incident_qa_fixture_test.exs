@@ -140,4 +140,102 @@ defmodule Letflow.Scripts.SwiftrouteIncidentQaFixtureTest do
       assert leaks == [], inspect(leaks)
     end
   end
+
+  describe "seed script behaviour against a stub curl (idempotency and activation)" do
+    @stub ~S"""
+    #!/usr/bin/env bash
+    dir="${STUB_CURL_DIR}"
+    args=("$@")
+    last="${args[$(( ${#args[@]} - 1 ))]}"
+    method=GET
+    for ((i = 0; i < ${#args[@]}; i++)); do
+      case "${args[$i]}" in
+        -X) method="${args[$((i + 1))]}" ;;
+        --data-binary) cat > /dev/null ;;
+      esac
+    done
+    printf '%s %s\n' "${method}" "${last}" >> "${dir}/calls"
+    if [[ "${last}" == */activate ]]; then
+      printf '%s' '{"id":"d1","name":"Driver Incident Report","version":"1.0","status":"ACTIVE"}'
+    elif [[ "${method}" == POST ]]; then
+      printf '%s' '{"id":"d1","name":"Driver Incident Report","version":"1.0","status":"DRAFT"}'
+    elif [[ -n "${STUB_ACTIVE_VERSION:-}" ]]; then
+      printf '{"items":[{"id":"old1","name":"Driver Incident Report","version":"%s","status":"ACTIVE"}]}' "${STUB_ACTIVE_VERSION}"
+    else
+      printf '%s' '{"items":[]}'
+    fi
+    """
+
+    defp seed_calls(active_version) do
+      bash =
+        case :os.type() do
+          {:win32, _} ->
+            git = System.find_executable("git")
+            roots = if git, do: [Path.dirname(Path.dirname(git))], else: []
+            roots = roots ++ ["C:/Program Files/Git"]
+
+            Enum.find(
+              Enum.map(roots, &Path.join([&1, "usr", "bin", "bash.exe"])),
+              &File.exists?/1
+            )
+
+          _ ->
+            System.find_executable("bash")
+        end
+
+      assert bash, "bash not found"
+      dir = Path.join(System.tmp_dir!(), "incident_seed_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf(dir) end)
+      File.write!(Path.join(dir, "curl"), String.replace(@stub, "\r\n", "\n"))
+      File.chmod!(Path.join(dir, "curl"), 0o755)
+      sep = if match?({:win32, _}, :os.type()), do: ";", else: ":"
+
+      {out, status} =
+        System.cmd(bash, ["scripts/seed_swiftroute_incident_definition.sh"],
+          cd: @root,
+          stderr_to_stdout: true,
+          env:
+            [
+              {"PATH", dir <> sep <> System.get_env("PATH", "")},
+              {"STUB_CURL_DIR", String.replace(dir, "\\", "/")},
+              {"QA_AUTH_TOKEN", "stub-token"},
+              {"QA_URL", "https://stub.invalid"}
+            ] ++ if(active_version, do: [{"STUB_ACTIVE_VERSION", active_version}], else: [])
+        )
+
+      assert status == 0, String.slice(out, 0, 1500)
+
+      calls =
+        case File.read(Path.join(dir, "calls")) do
+          {:ok, c} -> c |> String.split(~r/\r?\n/, trim: true)
+          _ -> []
+        end
+
+      {calls, out}
+    end
+
+    test "nothing ACTIVE: creates the definition and then activates it" do
+      {calls, _} = seed_calls(nil)
+      assert Enum.count(calls, &String.starts_with?(&1, "POST ")) == 2, inspect(calls)
+      assert Enum.any?(calls, &(&1 =~ ~r{^POST \S+/definitions$})), inspect(calls)
+      assert Enum.any?(calls, &(&1 =~ ~r{^POST \S+/definitions/d1/activate$})), inspect(calls)
+    end
+
+    test "ACTIVE at the fixture version: idempotent no-op (no POST at all)" do
+      {calls, out} = seed_calls("1.0")
+      assert Enum.reject(calls, &String.starts_with?(&1, "GET ")) == [], inspect(calls)
+      assert out =~ "skipping creation"
+    end
+
+    test "ACTIVE newer than the fixture: never downgrades (no POST)" do
+      {calls, _} = seed_calls("1.1")
+      assert Enum.reject(calls, &String.starts_with?(&1, "GET ")) == [], inspect(calls)
+    end
+
+    test "ACTIVE older than the fixture: creates and activates the fixture version" do
+      {calls, _} = seed_calls("0.9")
+      assert Enum.count(calls, &String.starts_with?(&1, "POST ")) == 2, inspect(calls)
+    end
+  end
 end

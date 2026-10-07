@@ -5463,23 +5463,6 @@ defmodule Letflow.Engine do
      }}
   end
 
-  # Catch-all -- every Multi step's own callback above already maps its
-  # failure to the exact error shape complete_error() promises (or passes a
-  # raw changeset/term() through, matching those catch-all clauses); this
-  # just unwraps Ecto.Multi's {:error, failed_step, reason, changes_so_far}
-  # envelope around whatever reason each step already produced.
-  #
-  # ISS-0784 -- additionally, when `reason` is the `{:invalid_form_schema,
-  # node_id, form_schema_reason}` rejection surfacing from
-  # `TaskActivation.append_multi_from_existing_records/7` (via the hop-chain
-  # advance dispatched from `:transition`), records a best-effort audit entry
-  # in a second, independent transaction, opened only now that
-  # `Repo.transaction/1` has already returned this `{:error, ...}` and rolled
-  # back (design §3). `instance_id` is read from `_changes.task.instance_id`
-  # -- the `:task` step is always fetched first and is always present in
-  # `changes_so_far` by the time any later `:task_records`-keyed step can
-  # fail (design §2 row 2). Any other `reason` shape is byte-identical to
-  # before this issue.
   # REQ-460 (design req459 §2.4): a completion guard refused the request. The
   # transaction has already rolled back (only locks and SELECTs preceded the
   # refusal), so the one audit record is written NOW, in its own transaction.
@@ -5503,6 +5486,23 @@ defmodule Letflow.Engine do
     {:error, {:output_refused, %{missing_keys: missing, rejected_keys: rejected}}}
   end
 
+  # Catch-all -- every Multi step's own callback above already maps its
+  # failure to the exact error shape complete_error() promises (or passes a
+  # raw changeset/term() through, matching those catch-all clauses); this
+  # just unwraps Ecto.Multi's {:error, failed_step, reason, changes_so_far}
+  # envelope around whatever reason each step already produced.
+  #
+  # ISS-0784 -- additionally, when `reason` is the `{:invalid_form_schema,
+  # node_id, form_schema_reason}` rejection surfacing from
+  # `TaskActivation.append_multi_from_existing_records/7` (via the hop-chain
+  # advance dispatched from `:transition`), records a best-effort audit entry
+  # in a second, independent transaction, opened only now that
+  # `Repo.transaction/1` has already returned this `{:error, ...}` and rolled
+  # back (design §3). `instance_id` is read from `_changes.task.instance_id`
+  # -- the `:task` step is always fetched first and is always present in
+  # `changes_so_far` by the time any later `:task_records`-keyed step can
+  # fail (design §2 row 2). Any other `reason` shape is byte-identical to
+  # before this issue.
   defp interpret_complete_result({:error, _failed_step, reason, changes}, actor_id, prefix) do
     case reason do
       {:invalid_form_schema, node_id, form_schema_reason} ->

@@ -7,9 +7,9 @@
   "to_agent": "REQ-ANALYST",
   "file": "handoffs/WF01-REQ-ENGINE-AC-20261007/step-01-req-analyst.json",
   "created_at": "2026-10-07T00:00:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-10-07T00:00:00Z",
+  "completed_at": "2026-10-07T00:00:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -37,7 +37,14 @@
       "No contradiction with a done requirement or decision record; REQ-061 amendment and 0007 passage handled as briefed"
     ]
   },
-  "result": null,
-  "rework_count": 0,
+  "result": {
+    "status": "PASS",
+    "summary": "Drafted REQ-459..466 (466 from rework split)",
+    "artifacts_out": [
+      "docs/requirements.yaml"
+    ],
+    "next_action": "Route to REQ-VALIDATOR"
+  },
+  "rework_count": 1,
   "max_rework": 3
 }

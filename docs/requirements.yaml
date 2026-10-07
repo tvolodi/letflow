@@ -34477,7 +34477,7 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S3
-    # impl_order: UNREGISTERED -- blocked-by: REQ-447 -- REQ-447 = letflow-queue task Q-964, map when registering; the distinct-person rule must hold for TENANT_ADMIN, a role that exists only after REQ-447 PR2, so the design is written once that role is real
+    impl_order: 1022  # letflow-queue task id, GH#2337. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-447 -- REQ-447 = letflow-queue task Q-964, map when registering; the distinct-person rule must hold for TENANT_ADMIN, a role that exists only after REQ-447 PR2, so the design is written once that role is real
     description: >
       Source: GH #2335 (ISS-1039, Q-1021, requirement C: required decision
       outputs) and GH #2323 (ISS-1034, Q-1016, requirement A: distinct
@@ -34610,7 +34610,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
-    # impl_order: UNREGISTERED -- blocked-by: REQ-459 -- builds exactly what the REQ-459 design specifies; may not start before that design passes CODE-DESIGN-VALIDATOR
+    impl_order: 1023  # letflow-queue task id, GH#2338. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-459 -- builds exactly what the REQ-459 design specifies; may not start before that design passes CODE-DESIGN-VALIDATOR
     description: >
       Source: GH #2335 (ISS-1039, Q-1021). Today a HUMAN_TASK can be
       completed without its decision key: variable_schemas (REQ-109)
@@ -34687,7 +34687,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
-    # impl_order: UNREGISTERED -- blocked-by: REQ-460 -- the validator checks the attribute REQ-460 introduces and uses the code names reserved in the REQ-459 design
+    impl_order: 1024  # letflow-queue task id, GH#2339. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-460 -- the validator checks the attribute REQ-460 introduces and uses the code names reserved in the REQ-459 design
     description: >
       Source: GH #2335 (ISS-1039, Q-1021) scope item (1) and the
       design-intent constraint 'the validator also flags a decision reading
@@ -34732,7 +34732,7 @@ requirements:
     status: pending
     stage: S3
     # ORDERING: PR #2334 (Q-990 / GH #2277, the home of the two KNOWN LIMITATION tests) merged as 3eb72f99 on 2026-10-07: that precondition is SATISFIED; the entry stays blocked only by its depends_on (REQ-460/461).
-    # impl_order: UNREGISTERED -- blocked-by: REQ-461 -- the shipped definitions can adopt only after the engine check (REQ-460) and the validator (REQ-461) exist; REQ-460 is reached through REQ-461
+    impl_order: 1025  # letflow-queue task id, GH#2340. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-461 -- the shipped definitions can adopt only after the engine check (REQ-460) and the validator (REQ-461) exist; REQ-460 is reached through REQ-461
     description: >
       Source: GH #2335 (ISS-1039, Q-1021) adoption scope. PRECONDITION
       TO CHECK FIRST (ORDERING: satisfied, PR #2334 merged as 3eb72f99 on
@@ -34820,7 +34820,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
-    # impl_order: UNREGISTERED -- blocked-by: REQ-460 -- both rules edit run_complete_task, so C lands first and this entry builds on REQ-460's check order; REQ-459 is reached through REQ-460
+    impl_order: 1026  # letflow-queue task id, GH#2341. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-460 -- both rules edit run_complete_task, so C lands first and this entry builds on REQ-460's check order; REQ-459 is reached through REQ-460
     description: >
       Source: GH #2323 (ISS-1034, Q-1016, BA checklist B2). Distinct roles
       do not stop ONE person who holds several roles, or the same role,
@@ -34890,7 +34890,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
-    # impl_order: UNREGISTERED -- blocked-by: REQ-463 -- checks the attribute REQ-463 introduces, with the code names reserved in the REQ-459 design
+    impl_order: 1027  # letflow-queue task id, GH#2342. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-463 -- checks the attribute REQ-463 introduces, with the code names reserved in the REQ-459 design
     description: >
       Source: GH #2323 (ISS-1034, Q-1016): 'the process validator checks
       that the referenced nodes exist and precede the node', AMENDED by BA
@@ -34942,7 +34942,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
-    # impl_order: UNREGISTERED -- blocked-by: REQ-464 -- shipped definitions can adopt only after the engine rule (REQ-463) and the validator (REQ-464) exist; REQ-463 is reached through REQ-464 and REQ-462 (same fixtures) precedes through depends_on
+    impl_order: 1028  # letflow-queue task id, GH#2343. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-464 -- shipped definitions can adopt only after the engine rule (REQ-463) and the validator (REQ-464) exist; REQ-463 is reached through REQ-464 and REQ-462 (same fixtures) precedes through depends_on
     description: >
       Source: GH #2323 (ISS-1034, Q-1016) adoption scope, part 1 of 2
       (part 2 is REQ-466). Adds distinct_from to HUMAN_TASK nodes of
@@ -35004,7 +35004,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
-    # impl_order: UNREGISTERED -- blocked-by: REQ-465 -- part 2 of the adoption split, chained after part 1 so each turn edits one pair of definitions; REQ-465 itself waits for REQ-462 and the engine rule
+    impl_order: 1029  # letflow-queue task id, GH#2344. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-465 -- part 2 of the adoption split, chained after part 1 so each turn edits one pair of definitions; REQ-465 itself waits for REQ-462 and the engine rule
     description: >
       Source: GH #2323 (ISS-1034, Q-1016) adoption scope, part 2 of 2
       (part 1 is REQ-465). Adds distinct_from to HUMAN_TASK nodes of

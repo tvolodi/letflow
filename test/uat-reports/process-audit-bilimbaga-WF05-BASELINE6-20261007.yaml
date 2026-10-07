@@ -1,0 +1,183 @@
+report_id: process-audit-bilimbaga-WF05-BASELINE6-20261007
+run_id: WF05-BASELINE6-20261007
+generated_at: "2026-10-07T04:04:04Z"
+commit_sha: 92d74cbcfa604fe31f3450ce82cbaecebdfd0e8a
+scope: bilimbaga
+digest_algorithm: sha256-hex-of-file-bytes
+audited_inputs:
+  - path: test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    digest: 5c992fb8f7d9b9025bb38afdb4796ed8d7cd588e02e993ae2b552b6cb7f6b6af
+  - path: test/fixtures/uat/actors.yaml
+    digest: 6b1945b61f8e8d252e0629753330c7e95d8bb1da5c2698a45b920a40dda57a85
+  - path: docs/roles.md
+    digest: 014866546eb7b96aa057319515f0d928ba9f02144408ec12c4c14c6e0835218f
+  - path: priv/solutions/bilimbaga.json
+    digest: fc62a07e6828e73d9a62dd746b9d58cde209982b843ba8f29153fe031caf4189
+  - path: priv/modules/exam/pack.json
+    digest: 0690646aca805ea3b2f2ec88f1fed398beb4252c1f6933d4758af6efd725a49e
+cross_scope_reads:
+  - path: scripts/seed_meridian_definition.sh
+    digest: d34e1ef7b2fd32af8fa42b50e294ea4d998b5d550ef090f86f3824d304b09ab2
+  - path: scripts/seed_swiftroute_definition.sh
+    digest: 08067cfb60a900357ec2b45ad68cd602e672f85a874047780aff09dfbf33b108
+  - path: scripts/seed_vortex_definition.sh
+    digest: 8f19dda9188ea54dba9eb6d448c521847432bdc86bc43dcf253d87fff16244e7
+  - path: test/fixtures/qa/meridian_loan_origination_process_definition.json
+    digest: 034aeadf40ddf7df57363e13d1b71d1abb9b42b4fd1a8378133ad007552248e5
+  - path: test/fixtures/qa/meridian_regulatory_compliance_review_process_definition.json
+    digest: 80ff61eea4ed78de57b0d77ba643afa2acf3d1b0ba0f4b285ec00921bd2cbba9
+  - path: test/fixtures/qa/swiftroute_process_definition.json
+    digest: dc178a872c76b3f89687dcc0a47518e13ff88860f50daac0f9bcac2dc2d18963
+  - path: test/fixtures/qa/vortex_8d_corrective_action_definition.json
+    digest: 58ea2160e33eaf54296b71bbe1fbcd50f7f383795a8403833aceadc53c108a5b
+  - path: test/fixtures/qa/vortex_production_order_release_process_definition.json
+    digest: 4f7d8176b5605062cc04c20a20f86c4844e1148674a3095e43bd2763f24d8ce8
+  - path: test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json
+    digest: 40cd7e12fc6d185729b7b1454ba709a1d5a004f0e939346afaf3e02d1fc9d984
+  - path: test/fixtures/simulation/meridian/org_structure.yaml
+    digest: ce1cde5a911787d08d9877bc60b36402a6cfe964dbb85056abaf62dd9b5560cd
+  - path: test/fixtures/simulation/meridian/process_claim_intake.yaml
+    digest: a2dc51082161131a794912bd62fbb8152d87eb6effba309bec02baa2d8656fe2
+  - path: test/fixtures/simulation/meridian/process_policy_binding.yaml
+    digest: cfa431752b69b1436a34eb434a7a56a9d346a6e8e25c006ff9158f5aedf394c0
+  - path: test/fixtures/simulation/swiftroute/org_structure.yaml
+    digest: 4de99410dd76b1cc0e8d676c0ea567e4a9c51944c420f891eac19e49612a00ed
+  - path: test/fixtures/simulation/swiftroute/process_route_approval.yaml
+    digest: 8b7af550c6ef8d95c9ee41023024e0dbaa067058339dae8686b2c8c6ace3bc00
+  - path: test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml
+    digest: cc8c0ea9d88b07f4a15e6dd20315db9a2dc4afc8bc2c4b2ef24a70f9b847f723
+  - path: test/fixtures/simulation/vortex/org_structure.yaml
+    digest: db4702e9feb06b8d52e3922019fb418da6d773519ce5f870498447aedb9d7e51
+  - path: test/fixtures/simulation/vortex/process_quality_check.yaml
+    digest: 6e93ac24f322ca61e0d472dcd817d6ee63aa0188e5a7920147570ad2eafbac3a
+  - path: test/fixtures/simulation/vortex/process_work_order.yaml
+    digest: 92d4f6c6e4ab20f627655ff0ee0521f186ee2e4578e68fd52564af261372eacd
+  - path: test/fixtures/uat/process-definition-aliases/proc-meridian-loan-origination.yaml
+    digest: 9feb9a617122461a3aade2f27ad0a78ecfc743e7f44ce495ebded1bdf950c513
+  - path: test/fixtures/uat/process-definition-aliases/proc-meridian-regulatory-compliance-review.yaml
+    digest: c4e1599a80c7779607347981230dce96774c523232b8ce5ff9d5a804812e0146
+  - path: test/fixtures/uat/process-definition-aliases/proc-swiftroute-driver-incident.yaml
+    digest: 10999e743dbd6137386e7f5269d10b2c4eff1d75faf2813c806230a34764fe12
+  - path: test/fixtures/uat/process-definition-aliases/proc-swiftroute-shipment-approval.yaml
+    digest: 65f00eb8a62fa8a5f28ee5369065ea5b004def8fe229c746ebd995c09ecbc641
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-8d-corrective-action.yaml
+    digest: 579bec82d421b02ec88909ecd7df1f30d29c227b022f8c302caeac95321ad026
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-production-order-release.yaml
+    digest: 8f59e4af6594ad8716e62703aeebd2c1ffd994445fd89f60e82c29a5d71edad3
+  - path: test/fixtures/uat/process-definition-aliases/proc-vortex-supplier-quality-deviation.yaml
+    digest: ba7a52bc4e6b3e1bd45356259c405e94ab97168168cfd4370a6da9942ecc6175
+validator_outputs: []
+
+# State present at audit time, recorded as context and not as a finding (per the dispatch task):
+# the QA tenant for this scope already holds earlier fixture data (11 instances, a promotion-conflict
+# definition, and a task assigned to the administrator account). None of that is part of the audited
+# inputs of this scope and it was not read or judged here.
+
+checklist:
+  - item: A1
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no process definition: no sidecar under test/fixtures/uat/process-definition-aliases names this
+      scope, there is no test/fixtures/simulation/bilimbaga directory, and the solution pack
+      priv/solutions/bilimbaga.json lists only the exam module, whose pack (priv/modules/exam/pack.json) has an empty
+      definitions list. The validator output is empty.
+  - item: A2
+    answer: NOT_APPLICABLE
+    evidence: >
+      No scenario text and no node name in the scope mentions correction, resubmission or return; the only scenario
+      (candidate-timed-exam-autograde.yaml) has a candidate answering and submitting once, and there is no process
+      node to name.
+  - item: A3
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no process definition (same files looked for as under A1), so there is no outcome path to
+      follow to an end and the validator output is empty.
+  - item: A4
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no human task: no process definition exists, and the exam pack in priv/modules/exam/pack.json
+      defines entity types only (questions, exams, answer options and so on) with no task nodes.
+  - item: B1
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no approval: the only scenario has the exam candidate sit and submit an exam, with no
+      approve-or-decline step, and there is no process definition.
+  - item: B2
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no verification step: the scenario's three steps (list exams, start a session, answer and
+      submit) contain no entry-then-check pair between different people.
+  - item: C1
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no process definition, so there is no decision condition to read and the validator output
+      is empty.
+  - item: D1
+    answer: NOT_APPLICABLE
+    evidence: >
+      The only scenario, candidate-timed-exam-autograde.yaml, carries no process_id at all (read as the same as
+      "n/a"), so no proc- identifier needs to resolve through a sidecar, and there is no process whose steps could
+      be compared with the three scenario steps.
+  - item: D2
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no process definition, so there is no human task that must appear as a scenario step.
+  - item: D3
+    answer: YES
+    evidence: >
+      The scope has no human task and so no routing role to cover. The single scenario actor, the candidate
+      (actor-bilimbaga-candidate), exists under actors in test/fixtures/uat/actors.yaml with tenant bilimbaga and is
+      not listed under unresolved.
+  - item: D4
+    answer: YES
+    evidence: >
+      The candidate in test/fixtures/uat/actors.yaml holds only the lowest external-candidate access, which per
+      docs/roles.md lets a person list installed modules and take exam actions the exam module grants, and the
+      scenario steps need nothing more. The scope has no seed script (no scripts/seed_bilimbaga_ file exists), so
+      nothing grants more than the roster lists; the separately seeded login account named in the roster note is
+      outside the audited inputs and was not checked.
+  - item: E1
+    answer: NO
+    evidence: >
+      The scope has one sensitive action that applies: seeing commercially sensitive data, since the exam pack
+      (priv/modules/exam/pack.json, answer option entity) states that the marker of the correct answer is the
+      field a candidate must never see. The only scenario, candidate-timed-exam-autograde.yaml, has no step marked
+      expect_refusal: true, and the scope being listed as exempt in the roster does not turn this into a YES.
+  - item: E2
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no actor holding an administrator role: the only actor, actor-bilimbaga-candidate, holds only
+      the external-candidate role in test/fixtures/uat/actors.yaml.
+  - item: E3
+    answer: YES
+    evidence: >
+      The candidate is the one tenant actor; its three steps (list exams, start an exam session, submit answers)
+      need only the tenant-scope permissions docs/roles.md gives the candidate (listing the tenant's modules) plus
+      the exam module's own grants, and nothing that is platform-scope such as managing tenants.
+  - item: F1
+    answer: NOT_APPLICABLE
+    evidence: >
+      The scope has no process definition, so there is no approval, threshold, escalation or rejection handling
+      to compare with the definitions in the other scopes' files that were handed over.
+
+findings:
+  - id: PA-BILIMBAGA-001
+    severity: MAJOR
+    checklist_item: E1
+    business_description: >
+      The exam answer key is the one piece of information a candidate must never see, yet nothing in this scope
+      tries it. The only scenario shows a candidate sitting an exam and getting their score, but never has a
+      candidate try to look at the correct answers or at someone else's results and checks that they are turned
+      away. If the answer key were visible to candidates, a certification could be passed by reading rather than
+      knowing, and nobody would find out before real candidates did.
+    affected:
+      - path: test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+        where: whole scenario, steps 1 to 3; no step has a refusal expectation
+      - path: priv/modules/exam/pack.json
+        where: answer option entity, the correct-answer marker described as hidden from candidates
+    suggested_owner: BA-BILIMBAGA
+
+verdict: PASS_WITH_FINDINGS
+verdict_note: >
+  This scope has no multi-step process to audit, and its single exam scenario is consistent with its actor, but it
+  never checks that a candidate is refused sight of the answer key, so the design is usable with one gap to close.

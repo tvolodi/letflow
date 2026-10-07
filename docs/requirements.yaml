@@ -34633,7 +34633,8 @@ requirements:
          earlier pass does not count) is refused with a retryable 422 whose
          body names the missing keys. The task stays open and claimable,
          the instance, tokens, variables and events are unchanged, and the
-         only write is one audited refusal record without PII.
+         only write is at most one audited refusal record without PII
+         (exactly one when the audit store is healthy).
       3. A value that a variable_schema rejects on the HUMAN_TASK
          completion path (out-of-enum, wrong type) is refused the same way:
          retryable 422 naming the rejected keys, no instance ERROR, nothing
@@ -34643,43 +34644,101 @@ requirements:
       variable_schema's own type and enum rules. DECIDED: form-expression
       re-evaluation errors are unchanged (still EXECUTION_ERROR).
 
-      4. Engine-internal merges (service-task outputs, REQ-056 and
-         others) keep going through the EXECUTION_ERROR / REQ-061 path
-         unchanged; merge/3 and its whole-batch semantics are unchanged.
+      4. Engine-internal merges keep going through the EXECUTION_ERROR /
+         REQ-061 path unchanged: the surviving schema-rejection-to-ERROR
+         path is the SUB_PROCESS completion merge
+         (lib/letflow/engine/sub_process.ex, build_completion_multi_from_merge,
+         ~L838-847; REQ-062). The service-task merge passes nil
+         validations (lib/letflow/engine.ex ~L3394), so it is never
+         schema-rejected and is NOT a regression case (REQ-459 design
+         section 11.1). merge/3 and its whole-batch semantics are unchanged.
+
+      DESIGN FACTS (REQ-459 design; copy, do not re-decide):
+      5. One new step `:completion_guards` in run_complete_task, between
+         :snapshot_and_state and :form_expression_reevaluation (design
+         section 2.2 step 4), after BOTH row locks (task, then instance
+         projection). REQ-460 introduces it with the rule C half (step 4c:
+         RequiredOutputs.missing_keys/2 over the SUBMITTED map); REQ-463
+         adds the rule A half (4b) before it. A second rule C check (6b-ii,
+         missing_keys over the CORRECTED map, catching a key dropped by
+         visible_when false or recomputed to null) and the schema
+         rejection check (6b-i..iv) live inside merge_output_variables/7
+         and reuse its single variable_schemas read; the reevaluation
+         domain error (6a) is unchanged and 6b does not run for it.
+      6. New module Letflow.Engine.RequiredOutputs (pure, total:
+         required_outputs/1, missing_keys/2, rejected_keys/3,
+         any_rejected?/1, allowed_keys/2). Public refusal:
+         {:error, {:output_refused, %{missing_keys: [...], rejected_keys: [...]}}}.
+         The refusal body is HTTP 422, application/problem+json, `code`
+         = "output_refused", members `missing_keys` and `rejected_keys`
+         (both sorted ascending, deduplicated, NAMES ONLY, never a value,
+         enum or schema text), built by Api.Error.output_refused/2 and
+         Api.Response.output_refused/3 (design section 3.2).
+      7. Rejected-key names are restricted to the ALLOWED set (the task's
+         own pinned form_schema.properties union required_outputs). A
+         rejection on any other key is still a refusal (whole batch,
+         nothing merged) but the 422 carries BOTH lists empty and the key
+         name appears nowhere (body or audit): this relaxes "naming the
+         rejected key" for out-of-form keys so a task worker cannot probe
+         which variable keys have a variable_schema (INV-2; design
+         section 3.2, Adjustments REQ-460 item 0, test C-4a).
+      8. The refusal audit record is written by a new
+         record_completion_refusal_audit/6, called from
+         interpret_complete_result/3 strictly after Repo.transaction/1 has
+         returned (a separate transaction, direct Audit.insert_entry/3,
+         function-level rescue, log-and-swallow). Guarantee: AT MOST ONE
+         audit record per refused request, EXACTLY ONE when the audit
+         store is healthy; a failing audit store yields the same 422 and
+         one logged warning (design section 2.4, D-3).
 
       EXPLICIT AMENDMENT OF ACCEPTED BEHAVIOUR. REQ-061 (status done)
       lists among the callers of the shared ERROR sink 'REQ-049's
       schema-violation-on-merge case'. After this entry that case still
-      routes to ERROR for service-task and other engine-internal merges,
-      but NOT for a HUMAN_TASK completion: there a rejected output is a
-      retryable 422 with no state change and no EXECUTION_ERROR event.
+      routes to ERROR for the SUB_PROCESS completion merge (REQ-062) and
+      other engine-internal EXECUTION_ERROR callers, but NOT for a
+      HUMAN_TASK completion: there a rejected output is a retryable 422
+      with no state change and no EXECUTION_ERROR event.
       REQ-061's text is therefore amended, not contradicted, and DOC-UPDATER
       leaves a dated amendment pointer on REQ-061 (see acceptance
       criteria). Tests that today assert instance ERROR after a HUMAN_TASK
-      completion with a rejected output (search
-      test/letflow/engine_complete_task_test.exs,
-      test/letflow/engine/shipped_definition_variable_schemas_engine_test.exs,
-      test/letflow/engine/variable_schema_test.exs) are changed to the new
-      behaviour, each with a comment citing this entry.
+      completion with a rejected output are changed to the new behaviour,
+      each with a comment citing REQ-459/REQ-460. The real files (verified
+      by the REQ-459 design, section 12.1):
+      test/letflow/engine_variable_schema_merge_test.exs (lines ~212, 337,
+      434), test/letflow/engine/shipped_definition_variable_schemas_engine_test.exs
+      (~132) and test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs
+      (~292; header comment ~14). test/letflow/engine_complete_task_test.exs
+      has no such assertion and test/letflow/engine/variable_schema_test.exs
+      is a unit test of the lookup and does not change.
+      test/letflow/engine_sub_process_test.exs (~777) is the SUB_PROCESS
+      path and must stay green. The code comments that would become false
+      are amended in the same change: the engine.ex moduledoc section
+      'Output-variable schema validation at the merge call site (REQ-109)'
+      (~L142-152), the comment above merge_output_variables/7
+      (~L3829-3861) and the 'Dependency ordering' paragraph of
+      lib/letflow/engine/variable_merge.ex (~L58-77).
 
       DECISION RECORD 0007 (docs/migration/decisions/0007-variable-merge-validates-new-keys.md)
       is NOT edited by this entry. It is flagged below for REVIEWER
       sign-off, per the decision-record rule.
     open_questions:
-      - "DECISION RECORD 0007, finding by ORCH, for REVIEWER sign-off. 0007 does not contradict validating every key, but two passages become stale for the task-completion path. Passage 1 (Implementation section, merge/3 bullet): 'the same whole-batch-abort-on-rejection semantics (§3.2) apply regardless of which key rejected.' Passage 2 (Open questions section): 'validation errors surface only via `EXECUTION_ERROR` events today'. Proposed dated note to append to 0007 by the reviewer-approved change: '2026-10 note (REQ-460): on the HUMAN_TASK completion path a rejected output is now refused with a retryable 422 before any state change and no EXECUTION_ERROR is raised; merge/3 itself and its whole-batch semantics are unchanged; the EXECUTION_ERROR path remains for service-task and other engine-internal merges. REVIEWER sign-off: pending'. This entry does not edit 0007; REVIEWER decides whether and when the note is written."
+      - "DECISION RECORD 0007, finding by ORCH, for REVIEWER sign-off. 0007 does not contradict validating every key, but two passages become stale for the task-completion path. Passage 1 ('What changes', first bullet, ~line 79): 'the same whole-batch-abort-on-rejection semantics (§3.2) apply regardless of which key rejected.' (still true of merge/3 itself; stale only in what the caller does with the rejection on the HUMAN_TASK path). Passage 2 ('Open questions', ~line 108): 'validation errors surface only via `EXECUTION_ERROR` events today'. Proposed dated note to append to 0007 by the reviewer-approved change: '2026-10 note (REQ-460): on the HUMAN_TASK completion path a rejected output is now refused with a retryable 422 before any state change and no EXECUTION_ERROR is raised; merge/3 itself and its whole-batch semantics are unchanged; the EXECUTION_ERROR path remains for the SUB_PROCESS completion merge and other engine-internal failures. REVIEWER sign-off: pending'. This entry does not edit 0007; REVIEWER decides whether and when the note is written."
       - "Start-form: GH #2335 point 4 asks for required instance-start variables (for example declared_value) validated at POST /instances. No start-form node exists in a definition today, so this is OUT OF SCOPE here and needs its own requirement and design. Default: ORCH files a follow-up issue referencing GH #2335 when registering this series; this entry builds nothing for it."
-      - "The 422 status versus the existing error-contract of Letflow.Routers.Tasks. Default: 422, as stated in GH #2335; the design (REQ-459 section 3) may report a conflict."
+      - "Sizing: if the work exceeds one turn, ELIXIR-DEV completes steps 4a/4c, the router and the audit record (items 1, 2, 5, 6, 8) first and reports the 6b schema-rejection amendment and its test changes to ORCH as a split, not a silent partial."
+      - "The 422 status versus the existing error-contract of Letflow.Routers.Tasks. RESOLVED by the REQ-459 design (section 3.1): no conflict found; 422 is the existing 'fix the body and resend' class."
     acceptance_criteria:
-      - "a HUMAN_TASK with required_outputs [decision] completed with output_variables lacking decision (key absent) returns 422 whose body names decision and carries no submitted value; afterwards the task is still open and claimable, the instance status, tokens, variables and event count are unchanged (asserted by reading the rows before and after), real Postgres"
+      - "a HUMAN_TASK with required_outputs [decision] completed with output_variables lacking decision (key absent) returns 422 (application/problem+json, code output_refused, missing_keys [decision], rejected_keys []) whose body names decision and carries no submitted value; afterwards the task is still open and claimable, the instance status, tokens, variables and event count are unchanged (asserted by reading the rows before and after), real Postgres"
       - "the same task completed with decision: null returns the same 422; completed with decision omitted while the instance already holds a decision value from an earlier pass (rework loop) is STILL refused, because only submitted output counts"
-      - "a HUMAN_TASK whose variable_schema enum rejects the submitted value returns a retryable 422 naming the rejected key and NOT its value, the instance is NOT in ERROR, no EXECUTION_ERROR event exists, and an immediate retry of the same task with a valid value completes and routes correctly"
+      - "a HUMAN_TASK whose variable_schema enum rejects the submitted value returns a retryable 422 with rejected_keys naming the rejected key (an in-form or required_outputs key) and NOT its value or the enum, the instance is NOT in ERROR, no EXECUTION_ERROR event exists, and an immediate retry of the same task with a valid value completes and routes correctly"
       - "negative cases: a completion carrying every required key with valid values behaves as before (existing completion tests pass unchanged except the amended ERROR assertions); a definition with no required_outputs behaves identically to today for omitted keys (default-off test)"
-      - "a service-task merge that violates a variable_schema still ends the instance in ERROR with an EXECUTION_ERROR event (regression test): REQ-061's path is intact for engine-internal merges"
-      - "the refusal writes exactly one audit record containing no submitted value, no user name and no email (test greps the stored record for the submitted value and the caller's email and finds neither); the 422 body contains key names only, no stack, module or SQL text"
+      - "a value rejected by a variable_schema on a key that is neither in the task's form_schema.properties nor in required_outputs still refuses the completion with 422 and BOTH lists empty, nothing merged, instance not in ERROR, and the key's name appears in neither the body nor the audit record (test C-4a)"
+      - "a SUB_PROCESS completion whose output the parent's variable_schema rejects still ends the parent in ERROR with an EXECUTION_ERROR event (regression test, test C-12; test/letflow/engine_sub_process_test.exs ~777 stays green): REQ-061's path is intact for engine-internal merges. A unit test keeps asserting VariableMerge.merge/3 returns {:rejected, ...} for non-nil validations. (A service-task merge passes nil validations and cannot be schema-rejected, so it is not the regression case.)"
+      - "a form-expression re-evaluation domain error with all required keys present still ends in EXECUTION_ERROR (test C-10); a submission with a missing required key AND a failing cross-field validation gets the 422, not EXECUTION_ERROR (test C-11); a required key dropped by visible_when false or recomputed to null is refused with missing_keys (test C-7)"
+      - "the refusal writes at most one audit record per refused request, and exactly one when the audit store is healthy; the record (action task.completion_refused) contains no submitted value, no user name and no email (test greps the stored record for the submitted value and the caller's email and finds neither); the 422 body contains key names only, no stack, module or SQL text; with audit_entries unavailable (DROP-TABLE regression, test C-15) the refusal still returns the same 422, does not raise, and one warning is logged"
       - "the same refusals hold when the completing request is authenticated with an API token, and for a caller holding TENANT_ADMIN (no role is exempt from the server-side check); both asserted in router tests"
       - "DOC-UPDATER leaves a dated amendment pointer on REQ-061 in docs/requirements.yaml naming this entry and the date; docs/migration/decisions/0007-variable-merge-validates-new-keys.md is unchanged by this entry (git diff of that path quoted empty)"
       - "SECURITY-REVIEWER verdict recorded (mandatory: lib/ change on a tenant-data path); REVIEWER verdict recorded on the 0007 note"
-      - "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the test files named above, and mix letflow.check_boundaries pass, real output quoted"
+      - "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the changed and new test files named above (plus test/letflow/routers/tasks_test.exs), and mix letflow.check_boundaries pass, real output quoted"
     depends_on: [REQ-459]
 
   - id: REQ-461
@@ -34705,23 +34764,52 @@ requirements:
       2. Every key in required_outputs has a variable_schema in the
          definition's variable_schemas, or the check reports the node and the
          key (the enum or type is what keeps the value valid, REQ-109).
-      3. Decision reads: for an edge condition or exclusive gateway that
-         reads a variable key, report it when the key IS the output of a
-         HUMAN_TASK on the path (appears in that task's form_schema
-         properties) and NO upstream HUMAN_TASK on any path declares it in
-         required_outputs. Whether this is a violation or a warning, and
-         which keys count as decision keys, is fixed by the REQ-459 design;
-         this entry builds what the design says and no more.
-      4. Run wherever the existing checks run (validate, activate, import).
+      3. Decision reads: for a conditional outgoing edge of an
+         EXCLUSIVE_GATEWAY or HUMAN_TASK that reads a variable key, report
+         it when the key IS the output of a HUMAN_TASK on the path
+         (appears in that task's form_schema.properties) and NO upstream
+         HUMAN_TASK (ancestors_or_self of the edge source) declares it in
+         required_outputs. This check is a WARNING, permanently, never a
+         violation or error (REQ-459 design section 1.4, D-4): it is
+         produced as the string prefix `decision_key_not_required:` by
+         SemanticValidation.decision_key_warnings/2 and surfaces in the
+         `warnings` list. There is no later severity switch.
+      4. Surfaces (design sections 1.2-1.4, Adjustments REQ-461): shape
+         violations (check 1) at validate, create, update, import and pack
+         install (they run inside Graph.validate_node_attributes/1);
+         check 2 at validate and activate only (variable_schemas rows exist
+         only after the definition row), called from BOTH clauses of
+         SemanticValidation.validate/2 so the empty-declared_fields early
+         return does not hide it; check 3 WARNING in the validate 200 body
+         and the pack-install result, not in the activate response.
+         Creates Letflow.Definitions.ValidationWarnings.for_definitions/2
+         (concatenates RoleBinding warnings, decision_key warnings; REQ-464
+         adds the third source) and switches the two call sites
+         (Definitions.validate_definition_graph/2 and
+         SolutionPack.unbound_role_warnings/2). Warnings type stays
+         [String.t()].
+
+      RESERVED CODES (copy exactly from REQ-459 design section 1.2):
+      CHK-25 check_required_outputs/1 in lib/letflow/definitions/graph.ex
+      produces only the two shape codes: `:invalid_required_outputs`
+      (not a list, non-string/empty entry, duplicate; one violation per
+      defect) and `:required_outputs_on_non_human_task`. Produced in
+      lib/letflow/definitions/semantic_validation.ex, not in CHK-25:
+      `:required_output_without_variable_schema` (check 2, VIOLATION,
+      SemanticValidation.required_output_schema_violations/2) and
+      `decision_key_not_required:` (check 3, WARNING string prefix,
+      SemanticValidation.decision_key_warnings/2).
     open_questions:
-      - "Check 3 would flag shipped definitions whose decision keys are not yet in required_outputs until REQ-462 adopts them. Default: check 3 ships as a WARNING in the validation result until REQ-462 is done, then the design's stated severity applies; the severity switch is part of REQ-462, not this entry. REVIEWER may substitute 'violation now, shipped definitions adopt in the same change'."
-      - "A definition already active in a tenant that fails a new check keeps running. Default (as REQ-455): new checks apply at validate, activate and import time only; nothing is deactivated."
+      - "RESOLVED by the REQ-459 design (section 1.4, D-4): check 3 is a permanent WARNING, not a violation, because shipped meridian decision keys (credit_decision, risk_rating, committee votes, regulatory review) stay unadopted by REQ-462 and a violation would make those definitions unactivatable. No severity switch exists in REQ-462. Open follow-up (design OQ-3): the check is 'no upstream task declares the key', not per-producer; an escalation task that produces the same key but omits it is not flagged when its source node declares it. ORCH may file a follow-up for a per-producer lint."
+      - "A definition already active in a tenant that fails a new check keeps running. Default (as REQ-455): the surfaces are those stated in BUILDS item 4; nothing is deactivated."
     acceptance_criteria:
-      - "one test per check with a minimal definition that violates only that check, asserting the new code and the offending node id and key; one test per check with a valid neighbour that passes (required_outputs naming a key that has a variable_schema)"
+      - "one test per check with a minimal definition that violates only that check, asserting the new code (check 1: :invalid_required_outputs, :required_outputs_on_non_human_task; check 2: :required_output_without_variable_schema; check 3: the decision_key_not_required: warning prefix) and the offending node id and key; one test per check with a valid neighbour that passes (required_outputs naming a key that has a variable_schema)"
+      - "surfaces: a definition whose HUMAN_TASK has a non-list required_outputs is rejected by Definitions.create/2 and by update (code :invalid_required_outputs); a definition with required_outputs naming a key without a variable_schema is reported by POST /definitions/:id/validate and refused by activate (:required_output_without_variable_schema), and is NOT rejected at create; the decision_key_not_required: warning appears in the validate 200 body and in the pack-install result and not in the activate response"
+      - "check 2 is reported for a definition that declares required_outputs and has declared_fields == %{} (no variable_schemas at all): the empty-declared_fields early return of SemanticValidation.validate/2 does not hide it"
       - "a required_outputs key without a variable_schema is reported with the node id and the key name; a duplicate key and a non-list value are each reported (negative tests)"
-      - "an edge condition reading decision where an upstream HUMAN_TASK has decision in its form_schema but no required_outputs is reported by check 3; the same definition with required_outputs: [decision] on that task passes"
+      - "an edge condition reading decision where an upstream HUMAN_TASK has decision in its form_schema but no required_outputs yields a decision_key_not_required: WARNING (in the validate response `warnings`, validation still valid, never a violation) from check 3; the same definition with required_outputs: [decision] on that task yields no such warning; a key that no HUMAN_TASK produces (service response, start variable) yields none"
       - "required_outputs on a node that is not a HUMAN_TASK is reported"
-      - "every definition shipped in the repository (test/fixtures/qa/*process_definition.json, priv/) is run through the validator in a test and the count of new findings per definition is quoted; none is weakened to make a definition pass"
+      - "every definition shipped in the repository (test/fixtures/qa/*process_definition.json, test/fixtures/simulation/**, priv/) is run through the validator in a test and the count of new findings (violations and warnings separately) per definition is quoted; none is weakened to make a definition pass"
       - "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over test/letflow/definitions, and mix letflow.check_boundaries pass, real output quoted"
       - "SECURITY-REVIEWER is not required for this entry (validator over definition data, no tenant-data path); CODE-DESIGN-VALIDATOR confirms code names match the REQ-459 design"
     depends_on: [REQ-460]
@@ -34749,7 +34837,7 @@ requirements:
       recreate the v1.5 forms itself.
 
       BUILDS:
-      1. Each of the following ELEVEN HUMAN_TASK nodes declares
+      1. Each of the following TWELVE HUMAN_TASK nodes declares
          required_outputs naming the key its outgoing edges read (ids and
          keys verified against the fixtures on 2026-10-07; ELIXIR-DEV
          re-verifies them on the working branch):
@@ -34774,43 +34862,58 @@ requirements:
            j. escalate-budget-approval-to-ceo: budget_decision
          vortex supplier quality deviation
          (test/fixtures/qa/vortex_supplier_quality_deviation_process_definition.json):
-           k. severity-classification: severity (read by the severity-routing
-              edges)
+           k. severity-classification: severity (read downstream by the
+              severity-routing edges e6-e8; this node has no form_schema,
+              so severity is not a form property and REQ-461 check 3 can
+              never fire for it; check 2 is satisfied by the existing
+              severity variable_schema)
+           l. escalate-severity-classification-to-ceo: severity (the D-ESC
+              task for severity-classification; same required_outputs key
+              as its source node, per REQ-459 design section 9 decision 1;
+              ORCH DECISION 2026-10-07: a missing value would otherwise
+              fall through to default-critical)
          Deliberately NOT in this list (see open_questions): meridian
          credit-memo-review / credit-memo-escalation-review (credit_decision),
          risk-assessment / risk-assessment-escalation-review (risk_rating),
-         committee-vote-cro / -director / -ceo, the regulatory review, the
-         swiftroute incident definition, and
-         escalate-severity-classification-to-ceo (its outgoing edge is
-         unconditional). If the run finds an edge reading a key of any of
+         committee-vote-cro / -director / -ceo, the regulatory review,
+         false-positive (vortex supplier quality deviation; read by
+         false-positive-check, submitted by the same
+         severity-classification task: not a decision key of this batch,
+         left for a later adoption pass) and the swiftroute incident
+         definition. If the run finds an edge reading a key of any of
          these it reports it to ORCH.
-      2. Every adopted key has a variable_schema (REQ-461 check 2) in the
+      2. Every adopted key has a variable_schema (REQ-461 check 2, a
+         VIOLATION at validate and activate:
+         :required_output_without_variable_schema) in the
          definition and in the seed scripts under scripts/, so the
          fixture, the seed and the definition agree.
       3. The two KNOWN LIMITATION tests (ops-review and ceo-approval completed
          with the decision key OMITTED) are replaced by assertions of the
-         new behaviour: 422, task still open, instance unchanged, and a
-         retry with a valid decision completes and routes. Where
-         REQ-461's check 3 was shipped as a warning, it is switched to the
-         severity the REQ-459 design states.
+         new behaviour: 422 (code output_refused, missing_keys naming the
+         key), task still open, instance unchanged, and a retry with a
+         valid decision completes and routes. REQ-461's check 3 is a
+         permanent WARNING (REQ-459 design section 1.4, D-4); there is NO
+         severity switch in this entry. Warnings that remain for the
+         deliberately unadopted keys (see the NOT-in-list paragraph) are
+         listed per definition in the run report and reported to ORCH.
       4. Each changed definition's version is incremented by one minor step
          from the version found on the working branch at the start (not a
-         number written in this entry; swiftroute is v1.4 on main and v1.5
-         on PR #2334) and its description says why, as the v1.5 swiftroute
+         number written in this entry; swiftroute is v1.5 on main after PR
+         #2334, other definitions as found) and its description says why, as the v1.5 swiftroute
          line does. REQ-465 and REQ-466 then increment again from whatever
          this entry leaves, so numbering is sequential and read, never
          assumed.
     open_questions:
-      - "Escalation tasks of D-ESC (for example escalate-l2-approval-to-ceo, escalate-to-ceo) are HUMAN_TASKs that take the same decision. Default: they declare the same required_outputs as the task they replace, because an omitted decision on an escalation task has the same silent fail-closed effect; REQ-459 section 9 is the authority."
+      - "Escalation tasks of D-ESC (for example escalate-l2-approval-to-ceo, escalate-to-ceo) are HUMAN_TASKs that take the same decision. DECIDED by REQ-459 design section 9 (decision 1): no inheritance; each escalation node declares the same required_outputs as the node it replaces, explicitly, because an omitted decision on an escalation task has the same silent fail-closed effect. Items e, h, j and l declare them."
       - "Start-form required instance-start variables (declared_value) are out of scope (see REQ-460 open_questions). The ISS-1008 acceptance line 'The declared value is a required start field' stays unmet by this entry and is reported to ORCH."
-      - "Sizing: eleven nodes across four definitions in one entry. If ELIXIR-DEV finds the work exceeds one turn it adopts swiftroute and replaces the KNOWN LIMITATION tests first and reports the remaining verticals to ORCH for a split, not a partial silent pass."
+      - "Sizing: twelve nodes across four definitions in one entry. If ELIXIR-DEV finds the work exceeds one turn it adopts swiftroute and replaces the KNOWN LIMITATION tests first and reports the remaining verticals to ORCH for a split, not a partial silent pass."
       - "Out-of-list decision keys (meridian credit_decision, risk_rating and the three committee votes; regulatory review). They are read by edges but are not named in GH #2335's adoption list. Default: not adopted here; ORCH decides whether a follow-up entry adopts them."
     acceptance_criteria:
       - "the run report quotes the check of PR #2334 (merged or not); if not merged the entry reports blocked and changes nothing (git diff empty)"
-      - "for each of the eleven nodes a through k in BUILDS item 1 a test completes it with the decision key omitted and asserts 422 naming that key, task still open, instance unchanged, then completes it with a valid value and asserts the route taken: eleven tests, named by node id, and the run report lists the eleven test names"
+      - "for each of the twelve nodes a through l in BUILDS item 1 a test completes it with the decision key omitted and asserts 422 naming that key, task still open, instance unchanged, then completes it with a valid value and asserts the route taken: twelve tests, named by node id, and the run report lists the twelve test names. REQ-461 check 3 is vacuous for the vortex nodes g through l (no form_schema, so no form-produced key) and proves nothing there; the 422 tests are the evidence"
       - "the two former KNOWN LIMITATION tests no longer exist (grep 'KNOWN LIMITATION' test returns nothing for them) and their replacements assert 422, not the former fail-closed route; the former assertion text is quoted in the run report"
-      - "every shipped definition changed by this entry passes the validator with status OK, and the REQ-461 check 3 finds no unadopted decision key in any of them (counts quoted per definition)"
-      - "no definition outside the three verticals and no decision node whose key is not read by an outgoing edge is changed (git diff --stat quoted)"
+      - "every shipped definition changed by this entry passes the validator with status OK (no violation), and REQ-461 check 3 emits no decision_key_not_required: warning for any of the twelve adopted nodes (a through l); warnings that remain for the deliberately unadopted keys (meridian credit_decision, risk_rating, committee votes, regulatory review) are expected, are counted and listed per definition in the run report, and are reported to ORCH"
+      - "no definition outside the three verticals and no HUMAN_TASK node whose decision key is not read by a conditional edge at or downstream of it is changed (git diff --stat quoted)"
       - "SECURITY-REVIEWER verdict recorded (mandatory for adoption that changes what a completion may omit on a tenant-data path)"
       - "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over test/letflow/scripts and test/letflow/engine files naming the changed definitions, and mix letflow.check_boundaries pass, real output quoted"
     depends_on: [REQ-460, REQ-461]
@@ -34857,21 +34960,68 @@ requirements:
       2. Completion check in Letflow.Engine.run_complete_task: if the actor
          is the user who most recently completed any listed node in this
          instance, refuse with the REQ-459 refusal body. Nothing is written
-         except one audited refusal record without PII; the task stays open
-         and claimable.
+         except at most one audited refusal record without PII (exactly one
+         when the audit store is healthy); the task stays open and
+         claimable.
       3. Claim check in Letflow.Tasks.claim_task/3 with the same comparison
-         and the same refusal body.
+         and the same refusal body. Claim refusals write NO audit record.
       4. Out of scope: org-chart or delegation models, a tenant-wide
          switch. DECIDED (BA, 2026-10-07): assign_task/4 and
          reassign_task/4 do not check distinct_from; the completion check
          still refuses.
+
+      DESIGN FACTS (REQ-459 design; copy, do not re-decide):
+      5. ONE engine entry point, Letflow.Engine.SeparationOfDuties.check/5
+         (repo, graph, task, actor_id, prefix), called by the
+         `:completion_guards` step (design section 2.2 step 4b) that
+         REQ-460 introduced, AFTER BOTH row locks (task, then instance
+         projection) and BEFORE form re-evaluation and the merge, and
+         before the rule C submitted check (4b before 4c). It returns :ok
+         with no query when the node has no non-empty distinct_from or
+         actor_id is not a binary; otherwise one query. On
+         {:error, {:separation_of_duties, blocking_node_ids}} the step
+         returns {:error, {:completion_refused, {:separation_of_duties, ids}}};
+         the blocking node ids reach only the audit record, never the
+         response. The claim path calls check_for_claim/3 (second public
+         entry, loads the snapshot graph itself, delegates to check/5).
+         check_for_claim/3 is TOTAL: any failure to obtain the graph or
+         run the query (missing snapshot, failing build_graph/1, raise, DB
+         error) is caught, logged with one Logger.warning naming only the
+         task id and failure tag, and returns :ok (fails open; completion
+         is the authority and re-checks under the locks). It runs only
+         after the existing eligibility refusals, immediately before the
+         write in the claim clauses and in the idempotent re-claim clause.
+      6. Rework read: one query per guarded completion or claim over
+         `tasks` (status COMPLETED, instance_id, node_id IN named ids),
+         DISTINCT ON (node_id) ordered node_id ASC, completed_at DESC,
+         inserted_at DESC, id DESC, via the existing idx_task_instance
+         index; NO migration and no new index. A named node with no
+         completed row imposes no constraint; CANCELLED rows (escalated
+         past) are never completions.
+      7. Refusal wire: HTTP 403, Content-Type application/problem+json,
+         body EXACTLY {"detail":"separation of duties","status":403} (two
+         members, constant bytes, no trace_id, no type/title) for EVERY
+         cause (every node, user, instance) and on BOTH POST
+         /tasks/:id/complete and POST /tasks/:id/claim, sent by
+         Api.Response.separation_of_duties/1 (design section 4). The claim
+         mapping deliberately diverges from claim's own 409 for
+         eligibility refusals (D-2). Public engine error:
+         {:error, :separation_of_duties}, detail-free.
+      8. Audit (design section 5): action task.completion_refused,
+         after_state rule separation_of_duties with node_id and sorted
+         blocking_node_ids; written by record_completion_refusal_audit/6
+         (REQ-460 created it; this entry adds the {:separation_of_duties, _}
+         half of completion_refusal()) after the failed transaction
+         returns. At most one record per refused request, exactly one when
+         the audit store is healthy; a failing audit store gives the same
+         403 and one logged warning.
     open_questions:
       - "FOLLOW-UP, not part of this change: PROCESS-AUDITOR checklist item B1 (.claude/agents/process-auditor.md and the docs that restate it) may answer YES when distinct_from is present on the approval task. Dependency for ORCH: file a docs-only follow-up that edits that text after this entry is done. This entry changes no agent file."
       - "REQ-457's refusal scenario 'requester approves own request' needs this entry (Q-974 must not start before this is done). REQ-457's entry is NOT edited here; ORCH reports the ordering."
     acceptance_criteria:
       - "two roles, one user: user U holds role-a and role-b, completes node N1 (role-a), then attempts node N2 (role-b, distinct_from [N1]): completion is refused with the REQ-459 4xx, the body is exactly the fixed separation-of-duties body, and the task is still open; a second user holding role-b completes N2 (real Postgres, engine and router tests)"
-      - "the refusal body and status are byte-identical whichever node or user triggered it, and contain no node id, user id, user name or email (test compares bodies from two different triggers and greps for the ids)"
-      - "claim: U attempting POST /tasks/:id/claim on N2 is refused with the same body; a different user claims successfully"
+      - "the refusal is HTTP 403 and the body is exactly {\"detail\":\"separation of duties\",\"status\":403}, byte-identical whichever node or user triggered it, and contains no node id, user id, user name or email (test compares bodies from two different triggers byte for byte and greps for the ids)"
+      - "claim: U attempting POST /tasks/:id/claim on N2 is refused with the same 403 body and no audit record is written; a different eligible user claims successfully; a caller who is not eligible for the task still gets the existing claim refusal first (not the separation body); with the snapshot missing or build_graph/1 failing, check_for_claim/3 returns :ok, logs one warning and the eligible claim succeeds (fails open), and a definition without distinct_from gains no new claim failure"
       - "API-token case: a request authenticated with U's API token to complete N2 is refused, a token of a different user is accepted"
       - "TENANT_ADMIN is not exempt: a TENANT_ADMIN user who completed N1 is refused on N2 (requires REQ-447 PR2; the test fails if TENANT_ADMIN is special-cased)"
       - "parallel branches: nodes P1, P2 and P3 on parallel branches each name the other two in distinct_from; user U completes P1, then U attempting P2 is refused; three distinct users complete P1, P2 and P3 and all are accepted; the order of completion does not matter (U completing P2 first then attempting P1 is refused too)"
@@ -34879,8 +35029,10 @@ requirements:
       - "assign and reassign: assign_task and reassign_task to a user who completed a named node succeed (no check); the completion by that user is then refused"
       - "rework loop: U completes N1, a different user V completes N1 on a second pass, then U attempts N2: accepted because the most recent completion of N1 is V's; reversed order (V then U on the second pass) refuses U"
       - "default-off: a definition whose nodes carry no distinct_from lets the same user complete both steps, identical to today's behaviour (regression test on an existing shipped definition)"
-      - "a refusal writes nothing except one audit record with no PII (rows before and after compared; the record is searched for the user's email and name and contains neither)"
-      - "an idempotent replay of an accepted completion by the same user is not refused (REQ-459 section 10)"
+      - "a refusal writes nothing except at most one audit record with no PII (exactly one when the audit store is healthy; rows before and after compared, including updated_at and event count; the record, action task.completion_refused, is searched for the user's email and name and contains neither); with audit_entries unavailable (DROP-TABLE regression) the refusal still returns the same 403, does not raise and one warning is logged; an armed escalation timer keeps its original fire_at after a refusal"
+      - "a re-POST of an already-accepted completion by the same user is not refused by this rule: it receives the existing 409 'task is not pending' (the task is COMPLETED, so it ends at step 1 before the guards), the body is not the separation body and no task.completion_refused record is written (REQ-459 design section 10)"
+      - "default-off query count: a completion of a node without distinct_from issues no additional query beyond today's"
+      - "concurrency: two completions of parallel nodes P1 and P2 by the same user submitted concurrently: exactly one commits and the other is refused (the instance row lock serialises them)"
       - "SECURITY-REVIEWER verdict recorded (mandatory: authorization-adjacent change in lib/); it checks the refusal leaks nothing beyond 'separation of duties'"
       - "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over the engine and tasks router test files touched, and mix letflow.check_boundaries pass, real output quoted"
     depends_on: [REQ-459, REQ-460]
@@ -34890,7 +35042,8 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
-    impl_order: 1027  # letflow-queue task id, GH#2342. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-463 -- checks the attribute REQ-463 introduces, with the code names reserved in the REQ-459 design
+    impl_order: 1027  # letflow-queue task id, GH#2342. Registered 2026-10-07 by ORCH (WF-01 Step 3; registered in this PR because mix letflow.check_deferral_staleness requires 0 deferrals). Ordering recorded at drafting: blocked-by: REQ-463 and REQ-461 (ValidationWarnings, CHK-25) -- checks the attribute REQ-463 introduces, with the code names reserved in the REQ-459 design
+    # Queue task Q-1027 was registered with depends_on [1026] only (the queue cannot edit depends_on); ORCH keeps Q-1027 locked until Q-1024 (REQ-461) is done.
     description: >
       Source: GH #2323 (ISS-1034, Q-1016): 'the process validator checks
       that the referenced nodes exist and precede the node', AMENDED by BA
@@ -34906,36 +35059,70 @@ requirements:
       never an automatic binding).
 
       BUILDS:
+      RESERVED CODES (copy exactly from REQ-459 design section 1.2; do
+      not invent others). Violations: `:invalid_distinct_from`,
+      `:distinct_from_on_non_human_task`, `:distinct_from_self_reference`,
+      `:distinct_from_unknown_node`, `:distinct_from_not_human_task`,
+      `:distinct_from_downstream_only`. Warning (string prefix, not an
+      atom): `distinct_from_single_member_role:`. They extend
+      Graph.Violation.code(); checks are CHK-26 (check_distinct_from/1,
+      checks 1 and 2) and CHK-27 (check_distinct_from_position/1, check 3),
+      appended after CHK-25 in Graph.validate_node_attributes/1.
+
       1. Shape: `distinct_from` on a HUMAN_TASK is a list of non-empty node
          ids without duplicates and without the node's own id; on any other
-         node type it is a violation.
+         node type it is a violation. Codes: :invalid_distinct_from (not a
+         list, non-string or empty entry, duplicate),
+         :distinct_from_on_non_human_task, :distinct_from_self_reference.
       2. Existence: every listed id is a node of the same definition and a
-         HUMAN_TASK; a missing id is a violation naming node and id.
+         HUMAN_TASK; a missing id is a violation naming node and id
+         (:distinct_from_unknown_node); an existing node that is not a
+         HUMAN_TASK is :distinct_from_not_human_task.
       3. Path position: a listed node must not be reachable only AFTER this
          node (this node has a path to it and it has no path to this node):
          a node downstream-only is a violation naming both, since it can
-         never have completed when this node is checked. A listed node
-         that precedes this node, is on a parallel branch (no path either
-         way) or is on a rework loop (a path both ways) passes.
+         never have completed when this node is checked
+         (:distinct_from_downstream_only). A listed node that precedes this
+         node, is on a parallel or mutually exclusive branch (no path
+         either way) or is on a rework loop (a path both ways) passes
+         (design section 1.5 relation table). Consequence: three parallel
+         nodes may each name the other two; a node and its own downstream
+         successor may not name each other (l1-approval naming l2-approval
+         fails). A node unreachable from START passes (CHK-22 reports it).
       4. Same-role WARNING: when this node and a listed node route to the
-         same role and that role has exactly one member in the installing
-         tenant, the validation result carries a WARNING (not a violation)
-         naming both nodes and the role, because the single member could
-         never complete the second node. Evaluated where tenant role
-         membership is known (install or activate), as REQ-455 check 4 is;
-         at pure definition validation without a tenant it is not evaluated.
+         same role (attributes["role"] only, not escalation_role) and that
+         role has exactly one member in the installing tenant, the
+         validation result carries a WARNING (not a violation, prefix
+         `distinct_from_single_member_role:`) naming both nodes and the
+         role, because the single member could never complete the second
+         node. One warning per unordered pair (ids sorted); it applies to
+         preceding, parallel and loop pairs alike; zero members is the
+         unbound_task_role: case, not this one. Evaluated where tenant role
+         membership is known: pack install and
+         Definitions.validate_definition_graph/2 (which already holds the
+         tenant prefix), NOT in the activate response (record-shaped,
+         carries no warnings) and not at pure Graph validation without a
+         tenant. New RoleBinding functions single_member_pairs/1,
+         member_counts/2 (one prefix-scoped query over group_members and
+         tenant_role, returns counts only, run only when a definition has
+         a candidate pair) and format_single_member_warning/2; the warning
+         is the third source of ValidationWarnings.for_definitions/2
+         (created by REQ-461). Members are counted as distinct
+         group_members.user_id of the role's bound group regardless of
+         users.status (design OQ-2).
     open_questions:
       - "Whether the same-role warning also covers the case where the single member is the user's only role holder across escalation roles. Default: no; the warning compares only the role attributes of the two nodes."
+      - "Whether the single-member count excludes inactive users (design OQ-2). Default built: no, every distinct group_members.user_id of the role's bound group counts regardless of users.status; a stricter count needs a join to users and is a decision for this entry's run, reported to ORCH."
     acceptance_criteria:
       - "one test per check 1 to 3 with a minimal definition that violates only that check, asserting the code, the node id and the listed id; one passing neighbour per check"
-      - "a distinct_from naming the node itself, a non-existent id, a service-task id, a duplicate, and a node reachable only after this node are each reported (five negative tests)"
+      - "a distinct_from naming the node itself (:distinct_from_self_reference), a non-existent id (:distinct_from_unknown_node), a service-task id (:distinct_from_not_human_task), a duplicate (:invalid_distinct_from), and a node reachable only after this node (:distinct_from_downstream_only) are each reported (five negative tests); a non-list value is :invalid_distinct_from and the attribute on a non-HUMAN_TASK node is :distinct_from_on_non_human_task; each asserts the reserved code from the REQ-459 design section 1.2, no other code name"
       - "parallel branches: nodes P1, P2, P3 after a fork, each naming the other two, produce no violation; a listed node on the same path before this node passes; a listed node on a rework loop (path both ways) passes"
       - "check 4: a definition installed in a tenant where the shared role has one member returns a WARNING naming both nodes and the role, and the definition still installs (status unchanged); in a tenant where the role has two members no warning is returned"
-      - "a distinct_from check never changes a definition (activation of a definition with only a warning succeeds); the warning appears in the install and validate response bodies"
+      - "a distinct_from check never changes a definition (activation of a definition with only a warning succeeds, warnings never block); the distinct_from_single_member_role: warning appears in the pack-install `warnings` and the POST /definitions/:id/validate 200 body (not in the activate response)"
       - "every shipped definition is run through the validator in a test; for each, the count of new findings is quoted; shipped definitions without distinct_from report none"
       - "mix compile --warnings-as-errors, mix format --check-formatted, scoped mix test over test/letflow/definitions, and mix letflow.check_boundaries pass, real output quoted"
-      - "SECURITY-REVIEWER is required only if check 4 reads tenant role membership through a new query; if so its verdict is recorded; otherwise the run report says why not"
-    depends_on: [REQ-463]
+      - "SECURITY-REVIEWER verdict recorded: check 4's member_counts/2 is a new query over group_members and tenant_role (the design confirms the condition is met); it is prefix-scoped (INV-1) and returns counts only, never user ids, names or emails (INV-2)"
+    depends_on: [REQ-461, REQ-463]
 
   - id: REQ-465
     title: "Adopt distinct_from in the meridian loan origination and meridian regulatory sign-off definitions (approvals that pay, release or commit)"
@@ -34976,8 +35163,14 @@ requirements:
       Only nodes that approve, pay, release or commit get the attribute;
       ordinary data-entry nodes (credit-memo-review, risk-assessment,
       kyc-manual-review and similar) are not touched. A node id that the
-      REQ-464 validator rejects (not existing, downstream-only) is dropped
-      from the list and reported, never forced.
+      REQ-464 validator rejects (:distinct_from_unknown_node,
+      :distinct_from_downstream_only) is dropped from the list and
+      reported, never forced. Escalation nodes carry their OWN
+      distinct_from (no inheritance, REQ-459 design section 9); a later
+      approver names BOTH a node and its escalation node when either may
+      have been the decider. A node may not name a downstream node
+      (l1-approval naming l2-approval would fail); mutual naming is legal
+      only for parallel or loop pairs.
 
       Seed scripts under scripts/ and the QA copies stay in agreement with
       the definitions. Each changed definition's version is incremented by
@@ -34985,12 +35178,12 @@ requirements:
       read value, not a number written here); the description says why.
     open_questions:
       - "The REQ-463 rule needs enough distinct users in the shipped rosters (test/fixtures/uat/actors.yaml, scripts/seed_*_persona_actors.sh) to complete each path; a role with one holder makes a path uncompletable and REQ-464 check 4 warns. Default: this entry reports each such role and adds no roster actor itself (BA lane). Existing UAT scenarios whose single actor performs two gated steps will start failing; they are reported to ORCH as scenario issues, not edited here."
-      - "Whether D-ESC escalation tasks inherit the distinct_from of the task they replace. Default: as decided in REQ-459 section 9."
+      - "Whether D-ESC escalation tasks inherit the distinct_from of the task they replace. DECIDED by REQ-459 design section 9: no inheritance; they carry their own."
       - "Sizing: if the work exceeds one turn, ELIXIR-DEV adopts the meridian loan first and reports the regulatory chain to ORCH for a split, not a partial silent pass."
       - "PROCESS-AUDITOR re-audit (checklist B1 answer text) is a separate follow-up recorded in REQ-463."
     acceptance_criteria:
       - "the run report lists every node that received distinct_from with the listed node ids and a one-line business reason; every listed id exists in the definition (the REQ-464 validator reports status OK, no violation, for both changed definitions)"
-      - "meridian loan: one user holding both role-credit-approver-l1 and role-credit-director is refused at l2-approval after completing l1-approval, and a second user is accepted; the same user holding role-ceo is refused at escalate-l2-approval-to-ceo after completing l1-approval; a user who completed l2-approval is refused at disburse-loan (three tests, real Postgres)"
+      - "meridian loan: one user holding both role-credit-approver-l1 and role-credit-director is refused at l2-approval after completing l1-approval (403, body exactly {\"detail\":\"separation of duties\",\"status\":403}), and a second user is accepted; the same user holding role-ceo is refused at escalate-l2-approval-to-ceo after completing l1-approval; a user who completed l2-approval is refused at disburse-loan (three tests, real Postgres)"
       - "regulatory chain: the user who completed evidence-collection is refused at findings-sign-off, tested; a different user completes it"
       - "committee votes: committee-vote-cro names [committee-vote-director, committee-vote-ceo], committee-vote-director names [committee-vote-cro, committee-vote-ceo], committee-vote-ceo names [committee-vote-cro, committee-vote-director] (grep quoted); a test with one user holding role-cro and role-credit-director refuses the second vote and accepts three distinct users"
       - "no node outside the approval, release or payment set is changed and no definition other than the two named is changed (git diff --stat quoted)"
@@ -35020,8 +35213,10 @@ requirements:
           budget-approval): distinct_from [capacity-review, escalate-to-ceo]
         - swiftroute ceo-approval (role-ceo): distinct_from [ops-review]
       capacity-review, escalate-to-ceo and ops-review are first-level nodes
-      and get none. A node id that the REQ-464 validator rejects is dropped
-      and reported. Not touched: vortex_supplier_quality_deviation (a
+      and get none. A node id that the REQ-464 validator rejects
+      (:distinct_from_unknown_node, :distinct_from_downstream_only) is
+      dropped and reported. Escalation nodes carry their own
+      distinct_from (REQ-459 design section 9). Not touched: vortex_supplier_quality_deviation (a
       classification, not an approval, see open_questions) and
       swiftroute_incident (no approval gate).
 
@@ -35032,7 +35227,7 @@ requirements:
     open_questions:
       - "vortex supplier quality deviation: severity-classification and its D-ESC task do not approve or pay; the issue lists 'vortex/swiftroute approvals'. Default: not changed; ORCH decides whether a compliance reading calls for it."
       - "Roster size: see REQ-465 open_questions; same default."
-      - "Whether D-ESC escalation tasks inherit distinct_from: as REQ-459 section 9."
+      - "Whether D-ESC escalation tasks inherit distinct_from. DECIDED by REQ-459 design section 9: no inheritance; they carry their own."
     acceptance_criteria:
       - "the run report lists every node that received distinct_from with listed ids and a one-line business reason; the REQ-464 validator reports status OK for both changed definitions"
       - "swiftroute: one user holding role-ops-manager and role-ceo is refused at ceo-approval after completing ops-review, and a second user holding role-ceo is accepted (two-roles-one-user test, real Postgres)"

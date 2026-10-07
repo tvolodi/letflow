@@ -1,0 +1,178 @@
+run_id: WF05-G2BILIMBAGA-20261007-BILIMBAGA
+date: "2026-10-07"
+agent: UAT-RUNNER
+slice: bilimbaga
+purpose: "UAT run after R4 closing security gate G2 of REQ-447 PR2: bilimbaga-admin-user is TENANT_ADMIN-only (no PLATFORM_ADMIN). Record every 401/403 with endpoint, actor, role."
+environment:
+  base_url: https://qa.bizdala.com
+  environment: qa
+  idp: https://auth.qa.bizdala.com
+  realm: bilimbaga
+  qa_build: "UNKNOWN (no endpoint exposes a build SHA; preflight deployed_sha UNKNOWN, owner ai-dala-infra). Repo main = 92d74cbc."
+  credential_source: "ai-dala-infra/scripts/qa-uat-env.sh token <username> (fresh fetch at run time; tokens held in shell variables only, never written; the Playwright spec received the candidate password via process env only; bare 'platform' mode NOT used)"
+  preflight_report: test/uat-reports/preflight-2026-10-07-qa-bilimbaga-g2.txt
+  readiness: "GET https://qa.bizdala.com/health -> 200"
+result_overall: ENV_NOT_READY
+result_overall_note: >
+  The whole-corpus preflight is ENV_NOT_READY (9 GAP, 12 UNKNOWN across 37 scenarios) but every non-OK cell is in a
+  non-bilimbaga scenario. The bilimbaga row is all OK. The ONE bilimbaga scenario itself ran and PASSED. The
+  ENV_NOT_READY label is inherited from the full-corpus preflight; no bilimbaga scenario is BLOCKED. G2 evidence below is
+  independent of that label.
+g2_conclusion:
+  unexpected_403_for_legitimate_tenant_admin_action: NONE_OBSERVED
+  summary: >
+    As bilimbaga-admin-user (observed role TENANT_ADMIN only, no PLATFORM_ADMIN), 22 legitimate tenant-scope calls
+    returned 2xx (or a 422/400 validation response that is evaluated after authorization), including reads of users,
+    groups, roles, tokens, definitions, instances, tasks, audit, DLQ, webhooks, entity definitions, promotions, and a
+    full create/delete of a group. Every platform-scope or cross-tenant probe returned 403. See http_401_403_observations.
+  not_covered:
+    - "Tenant-admin driving the web GUI (no tenant-admin pipeline spec exists for bilimbaga; only an API-level probe was done)."
+    - "Mutating tenant-admin actions beyond group create/delete (token create, settings PATCH, module/solution install, definition import/activate) were not exercised to avoid changing QA state. POST /identity/tokens returned 422 field-validation (past authorization) with no token created."
+    - "Cross-tenant data access by object id (needs another tenant's ids; using another tenant's credential would be a different actor). Only platform-scope and tenant-spoof (header/query) probes were run."
+    - "platform-sandbox-cross-tenant-probe and platform-attachment-cross-tenant-probe were not run: they name platform actors in realm bpm-default; running them as bilimbaga-admin-user would substitute actors (forbidden)."
+actors_authenticated_for_run:
+  - actor: bilimbaga-admin-user
+    realm: bilimbaga
+    source: token_claim
+    note: "tooling account, not in test/fixtures/uat/actors.yaml roster (per roster header comment)"
+  - actor: candidate-user  (scenario actor actor-bilimbaga-candidate)
+    realm: bilimbaga
+    source: token_claim
+process_audit_gate:
+  scope: bilimbaga
+  latest_artefact: test/uat-reports/process-audit-bilimbaga-WF05-BASELINE-20261006.yaml
+  artefact_verdict: PASS_WITH_FINDINGS
+  digest_match: false
+  state: "STALE - no artefact currently matches the scope's input digests; the cited PASS_WITH_FINDINGS audit pre-dates a change to audited inputs."
+  evidence: >
+    sha256sum now vs audited_inputs: scenario bilimbaga/candidate-timed-exam-autograde.yaml 5c992fb8... MATCH;
+    priv/modules/exam/pack.json 0690646a... MATCH; test/fixtures/uat/actors.yaml audited 5503823b... now 6b1945b6... DIFFERS;
+    docs/roles.md audited 803c6f04... now 01486654... DIFFERS; priv/solutions/bilimbaga.json audited 7890ab30... now fc62a07e... DIFFERS.
+    Per WF-05 Step 0b step 4 a new audit would be required; none was run by UAT-RUNNER (instructed not to). The run proceeded on ORCH's dispatch; the gate is
+    NOT satisfied by the digest rule and this must be considered by ORCH/PRODUCT-OWNER.
+preflight_gap_table_bilimbaga:
+  note: "Preflight run over the whole corpus (--credential-protocol qa-uat-env). Columns: spec, local_deps, feature, tenant, realm, actors, app_roles, definitions, env_limitation."
+  bilimbaga-candidate-timed-exam-autograde: "OK OK OK OK OK OK OK OK OK (credential validity actor-bilimbaga-candidate@bilimbaga=OK)"
+  global: "base_url OK (GET /health 200); deployed_sha UNKNOWN (owner ai-dala-infra)"
+  corpus_summary: "checks OK=315 GAP=9 UNKNOWN=12; 7 of 37 scenarios with >=1 GAP; RESULT ENV_NOT_READY (all GAPs are non-bilimbaga)"
+  non_bilimbaga_gaps_for_reference:
+    - "platform-agent-artifact-resubmit-idempotent / feature: UNBUILT_FEATURE"
+    - "platform-sandbox-cross-tenant-probe / feature: UNBUILT_FEATURE"
+    - "platform-migration-partial-failure-resume, platform-partition-retention-drop, platform-tenant-switch-cache-isolation, swiftroute-shipment-attach-delivery-note / local_deps: spec shells to docker compose psql"
+    - "platform-partition-retention-drop (ISS-0901), platform-tenant-switch-cache-isolation EO-001 only (ISS-0901), swiftroute-tenant-onboarding-happy (ISS-0895) / env_limitation: ENV_NOT_SUPPORTED by design (structural sidecars)"
+    - "12 UNKNOWN: stale forward-reference NOTEs (7), app_roles without token for platform actors (4), deployed_sha (1)"
+scenario_selection:
+  run:
+    - bilimbaga-candidate-timed-exam-autograde
+  justification: >
+    It is the only scenario in test/fixtures/uat/scenarios/bilimbaga/. No tenant-admin-side scenario exists for the bilimbaga tenant;
+    every platform/ scenario names platform actors in realm bpm-default, and meridian/swiftroute/vortex scenarios name other tenants' actors.
+    Running any of them as bilimbaga-admin-user would be actor substitution (forbidden). The tenant-admin side of G2 was therefore covered
+    by a direct API probe of the role matrix (docs/roles.md) as bilimbaga-admin-user, recorded below as supplementary evidence, not as scenarios.
+scenarios:
+  - id: bilimbaga-candidate-timed-exam-autograde
+    file: test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    verdict: PASS
+    actor: actor-bilimbaga-candidate (account candidate-user, realm bilimbaga)
+    driver: "npx playwright test tests/e2e/pipelines/bilimbaga-candidate-timed-exam.pipeline.e2e.spec.ts --retries=0 (from web/, E2E_BASE_URL=BPM_TEST_URL=https://qa.bizdala.com, BPM_IDP_BASE_URL=https://auth.qa.bizdala.com, real headless Chromium). Run twice (second with --trace=on to capture network statuses): 1 passed (11.9s) and 1 passed (7.6s)."
+    steps:
+      step_1: "PASS - exam list rendered after token login + SPA navigation; GET /api/v1/modules/exam/exam-sessions/available?page_size=100 -> 200."
+      step_2: "PASS - POST /api/v1/modules/exam/exam-sessions -> 201; exam session screen rendered."
+      step_3: "PASS - two PUT .../answers/<id> -> 200 each, POST .../submit -> 200; result screen rendered."
+    expected_outcomes:
+      EO-001:
+        verdict: PASS
+        evidence: "Spec asserts the countdown title matches mm:ss and a reading taken later differs (ticks); spec passed."
+      EO-002:
+        verdict: PASS
+        evidence: "Spec asserts the result page shows score and pass/fail after submit without navigation; spec passed (screenshots written under web/tests/screenshots/pipelines/)."
+      EO-003:
+        verdict: PASS
+        evidence: "Questions answered with the known-correct options; the result from the real backend (submit 200, result screen) matches a correct grading as asserted by the spec. is_correct is redacted for every caller by design so grading is verified through the served result."
+    cleanup: "Both runs submitted their session in step 3; no open session left."
+    visual_regression: "No gui_screen expected outcome (EO methods are page_state/instance_state); two-phase REQ-362 comparison not applicable."
+    browser_401_403_during_scenario: "see http_401_403_observations, group browser_candidate. All are on non-scenario-critical SPA chrome calls the CANDIDATE role is not granted; the scenario passed."
+http_401_403_observations:
+  legend: "E = expected by the role matrix (docs/roles.md) or by routing; U = unexpected. No U entries were observed."
+  browser_candidate:
+    note: "Captured from the Playwright trace network log of the scenario run. Actor candidate-user, observed role CANDIDATE (+offline_access, uma_authorization, default-roles-bilimbaga). Statuses of the repeated calls were identical across two SPA page loads."
+    items:
+      - {status: 403, method: GET, endpoint: "/api/v1/me/memberships", actor: candidate-user, role: CANDIDATE, class: E, why: "MembershipsRead: CANDIDATE = no in the matrix (me.ex comment: CANDIDATE deliberately excluded)"}
+      - {status: 403, method: GET, endpoint: "/api/v1/definitions?page_size=5", actor: candidate-user, role: CANDIDATE, class: E, why: "DefinitionsRead: CANDIDATE = no"}
+      - {status: 403, method: GET, endpoint: "/api/v1/dlq?status=pending&page_size=101", actor: candidate-user, role: CANDIDATE, class: E, why: "DLQ routes not granted to CANDIDATE (SPA shell widget polling)"}
+      - {status: 403, method: GET, endpoint: "/api/v1/help/resolved?screen_id=exam-list", actor: candidate-user, role: CANDIDATE, class: E, why: "HelpRead: CANDIDATE = no"}
+  api_probe_bilimbaga_admin_user:
+    note: "Direct curl as bilimbaga-admin-user. Token claim realm_access.roles observed = [offline_access, uma_authorization, TENANT_ADMIN, default-roles-bilimbaga]; NO PLATFORM_ADMIN. iss = https://auth.qa.bizdala.com/realms/bilimbaga. All bodies are RFC7807 'insufficient permissions' with the trace_id shown."
+    items:
+      - {status: 403, method: GET, endpoint: "/api/v1/me/access", role: TENANT_ADMIN, class: E, trace_id: 3cabc421-edc3-4988-8033-7fc6c418c221, why: "Route not implemented (REQ-449 not merged; lib/letflow/routers/me.ex has only /memberships and /modules); unmatched route is default-deny 403, not a permission refusal"}
+      - {status: 403, method: GET, endpoint: "/api/v1/me", role: TENANT_ADMIN, class: E, trace_id: 7d26b60e-ff2d-40af-830f-40340cb290e7, why: "Unmatched route (no handler at /me), default-deny"}
+      - {status: 403, method: GET, endpoint: "/api/v1/tenant/modules", role: TENANT_ADMIN, class: E, trace_id: 320fa05c-5ea3-4109-9a60-2d1d10ca5585, why: "Route is POST-only (ModulesManage, which TENANT_ADMIN holds); a GET is an unmatched route. NOT a permission probe: the POST was not run (would change QA state)"}
+      - {status: 403, method: GET, endpoint: "/api/v1/tenant/solutions", role: TENANT_ADMIN, class: E, trace_id: 1107ca55-ee3e-4d4e-879b-adf0395d8c3f, why: "POST-only route (ModulesManage); GET unmatched. Same caveat"}
+      - {status: 403, method: GET, endpoint: "/api/v1/solution-packs", role: TENANT_ADMIN, class: E, trace_id: 41aebfd3-7253-4995-bdf7-ea9a0e2cf407, why: "Only POST routes exist; GET unmatched"}
+      - {status: 403, method: GET, endpoint: "/api/v1/public-read-handles", role: TENANT_ADMIN, class: E, trace_id: 7665aedd-284f-436a-a136-d29eb97a6e1a, why: "POST-only route; GET unmatched"}
+      - {status: 403, method: GET, endpoint: "/api/v1/admin/services", role: TENANT_ADMIN, class: E, trace_id: a7778c7d-54de-483b-8e19-cbd0adb20d61, why: "AdminServicesRead is PLATFORM scope (lib/letflow/api/authorization.ex endpoint_policy_key); platform-only probe"}
+      - {status: 403, method: GET, endpoint: "/api/v1/tenants", role: TENANT_ADMIN, class: E, trace_id: cf96ad6e-a755-492b-b14d-6c69ddd61e9d, why: "TenantsManage: platform scope, TENANT_ADMIN = no. Platform-only probe, evidence for G2"}
+      - {status: 403, method: GET, endpoint: "/api/v1/tenants/swiftroute", role: TENANT_ADMIN, class: E, trace_id: 2774c146-5754-4d5f-8472-95ad0a26d287, why: "cross-tenant read of another tenant record; refused"}
+      - {status: 403, method: GET, endpoint: "/api/v1/tenants/bilimbaga", role: TENANT_ADMIN, class: E, trace_id: 5951879b-4e73-48bf-9a8a-3279dbc4e5e6, why: "TenantsManage platform scope; even own tenant record via this route is refused for TENANT_ADMIN (matrix: TenantsManage no)"}
+      - {status: 403, method: GET, endpoint: "/api/v1/tenants/meridian", role: TENANT_ADMIN, class: E, trace_id: 82f5caf4-7d8e-4140-b351-3cea296dd994, why: "cross-tenant read; refused"}
+      - {status: 403, method: GET, endpoint: "/api/v1/platform-migrations", role: TENANT_ADMIN, class: E, trace_id: 66d6d4c8-d126-4a24-81d4-e9f56d49ef1e, why: "platform-only"}
+      - {status: 403, method: GET, endpoint: "/api/v1/event-retention", role: TENANT_ADMIN, class: E, trace_id: 73587b84-5a85-4ede-b0d4-e6f328ad75c5, why: "platform-only"}
+      - {status: 403, method: GET, endpoint: "/api/v1/solution-packs/rollouts/x", role: TENANT_ADMIN, class: E, trace_id: dd296a06-3f12-4987-b7e8-a06b5667bf6c, why: "rollouts require TenantsManage (platform)"}
+      - {status: 403, method: POST, endpoint: "/api/v1/tenants", role: TENANT_ADMIN, class: E, trace_id: 074079bf-8471-43fb-8945-27a7cbe37094, why: "create tenant is platform-only; refused, and nothing created (slug g2-probe-should-not-exist not created: the 403 is returned before any handler)"}
+      - {status: 403, method: POST, endpoint: "/api/v1/tenants/swiftroute/deactivate", role: TENANT_ADMIN, class: E, trace_id: 8f4ec0e4-cb5a-4dd8-9ee2-2b24d2720214, why: "cross-tenant destructive action refused"}
+  api_probe_candidate_user:
+    note: "Direct curl as candidate-user, role CANDIDATE."
+    items:
+      - {status: 403, method: GET, endpoint: "/api/v1/me/access", class: E, trace_id: cdf197b4-29e6-4040-8e35-f587046c318e, why: "unimplemented route"}
+      - {status: 403, method: GET, endpoint: "/api/v1/me/memberships", class: E, trace_id: c1d23d6a-7863-48e3-9616-b59fda69c816}
+      - {status: 403, method: GET, endpoint: "/api/v1/identity/users", class: E, trace_id: 713536ec-67ba-467f-80fa-ffdaefa97d4a}
+      - {status: 403, method: GET, endpoint: "/api/v1/definitions", class: E, trace_id: 308eb7ee-6014-4a76-b23b-9fd6d5526ac0}
+      - {status: 403, method: GET, endpoint: "/api/v1/tenants", class: E, trace_id: 252bdd8c-712a-4702-90b3-10c68958aef7}
+      - {status: 403, method: GET, endpoint: "/api/v1/audit", class: E, trace_id: 4ec12ea9-687a-4e07-b1f3-ac04f34525a6}
+      - {status: 403, method: GET, endpoint: "/api/v1/entities/definitions", class: E, trace_id: 08a8d88e-c703-4e8d-945b-6d54667f65ae}
+      - {status: 403, method: GET, endpoint: "/api/v1/tenant/modules", class: E, trace_id: 54768d74-be77-4017-a9e9-c6dd4e2073ae, why: "unmatched GET"}
+      - {status: 403, method: GET, endpoint: "/api/v1/instances", class: E, trace_id: c0b0671d-d9fc-41fb-bb9f-058fd4e7ab0d}
+      - {status: 403, method: POST, endpoint: "/api/v1/identity/groups", class: E, trace_id: 9099eda1-0701-49ec-9380-d102f9caff13, why: "refusal confirmed; no group created (write attempted as candidate)"}
+      - {status: 403, method: POST, endpoint: "/api/v1/instances", class: E, trace_id: 64c0481a-2030-48be-bf0f-2a89e67139ca}
+      - {status: 403, method: POST, endpoint: "/api/v1/tenants", class: E, trace_id: ac3d512d-8a9e-48ba-ac5e-b206416b28db}
+  unauthenticated:
+    items:
+      - {status: 401, method: GET, endpoint: "/api/v1/identity/users", actor: none, role: unauthenticated, class: E, body: "missing or malformed Authorization header"}
+      - {status: 401, method: GET, endpoint: "/api/v1/me/modules", actor: none, role: unauthenticated, class: E, body: "missing or malformed Authorization header"}
+admin_legit_actions_succeeded:
+  note: "bilimbaga-admin-user, TENANT_ADMIN only. Each is a legitimate tenant-scope action per docs/roles.md; none returned 403."
+  items:
+    - "GET /api/v1/me/memberships -> 200 (tenant_slug bilimbaga, tenant_id 6ab093a1-d190-4063-9543-d66b80d261a1)"
+    - "GET /api/v1/me/modules -> 200 (installed module exam 0.1.0)"
+    - "GET /api/v1/identity/users -> 200"
+    - "GET /api/v1/identity/groups -> 200"
+    - "GET /api/v1/identity/roles -> 200"
+    - "GET /api/v1/identity/tokens -> 200 (empty)"
+    - "GET /api/v1/definitions -> 200"
+    - "GET /api/v1/instances -> 200 (count 11)"
+    - "GET /api/v1/tasks -> 200; GET /api/v1/tasks/inbox -> 200"
+    - "GET /api/v1/audit -> 200 (count 18)"
+    - "GET /api/v1/dlq -> 200 (empty)"
+    - "GET /api/v1/webhooks/subscriptions -> 200 (empty)"
+    - "GET /api/v1/entities/definitions -> 200"
+    - "GET /api/v1/promotions -> 200 (empty); GET /api/v1/promotions/platform-events -> 200 (14 events, every payload target_tenant_id = 6ab093a1-... own tenant)"
+    - "GET /api/v1/instances/storage-usage -> 200"
+    - "POST /api/v1/entities/query -> 200"
+    - "POST /api/v1/definitions/<id>/validate -> 200 status valid"
+    - "POST /api/v1/identity/groups (g2-probe-group) -> 201; GET .../groups/<id>/members -> 200; DELETE .../groups/<id> -> 204; queried back: group no longer listed"
+    - "POST /api/v1/identity/tokens with incomplete body -> 422 validation (user_id / roles required), i.e. authorization passed; no token was created"
+    - "GET /api/v1/help/resolved without screen_id -> 400 (validation, past authorization)"
+    - "GET /api/v1/modules -> 404 (no such list route)"
+tenant_isolation_probe:
+  - "GET /api/v1/identity/users with header X-Tenant-Id: 00000000-0000-0000-0000-000000000001 and query ?tenant_id=00000000-0000-0000-0000-000000000001 returned 200 with a result set byte-identical (same sorted user ids) to the plain request: spoofed tenant selectors are ignored, the token's own tenant governs."
+observations:
+  - "R4 confirmed in the token: bilimbaga-admin-user realm_access.roles has TENANT_ADMIN and no PLATFORM_ADMIN. Audit log (GET /api/v1/audit) shows a role_binding.removed entry with before_state name PLATFORM_ADMIN, consistent with the R4 removal."
+  - "ai-dala-infra/scripts/qa-uat-env.sh REGISTRY still labels bilimbaga-admin-user as roles PLATFORM_ADMIN (stale label vs observed TENANT_ADMIN); documentation drift in ai-dala-infra, cosmetic."
+  - "GET /api/v1/me/access returns 403 (default-deny of an unrouted path) for both actors; the uat-runner instructions prefer it once REQ-449 is merged. Role observation used token_claim source."
+  - "The bilimbaga tenant contains fixture data from earlier platform-style runs (e.g. definition 'pl-promo-conflict-def489...', 11 instances, a task assigned to 'admin-user'); GET /definitions, /instances and /tasks as TENANT_ADMIN return them. Not evaluated as a leak (own tenant per token); noted for ORCH in case those fixtures should not live in bilimbaga."
+  - "Candidate-role SPA shell calls /me/memberships, /definitions, /dlq, /help/resolved each produce a 403 on every page load for a CANDIDATE (expected per matrix but noisy; the SPA does not gate these for CANDIDATE). Not a failure; may interest FRONTEND-DEV."
+  - "ISS-0727 (?realm=bilimbaga): this run did not use host-based realm resolution (spec mints the token directly against the bilimbaga realm); not re-probed."
+  - "Extra artefact created by this run beyond the report: test/uat-reports/preflight-2026-10-07-qa-bilimbaga-g2.txt (WF-05 Step 0 output, no secrets). web/tests/screenshots/pipelines/*.png rewritten by the spec runs (untracked output)."
+secret_handling: "No password or token was printed, logged or written. The Playwright output was piped through a redactor; the trace artefacts were created under the scratchpad directory (outside the repo) and not retained in the repo."
+known_open_issues_cited: [ISS-0727, ISS-0726, ISS-0729, ISS-0895, ISS-0901]
+env_blocked: []

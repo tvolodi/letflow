@@ -427,11 +427,12 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
       conn = call(:delete, "/groups/#{group.id}/members/#{operator.id}", ctx.p, @operator, nil)
       assert conn.status == 204, conn.resp_body
 
-      # The bound group cannot be deleted by anyone: tenant_role.group_id references it, so Postgres
-      # refuses (a pre-existing 500, reported as a defect, not a guard behaviour). The operator's
-      # request still REACHES the real row, which is what makes the TENANT_ADMIN's 403 non-vacuous.
-      assert {:raised, %Postgrex.Error{postgres: %{code: :foreign_key_violation}}} =
-               try_call(:delete, "/groups/#{group.id}", ctx.p, @operator, nil)
+      # The bound group cannot be deleted by anyone: tenant_role.group_id references it, so the
+      # delete is a clean 409 (ISS-1032; it was a 500). The operator's request still REACHES the real
+      # row, which is what makes the TENANT_ADMIN's 403 non-vacuous.
+      conn = call(:delete, "/groups/#{group.id}", ctx.p, @operator, nil)
+      assert conn.status == 409, conn.resp_body
+      assert Jason.decode!(conn.resp_body)["detail"] == "group is bound to a role"
 
       assert group_exists?(ctx.p, group)
     end
@@ -456,17 +457,20 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
   #
   # MEASURED FACT (Ecto 3.14.1, recorded here so the denials below are read correctly): `Ecto.UUID.cast/1`
   # accepts the raw 16-byte form, but `Repo.get(Schema, raw16)` and `where: id == ^raw16` do NOT: they
-  # raise `Ecto.Query.CastError` ("cannot be dumped to type :binary_id"). So the raw-byte spelling never
-  # resolves to the real row downstream in this Ecto version (a request that gets past the guard raises,
-  # it does not write); the canonical, upper-case, mixed-case and fully percent-encoded text spellings
-  # DO resolve. The guard compares after `Ecto.UUID.cast/1`, so it refuses every one of them BEFORE the
-  # handler runs: the TENANT_ADMIN must always see the fixed 403 (never a raise), which is what a
-  # string-compare guard would fail for the raw spellings (they would reach the handler and raise).
+  # raise `Ecto.Query.CastError`. Since ISS-1033 every identity route casts the id FIRST
+  # (`Identity.cast_id/1`) and uses the canonical text afterwards, so EVERY cast-accepted spelling
+  # (including both raw-byte forms) resolves to the real row exactly like the canonical one, and a
+  # spelling the cast rejects is the plain 404. A CastError is therefore a failure now, not a tolerated
+  # outcome. The guard decides on the same canonical value (INV-10): the TENANT_ADMIN must always see
+  # the fixed 403 for every spelling of the real guarded id, which is what a string-compare guard
+  # would fail.
 
   @resolving [
     "canonical lower-case",
     "upper-case hyphenated",
     "mixed-case hyphenated",
+    "raw 16 bytes, %XX upper-case hex",
+    "raw 16 bytes, %xx lower-case hex",
     "canonical text, every char percent-encoded"
   ]
 
@@ -483,16 +487,14 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
   defp assert_forbidden_resp({:raised, e}, label),
     do: flunk("#{label}: expected the fixed 403, the request raised #{inspect(e.__struct__)}")
 
-  # the operator control: :resolved (status as expected, reached the real row) or :cast_error (the
-  # downstream lookup rejected the spelling; nothing written). Anything else is a failure.
+  # the operator control: the spelling must resolve (status as expected, reached the real row).
+  # Anything else, a raised CastError included, is a failure.
   defp operator_outcome({:resp, conn}, expected_status, label) do
     assert conn.status == expected_status,
            "control, #{label}: #{conn.status} #{conn.resp_body}"
 
     :resolved
   end
-
-  defp operator_outcome({:raised, %Ecto.Query.CastError{}}, _status, _label), do: :cast_error
 
   defp operator_outcome({:raised, e}, _status, label),
     do: flunk("control, #{label}: unexpected #{inspect(e)}")
@@ -502,14 +504,10 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
       assert outcomes[label] == :resolved,
              "the denial for #{label} would be vacuous: the operator control did not reach the real row"
     end
-
-    for {label, outcome} <- outcomes do
-      assert outcome in [:resolved, :cast_error], "#{label}: #{inspect(outcome)}"
-    end
   end
 
   describe "RAW-BYTE: group id spellings" do
-    test "ADD MEMBER: every spelling is 403 for the TENANT_ADMIN, nothing written; the operator control resolves or the cast rejects it",
+    test "ADD MEMBER: every spelling is 403 for the TENANT_ADMIN, nothing written; the operator control resolves for every spelling",
          ctx do
       %{group: group} = world!(ctx)
       before = member_ids(ctx.p, group)
@@ -525,17 +523,12 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
 
           resp = try_call(:post, "/groups/#{segment}/members", ctx.p, @operator, body)
           outcome = operator_outcome(resp, 201, label)
+          assert user.id in member_ids(ctx.p, group), "control, #{label}: not the REAL group"
 
-          if outcome == :resolved do
-            assert user.id in member_ids(ctx.p, group), "control, #{label}: not the REAL group"
-
-            Repo.delete_all(
-              from(m in GroupMember, where: m.group_id == ^group.id and m.user_id == ^user.id),
-              prefix: ctx.p.schema_name
-            )
-          else
-            assert member_ids(ctx.p, group) == before
-          end
+          Repo.delete_all(
+            from(m in GroupMember, where: m.group_id == ^group.id and m.user_id == ^user.id),
+            prefix: ctx.p.schema_name
+          )
 
           {label, outcome}
         end
@@ -559,13 +552,8 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
             try_call(:delete, "/groups/#{segment}/members/#{operator.id}", ctx.p, @operator, nil)
 
           outcome = operator_outcome(resp, 204, label)
-
-          if outcome == :resolved do
-            assert member_ids(ctx.p, group) == [], "control, #{label}: not the REAL group"
-            add_member!(ctx.p, group, operator)
-          else
-            assert member_ids(ctx.p, group) == [operator.id]
-          end
+          assert member_ids(ctx.p, group) == [], "control, #{label}: not the REAL group"
+          add_member!(ctx.p, group, operator)
 
           {label, outcome}
         end
@@ -580,7 +568,7 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
       end
     end
 
-    test "DELETE GROUP: every spelling is 403 for the TENANT_ADMIN (group intact); control reaches the real row or the cast rejects it",
+    test "DELETE GROUP: every spelling is 403 for the TENANT_ADMIN (group intact); control reaches the real row for every spelling",
          ctx do
       bound = bound_group!(ctx.p)
       roles_before = role_rows(ctx.p)
@@ -592,23 +580,20 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
           assert group_exists?(ctx.p, bound), "#{label}: the group was deleted"
           assert role_rows(ctx.p) == roles_before
 
-          outcome =
-            case try_call(:delete, "/groups/#{segment}", ctx.p, @operator, nil) do
-              {:raised, %Postgrex.Error{postgres: %{code: :foreign_key_violation}}} ->
-                :resolved
-
-              other ->
-                operator_outcome(other, 204, label)
-            end
+          # the bound memberless group cannot be deleted by anyone: the operator's request reaches
+          # the real row and is refused with the 409 (ISS-1032), for every spelling
+          resp = try_call(:delete, "/groups/#{segment}", ctx.p, @operator, nil)
+          outcome = operator_outcome(resp, 409, label)
 
           assert group_exists?(ctx.p, bound)
+          assert role_rows(ctx.p) == roles_before
           {label, outcome}
         end
 
       assert_resolving_spellings_reached(outcomes)
     end
 
-    test "a spelling Ecto.UUID.cast/1 does NOT accept (padded, hyphenless, truncated, doubled) writes nothing",
+    test "a spelling Ecto.UUID.cast/1 does NOT accept (padded, hyphenless, truncated, doubled) is a 404 and writes nothing",
          ctx do
       %{group: group} = world!(ctx)
       user = insert_user!(ctx.p)
@@ -626,10 +611,9 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
         resp =
           try_call(:post, "/groups/#{segment}/members", ctx.p, @admin, %{"user_id" => user.id})
 
-        case resp do
-          {:resp, conn} -> refute conn.status in [200, 201], "#{segment}: #{conn.status}"
-          {:raised, e} -> assert %Ecto.Query.CastError{} = e
-        end
+        # ISS-1033: the cast runs first, so an uncastable group id is the plain 404 (never a raise)
+        assert {:resp, conn} = resp, "#{segment}: raised"
+        assert conn.status == 404, "#{segment}: #{conn.status} #{conn.resp_body}"
 
         assert member_ids(ctx.p, group) == before
       end
@@ -637,7 +621,7 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
   end
 
   describe "RAW-BYTE: user id spellings (PATCH, status)" do
-    test "PATCH: every spelling the operator resolves is 403 for the TENANT_ADMIN, user unchanged",
+    test "PATCH: every spelling resolves for the operator and is 403 for the TENANT_ADMIN, user unchanged",
          ctx do
       %{operator: operator} = world!(ctx)
 
@@ -656,11 +640,7 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
             })
 
           outcome = operator_outcome(op, 200, label)
-
-          case outcome do
-            :resolved -> assert_forbidden_resp(admin, "PATCH, #{label}")
-            :cast_error -> assert_not_a_write(admin, label)
-          end
+          assert_forbidden_resp(admin, "PATCH, #{label}")
 
           {label, outcome}
         end
@@ -668,7 +648,7 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
       assert_resolving_spellings_reached(outcomes)
     end
 
-    test "STATUS: for every spelling the operator resolves, the TENANT_ADMIN is 403 and the operator stays active",
+    test "STATUS: every spelling resolves for the operator and is 403 for the TENANT_ADMIN, who leaves the operator active",
          ctx do
       %{operator: operator} = world!(ctx)
 
@@ -686,12 +666,8 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
             })
 
           outcome = operator_outcome(op, 200, label)
-          if outcome == :resolved, do: reactivate!(ctx.p, operator)
-
-          case outcome do
-            :resolved -> assert_forbidden_resp(admin, "STATUS, #{label}")
-            :cast_error -> assert_not_a_write(admin, label)
-          end
+          reactivate!(ctx.p, operator)
+          assert_forbidden_resp(admin, "STATUS, #{label}")
 
           {label, outcome}
         end
@@ -699,13 +675,6 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
       assert_resolving_spellings_reached(outcomes)
     end
   end
-
-  # a spelling that does not resolve downstream: the answer is 403, 404 or a cast raise, never a 2xx
-  defp assert_not_a_write({:resp, conn}, label),
-    do: assert(conn.status in [403, 404], "#{label}: #{conn.status} #{conn.resp_body}")
-
-  defp assert_not_a_write({:raised, e}, label),
-    do: assert(%Ecto.Query.CastError{} = e, label)
 
   defp reactivate!(fixture, user) do
     {1, _} =
@@ -717,7 +686,7 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
   end
 
   describe "RAW-BYTE: token id spellings (DELETE)" do
-    test "every spelling is 403 for the TENANT_ADMIN and the token stays unrevoked; the operator control resolves or is rejected by the cast",
+    test "every spelling is 403 for the TENANT_ADMIN and the token stays unrevoked; the operator control resolves for every spelling",
          ctx do
       %{operator: operator} = world!(ctx)
 
@@ -738,12 +707,7 @@ defmodule Letflow.Api.PlatformEscalationGuardTest do
 
           resp = try_call(:delete, "/tokens/#{segment}", ctx.p, @operator, nil)
           outcome = operator_outcome(resp, 200, label)
-
-          if outcome == :resolved do
-            assert {%DateTime{}, _} = token_row(ctx.p, token.id), "control, #{label}: not revoked"
-          else
-            assert token_row(ctx.p, token.id) == before
-          end
+          assert {%DateTime{}, _} = token_row(ctx.p, token.id), "control, #{label}: not revoked"
 
           {label, outcome}
         end

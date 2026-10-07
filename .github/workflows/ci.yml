@@ -399,9 +399,15 @@ jobs:
             -c "ALTER SYSTEM SET synchronous_commit = off" \
             -c "ALTER SYSTEM SET full_page_writes = off" \
             -c "SELECT pg_reload_conf()"
-          sleep 2
+          # pg_reload_conf() only signals the postmaster, so poll (bounded: 10 x 1 s) until
+          # each setting reads back as `off` instead of trusting a fixed sleep.
           for setting in fsync synchronous_commit full_page_writes; do
-            value=$(psql -h 127.0.0.1 -p 5462 -U letflow -d letflow_dev -At -c "SHOW $setting")
+            value=""
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              value=$(psql -h 127.0.0.1 -p 5462 -U letflow -d letflow_dev -At -c "SHOW $setting")
+              [ "$value" = "off" ] && break
+              sleep 1
+            done
             echo "postgres $setting = $value"
             if [ "$value" != "off" ]; then
               echo "::error::Postgres setting $setting did not take effect (got '$value')"

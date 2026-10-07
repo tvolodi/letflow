@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ463-20261007/step-03b-test-design-validator.json",
   "created_at": "2026-10-07T13:28:23Z",
   "started_at": "2026-10-07T13:28:23Z",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -52,5 +52,239 @@
     "description": "STEP 03b - TEST DESIGN GATE (TEST-DESIGN-VALIDATOR), hard gate, with MUTANTS. Everything is committed (HEAD contains: impl 78e182a6, tests 66fcd10c, rework 87fab6cb). Tests under review: test/specs/REQ-463.md, test/support/sod_support.ex, test/letflow/engine_distinct_from_test.exs (40), test/letflow/routers/tasks_distinct_from_test.exs (13), test/letflow/engine_distinct_from_concurrency_test.exs (2, partition 15).\n\nPART 1 - static check per workflow WF-02 step 3b: every acceptance criterion in this handoff's context has at least one runnable test that would fail if violated (read the tests yourself; do not trust the spec's map); no skips/TODOs; unique per-test fixtures; self-sufficient; no hardcoded secrets/connection strings; no wall-clock or unseeded randomness; REQ-461 interplay (required_outputs definitions carry variable_schema before activation). Check also that test/support/sod_support.ex is compiled only in test (elixirc_paths) and does not trip repo guards.\n\nPART 2 - MUTANTS. ALL work is committed, so you may mutate lib/ in the working tree and restore with `git checkout -- lib/` after EACH mutant (verify `git status --short lib/` is clean before the next one and at the end; NEVER touch test/ except reading; NEVER git stash/reset/clean). One mutant at a time, one BEAM at a time, check free RAM before each run, MIX_TEST_PARTITION=3 (15 for the concurrency file), scoped single files only, pick the test file(s) most likely to kill the mutant first; a mutant is KILLED if any test fails (quote the failing test names and the Result: line), SURVIVED if the files that should catch it all stay green (then also say whether any other file kills it). Mutants (apply each to the real code; adapt to the actual code shape):\n M1 compare by role instead of user id (e.g. treat a completer holding the same role as blocking).\n M2 treat TENANT_ADMIN as exempt (skip the check for that role).\n M3 use the FIRST completion of a named node instead of the most recent (ORDER BY completed_at ASC).\n M4 count CANCELLED rows as completions (drop the status = COMPLETED filter).\n M5 require precedence (reject/ignore parallel nodes: only nodes upstream count).\n M6 drop the claim check in one normal claim clause (do each claim clause separately if there are several: unassigned, GROUP, ROLE).\n M7 omit the check from the idempotent re-claim clause.\n M8 the claim refusal writes an audit row (call the refusal-audit writer from the claim path).\n M9 add detail or a node id to the 403 body (or a trace_id), or vary the body by cause.\n M10 check after the merge instead of before (writes happen before the refusal; i.e. move the 4b step after the merge/writes).\n M11 check runs for nodes without distinct_from (an extra query: remove the default-off early return).\n M12 run 4c (rule C required_outputs) before 4b.\n M13 break fail-open (raise on a missing snapshot in check_for_claim/3).\n M14 status 409 or 422 instead of 403 (on complete; and separately on claim).\n M15 audit written inside the rolled-back transaction (so no record survives) or written twice.\n M16 drop the instance_id filter in the DISTINCT ON read (completions from another instance count).\n M17 remove the savepoint mode from the snapshot read (reintroduce F-1) - only if your harness can do it; otherwise say why not.\n M18 compare against the completer of ANY row rather than DISTINCT ON the latest (rework order test).\nReport per mutant: file/line mutated, command, KILLED/SURVIVED, killing test names, Result: line. If a mutant SURVIVES, FAIL the gate and name the missing/weak test so TEST-DESIGNER can fix it (do not write tests yourself). If the full set is infeasible under the RAM constraint say exactly which were not run and why; unrun mutants are listed as UNVERIFIED, not killed.\n\nAt the end: `git status --short lib/ test/` must be clean (quote it), and quote `git diff --stat HEAD` showing nothing but your handoff file. Complete handoff: verdict PASS/FAIL, per-AC table (AC -> test names), mutant table, next_action ('Route to TEST-RUNNER (4)' on PASS, 'Rework TEST-DESIGNER' on FAIL).\nRUN CONSTRAINTS (every agent in this run):\n- Branch feat/REQ-463-distinct-from-Q-1026 (from origin/main 508163d0). Verify with `git branch --show-current` first; STOP and report if different. Do NOT push, open a PR, merge, touch the letflow-queue (lock 1026 is held by tvolodi-orch), touch branches feat/REQ-462-adopt-required-outputs-Q-1025 or test/authz-deny-log-deterministic-capture, or the untracked letflow-3.code-workspace. Stage files by explicit path only; never git add -A / git add . .\n- Design: lib/letflow/design/req459-required-outputs-and-distinct-person.md governs rule A (distinct_from): sections 1.1, 2 (step 4b before 4c in the :completion_guards step), 4, 5, 6, 7, 8, 9, 10, 12.2 rule A plan, traceability A1-A11, 'Adjustments for REQ-460..466' for REQ-463. Where the requirement text and the design differ on a detail the DESIGN WINS; list every difference in result.design_vs_requirement_differences. REQ-464 (validator for distinct_from) is NOT this entry.\n- RAM is VERY tight (0.4-2 GB free; the harness KILLS runs at critical memory). mix commands strictly sequential, ONE BEAM at a time; before each mix test check free RAM: powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\". Scoped single test FILES only (never a directory or the full suite). `export MIX_TEST_PARTITION=3` ONLY for tests (unset for tooling tasks like compile/format/check_*); use a unique number (e.g. 15) for files that mutate shared state or run concurrency tests. If a run is killed, report it and do NOT loop.\n- Real Postgres only. Never report 'should pass'; quote real Result: lines.\n- docs/anti-patterns.md newest entry: a validator refusing at activate must be checked against EVERY test that activates hand-built definitions; grep the WHOLE test/ tree for the attribute, not only the changed area. REQ-461 check 2 applies: any test definition declaring required_outputs must declare a variable_schema for each key (register schema rows BEFORE activation); distinct_from needs no schema.\n- Commit titles: feat|fix|test|docs|chore(REQ-463/Q-1026): ... [Q-1026 / GH #2341], ending with the trailer line: Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>. Do not commit your own handoff-file edits unless this handoff says so: ORCH commits after you return.\n- Claim the handoff by setting top-level status to IN_PROGRESS only; at the end set status COMPLETED (or FAILED) and fill result (summary, verdict PASS/FAIL, issues, artifacts_out, evidence with quoted real output, next_action). Do not touch started_at/created_at. Do not edit handoffs/registry.json or handoffs/orchestrator.log.\n- Scratch files go in the scratchpad dir C:\\Users\\tvolo\\AppData\\Local\\Temp\\claude\\C--Users-tvolo-dev-ai-dala-letflow-3\\def1f47a-501c-4830-b7ce-a68038cf3791\\scratchpad\\r463\\ (never in the repo, never /tmp). That dir also holds files of earlier runs: use only r463/.\n",
     "extra": ""
   },
-  "result": null
+  "result": {
+    "verdict": "PASS",
+    "summary": "Static check passed for all 14 testable ACs (AC13 SECURITY verdict is a handoff, not a test); no skips/TODOs, fixtures unique per test, no secrets, no unseeded randomness (one DateTime.utc_now forges a CANCELLED row's completed_at, not asserted on), sod_support.ex compiled only in test via elixirc_paths(:test). All 24 mutants (M1-M18 with split variants) KILLED by measured runs; 0 survived, 0 unverified. Baselines at HEAD: engine file 40 passed, router file 13 passed, concurrency file 2 passed (partition 15).",
+    "issues": [
+      "Observation, not a gate failure: M4 (no status filter) is killed only by the forged-completed_by CANCELLED test; a realistic cancelled row has completed_by nil so the other escalation tests cannot catch it. The forged row is a legitimate probe.",
+      "Observation: M12 (4c before 4b) was killed by the engine test; the router 4b/4c test was not run against that mutant.",
+      "M8 variant that writes the claim audit row inside the claim transaction is an equivalent mutant (rolled back); the post-transaction variant was used."
+    ],
+    "ac_table": {
+      "AC1 two roles one user": "engine A-1 (4 tests), A-1b (3); router POST complete A-1",
+      "AC2 403 exact body byte-identical": "router A-2 (3 triggers compared by ==, greps ids), assert_separation! in every router refusal test",
+      "AC3 claim": "router claim U refused/V claims; ineligible gets 409 first; engine A-3 (7 tests, one per clause); A-3a (4+1 tests fail-open, savepoint); default-off claim tests (engine+router)",
+      "AC4 API token": "router A-4",
+      "AC5 TENANT_ADMIN": "router A-5 (2 tests)",
+      "AC6 parallel": "engine A-7 (3 tests, all orders)",
+      "AC7 named node never completed": "engine A-9 (2), A-10 (2), A-6 cancelled",
+      "AC8 assign/reassign": "engine A-11 (2)",
+      "AC9 rework loop": "engine A-6 (3 loop tests)",
+      "AC10 default off": "engine A-12 (null/empty/absent; shipped Meridian definition)",
+      "AC11 refusal writes nothing but one PII-free audit; audit failure; timer": "engine A-1, A-14, A-15; router A-1, A-15",
+      "AC12 replay 409": "engine A-13; router A-13",
+      "AC13 default-off query count": "engine A-12 query count and check/5 zero-query test",
+      "AC14 concurrency": "concurrency A-8 and control",
+      "AC15 SECURITY verdict": "handoff step 02c (not a test)",
+      "AC16 compile/format/test/boundaries": "TEST-RUNNER step 04"
+    },
+    "mutants": [
+      {
+        "id": "M1",
+        "mutation": "separation_of_duties.ex blocking_nodes filter: block when completer shares any role with actor",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "20 failures incl. A-1, A-3, A-6, A-7",
+        "result_line": "Result: 20/40 passed"
+      },
+      {
+        "id": "M2",
+        "mutation": "routers/tasks.ex handle_complete/handle_claim set Process flag for TENANT_ADMIN roles; SoD run_check skips on it",
+        "file_run": "router file",
+        "result": "KILLED",
+        "killing_tests": "A-5 (both tests)",
+        "result_line": "Result: 11/13 passed"
+      },
+      {
+        "id": "M3",
+        "mutation": "blocking_nodes order_by asc (first completion)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-6 U then V; A-6 reversed; A-13",
+        "result_line": "Result: 37/40 passed"
+      },
+      {
+        "id": "M4",
+        "mutation": "drop status == :completed filter",
+        "file_run": "engine file",
+        "result": "KILLED (single test)",
+        "killing_tests": "A-6 CANCELLED row forged completed_by",
+        "result_line": "Result: 39/40 passed"
+      },
+      {
+        "id": "M5",
+        "mutation": "only upstream named nodes count (graph reachability)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-7 (2 tests)",
+        "result_line": "Result: 38/40 passed"
+      },
+      {
+        "id": "M6a",
+        "mutation": "claim check removed, unassigned clause (tasks.ex:451)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-3 unassigned clause",
+        "result_line": "Result: 39/40 passed"
+      },
+      {
+        "id": "M6g",
+        "mutation": "claim check removed, GROUP clause (tasks.ex:481)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-3 GROUP clause",
+        "result_line": "Result: 39/40 passed"
+      },
+      {
+        "id": "M6r",
+        "mutation": "claim check removed, ROLE clause (tasks.ex:497)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-3 ROLE clause; A-3a x2",
+        "result_line": "Result: 37/40 passed"
+      },
+      {
+        "id": "M7",
+        "mutation": "claim check removed, idempotent re-claim clause (tasks.ex:464)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-3 idempotent re-claim clause",
+        "result_line": "Result: 39/40 passed"
+      },
+      {
+        "id": "M8",
+        "mutation": "claim refusal writes audit row (after claim transaction, via record_completion_refusal_audit). Note: first variant written INSIDE the claim transaction was rolled back = equivalent mutant (40 passed), not counted",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-3 ROLE clause; A-3 idempotent re-claim",
+        "result_line": "Result: 38/40 passed"
+      },
+      {
+        "id": "M9a",
+        "mutation": "response.ex 403 body gains trace_id",
+        "file_run": "router file",
+        "result": "KILLED",
+        "killing_tests": "A-2, claim 403, A-1, A-4, A-5 x2, A-15, 4b/4c",
+        "result_line": "Result: 5/13 passed"
+      },
+      {
+        "id": "M9b",
+        "mutation": "response.ex 403 body varies by endpoint",
+        "file_run": "router file",
+        "result": "KILLED",
+        "killing_tests": "A-2, A-1, A-4, A-5 x2, A-15, 4b/4c",
+        "result_line": "Result: 6/13 passed"
+      },
+      {
+        "id": "M10",
+        "mutation": "SoD check moved to a new Multi step after :merge (4c now precedes it)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "design 2.2 step 4b precedes 4c",
+        "result_line": "Result: 39/40 passed"
+      },
+      {
+        "id": "M11",
+        "mutation": "default-off early return removed (named != [] dropped; one query always)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-12 query count; A-12 check/5 itself",
+        "result_line": "Result: 38/40 passed"
+      },
+      {
+        "id": "M12",
+        "mutation": "4c required_outputs before 4b in check_completion_guards",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "design 2.2 step 4b precedes 4c (router 4b/4c test not run against this mutant)",
+        "result_line": "Result: 39/40 passed"
+      },
+      {
+        "id": "M13a",
+        "mutation": "missing snapshot raises inside check_for_claim (escapes fail-open)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-3a missing snapshot; A-3a build_graph rejects",
+        "result_line": "Result: 38/40 passed"
+      },
+      {
+        "id": "M13b",
+        "mutation": "rescue/catch removed from check_for_claim",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-3a DB error unknown schema; A-3a savepoint test",
+        "result_line": "Result: 38/40 passed"
+      },
+      {
+        "id": "M14c",
+        "mutation": "complete 403 -> 409",
+        "file_run": "router file",
+        "result": "KILLED",
+        "killing_tests": "A-1, A-2, A-4, A-5 x2, A-15, 4b/4c",
+        "result_line": "Result: 6/13 passed"
+      },
+      {
+        "id": "M14l",
+        "mutation": "claim 403 -> 422",
+        "file_run": "router file",
+        "result": "KILLED",
+        "killing_tests": "claim 403, A-4, A-2, A-5",
+        "result_line": "Result: 9/13 passed"
+      },
+      {
+        "id": "M15a",
+        "mutation": "refusal audit never written (equivalent to rolled back with the transaction)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-1, A-1 two rows, A-1b x2, A-7, A-10, A-13, A-15, 4b/4c",
+        "result_line": "Result: 31/40 passed"
+      },
+      {
+        "id": "M15b",
+        "mutation": "refusal audit written twice",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-1, A-1 two rows, A-1b x2, A-7, A-10, A-13, A-15, 4b/4c",
+        "result_line": "Result: 31/40 passed"
+      },
+      {
+        "id": "M16",
+        "mutation": "instance_id filter dropped from the read",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-1 per-instance; A-7 x2",
+        "result_line": "Result: 37/40 passed"
+      },
+      {
+        "id": "M17",
+        "mutation": "savepoint mode removed from snapshot read (harness feasible: test uses a real in-transaction DB error)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-3a DB error inside claim_task transaction (F-1)",
+        "result_line": "Result: 39/40 passed"
+      },
+      {
+        "id": "M18",
+        "mutation": "DISTINCT ON removed (any completion counts)",
+        "file_run": "engine file",
+        "result": "KILLED",
+        "killing_tests": "A-6 x3",
+        "result_line": "Result: 37/40 passed"
+      },
+      {
+        "id": "M19 (extra)",
+        "mutation": "instance projection lock FOR UPDATE -> FOR SHARE",
+        "file_run": "concurrency file, partition 15",
+        "result": "KILLED",
+        "killing_tests": "A-8 and control (deadlock)",
+        "result_line": "Result: 0/2 passed"
+      }
+    ],
+    "artifacts_out": [
+      "handoffs/WF02-REQ463-20261007/step-03b-test-design-validator.json"
+    ],
+    "evidence": "git status --porcelain lib/ test/ : empty (verified after the last mutant and after revert); clean re-run: 'Result: 40 passed' (engine file, MIX_TEST_PARTITION=3). git diff --stat HEAD: only handoffs/WF02-REQ463-20261007/step-03b-test-design-validator.json | 2 +- (pre-completion; handoff edit). Branch feat/REQ-463-distinct-from-Q-1026 verified. Raw outputs in scratchpad r463/*.txt.",
+    "design_vs_requirement_differences": [],
+    "next_action": "Route to TEST-RUNNER (4)"
+  }
 }

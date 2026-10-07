@@ -8,7 +8,52 @@
   "file": "handoffs/WF02-REQ462-20261007/step-03-test-designer.json",
   "created_at": "2026-10-07T12:15:32Z",
   "started_at": "2026-10-07T12:15:32Z",
-  "status": "PENDING",
+  "status": "COMPLETED",
+  "completed_at": "2026-10-07T12:32:00Z",
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-462.md, shared helper test/support/req462_adoption.ex, 3 per-vertical engine test files (10 node tests c..l), replaced the two KNOWN LIMITATION tests in swiftroute_decision_forms_fixture_test.exs with node-id-named tests a and b (and fixed assert_rejected! for nil -> missing_keys vs out-of-enum -> rejected_keys), and a validator adoption test (34 tests). grep -rn 'KNOWN LIMITATION' test returns nothing.",
+    "files_changed": [
+      "test/specs/REQ-462.md",
+      "test/support/req462_adoption.ex",
+      "test/letflow/engine/req462_meridian_required_outputs_test.exs",
+      "test/letflow/engine/req462_vortex_release_required_outputs_test.exs",
+      "test/letflow/engine/req462_vortex_deviation_required_outputs_test.exs",
+      "test/letflow/definitions/req462_shipped_required_outputs_adoption_test.exs",
+      "test/letflow/scripts/swiftroute_decision_forms_fixture_test.exs"
+    ],
+    "twelve_test_names": [
+      "ops-review: a completion omitting ops_decision is refused ... (swiftroute_decision_forms_fixture_test.exs)",
+      "ceo-approval: a completion omitting ceo_decision is refused ... (swiftroute_decision_forms_fixture_test.exs)",
+      "l1-approval: omitting l1_decision is refused ...",
+      "l2-approval: omitting l2_decision is refused ...",
+      "escalate-l2-approval-to-ceo: the D-ESC task inherits nothing; omitting l2_decision is refused ...",
+      "kyc-manual-review: omitting kyc_outcome is refused ...",
+      "capacity-review: omitting capacity_decision is refused ...",
+      "escalate-to-ceo: the D-ESC task inherits nothing; omitting capacity_decision is refused ...",
+      "budget-approval: omitting budget_decision is refused ...",
+      "escalate-budget-approval-to-ceo: the D-ESC task inherits nothing; omitting budget_decision is refused ...",
+      "severity-classification: omitting severity is refused ...",
+      "escalate-severity-classification-to-ceo: the D-ESC task inherits nothing; omitting severity is refused ..."
+    ],
+    "verification": {
+      "req462_shipped_required_outputs_adoption_test.exs": "Result: 34 passed",
+      "req462_meridian_required_outputs_test.exs": "Result: 4 passed",
+      "req462_vortex_release_required_outputs_test.exs": "Result: 4 passed",
+      "req462_vortex_deviation_required_outputs_test.exs": "Result: 2 passed",
+      "swiftroute_decision_forms_fixture_test.exs": "Result: 12 passed",
+      "mix format --check-formatted (all touched files)": "rc=0",
+      "mutant_1": "escalate-severity-classification-to-ceo required_outputs -> []: deviation engine file 1/2 failed (escalate-severity-classification-to-ceo test); validator file 32/34 (2 failed: adopted-set-exact vortex_deviation, severity nodes exactly [severity]). Reverted by copy-back, git status clean for the fixture.",
+      "mutant_2": "meridian kyc-manual-review required_outputs -> []: meridian engine file 3/4 (kyc-manual-review test failed); validator file 31/34 (3 failed: meridian exactly 12 warnings, check-3 kyc-manual-review pair, adopted-set-exact meridian). Reverted, git status clean for the fixture."
+    },
+    "issues": [
+      "mix letflow.check.test NOT run: it runs the full parallel suite, forbidden by the RAM rules (0.65-0.7 GB free). No test helper has a default argument (grep for backslash-backslash found only regexes), mix format --check-formatted passes. TEST-RUNNER must run it.",
+      "The 422 is asserted at the engine seam ({:error, {:output_refused, %{missing_keys: [key], rejected_keys: []}}}); the router rendering is covered by routers/tasks_required_outputs_test.exs, not re-driven per node (real fixtures use role assignees, so an HTTP call needs per-fixture identity setup).",
+      "REQ-461 check 3 is vacuous for vortex nodes g..l (no form_schema); the 422 tests are the evidence there, as the AC says. Mutant 1 shows the check-3 tests do not fail for it, only the engine and exact-set tests do.",
+      "Other existing tests that complete these nodes with the key omitted were not re-grepped/run (outside my files); TEST-RUNNER's wider run should catch any."
+    ],
+    "next_action": "TEST-DESIGN-VALIDATOR; TEST-RUNNER to run mix letflow.check.test and the scoped runs. Nothing committed."
+  },
   "priority": "NORMAL",
   "context": {
     "stage": "S3",

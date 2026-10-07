@@ -382,6 +382,33 @@ jobs:
         if: needs.changes.outputs.backend != 'false'
         run: mix deps.get
 
+      # Step 3 of the backend-gate speed-up (Q-1037 / GH #2364): the service database is a
+      # throwaway used only by this job's tests, so crash durability buys nothing. fsync,
+      # synchronous_commit and full_page_writes are all reload-only settings (no restart, no
+      # `services.postgres.command`, which was tried and reverted for max_connections: see the
+      # header of this file). The step fails unless the three values really read back as `off`,
+      # so a silent no-op cannot masquerade as a tuned run.
+      - name: Tune Postgres for CI (durability off, throwaway database)
+        if: needs.changes.outputs.backend != 'false'
+        env:
+          PGPASSWORD: letflow
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -p 5462 -U letflow -d letflow_dev -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
+          sleep 2
+          for setting in fsync synchronous_commit full_page_writes; do
+            value=$(psql -h 127.0.0.1 -p 5462 -U letflow -d letflow_dev -At -c "SHOW $setting")
+            echo "postgres $setting = $value"
+            if [ "$value" != "off" ]; then
+              echo "::error::Postgres setting $setting did not take effect (got '$value')"
+              exit 1
+            fi
+          done
+
       - name: Run backend gate
         if: needs.changes.outputs.backend != 'false'
         run: mix letflow.check

@@ -10,12 +10,11 @@ defmodule Letflow.Engine.RequiredOutputsTest do
 
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureLog
-
   alias Letflow.Definitions.Graph.Node
   alias Letflow.Engine.RequiredOutputs
   alias Letflow.Engine.VariableMerge
   alias Letflow.EventStore.Registry.ValidationFailure
+  alias Letflow.Test.LoggerCollector
 
   defp human_task(attributes), do: %Node{id: "n1", node_type: :HUMAN_TASK, attributes: attributes}
 
@@ -30,25 +29,36 @@ defmodule Letflow.Engine.RequiredOutputsTest do
     end
 
     test "absent attribute, nil, [] and a non-node all read as off ([]), silently" do
-      log =
-        capture_log(fn ->
-          assert RequiredOutputs.required_outputs(human_task(%{"role" => "r"})) == []
-          assert RequiredOutputs.required_outputs(human_task(%{"required_outputs" => nil})) == []
-          assert RequiredOutputs.required_outputs(human_task(%{"required_outputs" => []})) == []
-          assert RequiredOutputs.required_outputs(nil) == []
-          assert RequiredOutputs.required_outputs(:garbage) == []
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            assert RequiredOutputs.required_outputs(human_task(%{"role" => "r"})) == []
 
-      refute log =~ "malformed"
+            assert RequiredOutputs.required_outputs(human_task(%{"required_outputs" => nil})) ==
+                     []
+
+            assert RequiredOutputs.required_outputs(human_task(%{"required_outputs" => []})) == []
+            assert RequiredOutputs.required_outputs(nil) == []
+            assert RequiredOutputs.required_outputs(:garbage) == []
+          end,
+          attribute_to: self()
+        )
+
+      refute LoggerCollector.text(entries) =~ "malformed"
     end
 
     test "a malformed attribute (not a list, or a bad entry) reads as off and logs one warning each, naming only the node id" do
       for bad <- ["decision", %{"a" => 1}, ["ok", ""], ["ok", 5], ["ok", nil]] do
-        log =
-          capture_log(fn ->
-            assert RequiredOutputs.required_outputs(human_task(%{"required_outputs" => bad})) ==
-                     []
-          end)
+        {_, entries} =
+          LoggerCollector.capture(
+            fn ->
+              assert RequiredOutputs.required_outputs(human_task(%{"required_outputs" => bad})) ==
+                       []
+            end,
+            attribute_to: self()
+          )
+
+        log = LoggerCollector.text(entries)
 
         assert log =~ "malformed required_outputs"
         assert log =~ ~s("n1")

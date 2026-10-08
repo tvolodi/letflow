@@ -17,12 +17,11 @@ defmodule Letflow.LoginDiscovery.DispatchTest do
 
   use Letflow.DataCase, async: false
 
-  import ExUnit.CaptureLog
-
   alias Letflow.LoginDiscovery.Dispatch
   alias Letflow.LoginDiscovery.Notifier.Noop
   alias Letflow.LoginDiscoveryNotifierDouble, as: Double
   alias Letflow.Test.LoginDiscoveryHelpers, as: H
+  alias Letflow.Test.LoggerCollector
 
   @supervisor Letflow.LoginDiscovery.TaskSupervisor
   @notifier Letflow.LoginDiscovery.Notifier
@@ -81,11 +80,16 @@ defmodule Letflow.LoginDiscovery.DispatchTest do
 
       email = multi(w)
 
-      log =
-        capture_log([level: :debug], fn ->
-          send(self(), {:conn, H.post_email(email)})
-          H.await_idle()
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            send(self(), {:conn, H.post_email(email)})
+            H.await_idle()
+          end,
+          attribute_to: self()
+        )
+
+      log = LoggerCollector.text(entries)
 
       assert_received {:conn, conn}
       assert H.fp(conn) == baseline
@@ -108,11 +112,16 @@ defmodule Letflow.LoginDiscovery.DispatchTest do
   test "an adapter that succeeds leaves no failure line in the log", %{w: w} do
     email = multi(w)
 
-    log =
-      capture_log([level: :debug], fn ->
-        H.post_email(email)
-        H.await_idle()
-      end)
+    {_, entries} =
+      LoggerCollector.capture(
+        fn ->
+          H.post_email(email)
+          H.await_idle()
+        end,
+        attribute_to: self()
+      )
+
+    log = LoggerCollector.text(entries)
 
     assert [{^email, _}] = H.deliveries()
     refute log =~ "did not complete"
@@ -206,10 +215,13 @@ defmodule Letflow.LoginDiscovery.DispatchTest do
     test "Noop returns :ok and its log output carries no address, slug or display name" do
       tenants = [%{slug: "zorblax-slug", display_name: "Zorblax Display"}]
 
-      log =
-        capture_log([level: :debug], fn ->
-          assert Noop.deliver_tenant_list("someone@zorblax.test", tenants) == :ok
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn -> assert Noop.deliver_tenant_list("someone@zorblax.test", tenants) == :ok end,
+          attribute_to: self()
+        )
+
+      log = LoggerCollector.text(entries)
 
       refute log =~ "someone@zorblax.test"
       refute log =~ "zorblax"
@@ -221,11 +233,16 @@ defmodule Letflow.LoginDiscovery.DispatchTest do
       H.put_env!(@notifier, adapter: Noop, timeout_ms: 1_000, max_concurrent: 100)
       email = multi(w)
 
-      log =
-        capture_log([level: :debug], fn ->
-          send(self(), {:conn, H.post_email(email)})
-          H.await_idle()
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            send(self(), {:conn, H.post_email(email)})
+            H.await_idle()
+          end,
+          attribute_to: self()
+        )
+
+      log = LoggerCollector.text(entries)
 
       assert_received {:conn, conn}
       assert conn.status == 202 and conn.resp_body == @neutral

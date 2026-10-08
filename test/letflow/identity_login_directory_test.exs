@@ -11,7 +11,6 @@ defmodule Letflow.IdentityLoginDirectoryTest do
 
   use Letflow.DataCase, async: false
 
-  import ExUnit.CaptureLog
   import Ecto.Query, only: [from: 2]
 
   alias Letflow.Identity
@@ -19,6 +18,7 @@ defmodule Letflow.IdentityLoginDirectoryTest do
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
   alias Letflow.Oidc.JitProvisioningConfig
+  alias Letflow.Test.LoggerCollector
   alias Letflow.Test.LoginDirectoryFixture, as: Fx
 
   # ── helpers ─────────────────────────────────────────────────────────────
@@ -789,10 +789,15 @@ defmodule Letflow.IdentityLoginDirectoryTest do
     } do
       email = "control-logged@example.test"
 
-      log =
-        capture_log([level: :debug], fn ->
-          Repo.exists?(from(u in User, where: u.email == ^email), prefix: tenant.schema_name)
-        end)
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            Repo.exists?(from(u in User, where: u.email == ^email), prefix: tenant.schema_name)
+          end,
+          attribute_to: self()
+        )
+
+      log = LoggerCollector.text(entries)
 
       assert log =~ email
     end
@@ -808,17 +813,22 @@ defmodule Letflow.IdentityLoginDirectoryTest do
       jit_ctx = identity_context(%{email: "jit-logged@example.test"})
       jit_key = Fx.key!("jit-logged@example.test")
 
-      log =
-        capture_log([level: :debug], fn ->
-          user = create!(tenant, email)
-          {:ok, _} = Identity.update_user_profile(user.id, %{"email" => changed}, opts(tenant))
-          {:ok, _} = Identity.update_user_status(user.id, :inactive, opts(tenant))
+      {_, entries} =
+        LoggerCollector.capture(
+          fn ->
+            user = create!(tenant, email)
+            {:ok, _} = Identity.update_user_profile(user.id, %{"email" => changed}, opts(tenant))
+            {:ok, _} = Identity.update_user_status(user.id, :inactive, opts(tenant))
 
-          {:ok, _} =
-            Identity.provision_oidc_user(jit_ctx, tenant.tenant_id, jit_config(),
-              prefix: tenant.schema_name
-            )
-        end)
+            {:ok, _} =
+              Identity.provision_oidc_user(jit_ctx, tenant.tenant_id, jit_config(),
+                prefix: tenant.schema_name
+              )
+          end,
+          attribute_to: self()
+        )
+
+      log = LoggerCollector.text(entries)
 
       # The harness is capturing: the user write itself logs (pre-existing, not a directory query).
       assert log =~ "users"
@@ -836,10 +846,20 @@ defmodule Letflow.IdentityLoginDirectoryTest do
       end
 
       # Any logged statement mentioning an address is a users/audit_entries write, never a directory one.
-      log
-      |> String.split(~r/(?=\[debug\] QUERY)/)
-      |> Enum.filter(&(&1 =~ lower or &1 =~ changed or &1 =~ "jit-logged@example.test"))
-      |> Enum.each(fn chunk -> assert chunk =~ ~r/users|audit_entries/ end)
+      # One collector entry per log event, so the check is per statement (the collector text has
+      # no level prefix to split a joined string on).
+      address_entries =
+        Enum.filter(entries, fn %{text: t} ->
+          t =~ lower or t =~ changed or t =~ "jit-logged@example.test"
+        end)
+
+      # Non-vacuity: the writes above really did log statements mentioning an address.
+      assert address_entries != []
+
+      for %{text: t} <- address_entries do
+        assert t =~ ~r/users|audit_entries/,
+               "address-bearing entry is not a users/audit write: #{t}"
+      end
     end
 
     test "telemetry fires for a directory write even though it is not logged", %{tenant: tenant} do

@@ -16,33 +16,45 @@ defmodule Letflow.Secrets.LogFilterTest do
 
   use ExUnit.Case, async: false
 
-  import ExUnit.CaptureLog
+  alias Letflow.Test.LoggerCollector
 
   require Logger
 
-  # `capture_log/2`'s default formatter does not print metadata at all unless told
-  # to -- this project sets no `config :logger` metadata anywhere (confirmed:
-  # `grep -rn "config :logger" config/*.exs` finds nothing), so `metadata: :all` is
-  # passed explicitly here to make the (possibly redacted) metadata visible in the
-  # captured string. This is a test-visibility mechanism only; it does not change
+  # ISS-1038: these tests use the attributed `LoggerCollector` (own events only) instead of the
+  # global `capture_log/2`, whose absence assertions ("no [REDACTED]") could see another
+  # process's event. The message-only text does not show metadata, so `raw: true` is passed to
+  # include the inspected event (metadata map) in the captured string. This is a
+  # test-visibility mechanism only; it does not change
   # which filter runs or what it redacts -- `Letflow.Secrets.LogFilter.filter/2`
   # (registered once, node-wide, by `Letflow.Application.start/2`) has already run
   # on `log_event.meta` before the formatter ever sees it.
   test "a Logger call carrying a value under a sensitive key emits [REDACTED] in captured output, not the plaintext" do
-    log =
-      capture_log([metadata: :all], fn ->
-        Logger.info("webhook signing key resolved", secret: "sh-do-not-leak-me")
-      end)
+    {_, entries} =
+      LoggerCollector.capture(
+        fn ->
+          Logger.info("webhook signing key resolved", secret: "sh-do-not-leak-me")
+        end,
+        attribute_to: self(),
+        raw: true
+      )
+
+    log = LoggerCollector.text(entries)
 
     assert log =~ "[REDACTED]"
     refute log =~ "sh-do-not-leak-me"
   end
 
   test "a Logger call with no sensitive-keyed metadata is unaffected" do
-    log =
-      capture_log([metadata: :all], fn ->
-        Logger.info("ordinary log line", request_id: "req-123")
-      end)
+    {_, entries} =
+      LoggerCollector.capture(
+        fn ->
+          Logger.info("ordinary log line", request_id: "req-123")
+        end,
+        attribute_to: self(),
+        raw: true
+      )
+
+    log = LoggerCollector.text(entries)
 
     assert log =~ "ordinary log line"
     assert log =~ "req-123"
@@ -59,10 +71,16 @@ defmodule Letflow.Secrets.LogFilterTest do
   test "a value interpolated into the message string is NOT redacted, even if secret-shaped" do
     secret = "sh-do-not-leak-me"
 
-    log =
-      capture_log([metadata: :all], fn ->
-        Logger.info("webhook signing key resolved: secret=#{secret}")
-      end)
+    {_, entries} =
+      LoggerCollector.capture(
+        fn ->
+          Logger.info("webhook signing key resolved: secret=#{secret}")
+        end,
+        attribute_to: self(),
+        raw: true
+      )
+
+    log = LoggerCollector.text(entries)
 
     assert log =~ secret
     refute log =~ "[REDACTED]"
@@ -71,10 +89,16 @@ defmodule Letflow.Secrets.LogFilterTest do
   test "passing the same value as metadata instead of interpolating it IS redacted" do
     secret = "sh-do-not-leak-me"
 
-    log =
-      capture_log([metadata: :all], fn ->
-        Logger.info("webhook signing key resolved", secret: secret)
-      end)
+    {_, entries} =
+      LoggerCollector.capture(
+        fn ->
+          Logger.info("webhook signing key resolved", secret: secret)
+        end,
+        attribute_to: self(),
+        raw: true
+      )
+
+    log = LoggerCollector.text(entries)
 
     assert log =~ "[REDACTED]"
     refute log =~ secret

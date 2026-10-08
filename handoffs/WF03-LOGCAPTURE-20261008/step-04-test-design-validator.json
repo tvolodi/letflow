@@ -1,0 +1,43 @@
+{
+  "handoff_id": "701fe24d-a157-4763-ade3-ad06db24d4d1",
+  "run_id": "WF03-LOGCAPTURE-20261008",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-LOGCAPTURE-20261008/step-04-test-design-validator.json",
+  "created_at": "2026-10-08T03:00:00Z",
+  "started_at": "2026-10-08T03:00:00Z",
+  "completed_at": "2026-10-08T03:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-1038": "Q-1039 / GH #2367: tests asserting on globally captured logs flake under concurrent tests"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-1038.yaml",
+      "test/support/logger_collector.ex"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt",
+    "branch_name": "test/log-capture-deterministic-sink"
+  },
+  "task": {
+    "description": "Independent mutation proof and concurrency-injection proof, two passes.",
+    "acceptance_criteria": [
+      "Leaking or line-dropping mutants fail each converted test; concurrent unrelated log does not"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Pass 1: 14 lib mutants killed, 0 survived (authz M1-M4, dispatch M6-M8/M15/M16, required_outputs M10, wiring M11, mode M12, alerts M13a/b), concurrent injections ignored, negative control (attribute_to nil) fails as expected. Pass 2 FAIL initially: alerts AC-8 await/3 survivors AL2/AL3; fixed in 53c3155e, re-killed (AL1 timeout, AL2, AL3, identity test-side mutant). All other new-site mutants killed (TF1-4, MRB1-3, LF1-3, KR1, ID1, CTL).",
+    "artifacts_out": [
+      "test/specs/ISS-1038.md"
+    ]
+  }
+}

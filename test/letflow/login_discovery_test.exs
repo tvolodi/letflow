@@ -187,10 +187,15 @@ defmodule Letflow.LoginDiscoveryTest do
     test "reading the mode logs nothing (D29)" do
       H.put_env!(Letflow.LoginDiscovery, mode: :nonsense)
 
-      log =
-        ExUnit.CaptureLog.capture_log([level: :debug], fn -> LoginDirectory.deployment_mode() end)
+      # ISS-1038: attributed sink at every level (collector level is :all; the VM logger level is
+      # :debug in :test), so another test's event cannot make this "logs nothing" assertion fail.
+      {_mode, entries} =
+        Letflow.Test.LoggerCollector.capture(
+          fn -> LoginDirectory.deployment_mode() end,
+          attribute_to: self()
+        )
 
-      assert log == ""
+      assert entries == []
     end
   end
 

@@ -2,17 +2,34 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
   @moduledoc """
   REQ-441 AC5 (spec `test/specs/REQ-441.md`; design s6.2 AC5 row, s13 C-4 form): NO LEAK.
 
-  For the success case and EVERY failure case, the whole log output -- `capture_log(level:
-  :debug)` PLUS a `:logger` handler attached at all levels that records the raw event
-  terms (so a `:proc_lib` crash report that bypasses the Logger translator would still be
-  seen) -- contains none of: the typed address (any case), a tenant slug or display name,
-  the SMTP reply text (`SINKREPLYMARKER`), the compile-time-built username and password
-  markers, or any exception message text. The typed address is deliberately placed in the
-  exception / exit reason of the raising double, so a leak would be visible.
+  For the success case and EVERY failure case, the whole ATTRIBUTED log output contains none of:
+  the typed address (any case), a tenant slug or display name, the SMTP reply text
+  (`SINKREPLYMARKER`), the compile-time-built username and password markers, or any exception
+  message text. The typed address is deliberately placed in the exception / exit reason of the
+  raising double, so a leak would be visible.
+
+  The sink is a synchronous `:logger` handler (`Letflow.Test.LoggerCollector`) attached at all
+  levels that records the raw event terms (so a `:proc_lib` crash report that bypasses the
+  Logger translator would still be seen), restricted to events attributable to this test: its
+  own process, its `$callers` / `$ancestors`, and the notifier TaskSupervisor's own reports.
+
+  ATTRIBUTION NARROWING (ISS-1038, decided deliberately): events from processes NOT linked to
+  the test -- e.g. `:ssl` connection helpers or `gen_smtp` internals that were not started
+  through the test's call chain -- are not observed, so the unique-marker leak scan covers
+  attributed events only. A global (unattributed) scan was rejected: it is exactly the
+  hazard class being removed (another test's events making this one flake). Partial
+  mitigation: the M2b no-survivors check below proves the call leaves no process behind that
+  could log later.
+
+  Why not `capture_log`: it is a GLOBAL capture, so under concurrent tests it also picked up
+  an error-level "alert delivery exhausted" event logged by another test's alert deliverer
+  (ISS-1038 / Q-1039, a flake in `no leak: untrusted_implicit`). The attributed handler
+  cannot see such an event (proved by the probe test and by
+  `test/letflow/test_support/logger_collector_test.exs`).
 
   Non-vacuity: the sink DECODES the AUTH exchange, and the success case asserts the
   markers really were presented to the server; a failure case asserts the one fixed
-  warning line is present; a probe test proves both capture channels work.
+  warning line is present; a probe test proves the sink is live and attributes correctly.
 
   M2b: after the brutal-kill paths and the forced library failures, no process started by
   the call survives (bounded wait) and the sink's `open_connections/1` is 0.
@@ -22,8 +39,6 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
   """
 
   use ExUnit.Case, async: false
-
-  import ExUnit.CaptureLog
 
   require Logger
 
@@ -136,21 +151,35 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
 
   # ── observation ─────────────────────────────────────────────────────────
 
-  # Runs `fun` under capture_log(:debug) AND the all-levels :logger handler.
+  # Runs `fun` under the all-levels, synchronous, ATTRIBUTED :logger handler. Returns
+  # `{log_text, entries}`: the entries attributable to this test and their joined text.
   defp observe(fun) do
-    collector = LoggerCollector.attach!()
+    collector = attach_collector()
     events = S.attach_notifier!()
 
-    log =
-      capture_log([level: :debug], fn ->
-        fun.(events)
-        H.await_idle()
-        Process.sleep(100)
-      end)
+    try do
+      fun.(events)
+      H.await_idle()
+      Process.sleep(100)
+      LoggerCollector.assert_alive!(collector)
+    after
+      LoggerCollector.detach(collector)
+    end
 
     entries = LoggerCollector.collected(collector)
-    LoggerCollector.detach(collector)
-    {log, entries}
+    {Enum.map_join(entries, "\n", & &1.text), entries}
+  end
+
+  # The TaskSupervisor itself emits the child-terminated report on a brutal kill, so its
+  # own events are attributed too. `also_from` is safe only because every other test touching
+  # LoginDiscovery.TaskSupervisor is async: false (nothing concurrent can emit from it).
+  defp attach_collector do
+    LoggerCollector.attach!(
+      attribute_to: self(),
+      sasl: true,
+      raw: true,
+      also_from: [Letflow.LoginDiscovery.TaskSupervisor]
+    )
   end
 
   defp run_case(name) do
@@ -193,7 +222,7 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
   end
 
   # Named OTP singletons that are started lazily and live for the VM's lifetime: the logger's
-  # own handler processes (restarted by capture_log / Logger.configure) and OTP ssl's
+  # own handler processes (restarted by Logger.configure) and OTP ssl's
   # registered helpers (e.g. `:ssl_unknown_listener`, created on the first handshake that
   # meets an undecodable CA). A per-call WORKER leaked by the SMTP call is not one of these.
   defp logger_machinery?(info) do
@@ -236,14 +265,34 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
 
   # ── the tests ───────────────────────────────────────────────────────────
 
-  test "the capture channels are live: a probe line reaches both capture_log and the handler" do
-    {log, entries} = observe(fn _events -> Logger.error("PROBE-REQ441-LINE") end)
+  test "the sink is live and attributing: own and child lines arrive, unrelated ones do not" do
+    {:ok, sup} = Task.Supervisor.start_link()
 
-    assert log =~ "PROBE-REQ441-LINE"
+    {log, entries} =
+      observe(fn _events ->
+        Logger.error("PROBE-REQ441-LINE")
+
+        Task.Supervisor.async_nolink(sup, fn -> Logger.error("PROBE-REQ441-CHILD") end)
+        |> Task.await()
+
+        parent = self()
+
+        {pid, ref} =
+          spawn_monitor(fn ->
+            Logger.error("alert delivery exhausted unrelated")
+            send(parent, :unrelated_logged)
+          end)
+
+        assert_receive :unrelated_logged, 5_000
+        assert_receive {:DOWN, ^ref, :process, ^pid, _}, 5_000
+      end)
+
     assert Enum.any?(entries, &(&1.text =~ "PROBE-REQ441-LINE" and &1.level == :error))
+    assert log =~ "PROBE-REQ441-CHILD"
+    refute log =~ "alert delivery exhausted unrelated"
   end
 
-  test "positive control: a proc_lib crash that carries the password IS visible to both channels" do
+  test "positive control: a proc_lib crash that carries the password IS visible to the sink" do
     pass = S.pass()
 
     {log, entries} =
@@ -304,15 +353,17 @@ defmodule Letflow.LoginDiscovery.NotifierNoLeakTest do
   end
 
   test "ALL cases under ONE capture: nothing sensitive in the combined output" do
-    collector = LoggerCollector.attach!()
+    collector = attach_collector()
 
-    log =
-      capture_log([level: :debug], fn ->
-        for name <- @cases, do: run_case(name)
-      end)
+    try do
+      for name <- @cases, do: run_case(name)
+      LoggerCollector.assert_alive!(collector)
+    after
+      LoggerCollector.detach(collector)
+    end
 
     entries = LoggerCollector.collected(collector)
-    LoggerCollector.detach(collector)
+    log = Enum.map_join(entries, "\n", & &1.text)
 
     assert_clean(:all_cases, log, entries)
     assert log =~ @fixed_line

@@ -8,14 +8,13 @@ defmodule Letflow.Api.AuthzDenyLogTest do
   hashes of the caller and tenant ids, sampled for repeated denials, carrying nothing INV-4 forbids,
   and never altering the 403 (INV-5 / INV-10).
 
-  `async: false`: `capture_log`, Application env (window, clock, master key, platform-tenant pin)
-  and `:persistent_term` (sampler, one-time flags) are VM-global. `setup` zeroes the module's state
-  and every env key this file touches is restored on exit.
+  `async: false`: the log sink handler (`sink_log/1`), Application env (window, clock, master key,
+  platform-tenant pin) and `:persistent_term` (sampler, one-time flags) are VM-global. `setup`
+  zeroes the module's state and every env key this file touches is restored on exit.
   """
 
   use Letflow.DataCase, async: false
 
-  import ExUnit.CaptureLog
   import Plug.Conn, only: [assign: 3, put_private: 3, get_resp_header: 2]
 
   alias Letflow.Api.Authorization.AccessContext
@@ -23,6 +22,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
   alias Letflow.Identity.User
   alias Letflow.Plugs.Authorize
   alias Letflow.Support.PlatformTenantFixture, as: Fixture
+  alias Letflow.Test.LoggerCollector
 
   @label "letflow/authz-deny-log/v1"
   @env_keys [:authz_deny_log_window_s, :authz_deny_log_clock, :secrets_master_key]
@@ -36,6 +36,33 @@ defmodule Letflow.Api.AuthzDenyLogTest do
     end
 
     def log(_event, _config), do: :ok
+  end
+
+  # Runs `fun`, then returns the formatted text of every log event it emitted that came from
+  # the authz deny log, one per line, in arrival order. Replaces `capture_log/1` (a GLOBAL
+  # capture that can lose or add lines under concurrent load) with the shared synchronous
+  # `Letflow.Test.LoggerCollector` handler: it runs in the emitting process and `send/2`s
+  # before the log call returns, and it only forwards events attributable to THIS test
+  # process (itself, its Tasks via `$callers`). A deliberate narrowing: the leak checks
+  # examine what AuthzDenyLog emitted, not other loggers' lines, and message text only (no
+  # level or metadata; the Forwarder test covers those).
+  defp sink_log(fun) do
+    collector = LoggerCollector.attach!(attribute_to: self(), sasl: false, raw: false)
+
+    try do
+      fun.()
+
+      # a crashed handler is removed by :logger; fail loudly rather than pass "logs nothing" vacuously
+      LoggerCollector.assert_alive!(collector)
+    after
+      LoggerCollector.detach(collector)
+    end
+
+    collector
+    |> LoggerCollector.collected()
+    |> Enum.map(& &1.text)
+    |> Enum.filter(&String.contains?(&1, ["authz_deny", "authz deny log"]))
+    |> Enum.join("\n")
   end
 
   setup do
@@ -192,7 +219,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
   defp log_k(fixture, caller, policy) do
     {conn, access} = direct(fixture, caller, ["PLATFORM_ADMIN"], policy)
-    capture_log(fn -> assert :ok = AuthzDenyLog.log_denial(conn, access, policy) end)
+    sink_log(fn -> assert :ok = AuthzDenyLog.log_denial(conn, access, policy) end)
   end
 
   # --- (a) platform-scope denial ---------------------------------------------
@@ -202,7 +229,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       caller = Ecto.UUID.generate()
 
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           conn = deny_direct(ctx.a, caller, ["PLATFORM_ADMIN"], :TenantsManage)
           assert conn.status == 403
           assert conn.halted
@@ -226,7 +253,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
     test "the platform tenant's own non-admin role is attributed caller_platform_tenant=true",
          ctx do
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           conn = deny_direct(ctx.p, Ecto.UUID.generate(), ["PROCESS_DESIGNER"], :TenantsManage)
           assert conn.status == 403
         end)
@@ -240,7 +267,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       slug = "uniq-route-9d41c7"
 
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           {conn, identity} =
             api(:get, "/api/v1/tenants/" <> slug, ctx.a, ["PROCESS_DESIGNER"], nil)
 
@@ -264,7 +291,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
     test "A's TENANT_ADMIN on a cross-tenant platform route is attributed and denied (INV-10)",
          ctx do
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           {conn, _identity} =
             api(:patch, "/api/v1/tenants/" <> ctx.b.tenant.slug, ctx.a, ["TENANT_ADMIN"], %{
               "display_name" => "Hijacked"
@@ -300,7 +327,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
       on_exit(fn -> :logger.remove_handler(handler_id) end)
 
-      capture_log(fn -> assert :ok = AuthzDenyLog.log_denial(conn, access, :TenantsManage) end)
+      sink_log(fn -> assert :ok = AuthzDenyLog.log_denial(conn, access, :TenantsManage) end)
 
       assert_receive {:authz_event, ^forwarder_ref, event}, 1000
       assert event.level == :warning
@@ -338,7 +365,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
   describe "(b) tenant-scope denial" do
     test "a role lacking a tenant permission is attributed with platform_scope=false", ctx do
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           {conn, _identity} =
             api(:post, "/api/v1/definitions", ctx.a, ["TASK_WORKER"], %{"name" => "x"})
 
@@ -359,7 +386,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
   describe "(c) :Unknown and the router catch-all markers" do
     test "no :policy_key private key -> policy=Unknown, platform_scope=false", ctx do
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           conn = deny_direct(ctx.a, Ecto.UUID.generate(), ["PROCESS_DESIGNER"], nil)
           assert conn.status == 403
         end)
@@ -371,7 +398,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
     test "direct :UnmatchedPlatformPath for a non-operator -> platform_scope=true", ctx do
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           conn =
             deny_direct(ctx.a, Ecto.UUID.generate(), ["PROCESS_DESIGNER"], :UnmatchedPlatformPath)
 
@@ -388,7 +415,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       value = "zzz-uniq-3c7e19"
 
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           {conn, _identity} =
             api(
               :get,
@@ -413,7 +440,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       value = "zzz-uniq-6a02d4"
 
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           {conn, _identity} =
             api(
               :get,
@@ -464,7 +491,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
       for {method, path, roles, body} <- scenarios do
         log =
-          capture_log(fn ->
+          sink_log(fn ->
             {conn, identity} = api(method, path, ctx.a, roles, body)
             assert conn.status == 403
             send(self(), {:identity, identity})
@@ -596,7 +623,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       Application.put_env(:letflow, :authz_deny_log_clock, fn -> raise "boom" end)
       Application.put_env(:letflow, :authz_deny_log_window_s, 60)
 
-      capture_log(fn ->
+      sink_log(fn ->
         conn = deny_direct(ctx.a, Ecto.UUID.generate(), ["PLATFORM_ADMIN"], :TenantsManage)
         assert bytes(conn) == forbidden_bytes()
       end)
@@ -617,7 +644,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
     test "an unknown method at a router catch-all logs method=OTHER on one line", ctx do
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           {conn, _identity} =
             api("PURGE", "/api/v1/tenants/zzz/zzz/zzz", ctx.a, ["PROCESS_DESIGNER"], nil)
 
@@ -634,7 +661,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       hostile_method = "PURGE\r\nauthz_deny caller=deadbeefdeadbeef"
 
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           identity = mint!(ctx.a, ["PROCESS_DESIGNER"])
 
           conn =
@@ -750,7 +777,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       end)
 
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           1..50
           |> Enum.map(fn _ ->
             Task.async(fn -> AuthzDenyLog.log_denial(conn, access, :TenantsManage) end)
@@ -783,7 +810,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
           else: Application.put_env(:letflow, :secrets_master_key, bad)
 
         log =
-          capture_log(fn ->
+          sink_log(fn ->
             first = deny_direct(ctx.a, Ecto.UUID.generate(), ["PLATFORM_ADMIN"], :TenantsManage)
             assert bytes(first) == forbidden_bytes()
             second = deny_direct(ctx.a, Ecto.UUID.generate(), ["PLATFORM_ADMIN"], :TenantsManage)
@@ -810,7 +837,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
     test "a non-binary user id renders caller=none and the 403 is unchanged", ctx do
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           conn = deny_direct(ctx.a, 12_345, ["PLATFORM_ADMIN"], :TenantsManage)
           assert bytes(conn) == forbidden_bytes()
         end)
@@ -828,7 +855,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       Application.put_env(:letflow, :authz_deny_log_clock, fn -> raise RuntimeError, sentinel end)
 
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           conn = deny_direct(ctx.a, Ecto.UUID.generate(), ["PLATFORM_ADMIN"], :TenantsManage)
           assert bytes(conn) == forbidden_bytes()
         end)
@@ -842,7 +869,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       Application.put_env(:letflow, :authz_deny_log_clock, fn -> "not-an-integer" end)
 
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           conn = deny_direct(ctx.a, Ecto.UUID.generate(), ["PLATFORM_ADMIN"], :TenantsManage)
           assert bytes(conn) == forbidden_bytes()
         end)
@@ -857,7 +884,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
       _ = ctx
 
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           assert :ok = AuthzDenyLog.log_denial(:not_a_conn, access, :SentinelPolicyKey)
           assert :ok = AuthzDenyLog.log_denial(:not_a_conn, access, :SentinelPolicyKey)
         end)
@@ -882,7 +909,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
   describe "(j) allowed requests and the 500 branch log nothing from this module" do
     test "platform operator on a platform route, tenant admin on a tenant route", ctx do
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           {operator, _identity} =
             api(:get, "/api/v1/tenants/" <> ctx.a.tenant.slug, ctx.p, ["PLATFORM_ADMIN"], nil)
 
@@ -899,7 +926,7 @@ defmodule Letflow.Api.AuthzDenyLogTest do
 
     test "a conn without auth_context takes the 500 branch and logs no attribution line" do
       log =
-        capture_log(fn ->
+        sink_log(fn ->
           conn = Authorize.call(Plug.Test.conn(:get, "/x"), [])
           assert conn.status == 500
         end)

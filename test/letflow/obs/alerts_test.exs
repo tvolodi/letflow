@@ -23,6 +23,7 @@ defmodule Letflow.Obs.AlertsTest do
   alias Letflow.Obs.AlertHookEmissionState
   alias Letflow.Obs.AlertTriggerState
   alias Letflow.Obs.Alerts
+  alias Letflow.Test.LoggerCollector
   alias Letflow.TenantFixture
   alias Letflow.WebhookTestServer
 
@@ -379,6 +380,27 @@ defmodule Letflow.Obs.AlertsTest do
   #       NO dlq_entries row written
   # ---------------------------------------------------------------------------
 
+  # Waits (Process.monitor/:DOWN, bounded 5 s per task) for the alert delivery Tasks started on
+  # behalf of `caller` (it is in their `$callers`) to terminate.
+  defp settle_delivery_tasks(caller) do
+    Letflow.Obs.Alerts.TaskSupervisor
+    |> Task.Supervisor.children()
+    |> Enum.filter(fn pid ->
+      case Process.info(pid, :dictionary) do
+        {:dictionary, dict} -> caller in Keyword.get(dict, :"$callers", [])
+        nil -> false
+      end
+    end)
+    |> Enum.map(&Process.monitor/1)
+    |> Enum.each(fn ref ->
+      receive do
+        {:DOWN, ^ref, :process, _pid, _reason} -> :ok
+      after
+        5_000 -> Process.demonitor(ref, [:flush])
+      end
+    end)
+  end
+
   describe "AC-8: delivery failure retries, exhaustion logs error, no DLQ row" do
     test "failed delivery retries max_attempts times; logs error; zero dlq_entries rows" do
       %{schema_name: schema_name} = provisioned_tenant("req201-ac8")
@@ -399,23 +421,42 @@ defmodule Letflow.Obs.AlertsTest do
       # Use tiny backoff so test doesn't take long
       ctx = base_tick_context(%{dlq_count: 10})
 
-      # ISS-0429: delivery (including its own exhaustion Logger.error call) now runs
-      # in a detached Task dispatched off Letflow.Obs.Alerts.TaskSupervisor, not
-      # synchronously on this test process -- run_detection/2 itself returns as soon
-      # as dispatch happens. capture_log/1 only captures messages logged while its own
-      # `fun` is still running (see ExUnit.CaptureLog's moduledoc: cross-process log
-      # messages are captured only if the capture is still active when they're
-      # logged), so `fun` must stay alive past dispatch. 200ms comfortably covers the
-      # tiny 1ms/10ms-capped backoff configured above plus two real HTTP round trips.
-      log =
-        capture_log(fn ->
+      # ISS-0429: delivery (including its own exhaustion Logger.error call) runs in a detached
+      # Task dispatched off Letflow.Obs.Alerts.TaskSupervisor, not synchronously on this test
+      # process -- run_detection/2 returns as soon as dispatch happens.
+      # ISS-1038: attributed sink instead of the global capture_log. The Task is started by
+      # Task.Supervisor.start_child from this process, so its events carry this process in
+      # $callers and are attributed; another test's "alert delivery exhausted" cannot be counted.
+      # Instead of a fixed sleep, wait (bounded, receive-based) for the exhaustion entry itself.
+      # raw: true so the event metadata (hook_id) is in the text.
+      collector = LoggerCollector.attach!(attribute_to: self(), sasl: false, raw: true)
+
+      {status, entries} =
+        try do
           Alerts.run_detection(schema_name, ctx)
-          Process.sleep(200)
-        end)
+
+          {status, awaited} =
+            LoggerCollector.await(
+              collector,
+              fn entries -> Enum.any?(entries, &(&1.text =~ "alert delivery exhausted")) end,
+              10_000
+            )
+
+          # await/3 returns at the FIRST match, so an exact-count assertion needs a settle step:
+          # wait for this test's delivery Tasks to finish, then pick up whatever they logged
+          # after the match (a duplicate exhaustion log, or a stray per-attempt log).
+          settle_delivery_tasks(self())
+          {status, awaited ++ LoggerCollector.collected(collector)}
+        after
+          LoggerCollector.detach(collector)
+        end
+
+      assert status == :ok, "no exhaustion log within 10 s: #{inspect(entries)}"
+      log = LoggerCollector.text(entries)
 
       # 2 attempts should have been made (max_attempts: 2).
       # Exhaustion must log exactly ONE error entry (not one per attempt).
-      exhaustion_count = length(Regex.scan(~r/alert delivery exhausted/, log))
+      exhaustion_count = Enum.count(entries, &(&1.text =~ "alert delivery exhausted"))
       assert exhaustion_count == 1, "expected exactly 1 exhaustion log, got #{exhaustion_count}"
       assert log =~ "ac8-hook"
 

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "b02a222c-ec66-40da-a960-e183f6270074",
+  "run_id": "WF03-LOGCAPTURE-20261008",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-LOGCAPTURE-20261008/step-05-test-designer.json",
+  "created_at": "2026-10-08T04:00:00Z",
+  "started_at": "2026-10-08T04:00:00Z",
+  "completed_at": "2026-10-08T04:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-1038": "Q-1039 / GH #2367: tests asserting on globally captured logs flake under concurrent tests"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-1038.yaml",
+      "test/support/logger_collector.ex"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt",
+    "branch_name": "test/log-capture-deterministic-sink"
+  },
+  "task": {
+    "description": "Rework from findings and 50-run evidence.",
+    "acceptance_criteria": [
+      "Format/compile/lints clean; each converted file twice; 50 consecutive runs under max_cases"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Commits 1f3a1561, 8687f67b, 53c3155e. 50/50 runs 'Result: 359 passed' under --max-cases 8 with noisy async modules and a leaked 20 ms emitter; plus 10/10 'Result: 137 passed' after the final rework.",
+    "artifacts_out": [
+      "test/specs/ISS-1038.md"
+    ]
+  }
+}

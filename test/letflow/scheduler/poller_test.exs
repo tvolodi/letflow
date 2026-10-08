@@ -674,21 +674,26 @@ defmodule Letflow.Scheduler.PollerTest do
       assert {:noreply, state_after_tick1} = Poller.handle_info(:tick, state)
       :telemetry.detach(handler_id)
 
-      decisions = drain_ac3_decisions([])
+      all_decisions = drain_ac3_decisions([])
 
-      rejected = for {schema, :rejected} <- decisions, Map.has_key?(ours, schema), do: schema
-      granted = for {schema, :granted} <- decisions, Map.has_key?(ours, schema), do: schema
+      # Only OUR 10 schemas' decisions are asserted on (a leaked registration
+      # from elsewhere in the DB would add decisions, but cannot reorder ours).
+      decisions = Enum.filter(all_decisions, fn {schema, _} -> Map.has_key?(ours, schema) end)
+      assert length(decisions) == 10
 
-      # Sequential processing + release on the N-th rejection => the first N
-      # decisions of the tick are rejections, every later one is a grant.
-      assert Enum.take(decisions, @ac3_reject_count) |> Enum.map(&elem(&1, 1)) ==
-               List.duplicate(:rejected, @ac3_reject_count)
+      rejected = for {schema, :rejected} <- decisions, do: schema
+      granted = for {schema, :granted} <- decisions, do: schema
 
-      assert Enum.drop(decisions, @ac3_reject_count) |> Enum.all?(&(elem(&1, 1) == :granted))
+      # Sequential processing + release on the N-th rejection => (among our
+      # schemas) a rejected prefix followed by only grants.
+      expected_prefix = List.duplicate(:rejected, length(rejected))
+
+      assert Enum.map(decisions, &elem(&1, 1)) ==
+               expected_prefix ++ List.duplicate(:granted, length(granted))
 
       # Genuine partial skip: some rejected, some admitted, all 10 accounted for.
-      assert rejected != [] and granted != []
-      assert length(rejected) + length(granted) == 10
+      assert length(rejected) in 1..@ac3_reject_count
+      assert granted != []
 
       # A rejection did not block the rest of the tick: admitted => fired.
       for schema <- granted, do: assert(timer_status!(schema, ours[schema]) == "fired")

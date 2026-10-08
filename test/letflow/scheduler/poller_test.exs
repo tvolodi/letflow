@@ -653,6 +653,8 @@ defmodule Letflow.Scheduler.PollerTest do
   describe "REQ-218 AC3: a capacity rejection for one schema/operation does not block the rest of the same tick" do
     test "a deterministic partial skip admits the rest of the tick; skipped timers fire next tick" do
       AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+      # The strict sequential order this test relies on requires a cap of exactly 1.
+      assert Admission.global_cap() == 1
 
       timers =
         for i <- 1..10 do

@@ -19,7 +19,11 @@
     }
   },
   "task": {
-    "description": "Replace the spinning-antagonist AC3 test with a deterministic probe+telemetry-release test."
+    "description": "Replace the spinning-antagonist AC3 test (REQ-218) in test/letflow/scheduler/poller_test.exs with a deterministic test: the test process holds the sole global admission unit before a tick and a telemetry handler releases it on the 4th rejected poll_and_fire decision.",
+    "acceptance_criteria": [
+      "Test is deterministic by construction",
+      "Rejected timers stay due and fire next tick"
+    ]
   },
   "result": {
     "summary": "Implemented in commit b52e5792 (test-only, no lib/ change): test process holds the sole global unit, telemetry handler on admission_decision releases it on the 4th rejected poll_and_fire decision; asserts rejected prefix/admitted rest, rejected timers pending, all 10 fired on second tick."

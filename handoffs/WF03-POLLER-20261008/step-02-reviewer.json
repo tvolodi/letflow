@@ -19,7 +19,11 @@
     }
   },
   "task": {
-    "description": "Independent review of commit b52e5792."
+    "description": "Independent read-only review of commit b52e5792 for determinism, same-property coverage, scope creep and stale references.",
+    "acceptance_criteria": [
+      "Test is deterministic by construction",
+      "Rejected timers stay due and fire next tick"
+    ]
   },
   "result": {
     "verdict": "PASS",

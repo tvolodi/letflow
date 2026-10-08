@@ -1,0 +1,49 @@
+{
+  "handoff_id": "ac6-step01-elixir-dev-0001",
+  "run_id": "WF03-AC6-20261008",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-AC6-20261008/step-01-elixir-dev.json",
+  "created_at": "2026-10-08T01:55:00Z",
+  "started_at": "2026-10-08T01:55:00Z",
+  "completed_at": "2026-10-08T02:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "Q-1037": "queue Q-1037 / GH #2364: NoSmtpSecretGuardTest AC6 hit ExUnit.TimeoutError (60 s) on a starved runner (main run 37710170819 attempt 2); normal duration 2.8 s. Make the scan cheaper with guard semantics unchanged."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["Letflow.NoSmtpSecretGuardTest"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt",
+    "branch_name": "test/no-smtp-guard-scan-cost"
+  },
+  "task": {
+    "description": "Test-only change: AC6 narrows candidates with one git grep, prefilters lines with String.contains?, adds a 300 s timeout tag, and exposes scan_tracked/1.",
+    "acceptance_criteria": [
+      "Guard semantics unchanged: same scanned set and same hits as the old implementation on the real tree",
+      "mix format --check-formatted and mix compile --warnings-as-errors clean",
+      "AC6 test file passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Edited only test/letflow/no_smtp_secret_guard_test.exs. candidate_files/1 runs one git grep -l -z -F -e LETFLOW_SMTP_ (no -I; exit 1 => [], exit 0 => NUL split, other => raise); the old post-filters run on the candidates in the same order; per-line String.contains? prefilter is valid because all three regexes embed the literal LETFLOW_SMTP_ as a mandatory component; @tag timeout: 300_000; public scan_tracked/1 returns %{hits, scanned_paths}. One-off equality check (temporary test, deleted, not committed): old scanned=29 hits=0 in 2538 ms, new scanned=29 hits=0 in 308 ms, scanned path lists equal. Zero tracked symlinks (git ls-files -s | grep -c ^120000 = 0). mix test of the file passed twice (6 tests), mix format --check-formatted exit 0, mix compile --warnings-as-errors exit 0.",
+    "artifacts_out": ["test/letflow/no_smtp_secret_guard_test.exs"],
+    "git_evidence": {
+      "branch_name": "test/no-smtp-guard-scan-cost",
+      "commit_sha_list": ["0df7e644"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "TEST-DESIGNER adds fixture tests (temp git init repo, old-implementation copy) for scan_tracked/1."
+  }
+}

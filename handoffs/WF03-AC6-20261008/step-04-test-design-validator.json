@@ -1,0 +1,52 @@
+{
+  "handoff_id": "1826de74-b070-4485-a0a0-499281b4b7f4",
+  "run_id": "WF03-AC6-20261008",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-AC6-20261008/step-04-test-design-validator.json",
+  "created_at": "2026-10-08T07:00:00Z",
+  "started_at": "2026-10-08T07:00:00Z",
+  "completed_at": "2026-10-08T07:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "Q-1037": "GH #2364: NoSmtpSecretGuardTest scan cost reduction via git grep prefilter."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/no_smtp_secret_guard_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "letflow-3-ci-wt (sibling worktree)",
+    "branch_name": "test/no-smtp-guard-scan-cost"
+  },
+  "task": {
+    "description": "WF-03 Step 4 hard gate on TEST-DESIGNER: independent mutation proof of scan_tracked/1 and fixture-quality assessment.",
+    "acceptance_criteria": [
+      "Mutants independently applied with own counts, reverted and verified",
+      "Explicit verdict"
+    ]
+  },
+  "result": {
+    "status": "PASS_WITH_FINDINGS",
+    "summary": "PASS_WITH_FINDINGS. Baseline (MIX_ENV=test MIX_TEST_PARTITION=24): 'Result: 9 passed' (2 pattern tests, 4 AC6 tests, 3 fixture tests); wall time 1.4 s total, fixture tests 611 ms / 161 ms / 194 ms, AC6 real-tree scan 200 ms. Mutants applied to scan_tracked/candidate_files only (never old_scan), one mix run each, restored by file copy from scratchpad backup, 'git diff' empty and 'git status --short' empty after each. M1 candidate filter returns [] -> KILLED 6/9 passed (3 failed: AC6 tree scan, 'blank or variable forms', 'equals the old scan'). M2 drop candidates with size >1_000_000 -> KILLED 8/9 ('equals the old scan'; large.txt is ~2.8 MB). M3 remove String.valid? -> KILLED 8/9. M4 remove size<=@max_bytes -> KILLED 8/9 (toobig.txt). M5a git grep literal LETFLOW_SMTP_X -> KILLED 6/9 (3 failed). M5b line-level String.contains? literal LETFLOW_SMTP_X -> KILLED 8/9. M6a drop env_assignment from scan loop -> KILLED 8/9. M6b drop mapping_entry -> SURVIVED 9 passed. M6c drop put_env_literal -> SURVIVED 9 passed (fixtures only plant env_assignment violations; flagged?/1 sample tests exercise patterns/0 directly, not the scan_tracked loop). M7 git grep --untracked -> KILLED 8/9 (untracked.env). M8 git grep -I -> KILLED 8/9 (nulbytes.bin). M9 remove File.regular? -> SURVIVED 9 passed (git grep only lists tracked regular files/symlinks; only a dangling or non-regular symlink fixture could kill it, not portable on Windows; low value). M10 drop Enum.sort of candidates -> SURVIVED 9 passed (git grep already emits path-sorted output; equivalent mutant in practice). M10b descending sort -> KILLED 8/9 (order is asserted against old_scan and literal list). Not mutation-testable: @tag timeout 300_000 (a runtime budget, not logic). Coverage/quality: fixtures isolated (unique tmp dir from System.unique_integer + phash2(make_ref), on_exit File.rm_rf, own git init, core.autocrlf false, no shared state); async-safe and deterministic (no sleeps/clock); cheap (<1 s each); the test file avoids tripping the guard on itself because names/samples are built from pieces (the AC6 real-tree test passes with this file tracked). Oracle old_scan is a faithful copy of the pre-change scan, and the test also asserts literal expected hits and scanned set so it is not merely self-comparing. No skips, no TODOs, no secrets. Final state: 'git status --porcelain lib/ test/' empty, 'git diff' empty, test file re-run 'Result: 9 passed'.",
+    "issues": [
+      {
+        "severity": "LOW",
+        "finding": "M6b/M6c survive: no scan_tracked fixture plants a mapping_entry or put_env_literal violation, so dropping those patterns from the scan_tracked loop is undetected.",
+        "suggestion": "Add two violating lines to the 'small.env' (or a new tracked file) fixture, e.g. a quoted NAME: \"value\" line and a put_env(\"NAME\", \"value\") line (built from pieces), and extend the expected hits list with (mapping_entry) and (put_env_literal)."
+      },
+      {
+        "severity": "INFO",
+        "finding": "M9 (File.regular?) and M10 (Enum.sort) survive; both effectively equivalent given git grep semantics."
+      }
+    ],
+    "route_back": null
+  }
+}

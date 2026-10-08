@@ -1,0 +1,35 @@
+{
+  "handoff_id": "cish1-step02-reviewer-0001",
+  "run_id": "WF03-CI-SHARD1-20261008",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-CI-SHARD1-20261008/step-02-reviewer.json",
+  "created_at": "2026-10-08T09:30:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "supervisor": "Q-1037 / GH #2364 PR1 sharding review: scripts/test_parallel.sh, mix.exs, lib/mix/tasks/letflow.check.test.ex (static reading + bash -n; mix not run)."
+    },
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt3",
+    "branch_name": "ci/shard-script-pr1"
+  },
+  "task": {
+    "description": "Idiom/scope/decision-record gate on git diff origin/main...HEAD.",
+    "acceptance_criteria": ["partition-index sites global", "default behaviour unchanged", "input validation before side effects", "check list unchanged", "no scope creep / ADR consistency"]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS with two low/informational findings. Script: all five partition loops (build-path seed ~l.400, DB create ~l.523, launch ~l.728, wait ~l.783, report ~l.835) use FIRST..LAST; MIX_TEST_PARTITION, MIX_BUILD_PATH, DB, logs, partition-$idx.ready (script l.626/631 pairs with test/test_helper.exs:121 partition-#{MIX_TEST_PARTITION}.ready) all use the global index; mix test --partitions uses TOTAL. Pool/connection arithmetic (l.358-369), seeding/migrating/shared-group echoes and the reporting_count -ne N check stay on local N. No seq/{1..N}/array-index loop missed (EXIT-trap loops iterate ${!pids[@]}). Step 0b (l.176) precedes pre-compile, mktemp, trap, mix, so every validation exit 1 (SHARD format, K<=M, TOTAL, OFFSET, OFFSET+N<=TOTAL) occurs before any side effect; bash -n OK. Default path: TOTAL=N OFFSET=0, no slice line, slice_suffix empty, diff shows only these changes, so output is identical to origin/main. mix.exs: extracted the 12 entries of the old letflow.check list and of @check_static_steps ++ letflow.check.test - identical content and order; letflow.check.static ends at letflow.check_boundaries; preferred_envs adds the two aliases/tasks to :test. letflow.check.test: run([]) goes the true-branch (main suite with extra_env [] then both tails) identical to before; --shard validated (regex + K<=M) before any shell-out; --shard with --tails-only and unknown/extra args raise; tails-only skips main suite; existing test/mix/tasks/letflow_check_test_test.exs only calls run([]) and fakes bash, extra_env [] keeps the stream_and_capture env list = the old single KEEP_LOGS pair, so no expectation changes. ci.yml and docs untouched. ADR addendum: NO required - ADR 0009 governs pool_size vs max_connections, which is unchanged (arithmetic stays on local N, per-runner Postgres); no rule in core-directives/0004 requires a record per script env knob (the Q-1037 observability knobs landed likewise without one); the header comment documents the contract. Not run: mix test (BEAM mutex owned elsewhere).",
+    "findings": [
+      {"severity": "low", "file": "lib/mix/tasks/letflow.check.test.ex:155-185", "text": "Ambient TEST_PARALLEL_SHARD/TOTAL/OFFSET in the caller's environment pass through to the script even for run([]) / --tails-only paths (port env only adds, never clears). A developer or CI job with a stray TEST_PARALLEL_SHARD exported would get a sliced main suite from plain `mix letflow.check` while still running both tails. Inert in CI today (ci.yml untouched); consider unsetting the three vars in the non-shard branch when PR2 wires CI. Not blocking."},
+      {"severity": "info", "file": "scripts/test_parallel.sh:179-220", "text": "TEST_PARALLEL_SHARD takes precedence and silently ignores explicit TOTAL/OFFSET (documented in header). Acceptable; N must be equal on all shards (documented, not enforced). No new unit test for validation paths exists in this diff - TEST-DESIGNER step should cover letflow.check.test arg handling (--shard bad format, K>M, exclusivity, unknown arg)."},
+      {"severity": "info", "file": "mix.exs:117-168", "text": "Scope: @check_static_steps module attribute and the two aliases are the minimum needed for letflow.check.static; no new behaviours/macros/abstractions. No type-safety issue filed (no new transition logic)."}
+    ]
+  }
+}

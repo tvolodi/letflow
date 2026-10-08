@@ -1,0 +1,43 @@
+{
+  "handoff_id": "1991841f-061f-4a7d-9941-ae96a5dbc191",
+  "run_id": "WF03-LOGCAPTURE-20261008",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-LOGCAPTURE-20261008/step-01-orch.json",
+  "created_at": "2026-10-08T00:00:00Z",
+  "started_at": "2026-10-08T00:00:00Z",
+  "completed_at": "2026-10-08T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "ISS-1038": "Q-1039 / GH #2367: tests asserting on globally captured logs flake under concurrent tests"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-1038.yaml",
+      "test/support/logger_collector.ex"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt",
+    "branch_name": "test/log-capture-deterministic-sink"
+  },
+  "task": {
+    "description": "Diagnosis by ORCH from GH #2367: class = ExUnit capture_log is a global Logger capture; flakes: AuthzDenyLogTest lost line (run 37571670867), NotifierNoLeakTest untrusted_implicit saw another test's 'alert delivery exhausted' error (run 37668219153). Root cause test-side, not a product bug.",
+    "acceptance_criteria": [
+      "Diagnosis names the failure class and the fix design"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design: opt-in attributed synchronous :logger handler in test/support/logger_collector.ex (self/$callers/$ancestors/also_from); survey of the tree for absence/exact-count capture_log users by Explore agent (4 HIGH, ~14 MEDIUM).",
+    "artifacts_out": [
+      "test/specs/ISS-1038.md"
+    ]
+  }
+}

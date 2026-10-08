@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ464-20261007/step-03b-test-design-validator.json",
   "created_at": "2026-10-07T15:27:14Z",
   "started_at": "2026-10-07T15:27:14Z",
-  "status": "PENDING",
+  "status": "FAILED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -42,5 +42,39 @@
   "task": {
     "description": "STEP 03b - TEST DESIGN GATE (TEST-DESIGN-VALIDATOR). TEST-DESIGNER (commit f8d1a7ea) wrote test/specs/REQ-464.md and tests: test/letflow/definitions/distinct_from_validation_test.exs, distinct_from_single_member_warning_test.exs, test/letflow/routers/definitions_distinct_from_test.exs, and extended required_outputs_shipped_definitions_test.exs. Verify (1) every acceptance criterion in context has a runnable, non-skipped test with real assertions, fixtures isolated/self-sufficient, no flakiness; (2) APPLY SOURCE MUTANTS yourself, one at a time, to lib/letflow/definitions/{graph,role_binding,validation_warnings}.ex and/or definitions.ex/solution_pack.ex, running ONLY the relevant test files (sequential, scoped, one BEAM at a time), and restore each with `git checkout -- <file>` (the tree is clean and everything is committed at HEAD f8d1a7ea+handoff commit; confirm `git status` clean of lib/ changes after EVERY mutant; NEVER git stash/reset --hard/clean). A mutant is killed if some test fails. Required mutants: drop one reserved code (each of the six: emit a different/missing code); accept a duplicate entry; accept own id; accept an unknown id; accept a service-task id; treat downstream-only as OK; REJECT a preceding node (precedence-required mutant); REJECT a parallel node; REJECT a loop node; use escalation_role instead of role; warn when 2 members; warn when 0 members (unbound case); warn when roles differ; one warning per ORDERED pair (duplicates); put the warning in the activate response; make the warning a violation (blocks validate/install); run member_counts when no candidate pair (extra query); count only users.status-active members (join users) ; leak a user id or email in the warning text; forget the pack-install surface; forget the validate-200 surface; treat distinct_from on a non-HUMAN_TASK as ok; make an empty-string entry pass; make a non-list value pass. Add any other mutant you judge relevant. Report a table mutant -> test file(s) that killed it -> killed/SURVIVED. For any survivor, report it (do not fix tests yourself unless trivial; if you do, say so and commit with `test(REQ-464/Q-1027): ... [Q-1027 / GH #2342]`). Final: git status shows lib/ unchanged vs HEAD (quote it). Verdict PASS only if all required mutants are killed (or a survivor is demonstrably equivalent, with justification).\nRUN CONSTRAINTS (every agent in this run):\n- Branch feat/REQ-464-distinct-from-validator-Q-1027 (from origin/main 5b7b8c90). Verify with `git branch --show-current` first; STOP and report if different. Do NOT push, open a PR, merge, touch the letflow-queue (lock 1027 is held by tvolodi-orch), touch branch test/authz-deny-log-deterministic-capture, or the untracked letflow-3.code-workspace. Stage files by explicit path only; never git add -A / git add . . COMMIT your own production/test change (one commit) BEFORE returning, and quote the hash (mutation testers use git checkout; uncommitted work is unrecoverable and has destroyed work before).\n- Design: lib/letflow/design/req459-required-outputs-and-distinct-person.md section 1 (1.1, 1.2 reserved codes, 1.5 relation table), the traceability table, 'Adjustments for REQ-460..466' for REQ-464, Open question OQ-2. Where the requirement text and the design differ on a detail the DESIGN WINS; list every difference in result.design_vs_requirement_differences.\n- RAM is VERY tight (0.4-2 GB free; the harness KILLS runs at critical memory). mix commands strictly sequential, ONE BEAM at a time; before each mix test check free RAM: powershell -NoProfile -c \"[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)\". Scoped single test FILES only (never a directory or the full suite). `export MIX_TEST_PARTITION=3` ONLY for tests (unset for tooling tasks like compile/format/check_*); use a unique number (e.g. 16) for files that mutate shared state. If a run is killed, report it and do NOT loop.\n- Real Postgres only. Never report 'should pass'; quote real Result: lines.\n- docs/anti-patterns.md newest entries: a validator that starts refusing at activate must be checked against EVERY test that activates hand-built definitions: grep the WHOLE test/ tree (and fixtures) for the attribute (distinct_from). REQ-463's tests (test/letflow/engine_distinct_from_test.exs, test/letflow/routers/tasks_distinct_from_test.exs, test/letflow/engine_distinct_from_concurrency_test.exs, test/support/sod_support.ex and any other hit) build definitions with distinct_from and activate/create them: run each as a separate invocation and FIX THE TEST FIXTURES (never weaken the validator) if a legit-by-design definition is now refused; say which.\n- Commit titles: feat|fix|test|docs(REQ-464/Q-1027): ... [Q-1027 / GH #2342], ending with the trailer line: Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>. Do not commit handoff-file edits unless this handoff says so: ORCH commits them.\n- Claim the handoff by setting top-level status to IN_PROGRESS only; at the end set status COMPLETED (or FAILED) and fill result (summary, verdict PASS/FAIL, issues, artifacts_out, evidence with quoted real output, next_action). Do not touch started_at/created_at. Do not edit handoffs/registry.json or handoffs/orchestrator.log. If you rewrite the handoff JSON with PowerShell strip any UTF-8 BOM (lint_handoffs rejects it); prefer python json.dump with encoding utf-8.\n- Scratch files go in the scratchpad dir C:\\Users\\tvolo\\AppData\\Local\\Temp\\claude\\C--Users-tvolo-dev-ai-dala-letflow-3\\def1f47a-501c-4830-b7ce-a68038cf3791\\scratchpad\\r464\\ (never in the repo, never /tmp).\n",
     "extra": ""
+  },
+  "result": {
+    "summary": "INCOMPLETE. Baseline green (unit 38, warning 40, router 9, shipped 3; 13 shipped definitions, violations=0 candidate_pairs=0). Harness killed 16 of the planned mutants (one at a time, git checkout after each) before the OS reaped the background run for low memory. Not restarted per the reaper note. Tree reverted: git status --porcelain lib/ test/ empty.",
+    "verdict": "FAIL",
+    "issues": [
+      "Run incomplete: mutants after B10 (B11,B12,B13,W1-W12,S1-S6) NOT measured.",
+      "B1 and B10 showed 'all pass' but the harness patched the wrong occurrence (graph.ex has an earlier identical snippet at lines 1166 and 1153; the CHK-26 sites are 1237 and 1224). B1 fixed in mut.py (occurrence 1); B10 and B12 need occurrence 1. They must be re-run before judging; not a proven survivor."
+    ],
+    "mutants_measured": {
+      "C1a": "killed (validation)",
+      "C1b": "killed (validation, router)",
+      "C1c": "killed (validation, warning, router)",
+      "C2": "killed",
+      "C3": "killed",
+      "C4": "killed",
+      "C5": "killed",
+      "C6": "killed",
+      "B2": "killed (validation, router)",
+      "B3": "killed",
+      "B4": "killed (validation only)",
+      "B5": "killed",
+      "B6 reject preceding": "killed (validation, warning, router)",
+      "B7 reject parallel": "killed (validation, warning)",
+      "B8 reject loop": "killed (validation, warning)",
+      "B9": "killed",
+      "B1": "INVALID (wrong site)",
+      "B10": "INVALID (wrong site)"
+    },
+    "next_action": "Re-run mut.py for B1,B10(occ 1),B12(occ 1),B11,B13,W1-W12,S1-S6 in small batches when memory allows.",
+    "artifacts_out": [
+      "C:/Users/tvolo/AppData/Local/Temp/claude/C--Users-tvolo-dev-ai-dala-letflow-3/def1f47a-501c-4830-b7ce-a68038cf3791/scratchpad/r464/mut.py",
+      "C:/Users/tvolo/AppData/Local/Temp/claude/C--Users-tvolo-dev-ai-dala-letflow-3/def1f47a-501c-4830-b7ce-a68038cf3791/scratchpad/r464/out2.txt"
+    ],
+    "evidence": "git status --porcelain lib/ test/ -> empty after final git checkout -- lib/; HEAD 67c79f62; no commit made (no test changes)."
   }
 }

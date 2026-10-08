@@ -380,6 +380,27 @@ defmodule Letflow.Obs.AlertsTest do
   #       NO dlq_entries row written
   # ---------------------------------------------------------------------------
 
+  # Waits (Process.monitor/:DOWN, bounded 5 s per task) for the alert delivery Tasks started on
+  # behalf of `caller` (it is in their `$callers`) to terminate.
+  defp settle_delivery_tasks(caller) do
+    Letflow.Obs.Alerts.TaskSupervisor
+    |> Task.Supervisor.children()
+    |> Enum.filter(fn pid ->
+      case Process.info(pid, :dictionary) do
+        {:dictionary, dict} -> caller in Keyword.get(dict, :"$callers", [])
+        nil -> false
+      end
+    end)
+    |> Enum.map(&Process.monitor/1)
+    |> Enum.each(fn ref ->
+      receive do
+        {:DOWN, ^ref, :process, _pid, _reason} -> :ok
+      after
+        5_000 -> Process.demonitor(ref, [:flush])
+      end
+    end)
+  end
+
   describe "AC-8: delivery failure retries, exhaustion logs error, no DLQ row" do
     test "failed delivery retries max_attempts times; logs error; zero dlq_entries rows" do
       %{schema_name: schema_name} = provisioned_tenant("req201-ac8")
@@ -414,11 +435,18 @@ defmodule Letflow.Obs.AlertsTest do
         try do
           Alerts.run_detection(schema_name, ctx)
 
-          LoggerCollector.await(
-            collector,
-            fn entries -> Enum.any?(entries, &(&1.text =~ "alert delivery exhausted")) end,
-            10_000
-          )
+          {status, awaited} =
+            LoggerCollector.await(
+              collector,
+              fn entries -> Enum.any?(entries, &(&1.text =~ "alert delivery exhausted")) end,
+              10_000
+            )
+
+          # await/3 returns at the FIRST match, so an exact-count assertion needs a settle step:
+          # wait for this test's delivery Tasks to finish, then pick up whatever they logged
+          # after the match (a duplicate exhaustion log, or a stray per-attempt log).
+          settle_delivery_tasks(self())
+          {status, awaited ++ LoggerCollector.collected(collector)}
         after
           LoggerCollector.detach(collector)
         end

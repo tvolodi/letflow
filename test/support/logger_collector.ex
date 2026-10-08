@@ -120,6 +120,11 @@ defmodule Letflow.Test.LoggerCollector do
   EVERYTHING received (the mailbox messages are consumed), so use it instead of a later
   `collected/1`. For events emitted by a detached process (e.g. a supervised Task) that outlive
   the call under test.
+
+  NOTE: `await/3` returns at the FIRST moment `pred` holds. It therefore cannot support an
+  exact-count assertion ("logged exactly once"): a duplicate or extra event emitted just after
+  the match is missed. Such a test must add a settle step (e.g. monitor the emitting Tasks until
+  `:DOWN`) and then append `collected/1` before counting.
   """
   @spec await(handle(), ([%{level: atom(), text: String.t()}] -> boolean()), non_neg_integer()) ::
           {:ok | :timeout, [%{level: atom(), text: String.t()}]}

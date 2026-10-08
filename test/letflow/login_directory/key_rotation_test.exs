@@ -339,6 +339,7 @@ defmodule Letflow.LoginDirectory.KeyRotationTest do
 
       log = LoggerCollector.text(entries)
 
+      assert log =~ "QUERY"
       assert log =~ "control-slug-443"
     end
 

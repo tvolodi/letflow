@@ -846,10 +846,20 @@ defmodule Letflow.IdentityLoginDirectoryTest do
       end
 
       # Any logged statement mentioning an address is a users/audit_entries write, never a directory one.
-      log
-      |> String.split(~r/(?=\[debug\] QUERY)/)
-      |> Enum.filter(&(&1 =~ lower or &1 =~ changed or &1 =~ "jit-logged@example.test"))
-      |> Enum.each(fn chunk -> assert chunk =~ ~r/users|audit_entries/ end)
+      # One collector entry per log event, so the check is per statement (the collector text has
+      # no level prefix to split a joined string on).
+      address_entries =
+        Enum.filter(entries, fn %{text: t} ->
+          t =~ lower or t =~ changed or t =~ "jit-logged@example.test"
+        end)
+
+      # Non-vacuity: the writes above really did log statements mentioning an address.
+      assert address_entries != []
+
+      for %{text: t} <- address_entries do
+        assert t =~ ~r/users|audit_entries/,
+               "address-bearing entry is not a users/audit write: #{t}"
+      end
     end
 
     test "telemetry fires for a directory write even though it is not logged", %{tenant: tenant} do

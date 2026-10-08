@@ -1,0 +1,31 @@
+{
+  "handoff_id": "poller-ac3-step01-test-designer",
+  "run_id": "WF03-POLLER-20261008",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-POLLER-20261008/step-01-test-designer.json",
+  "created_at": "2026-10-08T04:10:00Z",
+  "started_at": "2026-10-08T04:10:00Z",
+  "completed_at": "2026-10-08T04:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "Q-1037": "GH #2364: PollerTest REQ-218 AC3 spinning-antagonist partial-skip test is probabilistic and flaked twice on CI (main run 37716503527 EPYC 9V74; PR #2374 run 37723710619 shard 2/3 EPYC 7763). Make it deterministic, test-only."
+    }
+  },
+  "task": {
+    "description": "Replace the spinning-antagonist AC3 test (REQ-218) in test/letflow/scheduler/poller_test.exs with a deterministic test: the test process holds the sole global admission unit before a tick and a telemetry handler releases it on the 4th rejected poll_and_fire decision.",
+    "acceptance_criteria": [
+      "Test is deterministic by construction",
+      "Rejected timers stay due and fire next tick"
+    ]
+  },
+  "result": {
+    "summary": "Implemented in commit b52e5792 (test-only, no lib/ change): test process holds the sole global unit, telemetry handler on admission_decision releases it on the 4th rejected poll_and_fire decision; asserts rejected prefix/admitted rest, rejected timers pending, all 10 fired on second tick."
+  }
+}

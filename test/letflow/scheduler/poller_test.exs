@@ -598,83 +598,117 @@ defmodule Letflow.Scheduler.PollerTest do
     end
   end
 
-  # A single, sequential caller (Poller) never holds more than one admission
-  # unit at a time (§1/§3 of the design doc), so with global_cap == 1 and NO
-  # concurrent contender, Poller's own acquire/release round trips never
-  # collide with each other -- every attempt succeeds (AC2's own proof).
-  # Genuinely forcing SOME (not all) of a tick's independent
-  # try_acquire(:global) calls to observe {:error, :capacity} therefore
-  # requires a real concurrent contender racing for the same sole unit
-  # throughout the tick -- this antagonist task continuously
-  # acquires-then-immediately-releases the sole global unit for as long as
-  # the tick is running, so some of Poller's own attempts land while the
-  # antagonist holds it (rejected) and others land while it doesn't (admitted)
-  # -- a real, not simulated, race against the exact admission decision AC3 is
-  # about. Extracted to its own top-level private function (not an inline
-  # closure inside the test) so the compiler doesn't need to derive an
-  # anonymous-function name from this describe/test's own long text.
-  defp ac3_attempt(schema_names) do
-    timers =
-      for schema_name <- schema_names,
-          do: {schema_name, due_timer_for!(schema_name, "req218-ac3")}
+  # AC3 is made DETERMINISTIC by construction (GH #2364: the previous
+  # spinning-antagonist design was probabilistic and flaked on CI).
+  #
+  # Facts this relies on (lib/letflow/scheduler/poller.ex):
+  #   * with global_cap == 1 the poll-and-fire sweep's Task.async_stream has
+  #     max_concurrency == 1, so schemas are processed strictly one after
+  #     another, each as try_acquire(:global) -> :admission_decision telemetry
+  #     (emitted synchronously, in the sweep task process) -> poll_and_fire
+  #     while holding the unit -> release.
+  #   * the test process holds the sole unit (`probe_ref`) BEFORE the tick, so
+  #     the first @ac3_reject_count poll_and_fire attempts are rejected with
+  #     no race at all (same strict happens-before as the AC3b test below).
+  #   * the telemetry handler releases the probe synchronously, on the sweep
+  #     task process, when it observes the @ac3_reject_count-th rejected
+  #     :poll_and_fire decision -- i.e. strictly BEFORE the next schema's
+  #     try_acquire. Every later schema in the same tick is therefore admitted.
+  # Result: exactly the first @ac3_reject_count schemas rejected and every
+  # other schema admitted, in ONE tick, independent of timing/CPU speed.
+  @ac3_reject_count 4
 
-    antagonist = Task.async(&ac3_antagonist_loop/0)
+  defp attach_ac3_release_after_n_rejections(test_pid, probe_ref, n) do
+    handler_id = "poller-ac3-release-after-n-#{System.unique_integer([:positive, :monotonic])}"
+    rejected = :counters.new(1, [])
 
-    state = %{
-      last_retention_run_at: nil,
-      last_tick_started_at: nil,
-      last_partition_maintenance_run_at: nil
-    }
+    :telemetry.attach(
+      handler_id,
+      [:letflow, :scheduler, :admission_decision],
+      fn _event, _measurements, metadata, _config ->
+        if metadata.op == :poll_and_fire do
+          send(test_pid, {:ac3_decision, metadata.schema, metadata.result})
 
-    {:noreply, _new_state} = Poller.handle_info(:tick, state)
+          if metadata.result == :rejected do
+            :counters.add(rejected, 1, 1)
+            if :counters.get(rejected, 1) == n, do: Admission.release(probe_ref)
+          end
+        end
+      end,
+      nil
+    )
 
-    Task.shutdown(antagonist, :brutal_kill)
-
-    Enum.count(timers, fn {schema_name, timer_id} ->
-      timer_status!(schema_name, timer_id) == "fired"
-    end)
+    ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(handler_id) end)
+    handler_id
   end
 
-  defp ac3_antagonist_loop do
-    case Admission.try_acquire(:global) do
-      {:ok, ref} -> Admission.release(ref)
-      {:error, :capacity} -> :ok
+  defp drain_ac3_decisions(acc) do
+    receive do
+      {:ac3_decision, schema, result} -> drain_ac3_decisions([{schema, result} | acc])
+    after
+      0 -> Enum.reverse(acc)
     end
-
-    ac3_antagonist_loop()
   end
 
   describe "REQ-218 AC3: a capacity rejection for one schema/operation does not block the rest of the same tick" do
-    test "an antagonist contending for the sole global unit produces a genuine partial skip" do
+    test "a deterministic partial skip admits the rest of the tick; skipped timers fire next tick" do
       AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+      # The strict sequential order this test relies on requires a cap of exactly 1.
+      assert Admission.global_cap() == 1
 
-      schema_names =
+      timers =
         for i <- 1..10 do
           %{schema_name: schema_name} = provisioned_tenant("req218-ac3-#{i}")
-          schema_name
+          {schema_name, due_timer_for!(schema_name, "req218-ac3")}
         end
 
-      # Retried up to 5 times (fresh due timers each attempt, same 10
-      # already-provisioned schemas) because which specific attempts collide
-      # with the antagonist is inherently nondeterministic; the assertion only
-      # requires that a genuine partial skip is OBSERVED at least once, not
-      # that it reproduces on a fixed attempt.
-      result =
-        Enum.reduce_while(1..5, nil, fn _attempt, _acc ->
-          fired_count = ac3_attempt(schema_names)
+      ours = Map.new(timers)
 
-          if fired_count > 0 and fired_count < length(schema_names) do
-            {:halt, fired_count}
-          else
-            {:cont, nil}
-          end
-        end)
+      assert {:ok, probe_ref} = Admission.try_acquire(:global)
+      handler_id = attach_ac3_release_after_n_rejections(self(), probe_ref, @ac3_reject_count)
 
-      assert is_integer(result),
-             "expected at least one of 5 attempts to show a genuine partial skip (some of " <>
-               "the 10 schemas' poll_and_fire admitted, some rejected) within a single tick " <>
-               "while an antagonist contended for the sole global unit -- got either total " <>
-               "success or total skip on every attempt"
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
+
+      assert {:noreply, state_after_tick1} = Poller.handle_info(:tick, state)
+      :telemetry.detach(handler_id)
+
+      all_decisions = drain_ac3_decisions([])
+
+      # Only OUR 10 schemas' decisions are asserted on (a leaked registration
+      # from elsewhere in the DB would add decisions, but cannot reorder ours).
+      decisions = Enum.filter(all_decisions, fn {schema, _} -> Map.has_key?(ours, schema) end)
+      assert length(decisions) == 10
+
+      rejected = for {schema, :rejected} <- decisions, do: schema
+      granted = for {schema, :granted} <- decisions, do: schema
+
+      # Sequential processing + release on the N-th rejection => (among our
+      # schemas) a rejected prefix followed by only grants.
+      expected_prefix = List.duplicate(:rejected, length(rejected))
+
+      assert Enum.map(decisions, &elem(&1, 1)) ==
+               expected_prefix ++ List.duplicate(:granted, length(granted))
+
+      # Genuine partial skip: some rejected, some admitted, all 10 accounted for.
+      assert length(rejected) in 1..@ac3_reject_count
+      assert granted != []
+
+      # A rejection did not block the rest of the tick: admitted => fired.
+      for schema <- granted, do: assert(timer_status!(schema, ours[schema]) == "fired")
+
+      # Rejected schemas' timers are left due (not fired, not deleted) ...
+      for schema <- rejected, do: assert(timer_status!(schema, ours[schema]) == "pending")
+
+      # ... and fire on the next tick once capacity is free.
+      assert {:noreply, _} = Poller.handle_info(:tick, state_after_tick1)
+
+      for {schema, timer_id} <- timers do
+        assert timer_status!(schema, timer_id) == "fired"
+      end
     end
   end
 
@@ -691,7 +725,7 @@ defmodule Letflow.Scheduler.PollerTest do
 
   # AC3's requirement text has TWO independent sub-clauses: (a) a rejection
   # for one schema's operation does not block a DIFFERENT schema's SAME
-  # operation later in the tick (covered above by the 10-schema antagonist
+  # operation later in the tick (covered above by the 10-schema deterministic
   # test, all racing for the same poll_and_fire operation), and (b) a
   # rejection for one schema's operation does not block that SAME schema's
   # OTHER operations later in the tick. (a) alone does not exercise (b) --
@@ -702,7 +736,7 @@ defmodule Letflow.Scheduler.PollerTest do
   #
   # This test exercises (b) with a LARGELY DETERMINISTIC harness rather than
   # a two-sided race: an earlier draft used a continuous antagonist Task
-  # (mirroring ac3_antagonist_loop/0 above) contending against BOTH the
+  # (mirroring the since-removed AC3 spinning antagonist) contending against BOTH the
   # target schema's poll_and_fire AND its retention-sweep admission calls at
   # once. Diagnostic runs (temporary IO.puts instrumentation, since removed)
   # showed that shape is not merely occasionally flaky but structurally

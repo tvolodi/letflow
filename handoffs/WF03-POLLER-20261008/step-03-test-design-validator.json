@@ -1,0 +1,32 @@
+{
+  "handoff_id": "poller-ac3-step03-tdv",
+  "run_id": "WF03-POLLER-20261008",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-POLLER-20261008/step-03-test-design-validator.json",
+  "created_at": "2026-10-08T04:40:00Z",
+  "started_at": "2026-10-08T04:40:00Z",
+  "completed_at": "2026-10-08T04:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "Q-1037": "GH #2364: deterministic PollerTest REQ-218 AC3; validate with mutants against lib/letflow/scheduler/poller.ex."
+    }
+  },
+  "task": {
+    "description": "Mutation-validate the deterministic AC3 test: mutate poller.ex (abort tick on first rejection, ignore capacity, skip all after first rejection, rejected timers marked fired, rejected timers pushed out of due, telemetry always granted), restoring by backup copy after each, and confirm the test kills each one.",
+    "acceptance_criteria": [
+      "Every mutant fails the AC3 test",
+      "lib/ identical to HEAD afterwards"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "summary": "M1 abort sweep, M2 ignore capacity, M3 skip all after first, M4a rejected->fired, M4b rejected fire_at pushed out, M5 telemetry always granted: all KILLED (each run twice). lib/ identical to HEAD. Hardening added afterwards: assert Admission.global_cap() == 1."
+  }
+}

@@ -242,6 +242,8 @@ defmodule Letflow.NoSmtpSecretGuardTest do
         make_repo(
           [
             {"small.env", pass <> "=hunter2\n"},
+            {"shapes.txt",
+             pass <> ~S|: "hunter2"| <> "\n" <> ~s|System.put_env("#{pass}", "hunter2")\n|},
             {"large.txt",
              :binary.copy(filler, 39_990) <> pass <> "=hunter2\n" <> :binary.copy(filler, 9)},
             {"longline.txt",
@@ -260,7 +262,7 @@ defmodule Letflow.NoSmtpSecretGuardTest do
       assert new.hits == old.hits
       assert new.scanned_paths == old.scanned_paths
 
-      # non-vacuous: the old scan itself finds the four violations
+      # non-vacuous: the old scan itself finds the planted violations
       assert old.hits != []
       assert new.hits != []
 
@@ -268,12 +270,21 @@ defmodule Letflow.NoSmtpSecretGuardTest do
                "large.txt:39991 (env_assignment)",
                "longline.txt:2 (env_assignment)",
                "nulbytes.bin:2 (env_assignment)",
+               "shapes.txt:1 (mapping_entry)",
+               "shapes.txt:2 (put_env_literal)",
                "small.env:1 (env_assignment)"
              ]
 
       # scanned: tracked, regular, <= @max_bytes, valid UTF-8, mentions the prefix
       assert new.scanned_paths ==
-               ["clean.txt", "large.txt", "longline.txt", "nulbytes.bin", "small.env"]
+               [
+                 "clean.txt",
+                 "large.txt",
+                 "longline.txt",
+                 "nulbytes.bin",
+                 "shapes.txt",
+                 "small.env"
+               ]
 
       refute "toobig.txt" in new.scanned_paths
       refute "bad.bin" in new.scanned_paths

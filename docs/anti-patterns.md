@@ -4642,3 +4642,5 @@ activation, so 30 tests failed in CI (Backend gate) while the REQ-461 local run,
 directories, passed. Rule: before pushing a validator that starts refusing at activate (or create), grep the
 WHOLE `test/` tree for the attribute it checks (`grep -rln "required_outputs" test/`) and run every file that
 activates hand-built definitions, not only the validator's own tests. Register the schema rows before activation.
+
+<!-- THROWAWAY proof 3 of the sharded gate (docs-only change): never merged. -->

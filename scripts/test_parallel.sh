@@ -44,6 +44,30 @@
 # Overridable knob: TEST_PARALLEL_N=<positive integer> to force the
 # partition count instead of deriving it from nproc/getconf.
 #
+# Q-1037 / GH #2364 sharding (backend gate split across several CI runners;
+# default-off -- with none of these set, TOTAL=N and OFFSET=0, i.e. exactly
+# the single-runner behaviour above):
+#   ExUnit assigns test FILES to partitions round-robin over the sorted file
+#   list (Mix.Tasks.Test: rem(index, total) == MIX_TEST_PARTITION - 1; the
+#   partition must be in 1..total and `--partitions` only sets total). So M
+#   shards that each run N consecutive partition numbers of a TOTAL = N*M
+#   partition space execute disjoint, exhaustive slices of the suite.
+#   TEST_PARALLEL_TOTAL   (default N) size of the whole partition space; the
+#       value handed to every partition as `mix test --partitions`.
+#   TEST_PARALLEL_OFFSET  (default 0) this runner executes global partitions
+#       OFFSET+1 .. OFFSET+N (requires OFFSET+N <= TOTAL).
+#   TEST_PARALLEL_SHARD=K/M  sugar for TOTAL=N*M, OFFSET=(K-1)*N (1 <= K <= M);
+#       explicit TOTAL/OFFSET are ignored when SHARD is set.
+#   N MUST be identical on every shard (CI pins TEST_PARALLEL_N=4), otherwise
+#   the shards' slices do not tile the partition space.
+#   Everything keyed by the partition index is GLOBAL (MIX_TEST_PARTITION, DB
+#   letflow_test<i>, _build/test-partition-<i>, create-<i>.log,
+#   partition-<i>.log, partition-<i>.ready, the `partition <i>:` summary
+#   lines); pool-size / connection arithmetic stays on the local N, since each
+#   runner has its own Postgres. Only when sliced, an extra `test_parallel:
+#   slice F..L of T` line is printed and the last line ends
+#   `... partitions reported (slice F..L of T)`; unsliced output is unchanged.
+#
 # Q-1037 / GH #2364 observability + diagnostic hooks (all default-off or
 # log-only; with nothing set the partitions' mix commands are unchanged):
 #   TEST_PARALLEL_EXTRA_ARGS   (default empty) whitespace-split words appended
@@ -148,6 +172,52 @@ if ! printf '%s' "$N" | grep -Eq '^[1-9][0-9]*$'; then
 fi
 
 echo "test_parallel: N=$N (source: $n_source)"
+
+# --- Step 0b: shard slice of the partition space (Q-1037 / GH #2364) -----
+# See the header. Default (nothing set): TOTAL=N, OFFSET=0, FIRST=1, LAST=N,
+# and no extra output line / summary suffix (output byte-identical to before).
+TOTAL="$N"
+OFFSET=0
+if [ -n "${TEST_PARALLEL_SHARD:-}" ]; then
+  if ! printf '%s' "$TEST_PARALLEL_SHARD" | grep -Eq '^[1-9][0-9]*/[1-9][0-9]*$'; then
+    echo "test_parallel: ERROR TEST_PARALLEL_SHARD='$TEST_PARALLEL_SHARD' is not of the form K/M (positive integers)" >&2
+    exit 1
+  fi
+  _shard_k="${TEST_PARALLEL_SHARD%%/*}"
+  _shard_m="${TEST_PARALLEL_SHARD##*/}"
+  if [ "$_shard_k" -gt "$_shard_m" ]; then
+    echo "test_parallel: ERROR TEST_PARALLEL_SHARD='$TEST_PARALLEL_SHARD' has K=$_shard_k greater than M=$_shard_m" >&2
+    exit 1
+  fi
+  TOTAL=$((N * _shard_m))
+  OFFSET=$(((_shard_k - 1) * N))
+else
+  if [ -n "${TEST_PARALLEL_TOTAL:-}" ]; then
+    if ! printf '%s' "$TEST_PARALLEL_TOTAL" | grep -Eq '^[1-9][0-9]*$'; then
+      echo "test_parallel: ERROR TEST_PARALLEL_TOTAL='$TEST_PARALLEL_TOTAL' is not a positive integer" >&2
+      exit 1
+    fi
+    TOTAL="$TEST_PARALLEL_TOTAL"
+  fi
+  if [ -n "${TEST_PARALLEL_OFFSET:-}" ]; then
+    if ! printf '%s' "$TEST_PARALLEL_OFFSET" | grep -Eq '^[0-9]+$'; then
+      echo "test_parallel: ERROR TEST_PARALLEL_OFFSET='$TEST_PARALLEL_OFFSET' is not a non-negative integer" >&2
+      exit 1
+    fi
+    OFFSET="$TEST_PARALLEL_OFFSET"
+  fi
+fi
+if [ $((OFFSET + N)) -gt "$TOTAL" ]; then
+  echo "test_parallel: ERROR OFFSET=$OFFSET + N=$N exceeds TOTAL=$TOTAL -- this runner's slice does not fit the partition space" >&2
+  exit 1
+fi
+FIRST=$((OFFSET + 1))
+LAST=$((OFFSET + N))
+slice_suffix=""
+if [ "$TOTAL" -ne "$N" ] || [ "$OFFSET" -ne 0 ]; then
+  slice_suffix=" (slice $FIRST..$LAST of $TOTAL)"
+  echo "test_parallel: slice $FIRST..$LAST of $TOTAL (TOTAL=$TOTAL OFFSET=$OFFSET)"
+fi
 
 # --- Step 1: pre-compile MIX_ENV=test exactly once (AC5) -----------------
 
@@ -327,8 +397,8 @@ fi
 # Part B for the full rationale.
 echo "test_parallel: seeding $N per-partition build paths from _build/test (sequential)"
 
-i=1
-while [ "$i" -le "$N" ]; do
+i="$FIRST"
+while [ "$i" -le "$LAST" ]; do
   partition_build_path="_build/test-partition-$i"
   rm -rf "$partition_build_path"
 
@@ -450,8 +520,8 @@ echo "test_parallel: seeding+migrating $N partition databases (capped at $max_co
 declare -A create_pid_to_partition
 in_flight=0
 
-i=1
-while [ "$i" -le "$N" ]; do
+i="$FIRST"
+while [ "$i" -le "$LAST" ]; do
   if [ "$in_flight" -ge "$max_concurrent_creates" ]; then
     wait -n -p finished_pid
     finished_exit=$?
@@ -701,8 +771,8 @@ test_parallel_watchdog_diag() {
   return 0
 }
 
-i=1
-while [ "$i" -le "$N" ]; do
+i="$FIRST"
+while [ "$i" -le "$LAST" ]; do
   # ISS-0917 §1.3 step 3: admission control -- blocks here (bounded, never
   # forever, see wait_for_build_admission_slot/poll_template_ready_dir
   # above) until fewer than max_concurrent_template_builds partitions are
@@ -720,7 +790,7 @@ while [ "$i" -le "$N" ]; do
   # the watchdog below (and the EXIT trap) able to signal the WHOLE tree
   # (mix + erl.exe/beam.smp), not just this immediate child.
   MIX_TEST_PARTITION="$i" MIX_BUILD_PATH="_build/test-partition-$i" LETFLOW_SKIP_ECTO_SETUP=1 \
-    mix test --partitions "$N" --no-color $high_pool_demand_exclude "$@" ${extra_args[@]+"${extra_args[@]}"} \
+    mix test --partitions "$TOTAL" --no-color $high_pool_demand_exclude "$@" ${extra_args[@]+"${extra_args[@]}"} \
     > "$tmp_dir/partition-$i.log" 2>&1 &
   pids[$i]=$!
   part_start_epoch[$i]=$(date +%s)
@@ -757,8 +827,8 @@ done
 
 # --- Step 3: wait for each partition individually --------------------------
 
-i=1
-while [ "$i" -le "$N" ]; do
+i="$FIRST"
+while [ "$i" -le "$LAST" ]; do
   wait "${pids[$i]}"
   exits[$i]=$?
   part_end_epoch[$i]=$(date +%s)
@@ -809,8 +879,8 @@ any_failed=0
 reporting_count=0
 declare -a missing_partition_indices=()
 
-i=1
-while [ "$i" -le "$N" ]; do
+i="$FIRST"
+while [ "$i" -le "$LAST" ]; do
   log="$tmp_dir/partition-$i.log"
   ex="${exits[$i]}"
 
@@ -945,7 +1015,7 @@ if [ "$reporting_count" -ne "$N" ]; then
 fi
 
 echo "---"
-echo "combined: $total_tests tests, $total_properties properties, $total_failures failures ($total_passed/$total_all passed) -- $reporting_count/$N partitions reported"
+echo "combined: $total_tests tests, $total_properties properties, $total_failures failures ($total_passed/$total_all passed) -- $reporting_count/$N partitions reported${slice_suffix}"
 
 # --- Step 5: exit-code contract (AC3) --------------------------------------
 #

@@ -1,0 +1,33 @@
+{
+  "handoff_id": "cidiag-step01-impl-0001",
+  "run_id": "WF03-CI-DIAG-20261008",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-CI-DIAG-20261008/step-01-implement.json",
+  "created_at": "2026-10-08T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "diagnosis": "Q-1037 / GH #2364: main run 37696835452 (job 113050607649): all four partitions hit TEST_PARALLEL_PARTITION_TIMEOUT_S=1800 at 23:04:02 on a slow runner and the job log said nothing about where each partition was. Print per-partition and host diagnostics into the job log when the watchdog fires."
+    },
+    "artifacts_in": ["scripts/test_parallel.sh"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt3",
+    "branch_name": "ci/watchdog-diagnostics"
+  },
+  "task": {
+    "description": "In scripts/test_parallel.sh only, just BEFORE the watchdog's kill -TERM (the WARNING ... sending TERM to its process group site in the watchdog subshell), print per-partition DIAG lines prefixed 'test_parallel: DIAG partition N: ' (tail -n 40 of the partition log piped through cut -c1-300; 'approx tests finished' count from lines matching ^[.F*]+$ via one grep|tr -d '\n'|wc -c; elapsed seconds from part_start_epoch and the timeout) and a once-per-run host block prefixed 'test_parallel: DIAG host: ' (uptime/loadavg, free -m, df -h /tmp ., ps top 8 by pcpu with a plain-ps fallback, nproc), guarded once via atomic mkdir \"$tmp_dir/diag-host.lock\". Every command guarded with || true and wrapped in 'timeout 5' when available. Existing WARNING text, exit codes and TERM/KILL logic unchanged; nothing printed on a normal run.",
+    "acceptance_criteria": [
+      "Diagnostics print before kill -TERM",
+      "Never cat the log; one grep pass; lines capped at 300 chars",
+      "host block exactly once even when several watchdogs fire together",
+      "bash -n passes; no other file changed besides scripts/test_parallel.sh"
+    ]
+  },
+  "result": {"status": "PASS", "summary": "Added test_parallel_diag_run and test_parallel_watchdog_diag to scripts/test_parallel.sh (defined before the launch loop); called from the watchdog subshell right after the unchanged WARNING and before kill -TERM. Per-partition DIAG lines (tail -n 40 capped at 300 cols, approx finished count via one grep, elapsed vs timeout) plus a once-per-run host block guarded by mkdir diag-host.lock in tmp_dir. All best-effort, timeout 5 when available, stderr. bash -n passes; throwaway harness confirmed output and single host block. Only scripts/test_parallel.sh changed."}
+}

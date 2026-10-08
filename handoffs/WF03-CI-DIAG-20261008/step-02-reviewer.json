@@ -1,0 +1,36 @@
+{
+  "handoff_id": "cidiag-step02-reviewer-0001",
+  "run_id": "WF03-CI-DIAG-20261008",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-CI-DIAG-20261008/step-02-reviewer.json",
+  "created_at": "2026-10-08T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {"diagnosis": "Q-1037 / GH #2364: print per-partition and host diagnostics when the watchdog fires."},
+    "artifacts_in": ["handoffs/WF03-CI-DIAG-20261008/step-01-implement.json"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt3",
+    "branch_name": "ci/watchdog-diagnostics"
+  },
+  "task": {
+    "description": "Review `git diff origin/main -- scripts/test_parallel.sh`. READ-ONLY.",
+    "acceptance_criteria": ["Diag before kill -TERM", "No existing behaviour change", "host block once-only", "bounded, best-effort", "Explicit PASS/FAIL"]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REVIEWER PASS, no MAJOR. Diag call sits after the unchanged WARNING echo and before kill -TERM; WARNING text, TERM/KILL, exit codes and EXIT trap untouched; nothing printed on a normal run (only reached inside the kill -0 branch). Output goes to stderr like the WARNING. Script has set -u and set -m only (no set -e, no pipefail), so the pipelines cannot abort anything; the call is also guarded with || true. part_start_epoch is declared before the fork so the subshell sees a copy, and ${part_start_epoch[$idx]:-$now} is set -u safe (verified with an unset index). The function is defined before the watchdog fork. mkdir lock verified: 4 concurrent invocations produced exactly one DIAG host block. timeout wraps only binaries (uptime, cat, free, df, nproc); no shell function is passed to timeout. ps fallback: `( ps --sort ... 2>/dev/null || ps 2>&1 ) | head -9` does fall back when --sort is unsupported (verified on Cygwin ps) and head bounds the output. sed prefix: $pfx contains only the integer partition index and constant text, and the log path is echoed outside sed, so no / or & can break the s/// (log content as sed input verified fine with a/b&c). tail -n 40 and one grep pass are bounded. MINOR items below.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "MINOR", "description": "ps is not wrapped in timeout 5 (only the test_parallel_diag_run binaries are); a ps hung on a wedged /proc would block this watchdog before kill -TERM and the partition would never be signalled. Wrap it: `timeout 5 ps ... || timeout 5 ps` when timeout exists.", "affected_requirement": null},
+      {"severity": "MINOR", "description": "Worst-case delay before TERM is about 5 s x 5 timeout-wrapped commands plus the unbounded ps (about 25 s+); acceptable against the 1800 s timeout and only on a slow host, but a single outer timeout around the host block would cap it.", "affected_requirement": null},
+      {"severity": "MINOR", "description": "grep for tests-finished reads the whole log (not tail-limited); fine for normal logs, unbounded for a pathological multi-GB log. Not timeout-wrapped. The 'approx' label covers accuracy, not time.", "affected_requirement": null},
+      {"severity": "MINOR", "description": "On a Windows host timeout may resolve to timeout.exe (only /usr/bin/timeout seen in Git Bash here); CI is Linux so not an issue there.", "affected_requirement": null}
+    ]
+  }
+}

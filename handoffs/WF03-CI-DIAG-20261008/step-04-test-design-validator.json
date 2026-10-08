@@ -1,0 +1,40 @@
+{
+  "handoff_id": "cidiag-step04-tdv-0001",
+  "run_id": "WF03-CI-DIAG-20261008",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-CI-DIAG-20261008/step-04-test-design-validator.json",
+  "created_at": "2026-10-08T00:30:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "diagnosis": "Q-1037 / GH #2364: scripts/test_parallel.sh watchdog prints per-partition and host diagnostics just before kill -TERM."
+    },
+    "artifacts_in": [
+      "handoffs/WF03-CI-DIAG-20261008/step-03-test-designer.json",
+      "test/scripts/test_parallel_watchdog_diag_test.exs"
+    ],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt3",
+    "branch_name": "ci/watchdog-diagnostics"
+  },
+  "task": {
+    "description": "Validate test/scripts/test_parallel_watchdog_diag_test.exs with mutation testing M1-M7 against scripts/test_parallel.sh.",
+    "acceptance_criteria": [
+      "Each mutant reported killed or survived with failing test names",
+      "git diff empty and HEAD unchanged after each mutant; restored from backup outside the repo",
+      "Explicit PASS/FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "TEST-DESIGN-VALIDATOR (3 tests, HEAD 669d2495): baseline 3 passed. M1 drop tail print KILLED (hung-partitions + huge tests fail). M2 remove host once-guard KILLED (hung-partitions test). M3 diag called unconditionally at start KILLED (normal-quick-run + hung-partitions tests). M4 partition number fixed to 1 in prefix KILLED (hung-partitions + huge tests). M5 remove cut -c1-300 cap KILLED (huge test only). M6 diag moved after kill -TERM KILLED (huge + hung-partitions tests). M7 approx-finished counts all lines KILLED (huge + hung-partitions tests). 7/7 killed, no test added. git diff empty, git status clean and HEAD 669d2495 unchanged after every mutant; script restored from a backup outside the repo (sha256 99bff340... identical to baseline).",
+    "artifacts_out": [],
+    "issues": []
+  }
+}

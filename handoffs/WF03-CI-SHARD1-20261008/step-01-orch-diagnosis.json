@@ -1,0 +1,30 @@
+{
+  "handoff_id": "cish1-step01-orch-0001",
+  "run_id": "WF03-CI-SHARD1-20261008",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-CI-SHARD1-20261008/step-01-orch-diagnosis.json",
+  "created_at": "2026-10-08T09:00:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "supervisor": "USER-PRIORITY Q-1037 / GH #2364 backend-gate speed: PR1 of sharding. test_parallel.sh gains TEST_PARALLEL_TOTAL/OFFSET/SHARD; mix.exs gains letflow.check.static; letflow.check.test gains --shard K/M and --tails-only. Inert in CI (ci.yml untouched). Commit locally only."
+    },
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt3",
+    "branch_name": "ci/shard-script-pr1"
+  },
+  "task": {
+    "description": "Diagnosis/design: ExUnit partitions files round-robin by rem(index,total)==partition-1 (Elixir mix/tasks/test.ex:1043-1047), so TOTAL=N*M with each shard running global partitions OFFSET+1..OFFSET+N tiles the suite. Ready-file pairing: test/test_helper.exs:121 writes partition-${MIX_TEST_PARTITION}.ready and the script polls partition-$idx.ready, so loop index must be global.",
+    "acceptance_criteria": ["default behaviour byte-identical", "sliced runs use global partition indices everywhere", "bad inputs exit 1 with no partition launched"]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented in commits c5f5a498 (script) and f50c4191 (mix alias + task). Deviations from plan: letflow.check kept as one flat alias list (@check_static_steps ++ [\"letflow.check.test\"]) instead of nesting, because test/mix/tasks/letflow.check_boundaries_test.exs and letflow_check_deferral_staleness_test.exs index the flat list; unsliced output gets no slice suffix/line so default output is byte-identical."
+  }
+}

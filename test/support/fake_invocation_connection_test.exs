@@ -90,7 +90,7 @@ defmodule Letflow.Test.FakeInvocationConnectionTest do
   end
 
   describe "stop_and_wait_gone!/3" do
-    test "returns :ok only after the tag has left pg_stat_activity" do
+    test "post-condition: after :ok the connection is stopped and the tag is not visible (wait timing itself is pinned by the timeout test below)" do
       tag = unique_tag("fake-stop")
       conn = FakeInvocationConnection.start!(tag)
       assert backend_count(tag) == 1

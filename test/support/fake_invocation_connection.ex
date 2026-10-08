@@ -75,12 +75,14 @@ defmodule Letflow.Test.FakeInvocationConnection do
 
     {attempts, interval_ms} = poll_config(poll_opts)
 
-    unless poll_visible?(conn, tag, attempts, interval_ms) do
-      raise "fake-tagged connection #{tag} not visible in pg_stat_activity " <>
-              "after #{attempts} attempts"
-    end
+    case poll_visible(conn, tag, attempts, interval_ms) do
+      :ok ->
+        conn
 
-    conn
+      {:error, last} ->
+        raise "fake-tagged connection #{tag} not visible in pg_stat_activity " <>
+                "after #{attempts} attempts; last result: #{inspect(last)}"
+    end
   end
 
   @doc """
@@ -105,13 +107,20 @@ defmodule Letflow.Test.FakeInvocationConnection do
      Keyword.get(poll_opts, :interval_ms, @default_interval_ms)}
   end
 
-  defp poll_visible?(conn, tag, attempts, interval_ms) do
+  # Returns :ok once visible, else {:error, last_result} (the last query result or
+  # error, so a timeout names what the connection actually answered).
+  defp poll_visible(conn, tag, attempts, interval_ms) do
     case Postgrex.query(conn, @tag_sql, [tag], timeout: @query_timeout_ms) do
       {:ok, %{rows: [_ | _]}} ->
-        true
+        :ok
 
-      _not_yet ->
-        retry(attempts, interval_ms, fn a -> poll_visible?(conn, tag, a, interval_ms) end)
+      other ->
+        if attempts <= 1 do
+          {:error, other}
+        else
+          Process.sleep(interval_ms)
+          poll_visible(conn, tag, attempts - 1, interval_ms)
+        end
     end
   end
 

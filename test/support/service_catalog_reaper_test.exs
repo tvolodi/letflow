@@ -238,7 +238,7 @@ defmodule Letflow.ServiceCatalogReaperTest do
         assert service_catalog_row_exists?(entry.service_id)
       end
 
-      GenServer.stop(other_conn)
+      FakeInvocationConnection.stop_and_wait_gone!(other_conn, sibling_tag)
     end
   end
 

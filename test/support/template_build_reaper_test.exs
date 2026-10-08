@@ -318,7 +318,7 @@ defmodule Letflow.TemplateBuildReaperTest do
         assert tenants_row_exists?(tenant.id)
       end
 
-      GenServer.stop(other_conn)
+      FakeInvocationConnection.stop_and_wait_gone!(other_conn, sibling_tag)
     end
   end
 

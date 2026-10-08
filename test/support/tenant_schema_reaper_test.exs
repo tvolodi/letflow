@@ -308,7 +308,7 @@ defmodule Letflow.TenantSchemaReaperTest do
       # backend leaves pg_stat_activity a moment LATER (it notices the closed socket
       # on its next read). A sweep issued in that window still sees the tag and
       # defers (reclaimed: 0). With a faster database (durability off in CI) that
-      # window is hit, so stop_and_wait_gone!/2 waits, bounded, until the tag is
+      # window is hit, so stop_and_wait_gone!/3 waits, bounded, until the tag is
       # really gone before the second sweep -- the guard under test is unchanged.
       FakeInvocationConnection.stop_and_wait_gone!(other_conn, fake_tag)
 

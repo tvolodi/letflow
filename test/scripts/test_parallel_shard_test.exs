@@ -55,6 +55,8 @@ defmodule Letflow.Scripts.TestParallelShardTest do
     case "$1" in
       test)
         printf '%s\n' "$@" > "$STUB_ARGV_DIR/argv-$part"
+        if [ -d "${MIX_BUILD_PATH:-}" ]; then s=seeded; else s=MISSING; fi
+        echo "$part ${MIX_BUILD_PATH:-} $s" >> "$STUB_ARGV_DIR/build.log"
         if [ -n "${TEST_PARALLEL_TEMPLATE_READY_DIR:-}" ]; then
           : > "$TEST_PARALLEL_TEMPLATE_READY_DIR/partition-${MIX_TEST_PARTITION}.ready"
           echo "partition-${MIX_TEST_PARTITION}.ready" >> "$STUB_ARGV_DIR/ready.log"
@@ -168,6 +170,20 @@ defmodule Letflow.Scripts.TestParallelShardTest do
     if File.exists?(path), do: path |> File.read!() |> String.split("\n", trim: true), else: []
   end
 
+  # Each launched partition's build path must have been seeded by the script's Step 1.5
+  # (the stub records, at `mix test` time, whether $MIX_BUILD_PATH exists as a directory).
+  defp assert_build_paths_seeded(argv_dir, parts, out) do
+    seeded =
+      argv_dir
+      |> Path.join("build.log")
+      |> File.read!()
+      |> String.split("\n", trim: true)
+
+    assert Enum.sort(seeded) ==
+             Enum.sort(for p <- parts, do: "#{p} _build/test-partition-#{p} seeded"),
+           out
+  end
+
   defp summary_parts(lines) do
     for l <- lines, [_, p] <- [Regex.run(~r/^partition (\d+): /, l)], do: String.to_integer(p)
   end
@@ -190,6 +206,8 @@ defmodule Letflow.Scripts.TestParallelShardTest do
       end
 
     assert Enum.sort(db_log(argv_dir)) == Enum.sort(expected_db), out
+
+    assert_build_paths_seeded(argv_dir, parts, out)
 
     # (3) summary lines are the global indices, nothing else
     assert summary_parts(lines) == parts, out
@@ -301,6 +319,7 @@ defmodule Letflow.Scripts.TestParallelShardTest do
                  ),
                out
 
+        assert_build_paths_seeded(argv_dir, [1, 2, 3, 4], out)
         assert summary_parts(lines) == [1, 2, 3, 4], out
         # (not a bare "slice": the test name, hence the tmp path in the output, may contain it)
         refute Enum.any?(lines, &Regex.match?(~r/slice [0-9]+\.\.[0-9]+|\(slice /, &1)), out

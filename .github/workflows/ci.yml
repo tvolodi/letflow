@@ -26,13 +26,44 @@
 #    nothing hand-rolled alongside it.
 #
 # 3. Job-key structure for REQ-138 (future frontend job).
-#    This job is declared as `jobs.backend`, not as an implicit single
+#    (Historical, pre-Q-1037: `jobs.backend` was one job owning `steps`/`services`; it is
+#    now the aggregator, see item 4.) This job was declared as `jobs.backend`, not as an implicit single
 #    top-level job or under a generic/unnamed key. REQ-138 (frontend gate,
 #    `npm run check`, blocked on REQ-115) is scoped to add `jobs.frontend`
 #    as a sibling of `jobs.backend` under the same `on: [push, pull_request]`
 #    triggers -- a pure append, touching none of this job's keys (`steps`,
 #    `services`, `runs-on`, etc.). Nothing about this file needs to be
 #    restructured for that to happen.
+#
+# 4. Q-1037 / GH #2364: the backend gate is SHARDED (supersedes the "exactly one
+#    `run: mix letflow.check` step" wording of item 2 for CI; local `mix letflow.check`
+#    is unchanged and still runs everything in one process).
+#    Jobs: `backend_static` (name "Backend static checks + isolated tails"; `mix
+#    letflow.check.static` + `mix letflow.check.test --tails-only`), `backend_shard`
+#    (name "Backend shard K/M", a matrix; each leg runs `mix letflow.check.test --shard
+#    K/M`, i.e. 4 partitions of the 4*M global partition space), and `backend` -- the
+#    AGGREGATOR, the only job named "Backend gate (mix letflow.check)".
+#    - Required contexts on main (0018) are still exactly "Backend gate (mix
+#      letflow.check)" and "Frontend gate (npm run check)". The static job and the shard
+#      legs are NOT required contexts; they gate the merge only through the aggregator.
+#      Do not rename the aggregator, and do not make a shard leg a required context (its
+#      name changes with M and it is skipped on docs-only changes).
+#    - The old contract "the job runs, its steps skip" still holds for the REQUIRED
+#      context: `backend` always runs (`if: always()`, deliberate on this job only) and
+#      reports success on a docs-only change. The static job and the shards are skipped
+#      at JOB level in that case (job `if:` = `!cancelled() && backend != 'false'`).
+#    - Aggregator semantics (fail closed): FILTER=needs.changes.outputs.backend,
+#      CHANGES/STATIC/SHARDS=needs.<job>.result. Green only if CHANGES=success and
+#      either FILTER=false with STATIC=SHARDS=skipped, or FILTER!=false with
+#      STATIC=SHARDS=success. Anything else (failure, cancelled, skipped by mistake,
+#      empty -- including a failed `changes` job) is red. This is stricter than the old
+#      single job, which ran its gate even if `changes` failed.
+#    - THE ONE KNOB: `matrix.shard` in `backend_shard`. M comes from
+#      `strategy.job-total`; edit only that list to change the shard count.
+#    - Concurrency: with M=3 a PR run keeps 6 long jobs busy (frontend, mobile, static,
+#      3 shards) plus two seconds-long ones (`changes`, the aggregator) against the GitHub
+#      free plan's 20 concurrent jobs: 3 PRs in flight is ~18 long jobs; M=4 is 7 per PR,
+#      ~21 for 3 PRs. A plan or runner-size change is the owner's decision.
 #
 # Toolchain versions: read from .tool-versions (elixir 1.20.3-otp-29,
 # erlang 29.0.5, rust 1.97.1) via setup-beam's version-file input (Elixir/OTP)
@@ -43,7 +74,7 @@
 # `mix letflow.check_toolchain` can never silently drift apart -- the same
 # file backs both.
 #
-# WASMEX_BUILD: true on "Run backend gate" (REQ-165): without it, `wasmex`'s
+# WASMEX_BUILD: true on the backend static/shard run steps (REQ-165; formerly "Run backend gate"): without it, `wasmex`'s
 # own rustler_precompiled dependency could satisfy `mix compile` by fetching
 # a precompiled NIF for ubuntu-latest and never touch the pinned Rust
 # toolchain at all, silently defeating the point of pinning it -- see
@@ -105,6 +136,11 @@ name: CI
 # obvious-looking alternative that was tried and rejected during that design's
 # review, specifically because the obvious alternative silently breaks
 # 0018's required-status-check contexts.
+#
+# Q-1037 amendment: that reasoning governs the REQUIRED contexts. The sharded backend's
+# NON-required legs (`backend_static`, `backend_shard`) use job-level path-filter `if:`s
+# (skipped on docs-only changes), and the required aggregator `backend` uses `always()`
+# on purpose, so it is never skipped; see item 4 above. `frontend`/`mobile` are unchanged.
 on:
   push:
     branches: [main]
@@ -130,8 +166,8 @@ concurrency:
 
 jobs:
   # Not a required status check. Computes whether backend-relevant /
-  # frontend-relevant paths changed so `backend`/`frontend` below can skip
-  # their expensive steps on a docs-only change -- see the design doc §3.
+  # frontend-relevant paths changed so the backend legs (skipped at job level) and
+  # `frontend` (steps skipped) below can avoid their expensive work on a docs-only change -- see the design doc §3.
   # Hand-rolled git diff rather than a third-party paths-filter action, so
   # every edge case (zero-SHA new branch, non-push/PR triggers, force-push,
   # the script's own failure) is auditable directly in this file.
@@ -264,22 +300,24 @@ jobs:
           path: path-filter-outputs.txt
           retention-days: 1
 
-  # This job's `name:` string is a required-status-check `context` on main's branch
-  # protection (docs/migration/decisions/0018-branch-protection-posture.md). Do not
-  # rename it without updating that record's `contexts` list and re-running its
-  # Step 1/2 -- a silent rename makes GitHub report the required check as
-  # perpetually missing, which behaves as a permanent block on main, not a
-  # silent pass-through.
-  backend:
-    name: Backend gate (mix letflow.check)
+  # Q-1037 / GH #2364 (backend-gate sharding): the static half of the old single `backend`
+  # job. NOT a required status check (only the aggregator `backend` below is). Runs the
+  # `mix letflow.check` steps up to and including the boundary check (`mix
+  # letflow.check.static`) and the two isolated tails (`mix letflow.check.test
+  # --tails-only`), in parallel with the `backend_shard` legs.
+  #
+  # Job-level `if:` (not step-level like the old `backend`): a docs-only PR shows this
+  # job as skipped, and the aggregator expects exactly that (result 'skipped'). The
+  # leading `!cancelled()` replaces the implicit success() (any status function in a
+  # job-level `if` does), so, like the old job and frontend/mobile, it still runs when
+  # `changes` merely failed (output empty != 'false', fail open); the aggregator turns
+  # that into red via CHANGES != 'success'. A cancelled run does not start it.
+  # fetch-depth: 0 is required here (`letflow.lint_handoffs` uses git history).
+  backend_static:
+    name: Backend static checks + isolated tails
     runs-on: ubuntu-latest
     needs: changes
-    # NOT `always()` -- see design doc §4. `!cancelled()` keeps this required
-    # job running when `changes` merely *fails* (so the gate still runs, fail
-    # open), while still letting a genuinely cancelled/superseded run (this
-    # workflow's own `cancel-in-progress`) actually stop instead of running to
-    # completion immune to cancellation.
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.changes.outputs.backend != 'false' }}
 
     # ISS-0779: `--health-cmd "pg_isready -U letflow"` (no `-d`) was NOT a check that
     # the target database exists -- it was not even a check that the specific
@@ -330,6 +368,7 @@ jobs:
     # `--health-retries` raised from 10 to 30 (interval unchanged at 2s, so ~60s+
     # budget instead of ~20s) since a real authenticated query naturally needs a
     # little longer to first succeed than a bare TCP/protocol probe did.
+
     services:
       postgres:
         image: postgres:16
@@ -415,11 +454,192 @@ jobs:
             fi
           done
 
-      - name: Run backend gate
+      - name: Run static checks (mix letflow.check.static)
         if: needs.changes.outputs.backend != 'false'
-        run: mix letflow.check
+        run: mix letflow.check.static
         env:
+          MIX_ENV: test
           WASMEX_BUILD: true
+
+      - name: Run isolated tails (mix letflow.check.test --tails-only)
+        if: needs.changes.outputs.backend != 'false'
+        run: mix letflow.check.test --tails-only
+        env:
+          MIX_ENV: test
+          WASMEX_BUILD: true
+          # PR1 review (LOW): an ambient shard setting must never leak into a non-shard
+          # invocation. scripts/test_parallel.sh treats an empty value exactly like unset
+          # (`[ -n "${VAR:-}" ]`), so empty strings are the safe, explicit reset.
+          TEST_PARALLEL_SHARD: ''
+          TEST_PARALLEL_TOTAL: ''
+          TEST_PARALLEL_OFFSET: ''
+
+  # Q-1037 / GH #2364: one leg of the sharded test suite. NOT a required status check.
+  # `matrix.shard` is THE ONE KNOB: the shard count M is derived from the matrix itself
+  # (`strategy.job-total`, valid in a job `name:` and in steps), so changing
+  # `shard: [1, 2, 3]` to `[1, 2, 3, 4]` is the whole change -- the job name and the
+  # `--shard K/M` argument follow. Each leg runs TEST_PARALLEL_N=4 partitions of the global
+  # partition space N*M (scripts/test_parallel.sh); N must be the same on every leg.
+  # Same `if:` reasoning as backend_static. fetch-depth: 0 is kept (not a shallow clone):
+  # several tests shell out to git (e.g. test/letflow/login_directory/no_secret_in_repo_test.exs)
+  # and a shallow checkout would change what the suite sees relative to today's gate; the
+  # repo has ~3k commits, so the cost is seconds. Each leg has its own Postgres service.
+  # All legs share one cache key; GitHub keeps the first save and ignores later ones
+  # ('unable to reserve cache'), which is harmless.
+  backend_shard:
+    name: Backend shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.backend != 'false' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+
+    # Same service as backend_static (see the ISS-0779 note there), one per leg.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: letflow
+          POSTGRES_PASSWORD: letflow
+          POSTGRES_DB: letflow_dev
+        ports:
+          - 5462:5432
+        options: >-
+          --health-cmd "PGPASSWORD=letflow psql -U letflow -d letflow_dev -h 127.0.0.1 -c 'SELECT 1'"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Elixir/OTP (from .tool-versions)
+        uses: erlef/setup-beam@v1
+        with:
+          version-file: .tool-versions
+          version-type: strict
+
+      - name: Read pinned Rust version from .tool-versions
+        id: rust_pin
+        run: |
+          version=$(grep -E '^rust ' .tool-versions | awk '{print $2}')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Rust (pinned via .tool-versions)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ steps.rust_pin.outputs.version }}
+
+      - name: Cache deps and _build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - name: Install dependencies
+        if: needs.changes.outputs.backend != 'false'
+        run: mix deps.get
+
+      # Step 3 of the backend-gate speed-up (Q-1037 / GH #2364): the service database is a
+      # throwaway used only by this job's tests, so crash durability buys nothing. fsync,
+      # synchronous_commit and full_page_writes are all reload-only settings (no restart, no
+      # `services.postgres.command`, which was tried and reverted for max_connections: see the
+      # header of this file). The step fails unless the three values really read back as `off`,
+      # so a silent no-op cannot masquerade as a tuned run.
+      - name: Tune Postgres for CI (durability off, throwaway database)
+        if: needs.changes.outputs.backend != 'false'
+        env:
+          PGPASSWORD: letflow
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -p 5462 -U letflow -d letflow_dev -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
+          # pg_reload_conf() only signals the postmaster, so poll (bounded: 10 x 1 s) until
+          # each setting reads back as `off` instead of trusting a fixed sleep.
+          for setting in fsync synchronous_commit full_page_writes; do
+            value=""
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              value=$(psql -h 127.0.0.1 -p 5462 -U letflow -d letflow_dev -At -c "SHOW $setting")
+              [ "$value" = "off" ] && break
+              sleep 1
+            done
+            echo "postgres $setting = $value"
+            if [ "$value" != "off" ]; then
+              echo "::error::Postgres setting $setting did not take effect (got '$value')"
+              exit 1
+            fi
+          done
+
+      - name: Run test shard
+        if: needs.changes.outputs.backend != 'false'
+        run: mix letflow.check.test --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+        env:
+          MIX_ENV: test
+          WASMEX_BUILD: true
+          TEST_PARALLEL_N: 4
+
+  # This job's `name:` string is a required-status-check `context` on main's branch
+  # protection (docs/migration/decisions/0018-branch-protection-posture.md). Do not
+  # rename it without updating that record's `contexts` list and re-running its
+  # Step 1/2 -- a silent rename makes GitHub report the required check as
+  # perpetually missing, which behaves as a permanent block on main, not a
+  # silent pass-through.
+  #
+  # Q-1037 / GH #2364: this key is now the AGGREGATOR of the sharded backend gate, and
+  # the ONLY job carrying this name (the shard and static jobs have other names). It
+  # fails closed: green only if `changes` succeeded AND either the path filter said
+  # `false` and static + all shards were skipped, or static + all shards succeeded.
+  # Every other value (failure, cancelled, unexpectedly skipped, empty) is red.
+  # `if: ${{ always() }}` is deliberate HERE ONLY: this is the one job that must never be
+  # skipped (a skipped required check behaves as missing and blocks merges), and it must
+  # report red, not vanish, when a leg failed or the run was cancelled. A rerun of
+  # failed jobs reruns this job too (it depends on them); a rerun of this job alone
+  # re-reads the previous attempt's leg results, so a red leg stays red.
+  backend:
+    name: Backend gate (mix letflow.check)
+    runs-on: ubuntu-latest
+    needs: [changes, backend_static, backend_shard]
+    if: ${{ always() }}
+    steps:
+      - name: Aggregate backend legs (fail closed)
+        env:
+          FILTER: ${{ needs.changes.outputs.backend }}
+          CHANGES: ${{ needs.changes.result }}
+          STATIC: ${{ needs.backend_static.result }}
+          SHARDS: ${{ needs.backend_shard.result }}
+        run: |
+          set -euo pipefail
+          echo "filter(backend)=[$FILTER] changes=[$CHANGES] static=[$STATIC] shards=[$SHARDS]"
+          fail=0
+          require() {
+            if [ "$2" != "$3" ]; then
+              echo "::error::$1 result is '$2', expected '$3'"
+              fail=1
+            fi
+          }
+          require 'changes (Detect changed paths)' "$CHANGES" success
+          if [ "$FILTER" = "false" ]; then
+            echo "path filter says no backend-relevant change: legs must all be skipped"
+            require 'backend_static' "$STATIC" skipped
+            require 'backend_shard' "$SHARDS" skipped
+          else
+            echo "backend gate required (filter='$FILTER'): legs must all have succeeded"
+            require 'backend_static' "$STATIC" success
+            require 'backend_shard' "$SHARDS" success
+          fi
+          exit "$fail"
 
   frontend:
     # This job's `name:` string is a required-status-check `context` on main's branch
@@ -452,7 +672,7 @@ jobs:
     name: Frontend gate (npm run check)
     runs-on: ubuntu-latest
     needs: changes
-    # See the matching note on `backend` above -- NOT `always()`.
+    # NOT `always()` (unlike the aggregator `backend`, which needs it; see its note).
     if: ${{ !cancelled() }}
     defaults:
       run:
@@ -479,7 +699,7 @@ jobs:
 
   # REQ-420: Mobile gate job, appended alongside `backend`/`frontend` as a sibling under
   # the same `on:` triggers, touching none of their keys. Structurally parallel to
-  # `backend`/`frontend` (needs: changes; `if: ${{ !cancelled() }}`; step-level fail-open
+  # `frontend` (needs: changes; `if: ${{ !cancelled() }}`; step-level fail-open
   # `if:` on the expensive steps only) per ISS-0591/ISS-0592's design
   # (lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md) even though this job is
   # NOT (yet) a required-status-check context.
@@ -497,7 +717,7 @@ jobs:
     name: Mobile gate (flutter analyze + test + build)
     runs-on: ubuntu-latest
     needs: changes
-    # NOT `always()` -- same reasoning as `backend`/`frontend` (see this design's §3 and
+    # NOT `always()` -- same reasoning as `frontend` (see this design's §3 and
     # the ISS-0591/ISS-0592 design doc's job-block note): `!cancelled()` keeps this job
     # running when `changes` merely *fails* (fail open), while still letting a genuinely
     # cancelled/superseded run (this workflow's own `cancel-in-progress`) actually stop.

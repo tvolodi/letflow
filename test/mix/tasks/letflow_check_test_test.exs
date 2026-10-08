@@ -115,6 +115,9 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
   @target_substring "default values for the optional arguments"
 
   setup do
+    # Q-1037: a sharded CI job exports TEST_PARALLEL_* into this VM; run/1 must see none.
+    Letflow.Test.TestParallelEnv.scrub_ambient!()
+
     fixture_root =
       Path.join(
         System.tmp_dir!(),
@@ -1471,8 +1474,8 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
 
       calls = recorded_calls(fake_bin_dir)
       assert length(calls) == 4, inspect(calls)
-      # TEST_PARALLEL_SHARD is not exported by a plain run (assumes the ambient env has
-      # none, same as CI and a normal dev shell)
+      # TEST_PARALLEL_SHARD is not exported by a plain run (the top-level setup scrubs
+      # any ambient TEST_PARALLEL_* via Letflow.Test.TestParallelEnv.scrub_ambient!/0)
       assert Enum.at(calls, 0) == "bash shard="
       assert Enum.at(calls, 1) =~ "--dry-run"
       assert Enum.at(calls, 2) =~ "fake_wasm_hang_test"

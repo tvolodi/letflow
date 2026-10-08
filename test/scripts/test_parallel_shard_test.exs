@@ -124,10 +124,7 @@ defmodule Letflow.Scripts.TestParallelShardTest do
         :exit_status,
         :stderr_to_stdout,
         {:cd, work},
-        {:env,
-         Enum.map(env, fn {k, v} ->
-           {to_charlist(k), if(v, do: to_charlist(v), else: false)}
-         end)},
+        {:env, Letflow.Test.TestParallelEnv.port_env(env)},
         {:args, ["-c", launcher, "launcher", bin, out_file, script()]}
       ])
 

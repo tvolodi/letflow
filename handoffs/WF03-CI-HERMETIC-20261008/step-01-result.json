@@ -1,0 +1,18 @@
+{
+  "run_id": "WF03-CI-HERMETIC-20261008",
+  "step": "01",
+  "from_agent": "TEST-DESIGNER",
+  "status": "DONE_WITH_CAVEAT",
+  "files_changed": [
+    "test/scripts/test_parallel_instrumentation_test.exs",
+    "test/scripts/test_parallel_shard_test.exs",
+    "test/scripts/test_parallel_watchdog_diag_test.exs",
+    "test/scripts/test_parallel_watchdog_orphan_test.exs",
+    "test/mix/tasks/letflow_check_test_test.exs"
+  ],
+  "verification": {
+    "ambient_shard_env_first_run": "Result: 79/80 passed; only failure: orphan EXIT-trap test (watchdog-orphan:275)",
+    "no_ambient_first_run": "Result: 80 passed",
+    "caveat": "Orphan EXIT-trap test (test_parallel_watchdog_orphan_test.exs:275) is an ambient-independent, order/load-dependent flake on this Windows host: it also fails with NO ambient env (control runs X_NOOP) and against the unmodified HEAD file (seeds 2,3). Not a hermeticity defect; scripts/ not edited per instructions."
+  }
+}

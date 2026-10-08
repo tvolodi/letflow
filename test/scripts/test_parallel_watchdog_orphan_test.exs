@@ -168,7 +168,7 @@ defmodule Letflow.Scripts.TestParallelWatchdogOrphanTest do
         :exit_status,
         :stderr_to_stdout,
         {:cd, work},
-        {:env, Enum.map(env, fn {k, v} -> {to_charlist(k), to_charlist(v)} end)},
+        {:env, Letflow.Test.TestParallelEnv.port_env(env)},
         {:args, ["-c", launcher, "launcher", bin, script()]}
       ])
 

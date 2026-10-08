@@ -42,9 +42,51 @@ defmodule Letflow.NoSmtpSecretGuardTest do
                      LETFLOW_SMTP_USERNAME LETFLOW_SMTP_PASSWORD LETFLOW_SMTP_TLS
                      LETFLOW_MAIL_FROM LETFLOW_PUBLIC_BASE_URL LETFLOW_MAIL_TIMEOUT_MS)
 
-  defp tracked_files do
-    {out, 0} = System.cmd("git", ["ls-files", "-z"], stderr_to_stdout: true)
+  @needle "LETFLOW_SMTP_"
+
+  defp tracked_files(root) do
+    {out, 0} = System.cmd("git", ["ls-files", "-z"], cd: root)
     out |> String.split(<<0>>, trim: true)
+  end
+
+  # One `git grep` narrows ~7k tracked files to the few that mention the variable
+  # prefix at all (no `-I`: binary files are decided by the String.valid? check below,
+  # exactly as before). `-z` keeps paths unquoted; stderr is not merged into the paths.
+  defp candidate_files(root) do
+    case System.cmd("git", ["grep", "-l", "-z", "-F", "-e", @needle], cd: root) do
+      {_out, 1} -> []
+      {out, 0} -> String.split(out, <<0>>, trim: true)
+      {out, code} -> raise "git grep exited #{code}: #{out}"
+    end
+  end
+
+  @doc false
+  # Scans the tracked tree under `root` for a value assigned to an SMTP credential
+  # variable. Returns `%{hits: [...], scanned_paths: [...]}`; `hits` are
+  # "path:number (kind)" strings in sorted-path then line order.
+  def scan_tracked(root) do
+    scanned =
+      for path <- Enum.sort(candidate_files(root)),
+          full = Path.join(root, path),
+          File.regular?(full),
+          %File.Stat{size: size} = File.stat!(full),
+          size <= @max_bytes,
+          content = File.read!(full),
+          String.valid?(content),
+          :binary.match(content, @needle) != :nomatch,
+          do: {path, content}
+
+    # every pattern needs the literal prefix, so a line without it cannot match
+    hits =
+      for {path, content} <- scanned,
+          {line, number} <- content |> String.split("
+") |> Enum.with_index(1),
+          String.contains?(line, @needle),
+          {kind, re} <- patterns(),
+          Regex.match?(re, line),
+          do: "#{path}:#{number} (#{kind})"
+
+    %{hits: hits, scanned_paths: Enum.map(scanned, &elem(&1, 0))}
   end
 
   describe "the scan patterns" do
@@ -88,32 +130,20 @@ defmodule Letflow.NoSmtpSecretGuardTest do
   end
 
   describe "AC6: the tracked tree" do
+    @tag timeout: 300_000
     test "no tracked file assigns a value to the SMTP username or password variable" do
-      files = tracked_files()
+      root = File.cwd!()
+      files = tracked_files(root)
       assert length(files) > 1_000, "git ls-files returned #{length(files)} files"
 
-      scanned =
-        for path <- files,
-            File.regular?(path),
-            %File.Stat{size: size} = File.stat!(path),
-            size <= @max_bytes,
-            content = File.read!(path),
-            String.valid?(content),
-            :binary.match(content, "LETFLOW_SMTP_") != :nomatch,
-            do: {path, content}
-
-      hits =
-        for {path, content} <- scanned,
-            {line, number} <- content |> String.split("\n") |> Enum.with_index(1),
-            {kind, re} <- patterns(),
-            Regex.match?(re, line),
-            do: "#{path}:#{number} (#{kind})"
+      %{hits: hits, scanned_paths: scanned_paths} = scan_tracked(root)
 
       assert hits == [],
-             "a value is assigned to an SMTP credential variable:\n" <> Enum.join(hits, "\n")
+             "a value is assigned to an SMTP credential variable:
+" <> Enum.join(hits, "
+")
 
       # not vacuous: the variable NAMES are present in tracked files (the example env files)
-      scanned_paths = Enum.map(scanned, &elem(&1, 0))
       assert ".env.example" in scanned_paths
       assert "deploy/.env.example" in scanned_paths
       assert "config/runtime.exs" in scanned_paths

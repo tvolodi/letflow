@@ -1269,4 +1269,263 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       refute File.exists?(log_dir)
     end
   end
+
+  # Q-1037 / GH #2364: `--shard K/M` and `--tails-only`, plus the `letflow.check` alias split.
+  #
+  # Seam: the same fake `bash`/`mix` + Application-env resolver technique as the rest of
+  # this file (nothing real is spawned). The fakes below additionally append one line per
+  # invocation to a single shared record file (`calls.txt`): `bash shard=<value of
+  # TEST_PARALLEL_SHARD in the fake's own environment>` for the main-suite runner and
+  # `mix <argv>` for each tail command, so a test can assert both WHAT ran and, by absence,
+  # what did NOT run (and in what order).
+  describe "mix letflow.check.test --shard / --tails-only (Q-1037 / GH #2364)" do
+    defp calls_path(fake_bin_dir), do: Path.join(fake_bin_dir, "calls.txt")
+
+    defp recorded_calls(fake_bin_dir) do
+      path = calls_path(fake_bin_dir)
+
+      if File.exists?(path),
+        do: path |> File.read!() |> String.replace("\r", "") |> String.split("\n", trim: true),
+        else: []
+    end
+
+    # Fake `bash`: records the value of TEST_PARALLEL_SHARD it was launched with (empty when
+    # unset), prints the runner stdout pointing at `log_dir`, exits `exit_code`.
+    defp install_recording_bash(fake_bin_dir, log_dir, exit_code \\ 0) do
+      rec = calls_path(fake_bin_dir)
+
+      case :os.type() do
+        {:win32, _} ->
+          out_path = Path.join(fake_bin_dir, "recording_bash_out.txt")
+          File.write!(out_path, fake_runner_stdout(log_dir))
+          rec_win = String.replace(rec, "/", "\\")
+          out_win = String.replace(out_path, "/", "\\")
+
+          File.write!(Path.join(fake_bin_dir, "bash.bat"), """
+          @echo off
+          if defined TEST_PARALLEL_SHARD (>>"#{rec_win}" echo bash shard=%TEST_PARALLEL_SHARD%) else (>>"#{rec_win}" echo bash shard=)
+          type "#{out_win}"
+          exit /b #{exit_code}
+          """)
+
+        _ ->
+          fake_path = Path.join(fake_bin_dir, "bash")
+
+          File.write!(fake_path, """
+          #!/bin/sh
+          echo "bash shard=${TEST_PARALLEL_SHARD:-}" >> "#{rec}"
+          echo "test_parallel: N=2 (source: fake)"
+          echo "test_parallel: partition logs in #{log_dir}"
+          exit #{exit_code}
+          """)
+
+          File.chmod!(fake_path, 0o755)
+      end
+
+      :ok
+    end
+
+    # Fake `mix`: same dispatch as install_wasm_hang_aware_fake_mix/1 (one discovered
+    # wasm_hang test, which passes; everything else passes), but every invocation is first
+    # recorded as `mix <argv>`.
+    defp install_recording_mix(fake_bin_dir) do
+      rec = calls_path(fake_bin_dir)
+
+      case :os.type() do
+        {:win32, _} ->
+          rec_win = String.replace(rec, "/", "\\")
+
+          File.write!(Path.join(fake_bin_dir, "mix.bat"), """
+          @echo off
+          setlocal
+          set ARGS=%*
+          >>"#{rec_win}" echo mix %ARGS%
+          echo %ARGS% | findstr /C:"--dry-run" >nul
+          if %ERRORLEVEL%==0 (
+            echo Tests that would be executed:
+            echo test/fake_wasm_hang_test.exs:1
+            echo All tests have been excluded.
+            echo Finished in 0.0 seconds
+            echo Result: 0 tests, 1 excluded
+            exit /b 1
+          )
+          echo Finished in 0.0 seconds
+          echo Result: 1 passed
+          exit /b 0
+          """)
+
+        _ ->
+          fake_path = Path.join(fake_bin_dir, "mix")
+
+          File.write!(fake_path, """
+          #!/bin/sh
+          echo "mix $*" >> "#{rec}"
+          case "$*" in
+            *"--dry-run"*)
+              echo "Tests that would be executed:"
+              echo "test/fake_wasm_hang_test.exs:1"
+              echo "All tests have been excluded."
+              echo "Finished in 0.0 seconds"
+              echo "Result: 0 tests, 1 excluded"
+              exit 1
+              ;;
+            *)
+              echo "Finished in 0.0 seconds"
+              echo "Result: 1 passed"
+              exit 0
+              ;;
+          esac
+          """)
+
+          File.chmod!(fake_path, 0o755)
+      end
+
+      :ok
+    end
+
+    defp clean_log_dir(fixture_root, name) do
+      dir = write_partition_log(fixture_root, name, "partition-1.log", "Result: 5/5 passed\n")
+      write_partition_log(fixture_root, name, "partition-2.log", "Result: 3/3 passed\n")
+      dir
+    end
+
+    defp run_task_capturing(args) do
+      ExUnit.CaptureIO.with_io(fn -> Mix.Tasks.Letflow.Check.Test.run(args) end)
+    end
+
+    test "--shard 2/3 exports TEST_PARALLEL_SHARD=2/3 to the runner, checks its logs, and runs no tails",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_recording_bash(fake_bin_dir, clean_log_dir(fixture_root, "logs"))
+      install_recording_mix(fake_bin_dir)
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
+
+      {_result, io} = run_task_capturing(["--shard", "2/3"])
+
+      # the runner saw the slice, exactly once, and no `mix` tail command was launched
+      assert recorded_calls(fake_bin_dir) == ["bash shard=2/3"]
+      assert io =~ "OK -- no test failures, no ISS-0069 warnings"
+      refute io =~ "wasm_hang"
+      refute io =~ "lua_wallclock_race"
+    end
+
+    test "--shard still applies the ISS-0069 warnings gate to the slice's partition logs",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      log_dir =
+        write_partition_log(fixture_root, "logs", "partition-5.log", """
+        test/x_test.exs:1: warning: #{@target_substring} in helper/2 are never used
+        Result: 5/5 passed
+        """)
+
+      install_recording_bash(fake_bin_dir, log_dir)
+      install_recording_mix(fake_bin_dir)
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
+
+      exception =
+        assert_raise Mix.Error, ~r/#{Regex.escape(@target_substring)}/, fn ->
+          run_task_capturing(["--shard", "1/3"])
+        end
+
+      assert exception.message =~ "[partition 5]"
+      assert recorded_calls(fake_bin_dir) == ["bash shard=1/3"]
+    end
+
+    test "--shard propagates a failing runner exit as a Mix.Error and still runs no tails",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      log_dir =
+        write_partition_log(fixture_root, "logs", "partition-1.log", "Failed: 1 test\n")
+
+      install_recording_bash(fake_bin_dir, log_dir, 1)
+      install_recording_mix(fake_bin_dir)
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
+
+      assert_raise Mix.Error, ~r/exited 1/, fn -> run_task_capturing(["--shard", "3/3"]) end
+      assert recorded_calls(fake_bin_dir) == ["bash shard=3/3"]
+    end
+
+    test "--tails-only runs only the wasm_hang and lua tails and never launches the runner script",
+         %{fake_bin_dir: fake_bin_dir} do
+      install_recording_bash(fake_bin_dir, "/nonexistent")
+      install_recording_mix(fake_bin_dir)
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
+
+      {_result, io} = run_task_capturing(["--tails-only"])
+
+      calls = recorded_calls(fake_bin_dir)
+      refute Enum.any?(calls, &String.starts_with?(&1, "bash")), inspect(calls)
+      assert length(calls) == 3, inspect(calls)
+      assert Enum.at(calls, 0) =~ "--dry-run"
+      assert Enum.at(calls, 1) =~ "fake_wasm_hang_test"
+      assert Enum.at(calls, 2) =~ "--only lua_wallclock_race"
+      assert io =~ "1/1 isolated wasm_hang tests passed"
+      assert io =~ "isolated :lua_wallclock_race run also passed clean"
+      refute io =~ "no ISS-0069 warnings"
+    end
+
+    test "no arguments still runs the whole suite (shard unset) and then the tails, in that order",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_recording_bash(fake_bin_dir, clean_log_dir(fixture_root, "logs"))
+      install_recording_mix(fake_bin_dir)
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
+
+      {_result, io} = run_task_capturing([])
+
+      calls = recorded_calls(fake_bin_dir)
+      assert length(calls) == 4, inspect(calls)
+      # TEST_PARALLEL_SHARD is not exported by a plain run (assumes the ambient env has
+      # none, same as CI and a normal dev shell)
+      assert Enum.at(calls, 0) == "bash shard="
+      assert Enum.at(calls, 1) =~ "--dry-run"
+      assert Enum.at(calls, 2) =~ "fake_wasm_hang_test"
+      assert Enum.at(calls, 3) =~ "--only lua_wallclock_race"
+      assert io =~ "OK -- no test failures, no ISS-0069 warnings"
+    end
+
+    test "--shard together with --tails-only is rejected as mutually exclusive, starting nothing",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_recording_bash(fake_bin_dir, clean_log_dir(fixture_root, "logs"))
+      install_recording_mix(fake_bin_dir)
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
+
+      exception =
+        assert_raise Mix.Error, fn -> run_task_capturing(["--shard", "1/3", "--tails-only"]) end
+
+      assert exception.message =~ "mutually exclusive"
+      assert recorded_calls(fake_bin_dir) == []
+    end
+
+    for {label, args, needle} <- [
+          {"K greater than M", ["--shard", "4/3"], "greater than M"},
+          {"non-numeric shard", ["--shard", "abc"], "K/M"},
+          {"zero M", ["--shard", "1/0"], "K/M"},
+          {"unknown flag", ["--bogus"], "unrecognised arguments"},
+          {"stray positional argument", ["extra"], "unrecognised arguments"},
+          {"--shard without a value", ["--shard"], "unrecognised arguments"}
+        ] do
+      test "#{label} raises Mix.Error and starts no subprocess",
+           %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+        install_recording_bash(fake_bin_dir, clean_log_dir(fixture_root, "logs"))
+        install_recording_mix(fake_bin_dir)
+        install_executable_resolver(fake_bin_dir, ["bash", "mix"])
+
+        exception =
+          assert_raise Mix.Error, fn -> run_task_capturing(unquote(args)) end
+
+        assert exception.message =~ unquote(needle)
+        assert recorded_calls(fake_bin_dir) == []
+      end
+    end
+  end
+
+  describe "letflow.check alias split (Q-1037 / GH #2364)" do
+    test "letflow.check is the static steps followed by letflow.check.test, and static ends at the boundary check" do
+      aliases = Mix.Project.config()[:aliases]
+      static = Keyword.fetch!(aliases, :"letflow.check.static")
+      full = Keyword.fetch!(aliases, :"letflow.check")
+
+      assert is_list(static)
+      assert full == static ++ ["letflow.check.test"]
+      assert List.last(static) == "letflow.check_boundaries"
+      refute "letflow.check.test" in static
+    end
+  end
 end

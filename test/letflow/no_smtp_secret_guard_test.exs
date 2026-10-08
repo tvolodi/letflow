@@ -79,8 +79,7 @@ defmodule Letflow.NoSmtpSecretGuardTest do
     # every pattern needs the literal prefix, so a line without it cannot match
     hits =
       for {path, content} <- scanned,
-          {line, number} <- content |> String.split("
-") |> Enum.with_index(1),
+          {line, number} <- content |> String.split("\n") |> Enum.with_index(1),
           String.contains?(line, @needle),
           {kind, re} <- patterns(),
           Regex.match?(re, line),
@@ -139,9 +138,7 @@ defmodule Letflow.NoSmtpSecretGuardTest do
       %{hits: hits, scanned_paths: scanned_paths} = scan_tracked(root)
 
       assert hits == [],
-             "a value is assigned to an SMTP credential variable:
-" <> Enum.join(hits, "
-")
+             "a value is assigned to an SMTP credential variable:\n" <> Enum.join(hits, "\n")
 
       # not vacuous: the variable NAMES are present in tracked files (the example env files)
       assert ".env.example" in scanned_paths

@@ -101,7 +101,9 @@ defmodule Letflow.Scripts.TestParallelEnvTest do
     put_sentinels()
 
     inside =
-      TestParallelEnv.with_clean_env(fn -> Enum.map(TestParallelEnv.vm_names(), &System.get_env/1) end)
+      TestParallelEnv.with_clean_env(fn ->
+        Enum.map(TestParallelEnv.vm_names(), &System.get_env/1)
+      end)
 
     assert Enum.all?(inside, &is_nil/1)
     assert System.get_env("TEST_PARALLEL_SHARD") == "sentinel-TEST_PARALLEL_SHARD"

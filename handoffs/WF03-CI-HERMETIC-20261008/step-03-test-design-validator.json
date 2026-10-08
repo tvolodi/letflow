@@ -1,0 +1,50 @@
+{
+  "agent": "TEST-DESIGN-VALIDATOR",
+  "step": "03",
+  "workflow": "WF-03 CI-HERMETIC (Q-1037 / GH #2364)",
+  "head": "9f6361f5",
+  "verdict": "PASS_WITH_FINDINGS",
+  "edits_made_to_tests": false,
+  "A_ambient_env": {
+    "run1": "TEST_PARALLEL_N=4 SHARD=1/3 TOTAL=12 OFFSET=0 EXTRA_ARGS=--bogus PRINT_SLOWEST=3 -> 'Result: 75 passed', EXIT=0 (6 files)",
+    "run2": "SHARD=2/3 TOTAL=12 OFFSET=4 N=4 -> 'Result: 75 passed', EXIT=0 (6 files)",
+    "orphan_file": "test_parallel_watchdog_orphan_test.exs with ambient run1 env: 'Result: 4/5 passed', only failure 'EXIT-trap path' (:275, 'script did not release its stdout pipe within 40000 ms'); pre-existing Windows flake, not counted against the fix"
+  },
+  "B_red_proof": {
+    "method": "git checkout ce32f00c -- 5 converted files; ambient N=4 SHARD=1/3 TOTAL=12 OFFSET=0; restored with git checkout HEAD; git diff HEAD --stat empty, git status clean",
+    "result": "Result: 56/60 passed, EXIT=2",
+    "failures": [
+      "instrumentation_test:178 'no extra args and PRINT_SLOWEST=0' left [... '--partitions','6' ...] right ['--partitions','2' ...]",
+      "instrumentation_test:191 'TEST_PARALLEL_EXTRA_ARGS lands after the other args' (same partitions 6 vs 2 inheritance)",
+      "letflow_check_test_test:1464 'no arguments still runs the whole suite' left 'bash shard=1/3' right 'bash shard='",
+      "orphan_test EXIT-trap path (pre-existing flake, fails regardless)"
+    ],
+    "note": "shard_test and diag_test passed pre-fix under this ambient (shard_test already nil-sets SHARD/TOTAL/OFFSET itself at line 108-110); they are protected against N/other knobs only via the helper and the mutants below"
+  },
+  "C_mutants": [
+    {"mutant": "drop TEST_PARALLEL_SHARD from @script_knobs", "ambient": "N=4 SHARD=1/3", "result": "KILLED 67/75: instrumentation:178,191; env_test 'every TEST_* knob...', 'scrubbed env actually reaches a child', 'with_clean_env', 'SHARD is scrubbed', 'scrub_ambient!'; letflow_check_test:1464"},
+    {"mutant": "drop TEST_PARALLEL_TOTAL", "ambient": "TOTAL=12 OFFSET=4", "result": "KILLED 69/75: instrumentation:178,191; env_test 'TOTAL is scrubbed', 'port_env/1 unsets every knob', coverage-grep test"},
+    {"mutant": "drop TEST_PARALLEL_OFFSET", "ambient": "TOTAL=12 OFFSET=4", "result": "KILLED 66/75: instrumentation x3, diag_test x3, env_test 'OFFSET is scrubbed', 'cmd_env/1', coverage-grep"},
+    {"mutant": "drop TEST_PARALLEL_N", "ambient": "N=4", "result": "KILLED 71/75, only by test_parallel_env_test.exs ('N is scrubbed', with_clean_env, scrub_ambient!, coverage-grep). SURVIVED in the 4 behavioral files because they set TEST_PARALLEL_N explicitly on every spawn; unit oracle is the sole observer (acceptable)"},
+    {"mutant": "drop TEST_PARALLEL_EXTRA_ARGS", "ambient": "EXTRA_ARGS=--bogus PRINT_SLOWEST=3", "result": "KILLED 73/75, only by env_test ('EXTRA_ARGS is scrubbed', coverage-grep); behavioral tests set it explicitly"},
+    {"mutant": "(a) empty @child_only (drop MIX_TEST_PARTITION)", "ambient": "N=4 SHARD=1/3", "result": "KILLED 72/75: env_test 'scrubbed env actually reaches a child', 'MIX_TEST_PARTITION is scrubbed...', 'port_env/1 unsets every knob'"},
+    {"mutant": "(b) scrub_ambient! on_exit does not restore", "ambient": "N=4 SHARD=1/3 TOTAL=12", "result": "KILLED 74/75: env_test 'scrub_ambient!/0 deletes the knobs now and restores them when the test exits'"},
+    {"mutant": "(c) port_env: scrub map wins over explicit env", "ambient": "N=4 SHARD=1/3", "result": "KILLED 48/75: 27 failures across instrumentation, diag, shard files and env_test port_env tests"}
+  ],
+  "C_summary": "8 mutants, 8 killed, 0 survived the whole suite; no killing test needed/added. After each mutant git checkout HEAD restored the helper; 'diff lines: 0; status: 0' printed every time.",
+  "D_guard": {
+    "throwaway_spawn": "test/scripts/zz_throwaway_spawn_test.exs (Path.expand to scripts/test_parallel.sh + System.cmd, no helper) -> guard FAIL 'Result: 1/2 passed': violations [\"scripts/zz_throwaway_spawn_test.exs\"]",
+    "throwaway_check_test": "zz_throwaway_check_test.exs calling Mix.Tasks.Letflow.Check.Test.run([]) -> guard FAIL: violations [\"scripts/zz_throwaway_check_test.exs\"]",
+    "real_tree": "after deleting both throwaways: guard 'Result: 2 passed', EXIT=0; git status --porcelain empty"
+  },
+  "E_coverage": {
+    "judgment": "Each failing symptom of the original bug has a test that is RED on ce32f00c under ambient shard env (B) and GREEN at HEAD (A): partitions inherited (instrumentation 178/191) and shard leakage into run/1 (letflow_check_test 1464). Remaining knobs are pinned by the unit oracle, killed by mutants (C).",
+    "findings": [
+      "MINOR: guard blind spot - an aliased call (alias Mix.Tasks.Letflow.Check.Test; Test.run([])) is not matched by rule B. Documented class of blind spots in the moduledoc covers runtime-built paths but not aliasing.",
+      "MINOR: test/scripts/*.sh harnesses (create_burst, pool_sizing, tmpdir_cleanup) spawn the script outside ExUnit and are outside the guard (documented); create_burst sets N explicitly but not SHARD/TOTAL/OFFSET. Not run by ExUnit and no CI reference found.",
+      "INFO: orphan_test EXIT-trap flake is pre-existing and unrelated.",
+      "INFO: shard_test / diag_test did not go red in B under the specified ambient (shard_test scrubs its own base env); only protected via helper mutants."
+    ]
+  },
+  "cleanup": "git status --porcelain empty at completion; no untracked files; logs in C:/Users/tvolo/AppData/Local/Temp/claude/tdv-*.log"
+}

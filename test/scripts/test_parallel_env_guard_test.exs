@@ -25,6 +25,9 @@ defmodule Letflow.Scripts.TestParallelEnvGuardTest do
     * A script path assembled at runtime (concatenation, `Path.join/2` pieces), or a command
       string such as `"bash <path> --x"` that does not END in the script name.
     * A spawn via a primitive not listed above, or via a helper module living outside `test/`.
+    * An aliased call to the check.test task module (`alias ...Check.Test` then `Test.run(`).
+    * Spawns written inside a heredoc (heredocs are stripped as docs) and a helper-module
+      mention in a trailing comment (counts as a reference).
     * Shell harnesses (`test/**/*.sh`) -- not run by ExUnit; they set their own env.
     * The check proves the helper is REFERENCED, not that it is applied to every spawn in the
       file; per-variable behaviour is pinned by `test_parallel_env_test.exs` and by the

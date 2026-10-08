@@ -1,0 +1,31 @@
+{
+  "handoff_id": "cidiag-step03-td-0001",
+  "run_id": "WF03-CI-DIAG-20261008",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-CI-DIAG-20261008/step-03-test-designer.json",
+  "created_at": "2026-10-08T00:30:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {"diagnosis": "Q-1037 / GH #2364: watchdog-fired diagnostics in scripts/test_parallel.sh need stub-driven coverage: DIAG partition block, once-only host block, no DIAG on normal run, bounded on a huge log with a 300-column cap."},
+    "artifacts_in": ["scripts/test_parallel.sh", "test/scripts/test_parallel_watchdog_orphan_test.exs", "test/scripts/test_parallel_instrumentation_test.exs"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt3",
+    "branch_name": "ci/watchdog-diagnostics"
+  },
+  "task": {
+    "description": "Write test/scripts/test_parallel_watchdog_diag_test.exs, stub-driven (stub mix/psql on PATH, real script through bash -c 'set -o pipefail; bash script 2>&1 | cat'), async false, three cases: hung partitions with per-partition log tails, exact approx-finished figure and exactly one host block; normal quick run prints no DIAG; huge 200k-line log keeps diagnostics bounded and capped at 300 columns.",
+    "acceptance_criteria": [
+      "hung case asserts WARNING precedes each partition DIAG block, K exact, one host block, non-zero prompt exit",
+      "normal run has no 'test_parallel: DIAG'",
+      "huge-log case asserts bounded time and the column cap",
+      "file passes mix format --check-formatted"
+    ]
+  },
+  "result": {"status": "PASS", "summary": "3 tests written by TEST-DESIGNER; ORCH fixed one test bug (the no-DIAG refute matched the tmp_dir test name; now refutes 'test_parallel: DIAG'). Ran twice under MIX_ENV=test MIX_TEST_PARTITION=21: Result 3 passed each time (15.7 s and 15.8 s). format --check-formatted exit 0.", "artifacts_out": ["test/scripts/test_parallel_watchdog_diag_test.exs"], "issues": []}
+}

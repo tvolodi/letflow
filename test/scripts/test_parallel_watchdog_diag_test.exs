@@ -240,7 +240,7 @@ defmodule Letflow.Scripts.TestParallelWatchdogDiagTest do
     IO.puts("[watchdog-diag] quick case returned in #{elapsed} ms")
 
     assert status == 0, out
-    refute out =~ "DIAG", out
+    refute out =~ "test_parallel: DIAG", out
     refute out =~ "WARNING", out
   end
 

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "e8a3f1b6-7c42-4d95-a0e1-5b9d2c6f4a17",
+  "run_id": "WF03-REAPER-FAMILY-20261008",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-REAPER-FAMILY-20261008/step-04b-test-design-validator.json",
+  "created_at": "2026-10-08T01:15:00Z",
+  "started_at": "2026-10-08T01:15:00Z",
+  "completed_at": "2026-10-08T01:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "Q-1037": "queue Q-1037 / GH #2364 fake other-invocation connection helper: default DBConnection queue shedding dropped the first query after 4000ms, and the second sweep after close raced the backend leaving pg_stat_activity."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/support/fake_invocation_connection.ex",
+      "test/support/fake_invocation_connection_test.exs",
+      "test/support/service_catalog_reaper_test.exs",
+      "test/support/template_build_reaper_test.exs",
+      "test/support/tenant_schema_reaper_test.exs"
+    ],
+    "owned_modules": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt2",
+    "branch_name": "test/reaper-fake-connection-family"
+  },
+  "task": {
+    "description": "WF-03 Step 4b hard gate on TEST-DESIGNER: does the test set pin the helper behaviour, are fixtures isolated, no skipped coverage, no fixed sleeps, assertions unchanged in the five converted sites; independently apply mutants (a)-(e) to the helper with own measured counts, restore from backup, verify clean tree.",
+    "acceptance_criteria": [
+      "Helper behaviours (queue options, pool removal, wait-visible, wait-gone, tag, both timeout paths) each have a runnable test or an honestly stated gap",
+      "No skip tags or TODOs; fixtures isolated; no fixed sleeps in tests",
+      "Assertions in the converted reaper tests unchanged apart from setup/teardown replacement",
+      "Mutants independently applied with own counts, restored from backup and verified"
+    ]
+  },
+  "result": {
+    "status": "PASS_WITH_FINDINGS",
+    "summary": "PASS_WITH_FINDINGS (no route-back). Baseline, MIX_ENV=test MIX_TEST_PARTITION=23, the helper test file plus the three reaper files in one invocation with --trace, run twice in separate invocations: 'Result: 23 passed' both times (5 helper + 5 service_catalog + 7 template_build + 6 tenant_schema; 0 excluded or skipped). Diff review (git diff origin/main...HEAD): in the 5 converted sites only the hand-rolled Postgrex.start_link / on_exit stop / SELECT 1 sanity query / GenServer.stop (and the third file's private wait_until_gone) were replaced by FakeInvocationConnection.start!/2 and stop_and_wait_gone!/3; every assert/refute on sweep results and row existence is untouched (grep of the +/- lines shows removed lines containing assert/sleep only inside the removed poll helper, no added assert/refute). No @tag :skip, no TODO, no secrets (credentials are no longer read from Repo.config in the tests; the helper takes them from BpmDefaultRealmDisplacement.dedicated_connection_opts/0). Fixtures: each test uses System.unique_integer-derived tags, start! registers an on_exit stop tolerant of an already-dead process (ISS-0452), helper tests set Sandbox mode :auto like the sibling reaper tests, no test depends on another. No fixed sleeps in any test file; the only waiting is the helper's own bounded poll (100 x 50 ms), overridable to 2 x 1 ms for the timeout tests. Mutants (my own runs, one at a time; helper copied to the scratchpad first, mutated by an exact single-occurrence replace, test run, then restored with cp from the backup, never git checkout; git diff --stat and git status --porcelain empty after each): (a) opts/1 drops :queue_target/:queue_interval/:connect_timeout/:timeout via Keyword.drop -> helper file 4/5 passed, KILLED by 'opts/1 returns the never-shedding dedicated options...'. (b) opts/1 re-adds :pool/:pool_size from Repo.config() -> helper file 0/5 passed, KILLED (start! crashes; all 5 helper tests fail). (c) wait-visible poll replaced by 'case :ok' -> helper + 3 reaper files 14/23 passed, 9 KILLED: 4 helper tests plus both concurrent-invocation guard tests in service_catalog and template_build, the tenant_schema liveness test, and the two sibling-guard tests (service_catalog, template_build) - the reaper tests do detect a not-yet-visible fake connection. (d) wait-gone poll replaced by 'unless true' -> 22/23 passed, 1 KILLED: only 'stop_and_wait_gone!/3 raises naming the tag when another backend still carries it'. SURVIVED in the helper's 'returns :ok only after the tag has left pg_stat_activity' test and in every converted reaper test. (d) re-run on the three reaper files alone three more times in separate invocations (d2/d3/d4): 'Result: 18 passed' each time, so no flake observed. Widening attempt (k): Process.exit(conn, :kill) with no wait -> reaper files 15/18 passed, but the 3 failures are '** (EXIT from #PID) killed', i.e. the kill propagating over the test-process link, a probe artifact and not the late-leaving-backend race. I therefore state honestly that the late-leaving-backend race cannot be forced deterministically from the tests (the backend leaves in well under one scheduler tick after GenServer.stop on a local socket) and the pin on the wait-gone poll is only its failure branch (timeout raises naming the tag), not its success timing. (e) opts/1 uses application_name: tag <> 'x' -> helper + 3 reaper files 14/23 passed, 9 KILLED (4 helper tests, both concurrent-invocation guard tests in service_catalog and template_build, tenant_schema liveness test, both sibling-guard tests). All of (a)(b)(c)(e) killed, (d) partially killed. Tooling, run once each after the mutants (default env, no MIX_TEST_PARTITION): mix format --check-formatted exit 0; mix compile --warnings-as-errors exit 0; mix letflow.check_issue_refs 'OK -- every cross-reference is prefixed and well-formed' (627 files); mix letflow.lint_handoffs OK, 0 new violations (run before this file was added; re-run after, see next sentence). The mix mutex (mixlock) was held by another session ('CI-shard-pr1') at start; my script waited for it and then took it per run, one mix invocation each, released on exit. Never rebuilt deps; RAM 4.29 GB free at start.",
+    "issues": [
+      {
+        "severity": "LOW",
+        "id": "F-1",
+        "text": "Mutant (d) survives in the helper test 'returns :ok only after the tag has left pg_stat_activity' and in all converted reaper tests. The test name promises more than it pins: with the poll removed it still passes because GenServer.stop on a local socket is effectively synchronous. The success-timing of stop_and_wait_gone!/3 is unpinned; only its timeout branch is. Not fixable deterministically without a seam in the helper (e.g. an injected query function), which would exceed this ticket's scope. Recommend renaming that test or adding a comment that it pins the postcondition, not the wait; non-blocking."
+      },
+      {
+        "severity": "INFO",
+        "id": "F-2",
+        "text": "The :query_timeout_ms (5000) argument to the visibility query in start!/2 and the 100 x 50 ms defaults are not pinned by any test; changing them would not fail the suite. Acceptable for tuning constants."
+      }
+    ],
+    "route_back": null
+  }
+}

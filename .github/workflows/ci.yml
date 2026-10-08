@@ -26,7 +26,8 @@
 #    nothing hand-rolled alongside it.
 #
 # 3. Job-key structure for REQ-138 (future frontend job).
-#    This job is declared as `jobs.backend`, not as an implicit single
+#    (Historical, pre-Q-1037: `jobs.backend` was one job owning `steps`/`services`; it is
+#    now the aggregator, see item 4.) This job was declared as `jobs.backend`, not as an implicit single
 #    top-level job or under a generic/unnamed key. REQ-138 (frontend gate,
 #    `npm run check`, blocked on REQ-115) is scoped to add `jobs.frontend`
 #    as a sibling of `jobs.backend` under the same `on: [push, pull_request]`
@@ -135,6 +136,11 @@ name: CI
 # obvious-looking alternative that was tried and rejected during that design's
 # review, specifically because the obvious alternative silently breaks
 # 0018's required-status-check contexts.
+#
+# Q-1037 amendment: that reasoning governs the REQUIRED contexts. The sharded backend's
+# NON-required legs (`backend_static`, `backend_shard`) use job-level path-filter `if:`s
+# (skipped on docs-only changes), and the required aggregator `backend` uses `always()`
+# on purpose, so it is never skipped; see item 4 above. `frontend`/`mobile` are unchanged.
 on:
   push:
     branches: [main]
@@ -160,8 +166,8 @@ concurrency:
 
 jobs:
   # Not a required status check. Computes whether backend-relevant /
-  # frontend-relevant paths changed so `backend`/`frontend` below can skip
-  # their expensive steps on a docs-only change -- see the design doc §3.
+  # frontend-relevant paths changed so the backend legs (skipped at job level) and
+  # `frontend` (steps skipped) below can avoid their expensive work on a docs-only change -- see the design doc §3.
   # Hand-rolled git diff rather than a third-party paths-filter action, so
   # every edge case (zero-SHA new branch, non-push/PR triggers, force-push,
   # the script's own failure) is auditable directly in this file.
@@ -666,7 +672,7 @@ jobs:
     name: Frontend gate (npm run check)
     runs-on: ubuntu-latest
     needs: changes
-    # See the matching note on `backend` above -- NOT `always()`.
+    # NOT `always()` (unlike the aggregator `backend`, which needs it; see its note).
     if: ${{ !cancelled() }}
     defaults:
       run:
@@ -693,7 +699,7 @@ jobs:
 
   # REQ-420: Mobile gate job, appended alongside `backend`/`frontend` as a sibling under
   # the same `on:` triggers, touching none of their keys. Structurally parallel to
-  # `backend`/`frontend` (needs: changes; `if: ${{ !cancelled() }}`; step-level fail-open
+  # `frontend` (needs: changes; `if: ${{ !cancelled() }}`; step-level fail-open
   # `if:` on the expensive steps only) per ISS-0591/ISS-0592's design
   # (lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md) even though this job is
   # NOT (yet) a required-status-check context.
@@ -711,7 +717,7 @@ jobs:
     name: Mobile gate (flutter analyze + test + build)
     runs-on: ubuntu-latest
     needs: changes
-    # NOT `always()` -- same reasoning as `backend`/`frontend` (see this design's §3 and
+    # NOT `always()` -- same reasoning as `frontend` (see this design's §3 and
     # the ISS-0591/ISS-0592 design doc's job-block note): `!cancelled()` keeps this job
     # running when `changes` merely *fails* (fail open), while still letting a genuinely
     # cancelled/superseded run (this workflow's own `cancel-in-progress`) actually stop.

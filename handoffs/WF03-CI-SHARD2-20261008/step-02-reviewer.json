@@ -1,0 +1,56 @@
+{
+  "handoff_id": "cish2-step02-reviewer-0001",
+  "run_id": "WF03-CI-SHARD2-20261008",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-CI-SHARD2-20261008/step-02-reviewer.json",
+  "created_at": "2026-10-08T11:00:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "supervisor": "Q-1037 / GH #2364 PR2 break attempt on commit b0dc8e00 (.github/workflows/ci.yml)."
+    },
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt3",
+    "branch_name": "ci/shard-matrix-pr2"
+  },
+  "task": {
+    "description": "Break the sharded backend gate: false-green, missing/duplicate required context, YAML pitfalls, concurrency, stale comments, on/concurrency/changes/frontend/mobile drift, cd.yml impact.",
+    "acceptance_criteria": ["required context names unchanged and unique", "aggregator fails closed", "on/concurrency/changes/frontend/mobile untouched", "header comments truthful"]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "FAIL",
+    "verdict_reason": "No functional blocker found. FAIL is solely because acceptance criterion 'header comments truthful' is violated by F1/F2 (comments in frontend and mobile now state backend does NOT use always(), which is false). Comment-only fix; re-review not needed beyond a diff glance.",
+    "findings": [
+      {"id": "F1", "severity": "medium", "title": "frontend job comment untruthful", "evidence": "ci.yml line ~669: 'See the matching note on `backend` above -- NOT `always()`.' backend now has `if: ${{ always() }}` (line ~608).", "fix": "Reword to: 'Same as the old single backend job: `!cancelled()`, not `always()`. (The backend AGGREGATOR uses always() deliberately, see its note.)'"},
+      {"id": "F2", "severity": "medium", "title": "mobile job comment untruthful", "evidence": "ci.yml line ~714: 'NOT `always()` -- same reasoning as `backend`/`frontend`'. backend (aggregator) is always(). Also line ~696-698 'Structurally parallel to backend/frontend (needs: changes; if !cancelled(); step-level fail-open if)' no longer describes backend.", "fix": "Say 'same reasoning as `frontend`' and 'parallel to `frontend`'; mention backend is now an aggregator."},
+      {"id": "F3", "severity": "low", "title": "top-of-file ISS-0591/0592 warning (lines ~129-137) contradicts new jobs", "evidence": "It says job-level `!cancelled()` instead of `always()` and step-level rather than job-level path-filter `if:` were deliberately chosen 'because the obvious alternative silently breaks 0018 contexts'. backend_static/backend_shard now use JOB-level path-filter ifs and the aggregator uses always(). Header item 4 and the job comments explain why (legs are not required contexts), but this block is unqualified.", "fix": "Append one sentence: 'Q-1037 exception: the non-required backend_static/backend_shard legs use job-level path-filter ifs and the required aggregator uses always(); see header item 4.'"},
+      {"id": "F4", "severity": "low", "title": "stale narrative comments", "evidence": "Line ~162-164 'so `backend`/`frontend` below can skip their expensive steps' (backend no longer has steps that skip; legs are skipped at job level). Line ~98 'TEST_MAX_CONNECTIONS=200 on the \"Run backend gate\" step below' (step no longer exists; historical, line 76 was updated but this one was not). Header item 3 (lines ~28-35) says jobs.backend owns `steps`, `services`, `runs-on` (backend now has no services).", "fix": "Touch up wording (say 'backend_static/backend_shard' / 'formerly the Run backend gate step')."},
+      {"id": "F5", "severity": "info", "title": "dead step-level ifs in legs", "evidence": "All `if: needs.changes.outputs.backend != 'false'` on steps in backend_static/backend_shard are unreachable-false because the job-level if already requires the same condition (job-level and step-level read the same output). Harmless, mirrors the old job; a future reader may think the job can run with steps skipped.", "fix": "Optional: drop them, or leave (fail-safe duplicate)."},
+      {"id": "F6", "severity": "info", "title": "superseded PR runs now report the required context red instead of cancelled", "evidence": "Aggregator is always(), so when cancel-in-progress cancels an old PR run its `Backend gate` check on the OLD head SHA ends failure (CHANGES/STATIC/SHARDS = cancelled) rather than cancelled. Harmless for protection (the new SHA is what is evaluated), cancel-in-progress is pull_request-only so push-to-main and merge_group are never cancelled by this group. Previously !cancelled() gave cancelled. Possible cosmetic noise in PR check history / notification emails only.", "fix": "None required; optionally document."},
+      {"id": "F7", "severity": "info", "title": "skipped matrix job displays an unexpanded name", "evidence": "When backend_shard is skipped at job level (docs-only), GitHub shows one skipped entry literally named 'Backend shard ${{ matrix.shard }}/${{ strategy.job-total }}'. Not a required context so no effect on gating.", "fix": "None."}
+    ],
+    "verified_ok": [
+      "Required contexts: only the aggregator `backend` has name 'Backend gate (mix letflow.check)' (YAML parsed: changes, backend_static 'Backend static checks + isolated tails', backend_shard 'Backend shard K/M', backend, frontend 'Frontend gate (npm run check)', mobile). Aggregator name is static; no duplicates; frontend name unchanged. Match 0018 contexts list exactly.",
+      "strategy context is available in jobs.<id>.name and in step run/with; strategy.job-total is the matrix size (3); `--shard 1/3` etc is correct shell.",
+      "needs.backend_shard.result of a matrix job is the aggregate: failure if any leg failed, cancelled if cancelled, success only if all succeeded; job-level if=false skips the whole matrix as one 'skipped'. All non-'success' values go red when FILTER!=false. A matrix of 0 shards is a workflow parse error (cannot silently pass) and shard list is a static literal.",
+      "always() on the aggregator means needs-skipped propagation does not skip it; a failed/cancelled/skipped changes job gives CHANGES!=success -> red. Legs use !cancelled() so they run when changes failed (outputs empty != 'false', fail open) and aggregator still red. FILTER=false but legs ran, or FILTER=true but legs skipped -> red (fail closed). Expression `!=` is case-insensitive vs bash `=` case-sensitive, only possible divergence is a non-lowercase output, which `changes` never emits, and that direction fails closed anyway.",
+      "Reruns: `gh run rerun --failed` reruns the failed leg and the (failed) aggregator; matrix result is recomputed over old successful legs + rerun leg. Rerun of aggregator alone re-reads the previous attempt's needs results so a red leg stays red (cannot be turned green by rerunning the aggregator). Comment at ci.yml ~600-603 is accurate.",
+      "Events: push-to-main always sets backend=true (ISS-0840) so legs run and aggregator needs success; merge_group computes the filter over the queue entry's range, same name reported; cancel-in-progress is pull_request-only so a queue/main run cannot be superseded into a false green.",
+      "Concurrency group, `on:` (push main, pull_request, merge_group), `changes` job, `frontend`, `mobile`: diff vs origin/main hunks are only the header comment (line 37-66, 76), the old backend job region (297 onward) and nothing in on:/concurrency:/changes/frontend/mobile code (hunk list: @@ -36 +37..., -46 +76, -267..., -277..., -332..., -418..., -420..., -421..., -422 +464,173; all within header or the backend job region).",
+      "cd.yml: triggers on workflow_run of workflow 'CI' on branch main, requires conclusion==success and reads the path-filter-outputs artifact from the `changes` job; neither refers to job names or the backend job. Workflow conclusion is success only if every job succeeded or was skipped, and the aggregator is red whenever any leg is not green, so a failed leg still blocks CD. No cd.yml change needed.",
+      "Services block: valid per job, ports 5462:5432 are per-VM so 4 concurrent Postgres services do not collide; health-cmd identical to the old job. `TEST_PARALLEL_*: ''` empty env is valid in Actions and scripts/test_parallel.sh treats empty as unset ([ -n \"${VAR:-}\" ]); `TEST_PARALLEL_N: 4` becomes the string '4'; WASMEX_BUILD true as before. MIX_ENV: test is consistent with mix.exs preferred_envs for letflow.check.static / letflow.check.test.",
+      "Cache: the four jobs share one key; actions/cache saves only on job success and a lost reservation race is a warning, not a failure. On a cold cache all four jobs compile (incl. wasmex Rust build) in parallel: cost only, not correctness.",
+      "Aggregator script: set -euo pipefail with require() inside if-tests; fail flag survives (function runs in same shell); `exit \"$fail\"` correct; empty FILTER goes to the success-required branch (fail closed)."
+    ],
+    "decision_record_check": "0018 contexts and strict=true unaffected; no disagreement with any decision record.",
+    "proposed_fix_for_orch": "Edit comments only: F1, F2 (required for PASS), F3, F4 (recommended). No functional change to jobs/needs/if/aggregator script is needed.",
+    "summary": "Functional design survives every attack tried (leg-result matrix, skipped/cancelled/failed changes, matrix aggregation, reruns, merge_group/push events, name uniqueness, cd.yml). Verdict FAIL only for two untruthful comments (frontend ~669 and mobile ~714 claim backend is not always()), plus stale narrative comments; fix comments and the gate is PASS."
+  }
+}

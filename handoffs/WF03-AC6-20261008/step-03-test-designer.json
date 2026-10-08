@@ -1,0 +1,35 @@
+{
+  "handoff_id": "ac6-step03-test-designer-0001",
+  "run_id": "WF03-AC6-20261008",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-AC6-20261008/step-03-test-designer.json",
+  "created_at": "2026-10-08T02:05:00Z",
+  "started_at": "2026-10-08T02:05:00Z",
+  "completed_at": "2026-10-08T01:59:32Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "requirement_ids": [],
+    "source_text": {"Q-1037": "queue Q-1037 / GH #2364: NoSmtpSecretGuardTest AC6 scan cost; prove scan_tracked/1 equals the old scan."},
+    "owned_modules": ["Letflow.NoSmtpSecretGuardTest"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt",
+    "branch_name": "test/no-smtp-guard-scan-cost"
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added describe 'scan_tracked/1 against a fixture repo' (3 tests) with a private old_scan/1 oracle and temp git-init repos (on_exit rm_rf). Combined repo: small.env, large.txt (>2.5 MB, hit line 39991), longline.txt (13k-char line, hit line 2), nulbytes.bin (NUL bytes, hit line 2), toobig.txt (>4,000,000 B, not scanned), bad.bin (invalid UTF-8, not scanned), clean.txt (blank/variable forms, scanned, no hit), untracked.env (not scanned); new == old on hits and scanned_paths and equals the absolute expectation (4 hits). Separate repos: clean-only (hits [], scanned [clean.txt]) and no-mention (git grep exit 1: both []). NUL.bin was renamed nulbytes.bin because NUL is a Windows reserved device name (git add failed). Mutant: adding -I to git grep -> 8/9 passed, combined test failed; reverted and verified (cmp + grep). Two runs 9 passed; format and compile --warnings-as-errors exit 0.",
+    "artifacts_out": ["test/letflow/no_smtp_secret_guard_test.exs"],
+    "git_evidence": {
+      "branch_name": "test/no-smtp-guard-scan-cost",
+      "commit_sha_list": ["20d95725"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "TEST-DESIGN-VALIDATOR reviews; scan_tracked/1 unchanged."
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "handoff_id": "cish1-step04-tdv-0001",
+  "run_id": "WF03-CI-SHARD1-20261008",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-CI-SHARD1-20261008/step-04-test-design-validator.json",
+  "created_at": "2026-10-08T09:40:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "requirement_ids": [],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt3",
+    "branch_name": "ci/shard-script-pr1"
+  },
+  "task": {
+    "description": "Independent hard gate on TEST-DESIGNER step 03: coverage judgment plus real in-place mutation proof (own runs, restored from backup, git diff empty after each)."
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS",
+    "summary": "One coverage gap found (seed loop, Step 1.5) and closed by a test-only commit; all 13 mutants (plus script loop variants) now killed. Final run: 19 + 30 = 49 passed, 0 failures; git status clean.",
+    "coverage_findings": [
+      "AC a (SHARD=2/3 N=4 -> 5..8 of 12, DB create/migrate, ready-file pairing, summary lines, slice text, exit 0): covered by shard 2/3 tests incl. admission cap 1.",
+      "AC b (unset -> 1..4, --partitions 4, no slice text): covered by 2 regression tests (cap 4 and cap 1).",
+      "AC c (TOTAL=12 OFFSET=8 == SHARD=3/3): covered.",
+      "AC d (11 bad inputs exit 1, nothing launched, calls.log absent): covered; K>M validation is killed only by the 'greater than M' needle (OFFSET+N>TOTAL guard is a second, redundant line of defence).",
+      "AC e (mix task): --shard export, no tails, --tails-only, both->error, run([]) order, bad shard values, static alias split: covered.",
+      "GAP FOUND AND FIXED: nothing asserted the Step 1.5 seed loop (build-path seeding) used global indices; a mutant seeding 1..N instead of FIRST..LAST survived. Added stub build.log + assert_build_paths_seeded/3 (tests only), commit 32245d57.",
+      "Residual (non-blocking): the alias test pins only static ++ check.test and that boundaries is last; a reorder of two middle static steps would survive here (ordering of the deferral slot is covered separately by T-ALIAS-SLOT).",
+      "No skips, no TODOs, no hardcoded secrets; each test uses its own tmp_dir; async: false; run_script has a 120 s bounded wait; no leaked files observed (git status clean)."
+    ],
+    "mutation_runs": [
+      {"id": "M1 launch loop (l728) FIRST->1", "result": "killed", "failing": 4, "killed_by": "shard 2/3, shard 3/3, TOTAL/OFFSET, ready-file cap 1"},
+      {"id": "M1 ecto loop (l523) FIRST->1", "result": "killed", "failing": 4, "killed_by": "shard 2/3, shard 3/3, TOTAL/OFFSET, ready-file cap 1"},
+      {"id": "M1 wait loop (l783) FIRST->1", "result": "killed", "failing": 4, "killed_by": "shard 2/3, shard 3/3, TOTAL/OFFSET, ready-file cap 1"},
+      {"id": "M1 summary loop (l835) FIRST->1", "result": "killed", "failing": 4, "killed_by": "shard 2/3, shard 3/3, TOTAL/OFFSET, ready-file cap 1"},
+      {"id": "M1 seed loop (l400) FIRST->1 (superset 1..LAST)", "result": "survived-equivalent", "note": "superset seeding is harmless; not a real defect"},
+      {"id": "M1 seed loop local 1..N (l400-401)", "result": "survived before fix, killed after", "failing": 4, "killed_by": "shard 2/3, shard 3/3, TOTAL/OFFSET, ready-file cap 1 via assert_build_paths_seeded (new)"},
+      {"id": "M2 --partitions TOTAL->N", "result": "killed", "failing": 6, "killed_by": "all slice tests incl. shard 1/3"},
+      {"id": "M3 OFFSET (k-1)*N -> k*N", "result": "killed", "failing": 5, "killed_by": "shard 1/3, 2/3, 3/3, cap 1, SHARD-wins"},
+      {"id": "M4 delete K>M validation", "result": "killed", "failing": 1, "killed_by": "SHARD 4 of 3 exits 1 (needle 'greater than M')"},
+      {"id": "M5 ecto.create MIX_TEST_PARTITION local", "result": "killed", "failing": 4, "killed_by": "shard 2/3, 3/3, TOTAL/OFFSET, cap 1 (db.log)"},
+      {"id": "M6 summary prints local index", "result": "killed", "failing": 4, "killed_by": "shard 2/3, 3/3, TOTAL/OFFSET, cap 1 (summary_parts)"},
+      {"id": "M7a unsharded FIRST=OFFSET+2", "result": "killed", "failing": 8, "killed_by": "both no-shard regression tests + slice tests"},
+      {"id": "M7b unsharded TOTAL=N+1", "result": "killed", "failing": 2, "killed_by": "both no-shard regression tests"},
+      {"id": "M8 --tails-only also runs main suite", "result": "killed", "failing": 1, "killed_by": "--tails-only runs only the wasm_hang and lua tails"},
+      {"id": "M9 --shard also runs tails", "result": "killed", "failing": 1, "killed_by": "--shard 2/3 exports ... runs no tails"},
+      {"id": "M10 --shard no longer exports TEST_PARALLEL_SHARD", "result": "killed", "failing": 3, "killed_by": "--shard 2/3 exports; ISS-0069 gate; failing-exit"},
+      {"id": "M11 drop exclusivity raise", "result": "killed", "failing": 1, "killed_by": "--shard with --tails-only rejected as mutually exclusive"},
+      {"id": "M12 drop validate_shard! K>M", "result": "killed", "failing": 1, "killed_by": "K greater than M raises Mix.Error"},
+      {"id": "M13a mix.exs: boundaries removed from end of static list", "result": "killed", "failing": 1, "killed_by": "letflow.check alias split"},
+      {"id": "M13b mix.exs: toolchain/boundaries swapped", "result": "killed", "failing": 1, "killed_by": "letflow.check alias split (deferral-staleness slot test stayed green)"}
+    ],
+    "run_mechanics": "Every mix run via mixrun22.sh (global mutex); backup copy in scratchpad before each mutation, restored by cp, 'git diff -- lib mix.exs scripts' empty after each; final git status clean.",
+    "commits": ["32245d57 test(ci): assert each launched partition's build path was seeded"]
+  }
+}

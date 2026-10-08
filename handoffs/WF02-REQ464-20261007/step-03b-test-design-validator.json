@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ464-20261007/step-03b-test-design-validator.json",
   "created_at": "2026-10-07T15:27:14Z",
   "started_at": "2026-10-07T15:27:14Z",
-  "status": "FAILED",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S3",
@@ -44,37 +44,266 @@
     "extra": ""
   },
   "result": {
-    "summary": "INCOMPLETE. Baseline green (unit 38, warning 40, router 9, shipped 3; 13 shipped definitions, violations=0 candidate_pairs=0). Harness killed 16 of the planned mutants (one at a time, git checkout after each) before the OS reaped the background run for low memory. Not restarted per the reaper note. Tree reverted: git status --porcelain lib/ test/ empty.",
-    "verdict": "FAIL",
-    "issues": [
-      "Run incomplete: mutants after B10 (B11,B12,B13,W1-W12,S1-S6) NOT measured.",
-      "B1 and B10 showed 'all pass' but the harness patched the wrong occurrence (graph.ex has an earlier identical snippet at lines 1166 and 1153; the CHK-26 sites are 1237 and 1224). B1 fixed in mut.py (occurrence 1); B10 and B12 need occurrence 1. They must be re-run before judging; not a proven survivor."
+    "summary": "PASS. 38 of 38 required source mutants killed, 0 survivors; no test change needed. Post-rebase (HEAD d3edf334) format, compile --warnings-as-errors and 10 test files green. REQ-464 lib files graph.ex/role_binding.ex/validation_warnings.ex/definitions.ex/solution_pack.ex are identical pre/post rebase (git diff 7befe9f9 08c706a7 -- lib shows only identity.ex, routers/identity.ex, letflow.check.test.ex and a design doc). Early mutants measured pre-rebase on that identical code; B1,B10,B12,B11,B13,W1-W12,S1-S6 measured with unique anchors (occurrence 1 for the three CHK-26 reject/frequency sites); every mutant restored via git checkout, tree_clean=True after each; final git status --porcelain lib/ test/ empty.",
+    "verdict": "PASS",
+    "mutant_table": [
+      {
+        "id": "C1a",
+        "mutant": "drop :invalid_distinct_from (bad entry code)",
+        "killed_by_files": "validation",
+        "status": "killed"
+      },
+      {
+        "id": "C1b",
+        "mutant": "same, duplicate site",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "C1c",
+        "mutant": "same, non-list site",
+        "killed_by_files": "validation, warning, router",
+        "status": "killed"
+      },
+      {
+        "id": "C2",
+        "mutant": "wrong code for :distinct_from_on_non_human_task",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "C3",
+        "mutant": "wrong code :distinct_from_self_reference",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "C4",
+        "mutant": "wrong code :distinct_from_unknown_node",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "C5",
+        "mutant": "wrong code :distinct_from_not_human_task",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "C6",
+        "mutant": "wrong code :distinct_from_downstream_only",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "B1",
+        "mutant": "accept duplicate entry",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "B2",
+        "mutant": "accept own id",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "B3",
+        "mutant": "accept unknown id",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "B4",
+        "mutant": "accept service-task id",
+        "killed_by_files": "validation",
+        "status": "killed"
+      },
+      {
+        "id": "B5",
+        "mutant": "downstream-only treated OK",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "B6",
+        "mutant": "REJECT preceding node",
+        "killed_by_files": "validation, warning, router",
+        "status": "killed"
+      },
+      {
+        "id": "B7",
+        "mutant": "REJECT parallel node",
+        "killed_by_files": "validation, warning",
+        "status": "killed"
+      },
+      {
+        "id": "B8",
+        "mutant": "REJECT loop node",
+        "killed_by_files": "validation, warning",
+        "status": "killed"
+      },
+      {
+        "id": "B9",
+        "mutant": "non-HUMAN_TASK carrying distinct_from ok",
+        "killed_by_files": "validation, router",
+        "status": "killed"
+      },
+      {
+        "id": "B10",
+        "mutant": "empty-string entry passes",
+        "killed_by_files": "validation",
+        "status": "killed"
+      },
+      {
+        "id": "B11",
+        "mutant": "non-list value passes",
+        "killed_by_files": "validation, warning, router",
+        "status": "killed"
+      },
+      {
+        "id": "B12",
+        "mutant": "whitespace-only entry passes",
+        "killed_by_files": "validation",
+        "status": "killed"
+      },
+      {
+        "id": "B13",
+        "mutant": "null no longer treated as absent",
+        "killed_by_files": "validation, warning, router, shipped",
+        "status": "killed"
+      },
+      {
+        "id": "W1",
+        "mutant": "escalation_role instead of role",
+        "killed_by_files": "warning, router",
+        "status": "killed"
+      },
+      {
+        "id": "W2",
+        "mutant": "warn when 2 members",
+        "killed_by_files": "warning, router",
+        "status": "killed"
+      },
+      {
+        "id": "W3",
+        "mutant": "warn when 0 members",
+        "killed_by_files": "warning",
+        "status": "killed"
+      },
+      {
+        "id": "W4",
+        "mutant": "warn when roles differ",
+        "killed_by_files": "warning",
+        "status": "killed"
+      },
+      {
+        "id": "W5",
+        "mutant": "one warning per ordered pair",
+        "killed_by_files": "warning",
+        "status": "killed"
+      },
+      {
+        "id": "W6",
+        "mutant": "member_counts run with no candidate pair",
+        "killed_by_files": "warning",
+        "status": "killed"
+      },
+      {
+        "id": "W7",
+        "mutant": "count only active users",
+        "killed_by_files": "warning",
+        "status": "killed"
+      },
+      {
+        "id": "W8",
+        "mutant": "leak member email in warning text",
+        "killed_by_files": "warning (query discipline), router (no-user-data)",
+        "status": "killed"
+      },
+      {
+        "id": "W9",
+        "mutant": "drop prefix in member_counts",
+        "killed_by_files": "warning, router",
+        "status": "killed"
+      },
+      {
+        "id": "W10",
+        "mutant": "member_counts ignores role filter",
+        "killed_by_files": "warning",
+        "status": "killed"
+      },
+      {
+        "id": "W11",
+        "mutant": "single-member warnings first, not last",
+        "killed_by_files": "warning",
+        "status": "killed"
+      },
+      {
+        "id": "W12",
+        "mutant": "drop single-member source",
+        "killed_by_files": "warning, router",
+        "status": "killed"
+      },
+      {
+        "id": "S1",
+        "mutant": "forget pack-install surface",
+        "killed_by_files": "warning",
+        "status": "killed"
+      },
+      {
+        "id": "S2",
+        "mutant": "forget validate-200 surface",
+        "killed_by_files": "warning, router",
+        "status": "killed"
+      },
+      {
+        "id": "S3",
+        "mutant": "warning in activate response",
+        "killed_by_files": "router",
+        "status": "killed"
+      },
+      {
+        "id": "S4",
+        "mutant": "warning makes validate invalid",
+        "killed_by_files": "warning, router",
+        "status": "killed"
+      },
+      {
+        "id": "S5",
+        "mutant": "warning blocks pack install",
+        "killed_by_files": "warning",
+        "status": "killed"
+      },
+      {
+        "id": "S6",
+        "mutant": "validate warnings always []",
+        "killed_by_files": "warning, router",
+        "status": "killed"
+      }
     ],
-    "mutants_measured": {
-      "C1a": "killed (validation)",
-      "C1b": "killed (validation, router)",
-      "C1c": "killed (validation, warning, router)",
-      "C2": "killed",
-      "C3": "killed",
-      "C4": "killed",
-      "C5": "killed",
-      "C6": "killed",
-      "B2": "killed (validation, router)",
-      "B3": "killed",
-      "B4": "killed (validation only)",
-      "B5": "killed",
-      "B6 reject preceding": "killed (validation, warning, router)",
-      "B7 reject parallel": "killed (validation, warning)",
-      "B8 reject loop": "killed (validation, warning)",
-      "B9": "killed",
-      "B1": "INVALID (wrong site)",
-      "B10": "INVALID (wrong site)"
+    "verification_post_rebase": {
+      "format": "mix format --check-formatted rc=0",
+      "compile": "mix compile --warnings-as-errors rc=0",
+      "tests": {
+        "distinct_from_validation_test": "38 passed",
+        "distinct_from_single_member_warning_test": "40 passed",
+        "routers/definitions_distinct_from_test": "9 passed",
+        "required_outputs_shipped_definitions_test": "3 passed",
+        "required_outputs_surfaces_test": "21 passed",
+        "role_binding_install_test": "7 passed",
+        "role_binding_test": "5 passed",
+        "engine_distinct_from_test": "40 passed",
+        "routers/tasks_distinct_from_test": "13 passed",
+        "engine_distinct_from_concurrency_test": "2 passed"
+      }
     },
-    "next_action": "Re-run mut.py for B1,B10(occ 1),B12(occ 1),B11,B13,W1-W12,S1-S6 in small batches when memory allows.",
-    "artifacts_out": [
-      "C:/Users/tvolo/AppData/Local/Temp/claude/C--Users-tvolo-dev-ai-dala-letflow-3/def1f47a-501c-4830-b7ce-a68038cf3791/scratchpad/r464/mut.py",
-      "C:/Users/tvolo/AppData/Local/Temp/claude/C--Users-tvolo-dev-ai-dala-letflow-3/def1f47a-501c-4830-b7ce-a68038cf3791/scratchpad/r464/out2.txt"
+    "design_vs_requirement_differences": [],
+    "issues": [
+      "Earlier B1/B10 INVALID runs were harness anchor errors, re-measured. Notes: B4 and B10/B12 are killed by a single test file each, no gaps."
     ],
-    "evidence": "git status --porcelain lib/ test/ -> empty after final git checkout -- lib/; HEAD 67c79f62; no commit made (no test changes)."
-  }
+    "artifacts_out": [],
+    "next_action": "ORCH: commit this handoff edit, proceed to step 04."
+  },
+  "completed_at": "2026-10-08T05:10:01Z"
 }

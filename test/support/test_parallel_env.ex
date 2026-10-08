@@ -19,7 +19,7 @@ defmodule Letflow.Test.TestParallelEnv do
       using it are `async: false`, so no concurrently running test observes the gap.
 
   The list is static on purpose (a completeness test in `test_parallel_env_test.exs`
-  greps the script for every `TEST_PARALLEL_*` name it reads and fails when this list
+  greps the script for every `TEST_*` knob it reads and fails when this list
   falls behind).
   """
 

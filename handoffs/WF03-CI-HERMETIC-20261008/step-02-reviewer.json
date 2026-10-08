@@ -1,0 +1,51 @@
+{
+  "agent_id": "REVIEWER",
+  "workflow": "WF-03",
+  "step": "02",
+  "ref": "Q-1037 / GH #2364",
+  "branch": "ci/shard-script-pr1",
+  "range": "ce32f00c..HEAD (6b1d7db3, 90b7c2bd)",
+  "verdict": "PASS_WITH_FINDINGS",
+  "blocking": false,
+  "verified_by": "static read only; mix and tests deliberately not run (read-only gate)",
+  "answers": {
+    "1_knob_list_complete": "Yes for every TEST_* knob. Reads in scripts/test_parallel.sh: TEST_PARALLEL_{N,SHARD,TOTAL,OFFSET,GROUP,EXTRA_ARGS,PRINT_SLOWEST,KEEP_LOGS,PARTITION_TIMEOUT_S,PARTITION_KILL_GRACE_S,MAX_CONCURRENT_CREATES,MAX_CONCURRENT_TEMPLATE_BUILDS,SAMPLE_CONNECTIONS,TEMPLATE_READY_DIR} and TEST_{POOL_SIZE,MIN_POOL_SIZE,MAX_CONNECTIONS,CONNECTION_HEADROOM,NONPOOL_CONNECTION_RESERVE,PER_PARTITION_HEADROOM,SUPERUSER_RESERVED} (script lines 155-207, 276-337, 478, 501, 512, 600, 681-704, 724, 987). All 21 are in @script_knobs (test/support/test_parallel_env.ex:29-51). MIX_TEST_PARTITION (script 541/792) is in @child_only. lib/mix/tasks/letflow.check.test.ex reads no env itself; it only sets TEST_PARALLEL_SHARD and TEST_PARALLEL_KEEP_LOGS for the child (lines 180, 230). Not scrubbed: LETFLOW_DB_HOST/USER/PASSWORD/PORT (script 258-265; deliberate, documented at helper lines 27-28), TMPDIR (508), PATH, MIX_ENV, MIX_BUILD_PATH. The DB vars only affect the psql-stub WARN path; the 4 Port-based tests already pin LETFLOW_DB_PORT=1 (shard_test:115, instrumentation_test:132, diag/orphan env lists).",
+    "2_restore_and_async": "Correct. restore/1 maps nil to delete_env and value to put_env (helper:119-124). scrub_ambient! snapshots before deleting and registers on_exit from setup, so it restores after the test and LIFO-after anything registered later; it returns :ok. with_clean_env uses try/after so it restores on raise, proven by env_test:112-121. All env-mutating modules are async: false: letflow_check_test_test.exs:113, test_parallel_env_test.exs:13, instrumentation:23, shard:23, diag:31, orphan:48. The only async: true module is the guard test, which mutates nothing. ExUnit completes async modules before starting sync ones, so no async:true module can observe the gap. config/test.exs and test_helper.exs read TEST_POOL_SIZE, TEST_PARALLEL_GROUP, TEST_PARALLEL_TEMPLATE_READY_DIR and MIX_TEST_PARTITION only at boot, and no runtime System.get_env of TEST_* exists in lib/ or test/support (grep), so deleting them in-VM is observable only by child spawns. MIX_TEST_PARTITION is correctly not deleted from the VM.",
+    "3_conversion_semantics": "No assertion changed: letflow_check_test_test.exs diff touches only the new setup line and one comment. shard_test and instrumentation_test replaced an identical charlist/false mapper with port_env/1, which additionally unsets non-listed ambient knobs; explicit values still win because port_env merges caller env over the scrub map (helper:90-95). diag and orphan previously could not express nil; they now also unset ambient knobs they never set (EXTRA_ARGS, SHARD, TOTAL, OFFSET, PRINT_SLOWEST, MAX_CONNECTIONS...), the intended change. All explicit values (N, POOL_SIZE, timeouts, grace, template-builds cap, TMPDIR, LETFLOW_DB_PORT, STUB_ARGV_DIR, extra_env) pass through. Duplicate keys from the diag/orphan `++ extra_env` list resolve last-wins via Map.new. No explicit value silently dropped. Redundant explicit nil entries in shard_test remain, harmless.",
+    "4_other_spawn_sites": "Elixir: none missed that read TEST_PARALLEL_*. A scan of test/**/*.{ex,exs} for test_parallel.sh, letflow.check.test and Check.Test finds exactly the 5 converted files plus the guard and env tests. Tests that spawn mix (admission, client_ip, login_directory, login_discovery, mail, platform_tenant, secrets runtime_config; enablement_gate_runtime; check_boundaries; login_directory_tasks; migrate_tenant_admins) neither invoke test_parallel.sh nor check.test; the ambient vars their children can read are TEST_POOL_SIZE, TEST_PARALLEL_GROUP, MIX_TEST_PARTITION (config/test.exs:76,87,112), equal to the parent's own, and several already nil MIX_TEST_PARTITION (admission_runtime_config_test.exs:32-35, migrate_tenant_admins_test.exs:175). TEST_PARALLEL_SHARD and TEST_PARALLEL_N are read only by the script, so those children are unaffected. Shell harnesses test/scripts/test_parallel_{create_burst,pool_sizing,tmpdir_cleanup}_test.sh are not referenced by .github workflows, mix.exs or ExUnit; create_burst sets only N and POOL_SIZE and does not unset SHARD/TOTAL/OFFSET, so it would be vulnerable if ever wired into CI (finding 2).",
+    "5_guard_soundness": "Sound for its stated scope. Own source avoids self-trigger: script name, 'Check.Test.run(' and 'letflow.check.test' are built from fragments, the moduledoc is heredoc-stripped, and the helper token is built from fragments so the guard does not satisfy itself. env_test.exs is itself a spawn site (literal ending test_parallel.sh at env_test:20 plus System.cmd) and passes via its alias. A sanity test (guard:70-82) pins the five known sites so an empty scan fails. False positives: a file with a literal ending in the script name AND an unrelated System.cmd( would be flagged (remedy with an empty allow-list is a pointless helper reference); none currently, by static reading. False negatives, documented in the moduledoc: runtime-assembled paths, command strings not ending in the script name, other spawn primitives, spawn via helper outside test/, .sh harnesses, and referenced-not-applied. Undocumented but minor: heredoc stripping also hides spawns inside heredocs (conservative direction), and a trailing (non-whole-line) comment mentioning the helper still counts as a reference."
+  },
+  "findings": [
+    {
+      "id": 1,
+      "severity": "low",
+      "area": "docs accuracy",
+      "text": "Helper moduledoc (test/support/test_parallel_env.ex:20-22) says the completeness test greps for every TEST_PARALLEL_* name; the test (test_parallel_env_test.exs:75-77) actually matches every TEST_* read, which is what makes the TEST_POOL_SIZE family covered. Fix wording only.",
+      "route": "ELIXIR-DEV or TEST-DESIGNER (comment-only)"
+    },
+    {
+      "id": 2,
+      "severity": "low",
+      "area": "uncovered spawn sites (non-blocking)",
+      "text": "Three shell harnesses under test/scripts/*.sh run the real script or extracted blocks and inherit ambient TEST_PARALLEL_SHARD/TOTAL/OFFSET/EXTRA_ARGS and TEST_* pool knobs. They are not wired into CI today, so no current breakage, and the guard documents shell harnesses as a blind spot. Recommend filing a docs/issues item (tag test-hermeticity) instead of expanding this PR.",
+      "route": "file issue"
+    },
+    {
+      "id": 3,
+      "severity": "info",
+      "area": "knob list",
+      "text": "LETFLOW_DB_HOST/USER/PASSWORD are deliberately not scrubbed (documented). Impact limited to psql-stub WARN text; no current assertion depends on them.",
+      "route": "none"
+    },
+    {
+      "id": 4,
+      "severity": "info",
+      "area": "idiom / duplication",
+      "text": "scrub_ambient!/0 and with_clean_env/1 duplicate the snapshot-and-delete lines (helper:105-106 vs 113-114). A private helper would remove it; not worth blocking. No OTP or supervision concern (no processes introduced). No type-safety gap warranting a docs/issues filing.",
+      "route": "optional"
+    }
+  ],
+  "scope_and_decisions": "Tests and helper only: git diff ce32f00c..HEAD --stat -- scripts lib mix.exs config .github is empty. Only non-test additions are WF03-CI-HERMETIC handoff JSONs. Helper lives in test/support (compiled only in :test via mix.exs elixirc_paths). No behaviours, macros or generic plumbing; the guard has no allow-list. No conflict with docs/migration/decisions (0009 test-parallel pool sizing untouched; script arithmetic and defaults unchanged). gen_statem and supervision questions are not applicable.",
+  "not_verified": "mix compile, mix test and mix format not run (read-only gate); the claim that the guard currently reports zero violations is by static reading, not execution. TEST-RUNNER must execute test/scripts/test_parallel_env_guard_test.exs, test_parallel_env_test.exs, the four test_parallel_*_test.exs and test/mix/tasks/letflow_check_test_test.exs, ideally once with TEST_PARALLEL_N=2 TEST_PARALLEL_SHARD=1/2 TEST_POOL_SIZE=3 exported to prove the fix.",
+  "gate": "PASS: TEST-DESIGNER may proceed"
+}

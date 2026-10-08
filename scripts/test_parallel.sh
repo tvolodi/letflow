@@ -659,6 +659,10 @@ phase_start_epoch=$(date +%s)
 # just before the TERM, so a timed-out job log says where each partition was.
 # Best-effort throughout: every command is guarded and bounded, nothing here
 # can change an exit code or block the TERM/KILL logic.
+test_parallel_diag_t() {
+  if command -v timeout >/dev/null 2>&1; then timeout 5 "$@"; else "$@"; fi
+}
+
 test_parallel_diag_run() {
   if command -v timeout >/dev/null 2>&1; then
     timeout 5 "$@" 2>&1 || true
@@ -673,7 +677,7 @@ test_parallel_watchdog_diag() {
   {
     echo "${pfx}last 40 lines of $log:"
     tail -n 40 "$log" 2>/dev/null | cut -c1-300 | sed "s/^/${pfx}  /"
-    k=$(grep -E '^[.F*]+$' "$log" 2>/dev/null | tr -d '\n' | wc -c | tr -d '[:space:]')
+    k=$(test_parallel_diag_t grep -E '^[.F*]+$' "$log" 2>/dev/null | tr -d '\n' | wc -c | tr -d '[:space:]')
     echo "${pfx}approx tests finished: ${k:-0}"
     now=$(date +%s)
     start="${part_start_epoch[$idx]:-$now}"
@@ -688,7 +692,7 @@ test_parallel_watchdog_diag() {
         command -v free >/dev/null 2>&1 && test_parallel_diag_run free -m
         test_parallel_diag_run df -h /tmp .
         if command -v ps >/dev/null 2>&1; then
-          ( ps -eo pid,ppid,pcpu,pmem,etimes,comm --sort=-pcpu 2>/dev/null || ps 2>&1 ) | head -9
+          ( test_parallel_diag_t ps -eo pid,ppid,pcpu,pmem,etimes,comm --sort=-pcpu 2>/dev/null || test_parallel_diag_t ps 2>&1 ) | head -9
         fi
         command -v nproc >/dev/null 2>&1 && test_parallel_diag_run nproc
       } | cut -c1-300 | sed "s/^/${h}/"

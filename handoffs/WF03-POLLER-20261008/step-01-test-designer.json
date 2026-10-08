@@ -18,7 +18,9 @@
       "Q-1037": "GH #2364: PollerTest REQ-218 AC3 spinning-antagonist partial-skip test is probabilistic and flaked twice on CI (main run 37716503527 EPYC 9V74; PR #2374 run 37723710619 shard 2/3 EPYC 7763). Make it deterministic, test-only."
     }
   },
-  "task": "Replace the spinning-antagonist AC3 test with a deterministic probe+telemetry-release test.",
+  "task": {
+    "description": "Replace the spinning-antagonist AC3 test with a deterministic probe+telemetry-release test."
+  },
   "result": {
     "summary": "Implemented in commit b52e5792 (test-only, no lib/ change): test process holds the sole global unit, telemetry handler on admission_decision releases it on the 4th rejected poll_and_fire decision; asserts rejected prefix/admitted rest, rejected timers pending, all 10 fired on second tick."
   }

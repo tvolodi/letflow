@@ -18,7 +18,9 @@
       "Q-1037": "GH #2364: PollerTest REQ-218 AC3 spinning-antagonist partial-skip test is probabilistic and flaked twice on CI (main run 37716503527 EPYC 9V74; PR #2374 run 37723710619 shard 2/3 EPYC 7763). Make it deterministic, test-only."
     }
   },
-  "task": "Independent review of commit b52e5792.",
+  "task": {
+    "description": "Independent review of commit b52e5792."
+  },
   "result": {
     "verdict": "PASS",
     "summary": "Deterministic by construction: global_cap 1 => max_concurrency 1 sequential; Admission.release is a GenServer.call; telemetry handler runs synchronously before the next try_acquire. Findings addressed: stale test/specs/REQ-218.md AC3(a) text updated; assertions filtered to the test's own 10 schemas; mid-assert pipe left as is (valid)."

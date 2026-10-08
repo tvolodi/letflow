@@ -33,6 +33,7 @@ defmodule Letflow.TemplateBuildReaperTest do
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.TenantSchemaReaper
+  alias Letflow.Test.FakeInvocationConnection
 
   @throwaway_display_name "Tenant Template Build (throwaway)"
 
@@ -248,35 +249,10 @@ defmodule Letflow.TemplateBuildReaperTest do
       on_exit(fn -> cleanup_rows!(row_id, tenant.id) end)
 
       fake_tag = "letflow_mixtest_fake#{System.unique_integer([:positive])}"
-      repo_config = Repo.config()
-
-      {:ok, other_conn} =
-        Postgrex.start_link(
-          hostname: Keyword.fetch!(repo_config, :hostname),
-          port: Keyword.fetch!(repo_config, :port),
-          username: Keyword.fetch!(repo_config, :username),
-          password: Keyword.fetch!(repo_config, :password),
-          database: Keyword.fetch!(repo_config, :database),
-          parameters: [application_name: fake_tag]
-        )
-
-      # ISS-0452: tolerate the connection process already being gone -- it is
-      # linked to the test process, and on_exit runs after that process exits, so
-      # check-then-act races its own shutdown.
-      on_exit(fn ->
-        try do
-          GenServer.stop(other_conn)
-        catch
-          :exit, _ -> :ok
-        end
-      end)
-
-      %{rows: [[1]]} =
-        Postgrex.query!(
-          other_conn,
-          "SELECT 1 FROM pg_stat_activity WHERE application_name = $1",
-          [fake_tag]
-        )
+      # Starts the fake-tagged connection with explicit queue options and blocks until
+      # it is really visible in pg_stat_activity under its tag (the sanity check) --
+      # otherwise this test could pass for the wrong reason (Q-1037 / GH #2364).
+      other_conn = FakeInvocationConnection.start!(fake_tag)
 
       assert {:deferred, :concurrent_invocation} =
                TenantSchemaReaper.sweep_template_build_orphans(Repo, 1)
@@ -286,7 +262,7 @@ defmodule Letflow.TemplateBuildReaperTest do
       assert tenant_schemas_row_exists?(row_id)
       assert tenants_row_exists?(tenant.id)
 
-      GenServer.stop(other_conn)
+      FakeInvocationConnection.stop_and_wait_gone!(other_conn, fake_tag)
 
       assert {:ok, %{deleted: deleted, skipped_schema_present: _}} =
                TenantSchemaReaper.sweep_template_build_orphans(Repo, 1)
@@ -323,32 +299,10 @@ defmodule Letflow.TemplateBuildReaperTest do
 
       expect_proceed? = own_tag =~ ~r/_grp/
 
-      repo_config = Repo.config()
-
-      {:ok, other_conn} =
-        Postgrex.start_link(
-          hostname: Keyword.fetch!(repo_config, :hostname),
-          port: Keyword.fetch!(repo_config, :port),
-          username: Keyword.fetch!(repo_config, :username),
-          password: Keyword.fetch!(repo_config, :password),
-          database: Keyword.fetch!(repo_config, :database),
-          parameters: [application_name: sibling_tag]
-        )
-
-      on_exit(fn ->
-        try do
-          GenServer.stop(other_conn)
-        catch
-          :exit, _ -> :ok
-        end
-      end)
-
-      %{rows: [[1]]} =
-        Postgrex.query!(
-          other_conn,
-          "SELECT 1 FROM pg_stat_activity WHERE application_name = $1",
-          [sibling_tag]
-        )
+      # Starts the fake-tagged connection with explicit queue options and blocks until
+      # it is really visible in pg_stat_activity under its tag (the sanity check) --
+      # otherwise this test could pass for the wrong reason (Q-1037 / GH #2364).
+      other_conn = FakeInvocationConnection.start!(sibling_tag)
 
       result = TenantSchemaReaper.sweep_template_build_orphans(Repo, 1)
       Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)

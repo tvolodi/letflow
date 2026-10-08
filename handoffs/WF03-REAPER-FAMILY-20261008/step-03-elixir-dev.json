@@ -1,0 +1,55 @@
+{
+  "handoff_id": "reaper-family-step03-elixir-dev-0001",
+  "run_id": "WF03-REAPER-FAMILY-20261008",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-REAPER-FAMILY-20261008/step-03-elixir-dev.json",
+  "created_at": "2026-10-08T01:20:00Z",
+  "started_at": "2026-10-08T01:20:00Z",
+  "completed_at": "2026-10-08T01:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "Q-1037": "GH #2364: CI flake in test/support/service_catalog_reaper_test.exs (concurrent-invocation guard): Postgrex.query!(other_conn, pg_stat_activity ...) raised DBConnection.ConnectionError 'connection not available and request was dropped from queue after 4000ms'. The fake other-invocation connection was a plain Postgrex.start_link with default overload-shedding queue options (queue_target 50ms / queue_interval 2s) and start_link returns before the handshake completes, so on a slow runner the first query is shed. Second class: after GenServer.stop the server backend leaves pg_stat_activity later, so an immediate second sweep can still see the tag."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": ["test/support/bpm_default_realm_displacement.ex"],
+    "owned_modules": ["Letflow.Test.FakeInvocationConnection"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt2",
+    "branch_name": "test/reaper-fake-connection-family"
+  },
+  "task": {
+    "description": "TEST-ONLY change. New test/support/fake_invocation_connection.ex (opts/1, start!/2, stop_and_wait_gone!/3) built on BpmDefaultRealmDisplacement.dedicated_connection_opts/0; convert all 5 fake-connection sites in service_catalog_reaper_test.exs, template_build_reaper_test.exs, tenant_schema_reaper_test.exs. Helper's own unit test is TEST-DESIGNER's.",
+    "acceptance_criteria": [
+      "One source of truth for dedicated connection options",
+      "No assertion changed; only connection plumbing",
+      "mix compile --warnings-as-errors and mix format --check-formatted clean",
+      "Each converted test file passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Created Letflow.Test.FakeInvocationConnection (opts/1 = dedicated_connection_opts/0 + parameters application_name; start!/2 starts linked conn, registers ISS-0452 tolerant on_exit stop, bounded poll 100x50ms through the new connection with explicit timeout until its tag is visible; stop_and_wait_gone!/3 stops and polls via Repo.query! until the tag is gone, raising a message naming the tag). Converted 5 sites (service_catalog: concurrent + sibling; template_build: concurrent + sibling; tenant_schema: concurrent); the three second-sweep sites use stop_and_wait_gone!; tenant_schema's private wait_until_gone/2 removed. No lib/ change, no tenant_schema_reaper.ex change. Verification: mix format --check-formatted on 4 files exit 0; mix compile --warnings-as-errors exit 0; MIX_TEST_PARTITION=23 mix test: service_catalog_reaper_test 5 passed (0.2s), template_build_reaper_test 7 passed (0.3s), tenant_schema_reaper_test 6 passed (0.3s). The original flake itself (slow-runner shed) not reproduced locally.",
+    "artifacts_out": [
+      "test/support/fake_invocation_connection.ex",
+      "test/support/service_catalog_reaper_test.exs",
+      "test/support/template_build_reaper_test.exs",
+      "test/support/tenant_schema_reaper_test.exs"
+    ],
+    "git_evidence": {
+      "branch_name": "test/reaper-fake-connection-family",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "TEST-DESIGNER writes the helper's own unit test."
+  }
+}

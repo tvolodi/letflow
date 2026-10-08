@@ -26,6 +26,7 @@ defmodule Letflow.TenantSchemaReaperTest do
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.TenantSchemaReaper
+  alias Letflow.Test.FakeInvocationConnection
 
   # ---------------------------------------------------------------------------------
   # Fixtures / helpers
@@ -72,25 +73,6 @@ defmodule Letflow.TenantSchemaReaperTest do
   defp tenants_row_exists?(id) do
     %{rows: rows} = Repo.query!("SELECT 1 FROM tenants WHERE id = $1", [Ecto.UUID.dump!(id)])
     rows != []
-  end
-
-  # Polls pg_stat_activity (bounded: 100 x 50 ms = 5 s) until no backend carries
-  # `application_name`. Returns true once it is gone, false on timeout.
-  defp wait_until_gone(application_name, attempts \\ 100) do
-    %{rows: rows} =
-      Repo.query!("SELECT 1 FROM pg_stat_activity WHERE application_name = $1", [application_name])
-
-    cond do
-      rows == [] ->
-        true
-
-      attempts <= 1 ->
-        false
-
-      true ->
-        Process.sleep(50)
-        wait_until_gone(application_name, attempts - 1)
-    end
   end
 
   # Inserts a real tenant_schemas row directly via SQL (bypassing
@@ -303,46 +285,10 @@ defmodule Letflow.TenantSchemaReaperTest do
       # invocation -- exactly what config/test.exs's own connections carry, just
       # with a fake pid suffix a real invocation could never coincidentally share.
       fake_tag = "letflow_mixtest_fake#{System.unique_integer([:positive])}"
-      repo_config = Repo.config()
-
-      {:ok, other_conn} =
-        Postgrex.start_link(
-          hostname: Keyword.fetch!(repo_config, :hostname),
-          port: Keyword.fetch!(repo_config, :port),
-          username: Keyword.fetch!(repo_config, :username),
-          password: Keyword.fetch!(repo_config, :password),
-          database: Keyword.fetch!(repo_config, :database),
-          # ISS-0217 (test-hygiene fix, incidental): guarantee this connection
-          # closes even if a later assertion in this test raises -- otherwise, under
-          # TEST_PARALLEL_N>1 connection-pool pressure, an early failure here (a
-          # transient DBConnection timeout on the very next query, observed live)
-          # left this fake-tagged connection open for the rest of the partition's
-          # test run, cascading into every later sweep_orphans/2 call in this
-          # process incorrectly seeing a genuinely-external (no group tag) hazard
-          # and deferring. The explicit GenServer.stop/1 later in this test (once
-          # its own assertions are satisfied) still runs first and is a no-op here.
-          parameters: [application_name: fake_tag]
-        )
-
-      # ISS-0452: tolerate the connection process already being gone -- it is
-      # linked to the test process, and on_exit runs after that process
-      # exits, so check-then-act races its own shutdown.
-      on_exit(fn ->
-        try do
-          GenServer.stop(other_conn)
-        catch
-          :exit, _ -> :ok
-        end
-      end)
-
-      # Sanity: the fake connection really is visible to Postgres under its tag --
-      # otherwise this test would pass for the wrong reason (a no-op guard).
-      %{rows: [[1]]} =
-        Postgrex.query!(
-          other_conn,
-          "SELECT 1 FROM pg_stat_activity WHERE application_name = $1",
-          [fake_tag]
-        )
+      # Starts the fake-tagged connection with explicit queue options and blocks until
+      # it is really visible in pg_stat_activity under its tag (the sanity check) --
+      # otherwise this test could pass for the wrong reason (Q-1037 / GH #2364).
+      other_conn = FakeInvocationConnection.start!(fake_tag)
 
       assert {:ok, %{reclaimed: 0, skipped_invalid_format: _}} =
                TenantSchemaReaper.sweep_orphans(Repo, 1)
@@ -358,15 +304,13 @@ defmodule Letflow.TenantSchemaReaperTest do
       # Close the "other invocation" -- its connection, and therefore its tag,
       # disappears from pg_stat_activity exactly as a genuinely dead invocation's
       # would (TCP-level, unconditional).
-      GenServer.stop(other_conn)
-
       # Q-1037 / GH #2364: stopping the client closes its socket, but the server-side
       # backend leaves pg_stat_activity a moment LATER (it notices the closed socket
       # on its next read). A sweep issued in that window still sees the tag and
       # defers (reclaimed: 0). With a faster database (durability off in CI) that
-      # window is hit, so wait, bounded, until the tag is really gone before the
-      # second sweep -- the guard under test is unchanged.
-      assert wait_until_gone(fake_tag), "fake-tagged connection still in pg_stat_activity"
+      # window is hit, so stop_and_wait_gone!/2 waits, bounded, until the tag is
+      # really gone before the second sweep -- the guard under test is unchanged.
+      FakeInvocationConnection.stop_and_wait_gone!(other_conn, fake_tag)
 
       assert {:ok, %{reclaimed: reclaimed, skipped_invalid_format: _}} =
                TenantSchemaReaper.sweep_orphans(Repo, 1)

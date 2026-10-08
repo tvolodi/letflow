@@ -14,7 +14,13 @@ defmodule Letflow.MixProject do
   end
 
   def cli do
-    [preferred_envs: ["letflow.check": :test]]
+    [
+      preferred_envs: [
+        "letflow.check": :test,
+        "letflow.check.static": :test,
+        "letflow.check.test": :test
+      ]
+    ]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -108,6 +114,59 @@ defmodule Letflow.MixProject do
     ]
   end
 
+  # The `letflow.check` steps up to and including the boundary check -- everything
+  # except the test run. See the `letflow.check.static` / `letflow.check` aliases.
+  @check_static_steps [
+    "letflow.check_toolchain",
+    "letflow.check_requirements_registration",
+    # ISS-0613: shares a parse of docs/requirements.yaml and the same "id" concept
+    # as check_requirements_registration immediately above, so it is slotted right
+    # after it -- cheap, no compile step, catches a REQ-NNN id collision with
+    # origin/main before a full compile+test cycle. See
+    # lib/letflow/design/iss0613-req-id-collision-check.md section 3.4.
+    "letflow.check_req_id_collision",
+    # ISS-0258: positioned immediately after the registration check per design
+    # D5 -- it shares a parse of docs/requirements.yaml with that check, so a
+    # stale deferral is reported in a second rather than after a full
+    # compile+test cycle. T-ALIAS-SLOT asserts this ordering.
+    "letflow.check_deferral_staleness",
+    # ISS-0257: wired in as a hard gate, matching check_requirements_registration's
+    # own precedent ("a check nobody runs is not a check") -- verified green on
+    # main and against both open PRs' own new content before landing (neither adds
+    # a handoffs/ file at all), so this addition does not retroactively fail any
+    # currently in-flight branch. See HANDOFF_PROTOCOL.md's Enforcement note for
+    # what "hard" and "advisory" mean for this task's own findings.
+    "letflow.lint_handoffs",
+    # ISS-0481: a pure static/textual scan over test/**/*_test.exs, like
+    # lint_handoffs above and check_requirements_registration -- no
+    # compile step, no shared parse target with any neighbor, so it has
+    # no ordering dependency either direction. Placed with the other
+    # fast, non-compiling checks so a violation surfaces in seconds, not
+    # after a full compile+test cycle.
+    "letflow.check_async_sandbox_reachability",
+    # 2026-09-09: enforces ISSUE_QUEUE.md's "Numbering schema" -- three
+    # registries (local ISS-NNNN, queue Q-N, GitHub GH-N) number
+    # independently from 1, so an unprefixed cross-reference is ambiguous.
+    # A pure column-0 textual scan over docs/issues/*.yaml: no compile step
+    # and no shared parse target with any neighbour, so it has no ordering
+    # dependency either direction. Placed with the other fast,
+    # non-compiling checks so a violation surfaces in seconds. It exists as
+    # a gate because the rule it replaces ("ISS-0187 is queue task 187") was
+    # documented too, and decayed to 172/305 with nothing re-checking it.
+    "letflow.check_issue_refs",
+    # REQ-358: validates test/fixtures/uat/scenarios/**/*.yaml against the schema
+    # documented in docs/agents/uat-scenario-schema.md -- placed with the other
+    # fast, non-compiling structural scans (no shared parse target with any
+    # neighbor, so no ordering dependency either direction).
+    "letflow.check_uat_scenario_schema",
+    "format --check-formatted",
+    "compile --warnings-as-errors",
+    # REQ-405: D3 backend boundary check (xref-based module boundary enforcement).
+    # Must run after compile (xref needs fully compiled call graph) and before
+    # check.test (fail fast on boundary violations without waiting for the test run).
+    "letflow.check_boundaries"
+  ]
+
   defp aliases do
     [
       "ecto.setup": ["ecto.create", "ecto.migrate"],
@@ -146,57 +205,12 @@ defmodule Letflow.MixProject do
       # weakened by finding nothing left to recompile. It is not: measured (design
       # doc M5, re-verified as V4/V5) that an already-compiled project still exits 1
       # from that step, with the warnings re-emitted from the compile manifest.
-      "letflow.check": [
-        "letflow.check_toolchain",
-        "letflow.check_requirements_registration",
-        # ISS-0613: shares a parse of docs/requirements.yaml and the same "id" concept
-        # as check_requirements_registration immediately above, so it is slotted right
-        # after it -- cheap, no compile step, catches a REQ-NNN id collision with
-        # origin/main before a full compile+test cycle. See
-        # lib/letflow/design/iss0613-req-id-collision-check.md section 3.4.
-        "letflow.check_req_id_collision",
-        # ISS-0258: positioned immediately after the registration check per design
-        # D5 -- it shares a parse of docs/requirements.yaml with that check, so a
-        # stale deferral is reported in a second rather than after a full
-        # compile+test cycle. T-ALIAS-SLOT asserts this ordering.
-        "letflow.check_deferral_staleness",
-        # ISS-0257: wired in as a hard gate, matching check_requirements_registration's
-        # own precedent ("a check nobody runs is not a check") -- verified green on
-        # main and against both open PRs' own new content before landing (neither adds
-        # a handoffs/ file at all), so this addition does not retroactively fail any
-        # currently in-flight branch. See HANDOFF_PROTOCOL.md's Enforcement note for
-        # what "hard" and "advisory" mean for this task's own findings.
-        "letflow.lint_handoffs",
-        # ISS-0481: a pure static/textual scan over test/**/*_test.exs, like
-        # lint_handoffs above and check_requirements_registration -- no
-        # compile step, no shared parse target with any neighbor, so it has
-        # no ordering dependency either direction. Placed with the other
-        # fast, non-compiling checks so a violation surfaces in seconds, not
-        # after a full compile+test cycle.
-        "letflow.check_async_sandbox_reachability",
-        # 2026-09-09: enforces ISSUE_QUEUE.md's "Numbering schema" -- three
-        # registries (local ISS-NNNN, queue Q-N, GitHub GH-N) number
-        # independently from 1, so an unprefixed cross-reference is ambiguous.
-        # A pure column-0 textual scan over docs/issues/*.yaml: no compile step
-        # and no shared parse target with any neighbour, so it has no ordering
-        # dependency either direction. Placed with the other fast,
-        # non-compiling checks so a violation surfaces in seconds. It exists as
-        # a gate because the rule it replaces ("ISS-0187 is queue task 187") was
-        # documented too, and decayed to 172/305 with nothing re-checking it.
-        "letflow.check_issue_refs",
-        # REQ-358: validates test/fixtures/uat/scenarios/**/*.yaml against the schema
-        # documented in docs/agents/uat-scenario-schema.md -- placed with the other
-        # fast, non-compiling structural scans (no shared parse target with any
-        # neighbor, so no ordering dependency either direction).
-        "letflow.check_uat_scenario_schema",
-        "format --check-formatted",
-        "compile --warnings-as-errors",
-        # REQ-405: D3 backend boundary check (xref-based module boundary enforcement).
-        # Must run after compile (xref needs fully compiled call graph) and before
-        # check.test (fail fast on boundary violations without waiting for the test run).
-        "letflow.check_boundaries",
-        "letflow.check.test"
-      ]
+      # Q-1037 / GH #2364: the static (everything-but-the-test-run) steps are shared
+      # by `letflow.check.static` (a CI job that does not run the suite) and
+      # `letflow.check` (this list followed by the test step, so the local alias is
+      # the same flat step list as before; see @check_static_steps).
+      "letflow.check.static": @check_static_steps,
+      "letflow.check": @check_static_steps ++ ["letflow.check.test"]
     ]
   end
 

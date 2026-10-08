@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Letflow.Check.Test do
-  @shortdoc "Runs the test suite (parallel), gated only on ISS-0069's own warning class (unused defaults)"
+  @shortdoc "Runs the test suite (parallel; optional --shard K/M or --tails-only), gated only on ISS-0069's own warning class"
 
   @moduledoc """
   ISS-0069 Part 2 (revised): the `test` step used by `mix letflow.check`.
@@ -124,11 +124,17 @@ defmodule Mix.Tasks.Letflow.Check.Test do
 
   ## Usage
 
-      mix letflow.check.test
+      mix letflow.check.test                  # everything (the default; what `letflow.check` runs)
+      mix letflow.check.test --shard K/M      # only the K-th of M slices of the main suite
+      mix letflow.check.test --tails-only     # only the :wasm_hang and :lua_wallclock_race tails
 
-  No arguments -- invoked from the `letflow.check` alias. `run/1` accepts
-  and ignores the arg list Mix passes, matching the standard `Mix.Task`
-  `run/1` shape.
+  Q-1037 / GH #2364 (backend-gate sharding): `--shard K/M` exports
+  `TEST_PARALLEL_SHARD=K/M` to `scripts/test_parallel.sh` (see its header; N must be
+  the same on every shard) and skips the two isolated tails, which `--tails-only`
+  runs on their own, so a CI matrix can run the slices and the tails as separate
+  jobs. The two flags are mutually exclusive; any other argument is an error. The
+  ISS-0069 warnings scan and log-dir cleanup apply per invocation. With no
+  arguments the behaviour is exactly the single-process run described above.
   """
 
   use Mix.Task
@@ -146,17 +152,66 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   @type executable_resolver :: (String.t() -> Path.t() | nil)
 
   @impl Mix.Task
-  def run(_args) do
-    run_main_suite()
-    run_wasm_hang_tests()
-    run_lua_wallclock_race_tests()
+  def run(args) do
+    {opts, rest, invalid} =
+      OptionParser.parse(args, strict: [shard: :string, tails_only: :boolean])
+
+    if invalid != [] or rest != [] do
+      Mix.raise(
+        "mix letflow.check.test: unrecognised arguments #{inspect(invalid ++ rest)} -- " <>
+          "usage: mix letflow.check.test [--shard K/M | --tails-only]"
+      )
+    end
+
+    shard = Keyword.get(opts, :shard)
+    tails_only? = Keyword.get(opts, :tails_only, false)
+
+    cond do
+      shard != nil and tails_only? ->
+        Mix.raise(
+          "mix letflow.check.test: --shard and --tails-only are mutually exclusive " <>
+            "(--shard runs only a main-suite slice, --tails-only runs only the isolated tails)"
+        )
+
+      shard != nil ->
+        validate_shard!(shard)
+        # Q-1037 / GH #2364: a sharded CI job runs only its slice of the main suite; the
+        # :wasm_hang and :lua_wallclock_race tails run once, in a separate --tails-only job.
+        run_main_suite([{"TEST_PARALLEL_SHARD", shard}])
+
+      tails_only? ->
+        run_wasm_hang_tests()
+        run_lua_wallclock_race_tests()
+
+      true ->
+        run_main_suite([])
+        run_wasm_hang_tests()
+        run_lua_wallclock_race_tests()
+    end
+  end
+
+  # K/M with 1 <= K <= M, positive integers (same contract as scripts/test_parallel.sh).
+  defp validate_shard!(shard) do
+    case Regex.run(~r/^([1-9][0-9]*)\/([1-9][0-9]*)$/, shard) do
+      [_, k, m] ->
+        if String.to_integer(k) > String.to_integer(m) do
+          Mix.raise(
+            "mix letflow.check.test: --shard #{shard} has K greater than M (need 1 <= K <= M)"
+          )
+        end
+
+      nil ->
+        Mix.raise(
+          "mix letflow.check.test: --shard #{inspect(shard)} is not of the form K/M (positive integers)"
+        )
+    end
   end
 
   # ISS-0428: shells out to scripts/test_parallel.sh (an N-way parallel `mix test
   # --partitions N` runner) instead of plain `mix test`, then re-points the ISS-0069
   # substring check at the N per-partition log files the runner writes -- see
   # moduledoc and design doc section 1 for the full rationale.
-  defp run_main_suite do
+  defp run_main_suite(extra_env) do
     bash = resolve_executable("bash")
 
     if is_nil(bash) do
@@ -171,7 +226,9 @@ defmodule Mix.Tasks.Letflow.Check.Test do
     # trap does not delete its partition-log tmp_dir out from under this caller --
     # this task now owns removing that directory itself (see §3a.3 below).
     {output, exit_code} =
-      stream_and_capture(bash, ["scripts/test_parallel.sh"], [{"TEST_PARALLEL_KEEP_LOGS", "1"}])
+      stream_and_capture(bash, ["scripts/test_parallel.sh"], [
+        {"TEST_PARALLEL_KEEP_LOGS", "1"} | extra_env
+      ])
 
     # ORDERING RULE (design doc section 1.2 step 1): if the runner exited nonzero,
     # report that first -- even if the log-dir line also happens to be missing. The

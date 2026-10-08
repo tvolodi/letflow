@@ -1,0 +1,45 @@
+{
+  "handoff_id": "cish1-step03-testdesigner-0001",
+  "run_id": "WF03-CI-SHARD1-20261008",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-CI-SHARD1-20261008/step-03-test-designer.json",
+  "created_at": "2026-10-08T10:30:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt3",
+    "branch_name": "ci/shard-script-pr1",
+    "test_commit": "6d0f0b8e"
+  },
+  "task": {
+    "description": "Tests for TEST_PARALLEL_SHARD/TOTAL/OFFSET slicing in scripts/test_parallel.sh and for mix letflow.check.test --shard/--tails-only plus the letflow.check alias split."
+  },
+  "result": {
+    "status": "PASS",
+    "files": [
+      "test/scripts/test_parallel_shard_test.exs (new, 19 tests, ~32 s per run)",
+      "test/mix/tasks/letflow_check_test_test.exs (new describe blocks, 30 tests total in file, ~5 s; existing tests unchanged)"
+    ],
+    "runs": {
+      "test_parallel_shard_test.exs": "Result: 19 passed (32.4 s, 32.5 s), two runs green",
+      "letflow_check_test_test.exs": "Result: 30 passed (4.9 s, 4.7 s), two runs green",
+      "test_parallel_instrumentation_test.exs": "Result: 3 passed (10.7 s)",
+      "test_parallel_watchdog_orphan_test.exs": "Result: 4/5 passed; 'EXIT-trap path: abort while a watchdog is running releases the pipe promptly' fails (pipe not released in 40 s). Reproduced in isolation and ALSO against the merge-base (main 5b7b8c90) copy of scripts/test_parallel.sh on this Windows host: pre-existing, not caused by this PR."
+    },
+    "mutants": [
+      {"id": "m1", "mutation": "LAST=$((OFFSET + N)) -> LAST=$N", "failed": "4/19 (shard 2/3, 3/3, TOTAL+OFFSET, admission cap 1)"},
+      {"id": "m2", "mutation": "mix test --partitions \"$TOTAL\" -> \"$N\"", "failed": "6/19"},
+      {"id": "m3", "mutation": "ready-file poll uses partition-$((idx - OFFSET)).ready (local index)", "failed": "1/19 (admission cap 1 pairing test)"},
+      {"id": "m4", "mutation": "drop K>M check", "failed": "1/19 (SHARD 4 of 3)"},
+      {"id": "m5", "mutation": "ecto.create MIX_TEST_PARTITION=$((i-OFFSET))", "failed": "4/19"}
+    ],
+    "mutant_method": "mutated copies of the script in the scratchpad driven by temporary renamed copies of the test file (scripts/ and lib/ untouched; temp test files deleted, git status clean).",
+    "unverified": [
+      "No mutants applied to lib/mix/tasks/letflow.check.test.ex (lib/ is off limits for this step).",
+      "Windows .bat fakes exercised only here (win32 host); the sh branch of the new fakes was not run."
+    ]
+  }
+}

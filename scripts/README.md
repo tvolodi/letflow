@@ -6,7 +6,7 @@ convention downstream agents need without re-deriving it.
 
 | Script | Purpose |
 |---|---|
-| `test_parallel.sh` | Runs the suite as N parallel `mix test --partitions N` processes. |
+| `test_parallel.sh` | Runs the suite as N parallel `mix test --partitions N` processes. Q-1037: `TEST_PARALLEL_SHARD=K/M` (or `TEST_PARALLEL_TOTAL`/`TEST_PARALLEL_OFFSET`) runs only slice K of a TOTAL=N*M partition space (global partition numbers; N must match on every shard); default unchanged. See its header. |
 | `timed_test.sh` | Times a `mix test` run. |
 | `uat_preflight.sh` | WF-05 Step 0: read-only preflight of a target environment against the UAT scenario corpus's PRECONDITIONS manifest; prints a scenario x check gap table; exit 1 means `ENV_NOT_READY`. Usage in its header comment. |
 | `mutate.py` | Single-occurrence substitution mutation-testing helper (apply mutant, run tests, report kill/survive, always revert). See below. |

@@ -1,0 +1,73 @@
+{
+  "handoff_id": "reaper-family-step03d-reviewer-0001",
+  "run_id": "WF03-REAPER-FAMILY-20261008",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-REAPER-FAMILY-20261008/step-03d-reviewer.json",
+  "created_at": "2026-10-08T01:40:00Z",
+  "started_at": "2026-10-08T01:40:00Z",
+  "completed_at": "2026-10-08T01:50:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "Q-1037": "GH #2364: reaper tests' fake other-invocation Postgrex connection shed by default DBConnection queue options; reclaim-after-close needs a bounded wait for the tag to leave pg_stat_activity."
+    },
+    "related_handoff_ids": ["reaper-family-step03-elixir-dev-0001"],
+    "artifacts_in": ["handoffs/WF03-REAPER-FAMILY-20261008/step-03-elixir-dev.json"],
+    "owned_modules": ["Letflow.Test.FakeInvocationConnection"],
+    "worktree": "C:/Users/tvolo/dev/ai-dala/letflow-3-ci-wt2",
+    "branch_name": "test/reaper-fake-connection-family"
+  },
+  "task": {
+    "description": "WF-03 Step 3d idiom/scope gate on commit 2fc6c598 (test-only).",
+    "acceptance_criteria": [
+      "lib/ and test/support/tenant_schema_reaper.ex untouched",
+      "No assertion weakened or removed",
+      "Bounded waits with clear messages; ISS-0452 tolerant on_exit preserved",
+      "No missed fake-tagged connection site in test/"
+    ]
+  },
+  "result": {
+    "status": "PASS_WITH_FINDINGS",
+    "summary": "PASS_WITH_FINDINGS. Diff touches only handoff json, new test/support/fake_invocation_connection.ex and three reaper test files; no lib/ and no test/support/tenant_schema_reaper.ex change. Assertions: every assert/refute and the expect_proceed? branches in both sibling tests are byte-identical (only connection plumbing hunks changed). The old inline sanity match %{rows: [[1]]} is replaced by start!/2 raising unless the new connection itself sees its tag (equivalent or stronger, bounded 100x50ms, message names tag). The tenant_schema private wait_until_gone/2 is replaced by stop_and_wait_gone!/3 with the same bound (100x50ms) and a message that now names the tag. Repo.config() in config/test.exs has parameters containing only application_name, so Keyword.put(:parameters, application_name: tag) replaces rather than drops anything meaningful, and the fake tag (letflow_mixtest_fake<unique int>) differs from the invocation's own tag (letflow_mixtest_<pid>[_grp..]); Keyword.put (not merge) is correct for a keyword value. dedicated_connection_opts drops :pool/:pool_size and sets queue_target/queue_interval/connect/query timeouts: this is the intended single source of truth. start! links to the caller; when called from a test or setup process (ExUnit setup runs in the test process) linkage and on_exit tolerant stop (ISS-0452, try/catch :exit) are preserved. The ISS-0217 comment (close even if later assertion raises) is adequately covered by start!/2's on_exit; the explicit ISS-0217 id is lost from the helper (cosmetic). No unused aliases: Repo still used in all three test files; FakeInvocationConnection alias used. No supervision/OTP concerns (test helper, no spawn). No decision-record or anti-patterns conflict found. Other fake-tagged sites in test/: bpm_default_realm_displacement.ex:227 (dedicated opts, unlinked lock conn, SAFE); bpm_default_realm_displacement_connect_test.exs:109 (query_select_1 with its own opts and explicit 60s timeout, SAFE, no application_name); partition_maintenance_test.exs:333 and service_catalog_delete_pinned_instances_test.exs:691 only query pg_stat_activity via Repo, no fake connection (SAFE); tenant_schema_reaper.ex hits are lib-side guard code. No missed site.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "test/support/service_catalog_reaper_test.exs:241 and test/support/template_build_reaper_test.exs:321: the two sibling-guard tests still end with a bare GenServer.stop(other_conn) (pre-existing, unchanged). The server backend lingers in pg_stat_activity briefly, so a later test in the same process whose sweep expects to proceed could see a stale non-group sibling tag and defer. Same late-leaving-backend class this change fixes elsewhere; consider stop_and_wait_gone! there. Not introduced by this diff.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "test/support/tenant_schema_reaper_test.exs comment says stop_and_wait_gone!/2 but the function is stop_and_wait_gone!/3 (default arg, so /2 also exists; comment is technically accurate but inconsistent with the moduledoc).",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "test/support/fake_invocation_connection.ex poll_visible?/4 swallows any Postgrex.query error as 'not yet' and the final raise omits the last error; on a persistent failure the message says only 'not visible after N attempts'. Acceptable (bounded, tag named), optional: include last error.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Helper's own unit test not yet written (owed by TEST-DESIGNER per ELIXIR-DEV handoff). Not run: no mix per task instructions.",
+        "affected_requirement": null
+      }
+    ],
+    "type_safety_gaps": "none found; no issue filed.",
+    "git_evidence": {
+      "branch_name": "test/reaper-fake-connection-family",
+      "commit_sha_list": ["2fc6c598"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to TEST-DESIGNER (helper unit test); optionally apply MINOR 1 via stop_and_wait_gone! in the two sibling tests."
+  }
+}
